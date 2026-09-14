@@ -24,7 +24,6 @@
 ## Known limitations
 
 - Real backend generation providers are not connected; UI remains DEMO mode.
-- `public/social-preview.png` is a placeholder text file and should be replaced with a licensed image before production.
 - No automated test suite existed in the repository at implementation time.
 
 ## Next steps
