@@ -1,0 +1,8 @@
+- [x] Responsive 3D starting valley scene
+- [x] Five discoverable portals with route targets
+- [x] Data-driven typed portal configuration
+- [x] GAME/MAKE workflow readiness states and checks
+- [x] Accessible non-3D portal navigation
+- [x] DEMO vs live feature labeling
+- [x] Cloudflare Pages SPA routing fallback
+- [x] Environment-variable based external URL configuration
