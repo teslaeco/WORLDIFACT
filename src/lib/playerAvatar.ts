@@ -30,6 +30,6 @@ export function createPlayerAvatar() {
     legs.forEach((leg, i) => { leg.rotation.x = seated ? -1.35 : gait * (i ? -.52 : .52); });
     knees.forEach((knee, i) => { knee.rotation.x = seated ? 1.35 : Math.max(0, gait * (i ? -1 : 1)) * .7; });
     arms.forEach((arm, i) => { arm.rotation.x = seated ? -1.0 : -gait * (i ? -.42 : .42); });
-    arms[0].rotation.z = reaching * .85;
+    arms[0].rotation.z = -reaching * .85;
   } };
 }

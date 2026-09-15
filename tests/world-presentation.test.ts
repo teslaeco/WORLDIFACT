@@ -2,9 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { meadowBlueprint, demoBlueprint } from '../src/lib/blueprint.ts';
-import { createSolarVehicle } from '../src/lib/solarVehicle.ts';
 import { createPlayerAvatar } from '../src/lib/playerAvatar.ts';
-import { disposeObject } from '../src/lib/worldGeometry.ts';
+import { createWorldObject, updateWorldObject, disposeObject } from '../src/lib/worldGeometry.ts';
 import { PORTALS } from '../src/config/portals.ts';
 import { avoidVehicleBodies } from '../src/lib/movement.ts';
 
@@ -27,7 +26,16 @@ test('the open meadow has no buildings and every portal shares the river line', 
 });
 
 test('vehicle has distinct hinged doors, four complete wheels and fits its collision radius', () => {
-  const car = createSolarVehicle();
+  const spec = meadowBlueprint().objects[0];
+  const car = createWorldObject({ ...spec, x: 0, z: 0, rotation: 0 });
+  updateWorldObject(car, { ...spec, x: 0, z: 0, rotation: 0, color: '#ff0000' });
+  let tinted = 0;
+  car.traverse(part => {
+    if (part instanceof THREE.Mesh && part.material instanceof THREE.MeshStandardMaterial && part.material.name === 'worldifact-object-color') {
+      assert.equal(part.material.color.getHexString(), 'ff0000'); tinted++;
+    }
+  });
+  assert.ok(tinted > 0, 'existing object color editing remains available on vehicle trim');
   const driver = car.getObjectByName('driver-door')!;
   const passenger = car.getObjectByName('passenger-door')!;
   assert.ok(driver && passenger && driver !== passenger);

@@ -17,6 +17,7 @@ export function createSolarVehicle() {
   cells.needsUpdate = true;
   const pv = new THREE.MeshStandardMaterial({ map: cells, color: '#b7d6ed', roughness: .31, metalness: .45 });
   const trim = new THREE.MeshStandardMaterial({ color: '#344b59', roughness: .4, metalness: .75 });
+  trim.name = 'worldifact-object-color';
   const rubber = new THREE.MeshStandardMaterial({ color: '#18212a', roughness: .98 });
   const glass = new THREE.MeshStandardMaterial({ color: '#74959e', transparent: true, opacity: .25, roughness: .13, metalness: .2, depthWrite: false, side: THREE.DoubleSide });
   const lamp = new THREE.MeshStandardMaterial({ color: '#f3f7e3', emissive: '#e7f3d4', emissiveIntensity: 1.5 });

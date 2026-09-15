@@ -31,6 +31,7 @@ export function createWorldObject(o: WorldObject) {
   if (o.kind === "rover") {
     const vehicle = createSolarVehicle();
     for (const child of [...vehicle.children]) g.add(child);
+    updateWorldObject(g, o);
     return g;
   }
   const base = material(o.color),
