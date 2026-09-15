@@ -50,17 +50,43 @@ export async function checkPublishedRelease(deployment: Deployment,
   { dist = "dist", fetcher = fetch, retryDelaysMs = [2000, 4000, 8000, 16000] }:
   { dist?: string; fetcher?: ReleaseFetch; retryDelaysMs?: number[] } = {}) {
   const { origin, versionId } = deployment;
-  const request = async (path: string, options: RequestInit = {}) => {
+  const request = async (path: string, options: RequestInit = {}, manualRedirects = false) => {
     let response;
     const requestHeaders = new Headers(options.headers);
     requestHeaders.set("Cache-Control", "no-cache");
     try {
       response = await fetcher(new URL(path, origin), {
-        ...options, redirect: "error", signal: AbortSignal.timeout(15_000),
+        ...options, redirect: manualRedirects ? "manual" : "error", signal: AbortSignal.timeout(15_000),
         headers: requestHeaders,
       });
     } catch { throw new Error(`HTTP request failed for ${path}; check deployment availability.`); }
     return response;
+  };
+  const staticResponse = async (path: string, options: RequestInit) => {
+    // Cloudflare canonicalizes file.html and folder/index.html before serving
+    // their original bytes. Permit only those same-origin HTML destinations.
+    const original = new URL(path, origin);
+    const canonical = original.pathname.endsWith(".html")
+      ? original.pathname.replace(/(?:\/index)?\.html$/, "") || "/" : null;
+    const allowed = new Set(canonical ? [canonical, `${canonical.replace(/\/$/, "")}/`] : []);
+    const visited = new Set([original.href]);
+    let current = original;
+    for (let hops = 0; ; hops++) {
+      const response = await request(current.pathname, options, true);
+      if (response.status < 300 || response.status >= 400) return response;
+      let next: URL;
+      try {
+        const location = response.headers.get("location");
+        requireCheck(location, "Missing redirect location.");
+        next = new URL(location, current);
+      } catch { throw new Error(`${path} returned an invalid static redirect.`); }
+      requireCheck(hops < 2 && next.origin === original.origin && !next.username && !next.password &&
+        !next.search && !next.hash && allowed.has(next.pathname) && !visited.has(next.href),
+        `${path} returned a noncanonical or excessive static redirect.`);
+      await response.body?.cancel();
+      visited.add(next.href);
+      current = next;
+    }
   };
   const json = async (response: Response, path: string, status = 200) => {
     requireCheck(response.status === status && response.headers.get("content-type")?.includes("application/json"),
@@ -75,7 +101,7 @@ export async function checkPublishedRelease(deployment: Deployment,
     // Newly deployed static assets can briefly reach an edge after the Worker.
     // Retry only idempotent reads, never generation or other POST requests.
     for (let attempt = 0; ; attempt++) {
-      const response = await request(path, options);
+      const response = await staticResponse(path, options);
       const mime = response.headers.get("content-type")?.split(";")[0].trim();
       const validType = response.status === 200 && types.includes(mime ?? "");
       const matches = validType && digest(Buffer.from(await response.arrayBuffer())) === expectedHash;

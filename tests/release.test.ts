@@ -90,6 +90,81 @@ test("release smoke verifies deep links and lazy assets and only sends DEMO with
   }
 });
 
+test("copied HTML follows Cloudflare canonical paths while preserving hashes and API redirect policy", async (t) => {
+  const f = await fixture(t);
+  const canonicalFiles = new Map([
+    ["/apps/chess/", "/apps/chess/index.html"],
+    ["/apps/chess/guest", "/apps/chess/guest.html"],
+    ["/apps/iss/", "/apps/iss/index.html"],
+    ["/apps/terra/", "/apps/terra/index.html"],
+  ]);
+  const seen: string[] = [];
+  let stale = false;
+  const fetcher = async (url: URL, init: RequestInit) => {
+    seen.push(url.pathname);
+    assert.equal(init.redirect, url.pathname.startsWith("/api/") ? "error" : "manual");
+    if (url.pathname.endsWith("/index.html")) {
+      return new Response(null, { status: 307, headers: { Location: origin + url.pathname.slice(0, -11) } });
+    }
+    if (["/apps/chess", "/apps/iss", "/apps/terra"].includes(url.pathname)) {
+      return new Response(null, { status: 307, headers: { Location: url.pathname + "/" } });
+    }
+    if (url.pathname === "/apps/chess/guest.html") {
+      return new Response(null, { status: 307, headers: { Location: "./guest" } });
+    }
+    const source = canonicalFiles.get(url.pathname);
+    if (source) return new Response(stale ? "<html>Stale app</html>" : f.files.get(source), {
+      headers: { "Content-Type": "text/html" },
+    });
+    return f.fetcher(url, init);
+  };
+  const result = await checkPublishedRelease({ origin, versionId }, { ...f, fetcher });
+  assert.equal(result.foundationAssets, 5);
+  for (const path of canonicalFiles.keys()) assert.ok(seen.includes(path), path);
+  assert.equal(f.requests.filter(request => request.method === "POST").length, 2);
+  assert.equal(f.providerCalls(), 0);
+  stale = true;
+  await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /does not match/);
+});
+
+test("static checks reject external, unrelated, credentialed and cyclic redirects", async (t) => {
+  const f = await fixture(t);
+  for (const [path, location] of [
+    ["/apps/chess/index.html", "https://other.example/apps/chess/"],
+    ["/apps/chess/index.html", "/"],
+    ["/apps/chess/index.html", "/apps/chess/?token=private"],
+    ["/apps/chess/index.html", "/apps/chess/#fragment"],
+    ["/apps/chess/index.html", origin.replace("https://", "https://user:password@") + "/apps/chess/"],
+    ["/apps/chess/index.html", "/apps/chess/index.html"],
+    ["/assets/app.js", "/assets/renamed.js"],
+  ]) {
+    const destinations: string[] = [];
+    const target = new URL(location, origin).href;
+    let targetReadsBeforeRedirect = 0;
+    const fetcher = async (url: URL, init: RequestInit) => {
+      destinations.push(url.href);
+      if (url.pathname === path) {
+        targetReadsBeforeRedirect = destinations.filter(value => value === target).length;
+        return new Response(null, { status: 307, headers: { Location: location } });
+      }
+      return f.fetcher(url, init);
+    };
+    await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /noncanonical/);
+    assert.equal(destinations.filter(value => value === target).length, targetReadsBeforeRedirect);
+  }
+  const sequence: string[] = [];
+  const fetcher = async (url: URL, init: RequestInit) => {
+    if (url.pathname.startsWith("/apps/chess") && !url.pathname.endsWith(".js") && !url.pathname.includes("guest")) {
+      sequence.push(url.pathname);
+      return new Response(null, { status: 307, headers: { Location: url.pathname === "/apps/chess" ? "/apps/chess/" : "/apps/chess" } });
+    }
+    return f.fetcher(url, init);
+  };
+  await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /excessive/);
+  assert.deepEqual(sequence, ["/apps/chess/index.html", "/apps/chess", "/apps/chess/"]);
+  assert.equal(f.providerCalls(), 0);
+});
+
 test("release smoke rejects a lazy asset silently replaced by HTML or stale JavaScript", async (t) => {
   for (const mismatch of ["html", "stale"]) {
     const f = await fixture(t);
