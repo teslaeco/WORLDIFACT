@@ -1,0 +1,12 @@
+{
+  "chess": {
+    "repository": "teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer",
+    "commit": "e134964e9c8b7edc43c26b508973f6fb658af90d",
+    "base": "/apps/chess/"
+  },
+  "terra": {
+    "repository": "Terraforming-Planet/Polar-Sun-Moon-Analysis",
+    "commit": "ae90f7367587e0973782c470cde3f5103c0540fc",
+    "base": "/apps/terra/"
+  }
+}

@@ -178,3 +178,8 @@ reports-local/
 __pycache__/
 *.pyc
 source-models/
+
+# Pinned foundation build inputs and hydrated static assets
+.upstream/
+public/apps/iss/assets/
+public/apps/iss/vendor/

@@ -2,7 +2,7 @@ Updated: 2026-09-15T11:27:40Z
 
 # WORLDIFACT night shift
 
-Owner: root conversation. State: IDLE after full local verification of Mirror Lake at 2026-09-15T11:27:40Z. Set this marker ACTIVE with a timestamp before editing and release it afterward; if another active editor is present, do independent research only.
+Owner: root conversation. State: IDLE — foundation source checkpoint prepared for CI/release, 2026-09-15. No paid generation authorized. Set ACTIVE before another edit; keep the original applications and meadow/river design.
 
 ## Authorized scope
 
@@ -79,3 +79,13 @@ Current release decision: public DEMO deployed; NO-GO for the final contest laun
 Root is implementing water-surface portal entry, generated panorama/reflections and an analogue mobile joystick in `work/water-portals` / `WORLDIFACT-water`. The remote baseline is main `28f58710d2f9be5089bc6f75a300b5b79a883f54`, tree `c8fc59b836e719e67fc8e151c0356a68b91e2c15`. Local checkpoint history differs; publish file trees on the actual current remote parent, without overwriting remote history. PR #4's second release attempt confirmed OpenAI CONFIGURED and published version `be1b4e66-3081-4049-ab50-360ca5e3ecc7`; paid generation stayed off. See MIRROR_LAKE.md and the next PR for current implementation / release evidence.
 
 Mirror Lake local verification: 54/54 tests, lint, TypeScript, local HTTP DEMO smoke, production build, Worker packaging and diff checks pass. Shared Three.js remains 582.76 kB minified / 146.19 kB gzip; the WebP is 245,776 bytes. No physical Android or paid LIVE pass is inferred. The change's PR records final CI and public deployment results.
+
+## Meadow and existing-foundation correction
+
+The owner rejected the whole-lake replacement and explicitly prohibited further paid generation. Root restored the meadow, flowing river and bridge while retaining the panorama and mobile joystick. Existing Chess/ISS/Terra are copied via pinned build inputs; the three existing FORGE Sites are public and connected, with full-copy/storage limitations recorded in FOUNDATION_INTEGRATION.md. The original WORLDIFACT local tools remain at /builder and /make. Do not recreate already-working apps or downgrade the current Site studio to its older private GitHub baseline.
+
+The original ISS computer now opens the separately copied Terra Earth-observation interface with a Nile mission brief and preserves station progress on close. No automatic analysis, paid AI job, manufacturing approval or completed eight-planet campaign is claimed. Final verification and deployment evidence belong in the foundation integration PR.
+
+Additional blocks: full Shop/Studio archive reads returned ownership-verification denial; their Git source service returned HTTP 500. Do not bypass the archive denial. Public browser continuation previously hit an automatic approval usage-limit rejection; no alternate browser or CI renderer was used.
+
+Foundation local verification: 57/57 tests, TypeScript, production build and local DEMO HTTP pass. Lint has seven pre-existing unused-variable warnings in the imported ISS source and no errors. Worker dry-run passes for the local hub + ISS package; CI must also assemble the pinned Chess/Terra builds before deployment. No visual/Android or full-migration pass is implied.

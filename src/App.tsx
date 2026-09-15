@@ -5,6 +5,7 @@ import LoadingFallback from './components/LoadingFallback'
 const HomePage = lazy(async () => import('./pages/HomePage'))
 const PortalPage = lazy(async () => import('./pages/PortalPage'))
 const InfoPage = lazy(async () => import('./pages/InfoPage'))
+const WorkbenchPage = lazy(async () => import('./pages/WorkbenchPage'))
 
 export default function App() {
   return (
@@ -12,6 +13,11 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/portal/:portalId" element={<PortalPage />} />
+        {['/chess', '/chess/shop', '/iss', '/planets', '/shop', '/lab', '/terra'].map(path => (
+          <Route key={path} path={path} element={<PortalPage />} />
+        ))}
+        <Route path="/builder" element={<WorkbenchPage kind="builder" />} />
+        <Route path="/make" element={<WorkbenchPage kind="make" />} />
         <Route path="/privacy" element={<InfoPage kind="privacy" />} />
         <Route path="/terms" element={<InfoPage kind="terms" />} />
         <Route path="*" element={<Navigate to="/" replace />} />

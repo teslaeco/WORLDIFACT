@@ -20,7 +20,7 @@ interface Props {
   blueprint?: WorldBlueprint;
   activePortalId?: string;
 }
-const START = { ...demoBlueprint("village forest"), title: "Mirror Lake" };
+const START = demoBlueprint("village forest");
 interface RuntimeObject {
   spec: WorldObject;
   group: THREE.Group;
@@ -50,7 +50,7 @@ export default function StartingWorld({
   const [hint, setHint] = useState(
       "Walk onto a glowing water portal to enter.",
     ),
-    [location, setLocation] = useState("Mirror Lake entrance");
+    [location, setLocation] = useState("Riverlight meadow");
   const sceneStructure = `${blueprint.biome}:${blueprint.objects
     .map((o) => `${o.id}:${o.kind}`)
     .join(",")}`;
@@ -106,19 +106,34 @@ export default function StartingWorld({
     const sun = new THREE.DirectionalLight("#ffe9bc", 3);
     sun.position.set(30, 55, 20);
     scene.add(sun);
-    const environment = lunar ? null : createLakeEnvironment(scene, mobile, () => setTextureFailed(true));
-    if (lunar) {
+    const environment = lunar ? null : createLakeEnvironment(scene, mobile, () => setTextureFailed(true), sea);
+    if (!sea) {
       const ground = new THREE.Mesh(
         new THREE.PlaneGeometry(230, 230),
-        new THREE.MeshStandardMaterial({ color: "#626874", roughness: 1 }),
+        new THREE.MeshStandardMaterial({ color: lunar ? "#626874" : "#62905d", roughness: 1 }),
       );
       ground.rotation.x = -Math.PI / 2;
+      ground.name = lunar ? "lunar-ground" : "green-meadow";
       scene.add(ground);
+    }
+    if (lunar) {
       scene.add(createDecorativeTerrain(Array.from({ length: 32 }, (_, i) => ({
         id: `lunar-rock-${i}`, kind: "rock", name: "Lunar rock",
         x: Math.sin(i * 2.4) * (48 + i % 8), z: Math.cos(i * 2.4) * (48 + i % 8),
         scale: 1.5 + i % 4, rotation: i * 19, color: "#7c8992",
       }))));
+    } else if (!sea) {
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.2, 12), new THREE.MeshStandardMaterial({ color: "#bdad87", roughness: 0.85 }));
+      bridge.name = "river-footbridge";
+      bridge.position.set(0, 0.16, 0);
+      scene.add(bridge);
+      const trees: WorldObject[] = [];
+      for (let i = 0; i < 65; i++) {
+        const x = ((i * 31) % 125) - 62, z = ((i * 47) % 120) - 60;
+        if (Math.abs(z) < 10 || (Math.abs(x) < 24 && Math.abs(z) < 32)) continue;
+        trees.push({ id: `valley-tree-${i}`, kind: "tree", name: "Valley flora", x, z, scale: 0.6 + i % 5 * 0.2, rotation: i * 17 % 360, color: i % 2 ? "#2e674d" : "#45754c" });
+      }
+      scene.add(createDecorativeTerrain(trees));
     }
     const objects: RuntimeObject[] = sceneBlueprint.objects.map((o) => ({
       spec: o,
@@ -178,7 +193,7 @@ export default function StartingWorld({
       ctx.fillText(p.shortTitle, 256, 68);
       ctx.fillStyle = p.color;
       ctx.font = "500 24px sans-serif";
-      ctx.fillText(p.id === activePortalId ? "YOU ARE HERE" : p.id === "ai-game-lab" || p.id === "enchanted-ai-shop" ? "WALK IN TO OPEN" : "PREVIEW · WALK IN", 256, 120);
+      ctx.fillText(p.id === activePortalId ? "YOU ARE HERE" : "WALK IN TO OPEN", 256, 120);
       const label = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: new THREE.CanvasTexture(canvas),

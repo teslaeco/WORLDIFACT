@@ -9,7 +9,9 @@ export default function InfoPage({ kind }: { kind: "privacy" | "terms" }) {
       <p>Updated 15 September 2026. WORLDIFACT is an early playable prototype.</p>
       {kind === "privacy" ? <>
         <h2>Files and saved worlds</h2>
-        <p>The model viewer reads your GLB on your device. It does not upload that model. Up to 30 saved scene blueprints are stored in this browser. Export a blueprint before clearing your browser’s site data; clearing it removes the device archive. There is no account or cloud backup.</p>
+        <p>The WORLDIFACT scene editor and manufacturing model viewer read your GLB on your device. It does not upload that model. Up to 30 saved scene blueprints are stored in this browser. Export a blueprint before clearing your browser’s site data; clearing it removes the device archive. This local scene archive has no account or cloud backup.</p>
+        <h2>Connected applications</h2>
+        <p>The portals reuse our existing Chess, ISS, Terra, FORGE shop, World Builder and Froge studio. The shop, World Builder and studio currently load from their original public addresses; those services receive normal browser requests and retain their own sign-in, storage and backend connections. Chess opens in its existing guest mode. ISS retains manual JSON progress export. Terra loads published evidence and external observation sources; check their dates and notices in that application.</p>
         <h2>Optional AI generation</h2>
         <p>DEMO runs local rules and does not analyze reference images. If you choose enabled LIVE generation, your prompt and optional image are sent through our server to OpenAI. Submit only material you have permission to use. Do not include sensitive personal information.</p>
         <p>The server requests that Responses are not stored as application history. This does not mean OpenAI or the hosting provider retains no operational or safety data. Their policies and the operator’s account settings also apply.</p>
