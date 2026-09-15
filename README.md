@@ -60,6 +60,6 @@ Every MAKE candidate requires process-specific mesh, wall, clearance, color-pack
 
 ## Release preparation
 
-See `docs/CLOUDFLARE.md`, `docs/CONTEST_STATUS.md`, `docs/ASSET_LICENSES.md` and `docs/MANUFACTURING_AUDIT.md`. The contest release is currently NO-GO: live Astra evidence, browser/device QA, public URL, actual CI result and launch materials remain outstanding.
+See `docs/CLOUDFLARE.md`, `docs/CONTEST_STATUS.md`, `docs/ASSET_LICENSES.md` and `docs/MANUFACTURING_AUDIT.md`. The contest release is currently NO-GO: live Astra evidence, browser/device QA, public URL and launch materials remain outstanding. [PR #2](https://github.com/teslaeco/WORLDIFACT/pull/2) contains the source review; its implementation snapshot passed [GitHub verification](https://github.com/teslaeco/WORLDIFACT/actions/runs/34934275354). Check the PR for the latest commit status.
 
 The source-code license is MIT; private source assets, third-party brands and linked projects are not relicensed by this repository.

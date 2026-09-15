@@ -11,9 +11,9 @@ Implementation and verification are separate. This supersedes the initial unsubs
 - [x] Product Hunt field draft, recording script and morning PR description prepared locally
 - [ ] Desktop/Android gameplay, archive and export verified
 - [ ] Real approved Astra request
-- [ ] Current original models recovered and validated
+- [ ] All current originals recovered and validated (legacy Queen and ISS recovered; neither approved for production)
 - [ ] Supplier geometry/color preflight passed
-- [ ] PR conflict resolved and new GitHub CI green
+- [x] Replacement PR #2 has no conflict; implementation CI run 34934275354 passed (require latest-commit checks before merge)
 - [ ] Public HTTPS release and route refresh verified
 - [ ] Actual thumbnail/gallery/screenshots/video
 - [ ] Final operator/data notice and imported asset rights

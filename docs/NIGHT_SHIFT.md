@@ -2,7 +2,7 @@ Updated: 2026-09-15T05:15:25+00:00
 
 # WORLDIFACT night shift
 
-Owner: root conversation. State: ACTIVE for the user-authorized morning continuation at 2026-09-15T05:15:25+00:00. Set this marker ACTIVE with a timestamp before editing and release it afterward; if another active editor is present, do independent research only.
+Owner: root conversation. State: IDLE after the user-authorized morning implementation and PR review at 2026-09-15T05:51:31+00:00. Set this marker ACTIVE with a timestamp before editing and release it afterward; if another active editor is present, do independent research only.
 
 ## Authorized scope
 
@@ -10,7 +10,9 @@ The user requested six hours of site/game-world development, model improvement, 
 
 The enabled schedule has six hourly runs, 2026-09-15 00:00:56–05:00:56 UTC. This schedules continuations; it does not guarantee uninterrupted six-hour execution.
 
-Local branch: work/worldifact-night-audit, based on PR #1 head 36a4492b8cd25cd03d566dc935fbac6aec24a2af. Last observed main ba6bca908122b0e5b9d16dd01ca37933a402ba5c. No push, PR, merge or deployment occurred. Check current main only when preparing the morning review.
+Local checkpoint branch: `work/worldifact-night-audit`. Remote review branch: `codex/worldifact-release-review`, [PR #2](https://github.com/teslaeco/WORLDIFACT/pull/2), based on main `ba6bca908122b0e5b9d16dd01ca37933a402ba5c`. The implementation snapshot is remote commit `7db0313297bb407b075a711758574684c8c1cc7b`; its file tree equals local checkpoint `b6ca90100a59e581dcb941ca5a78b799fcb162f8`. GitHub connector publication was used because shell Git transport was unavailable. Do not push the local checkpoint history over the review branch. Read the latest remote review ref before continuing.
+
+GitHub verification run `34934275354` passed the implementation snapshot. This evidence update is documentation only; check PR #2 for the latest subsequent CI result. No merge, deployment, paid provider call or order occurred.
 
 ## Completed and verified
 
@@ -40,8 +42,9 @@ Local branch: work/worldifact-night-audit, based on PR #1 head 36a4492b8cd25cd03
 - Fixed scaled/rotated habitat collisions, rover body clearance and safe rover exits with four movement tests.
 - Added privacy/preview notices and a Cloudflare setup guide. The private operator contact remains unconfirmed.
 - Recovered ISS source files. Experimental 100 mm and 370 mm monochrome copies have 467,945 triangles and 27/27 open geometries. Both are NOT PRINT READY. The saved full-color nominal 370 mm JLC3DP quote is $213.53; it includes a thin-wall warning and does not establish approval.
-- Preserved the main-branch product vision in PROJECT_VISION.md and its ignore rules. A replacement review branch will be based directly on current main to resolve the old README conflict without merging the obsolete draft.
+- Preserved the main-branch product vision in PROJECT_VISION.md and its ignore rules. PR #2 is based directly on current main and is mergeable without the old README conflict. The obsolete draft #1 remains unmerged.
 - Product Hunt's live form requires a human bot check. The linked official launch guide is readable; no form or launch was submitted.
+- The private ISS packet contains conservative 100 mm / 370 mm STL copies, machine-readable audit results and hashes. The release report and packet are separate from the public repository; locate `WORLDIFACT-release-review-2026-09-15.md` and `ISS-preflight-2026-09-15.zip` in saved project files after the final handoff.
 
 ## Security/approval blocks — do not retry indirectly
 
