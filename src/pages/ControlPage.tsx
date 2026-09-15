@@ -8,6 +8,9 @@ type OracleWorlds = {
   checkedAt: string
   oracle: string
   connectorVersion?: number
+  characterStandard?: number
+  provider?: string
+  model?: string
   worlds: { id: string; oracle: string }[]
   evidence?: string
 }
@@ -92,6 +95,9 @@ export default function ControlPage() {
           <p className={`oracle-world-status ${bridge?.oracle === 'CONNECTOR_READY' ? 'ready' : ''}`}>
             <strong>Oracle bridge:</strong> {bridge ? labels[bridge.oracle] || bridge.oracle : 'Checking shared backend…'}
             {oracleWorlds?.connectorVersion ? ` · connector v${oracleWorlds.connectorVersion}` : ''}
+            {oracleWorlds?.characterStandard ? ` · character standard ${oracleWorlds.characterStandard}` : ''}
+            {oracleWorlds?.provider ? ` · ${oracleWorlds.provider}` : ''}
+            {oracleWorlds?.model ? ` · ${oracleWorlds.model}` : ''}
           </p>
           <p>{editors[i].note}</p>
           <div className="control-actions"><Link className="button-link" to={world.route}>Open world</Link>
