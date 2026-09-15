@@ -1,47 +1,33 @@
-# Contest status — post-deployment continuation, 15 September 2026
+# Contest status — foundation integration, 15 September 2026
 
-Decision: **Public DEMO deployed; NO-GO for final contest launch or manufacturing orders.** The owner requested automation after the first successful deployment. Main-branch release automation and optional secure OpenAI provisioning are implemented in PR #4. Production environment approvals remain in force. No paid generation, supplier message, manufacturing order or contest submission was executed by this continuation.
+Decision: **Public DEMO exists; final contest readiness is NO-GO.** The owner has explicitly prohibited paid generation for this continuation. Restore the meadow and river and reuse existing projects. Current source, limitations and URLs are in [FOUNDATION_INTEGRATION.md](FOUNDATION_INTEGRATION.md). This change's PR is the final CI/deployment evidence ledger.
 
 | Item | Status | Evidence / remaining work |
 |---|---|---|
-| Official date and guide | PREVIOUSLY VERIFIED | Earlier audit recorded 18 September 2026 and reviewed the official linked launch guide; recheck the live form before submission |
-| Live form / eligibility | BLOCKED | Earlier authenticated review hit Product Hunt's human/bot challenge and a conflicting countdown; no bypass or submission |
-| Source baseline | MERGED | PR #2 merged as `2588c3b9c0ea647d1db7662b24725388a215239f`; redirect fix PR #3 merged as `2304d4717f77e220bf8145d39a5905b9698a0a60`. Original vision remains in PROJECT_VISION.md |
-| Old PR #1 | CONFLICTED DRAFT | Not merged; do not replace the reviewed main source with this older branch |
-| Mirror Lake / rover / workshop | IMPLEMENTED; DEVICE QA OUTSTANDING | Generated panorama, planar water reflections, walk-in portals and an analogue joystick replace the old river / directional-pad view. Movement and pointer logic have regression tests; physical Android behavior and FPS remain unmeasured. See MIRROR_LAKE.md |
-| Studio / archive / exports | IMPLEMENTED; DEVICE QA OUTSTANDING | DEMO composition, validated imports, edits, local archive provenance, GLB export/viewer and race guards; no physical-device pass claimed |
-| Astra integration | IMPLEMENTED; LIVE BLOCKED | Server Responses API, strict schema, preview code, expiry, rate limiter and persistent global allowance; only successful real provider output earns LIVE |
-| OpenAI provisioning | CONFIGURED | [Run 34959157811 attempt 2](https://github.com/teslaeco/WORLDIFACT/actions/runs/34959157811/attempts/2), 2026-09-15 10:59 UTC: model metadata access verified and Worker secret synchronized. Paid generation remains disabled; CONFIGURED is not LIVE evidence |
-| Generation proof | IMPLEMENTED | Provider response ID, UTC, scene SHA-256 and token usage; evidence excludes secrets and reference images. Provider tests are simulated |
-| Other portals | PLANNED | Chess engine, playable ISS mission, live Earth observation and eight-planet gameplay remain outside this implemented prototype |
-| Verified code baseline | PASS | Successful release ran 41/41 tests, lint, TypeScript, local HTTP smoke, production build and Worker packaging. Shared Three.js chunk still has a size warning |
-| New automation tests | FULL LOCAL PASS; SEE PR CHECKS | After fixing the new script's TypeScript errors, full verification passes 48/48 tests, lint, TypeScript, local DEMO HTTP and production build. The seven connection tests also reject trailing-newline keys. Cloudflare packaging and diff checks also pass locally. Require CI on the exact completed PR #4 head before merge |
-| Cloudflare credentials | SUCCESSFULLY USED | Existing production environment account ID and API token published the Worker. Values were not read. Full token scope/expiry and account plan remain separate owner checks |
-| Cloudflare public release | PASS | [Run 34956564451](https://github.com/teslaeco/WORLDIFACT/actions/runs/34956564451) completed at 2026-09-15T10:12:00Z on `2304d4717f77e220bf8145d39a5905b9698a0a60`; version `8fc7aa65-eb6e-482b-9de7-e62e49101f13` |
-| Public HTTP verification | PASS | https://worldifact.xodobrox.workers.dev — five exact HTML routes, eleven matching JS/CSS assets, API 404, DEMO generation and origin rejection passed in the real release job |
-| Automatic publication | VERIFIED | PR #4 merged as 28f58710d2f9be5089bc6f75a300b5b79a883f54 and its merge push triggered successful run 34959157811. Attempt 2 also passed after OpenAI secret entry. Main pushes run full checks and deployment; manual DEPLOY remains available |
-| Source models | PARTIAL | Legacy Queen and ISS sources recovered earlier; exact current Queen, Julie, astronaut and wooden polyhedron sources still missing |
-| Manufacturing | NOT APPROVED | Legacy Queen retains 16/99 open geometries; recovered ISS retains 27/27 open at 100 mm and 370 mm. No completed wall, slicer, color or supplier engineering approval |
-| Supplier costs | PREVIOUS OBSERVATIONS | Legacy Queen 100 mm white: $2.72 for 1, $5.44 for 2 and $27.20 for 10. Nominal 370 mm ISS color quote $213.53 carried a thin-wall warning. These are not new/current binding quotes. Sculpteo and 200 mm prices unknown |
-| Privacy / terms / rights | PARTIAL | Preview notices and data inventory exist; private operator contact and imported asset rights still need confirmation |
-| Launch copy / media | PARTIAL | Earlier field-length-checked copy, gallery plan and 90-second script exist. Public URL now exists; genuine application screenshots/video and LIVE proof remain outstanding |
+| Official contest | DATE DISPLAY VERIFIED; FORM UNRESOLVED | [Official page](https://www.producthunt.com/contests/gpt-6-astra-challenge) still displays 18 September 2026 and a zero countdown. Confirm the actual launch/submission form and all applicable rules; do not infer eligibility or exact closing time from that inconsistency |
+| Main baseline | DEPLOYED | Main `c1286471fe55f458f43b237e297992764176eebb`, PR #5. [Release 34963626213 attempt 2](https://github.com/teslaeco/WORLDIFACT/actions/runs/34963626213/attempts/2) succeeded; version `cc285671-c13f-4354-91f4-b7a9793e7d8a`. First immediate smoke mismatch was resolved on rerun of the same code; exact cause unconfirmed |
+| Meadow / flowing river | RESTORED IN THIS CHANGE; VISUAL QA OUTSTANDING | Green meadow, trees, bridge, river current and water portals; existing panorama reused. Game Lab is behind the shop |
+| Portal controls | CODE VERIFIED | Analogue joystick, independent camera pointer, swept walk-in entry, action priority and collision-resolved routes across the bridge. Physical Android and FPS are not measured |
+| Original Chess / ISS / Terra | COPY ASSEMBLY IMPLEMENTED | Pinned source builds and existing ISS asset hashes. ISS retains eight repairs and adds a Terra computer with a Nile mission. CI must build the two upstream apps and the actual release must verify their files |
+| World Builder / Shop / Studio | PUBLIC ORIGINALS CONNECTED; NOT FULLY MIGRATED | Source/storage recovery limits described in FOUNDATION_INTEGRATION.md. Do not present the iframe URLs as complete copies. Existing Game Lab / MAKE tools remain at `/builder` and `/make` |
+| Eight Planets campaign | INCOMPLETE | Existing FORGE World Builder is the supplied foundation; eight finished platform levels have not been demonstrated |
+| Chess shop | PARTIAL | Existing shop connected as a tab. Direct board/piece-to-catalog transfer and automated ordering still need implementation |
+| Oracle | EXISTING SERVICE PRESERVED | Existing Sites integration code recovered; no new VM or job started. New WORLDIFACT backend pairing and owner/storage migration are not complete |
+| OpenAI | CONFIGURED; PAID OFF | Earlier release verified model metadata and synchronized the server secret. Current gates remain `ENABLE_PAID_GENERATION=false`, allowance 0. No paid request or image generation in this continuation |
+| LIVE Astra evidence | ABSENT FOR WORLDIFACT | Responses API and proof envelope exist; provider tests use stubs. A key or green CI is not LIVE evidence. Any later pilot requires explicit budget and expiry authorization |
+| Local verification | SEE PR FOR FINAL RESULT | Meaningful movement, API, original ISS repairs/collision and deployment integrity tests; lint/type/build/HTTP and Worker dry-run. Imported ISS source retains unused-variable warnings; shared Three.js retains a bundle-size warning |
+| Browser/device | BLOCKED | Earlier public-browser inspection was rejected by automatic approval review for the usage limit. No local/alternate/headless workaround. Frame behavior, shader rendering, visual acceptance and physical Android remain outstanding |
+| Source models / MAKE | NOT APPROVED | Original private manufacturing models remain outside public git. The copied game models are GAME assets, not print-ready revisions. See MANUFACTURING_AUDIT.md |
+| Supplier costs | HISTORICAL / PARTIAL | JLC3DP observations remain dated, preliminary and model-specific. Sculpteo and missing size/quantity quotes remain UNKNOWN. No order or supplier message sent |
+| Launch materials | DRAFT | Previous submission text, gallery plan and 90-second scenario exist. Update them to describe the reused foundations, then capture genuine working media and verify the form |
 
-## Next release gates
+## Next concrete gates
 
-The first Cloudflare failure (error 100324 on a blanket redirect) is resolved and a subsequent real release passed. Do not repeat the old failed run or recreate valid Cloudflare credentials.
+1. Finish this PR's source/build checks and automatic Cloudflare release. Record exact CI, source SHA, deployment version and HTTP result in its PR.
+2. Obtain authorized exports of the blocked original Sites and design owner identity / D1/R2 / Oracle migration before claiming full self-hosting. Preserve existing archives and encrypted credentials.
+3. When browser access is available, inspect desktop and actual Android: green ground and river, all portals, original app rendering, ISS computer/return, save/export and independent joystick/camera fingers. Do not turn structural code evidence into an FPS claim.
+4. Respect the current no-paid instruction. Only after a new explicit spending authorization may one controlled Astra request produce WORLDIFACT LIVE evidence.
+5. Check the real Product Hunt form, applicable contest rules and required fields; resolve the contradictory countdown. Use genuine screenshots/video and clearly distinguish pre-existing work, this integration, MOCK scenery and real Earth-observation sources. Do not fabricate eligibility, claims, votes or a guaranteed win.
+6. Final submission and supplier ordering remain separate actions. A public game demo does not establish manufacturing approval.
 
-For PR #4, check the exact head's full CI before merging, then inspect the new automatic production run and its separate OpenAI connection status. A green DEMO deployment with a BLOCKED key warning is not an AI connection success. An invalid supplied key should stop provisioning rather than be treated as valid.
-
-Before claiming contest readiness, complete desktop/physical Android QA, explicit API budget/expiry and one controlled real Astra result, asset/contact review, actual launch-form review and genuine media. Before any MAKE order, complete source identity, mesh, color and supplier engineering checks independently.
-
-The earlier night-shift notes remain historical evidence; their no-public-URL and manual-only statements are superseded by this post-deployment continuation. See AUTOMATION_STATUS.md and CLOUDFLARE_SETUP.md for current operations, and MANUFACTURING_AUDIT.md for the unchanged model/quote evidence.
-
-Primary references: [official contest](https://www.producthunt.com/contests/gpt-6-astra-challenge), [linked launch guide](https://app.notion.com/p/teamhome1431/GPT-6-Astra-Challenge-Product-Hunt-Launch-Guide-3d62e1256c9e80f39bccdd2ab93bb306), [Astra guide](https://developers.openai.com/api/docs/guides/latest-model), [Astra model/pricing](https://developers.openai.com/api/docs/models/gpt-6-astra).
-
-Updated: 2026-09-15T10:38:23Z
-
-## Mirror Lake continuation
-
-The owner requested automatic portal entry, a realistic generated water-world texture and a mobile joystick. The implementation and image provenance are documented in MIRROR_LAKE.md. All five portal routes are included in publication smoke checks, along with the WebP asset's MIME type and SHA-256. Final verification and publication evidence will be recorded in this change's PR. Existing paid-generation and final-contest gates remain unresolved.
-
-Mirror Lake local verification passed 54/54 tests, lint, TypeScript, local HTTP DEMO smoke, production build, Worker packaging and diff checks. The new tests caught and resolved a path crossing the wrong portal. Public browser appearance and physical Android multitouch remain separate checks; final CI and release results are recorded on this change's PR.
+Historical PR #2–#5 details remain in NIGHT_SHIFT.md and their PRs. The earlier statements that the three games were only nonexistent previews are superseded: the owner supplied functioning original projects and this change reuses them. The former whole-lake replacement was a design regression, now corrected in code.

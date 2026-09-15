@@ -76,7 +76,7 @@ export async function checkPublishedRelease(deployment: Deployment,
 
   const expectedHtml = await readFile(join(dist, "index.html"));
   requireCheck(/id=["']root["']/.test(expectedHtml.toString()), "Built app entry point is missing.");
-  const routes = ["/", "/privacy", "/terms", ...PORTALS.map(portal => portal.route)];
+  const routes = ["/", "/privacy", "/terms", "/terra", "/chess/shop", "/builder", "/make", ...PORTALS.map(portal => portal.route)];
   for (const path of routes) {
     const response = await request(path, { headers: { Accept: "text/html" } });
     requireCheck(response.status === 200 && response.headers.get("content-type")?.includes("text/html"),
@@ -96,6 +96,30 @@ export async function checkPublishedRelease(deployment: Deployment,
     requireCheck(digest(Buffer.from(await response.arrayBuffer())) === digest(await readFile(join(dist, path))),
       `${path} does not match the release build.`);
   }
+  const foundation = JSON.parse(await readFile(join(dist, "foundation-release.json"), "utf8")) as {
+    files: Array<{ path: string; bytes: number; sha256: string }>;
+  };
+  requireCheck(Array.isArray(foundation.files) && foundation.files.length <= 1500,
+    "The assembled application manifest is missing or invalid.");
+  for (const path of ["/apps/chess/index.html", "/apps/chess/guest.html", "/apps/iss/index.html", "/apps/terra/index.html"]) {
+    requireCheck(foundation.files.some(file => file.path === path), `Missing original application: ${path}`);
+  }
+  const foundationFiles = [...foundation.files];
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    for (let file = foundationFiles.pop(); file; file = foundationFiles.pop()) {
+      const path = file.path;
+      requireCheck(/^\/apps\/(chess|iss|terra)\/[a-z\d_./+ -]+$/i.test(path) && !path.includes(".."), "Invalid foundation asset path.");
+      const local = await readFile(join(dist, path.slice(1)));
+      requireCheck(local.length === file.bytes && digest(local) === file.sha256, `${path} changed after assembly.`);
+      const response = await request(path);
+      const mime = response.headers.get("content-type")?.split(";")[0].trim();
+      const expected = path.endsWith(".html") ? ["text/html"] : path.endsWith(".css") ? ["text/css"] :
+        path.endsWith(".js") ? ["application/javascript", "text/javascript"] : path.endsWith(".wasm") ? ["application/wasm"] :
+        ["model/gltf-binary", "application/octet-stream"];
+      requireCheck(response.status === 200 && expected.includes(mime ?? ""), `${path} must deliver its original application content type.`);
+      requireCheck(digest(Buffer.from(await response.arrayBuffer())) === file.sha256, `${path} does not match the copied application.`);
+    }
+  }));
   await json(await request("/api/release-check-missing"), "/api/release-check-missing", 404);
   // Always send explicit DEMO, even when checking a mistakenly enabled deployment.
   // No provider secret or access token is available to this workflow step.
@@ -112,7 +136,7 @@ export async function checkPublishedRelease(deployment: Deployment,
     ...options, headers: { ...options.headers, Origin: "https://invalid-origin.example" },
   });
   await json(rejected, "Cross-origin blueprint request", 403);
-  return { origin, versionId, mode: "DEMO", htmlRoutes: routes.length, verifiedAssets: assets.length };
+  return { origin, versionId, mode: "DEMO", htmlRoutes: routes.length, verifiedAssets: assets.length, foundationAssets: foundation.files.length };
 }
 
 async function main() {
@@ -127,12 +151,12 @@ async function main() {
   console.log(`Deployed URL: ${deployment.origin}`);
   console.log(`Cloudflare version: ${deployment.versionId}`);
   const result = await checkPublishedRelease(deployment);
-  console.log(`PASS: ${result.htmlRoutes} HTML routes, ${result.verifiedAssets} matching JS/CSS/image assets, API 404, DEMO generation and origin rejection. No paid API call.`);
+  console.log(`PASS: ${result.htmlRoutes} HTML routes, ${result.verifiedAssets} matching hub assets, ${result.foundationAssets} original app entries/assets, API 404, DEMO generation and origin rejection. No paid API call.`);
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `url=${result.origin}\n`);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY,
     `## WORLDIFACT DEMO release\n\n[Open WORLDIFACT](${result.origin})\n\n` +
     `Cloudflare version: \`${result.versionId}\`\n\n` +
-    `HTTP checks passed: ${result.htmlRoutes} application routes, ${result.verifiedAssets} JavaScript/CSS/image files matching the build, API 404, DEMO generation and origin rejection.\n\n` +
+    `HTTP checks passed: ${result.htmlRoutes} application routes, ${result.verifiedAssets} hub files, ${result.foundationAssets} copied application entries/assets matching the build, API 404, DEMO generation and origin rejection.\n\n` +
     "No paid API call. Browser appearance, WebGL and physical Android still require device QA.\n");
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

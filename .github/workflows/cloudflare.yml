@@ -20,7 +20,7 @@ jobs:
       name: production
       url: ${{ steps.release.outputs.url }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -34,6 +34,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: npm ci
       - run: npm run verify
+      - uses: ./.github/actions/foundations
       - run: npm run deploy:check
       - name: Connect optional OpenAI secrets without paid generation
         id: openai

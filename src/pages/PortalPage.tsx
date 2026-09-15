@@ -1,150 +1,59 @@
-import { lazy, Suspense } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
-import { PORTALS, getPortalById } from "../config/portals";
-import { getOptionalExternalDemoUrl } from "../lib/env";
-import LoadingFallback from "../components/LoadingFallback";
-const WorldStudio = lazy(() => import("../components/WorldStudio"));
-const ManufacturingPanel = lazy(
-  () => import("../components/ManufacturingPanel"),
-);
-const planets = [
-  "Mercury Relay Cliffs",
-  "Venus Cloud Foundry",
-  "Earth Orbit Relay",
-  "Mars Iceworks Basin",
-  "Jupiter Magnet Storm Deck",
-  "Saturn Ringline Pass",
-  "Uranus Cryo Drift",
-  "Neptune Aurora Forge",
-];
+import { useState } from 'react'
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
+import { PORTALS, getPortalById } from '../config/portals'
+import { foundationForPath } from '../config/foundations'
+
 export default function PortalPage() {
-  const { portalId } = useParams(),
-    portal = portalId ? getPortalById(portalId) : undefined;
-  if (!portal) return <Navigate to="/" replace />;
-  const external = getOptionalExternalDemoUrl(portal.externalDemoEnv);
-  return (
-    <main className="portal-page">
-      <header className="portal-header">
-        <Link to="/" className="brand">
-          WORLDIFACT <span>← Mirror Lake</span>
-        </Link>
-        <nav>
-          {PORTALS.map((p) => (
-            <Link
-              key={p.id}
-              className={p.id === portal.id ? "active" : ""}
-              to={p.route}
-            >
-              {p.shortTitle}
-            </Link>
-          ))}
-        </nav>
-      </header>
-      {portal.id === "ai-game-lab" ? (
-        <Suspense fallback={<LoadingFallback message="Opening Game Lab…" />}>
-          <WorldStudio />
-        </Suspense>
-      ) : portal.id === "enchanted-ai-shop" ? (
-        <>
-          <div className="studio-heading">
-            <div>
-              <span className="eyebrow">ENCHANTED AI SHOP</span>
-              <h1>From world to workbench.</h1>
-            </div>
-            <span className="pill">PRODUCTION VALIDATION REQUIRED</span>
-          </div>
-          <p>
-            Compare manufacturing scenarios, track required repairs, and prepare
-            a candidate for supplier review.
-          </p>
-          <Suspense fallback={<LoadingFallback message="Opening MAKE workbench…" />}>
-            <ManufacturingPanel />
-          </Suspense>
-          <Link className="button-link" to="/portal/ai-game-lab">
-            Open the 3D Game Lab →
-          </Link>
-        </>
-      ) : (
-        <>
-          <div className="studio-heading">
-            <div>
-              <span className="eyebrow">PORTAL PREVIEW · PLANNED</span>
-              <h1>{portal.title}</h1>
-              <p>{portal.description}</p>
-            </div>
-          </div>
-          {portal.id === "chess-cube-512-ai" ? (
-            <section>
-              <h2>512 squares. Eight levels.</h2>
-              <p>
-                This portal is a preview. The 8×8×8 chess engine, AI matches and
-                custom pieces are separate integration work.
-              </p>
-              {external ? (
-                <a href={external}>Open external chess demo</a>
-              ) : (
-                <p className="muted">
-                  A playable chess integration is not connected yet.
-                </p>
-              )}
-            </section>
-          ) : null}
-          {portal.id === "terra-fix-iss" ? (
-            <div className="workflow-pair">
-              <article>
-                <span className="eyebrow">SIMULATION · PLANNED</span>
-                <h2>Fix ISS</h2>
-                <p>
-                  Inspect a damaged station, isolate faults and complete a
-                  restoration mission. This WORLDIFACT portal does not yet
-                  contain the repair game.
-                </p>
-              </article>
-              <article>
-                <span className="eyebrow">REAL DATA · EXTERNAL PROJECT</span>
-                <h2>Terra observation</h2>
-                <p>
-                  Visit the separate Earth-observation project. Its data sources
-                  and dates must be checked in that application; the generated
-                  WORLDIFACT valley is game scenery.
-                </p>
-                <a
-                  href="https://terraforming-planet.github.io/Polar-Sun-Moon-Analysis/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open Terra observation ↗
-                </a>
-              </article>
-            </div>
-          ) : null}
-          {portal.id === "8-planets-in-8-days" ? (
-            <section>
-              <h2>Restoration routes</h2>
-              <p>
-                These are planned levels; platform gameplay is not integrated
-                yet.
-              </p>
-              <ol className="planet-list">
-                {planets.map((p, i) => (
-                  <li key={p}>
-                    <span>{String(i + 1).padStart(2, "0")}</span>
-                    {p}
-                    <small>PLANNED</small>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ) : null}
-          <Link className="button-link" to="/portal/ai-game-lab">
-            Create a playable prototype in the Game Lab →
-          </Link>
-        </>
-      )}
-      <footer className="site-footer">
-        Terraforming Planet · WORLDIFACT{" "}
-        <span>GAME and MAKE have separate validation.</span>
-      </footer>
-    </main>
-  );
+  const { portalId } = useParams()
+  const { pathname } = useLocation()
+  const [loadedFrame, setLoadedFrame] = useState('')
+  const legacy = portalId ? getPortalById(portalId) : undefined
+  if (legacy) return <Navigate to={legacy.route} replace />
+  const app = foundationForPath(pathname)
+  if (!app) return <Navigate to="/" replace />
+  const chessShop = pathname === '/chess/shop'
+  return <main className="portal-page foundation-page">
+    <header className="portal-header">
+      <Link to="/" className="brand">WORLDIFACT<span>← Back to the meadow</span></Link>
+      <nav aria-label="World portals">
+        {PORTALS.map(portal => <Link key={portal.id} to={portal.route}
+          className={portal.id === app.id ? 'active' : ''}>{portal.shortTitle}</Link>)}
+        <Link to="/terra" className={app.route === '/terra' ? 'active' : ''}>Earth observation</Link>
+      </nav>
+    </header>
+    <div className="foundation-heading">
+      <h1>{chessShop ? 'Chess · Boards and pieces shop' : app.title}</h1>
+      <a href={app.original} target="_blank" rel="noreferrer" className="button-link">Open original ↗</a>
+    </div>
+    <nav className="foundation-actions" aria-label="Application tools">
+      {(app.route === '/chess' || chessShop) && <>
+        <Link to="/chess" aria-current={!chessShop ? 'page' : undefined}>Play chess</Link>
+        <Link to="/chess/shop" aria-current={chessShop ? 'page' : undefined}>Shop boards and pieces</Link>
+        <Link to="/make">Check production requirements</Link>
+      </>}
+      {app.route === '/iss' && <Link to="/terra">Open Earth observation →</Link>}
+      {app.route === '/terra' && <Link to="/iss">← Return to the ISS station</Link>}
+      {app.route === '/lab' && <><Link to="/builder">WORLDIFACT scene editor</Link><Link to="/shop">Shop →</Link></>}
+      {app.route === '/shop' && !chessShop && <><Link to="/make">Manufacturing audit</Link><Link to="/lab">Studio behind the shop →</Link></>}
+    </nav>
+    {app.hosting === 'connected' && <p className="foundation-note">
+      Your original application opens below. If it asks you to sign in or does not appear,
+      use “Open original” to access your saved projects in a separate tab.
+    </p>}
+    {app.route === '/planets' && <p className="foundation-note">
+      FORGE World Builder is the existing foundation for the planetary expedition. The eight-level campaign is still being integrated.
+    </p>}
+    {app.route === '/terra' && <p className="foundation-note">
+      <strong>EARTH OBSERVATION</strong> · Check each image’s source and acquisition date. The ISS repair game is a separate simulation.
+    </p>}
+    {chessShop && <p className="foundation-note">
+      Use the existing design studio for a board or piece. Download available models there and check their production requirements before ordering. Direct chess-to-catalog transfer is not connected yet.
+    </p>}
+    <div className="foundation-frame-shell">
+      {loadedFrame !== app.frame && <p className="foundation-loading" role="status">Opening {app.title}…</p>}
+      <iframe key={app.frame} src={app.frame} title={app.title} className="foundation-frame"
+        allow="fullscreen; clipboard-write" allowFullScreen
+        onLoad={() => setLoadedFrame(app.frame)} />
+    </div>
+  </main>
 }

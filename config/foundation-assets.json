@@ -1,0 +1,89 @@
+{
+  "sourceCommit": "293007c888dabef4274fcff3fa810b5ed71eb455",
+  "files": [
+    {
+      "path": "public/apps/iss/assets/astronaut-forge.glb",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/assets/astronaut-forge.glb",
+      "sha256": "747bd89001bd580d85ec90b273a59c4a3ae821973cc01aac0b2814c6cf106d2a",
+      "bytes": 4670868
+    },
+    {
+      "path": "public/apps/iss/assets/interior-training.glb",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/assets/interior-training.glb",
+      "sha256": "9f3fe7e2b67b905a2fbac9d07eb35ad60b3d05874f80923c7154a1b5c25450d2",
+      "bytes": 5120820
+    },
+    {
+      "path": "public/apps/iss/assets/iss-collision.glb",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/assets/iss-collision.glb",
+      "sha256": "c9787ee7aa93b7d9ea3b1960d75de68830248d00e22e5bf9c7c00ff5de0c57e8",
+      "bytes": 1574380
+    },
+    {
+      "path": "public/apps/iss/assets/iss-nasa.glb",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/assets/iss-nasa.glb",
+      "sha256": "8c1f941875b530cbeea6991cd6ad365595c7e49063a21dc2ddc10054d2960089",
+      "bytes": 20240552
+    },
+    {
+      "path": "public/apps/iss/vendor/LICENSE",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/LICENSE",
+      "sha256": "bfe119ea4fd413f5f7ca3fcd63adb0c4a073ed39daa2fe7d3e6b769e21272601",
+      "bytes": 1081
+    },
+    {
+      "path": "public/apps/iss/vendor/build/three.core.js",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/build/three.core.js",
+      "sha256": "eb077d2417f61d3e6d9264c317cabc4ea35769ed6b0ab533067292a550784c20",
+      "bytes": 1403455
+    },
+    {
+      "path": "public/apps/iss/vendor/build/three.module.js",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/build/three.module.js",
+      "sha256": "c8211c69345d2e9949dc7a8ac969380497aa0600a5a8ac6a459c8cd02dd9cb8a",
+      "bytes": 603113
+    },
+    {
+      "path": "public/apps/iss/vendor/examples/jsm/environments/RoomEnvironment.js",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/examples/jsm/environments/RoomEnvironment.js",
+      "sha256": "c20f0b4677f6128a138d7152b85cbef9091f4f45cdfa05adca04d40c1697c7ae",
+      "bytes": 4899
+    },
+    {
+      "path": "public/apps/iss/vendor/examples/jsm/exporters/GLTFExporter.js",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/examples/jsm/exporters/GLTFExporter.js",
+      "sha256": "e7c29444454eb321b39e4c8b3062944f4fd5299a0e7483e9cb8c0594cdec829f",
+      "bytes": 86392
+    },
+    {
+      "path": "public/apps/iss/vendor/examples/jsm/geometries/RoundedBoxGeometry.js",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/examples/jsm/geometries/RoundedBoxGeometry.js",
+      "sha256": "c1b7c9bd2cddff2e3f3a0723f618a3d364a47450e3d25771d21faed88410bec8",
+      "bytes": 6476
+    },
+    {
+      "path": "public/apps/iss/vendor/examples/jsm/loaders/GLTFLoader.js",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/examples/jsm/loaders/GLTFLoader.js",
+      "sha256": "67ac5551fdafa6e349bd80c8f8e5e39c136d6b2fb1ad647db9abb21dc86f9e4a",
+      "bytes": 114739
+    },
+    {
+      "path": "public/apps/iss/vendor/examples/jsm/math/Capsule.js",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/examples/jsm/math/Capsule.js",
+      "sha256": "be54c3c58483a7f6b0184dbc6ffdcea58ac13515a7d9fd19ed675b9edfc5f319",
+      "bytes": 3543
+    },
+    {
+      "path": "public/apps/iss/vendor/examples/jsm/math/Octree.js",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/examples/jsm/math/Octree.js",
+      "sha256": "f71364b8d033e03acef6d33c81198e11595f8053cdceffaf77d3040c541eb536",
+      "bytes": 14863
+    },
+    {
+      "path": "public/apps/iss/vendor/examples/jsm/utils/BufferGeometryUtils.js",
+      "url": "https://fix-iss-repair-game.terraformingplanet.chatgpt.site/vendor/examples/jsm/utils/BufferGeometryUtils.js",
+      "sha256": "fda7e946b8e0b5ab39b779206589e7a1079a22eb24efb89d7223e03fdfb1f751",
+      "bytes": 35539
+    }
+  ]
+}

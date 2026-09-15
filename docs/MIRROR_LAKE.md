@@ -1,4 +1,6 @@
-# Mirror Lake — water portals and touch controls
+# Mirror Lake — historical water portal implementation
+
+Superseded by the owner’s correction on 15 September 2026: restore the green meadow and flowing river, retain the joystick and water portals, and reuse existing games. See FOUNDATION_INTEGRATION.md. The notes below document the previous release, not the current desired layout.
 
 The owner requested working walk-in portals, a realistic world on a mirror-water surface, a generated environment texture and a phone joystick. This change implements that scope in the existing WORLDIFACT application and Cloudflare release workflow.
 

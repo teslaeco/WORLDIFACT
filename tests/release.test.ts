@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { checkCredentialInputs, readDeployment, checkPublishedRelease } from "../scripts/release-check.ts";
 import { handle } from "../server/worker.ts";
 
@@ -45,8 +46,17 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     ["/assets/app.css", "body { color: white; }"],
     ["/assets/lazy.js", "export const portal = true;"],
     ["/assets/lake.webp", "RIFF mock texture bytes"],
+    ["/apps/chess/index.html", '<html>Existing chess app<script src="./game.js"></script></html>'],
+    ["/apps/chess/guest.html", '<html>Existing guest app<script src="./game.js"></script></html>'],
+    ["/apps/chess/game.js", "export const originalChess = true;"],
+    ["/apps/iss/index.html", '<html>Existing ISS application</html>'],
+    ["/apps/terra/index.html", '<html>Existing Terra application</html>'],
   ]);
+  for (const app of ["chess", "iss", "terra"]) await mkdir(join(dist, "apps", app), { recursive: true });
   for (const [path, contents] of files) await writeFile(join(dist, path.slice(1)), contents);
+  await writeFile(join(dist, "foundation-release.json"), JSON.stringify({ files: [...files]
+    .filter(([path]) => path.startsWith("/apps/"))
+    .map(([path, content]) => ({ path, bytes: Buffer.byteLength(content), sha256: createHash("sha256").update(content).digest("hex") })) }));
   const requests: Request[] = [];
   let providerCalls = 0;
   const fetcher = async (url: URL, init: RequestInit) => {
@@ -58,7 +68,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     }) as typeof fetch);
     const asset = files.get(url.pathname);
     return new Response(asset ?? files.get("/index.html"), { headers: {
-      "Content-Type": asset ? (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript") : "text/html",
+      "Content-Type": !asset || url.pathname.endsWith(".html") ? "text/html" : (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript"),
     } });
   };
   return { dist, files, requests, fetcher, providerCalls: () => providerCalls };
@@ -67,8 +77,9 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
 test("release smoke verifies deep links and lazy assets and only sends DEMO without secrets", async (t) => {
   const f = await fixture(t);
   const result = await checkPublishedRelease({ origin, versionId }, f);
-  assert.equal(result.htmlRoutes, 8);
+  assert.equal(result.htmlRoutes, 12);
   assert.equal(result.verifiedAssets, 4);
+  assert.equal(result.foundationAssets, 5);
   assert.equal(f.providerCalls(), 0);
   const posts = f.requests.filter((request) => request.method === "POST");
   assert.equal(posts.length, 2);
@@ -108,4 +119,12 @@ test("release smoke detects a missing panorama served as HTML or a stale image",
     await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /lake\.webp/);
     assert.equal(f.providerCalls(), 0);
   }
+});
+
+test("release rejects a portal wrapper masquerading as a copied original app", async (t) => {
+  const f = await fixture(t);
+  const fetcher = async (url: URL, init: RequestInit) => url.pathname === '/apps/chess/guest.html'
+    ? new Response(f.files.get('/index.html'), { headers: { 'Content-Type': 'text/html' } }) : f.fetcher(url, init);
+  await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /copied application/);
+  assert.equal(f.providerCalls(), 0);
 });

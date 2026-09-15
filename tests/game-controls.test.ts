@@ -29,14 +29,19 @@ test("portal selection follows travel order, ignores current destination and sel
   assert.equal(nearestPortal({ x: 0, z: -1 }, gates, "near")?.id, "far");
 });
 
-test("all five configured water entrances are reachable from spawn through actual village collision", () => {
+test("all five entrances are reachable across the bridge without entering a different portal", () => {
   const habitats = demoBlueprint("village forest").objects.filter(spec => spec.kind === "habitat")
     .map(spec => ({ spec, doorOpen: false }));
   const spawn = { x: 0, z: 17 };
   for (const portal of PORTALS) {
-    const end = movePlayer(spawn, portal.position, habitats);
-    assert.ok(Math.hypot(end.x - portal.position.x, end.z - portal.position.z) < 0.01, portal.id);
-    assert.equal(enteredPortal(spawn, end, PORTALS)?.id, portal.id);
+    let from = spawn;
+    const route = [{ x: 0, z: -6.5 }, { x: portal.position.x, z: -6.5 }, portal.position];
+    for (const [index, waypoint] of route.entries()) {
+      const end = movePlayer(from, waypoint, habitats);
+      assert.ok(Math.hypot(end.x - waypoint.x, end.z - waypoint.z) < 0.01, portal.id);
+      assert.equal(enteredPortal(from, end, PORTALS)?.id, index === route.length - 1 ? portal.id : undefined);
+      from = end;
+    }
   }
 });
 
