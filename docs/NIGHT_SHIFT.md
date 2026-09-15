@@ -2,7 +2,7 @@ Updated: 2026-09-15T11:27:40Z
 
 # WORLDIFACT night shift
 
-Owner: root conversation. State: IDLE — foundation source checkpoint prepared for CI/release, 2026-09-15. No paid generation authorized. Set ACTIVE before another edit; keep the original applications and meadow/river design.
+Owner: root conversation. State: IDLE — foundation release and bounded propagation check prepared, 2026-09-15. No paid generation authorized. Set ACTIVE before another edit.
 
 ## Authorized scope
 
@@ -89,3 +89,5 @@ The original ISS computer now opens the separately copied Terra Earth-observatio
 Additional blocks: full Shop/Studio archive reads returned ownership-verification denial; their Git source service returned HTTP 500. Do not bypass the archive denial. Public browser continuation previously hit an automatic approval usage-limit rejection; no alternate browser or CI renderer was used.
 
 Foundation local verification: 57/57 tests, TypeScript, production build and local DEMO HTTP pass. Lint has seven pre-existing unused-variable warnings in the imported ISS source and no errors. Worker dry-run passes for the local hub + ISS package; CI must also assemble the pinned Chess/Terra builds before deployment. No visual/Android or full-migration pass is implied.
+
+PR #6 passed CI 35006048011 on e08124f30578e39ca21eb2f1206579c9813bf072 and merged as 0ea90397c00dfdbf0e98e3d645d77b95da1124b4. Its automatic release 35006854698 deployed 5c670d3b-95fd-4086-9910-788381fed3a3 but immediate root HTML still differed from the build. The follow-up adds bounded asset GET retries (2/4/8/16 seconds), preserving strict hashes and never retrying generation POSTs. Follow-up local verification: 58/58 tests, TypeScript, HTTP, build, Worker dry-run and diff pass; seven imported ISS lint warnings persist. Final release proof belongs in the follow-up PR.

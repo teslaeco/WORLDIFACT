@@ -1,6 +1,6 @@
 # WORLDIFACT contest submission draft
 
-Prepared 15 September 2026 for owner review. Do not submit this draft until the release gates in `CONTEST_STATUS.md` pass.
+Prepared 15 September 2026 for owner review; updated for the existing foundations in PR #6. Do not submit until CONTEST_STATUS.md gates pass. No paid generation is currently authorized.
 
 ## Product Hunt fields
 
@@ -10,9 +10,9 @@ Tagline (54/60 characters):
 
 > Build playable AI worlds, then prepare them to be made
 
-Description (205/260 characters):
+Description (202/260 characters, recheck the live field limit):
 
-> Turn prompts into playable 3D scenes with GPT-6 Astra. Explore a river valley, drive a rover, edit and combine saved worlds, then export GAME geometry and review separate MAKE candidates for manufacturing.
+> Explore a 3D river valley linking our chess engine, ISS repair game, Earth observation and creation studios. Edit and export GAME scenes, then review separate MAKE candidates. Astra generation is gated.
 
 Suggested topics, subject to the live form: `AI`, `Developer Tools`, `3D Design`
 
@@ -20,15 +20,15 @@ Maker comment draft:
 
 > I started WORLDIFACT from a practical question: how can one person move from an idea to a world they can explore, improve and eventually manufacture responsibly? The current prototype connects a playable river valley, five project portals, a prompt-to-scene workflow and a production workbench.
 >
-> GPT-6 Astra is used server-side to turn a prompt and optional reference image into a strict WorldBlueprint. The browser validates that blueprint and builds a procedural scene with objects that can be moved, scaled, recolored, rotated, archived, combined and exported. A no-key DEMO remains available, but it is clearly labelled and does not pretend to be AI.
+> The server integration is designed to use GPT-6 Astra to turn a prompt and optional reference image into a strict WorldBlueprint. Paid generation is currently disabled, and this project has not yet recorded a controlled LIVE result. The browser validates that blueprint and builds a procedural scene with objects that can be moved, scaled, recolored, rotated, archived, combined and exported. A no-key DEMO remains available, but it is clearly labelled and does not pretend to be AI.
 >
 > WORLDIFACT also separates GAME from MAKE. A mesh that looks good in a game is not automatically printable. The workbench records process-specific walls, detail, clearance, color and supplier-review requirements, with unknown prices shown as unknown rather than invented.
 >
-> This is an early foundation for connected worlds including Cube Chess 512 AI, Terra observation and a future ISS restoration simulation. Those portals are labelled as planned where gameplay is not yet integrated. I would love feedback on the scene-building flow and on the clearest next step from a procedural world to a responsibly manufactured object.
+> This hub reuses our existing Cube Chess 512 AI engine, Fix ISS repair game and Terra observation frontend. The original FORGE shop, World Builder and Froge studio are connected; their complete backend/storage migration remains unfinished. The ISS computer opens Terra with a Nile mission brief and returns to the same station progress. The eight-planet campaign and direct chess-to-shop transfer are still in progress. I would love feedback on the scene-building flow and on the clearest next step from a procedural world to a responsibly manufactured object.
 
 ## Shoutouts
 
-ChatGPT / OpenAI (Astra and coding assistance), Three.js (renderer), React and Vite (application), Cloudflare (only after the deployment actually uses it). Match the live form’s tool records; do not imply a supplier partnership.
+ChatGPT / OpenAI (Astra and coding assistance), Three.js (renderer), React and Vite (application), Cloudflare (production hosting). Match the live form’s tool records; do not imply a supplier partnership.
 
 ## 90-second demo recording script
 
@@ -36,10 +36,10 @@ Record only after the exact public release, browser/device QA and one owner-appr
 
 1. **0–10 seconds — Enter the valley.** Show the river, bridge and all five portals. Say: “WORLDIFACT is one shared 3D world where ideas become playable scenes and carefully reviewed physical candidates.”
 2. **10–22 seconds — Prove interaction.** Walk with controls, open a workshop door, enter and exit the solar rover, then stop near a portal. Do not imply that every portal already contains a finished game.
-3. **22–42 seconds — Prove Astra.** Open AI Game Lab. Select LIVE only when the configuration is ready and approved preview access is available. Enter a short prompt, attach an optional cleared reference image, generate, and keep the LIVE/result label visible. Say: “GPT-6 Astra returns a strict WorldBlueprint through a server-only Responses API integration; it does not return unchecked code.”
+3. **22–42 seconds — Prove Astra.** Open the WORLDIFACT scene editor at /builder. Select LIVE only when the configuration is ready and approved preview access is available. Enter a short prompt, attach an optional cleared reference image, generate, and keep the LIVE/result label visible. Say: “GPT-6 Astra returns a strict WorldBlueprint through a server-only Responses API integration; it does not return unchecked code.”
 4. **42–61 seconds — Shape the world.** Move, rotate, scale and recolor one object. Walk through the updated scene. Save it, find it in the device archive, and add a saved world to the current composition.
 5. **61–72 seconds — Restore and export.** Export JSON, import that same validated blueprint, then export the procedural GAME GLB. Say clearly that the exported file contains scene geometry, not the controller or a certified production model.
-6. **72–85 seconds — GAME versus MAKE.** Open Enchanted AI Shop. Show the observed 100 mm legacy-Queen prices and the production profiles. Point out one UNKNOWN/BLOCKED Sculpteo price and one known JLC3DP result.
+6. **72–85 seconds — GAME versus MAKE.** Open the manufacturing audit at /make. Show the observed 100 mm legacy-Queen prices and the production profiles. Point out one UNKNOWN/BLOCKED Sculpteo price and one known JLC3DP result.
 7. **85–90 seconds — Close honestly.** Say: “WORLDIFACT connects imagination, playable structure and manufacturing evidence—without confusing a beautiful render with a finished product.”
 
 Capture checklist:
@@ -84,7 +84,7 @@ Verification to paste only for checks run on the reconciled PR commit:
 - `[ ] One real budget-approved Astra request`
 - `[ ] Public HTTPS routes and refresh`
 
-Known release blocks: browser/device QA, paid LIVE proof and secrets, authenticated Cloudflare account, current Queen/Julie originals, exact ISS production validation, public media and the bot-blocked live form. Review reconciliation/CI evidence in CONTEST_STATUS.md.
+Known contest blocks: browser/device QA, controlled LIVE proof (currently prohibited), genuine launch media and the unresolved live form. Full Shop/Studio/World Builder migration and direct catalog transfer remain incomplete. Cloudflare is already deployed and the OpenAI server secret is configured. Current source-model and supplier approval limits remain separate MAKE gates. Review reconciliation/CI evidence in CONTEST_STATUS.md.
 
 ## Source and rule notes
 
