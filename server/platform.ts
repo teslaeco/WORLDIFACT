@@ -84,15 +84,15 @@ async function readOracleHealth(env: PlatformEnv, fetcher: typeof fetch) {
     const characterStandard = body.characterStandard;
     const provider = body.provider;
     const model = body.model;
-    if (typeof body.ready !== 'boolean' || !Number.isSafeInteger(connectorVersion) ||
-      connectorVersion < 1 || connectorVersion > 10_000 ||
-      (characterStandard !== undefined && (!Number.isSafeInteger(characterStandard) || characterStandard < 1 || characterStandard > 10_000)) ||
-      (provider !== undefined && !['openai', 'ollama'].includes(String(provider))) ||
+    if (typeof body.ready !== 'boolean' ||
+      typeof connectorVersion !== 'number' || !Number.isSafeInteger(connectorVersion) || connectorVersion < 1 || connectorVersion > 10_000 ||
+      (characterStandard !== undefined && (typeof characterStandard !== 'number' || !Number.isSafeInteger(characterStandard) || characterStandard < 1 || characterStandard > 10_000)) ||
+      (provider !== undefined && (typeof provider !== 'string' || !['openai', 'ollama'].includes(provider))) ||
       (model !== undefined && (typeof model !== 'string' || !/^[A-Za-z0-9._:-]{1,120}$/.test(model))))
       return { oracle: 'INVALID_HEALTH_RESPONSE' as const };
     return {
       oracle: body.ready === true ? 'CONNECTOR_READY' as const : 'CONNECTOR_NOT_READY' as const,
-      connectorVersion: connectorVersion as number,
+      connectorVersion,
       ...(typeof characterStandard === 'number' ? { characterStandard } : {}),
       ...(typeof provider === 'string' ? { provider } : {}),
       ...(typeof model === 'string' ? { model } : {}),
