@@ -1,15 +1,19 @@
 # WORLDIFACT — AI Worlds Made Real
 
-WORLDIFACT is a browser 3D prototype connecting an explorable valley, a procedural scene studio and a manufacturing workbench. This source is a review candidate. The application has not been deployed or verified in a browser during this audit.
+WORLDIFACT is a browser 3D prototype connecting an explorable valley, a procedural scene studio and a manufacturing workbench.
+
+**Public DEMO:** https://worldifact.xodobrox.workers.dev
+
+The first successful public release passed [GitHub deployment and public HTTP verification](https://github.com/teslaeco/WORLDIFACT/actions/runs/34956564451) on 15 September 2026. HTTP checks are not evidence of browser gameplay, physical Android quality or real Astra generation. See [release automation and evidence](docs/AUTOMATION_STATUS.md) for the exact baseline and remaining gates.
 
 ## What is implemented
 
 - A Three.js valley with five portals, mountains, river, bridge, rover driving, opening workshop doors, keyboard/mouse and touch controls.
 - AI Game Lab: prompt-driven DEMO scenes, valley/lunar/ocean biomes, editable colors and scales, object removal, device archive, composition, blueprint JSON and actual procedural GLB export.
-- A server-only `gpt-6-astra` Responses API integration using a strict `WorldBlueprint` schema. Paid generation is disabled by default. Only a successful real request earns the LIVE label; this branch has been tested with mocked provider responses only.
+- A server-only `gpt-6-astra` Responses API integration using a strict `WorldBlueprint` schema. Paid generation is disabled by default. Only a successful real request earns the LIVE label; provider-response tests so far use mocks.
 - Preview access code, expiry, a persistent global reservation ceiling and per-IP throttling. Provider response IDs, scene hashes and reported token usage can be exported without secrets.
 - Enchanted AI Shop: local GLB review with geometry/textured views and SHA-256, two supplier candidates, observed preliminary JLC3DP prices, explicit cost assumptions and a production revision checklist.
-- Cloudflare Worker + static assets configuration, CI verification and a manual production workflow.
+- Cloudflare Worker + static assets configuration, CI, main-branch release automation, optional secure OpenAI provisioning and a retained manual DEPLOY control.
 
 Chess Cube 512 AI and 8 Planets are planned portal previews. Terra links to a separate project; a playable ISS mission and live Earth-observation feed are not integrated here. No complete five-game collection is claimed.
 
@@ -54,12 +58,14 @@ Move with WASD/arrows, look by dragging, and press E near a portal or object. On
 
 The model creates a structured arrangement of six supported procedural object kinds, not an arbitrary high-detail reconstructed mesh. The optional image can guide LIVE composition; DEMO does not analyze it. A generated GLB contains geometry/materials, not the controller code or a certified fabrication file.
 
-The archive stores up to 30 successful scene records in this browser's local storage. It is not cloud synchronization. Local GLB files are not uploaded by the viewer. Reference images are sent to the backend/provider only when the user requests enabled LIVE generation. See `PRIVACY.md`, `TERMS.md` and the implementation inventory in `docs/DATA_HANDLING.md`.
+The archive stores up to 30 successful scene records in this browser's local storage. It is not cloud synchronization. Local GLB files are not uploaded by the viewer. Reference images are sent to the backend/provider only when the user requests enabled LIVE generation. See `PRIVACY.md`, `TERMS.md` and `docs/DATA_HANDLING.md`.
 
 Every MAKE candidate requires process-specific mesh, wall, clearance, color-package and supplier review. The recovered legacy Queen is outside this repository and is not the current approved character. Quote tests are not orders or production approvals.
 
-## Release preparation
+## Release and OpenAI setup
 
-See `docs/CLOUDFLARE.md`, `docs/CONTEST_STATUS.md`, `docs/ASSET_LICENSES.md` and `docs/MANUFACTURING_AUDIT.md`. The contest release is currently NO-GO: live Astra evidence, browser/device QA, public URL and launch materials remain outstanding. [PR #2](https://github.com/teslaeco/WORLDIFACT/pull/2) contains the source review; its implementation snapshot passed [GitHub verification](https://github.com/teslaeco/WORLDIFACT/actions/runs/34934275354). Check the PR for the latest commit status.
+A main push or merge starts the verified DEMO release pipeline. Production environment approvals, if configured, still apply. Missing `OPENAI_API_KEY` produces a clear BLOCKED connection warning while allowing DEMO deployment. A supplied key is checked against the official model metadata endpoint and copied to the Worker secret store without appearing in the frontend. A successful configuration check is not LIVE evidence and cannot enable paid generation by itself.
+
+See `docs/CLOUDFLARE_SETUP.md`, `docs/AUTOMATION_STATUS.md`, `docs/CONTEST_STATUS.md`, `docs/ASSET_LICENSES.md` and `docs/MANUFACTURING_AUDIT.md`. The public DEMO is deployed; the final contest launch remains NO-GO until real Astra evidence, browser/device QA and launch materials pass their separate gates. PR #2 and the redirect fix in PR #3 are merged; old draft PR #1 remains unmerged.
 
 The source-code license is MIT; private source assets, third-party brands and linked projects are not relicensed by this repository.

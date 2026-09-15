@@ -1,9 +1,11 @@
-name: Publish approved Cloudflare release
+name: Publish WORLDIFACT and verify OpenAI setup
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type DEPLOY after reviewing the release and production costs
+        description: Type DEPLOY to republish the reviewed DEMO release
         required: true
         type: string
 permissions:
@@ -13,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'DEPLOY')
     environment:
       name: production
       url: ${{ steps.release.outputs.url }}
@@ -33,7 +35,15 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm run deploy:check
-      - name: Deploy manually approved source
+      - name: Connect optional OpenAI secrets without paid generation
+        id: openai
+        run: node scripts/connect-openai.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GENERATION_ACCESS_TOKEN: ${{ secrets.GENERATION_ACCESS_TOKEN }}
+      - name: Deploy verified DEMO source
         run: npm run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
