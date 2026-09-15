@@ -6,9 +6,19 @@ export interface PlatformEnv {
   ORACLE_API_TOKEN?: string;
   GENERATION_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
+
+export const ORACLE_WORLD_IDS = [
+  'chess-cube-512-ai',
+  'terra-fix-iss',
+  '8-planets-in-8-days',
+  'enchanted-ai-shop',
+  'ai-game-lab',
+] as const;
+
 const reply = (data: unknown, status = 200) => Response.json(data, {
   status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
 });
+
 export function oracleOrigin(value: string | undefined) {
   try {
     const u = new URL(value || '');
@@ -18,6 +28,7 @@ export function oracleOrigin(value: string | undefined) {
     return u.origin;
   } catch { return null; }
 }
+
 export function platformStatus(env: PlatformEnv) {
   return {
     checkedAt: new Date().toISOString(),
@@ -28,6 +39,7 @@ export function platformStatus(env: PlatformEnv) {
       (env.OWNER_ACCESS_TOKEN?.length ?? 0) <= 256 && !!env.GENERATION_LIMITER,
   };
 }
+
 async function authorized(request: Request, expected: string) {
   const supplied = request.headers.get('X-WORLDIFACT-Owner') || '';
   if (supplied.length < 32 || supplied.length > 256) return false;
@@ -38,6 +50,7 @@ async function authorized(request: Request, expected: string) {
   for (let i = 0; i < aa.length; i++) delta |= aa[i] ^ bb[i];
   return delta === 0;
 }
+
 async function smallJson(response: Response): Promise<Record<string, unknown>> {
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
     await response.body?.cancel(); throw new Error('Invalid response');
@@ -57,9 +70,52 @@ async function smallJson(response: Response): Promise<Record<string, unknown>> {
   if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid response');
   return result as Record<string, unknown>;
 }
+
+async function readOracleHealth(env: PlatformEnv, fetcher: typeof fetch) {
+  const origin = oracleOrigin(env.ORACLE_ENDPOINT);
+  if (!origin || !env.ORACLE_API_TOKEN) return { oracle: 'NOT_CONFIGURED' as const };
+  try {
+    const r = await fetcher(`${origin}/v1/health`, {
+      method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(8000),
+      headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: 'application/json' },
+    });
+    const body = await smallJson(r);
+    if (typeof body.ready !== 'boolean' || !Number.isSafeInteger(body.connectorVersion))
+      return { oracle: 'INVALID_HEALTH_RESPONSE' as const };
+    return {
+      oracle: body.ready === true ? 'CONNECTOR_READY' as const : 'CONNECTOR_NOT_READY' as const,
+      connectorVersion: body.connectorVersion as number,
+    };
+  } catch {
+    return { oracle: 'CHECK_FAILED' as const };
+  }
+}
+
 export async function platformApi(request: Request, env: PlatformEnv, fetcher: typeof fetch = fetch) {
   const url = new URL(request.url);
   if (url.pathname === '/api/platform' && request.method === 'GET') return reply(platformStatus(env));
+
+  if (url.pathname === '/api/platform/oracle-worlds') {
+    if (request.method !== 'GET') return reply({ error: 'Use GET' }, 405);
+    if (!oracleOrigin(env.ORACLE_ENDPOINT) || !env.ORACLE_API_TOKEN)
+      return reply({ checkedAt: new Date().toISOString(), oracle: 'NOT_CONFIGURED',
+        worlds: ORACLE_WORLD_IDS.map(id => ({ id, oracle: 'NOT_CONFIGURED' })) }, 503);
+    if (!env.GENERATION_LIMITER) return reply({ error: 'Oracle bridge limiter is not configured' }, 503);
+    try {
+      const key = `oracle-worlds:${request.headers.get('CF-Connecting-IP') || 'unknown-client'}`;
+      if (!(await env.GENERATION_LIMITER.limit({ key })).success)
+        return reply({ error: 'Please wait before checking Oracle again' }, 429);
+    } catch { return reply({ error: 'Check limiter unavailable' }, 503); }
+    const health = await readOracleHealth(env, fetcher);
+    return reply({
+      checkedAt: new Date().toISOString(),
+      oracle: health.oracle,
+      ...(health.connectorVersion ? { connectorVersion: health.connectorVersion } : {}),
+      worlds: ORACLE_WORLD_IDS.map(id => ({ id, oracle: health.oracle })),
+      evidence: 'One authenticated read-only Oracle health check shared by all five WORLDIFACT worlds. No generation, render or job was requested.',
+    }, health.oracle === 'CONNECTOR_READY' || health.oracle === 'CONNECTOR_NOT_READY' ? 200 : 502);
+  }
+
   if (url.pathname !== '/api/platform/check') return reply({ error: 'Not found' }, 404);
   if (request.method !== 'POST') return reply({ error: 'Use POST' }, 405);
   if (request.headers.get('Origin') !== url.origin) return reply({ error: 'Same-origin request required' }, 403);
@@ -69,7 +125,7 @@ export async function platformApi(request: Request, env: PlatformEnv, fetcher: t
     if (!(await env.GENERATION_LIMITER!.limit({ key: 'platform-owner-check' })).success)
       return reply({ error: 'Please wait before checking again' }, 429);
   } catch { return reply({ error: 'Check limiter unavailable' }, 503); }
-  let openai = 'NOT_CONFIGURED', oracle = 'NOT_CONFIGURED';
+  let openai = 'NOT_CONFIGURED';
   if (env.OPENAI_API_KEY) {
     try {
       const model = env.OPENAI_MODEL || 'gpt-6-astra';
@@ -82,18 +138,7 @@ export async function platformApi(request: Request, env: PlatformEnv, fetcher: t
       openai = body.object === 'model' && body.id === model ? 'MODEL_ACCESS_VERIFIED' : 'INVALID_METADATA';
     } catch { openai = 'CHECK_FAILED'; }
   }
-  const origin = oracleOrigin(env.ORACLE_ENDPOINT);
-  if (origin && env.ORACLE_API_TOKEN) {
-    try {
-      const r = await fetcher(`${origin}/v1/health`, {
-        method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(8000),
-        headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: 'application/json' },
-      });
-      const body = await smallJson(r);
-      oracle = typeof body.ready !== 'boolean' || !Number.isSafeInteger(body.connectorVersion)
-        ? 'INVALID_HEALTH_RESPONSE' : body.ready === true ? 'CONNECTOR_READY' : 'CONNECTOR_NOT_READY';
-    } catch { oracle = 'CHECK_FAILED'; }
-  }
-  return reply({ checkedAt: new Date().toISOString(), openai, oracle,
+  const oracleHealth = await readOracleHealth(env, fetcher);
+  return reply({ checkedAt: new Date().toISOString(), openai, oracle: oracleHealth.oracle,
     evidence: 'Read-only model metadata and connector health. No generation, render or job was requested.' });
 }
