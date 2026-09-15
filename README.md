@@ -1,37 +1,65 @@
-# WORLDIFACT
-A public competition demo of an AI-powered 3D universe where games, Earth observation, digital creation and real manufacturing meet. Explore Chess Cube 512 AI, Terra: Fix ISS, 8 Planets in 8 Days, the Enchanted AI Shop and AI Game Lab.
+# WORLDIFACT — AI Worlds Made Real
 
-**AI Worlds Made Real**
+WORLDIFACT is a browser 3D prototype connecting an explorable valley, a procedural scene studio and a manufacturing workbench. This source is a review candidate. The application has not been deployed or verified in a browser during this audit.
 
-Play. Design. Make It Real.
+## What is implemented
 
-WORLDIFACT is an interactive 3D world-building studio where games, science, artificial intelligence and real-world manufacturing come together in one place.
+- A Three.js valley with five portals, mountains, river, bridge, rover driving, opening workshop doors, keyboard/mouse and touch controls.
+- AI Game Lab: prompt-driven DEMO scenes, valley/lunar/ocean biomes, editable colors and scales, object removal, device archive, composition, blueprint JSON and actual procedural GLB export.
+- A server-only `gpt-6-astra` Responses API integration using a strict `WorldBlueprint` schema. Paid generation is disabled by default. Only a successful real request earns the LIVE label; this branch has been tested with mocked provider responses only.
+- Preview access code, expiry, a persistent global reservation ceiling and per-IP throttling. Provider response IDs, scene hashes and reported token usage can be exported without secrets.
+- Enchanted AI Shop: local GLB review with geometry/textured views and SHA-256, two supplier candidates, observed preliminary JLC3DP prices, explicit cost assumptions and a production revision checklist.
+- Cloudflare Worker + static assets configuration, CI verification and a manual production workflow.
 
-The adventure begins in a green meadow surrounded by mountains. A river flows through the valley, and its surface acts like a living mirror. As the player approaches the water, images of five portals appear, leading to new worlds.
+Chess Cube 512 AI and 8 Planets are planned portal previews. Terra links to a separate project; a playable ISS mission and live Earth-observation feed are not integrated here. No complete five-game collection is claimed.
 
-1. CHESS CUBE 512 AI
+The original main-branch product vision is preserved in `docs/PROJECT_VISION.md` as a roadmap, separate from implemented features.
 
-Enter the world of three-dimensional 8 × 8 × 8 chess. Play matches, train artificial intelligence, and design your own boards and pieces. You can keep an approved set inside the game or order it as a real physical product.
+## Run locally
 
-2. TERRA — FIX ISS
+Use Node.js 24 and `npm ci`.
 
-Travel to the International Space Station. Control an astronaut, use tools and complete realistic repair tasks: replace fuses, tighten connections, seal modules and repair onboard systems. This portal combines a story-driven simulation with real Earth observation and technical education.
+```sh
+npm run dev:api
+# In a second terminal:
+npm run dev -- --host 127.0.0.1
+```
 
-3. 8 PLANETS IN 8 DAYS
+Open the Vite URL. Its `/api` proxy points to `127.0.0.1:8787`. Without an approved backend key/configuration, local DEMO scene creation remains available.
 
-A platforming adventure across eight unique planets. Each world has its own environment, hazards, laws of physics, missions and technologies needed to protect or restore it.
+`dev:api` is deliberately DEMO-only. For an approved live test, build once and use `npm run dev:worker` in place of `dev:api`; this uses the same Cloudflare Worker and Durable Object quota as deployment. Read `docs/CLOUDFLARE_SETUP.md` before setting secrets or enabling paid generation.
 
-4. ENCHANTED AI SHOP
+```sh
+npm run verify
+npm run deploy:check
+```
 
-Describe your dream object or upload an image. AI will create its 3D model and textures. The customer approves the geometry and visual appearance separately. Any rejected element is generated again. Once the design is approved, the system prepares an automatic manufacturing quote for producing the object from plastic, metal, stone or another available material.
+Verification runs lint, TypeScript, unit/integration tests, a real local HTTP smoke test and the production build. The deployment check packages the Worker without publishing it. Neither replaces browser gameplay, Android or live AI verification.
 
-5. AI GAME LAB
+## Controls and routes
 
-A laboratory for creating your own games and worlds with AI. Enter a prompt or upload an image to generate a character, vehicle, building, object or complete environment. Browse the model archive, combine assets on a single map, enter buildings, open doors and drive the vehicles you create.
+Move with WASD/arrows, look by dragging, and press E near a portal or object. On-screen controls provide touch movement, door and vehicle actions. Direct portal links remain available if WebGL fails.
 
-Every approved project can have two separate versions:
+| Route | Current scope |
+|---|---|
+| `/` | Valley, rover, workshop, portal navigation |
+| `/portal/ai-game-lab` | Scene studio and device archive |
+| `/portal/enchanted-ai-shop` | Model review and manufacturing workbench |
+| `/portal/chess-cube-512-ai` | Planned integration; optional `VITE_WORLDIFACT_CHESS_DEMO_URL` |
+| `/portal/terra-fix-iss` | Context and external Terra project link |
+| `/portal/8-planets-in-8-days` | Planned mission preview |
+| `/privacy`, `/terms` | Data and preview notices; final operator contact requires review |
 
-- GAME — a GLB/FBX model with PBR textures, optimized for games and animation.
-- MAKE — a validated model prepared for 3D printing, CNC machining or laser cutting, depending on its design and material.
+## Generation and data boundaries
 
-WORLDIFACT turns an idea into a digital world—and a digital world into something you can touch.
+The model creates a structured arrangement of six supported procedural object kinds, not an arbitrary high-detail reconstructed mesh. The optional image can guide LIVE composition; DEMO does not analyze it. A generated GLB contains geometry/materials, not the controller code or a certified fabrication file.
+
+The archive stores up to 30 successful scene records in this browser's local storage. It is not cloud synchronization. Local GLB files are not uploaded by the viewer. Reference images are sent to the backend/provider only when the user requests enabled LIVE generation. See `PRIVACY.md`, `TERMS.md` and the implementation inventory in `docs/DATA_HANDLING.md`.
+
+Every MAKE candidate requires process-specific mesh, wall, clearance, color-package and supplier review. The recovered legacy Queen is outside this repository and is not the current approved character. Quote tests are not orders or production approvals.
+
+## Release preparation
+
+See `docs/CLOUDFLARE.md`, `docs/CONTEST_STATUS.md`, `docs/ASSET_LICENSES.md` and `docs/MANUFACTURING_AUDIT.md`. The contest release is currently NO-GO: live Astra evidence, browser/device QA, public URL and launch materials remain outstanding. [PR #2](https://github.com/teslaeco/WORLDIFACT/pull/2) contains the source review; its implementation snapshot passed [GitHub verification](https://github.com/teslaeco/WORLDIFACT/actions/runs/34934275354). Check the PR for the latest commit status.
+
+The source-code license is MIT; private source assets, third-party brands and linked projects are not relicensed by this repository.

@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "worldifact",
+  "main": "server/worker.ts",
+  "compatibility_date": "2026-09-14",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "OPENAI_MODEL": "gpt-6-astra",
+    "ENABLE_PAID_GENERATION": "false",
+    "GENERATION_REQUEST_LIMIT": "0",
+    "GENERATION_EXPIRES_AT": ""
+  },
+  "durable_objects": {
+    "bindings": [{"name": "GENERATION_BUDGET", "class_name": "GenerationBudget"}]
+  },
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["GenerationBudget"]}],
+  "ratelimits": [{"name":"GENERATION_LIMITER", "namespace_id":"5122026", "simple":{"limit":3,"period":60}}],
+  "observability": {"enabled":false}
+}
