@@ -2,6 +2,22 @@ import type { WorldObject } from "./blueprint.ts";
 export interface PointXZ { x: number; z: number }
 export interface HabitatObstacle { spec: WorldObject; doorOpen: boolean }
 
+/** Keep the walking avatar outside car bodies; boarding owns the door passage. */
+export function avoidVehicleBodies(from: PointXZ, target: PointXZ, vehicles: WorldObject[]): PointXZ {
+  const occupied = (point: PointXZ) => vehicles.some(spec => {
+    const p = local(point, spec);
+    return Math.abs(p.x) < 1.65 && Math.abs(p.z) < 2.6;
+  });
+  const count = Math.max(1, Math.ceil(Math.hypot(target.x - from.x, target.z - from.z) / .08));
+  let safe = { ...from };
+  for (let i = 1; i <= count; i++) {
+    const next = { x: from.x + (target.x - from.x) * i / count, z: from.z + (target.z - from.z) * i / count };
+    if (occupied(next)) break;
+    safe = next;
+  }
+  return safe;
+}
+
 function local(point: PointXZ, spec: WorldObject): PointXZ {
   const angle = spec.rotation * Math.PI / 180;
   const x = point.x - spec.x, z = point.z - spec.z;
@@ -43,8 +59,8 @@ export function movePlayer(from: PointXZ, target: PointXZ, habitats: HabitatObst
   return safe;
 }
 
-export function findRoverExit(rover: PointXZ, rotation: number, scale: number, habitats: HabitatObstacle[]): PointXZ | null {
-  for (const offset of [Math.PI / 2, -Math.PI / 2, 0, Math.PI, Math.PI / 4, -Math.PI / 4]) {
+export function findRoverExit(rover: PointXZ, rotation: number, scale: number, habitats: HabitatObstacle[], driverOnly = false): PointXZ | null {
+  for (const offset of driverOnly ? [-Math.PI / 2] : [-Math.PI / 2, Math.PI / 2, 0, Math.PI, Math.PI / 4, -Math.PI / 4]) {
     const angle = rotation + offset;
     const distance = 3.5 * scale + 0.5;
     const point = { x: rover.x + Math.sin(angle) * distance, z: rover.z + Math.cos(angle) * distance };

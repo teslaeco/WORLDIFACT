@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createSolarVehicle } from "./solarVehicle.ts";
 import type { WorldObject } from "./blueprint.ts";
 
 function material(color: string, metalness = 0, roughness = 0.7) {
@@ -27,39 +28,18 @@ export function createWorldObject(o: WorldObject) {
   g.position.set(o.x, 0, o.z);
   g.rotation.y = (o.rotation * Math.PI) / 180;
   g.scale.setScalar(o.scale);
+  if (o.kind === "rover") {
+    const vehicle = createSolarVehicle();
+    for (const child of [...vehicle.children]) g.add(child);
+    updateWorldObject(g, o);
+    return g;
+  }
   const base = material(o.color),
     dark = material("#273c49", 0.4),
     glass = material("#56c9d3", 0.55, 0.18),
-    white = material("#eff2e1"),
-    rubber = material("#192a31");
+    white = material("#eff2e1");
   base.name = "worldifact-object-color";
-  if (o.kind === "rover") {
-    box(g, [2.8, 0.5, 4.3], [0, 0.85, 0], base);
-    box(g, [2.5, 0.22, 4.6], [0, 0.63, 0], dark);
-    box(g, [2.15, 1.1, 1.8], [0, 1.6, -0.4], glass);
-    box(g, [2.5, 0.12, 2.4], [0, 2.2, -0.4], dark);
-    box(g, [2.1, 0.07, 1.35], [0, 1.2, 1.25], material("#315196", 0.3, 0.25));
-    for (const x of [-1.42, 1.42])
-      for (const z of [-1.45, 1.45]) {
-        const wheel = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.6, 0.6, 0.4, 16),
-          rubber,
-        );
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(x, 0.61, z);
-        wheel.name = "wheel";
-        g.add(wheel);
-        const hub = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.3, 0.3, 0.43, 12),
-          white,
-        );
-        hub.rotation.z = Math.PI / 2;
-        hub.position.copy(wheel.position);
-        g.add(hub);
-      }
-    for (const x of [-0.88, 0.88])
-      box(g, [0.5, 0.22, 0.08], [x, 1, -2.19], material("#fff0bd", 0.1));
-  } else if (o.kind === "habitat") {
+  if (o.kind === "habitat") {
     box(g, [5.8, 0.25, 5], [0, 0.12, 0], dark);
     box(g, [5.5, 3.2, 0.2], [0, 1.8, -2.3], base);
     for (const x of [-2.65, 2.65]) box(g, [0.2, 3.2, 4.6], [x, 1.8, 0], base);

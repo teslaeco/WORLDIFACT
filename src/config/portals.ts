@@ -10,7 +10,7 @@ export const PORTALS: readonly PortalDefinition[] = [
     description:
       'Compete in volumetric chess matches, train AI opponents, and design custom boards and pieces.',
     color: '#90caf9',
-    position: { x: -14, z: 0 },
+    position: { x: -20, z: 2.7 },
     externalDemoEnv: 'VITE_WORLDIFACT_CHESS_DEMO_URL',
   },
   {
@@ -22,7 +22,7 @@ export const PORTALS: readonly PortalDefinition[] = [
     description:
       'Coordinate story-driven ISS repair scenarios and explore clearly labeled Earth-observation experiences.',
     color: '#ffcc80',
-    position: { x: -6, z: 0 },
+    position: { x: -10, z: 2.7 },
   },
   {
     id: '8-planets-in-8-days',
@@ -33,7 +33,7 @@ export const PORTALS: readonly PortalDefinition[] = [
     description:
       'Travel across planets with unique physics, hazards and restoration technologies.',
     color: '#ce93d8',
-    position: { x: 16, z: 0 },
+    position: { x: 0, z: 2.7 },
   },
   {
     id: 'enchanted-ai-shop',
@@ -44,7 +44,7 @@ export const PORTALS: readonly PortalDefinition[] = [
     description:
       'Prototype object generation workflows that separate appearance review from manufacturing validation.',
     color: '#a5d6a7',
-    position: { x: 8, z: 0 },
+    position: { x: 10, z: 2.7 },
   },
   {
     id: 'ai-game-lab',
@@ -55,7 +55,7 @@ export const PORTALS: readonly PortalDefinition[] = [
     description:
       'Create characters, vehicles, buildings and objects, then place them into reusable scenes.',
     color: '#80cbc4',
-    position: { x: 8, z: -10 },
+    position: { x: 20, z: 2.7 },
   },
 ] as const
 

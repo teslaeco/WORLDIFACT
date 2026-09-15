@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import LoadingFallback from "../components/LoadingFallback";
 import PortalCardsNav from "../components/PortalCardsNav";
+import WorldifactLogo from "../components/WorldifactLogo";
 import { getPortalById } from "../config/portals";
 const StartingWorld = lazy(() => import("../components/StartingWorld"));
 export default function HomePage() {
@@ -11,7 +12,7 @@ export default function HomePage() {
     <main className="home-world">
       <header className="home-header">
         <Link to="/" className="brand">
-          WORLDIFACT<span>AI Worlds Made Real</span>
+          <WorldifactLogo /><span className="brand-name">WORLDIFACT<span>AI Worlds Made Real</span></span>
         </Link>
         <Link className="button-link" to="/lab">
           Open Game Lab →

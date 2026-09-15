@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { JoystickInput, joystickAxes, movementAxes, STILL } from "../src/lib/gameControls.ts";
 import { enteredPortal, nearestPortal } from "../src/lib/portalNavigation.ts";
 import { PORTALS } from "../src/config/portals.ts";
-import { demoBlueprint } from "../src/lib/blueprint.ts";
+import { meadowBlueprint } from "../src/lib/blueprint.ts";
 import { movePlayer } from "../src/lib/movement.ts";
 
 test("water portals open on walking from either side, sideways, and across a skipped frame", () => {
@@ -29,13 +29,13 @@ test("portal selection follows travel order, ignores current destination and sel
   assert.equal(nearestPortal({ x: 0, z: -1 }, gates, "near")?.id, "far");
 });
 
-test("all five entrances are reachable across the bridge without entering a different portal", () => {
-  const habitats = demoBlueprint("village forest").objects.filter(spec => spec.kind === "habitat")
+test("all five aligned river entrances are reachable from the open meadow without crossing another portal", () => {
+  const habitats = meadowBlueprint().objects.filter(spec => spec.kind === "habitat")
     .map(spec => ({ spec, doorOpen: false }));
   const spawn = { x: 0, z: 17 };
   for (const portal of PORTALS) {
     let from = spawn;
-    const route = [{ x: 0, z: -6.5 }, { x: portal.position.x, z: -6.5 }, portal.position];
+    const route = [{ x: portal.position.x, z: 8 }, portal.position];
     for (const [index, waypoint] of route.entries()) {
       const end = movePlayer(from, waypoint, habitats);
       assert.ok(Math.hypot(end.x - waypoint.x, end.z - waypoint.z) < 0.01, portal.id);

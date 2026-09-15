@@ -219,6 +219,12 @@ export function localSceneResult(
     limitation,
   });
 }
+export function meadowBlueprint(): WorldBlueprint {
+  return validateBlueprint({ version: 1, title: "Riverlight meadow", biome: "valley", objects: [
+    { id: "rover-1", kind: "rover", name: "Photovoltaic explorer", x: 6, z: 13, scale: 1, rotation: 20, color: "#1e3c59" },
+  ] });
+}
+
 export function demoBlueprint(prompt = ""): WorldBlueprint {
   const q = prompt.toLowerCase();
   const biome = /moon|lunar|księżyc/.test(q)
@@ -297,6 +303,9 @@ export function demoBlueprint(prompt = ""): WorldBlueprint {
         rotation: 0,
         color: "#387947",
       });
+  if (/usu[nń]|bez dom|no houses|remove.*house|open meadow/.test(q)) {
+    return validateBlueprint({ ...meadowBlueprint(), biome, objects: objects.filter(o => o.kind !== "habitat" && o.kind !== "solar-array") });
+  }
   return validateBlueprint({
     version: 1,
     title: biome === "lunar" ? "Moon workshop" : "Riverlight village",

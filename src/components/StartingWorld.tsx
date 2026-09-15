@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { PORTALS } from "../config/portals";
-import { demoBlueprint } from "../lib/blueprint";
+import { meadowBlueprint } from "../lib/blueprint";
 import type { WorldBlueprint, WorldObject } from "../lib/blueprint";
-import { findRoverExit, movePlayer } from "../lib/movement";
+import { avoidVehicleBodies, findRoverExit, movePlayer } from "../lib/movement";
 import { movementAxes, STILL } from "../lib/gameControls";
 import type { MoveAxes } from "../lib/gameControls";
 import { enteredPortal, nearestPortal, PORTAL_RADIUS } from "../lib/portalNavigation";
 import { createLakeEnvironment } from "../lib/lakeEnvironment";
+import { createPlayerAvatar } from "../lib/playerAvatar";
+import { createWorldAudio } from "../lib/worldAudio";
 import TouchJoystick from "./TouchJoystick";
 import {
   createDecorativeTerrain,
@@ -20,7 +22,7 @@ interface Props {
   blueprint?: WorldBlueprint;
   activePortalId?: string;
 }
-const START = demoBlueprint("village forest");
+const START = meadowBlueprint();
 interface RuntimeObject {
   spec: WorldObject;
   group: THREE.Group;
@@ -35,6 +37,30 @@ export default function StartingWorld({
     input = useRef<Record<string, boolean>>({}),
     action = useRef(""),
     runtimeObjects = useRef<RuntimeObject[]>([]);
+  const audio = useRef<ReturnType<typeof createWorldAudio> | null>(null);
+  const audioEnabled = useRef(false);
+  const zoom = useRef(6);
+  const overview = useRef(false);
+  const [music, setMusic] = useState(false);
+  const [transition, setTransition] = useState(false);
+  const [captureNotice, setCaptureNotice] = useState("");
+  const [wide, setWide] = useState(false);
+  const [zoomValue, setZoomValue] = useState(6);
+  const capture = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!captureNotice) return;
+    const timer = setTimeout(() => setCaptureNotice(""), 3000);
+    return () => clearTimeout(timer);
+  }, [captureNotice]);
+  useEffect(() => () => { audio.current?.dispose(); audio.current = null; }, []);
+  const toggleMusic = async () => {
+    try {
+      audio.current ??= createWorldAudio();
+      const next = !audioEnabled.current;
+      await audio.current.setPlaying(next);
+      audioEnabled.current = next; setMusic(next);
+    } catch { setCaptureNotice("Audio is unavailable in this browser."); }
+  };
   const stick = useRef<MoveAxes>({ ...STILL });
   const onStickMove = useCallback((axes: MoveAxes) => { stick.current = axes; }, []);
   const latestBlueprint = useRef(blueprint);
@@ -79,6 +105,8 @@ export default function StartingWorld({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.appendChild(renderer.domElement);
     renderer.domElement.tabIndex = 0;
     renderer.domElement.setAttribute(
@@ -105,6 +133,10 @@ export default function StartingWorld({
     );
     const sun = new THREE.DirectionalLight("#ffe9bc", 3);
     sun.position.set(30, 55, 20);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(mobile ? 512 : 1024, mobile ? 512 : 1024);
+    Object.assign(sun.shadow.camera, { left: -35, right: 35, top: 35, bottom: -35, near: 1, far: 120 });
+    sun.shadow.bias = -.0004;
     scene.add(sun);
     const environment = lunar ? null : createLakeEnvironment(scene, mobile, () => setTextureFailed(true), sea);
     if (!sea) {
@@ -114,6 +146,12 @@ export default function StartingWorld({
       );
       ground.rotation.x = -Math.PI / 2;
       ground.name = lunar ? "lunar-ground" : "green-meadow";
+      ground.receiveShadow = true;
+      const mat = ground.material;
+      mat.onBeforeCompile = shader => {
+        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vMeadow;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvMeadow = position;');
+        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vMeadow;').replace('#include <color_fragment>', '#include <color_fragment>\nfloat mottling = sin(vMeadow.x * 2.1 + sin(vMeadow.y * 1.7)) * sin(vMeadow.y * 2.9) * 0.06 + sin(vMeadow.x * 0.18 + vMeadow.y * 0.13) * 0.07;\ndiffuseColor.rgb *= 0.93 + mottling;');
+      };
       scene.add(ground);
     }
     if (lunar) {
@@ -123,10 +161,6 @@ export default function StartingWorld({
         scale: 1.5 + i % 4, rotation: i * 19, color: "#7c8992",
       }))));
     } else if (!sea) {
-      const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.2, 12), new THREE.MeshStandardMaterial({ color: "#bdad87", roughness: 0.85 }));
-      bridge.name = "river-footbridge";
-      bridge.position.set(0, 0.16, 0);
-      scene.add(bridge);
       const trees: WorldObject[] = [];
       for (let i = 0; i < 65; i++) {
         const x = ((i * 31) % 125) - 62, z = ((i * 47) % 120) - 60;
@@ -207,6 +241,9 @@ export default function StartingWorld({
       scene.add(g);
       return { g, face, ripple, i, id: p.id };
     });
+    const avatar = createPlayerAvatar();
+    scene.add(avatar.root);
+    let boarding: { car: RuntimeObject; from: THREE.Vector3; outside: THREE.Vector3; seat: THREE.Vector3; time: number; exiting: boolean } | null = null;
     const player = new THREE.Vector3(0, 2.3, 17),
       forward = new THREE.Vector3(),
       right = new THREE.Vector3(),
@@ -220,6 +257,7 @@ export default function StartingWorld({
       elapsed = 0;
     let contextLost = false;
     let navigating = false;
+    let navigationTimer: ReturnType<typeof setTimeout> | undefined;
     let drag: { id: number; x: number; y: number; moved: number } | null = null;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const clear = () => {
@@ -233,7 +271,30 @@ export default function StartingWorld({
       navigating = true;
       clear();
       setReady(false);
-      open.current(id);
+      setTransition(true);
+      if (audioEnabled.current) audio.current?.portal();
+      navigationTimer = setTimeout(() => open.current(id), reduced ? 0 : 520);
+    };
+    const visibility = () => {
+      clear();
+      void audio.current?.setPlaying(audioEnabled.current && !document.hidden).catch(() => {});
+    };
+    capture.current = () => {
+      try {
+        renderer.render(scene, camera);
+        renderer.domElement.toBlob(blob => {
+          if (!blob || contextLost) return;
+          const url = URL.createObjectURL(blob), link = document.createElement('a');
+          link.href = url; link.download = `WORLDIFACT-${sceneBlueprint.biome}.png`; link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          setCaptureNotice("Current world image saved.");
+        }, 'image/png');
+      } catch { setCaptureNotice("This browser could not save the current view."); }
+    };
+    const wheelZoom = (event: WheelEvent) => {
+      event.preventDefault();
+      zoom.current = THREE.MathUtils.clamp(zoom.current + Math.sign(event.deltaY), 3, 24);
+      setZoomValue(zoom.current);
     };
     const down = (e: KeyboardEvent) => {
       if (
@@ -326,6 +387,7 @@ export default function StartingWorld({
       setReady(true);
       frame = requestAnimationFrame(animate);
     };
+    renderer.domElement.addEventListener("wheel", wheelZoom, { passive: false });
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     renderer.domElement.addEventListener("pointermove", pointerMove);
     renderer.domElement.addEventListener("pointerup", pointerUp);
@@ -336,7 +398,7 @@ export default function StartingWorld({
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", clear);
-    document.addEventListener("visibilitychange", clear);
+    document.addEventListener("visibilitychange", visibility);
     const resize = new ResizeObserver(() => {
       if (host.clientWidth && host.clientHeight) {
         camera.aspect = host.clientWidth / host.clientHeight;
@@ -350,7 +412,9 @@ export default function StartingWorld({
       const dt = Math.min((now - previous) / 1000, 0.05);
       previous = now;
       elapsed += dt;
-      const { forward: move, side } = movementAxes(input.current, stick.current);
+      const axes = movementAxes(input.current, stick.current);
+      const move = boarding || overview.current ? 0 : axes.forward;
+      const side = boarding || overview.current ? 0 : axes.side;
       if (ride) yaw -= side * dt * 1.25;
       forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
       right.set(Math.cos(yaw), 0, -Math.sin(yaw));
@@ -361,11 +425,12 @@ export default function StartingWorld({
       player.z = THREE.MathUtils.clamp(player.z, -42, 42);
       const habitats = objects.filter((o) => specOf(o).kind === "habitat")
         .map((o) => ({ spec: specOf(o), doorOpen: o.doorOpen }));
-      const moved = movePlayer(old, player, habitats, ride ? 2.85 * specOf(ride).scale : 0);
+      let moved = movePlayer(old, player, habitats, ride ? 3 * specOf(ride).scale : 0);
+      if (!ride && !boarding) moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
       player.x = moved.x;
       player.z = moved.z;
       const crossed = enteredPortal(old, player, PORTALS, activePortalId);
-      if (crossed) { enter(crossed.id); return; }
+      if (crossed && !boarding) { enter(crossed.id); return; }
       const near = objects
         .filter((o) => (specOf(o).kind === "rover" && o.group.position.distanceTo(player) < 6) || (specOf(o).kind === "habitat" && o.group.position.distanceTo(player) < 7))
         .sort(
@@ -374,7 +439,8 @@ export default function StartingWorld({
             b.group.position.distanceTo(player),
         )[0];
       const nearPortal = nearestPortal(player, PORTALS, activePortalId);
-      if (action.current) {
+      if (boarding) action.current = "";
+      if (action.current && !boarding) {
         const a = action.current;
         action.current = "";
         if (a === "interact" && nearPortal) {
@@ -382,6 +448,8 @@ export default function StartingWorld({
           return;
         } else if (a === "reset") {
           player.set(0, 2.3, 17);
+          overview.current = false; setWide(false);
+          for (const object of objects) object.doorOpen = false;
           yaw = 0;
           pitch = -0.16;
           ride = null;
@@ -391,11 +459,11 @@ export default function StartingWorld({
           (ride && (a === "drive" || a === "interact"))
         ) {
           if (ride) {
-            const exit = findRoverExit(ride.group.position, ride.group.rotation.y, specOf(ride).scale, habitats);
+            const exit = findRoverExit(ride.group.position, ride.group.rotation.y, specOf(ride).scale, habitats, true);
             if (exit) {
-              player.set(exit.x, 2.3, exit.z);
-              ride = null;
-              setDriving(false);
+              const seat = new THREE.Vector3(-.55, .26, .1).multiplyScalar(specOf(ride).scale).applyAxisAngle(new THREE.Vector3(0,1,0), ride.group.rotation.y).add(ride.group.position);
+              boarding = { car: ride, from: seat.clone(), outside: new THREE.Vector3(exit.x, 0, exit.z), seat, time: 0, exiting: true };
+              ride.doorOpen = true;
             }
           }
         } else if (
@@ -408,12 +476,14 @@ export default function StartingWorld({
             a === "drive"
               ? objects.find((o) => specOf(o).kind === "rover")
               : near;
-          if (r) {
-            ride = r;
-            player.copy(r.group.position);
-            player.y = 2.3;
-            yaw = r.group.rotation.y;
-            setDriving(true);
+          if (r && r.group.position.distanceTo(player) < 6) {
+            const transform = (v: THREE.Vector3) => v.multiplyScalar(specOf(r).scale).applyAxisAngle(new THREE.Vector3(0,1,0), r.group.rotation.y).add(r.group.position);
+            const outside = transform(new THREE.Vector3(-2.15, 0, .25));
+            const clearPath = avoidVehicleBodies(player, movePlayer(player, outside, habitats), objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
+            if (Math.hypot(clearPath.x - outside.x, clearPath.z - outside.z) < .01) {
+              boarding = { car: r, from: new THREE.Vector3(player.x, 0, player.z), outside, seat: transform(new THREE.Vector3(-.55, .26, .1)), time: 0, exiting: false };
+              yaw = r.group.rotation.y;
+            } else setCaptureNotice("Approach the left-hand door to enter.");
           }
         } else if (
           a === "door" ||
@@ -429,7 +499,7 @@ export default function StartingWorld({
         }
       }
       for (const o of objects) {
-        const door = o.group.getObjectByName("door");
+        const door = o.group.getObjectByName(specOf(o).kind === "rover" ? "driver-door" : "door");
         if (door)
           door.rotation.y = THREE.MathUtils.damp(
             door.rotation.y,
@@ -438,12 +508,46 @@ export default function StartingWorld({
             dt,
           );
       }
-      if (ride) {
+      let seated = !!ride;
+      let gait = Math.min(1, Math.hypot(player.x - old.x, player.z - old.z) / Math.max(dt * 4, .001));
+      let reaching = 0;
+      if (boarding) {
+        boarding.time += dt;
+        const b = boarding, t = b.time;
+        const smooth = (v: number) => THREE.MathUtils.smoothstep(v, 0, 1);
+        b.car.doorOpen = t > (b.exiting ? 0 : .9) && t < 2.65;
+        reaching = t > .9 && t < 1.45 ? 1 : 0;
+        if (b.exiting) {
+          avatar.root.position.lerpVectors(b.seat, b.outside, smooth((t - .6) / 1.35));
+          seated = t < .7; gait = t > .7 && t < 2.0 ? .5 : 0;
+        } else if (t < .9) {
+          avatar.root.position.lerpVectors(b.from, b.outside, smooth(t / .9));
+          gait = .65;
+        } else {
+          avatar.root.position.lerpVectors(b.outside, b.seat, smooth((t - 1.4) / 1.05));
+          seated = t > 1.9; gait = t > 1.4 && t < 2.15 ? .4 : 0;
+        }
+        player.x = avatar.root.position.x; player.z = avatar.root.position.z;
+        avatar.root.rotation.y = b.car.group.rotation.y;
+        if (t >= 3.1) {
+          if (b.exiting) { ride = null; setDriving(false); }
+          else { ride = b.car; player.copy(ride.group.position); player.y = 2.3; setDriving(true); }
+          b.car.doorOpen = false; boarding = null;
+        }
+      } else if (ride) {
+        avatar.root.position.set(-.55, .26, .1).multiplyScalar(specOf(ride).scale).applyAxisAngle(new THREE.Vector3(0,1,0), yaw).add(new THREE.Vector3(player.x, 0, player.z));
+        avatar.root.rotation.y = yaw;
+      } else {
+        avatar.root.position.set(player.x, 0, player.z);
+        if (gait > .02) avatar.root.rotation.y = Math.atan2(-(player.x - old.x), -(player.z - old.z));
+      }
+      avatar.update(elapsed, gait, seated, reaching);
+      if (ride && !boarding) {
         ride.group.position.set(player.x, 0, player.z);
         ride.group.rotation.y = yaw;
         camera.position
           .copy(player)
-          .addScaledVector(forward, -7 * specOf(ride).scale);
+          .addScaledVector(forward, -(zoom.current + 1) * specOf(ride).scale);
         camera.position.y = 4.6 * specOf(ride).scale;
         target.copy(player).addScaledVector(forward, 6);
         target.y = 1.3;
@@ -452,10 +556,14 @@ export default function StartingWorld({
           if (w.name === "wheel") w.rotation.x -= move * dt * 14;
       } else {
         player.y = 2.3;
-        camera.position.copy(player);
-        target.copy(player).add(forward);
-        target.y += Math.tan(pitch);
+        camera.position.copy(player).addScaledVector(forward, -zoom.current);
+        camera.position.y = Math.max(1.5, 2.4 - Math.sin(pitch) * zoom.current);
+        target.set(player.x, 1.3, player.z).addScaledVector(forward, 1.2);
         camera.lookAt(target);
+      }
+      if (overview.current) {
+        camera.position.set(Math.sin(yaw) * 18, 48 + zoom.current, 30 + Math.cos(yaw) * 12);
+        camera.lookAt(0, 0, 3);
       }
       environment?.update(reduced ? 0 : elapsed);
       for (const p of portals) {
@@ -477,7 +585,7 @@ export default function StartingWorld({
                 ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
                 : mobile ? "Left thumb: move · right thumb: look" : "WASD move · drag to look · walk onto a water portal",
         );
-        setInteraction(nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
+        setInteraction(boarding ? "Entering / leaving vehicle…" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
       }
       renderer.render(scene, camera);
       if (!contextLost) frame = requestAnimationFrame(animate);
@@ -490,11 +598,15 @@ export default function StartingWorld({
     return () => {
       contextLost = true;
       cancelAnimationFrame(frame);
+      clearTimeout(navigationTimer);
+      capture.current = null;
+      sun.shadow.dispose();
       resize.disconnect();
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", clear);
-      document.removeEventListener("visibilitychange", clear);
+      document.removeEventListener("visibilitychange", visibility);
+      renderer.domElement.removeEventListener("wheel", wheelZoom);
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("pointermove", pointerMove);
       renderer.domElement.removeEventListener("pointerup", pointerUp);
@@ -525,6 +637,7 @@ export default function StartingWorld({
       aria-label="WORLDIFACT playable world"
     >
       <div className="starting-world" ref={mount} />
+      {transition && <div className="portal-transition" aria-live="polite">Entering world…</div>}
       {failed ? (
         <div className="webgl-fallback" role="alert">
           <h2>3D is unavailable in this browser</h2>
@@ -547,18 +660,18 @@ export default function StartingWorld({
           onClick={() => {
             action.current = "drive";
           }}
-          disabled={!blueprint.objects.some((o) => o.kind === "rover")}
+          disabled={!blueprint.objects.some((o) => o.kind === "rover") || (!driving && interaction !== "Drive rover")}
         >
           {driving ? "Exit rover" : "Drive rover"}
         </button>
-        <button
+        {blueprint.objects.some(o => o.kind === "habitat") && <button
           onClick={() => {
             action.current = "door";
           }}
           disabled={!blueprint.objects.some((o) => o.kind === "habitat")}
         >
           Toggle workshop door
-        </button>
+        </button>}
         <button
           onClick={() => {
             action.current = "reset";
@@ -566,7 +679,13 @@ export default function StartingWorld({
         >
           Reset view
         </button>
+        <button onClick={() => { overview.current = !overview.current; setWide(overview.current); }} aria-pressed={wide}>{wide ? "Follow character" : "Whole meadow"}</button>
+        <button onClick={() => { void toggleMusic(); }} aria-pressed={music}>{music ? "Music off" : "Music on"}</button>
+        <button onClick={() => capture.current?.()}>Save view PNG</button>
+        <label className="camera-zoom">Camera <input aria-label="Camera distance" type="range" min="3" max="24" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
       </div>
+      <div className="avatar-note">Animation mannequin · shop character pending</div>
+      {captureNotice && <div className="capture-notice" role="status">{captureNotice}</div>}
       <div className="world-hint" role="status">
         {hint}
       </div>
