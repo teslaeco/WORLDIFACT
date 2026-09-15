@@ -41,7 +41,7 @@ async function assetFiles(dist: string, relative = "assets"): Promise<string[]> 
   for (const entry of await readdir(join(dist, relative), { withFileTypes: true })) {
     const path = `${relative}/${entry.name}`;
     if (entry.isDirectory()) files.push(...await assetFiles(dist, path));
-    else if (entry.isFile() && /\.(js|css|webp)$/.test(path)) files.push(path);
+    else if (entry.isFile() && /\.(js|css|webp|png)$/.test(path)) files.push(path);
   }
   return files.sort();
 }
@@ -124,7 +124,7 @@ export async function checkPublishedRelease(deployment: Deployment,
   requireCheck(assets.some((path) => path.endsWith(".js")) && assets.some((path) => path.endsWith(".css")),
     "The release must include JavaScript and CSS assets.");
   for (const path of assets) {
-    const types = path.endsWith(".webp") ? ["image/webp"] : path.endsWith(".css") ? ["text/css"] : ["text/javascript", "application/javascript"];
+    const types = path.endsWith(".webp") ? ["image/webp"] : path.endsWith(".png") ? ["image/png"] : path.endsWith(".css") ? ["text/css"] : ["text/javascript", "application/javascript"];
     await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
   }
   const foundation = JSON.parse(await readFile(join(dist, "foundation-release.json"), "utf8")) as {

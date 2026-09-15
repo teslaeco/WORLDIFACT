@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import { PORTALS, getPortalById } from '../config/portals'
 import { foundationForPath } from '../config/foundations'
@@ -7,6 +7,9 @@ export default function PortalPage() {
   const { portalId } = useParams()
   const { pathname } = useLocation()
   const [loadedFrame, setLoadedFrame] = useState('')
+  useEffect(() => {
+    if (pathname === '/chess') window.location.replace('https://teslaeco.github.io/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/');
+  }, [pathname]);
   const legacy = portalId ? getPortalById(portalId) : undefined
   if (legacy) return <Navigate to={legacy.route} replace />
   const app = foundationForPath(pathname)
@@ -49,11 +52,11 @@ export default function PortalPage() {
     {chessShop && <p className="foundation-note">
       Use the existing design studio for a board or piece. Download available models there and check their production requirements before ordering. Direct chess-to-catalog transfer is not connected yet.
     </p>}
-    <div className="foundation-frame-shell">
+    {app.route === '/chess' ? <p>Opening the original Chess Cube website. <a href={app.original}>Open Chess Cube</a></p> : <div className="foundation-frame-shell">
       {loadedFrame !== app.frame && <p className="foundation-loading" role="status">Opening {app.title}…</p>}
       <iframe key={app.frame} src={app.frame} title={app.title} className="foundation-frame"
         allow="fullscreen; clipboard-write" allowFullScreen
         onLoad={() => setLoadedFrame(app.frame)} />
-    </div>
+    </div>}
   </main>
 }

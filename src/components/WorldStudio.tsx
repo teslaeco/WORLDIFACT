@@ -4,6 +4,7 @@ import StartingWorld from "./StartingWorld";
 import {
   MAX_BLUEPRINT_BYTES,
   demoBlueprint,
+  meadowBlueprint,
   localSceneResult,
   parseBlueprintJson,
   validateGenerationResult,
@@ -25,10 +26,10 @@ function download(data: Blob, name: string) {
 export default function WorldStudio() {
   const navigate = useNavigate();
   const [blueprint, setBlueprint] = useState<WorldBlueprint>(() =>
-    demoBlueprint("village forest"),
+    meadowBlueprint(),
   );
   const [prompt, setPrompt] = useState(
-    "Create a riverside village with a red solar rover, workshops and trees.",
+    "An open green meadow with a flowing river and a photovoltaic explorer.",
   );
   const [mode, setMode] = useState<"demo" | "live">("demo"),
     [live, setLive] = useState(false),

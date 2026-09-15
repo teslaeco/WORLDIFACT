@@ -2,7 +2,7 @@ Updated: 2026-09-15T11:27:40Z
 
 # WORLDIFACT night shift
 
-Owner: root conversation. State: IDLE — canonical static HTML correction verified locally and ready for the release follow-up, 2026-09-15. No paid generation authorized. Set ACTIVE before another edit.
+Owner: root conversation. State: IDLE — open meadow/PV vehicle/camera/audio changes verified locally; publication evidence belongs in the presentation PR. No paid generation authorized. Set ACTIVE before editing.
 
 ## Authorized scope
 
@@ -95,3 +95,7 @@ PR #6 passed CI 35006048011 on e08124f30578e39ca21eb2f1206579c9813bf072 and merg
 PR #7 passed CI 35007445969 and merged as 3c3332d69e351f920e4c23f178b98f293c244c9c. Release 35007611067 deployed c2a7198d-ff7f-4825-a241-97de2c830193 and passed hub checks, then stopped at Terra water-casebook/index.html. Cloudflare canonically redirects index.html through a directory URL; the static checker had forbidden every redirect. The next follow-up permits at most two same-origin canonical HTML redirects, still requiring exact MIME and SHA-256. External, unrelated, credentialed, query-bearing and cyclic redirects remain rejected; API requests retain redirect:error and generation POSTs are never retried.
 
 Canonical follow-up local verification: 60/60 tests, TypeScript, production build, local DEMO HTTP, Worker dry-run and diff check pass. Seven pre-existing ISS lint warnings and the Three.js size warning persist. docs/GPT_PROJECT_INSTRUCTIONS.md consolidates the owner's vision, exact foundation URLs, incomplete migration, Oracle preservation, no-paid instruction and verified Product Hunt guidance. Final CI and public integrity results belong in this follow-up PR; browser/device and full storage/auth migration remain outstanding.
+
+## Open meadow and PV vehicle correction
+
+Owner supersedes the bridge/houses and rear Lab placement: all five portals now share one river line. Chess opens its original website; full migration is deferred. See VISUAL_UPDATE.md for the PV reference mesh, neutral animated mannequin (actual shop asset unavailable), camera/overview, water shading, provided FORGE logo layout, local ambient audio and owner-triggered PNG capture. No paid image/API/Oracle generation or browser-block bypass occurred. Local verification: 64/64 tests, lint/type/build, local HTTP, Worker dry-run and diff checks pass. Final exact-head CI and Cloudflare source/version/HTTP evidence belongs in the presentation PR. Visual/device acceptance and the requested original character remain outstanding.
