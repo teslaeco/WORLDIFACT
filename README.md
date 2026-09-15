@@ -8,7 +8,7 @@ The first successful public release passed [GitHub deployment and public HTTP ve
 
 ## What is implemented
 
-- A Three.js valley with five portals, mountains, river, bridge, rover driving, opening workshop doors, keyboard/mouse and touch controls.
+- A Three.js mirror-water world with five walk-in portals, an AI-generated alpine panorama, planar reflections, rover driving, workshop doors, and an analogue phone joystick with independent drag-to-look controls.
 - AI Game Lab: prompt-driven DEMO scenes, valley/lunar/ocean biomes, editable colors and scales, object removal, device archive, composition, blueprint JSON and actual procedural GLB export.
 - A server-only `gpt-6-astra` Responses API integration using a strict `WorldBlueprint` schema. Paid generation is disabled by default. Only a successful real request earns the LIVE label; provider-response tests so far use mocks.
 - Preview access code, expiry, a persistent global reservation ceiling and per-IP throttling. Provider response IDs, scene hashes and reported token usage can be exported without secrets.
@@ -42,11 +42,11 @@ Verification runs lint, TypeScript, unit/integration tests, a real local HTTP sm
 
 ## Controls and routes
 
-Move with WASD/arrows, look by dragging, and press E near a portal or object. On-screen controls provide touch movement, door and vehicle actions. Direct portal links remain available if WebGL fails.
+Move with WASD/arrows or the left analogue joystick; drag on the scene with another finger to look. Walk onto a glowing water disk to open its portal automatically, tap a portal, or use the nearby action button / E. The joystick stops on release, cancellation and focus loss. Direct portal links remain available below the scene if WebGL fails. See `docs/MIRROR_LAKE.md` for texture provenance and verification scope.
 
 | Route | Current scope |
 |---|---|
-| `/` | Valley, rover, workshop, portal navigation |
+| `/` | Mirror Lake, rover, workshop, walk-in portal navigation |
 | `/portal/ai-game-lab` | Scene studio and device archive |
 | `/portal/enchanted-ai-shop` | Model review and manufacturing workbench |
 | `/portal/chess-cube-512-ai` | Planned integration; optional `VITE_WORLDIFACT_CHESS_DEMO_URL` |

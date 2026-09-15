@@ -297,6 +297,7 @@ export default function WorldStudio() {
         <div className="studio-scene">
           <StartingWorld
             blueprint={blueprint}
+            activePortalId="ai-game-lab"
             onPortalOpen={(id) => navigate(`/portal/${id}`)}
           />
           <div className="scene-toolbar">
