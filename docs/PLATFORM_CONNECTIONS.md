@@ -1,40 +1,51 @@
-# Platform connections — 15 September 2026
+# Platform connections — 16 September 2026
 
-The control centre is `/control`. It is a navigation and connection-diagnostics foundation, **not a unified five-application editor**. Original applications and owner data remain intact. No paid generation or Oracle job is authorized.
+The control centre is `/control`. It is a navigation and connection-diagnostics foundation, **not yet a unified five-application editor**. Original applications and owner data remain intact. Paid WORLDIFACT generation remains disabled.
 
 ## What is connected
 
 | Component | Evidence | Remaining gate |
 |---|---|---|
-| Cloudflare | WORLDIFACT Worker deployment pipeline and runtime status endpoint | New release must pass exact asset/route integrity checks |
-| OpenAI | Existing release verified model metadata and synchronized the Worker key | Paid generation remains disabled; no live generation evidence |
-| Oracle | Public Froge source provides authenticated `/v1/health`, pairing and Blender job APIs | Current endpoint and authorized connector credential are absent in WORLDIFACT; no live health or renderer verification |
-| Chess | Original public host retained; GitHub source editor linked | Source edit/publish is through its own authenticated repository |
-| ISS / Terra | Copied, pinned application sources and assets | Source changes through GitHub; station saves remain local/manual |
-| Planets | Original public FORGE World Builder connected | Owner identity, D1 worlds/assets, R2 and encrypted Oracle pairing remain on the original host |
+| Cloudflare | WORLDIFACT Worker deployment pipeline and runtime status endpoint | Merge/deploy the reviewed Oracle bridge after owner approval |
+| OpenAI | Existing WORLDIFACT release verified model metadata and synchronized the Worker key | Paid WORLDIFACT generation remains disabled; no LIVE blueprint request in this continuation |
+| Oracle | Existing VM was checked through its authenticated Quick Tunnel. `/v1/health` returned `ready=true`, provider `openai`, model `gpt-6-astra`, connector version 33 and character standard 20 | Store current endpoint/token in GitHub production secrets, deploy reviewed bridge, then verify from WORLDIFACT production |
+| Chess | Original public host retained; GitHub source editor linked | Source edit/publish remains through its own repository |
+| ISS / Terra | Copied, pinned application sources and assets | Source changes through WORLDIFACT; station saves remain local/manual |
+| Planets | Original public FORGE World Builder connected | Owner identity, D1 worlds/assets, R2 and write-path migration remain on the original host |
 | Shop | Original public shop connected | Current authorized source export and owner catalog/storage migration still unavailable |
-| Studio | Original public Froge Studio connected; public repository confirmed | GitHub v18 is not proof of parity with Sites v47; do not replace the current app blindly |
+| Studio | Original public Froge Studio connected; public repository confirmed | Public repo v18 is older than the live Oracle connector v33 and must not be treated as a safe replacement for the VM |
 
-Froge source inspected: `teslaeco/Froge-MPC-2-test` main `bac2827fc1ec31e71dc0f5c586df43c507338725` (Astra v18 reference reconstruction). The repository includes a Worker, D1 commerce, private R2 models and owner-bound AES-GCM connection credentials. A static HTML copy cannot preserve these services. Public source does not grant anonymous write access.
+## One Oracle backend for five worlds
 
-## Configure owner diagnostics
+Review branch `feat/oracle-five-world-bridge` adds `/api/platform/oracle-worlds`. It performs one server-side authenticated `GET /v1/health` request and maps the sanitized result to the five primary WORLDIFACT world IDs:
 
-Use the existing GitHub **production** environment. The release workflow synchronizes these optional secrets through stdin; it never prints their values:
+- Chess Cube 512 AI
+- Terra — Fix ISS
+- 8 Planets in 8 Days
+- Enchanted AI Shop
+- AI Game Lab
 
-- `OWNER_ACCESS_TOKEN`: a separate random owner code, 32–256 letters, digits, `_` or `-`. Do not reuse an OpenAI key, Cloudflare token or the paid-generation access code. Keep it in a password manager. Enter it only in the password field on WORLDIFACT `/control`.
-- `ORACLE_ENDPOINT` and `ORACLE_API_TOKEN`: supply both together only when an authorized connector credential and its current HTTPS Quick Tunnel origin are available. The API token is **not** the 32-character pairing code. Do not extract encrypted credentials from the existing Site or invent owner headers.
+The browser does not receive the Quick Tunnel URL or Oracle bearer credential. The endpoint is rate-limited and cannot create a job, render a model or change the selected AI provider. `/control` shows the shared Oracle state and sanitized runtime metadata such as connector version, character standard, provider and model.
 
-If only a pairing code is available, keep using the original signed-in Studio settings. WORLDIFACT does not yet implement the owner's login/pairing/storage migration. The existing installer documents `python3 ~/froge-connector/server.py --pair-info` for the current tunnel and pairing code; do not reinstall or reset the VM.
+The live read-only VM check on 16 September 2026 returned `ready=true`, `provider=openai`, `model=gpt-6-astra`, `connectorVersion=33`, `characterStandard=20`. This proves authenticated service readiness, **not** a successful Blender job and **not** a paid WORLDIFACT Astra generation.
 
-Absent optional secrets are not deleted or guessed. The public status endpoint reports configuration only, never secret values or the Oracle address. Owner checks require strict same-origin requests, constant-time code comparison and a server rate limiter. They call only OpenAI model metadata and Oracle health using GET, reject redirects and bound response size/time. A ready health response is not a successful Blender render. No `/responses`, `/jobs` or provider-switch request is made.
+## Configure production secrets
+
+Use the existing GitHub **production** environment. The release workflow synchronizes these optional secrets through stdin and never prints their values:
+
+- `OWNER_ACCESS_TOKEN`: a separate random owner code, 32–256 letters, digits, `_` or `-`. Do not reuse an OpenAI key, Cloudflare token or the paid-generation access code.
+- `ORACLE_ENDPOINT`: the current HTTPS Quick Tunnel origin from the preserved VM.
+- `ORACLE_API_TOKEN`: the current authenticated connector bearer credential from the preserved VM. It is not the pairing code.
+
+The live values have been verified on the VM but are not committed to git. Quick Tunnel addresses can change after restart, so a future managed tunnel remains a production-hardening task.
 
 ## Next integration work
 
-1. Establish the owner authentication system for WORLDIFACT; do not trust client-supplied Sites identity headers on a public Worker.
-2. Obtain authorized current Shop/Studio source exports and confirm exact versions. Earlier ownership-denied archives remain blocked.
-3. Migrate schemas and owner data with backups, access checks and rollback before changing original hosts. Preserve private files and encryption keys.
-4. Add a real owner-scoped scene/catalog editor backed by D1/R2 and version conflict handling. GitHub source-editor links are navigation, not embedded page-editing APIs.
-5. Pair the existing Oracle service through that owner identity, verify health and capabilities; retain the no-paid gate.
-6. Test authenticated save/reload, anonymous write denial, original app rendering and phone controls when browser inspection is available. Current browser approval block remains in force.
+1. Store `OWNER_ACCESS_TOKEN`, `ORACLE_ENDPOINT` and `ORACLE_API_TOKEN` in the GitHub `production` environment without exposing them in chat or source.
+2. Require exact-head CI for PR #11 to pass after the latest sanitized runtime-metadata changes.
+3. Show GO/NO-GO and obtain explicit owner approval before merge/deploy.
+4. After deployment, verify `/api/platform/oracle-worlds` and `/control` from production. This is still read-only evidence.
+5. Add reviewed Oracle write paths world-by-world only after the health bridge is stable. Job creation, render polling, artifact retrieval and shared publishing require separate authorization, schemas, limits and rollback behavior.
+6. Preserve the live VM runtime. Do not reinstall it from the older public Froge v18 snapshot; the active connector is now verified as v33 / character standard 20.
 
-No additional Oracle VM, database or storage bucket was provisioned in this change. Full-platform readiness remains incomplete until the identity, current-source and storage gates above are resolved.
+No additional Oracle VM, database or storage bucket was provisioned in this change. No paid generation, render, provider switch, order or supplier action was executed.
