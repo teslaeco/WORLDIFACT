@@ -1,6 +1,6 @@
 # Cloudflare: owner setup and controlled release
 
-Implemented: Worker plus Static Assets, SPA routing, rate binding, SQLite Durable Object allowance, CI and a manual production workflow. The owner's screenshot on 15 September confirms that `Production` contains environment secrets named `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Their values, validity, account match and permissions have not yet been tested against Cloudflare. The local Wrangler session remains unauthenticated; GitHub secrets do not authenticate this local session. There is no verified public WORLDIFACT origin yet.
+Implemented: Worker plus Static Assets, SPA routing, rate binding, SQLite Durable Object allowance, CI and a manual production workflow. The owner configured `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in `Production` and manually started [release run 34954004953](https://github.com/teslaeco/WORLDIFACT/actions/runs/34954004953). Input checks passed and Cloudflare accepted 14 static assets. Worker publication then failed on the blanket `_redirects` rule with error 100324; public checks were skipped. This establishes access for the observed upload, not a complete deployment or an audit of all token permissions. The local Wrangler session remains unauthenticated. There is no verified public WORLDIFACT origin yet.
 
 No Android plugin is needed for this deployment path. Use the GitHub website in a mobile browser to configure the repository; do not paste secrets into a chat, issue, commit or frontend variable.
 
@@ -15,6 +15,8 @@ No Android plugin is needed for this deployment path. Use the GitHub website in 
 ## First deployment from GitHub
 
 After the reviewed source is on `main`, open [Publish approved Cloudflare release](https://github.com/teslaeco/WORLDIFACT/actions/workflows/cloudflare.yml), select **Run workflow**, choose **main**, enter **DEPLOY** in `confirmation`, and select **Run workflow** again. The workflow must exist on the default branch for this control to be available.
+
+For the first-run redirect failure, use a **new Run workflow on main after the fix is merged**. Re-running the old failed job uses its original commit and therefore repeats the invalid rule. The fix removes `public/_redirects` and relies on the native `assets.not_found_handling: single-page-application` setting already in `wrangler.jsonc`. No new token is required to address this configuration error. This connector exposes reads and failed-job retries, but no new-workflow dispatch; the owner uses the existing manual control. Do not replace this control with an automatic trigger or a browser fallback for the unavailable connector operation.
 
 The workflow checks input presence and format without printing values. That check is not authentication evidence: Cloudflare checks the account and token during `wrangler deploy`. After a successful deployment, the workflow reads Wrangler's structured deployment result and automatically checks:
 

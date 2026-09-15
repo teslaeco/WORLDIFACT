@@ -1,8 +1,8 @@
-Updated: 2026-09-15T09:10:49Z
+Updated: 2026-09-15T09:50:39Z
 
 # WORLDIFACT night shift
 
-Owner: root conversation. State: IDLE after verified release-check implementation at 2026-09-15T09:16:28.257Z. Set this marker ACTIVE with a timestamp before editing and release it afterward; if another active editor is present, do independent research only.
+Owner: root conversation. State: IDLE after verified Cloudflare redirect fix at 2026-09-15T09:50:39Z. Set this marker ACTIVE with a timestamp before editing and release it afterward; if another active editor is present, do independent research only.
 
 ## Authorized scope
 
@@ -12,7 +12,7 @@ The enabled schedule has six hourly runs, 2026-09-15 00:00:56–05:00:56 UTC. Th
 
 Local checkpoint branch: `work/worldifact-night-audit`. Remote review branch: `codex/worldifact-release-review`, [PR #2](https://github.com/teslaeco/WORLDIFACT/pull/2), based on main `ba6bca908122b0e5b9d16dd01ca37933a402ba5c`. The implementation snapshot is remote commit `7db0313297bb407b075a711758574684c8c1cc7b`; its file tree equals local checkpoint `b6ca90100a59e581dcb941ca5a78b799fcb162f8`. GitHub connector publication was used because shell Git transport was unavailable. Do not push the local checkpoint history over the review branch. Read the latest remote review ref before continuing.
 
-GitHub verification run `34934492320` passed the previous review head `5d4e80441577d9ff862efdf5eebd917a57bcd442`. The current continuation adds release checks and setup evidence; check PR #2 for its resulting CI and merge state. No Cloudflare deployment, paid provider call or order is claimed in this checkpoint.
+PR #2 merged as `2588c3b9c0ea647d1db7662b24725388a215239f`; main verification run `34951818415` passed and its tree `cc288b6a29940eecc755cdbe305187b09ad63d0d` matched the local checkpoint. The owner dispatched release run `34954004953`. It passed input checks, verification and packaging, then uploaded 14 assets before Cloudflare rejected the blanket `_redirects` rule with error 100324. This continuation removes that rule and retains native SPA routing. No successful public deployment, paid provider call or order is claimed.
 
 ## Completed and verified
 
@@ -37,8 +37,11 @@ GitHub verification run `34934492320` passed the previous review head `5d4e80441
 
 ## Morning continuation
 
-- The owner supplied a screenshot showing both required environment-secret names in `Production`. Values and Cloudflare authorization are still unverified. `Production` and `production` refer to the same GitHub environment.
-- The manual release workflow now validates credential input format, records the actual Wrangler deployment URL/version, checks exact built HTML and all JS/CSS files, and tests DEMO/API routing. Five new tests pass with local fixtures; no public release check has run. Its summary will distinguish HTTP evidence from browser/device QA.
+The redirect-fix follow-up passes `npm run verify` (41/41 tests, lint, TypeScript, real local DEMO HTTP and build), `npm run deploy:check` and `git diff --check`. Both source and rebuilt output were checked for removal of the blanket redirect. Remote follow-up branch: `codex/fix-cloudflare-redirect-loop`. GitHub records its resulting CI and merge state; no successful deployment is inferred from these local checks.
+
+- The owner supplied both required environment-secret names in `Production` and dispatched the release. Credential-format checks and actual static-asset upload succeeded. Values were not read; full token permissions, expiry, plan and successful deployment remain unverified. `Production` and `production` refer to the same GitHub environment.
+- The manual release workflow validates credential input format, records the actual Wrangler deployment URL/version, checks exact built HTML and all JS/CSS files, and tests DEMO/API routing. Five tests pass with local fixtures. The real public-check step was skipped after the first deployment failed; no public pass is claimed.
+- Cloudflare error 100324 identified the redundant `/* /index.html 200` rule, which remained in `public/_redirects` despite an earlier documentation claim that it had been removed. The follow-up deletes the actual tracked file; `wrangler.jsonc` already provides native SPA fallback and `/api/*` Worker routing. After merge, a new manual Run workflow on main is required; retrying the old failed job retains the old commit. The connector has no new-run dispatch operation. Do not replace the manual control with an automatic trigger or browser recovery for the unavailable connector operation.
 - Added an access-code gate, expiry and a persistent global attempt counter before paid generation. A failed provider call consumes its reservation. Health distinguishes READY from LIVE. Tests simulate provider responses; no paid request occurred.
 - Added provider-result evidence (response identifier, timestamp, blueprint SHA-256 and token usage when available), with no API/access secret in saved proof. The access code stays in page memory. A one-request smoke script is prepared but has not been run.
 - Fixed scaled/rotated habitat collisions, rover body clearance and safe rover exits with four movement tests.
@@ -54,7 +57,7 @@ GitHub verification run `34934492320` passed the previous review head `5d4e80441
 2. Sculpteo browser requires human verification. No model quote was obtained.
 3. JLC3DP Discard was automatically rejected because configuration could be lost. The morning review used Save changes to preserve configuration, then native quantity controls. Settled totals were $5.44 for 2 and $27.20 for 10 white 100 mm Queen parts; quantity 1 was restored. No Discard or order was performed. The 200 mm quote remains UNKNOWN.
 4. Current Queen/Julie sources and W19 were not recovered; previous source notes record API 401. Do not bypass access controls or relabel the legacy Queen as current.
-5. The night-time dry-run restriction has been superseded by the user-authorized morning continuation. Packaging now passes locally. Actual Cloudflare deployment remains unperformed; this runtime is not authenticated to an account.
+5. The night-time dry-run restriction has been superseded by the user-authorized morning continuation. Packaging passes locally and in GitHub. The owner's first real release failed on redirect configuration after uploading assets. This local runtime remains unauthenticated; do not extract GitHub secrets to authenticate it.
 
 ## Useful next tasks for scheduled runs
 
@@ -65,7 +68,7 @@ Choose the next substantive unfinished item and record actual outcomes. Avoid re
 3. Add measured evidence to production profiles only when an exact source revision and process are available. Do not blindly fill holes or destroy current design requirements.
 4. Investigate a safe experimental MAKE revision of the recovered legacy model only if it preserves source and can be measured. Do not claim wall-thickness, visual or supplier approval from component watertightness.
 5. Refine contest copy only from new verified release evidence; do not submit/post or invent public URL/screenshots/live AI evidence.
-6. Advance the reviewed DEMO source through PR #2 and its green checks. Retain the explicit manual production workflow. Paid work, supplier orders/messages and contest submission require their applicable owner decisions.
+6. PR #2 is merged. Advance the redirect correction with green checks, then verify a new owner-dispatched main release. Retain the explicit manual production workflow. Paid work, supplier orders/messages and contest submission require their applicable owner decisions.
 
 Keep docs/CONTEST_STATUS.md and docs/MANUFACTURING_AUDIT.md current. Final manufacturing approval and contest release are separate: the demo may show an honestly preliminary production workbench, but must not claim finished physical products.
 
