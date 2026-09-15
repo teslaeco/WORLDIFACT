@@ -1,6 +1,6 @@
 # Cloudflare release preparation
 
-This branch targets **Cloudflare Workers with Static Assets**. The Worker owns `/api/*`; missing application routes use the SPA fallback in `wrangler.jsonc`. The old blanket Pages `_redirects` rule was removed so asset files are not rewritten to HTML.
+This project targets **Cloudflare Workers with Static Assets**. The Worker owns `/api/*`; missing application routes use the SPA fallback in `wrangler.jsonc`. Do not add the blanket `/* /index.html 200` rule: Cloudflare rejected it as an infinite redirect loop (error 100324) in the first deployment, [run 34954004953](https://github.com/teslaeco/WORLDIFACT/actions/runs/34954004953). The earlier statement that this file had already been removed was incorrect. This follow-up deletes `public/_redirects`; the existing native SPA configuration handles application routes while preserving actual asset files.
 
 1. Review the replacement branch based on current `main`. Main’s product vision is preserved in `PROJECT_VISION.md`; old PR #1 remains a conflicted draft and must not be merged.
 2. The owner requested continuation of planned release tasks after entering both deployment secrets. Require the verification workflow to pass on the exact reviewed commit.
