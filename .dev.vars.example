@@ -1,0 +1,11 @@
+# Local server only. Copy to .dev.vars, which is ignored by git.
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-6-astra
+# Enable only after the owner approves paid API use.
+ENABLE_PAID_GENERATION=false
+# Preview access secret (32–256 random characters), never an OpenAI API key.
+GENERATION_ACCESS_TOKEN=
+# Absolute lifetime request ceiling, including failures. Zero disables LIVE.
+GENERATION_REQUEST_LIMIT=0
+# Explicit approved expiry as an ISO 8601 UTC timestamp.
+GENERATION_EXPIRES_AT=
