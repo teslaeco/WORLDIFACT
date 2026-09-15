@@ -3,11 +3,11 @@
 This branch targets **Cloudflare Workers with Static Assets**. The Worker owns `/api/*`; missing application routes use the SPA fallback in `wrangler.jsonc`. The old blanket Pages `_redirects` rule was removed so asset files are not rewritten to HTML.
 
 1. Review the replacement branch based on current `main`. Main’s product vision is preserved in `PROJECT_VISION.md`; old PR #1 remains a conflicted draft and must not be merged.
-2. The morning go-ahead authorizes publishing the review branch and draft PR. Require the verification workflow to pass on the exact reviewed commit.
-3. Configure a GitHub `production` environment with required reviewers if available. The workflow's text input alone is not an approval policy.
+2. The owner requested continuation of planned release tasks after entering both deployment secrets. Require the verification workflow to pass on the exact reviewed commit.
+3. Use the configured GitHub `Production` environment; names are case-insensitive. Add required reviewers if desired. The screenshot shows none configured; the main-only manual workflow and its confirmation are still present.
 4. Set environment secrets `CLOUDFLARE_API_TOKEN` with only the needed Worker/account permissions and `CLOUDFLARE_ACCOUNT_ID`. Never put tokens in repository variables or frontend env files.
 5. After release approval and merge, run the manual Cloudflare workflow from `main` with confirmation `DEPLOY`. No automatic push deployment is configured.
-6. Record the actual public HTTPS URL and deployed commit. Verify home, direct portal refresh, assets, `/api/health`, DEMO scenes, archive, GLB export and mobile controls without authentication.
+6. The workflow's release check records the actual HTTPS URL/version and verifies exact HTML, all JS/CSS assets, `/api/health`, DEMO JSON and origin rejection. Archive, GLB export, rendering and mobile controls still require device QA. Read CLOUDFLARE_SETUP.md for the launch controls and error interpretation.
 
 ## Optional paid generation — separate activation
 

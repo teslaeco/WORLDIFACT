@@ -14,7 +14,9 @@ concurrency:
 jobs:
   deploy:
     if: github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY'
-    environment: production
+    environment:
+      name: production
+      url: ${{ steps.release.outputs.url }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -23,6 +25,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Check deployment input names and format
+        run: node scripts/release-check.ts credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: npm ci
       - run: npm run verify
       - run: npm run deploy:check
@@ -31,3 +38,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson
+      - name: Verify published HTML, assets and DEMO API
+        id: release
+        run: node scripts/release-check.ts smoke
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson
