@@ -2,7 +2,7 @@ Updated: 2026-09-15T11:27:40Z
 
 # WORLDIFACT night shift
 
-Owner: root conversation. State: IDLE — foundation release and bounded propagation check prepared, 2026-09-15. No paid generation authorized. Set ACTIVE before another edit.
+Owner: root conversation. State: IDLE — canonical static HTML correction verified locally and ready for the release follow-up, 2026-09-15. No paid generation authorized. Set ACTIVE before another edit.
 
 ## Authorized scope
 
@@ -91,3 +91,7 @@ Additional blocks: full Shop/Studio archive reads returned ownership-verificatio
 Foundation local verification: 57/57 tests, TypeScript, production build and local DEMO HTTP pass. Lint has seven pre-existing unused-variable warnings in the imported ISS source and no errors. Worker dry-run passes for the local hub + ISS package; CI must also assemble the pinned Chess/Terra builds before deployment. No visual/Android or full-migration pass is implied.
 
 PR #6 passed CI 35006048011 on e08124f30578e39ca21eb2f1206579c9813bf072 and merged as 0ea90397c00dfdbf0e98e3d645d77b95da1124b4. Its automatic release 35006854698 deployed 5c670d3b-95fd-4086-9910-788381fed3a3 but immediate root HTML still differed from the build. The follow-up adds bounded asset GET retries (2/4/8/16 seconds), preserving strict hashes and never retrying generation POSTs. Follow-up local verification: 58/58 tests, TypeScript, HTTP, build, Worker dry-run and diff pass; seven imported ISS lint warnings persist. Final release proof belongs in the follow-up PR.
+
+PR #7 passed CI 35007445969 and merged as 3c3332d69e351f920e4c23f178b98f293c244c9c. Release 35007611067 deployed c2a7198d-ff7f-4825-a241-97de2c830193 and passed hub checks, then stopped at Terra water-casebook/index.html. Cloudflare canonically redirects index.html through a directory URL; the static checker had forbidden every redirect. The next follow-up permits at most two same-origin canonical HTML redirects, still requiring exact MIME and SHA-256. External, unrelated, credentialed, query-bearing and cyclic redirects remain rejected; API requests retain redirect:error and generation POSTs are never retried.
+
+Canonical follow-up local verification: 60/60 tests, TypeScript, production build, local DEMO HTTP, Worker dry-run and diff check pass. Seven pre-existing ISS lint warnings and the Three.js size warning persist. docs/GPT_PROJECT_INSTRUCTIONS.md consolidates the owner's vision, exact foundation URLs, incomplete migration, Oracle preservation, no-paid instruction and verified Product Hunt guidance. Final CI and public integrity results belong in this follow-up PR; browser/device and full storage/auth migration remain outstanding.
