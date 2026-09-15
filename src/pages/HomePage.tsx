@@ -14,6 +14,7 @@ export default function HomePage() {
         <Link to="/" className="brand">
           <WorldifactLogo /><span className="brand-name">WORLDIFACT<span>AI Worlds Made Real</span></span>
         </Link>
+        <Link className="button-link" to="/control">Manage worlds</Link>
         <Link className="button-link" to="/lab">
           Open Game Lab →
         </Link>

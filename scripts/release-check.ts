@@ -116,7 +116,10 @@ export async function checkPublishedRelease(deployment: Deployment,
 
   const expectedHtml = await readFile(join(dist, "index.html"));
   requireCheck(/id=["']root["']/.test(expectedHtml.toString()), "Built app entry point is missing.");
-  const routes = ["/", "/privacy", "/terms", "/terra", "/chess/shop", "/builder", "/make", ...PORTALS.map(portal => portal.route)];
+  const platform = await json(await request("/api/platform"), "/api/platform");
+  requireCheck(platform.cloudflare === "RESPONDING" && typeof platform.ownerChecks === "boolean",
+    "Platform status endpoint did not return its contract");
+  const routes = ["/", "/control", "/privacy", "/terms", "/terra", "/chess/shop", "/builder", "/make", ...PORTALS.map(portal => portal.route)];
   for (const path of routes) {
     await matchingAsset(path, digest(expectedHtml), ["text/html"], { headers: { Accept: "text/html" } });
   }

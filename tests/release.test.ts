@@ -77,7 +77,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
 test("release smoke verifies deep links and lazy assets and only sends DEMO without secrets", async (t) => {
   const f = await fixture(t);
   const result = await checkPublishedRelease({ origin, versionId }, f);
-  assert.equal(result.htmlRoutes, 12);
+  assert.equal(result.htmlRoutes, 13);
   assert.equal(result.verifiedAssets, 4);
   assert.equal(result.foundationAssets, 5);
   assert.equal(f.providerCalls(), 0);
