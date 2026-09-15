@@ -44,6 +44,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     ["/assets/app.js", "export const worldifact = true;"],
     ["/assets/app.css", "body { color: white; }"],
     ["/assets/lazy.js", "export const portal = true;"],
+    ["/assets/lake.webp", "RIFF mock texture bytes"],
   ]);
   for (const [path, contents] of files) await writeFile(join(dist, path.slice(1)), contents);
   const requests: Request[] = [];
@@ -57,7 +58,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     }) as typeof fetch);
     const asset = files.get(url.pathname);
     return new Response(asset ?? files.get("/index.html"), { headers: {
-      "Content-Type": asset ? (url.pathname.endsWith(".css") ? "text/css" : "text/javascript") : "text/html",
+      "Content-Type": asset ? (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript") : "text/html",
     } });
   };
   return { dist, files, requests, fetcher, providerCalls: () => providerCalls };
@@ -66,8 +67,8 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
 test("release smoke verifies deep links and lazy assets and only sends DEMO without secrets", async (t) => {
   const f = await fixture(t);
   const result = await checkPublishedRelease({ origin, versionId }, f);
-  assert.equal(result.htmlRoutes, 5);
-  assert.equal(result.verifiedAssets, 3);
+  assert.equal(result.htmlRoutes, 8);
+  assert.equal(result.verifiedAssets, 4);
   assert.equal(f.providerCalls(), 0);
   const posts = f.requests.filter((request) => request.method === "POST");
   assert.equal(posts.length, 2);
@@ -97,4 +98,14 @@ test("release smoke refuses a READY health response before making a generation r
   await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /requires DEMO/);
   assert.equal(f.requests.length, 0);
   assert.equal(f.providerCalls(), 0);
+});
+
+test("release smoke detects a missing panorama served as HTML or a stale image", async (t) => {
+  for (const mime of ["text/html", "image/webp"]) {
+    const f = await fixture(t);
+    const fetcher = async (url: URL, init: RequestInit) => url.pathname === "/assets/lake.webp"
+      ? new Response("incorrect asset", { headers: { "Content-Type": mime } }) : f.fetcher(url, init);
+    await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /lake\.webp/);
+    assert.equal(f.providerCalls(), 0);
+  }
 });

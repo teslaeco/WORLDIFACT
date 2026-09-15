@@ -8,10 +8,10 @@ Decision: **Public DEMO deployed; NO-GO for final contest launch or manufacturin
 | Live form / eligibility | BLOCKED | Earlier authenticated review hit Product Hunt's human/bot challenge and a conflicting countdown; no bypass or submission |
 | Source baseline | MERGED | PR #2 merged as `2588c3b9c0ea647d1db7662b24725388a215239f`; redirect fix PR #3 merged as `2304d4717f77e220bf8145d39a5905b9698a0a60`. Original vision remains in PROJECT_VISION.md |
 | Old PR #1 | CONFLICTED DRAFT | Not merged; do not replace the reviewed main source with this older branch |
-| Valley / rover / workshop | IMPLEMENTED; DEVICE QA OUTSTANDING | Movement/collision, scaled walls, doors, rover clearance and safe exits have tests; real touch behavior and FPS remain unmeasured |
+| Mirror Lake / rover / workshop | IMPLEMENTED; DEVICE QA OUTSTANDING | Generated panorama, planar water reflections, walk-in portals and an analogue joystick replace the old river / directional-pad view. Movement and pointer logic have regression tests; physical Android behavior and FPS remain unmeasured. See MIRROR_LAKE.md |
 | Studio / archive / exports | IMPLEMENTED; DEVICE QA OUTSTANDING | DEMO composition, validated imports, edits, local archive provenance, GLB export/viewer and race guards; no physical-device pass claimed |
 | Astra integration | IMPLEMENTED; LIVE BLOCKED | Server Responses API, strict schema, preview code, expiry, rate limiter and persistent global allowance; only successful real provider output earns LIVE |
-| OpenAI provisioning | IMPLEMENTED; RUN RESULT REQUIRED | New script reports missing API key as BLOCKED; verifies supplied key with a fixed read-only model request and securely synchronizes Worker secrets. CONFIGURED is not LIVE evidence |
+| OpenAI provisioning | CONFIGURED | [Run 34959157811 attempt 2](https://github.com/teslaeco/WORLDIFACT/actions/runs/34959157811/attempts/2), 2026-09-15 10:59 UTC: model metadata access verified and Worker secret synchronized. Paid generation remains disabled; CONFIGURED is not LIVE evidence |
 | Generation proof | IMPLEMENTED | Provider response ID, UTC, scene SHA-256 and token usage; evidence excludes secrets and reference images. Provider tests are simulated |
 | Other portals | PLANNED | Chess engine, playable ISS mission, live Earth observation and eight-planet gameplay remain outside this implemented prototype |
 | Verified code baseline | PASS | Successful release ran 41/41 tests, lint, TypeScript, local HTTP smoke, production build and Worker packaging. Shared Three.js chunk still has a size warning |
@@ -19,7 +19,7 @@ Decision: **Public DEMO deployed; NO-GO for final contest launch or manufacturin
 | Cloudflare credentials | SUCCESSFULLY USED | Existing production environment account ID and API token published the Worker. Values were not read. Full token scope/expiry and account plan remain separate owner checks |
 | Cloudflare public release | PASS | [Run 34956564451](https://github.com/teslaeco/WORLDIFACT/actions/runs/34956564451) completed at 2026-09-15T10:12:00Z on `2304d4717f77e220bf8145d39a5905b9698a0a60`; version `8fc7aa65-eb6e-482b-9de7-e62e49101f13` |
 | Public HTTP verification | PASS | https://worldifact.xodobrox.workers.dev — five exact HTML routes, eleven matching JS/CSS assets, API 404, DEMO generation and origin rejection passed in the real release job |
-| Automatic publication | IMPLEMENTED IN PR #4 | Main push/merge starts full verification, packaging, optional secret setup, deployment and public smoke. Manual DEPLOY retained; the old manual-only policy is superseded by the owner's later automation request |
+| Automatic publication | VERIFIED | PR #4 merged as 28f58710d2f9be5089bc6f75a300b5b79a883f54 and its merge push triggered successful run 34959157811. Attempt 2 also passed after OpenAI secret entry. Main pushes run full checks and deployment; manual DEPLOY remains available |
 | Source models | PARTIAL | Legacy Queen and ISS sources recovered earlier; exact current Queen, Julie, astronaut and wooden polyhedron sources still missing |
 | Manufacturing | NOT APPROVED | Legacy Queen retains 16/99 open geometries; recovered ISS retains 27/27 open at 100 mm and 370 mm. No completed wall, slicer, color or supplier engineering approval |
 | Supplier costs | PREVIOUS OBSERVATIONS | Legacy Queen 100 mm white: $2.72 for 1, $5.44 for 2 and $27.20 for 10. Nominal 370 mm ISS color quote $213.53 carried a thin-wall warning. These are not new/current binding quotes. Sculpteo and 200 mm prices unknown |
@@ -39,3 +39,9 @@ The earlier night-shift notes remain historical evidence; their no-public-URL an
 Primary references: [official contest](https://www.producthunt.com/contests/gpt-6-astra-challenge), [linked launch guide](https://app.notion.com/p/teamhome1431/GPT-6-Astra-Challenge-Product-Hunt-Launch-Guide-3d62e1256c9e80f39bccdd2ab93bb306), [Astra guide](https://developers.openai.com/api/docs/guides/latest-model), [Astra model/pricing](https://developers.openai.com/api/docs/models/gpt-6-astra).
 
 Updated: 2026-09-15T10:38:23Z
+
+## Mirror Lake continuation
+
+The owner requested automatic portal entry, a realistic generated water-world texture and a mobile joystick. The implementation and image provenance are documented in MIRROR_LAKE.md. All five portal routes are included in publication smoke checks, along with the WebP asset's MIME type and SHA-256. Final verification and publication evidence will be recorded in this change's PR. Existing paid-generation and final-contest gates remain unresolved.
+
+Mirror Lake local verification passed 54/54 tests, lint, TypeScript, local HTTP DEMO smoke, production build, Worker packaging and diff checks. The new tests caught and resolved a path crossing the wrong portal. Public browser appearance and physical Android multitouch remain separate checks; final CI and release results are recorded on this change's PR.

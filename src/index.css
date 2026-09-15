@@ -82,27 +82,8 @@ main {
   bottom: 3.8rem;
 }
 
-.touch-controls {
-  position: absolute;
-  right: 0.75rem;
-  bottom: 0.75rem;
-  display: grid;
-  gap: 0.4rem;
-  grid-template-columns: repeat(3, 2.4rem);
-  align-items: center;
-}
 
-.touch-controls button {
-  border: none;
-  background: rgba(5, 21, 30, 0.75);
-  color: white;
-  border-radius: 8px;
-  min-height: 2.4rem;
-}
 
-.touch-controls button:last-child {
-  grid-column: 1 / span 3;
-}
 
 .portal-nav {
   display: grid;
@@ -254,16 +235,7 @@ td {
   }
 }
 
-@media (min-width: 800px) {
-  .touch-controls {
-    opacity: 0.25;
-  }
-  .touch-controls:focus-within,
-  .touch-controls:hover {
-    opacity: 1;
-  }
-}
-/* Riverlight: a playable working surface with warm sunlight and deep-water controls. */
+/* WORLDIFACT working surfaces. */
 :root {
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   line-height: 1.5;
@@ -436,37 +408,6 @@ h2 {
   background: #112a34e8;
   border-radius: 6px;
   font-size: 0.85rem;
-}
-.touch-controls {
-  grid-template-columns: repeat(3, 44px);
-  opacity: 1;
-  gap: 5px;
-}
-.touch-controls button {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  touch-action: none;
-  background: #172e39dd;
-}
-.touch-controls button:first-child {
-  grid-column: 2;
-}
-.touch-controls button:nth-child(2) {
-  grid-column: 1;
-  grid-row: 2;
-}
-.touch-controls button:nth-child(3) {
-  grid-column: 2;
-  grid-row: 2;
-}
-.touch-controls button:nth-child(4) {
-  grid-column: 3;
-  grid-row: 2;
-}
-.touch-controls button:last-child {
-  grid-row: 3;
-  font-size: 0.8rem;
 }
 .accessibility-panel {
   max-width: none;
@@ -896,3 +837,149 @@ input[type="file"] {
 .info-page h2 { margin-top:2rem; }
 .generation-evidence { overflow-wrap:anywhere; }
 .generation-evidence button { display:block; margin-top:.75rem; }
+
+/* Mirror Lake: keep two-thumb controls above the canvas, clear of page scrolling. */
+.home-world .starting-world-shell {
+  height: min(74svh, 820px);
+  min-height: 480px;
+  border-color: #638190;
+}
+.starting-world canvas { display: block; }
+.world-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.joystick-control {
+  position: absolute;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+}
+.joystick-base {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  padding: 0;
+  border: 1px solid #d5f0ff75;
+  border-radius: 50%;
+  background: #061e32a8;
+  box-shadow: inset 0 0 24px #6ebdd527, 0 8px 30px #03151d40;
+  backdrop-filter: blur(7px);
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.joystick-base:hover,
+.joystick-base.is-moving { background: #12364de3; border-color: #bef2f6; }
+.joystick-track {
+  position: absolute;
+  width: 86px;
+  height: 86px;
+  border: 1px solid #cbe6f331;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.joystick-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid #d2faff;
+  background: radial-gradient(circle at 35% 25%, #ecffff, #83cddc 40%, #276b85);
+  box-shadow: 0 4px 14px #00141f88;
+  pointer-events: none;
+  will-change: transform;
+}
+.joystick-caption,
+.world-interact > span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #f0fdff;
+  text-shadow: 0 1px 5px #00121f, 0 0 12px #00121f;
+}
+.world-interact {
+  position: absolute;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1.5rem, env(safe-area-inset-bottom));
+  width: clamp(128px, 25vw, 188px);
+  display: grid;
+  gap: 0.65rem;
+  text-align: center;
+}
+.world-interact button {
+  pointer-events: auto;
+  touch-action: manipulation;
+  min-height: 64px;
+  border-radius: 18px;
+  border: 1px solid #b8eaf7c9;
+  background: #0e3047eb;
+  font-size: 0.95rem;
+  padding: 0.65rem;
+  box-shadow: 0 6px 24px #00132144;
+}
+.keyboard-shortcut {
+  margin-left: 0.55rem;
+  display: inline-block;
+  border: 1px solid #b4d8e755;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.world-hint {
+  bottom: 176px;
+  max-width: calc(100% - 2rem);
+  font-size: 0.875rem;
+  padding: 0.45rem 0.7rem;
+  pointer-events: none;
+}
+.world-top {
+  max-width: calc(100% - 2rem);
+  padding: 0.55rem 0.75rem;
+  background: #092638a8;
+  border: 1px solid #b2deec35;
+  border-radius: 9px;
+}
+.world-top .eyebrow { font-size: 0.75rem; }
+.world-top > span:last-child { font-size: 0.875rem; }
+.world-actions { z-index: 1; top: 7.2rem; }
+.world-actions button { min-height: 44px; font-size: 0.875rem; }
+.loading-overlay,
+.webgl-fallback { z-index: 3; }
+.starting-world-shell .webgl-fallback {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  background: #0b2338e6;
+}
+@media (pointer: coarse) {
+  .keyboard-shortcut { display: none; }
+}
+@media (max-width: 760px) {
+  .home-intro { padding-bottom: 0.8rem; }
+  .home-intro h1 { font-size: 1.7rem; }
+  .home-intro .eyebrow { display: none; }
+  .home-intro p { font-size: 0.9375rem; }
+  .home-world .starting-world-shell { width: calc(100% - 1rem); height: 70svh; }
+  .world-top { top: 0.7rem; left: 0.7rem; }
+  .world-top strong { font-size: 1.2rem; }
+  .world-actions { top: 7.2rem; left: 0.7rem; }
+  .world-actions button { padding: 0.4rem 0.55rem; }
+  .world-hint { left: 0.7rem; font-size: 0.875rem; }
+  .studio-scene .starting-world-shell { height: 70svh; min-height: 500px; }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .home-world .starting-world-shell,
+  .studio-scene .starting-world-shell { height: 90svh; min-height: 340px; }
+  .world-top { top: 0.7rem; left: 0.7rem; }
+  .world-top .eyebrow { display: none; }
+  .world-actions { top: 0.7rem; left: auto; right: 0.7rem; max-width: 55%; }
+  .joystick-base { width: 112px; height: 112px; }
+  .world-hint { bottom: 155px; }
+}

@@ -3,6 +3,7 @@ import { appendFile, readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateGenerationResult } from "../src/lib/blueprint.ts";
+import { PORTALS } from "../src/config/portals.ts";
 
 const requireCheck: (condition: unknown, message: string) => asserts condition = (condition, message) => {
   if (!condition) throw new Error(message);
@@ -40,7 +41,7 @@ async function assetFiles(dist: string, relative = "assets"): Promise<string[]> 
   for (const entry of await readdir(join(dist, relative), { withFileTypes: true })) {
     const path = `${relative}/${entry.name}`;
     if (entry.isDirectory()) files.push(...await assetFiles(dist, path));
-    else if (entry.isFile() && /\.(js|css)$/.test(path)) files.push(path);
+    else if (entry.isFile() && /\.(js|css|webp)$/.test(path)) files.push(path);
   }
   return files.sort();
 }
@@ -75,7 +76,7 @@ export async function checkPublishedRelease(deployment: Deployment,
 
   const expectedHtml = await readFile(join(dist, "index.html"));
   requireCheck(/id=["']root["']/.test(expectedHtml.toString()), "Built app entry point is missing.");
-  const routes = ["/", "/privacy", "/terms", "/portal/ai-game-lab", "/portal/enchanted-ai-shop"];
+  const routes = ["/", "/privacy", "/terms", ...PORTALS.map(portal => portal.route)];
   for (const path of routes) {
     const response = await request(path, { headers: { Accept: "text/html" } });
     requireCheck(response.status === 200 && response.headers.get("content-type")?.includes("text/html"),
@@ -89,9 +90,9 @@ export async function checkPublishedRelease(deployment: Deployment,
   for (const path of assets) {
     const response = await request(`/${path}`);
     const mime = response.headers.get("content-type")?.split(";")[0].trim();
-    requireCheck(response.status === 200 && (path.endsWith(".css") ? mime === "text/css" :
+    requireCheck(response.status === 200 && (path.endsWith(".webp") ? mime === "image/webp" : path.endsWith(".css") ? mime === "text/css" :
       ["text/javascript", "application/javascript"].includes(mime ?? "")),
-      `${path} was not delivered with its required JavaScript/CSS content type.`);
+      `${path} was not delivered with its required JavaScript/CSS/image content type.`);
     requireCheck(digest(Buffer.from(await response.arrayBuffer())) === digest(await readFile(join(dist, path))),
       `${path} does not match the release build.`);
   }
@@ -126,12 +127,12 @@ async function main() {
   console.log(`Deployed URL: ${deployment.origin}`);
   console.log(`Cloudflare version: ${deployment.versionId}`);
   const result = await checkPublishedRelease(deployment);
-  console.log(`PASS: ${result.htmlRoutes} HTML routes, ${result.verifiedAssets} matching JS/CSS assets, API 404, DEMO generation and origin rejection. No paid API call.`);
+  console.log(`PASS: ${result.htmlRoutes} HTML routes, ${result.verifiedAssets} matching JS/CSS/image assets, API 404, DEMO generation and origin rejection. No paid API call.`);
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `url=${result.origin}\n`);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY,
     `## WORLDIFACT DEMO release\n\n[Open WORLDIFACT](${result.origin})\n\n` +
     `Cloudflare version: \`${result.versionId}\`\n\n` +
-    `HTTP checks passed: ${result.htmlRoutes} application routes, ${result.verifiedAssets} JavaScript/CSS files matching the build, API 404, DEMO generation and origin rejection.\n\n` +
+    `HTTP checks passed: ${result.htmlRoutes} application routes, ${result.verifiedAssets} JavaScript/CSS/image files matching the build, API 404, DEMO generation and origin rejection.\n\n` +
     "No paid API call. Browser appearance, WebGL and physical Android still require device QA.\n");
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

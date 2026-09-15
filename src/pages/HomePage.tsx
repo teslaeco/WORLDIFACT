@@ -18,12 +18,12 @@ export default function HomePage() {
       </header>
       <div className="home-intro">
         <span className="eyebrow">TERRAFORMING PLANET</span>
-        <h1>A world worth building.</h1>
+        <h1>Worlds on the water.</h1>
         <p>
-          Follow the river. Find your portal. Make something that belongs here.
+          Walk onto a glowing portal. Move with the joystick; drag to look around.
         </p>
       </div>
-      <Suspense fallback={<LoadingFallback message="Opening the valley…" />}>
+      <Suspense fallback={<LoadingFallback message="Opening Mirror Lake…" />}>
         <StartingWorld onPortalOpen={open} />
       </Suspense>
       <section className="accessibility-panel">
@@ -34,8 +34,8 @@ export default function HomePage() {
         <PortalCardsNav />
       </section>
       <footer className="site-footer">
-        Playable world: DEMO · procedural scenery{" "}
-        <span>Original models and live AI require separate connections.</span>
+        AI environment art · DEMO gameplay{" "}
+        <span>Game Lab and MAKE are available. Other destinations are previews.</span>
       </footer>
     </main>
   );

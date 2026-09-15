@@ -26,7 +26,7 @@ export default function PortalPage() {
     <main className="portal-page">
       <header className="portal-header">
         <Link to="/" className="brand">
-          WORLDIFACT <span>← valley</span>
+          WORLDIFACT <span>← Mirror Lake</span>
         </Link>
         <nav>
           {PORTALS.map((p) => (
