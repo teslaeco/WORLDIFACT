@@ -71,7 +71,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
       "Content-Type": !asset || url.pathname.endsWith(".html") ? "text/html" : (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript"),
     } });
   };
-  return { dist, files, requests, fetcher, providerCalls: () => providerCalls };
+  return { dist, files, requests, fetcher, retryDelaysMs: [], providerCalls: () => providerCalls };
 }
 
 test("release smoke verifies deep links and lazy assets and only sends DEMO without secrets", async (t) => {
@@ -127,4 +127,22 @@ test("release rejects a portal wrapper masquerading as a copied original app", a
     ? new Response(f.files.get('/index.html'), { headers: { 'Content-Type': 'text/html' } }) : f.fetcher(url, init);
   await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /copied application/);
   assert.equal(f.providerCalls(), 0);
+});
+
+test('release briefly retries stale edge HTML but never retries generation POSTs', async (t) => {
+  const f = await fixture(t);
+  let reads = 0;
+  const fetcher = async (url: URL, init: RequestInit) => {
+    if (url.pathname === '/' && ++reads <= 2) return new Response('<html>Previous release</html>', { headers: { 'Content-Type': 'text/html' } });
+    return f.fetcher(url, init);
+  };
+  const result = await checkPublishedRelease({ origin, versionId }, { ...f, fetcher, retryDelaysMs: [0, 0] });
+  assert.equal(reads, 3);
+  assert.equal(result.foundationAssets, 5);
+  assert.equal(f.requests.filter(request => request.method === 'POST').length, 2);
+  assert.equal(f.providerCalls(), 0);
+  await assert.rejects(checkPublishedRelease({ origin, versionId }, {
+    ...f, retryDelaysMs: [0], fetcher: async (url, init) => url.pathname === '/'
+      ? new Response('<html>Always stale</html>', { headers: { 'Content-Type': 'text/html' } }) : f.fetcher(url, init),
+  }), /does not match/);
 });

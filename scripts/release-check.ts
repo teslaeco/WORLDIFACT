@@ -47,7 +47,8 @@ async function assetFiles(dist: string, relative = "assets"): Promise<string[]> 
 }
 
 export async function checkPublishedRelease(deployment: Deployment,
-  { dist = "dist", fetcher = fetch }: { dist?: string; fetcher?: ReleaseFetch } = {}) {
+  { dist = "dist", fetcher = fetch, retryDelaysMs = [2000, 4000, 8000, 16000] }:
+  { dist?: string; fetcher?: ReleaseFetch; retryDelaysMs?: number[] } = {}) {
   const { origin, versionId } = deployment;
   const request = async (path: string, options: RequestInit = {}) => {
     let response;
@@ -70,6 +71,19 @@ export async function checkPublishedRelease(deployment: Deployment,
     requireCheck(value && typeof value === "object" && !Array.isArray(value), `${path} returned an invalid JSON object.`);
     return value as Record<string, unknown>;
   };
+  const matchingAsset = async (path: string, expectedHash: string, types: string[], options: RequestInit = {}) => {
+    // Newly deployed static assets can briefly reach an edge after the Worker.
+    // Retry only idempotent reads, never generation or other POST requests.
+    for (let attempt = 0; ; attempt++) {
+      const response = await request(path, options);
+      const mime = response.headers.get("content-type")?.split(";")[0].trim();
+      const validType = response.status === 200 && types.includes(mime ?? "");
+      const matches = validType && digest(Buffer.from(await response.arrayBuffer())) === expectedHash;
+      if (matches) return;
+      if (attempt >= retryDelaysMs.length) throw new Error(`${path} does not match the copied application / release build or required content type.`);
+      await new Promise(resolve => setTimeout(resolve, retryDelaysMs[attempt]));
+    }
+  };
   const health = await json(await request("/api/health"), "/api/health");
   requireCheck(health.mode === "DEMO" && health.generationReady === false && health.model === null,
     "This first-release check requires DEMO with paid generation unavailable.");
@@ -78,23 +92,14 @@ export async function checkPublishedRelease(deployment: Deployment,
   requireCheck(/id=["']root["']/.test(expectedHtml.toString()), "Built app entry point is missing.");
   const routes = ["/", "/privacy", "/terms", "/terra", "/chess/shop", "/builder", "/make", ...PORTALS.map(portal => portal.route)];
   for (const path of routes) {
-    const response = await request(path, { headers: { Accept: "text/html" } });
-    requireCheck(response.status === 200 && response.headers.get("content-type")?.includes("text/html"),
-      `${path} must deliver the HTML application entry point.`);
-    requireCheck(digest(Buffer.from(await response.arrayBuffer())) === digest(expectedHtml),
-      `${path} does not match the application built for this release.`);
+    await matchingAsset(path, digest(expectedHtml), ["text/html"], { headers: { Accept: "text/html" } });
   }
   const assets = await assetFiles(dist);
   requireCheck(assets.some((path) => path.endsWith(".js")) && assets.some((path) => path.endsWith(".css")),
     "The release must include JavaScript and CSS assets.");
   for (const path of assets) {
-    const response = await request(`/${path}`);
-    const mime = response.headers.get("content-type")?.split(";")[0].trim();
-    requireCheck(response.status === 200 && (path.endsWith(".webp") ? mime === "image/webp" : path.endsWith(".css") ? mime === "text/css" :
-      ["text/javascript", "application/javascript"].includes(mime ?? "")),
-      `${path} was not delivered with its required JavaScript/CSS/image content type.`);
-    requireCheck(digest(Buffer.from(await response.arrayBuffer())) === digest(await readFile(join(dist, path))),
-      `${path} does not match the release build.`);
+    const types = path.endsWith(".webp") ? ["image/webp"] : path.endsWith(".css") ? ["text/css"] : ["text/javascript", "application/javascript"];
+    await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
   }
   const foundation = JSON.parse(await readFile(join(dist, "foundation-release.json"), "utf8")) as {
     files: Array<{ path: string; bytes: number; sha256: string }>;
@@ -111,13 +116,10 @@ export async function checkPublishedRelease(deployment: Deployment,
       requireCheck(/^\/apps\/(chess|iss|terra)\/[a-z\d_./+ -]+$/i.test(path) && !path.includes(".."), "Invalid foundation asset path.");
       const local = await readFile(join(dist, path.slice(1)));
       requireCheck(local.length === file.bytes && digest(local) === file.sha256, `${path} changed after assembly.`);
-      const response = await request(path);
-      const mime = response.headers.get("content-type")?.split(";")[0].trim();
       const expected = path.endsWith(".html") ? ["text/html"] : path.endsWith(".css") ? ["text/css"] :
         path.endsWith(".js") ? ["application/javascript", "text/javascript"] : path.endsWith(".wasm") ? ["application/wasm"] :
         ["model/gltf-binary", "application/octet-stream"];
-      requireCheck(response.status === 200 && expected.includes(mime ?? ""), `${path} must deliver its original application content type.`);
-      requireCheck(digest(Buffer.from(await response.arrayBuffer())) === file.sha256, `${path} does not match the copied application.`);
+      await matchingAsset(path, file.sha256, expected);
     }
   }));
   await json(await request("/api/release-check-missing"), "/api/release-check-missing", 404);
