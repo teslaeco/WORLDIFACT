@@ -1,25 +1,37 @@
 import { spawnSync } from "node:child_process";
+import type { SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { appendFile, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MODEL = "gpt-6-astra";
 const MODEL_URL = `https://api.openai.com/v1/models/${MODEL}`;
-const fail = (message) => { throw new Error(message); };
+function fail(message: string): never { throw new Error(message); }
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
-export function checkDemoConfig(config) {
-  if (config?.name !== "worldifact" || config?.vars?.OPENAI_MODEL !== MODEL ||
+type SecretInputs = { OPENAI_API_KEY?: string; GENERATION_ACCESS_TOKEN?: string };
+export type WorkerSecrets = { OPENAI_API_KEY: string; GENERATION_ACCESS_TOKEN?: string };
+type ModelFetch = (url: string, options: RequestInit) => Promise<Response>;
+type SecretRunner = (command: string, args: string[],
+  options: SpawnSyncOptionsWithStringEncoding & { input: string; env: NodeJS.ProcessEnv }) =>
+  { status: number | null; error?: Error; stderr?: string };
+type ConnectionResult = { status: "BLOCKED" | "CONFIGURED"; reason: string; model: typeof MODEL };
+
+export function checkDemoConfig(config: unknown) {
+  if (!isRecord(config) || config.name !== "worldifact" || !isRecord(config.vars) ||
+      config.vars.OPENAI_MODEL !== MODEL ||
       config.vars.ENABLE_PAID_GENERATION !== "false" ||
       config.vars.GENERATION_REQUEST_LIMIT !== "0" || config.vars.GENERATION_EXPIRES_AT !== "") {
     fail("Automatic releases require the reviewed WORLDIFACT DEMO configuration. Paid activation needs a separate approved release.");
   }
 }
 
-export function readSecretInputs(env) {
+export function readSecretInputs(env: SecretInputs): WorkerSecrets | null {
   const key = env.OPENAI_API_KEY || "";
   const access = env.GENERATION_ACCESS_TOKEN || "";
   if (!key) return null;
-  if (!/^sk-[A-Za-z0-9_-]{20,2045}$/.test(key)) {
+  if (!/^sk-[A-Za-z0-9_-]{20,2045}$/.test(key) || /\s/.test(key)) {
     fail("OPENAI_API_KEY has an invalid format. Use the secure production environment secret; its value is never logged.");
   }
   if (access && (access.length < 32 || access.length > 256 || /\s/.test(access))) {
@@ -28,8 +40,8 @@ export function readSecretInputs(env) {
   return { OPENAI_API_KEY: key, ...(access ? { GENERATION_ACCESS_TOKEN: access } : {}) };
 }
 
-export async function verifyModelAccess(key, fetcher = fetch) {
-  let response;
+export async function verifyModelAccess(key: string, fetcher: ModelFetch = fetch) {
+  let response: Response;
   try {
     response = await fetcher(MODEL_URL, {
       method: "GET", redirect: "error", signal: AbortSignal.timeout(15_000),
@@ -42,15 +54,16 @@ export async function verifyModelAccess(key, fetcher = fetch) {
     // Do not print the provider body, headers or arbitrary exception text.
     fail(`OpenAI model-access verification failed (HTTP ${response.status}). Check the key, project and model permission in the secure dashboard.`);
   }
-  let model;
+  let model: unknown;
   try { model = await response.json(); }
   catch { fail("OpenAI returned invalid model metadata. No generation request was sent."); }
-  if (model?.id !== MODEL || model?.object !== "model") {
+  if (!isRecord(model) || model.id !== MODEL || model.object !== "model") {
     fail("OpenAI did not verify the approved Astra model. No generation request was sent.");
   }
 }
 
-export function uploadWorkerSecrets(payload, runner = spawnSync, env = process.env) {
+export function uploadWorkerSecrets(payload: WorkerSecrets, runner: SecretRunner = spawnSync,
+  env: NodeJS.ProcessEnv = process.env) {
   // Secrets go through stdin, never shell interpolation, argv, files or logs.
   const childEnv = { ...env };
   delete childEnv.OPENAI_API_KEY;
@@ -66,7 +79,9 @@ export function uploadWorkerSecrets(payload, runner = spawnSync, env = process.e
   }
 }
 
-export async function connectOpenAI(env, { fetcher = fetch, upload = uploadWorkerSecrets } = {}) {
+export async function connectOpenAI(env: SecretInputs,
+  { fetcher = fetch, upload = uploadWorkerSecrets }:
+  { fetcher?: ModelFetch; upload?: (payload: WorkerSecrets) => void } = {}): Promise<ConnectionResult> {
   const payload = readSecretInputs(env);
   if (!payload) return { status: "BLOCKED", reason: "OPENAI_API_KEY is not configured in the GitHub production environment.", model: MODEL };
   await verifyModelAccess(payload.OPENAI_API_KEY, fetcher);

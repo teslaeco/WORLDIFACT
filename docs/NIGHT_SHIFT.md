@@ -1,18 +1,18 @@
-Updated: 2026-09-15T09:50:39Z
+Updated: 2026-09-15T10:38:23Z
 
 # WORLDIFACT night shift
 
-Owner: root conversation. State: IDLE after verified Cloudflare redirect fix at 2026-09-15T09:50:39Z. Set this marker ACTIVE with a timestamp before editing and release it afterward; if another active editor is present, do independent research only.
+Owner: root conversation. State: IDLE after full verification of PR #4 completion at 2026-09-15T10:38:23Z. Set this marker ACTIVE with a timestamp before editing and release it afterward; if another active editor is present, do independent research only.
 
 ## Authorized scope
 
-The user requested six hours of site/game-world development, model improvement, preliminary supplier cost tests and contest audit. The morning instruction "Okej to zróbmy to wszystko" authorized implementing the agreed plan and preparing the review. After configuring the GitHub secrets, the owner requested: "Zrobione sprawdź czy okej i wykonaj zadania które zaplanowano lub wcześniej pomijano". This continuation advances the prepared DEMO release and keeps its manual deployment confirmation. Paid API activation still lacks an explicit budget/expiry and provider secret; orders, supplier messages and contest submission have not been authorized. No new automations.
+The user requested six hours of site/game-world development, model improvement, preliminary supplier cost tests and contest audit, then authorized the morning release. After the successful public deployment, the owner explicitly requested "my to musimy zautomatyzować" and OpenAI connection where needed. This later instruction authorizes main-branch release automation and optional secure API provisioning in PR #4, superseding the former manual-only release plan. Manual DEPLOY remains available, and existing production environment approvals remain effective. Paid API activation still needs its budget/expiry and provider secret; orders, supplier messages and contest submission have not been authorized. No new scheduled ChatGPT tasks are created.
 
 The enabled schedule has six hourly runs, 2026-09-15 00:00:56–05:00:56 UTC. This schedules continuations; it does not guarantee uninterrupted six-hour execution.
 
 Local checkpoint branch: `work/worldifact-night-audit`. Remote review branch: `codex/worldifact-release-review`, [PR #2](https://github.com/teslaeco/WORLDIFACT/pull/2), based on main `ba6bca908122b0e5b9d16dd01ca37933a402ba5c`. The implementation snapshot is remote commit `7db0313297bb407b075a711758574684c8c1cc7b`; its file tree equals local checkpoint `b6ca90100a59e581dcb941ca5a78b799fcb162f8`. GitHub connector publication was used because shell Git transport was unavailable. Do not push the local checkpoint history over the review branch. Read the latest remote review ref before continuing.
 
-PR #2 merged as `2588c3b9c0ea647d1db7662b24725388a215239f`; main verification run `34951818415` passed and its tree `cc288b6a29940eecc755cdbe305187b09ad63d0d` matched the local checkpoint. The owner dispatched release run `34954004953`. It passed input checks, verification and packaging, then uploaded 14 assets before Cloudflare rejected the blanket `_redirects` rule with error 100324. This continuation removes that rule and retains native SPA routing. No successful public deployment, paid provider call or order is claimed.
+PR #2 and redirect-fix PR #3 are merged. The first release failed on a blanket redirect, then the corrected main `2304d4717f77e220bf8145d39a5905b9698a0a60` passed actual publication in run `34956564451`. Public DEMO: https://worldifact.xodobrox.workers.dev; version `8fc7aa65-eb6e-482b-9de7-e62e49101f13`. Five HTML routes, eleven matching JS/CSS assets, DEMO generation, API 404 and origin rejection passed. No browser/device or paid AI success is inferred from HTTP checks.
 
 ## Completed and verified
 
@@ -20,7 +20,7 @@ PR #2 merged as `2588c3b9c0ea647d1db7662b24725388a215239f`; main verification ru
 - Game Lab local DEMO, three biomes, edits, composition, local archive, GLB/JSON exports; private original GLB viewer with container/URI/instance guards and hash.
 - Gated server-side Astra strict-schema endpoint, errors/timeout/body limits/rate binding. No real paid provider call.
 - Cloudflare Worker + assets, manual deploy workflow, CI, license/data/asset notes, corrected old unsupported verification claims.
-- 41 meaningful tests, lint, typecheck, real HTTP smoke and final local build passed. The shared Three.js geometry chunk is ~582 kB minified / 146 kB gzip; device performance remains unmeasured. The morning authorization resolved the earlier time-based dry-run restriction. The Worker/assets dry-run with the persistent Durable Object budget has passed; final verification is recorded in CONTEST_STATUS.md.
+- 48 meaningful tests, lint, typecheck, real HTTP smoke and final local build passed for the automation completion. The shared Three.js geometry chunk is ~582 kB minified / 146 kB gzip; device performance remains unmeasured. The morning authorization resolved the earlier time-based dry-run restriction. The Worker/assets dry-run with the persistent Durable Object budget has passed; final verification is recorded in CONTEST_STATUS.md.
 - Portable JSON blueprint import now has a 100 KB limit and strict validation, preserves the current scene on errors, and archives a successful import. Local edits and mixed archive composition are downgraded to explicit DEMO/MOCK provenance; a late Astra response cannot overwrite a scene changed while it was pending.
 - Object color, scale, X/Z placement and rotation now update existing scene groups without recreating the renderer. Adding/removing objects or changing biome still rebuilds the scene intentionally. This is code- and unit-verified; device FPS remains UNKNOWN.
 - Enchanted AI Shop now shows seven documented production profiles across JLC3DP and Sculpteo, with process-specific wall/detail/clearance constraints and observed versus UNKNOWN/BLOCKED prices. These are screening profiles, not approvals.
@@ -40,8 +40,8 @@ PR #2 merged as `2588c3b9c0ea647d1db7662b24725388a215239f`; main verification ru
 The redirect-fix follow-up passes `npm run verify` (41/41 tests, lint, TypeScript, real local DEMO HTTP and build), `npm run deploy:check` and `git diff --check`. Both source and rebuilt output were checked for removal of the blanket redirect. Remote follow-up branch: `codex/fix-cloudflare-redirect-loop`. GitHub records its resulting CI and merge state; no successful deployment is inferred from these local checks.
 
 - The owner supplied both required environment-secret names in `Production` and dispatched the release. Credential-format checks and actual static-asset upload succeeded. Values were not read; full token permissions, expiry, plan and successful deployment remain unverified. `Production` and `production` refer to the same GitHub environment.
-- The manual release workflow validates credential input format, records the actual Wrangler deployment URL/version, checks exact built HTML and all JS/CSS files, and tests DEMO/API routing. Five tests pass with local fixtures. The real public-check step was skipped after the first deployment failed; no public pass is claimed.
-- Cloudflare error 100324 identified the redundant `/* /index.html 200` rule, which remained in `public/_redirects` despite an earlier documentation claim that it had been removed. The follow-up deletes the actual tracked file; `wrangler.jsonc` already provides native SPA fallback and `/api/*` Worker routing. After merge, a new manual Run workflow on main is required; retrying the old failed job retains the old commit. The connector has no new-run dispatch operation. Do not replace the manual control with an automatic trigger or browser recovery for the unavailable connector operation.
+- The release workflow validates credential input format, records the actual Wrangler deployment URL/version, checks exact built HTML and all JS/CSS files, and tests DEMO/API routing. These checks passed in the corrected real release. PR #4 adds owner-requested main push/merge triggering and optional server-secret provisioning without enabling paid generation.
+- Cloudflare error 100324 was fixed in PR #3 by deleting the redundant redirect file. The earlier unavailable manual-dispatch operation was not bypassed: the owner started the successful release. The owner subsequently requested automatic publication. Browser fallback restrictions remain; the authorized GitHub workflow itself now performs future main deployments.
 - Added an access-code gate, expiry and a persistent global attempt counter before paid generation. A failed provider call consumes its reservation. Health distinguishes READY from LIVE. Tests simulate provider responses; no paid request occurred.
 - Added provider-result evidence (response identifier, timestamp, blueprint SHA-256 and token usage when available), with no API/access secret in saved proof. The access code stays in page memory. A one-request smoke script is prepared but has not been run.
 - Fixed scaled/rotated habitat collisions, rover body clearance and safe rover exits with four movement tests.
@@ -57,7 +57,7 @@ The redirect-fix follow-up passes `npm run verify` (41/41 tests, lint, TypeScrip
 2. Sculpteo browser requires human verification. No model quote was obtained.
 3. JLC3DP Discard was automatically rejected because configuration could be lost. The morning review used Save changes to preserve configuration, then native quantity controls. Settled totals were $5.44 for 2 and $27.20 for 10 white 100 mm Queen parts; quantity 1 was restored. No Discard or order was performed. The 200 mm quote remains UNKNOWN.
 4. Current Queen/Julie sources and W19 were not recovered; previous source notes record API 401. Do not bypass access controls or relabel the legacy Queen as current.
-5. The night-time dry-run restriction has been superseded by the user-authorized morning continuation. Packaging passes locally and in GitHub. The owner's first real release failed on redirect configuration after uploading assets. This local runtime remains unauthenticated; do not extract GitHub secrets to authenticate it.
+5. The night-time dry-run restriction was superseded by the authorized morning continuation. Corrected publication and public HTTP checks passed in GitHub. This local runtime remains unauthenticated; do not extract GitHub secrets to authenticate it.
 
 ## Useful next tasks for scheduled runs
 
@@ -68,8 +68,8 @@ Choose the next substantive unfinished item and record actual outcomes. Avoid re
 3. Add measured evidence to production profiles only when an exact source revision and process are available. Do not blindly fill holes or destroy current design requirements.
 4. Investigate a safe experimental MAKE revision of the recovered legacy model only if it preserves source and can be measured. Do not claim wall-thickness, visual or supplier approval from component watertightness.
 5. Refine contest copy only from new verified release evidence; do not submit/post or invent public URL/screenshots/live AI evidence.
-6. PR #2 is merged. Advance the redirect correction with green checks, then verify a new owner-dispatched main release. Retain the explicit manual production workflow. Paid work, supplier orders/messages and contest submission require their applicable owner decisions.
+6. PR #2 and #3 are merged and the public DEMO is verified. Complete PR #4 with green checks, then inspect its automatic release and separate OpenAI status. The local completion branch is `work/worldifact-automation`; its imported baseline tree matched PR #4 head `b6a5c30c0588db9f7b3062fb069cb0d785a9fe76`. Do not overwrite remote history with this local checkpoint history. Paid work, supplier orders/messages and contest submission require their applicable owner decisions.
 
 Keep docs/CONTEST_STATUS.md and docs/MANUFACTURING_AUDIT.md current. Final manufacturing approval and contest release are separate: the demo may show an honestly preliminary production workbench, but must not claim finished physical products.
 
-Current release decision: NO-GO until the documented browser/live-Astra/public-URL/CI/form gates are resolved.
+Current release decision: public DEMO deployed; NO-GO for the final contest launch until browser/device, LIVE Astra and form/media gates are resolved. See PR #4 for automation CI and its actual deployment outcome.

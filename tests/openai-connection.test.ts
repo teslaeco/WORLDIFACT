@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkDemoConfig, connectOpenAI, readSecretInputs, uploadWorkerSecrets, verifyModelAccess } from "../scripts/connect-openai.mjs";
+import { checkDemoConfig, connectOpenAI, readSecretInputs, uploadWorkerSecrets, verifyModelAccess } from "../scripts/connect-openai.ts";
+import type { WorkerSecrets } from "../scripts/connect-openai.ts";
 
 const key = "sk-test-" + "a".repeat(40);
 const access = "b".repeat(40);
-const validConfig = () => ({ name: "worldifact", vars: {
+const validConfig = (): { name: string; vars: Record<string, string> } => ({ name: "worldifact", vars: {
   OPENAI_MODEL: "gpt-6-astra", ENABLE_PAID_GENERATION: "false",
   GENERATION_REQUEST_LIMIT: "0", GENERATION_EXPIRES_AT: "",
 } });
@@ -34,6 +35,7 @@ test("secret validation never includes rejected values or enables billing", () =
     { OPENAI_API_KEY: key, GENERATION_ACCESS_TOKEN: access });
   for (const invalid of [`Bearer ${key}`, `${key}\n`, `"${key}"`]) {
     assert.throws(() => readSecretInputs({ OPENAI_API_KEY: invalid }), (error) => {
+      assert.ok(error instanceof Error);
       assert.ok(!error.message.includes(key)); return true;
     });
   }
@@ -47,7 +49,7 @@ test("model access uses only a fixed read endpoint and refuses redirects", async
     assert.equal(url, "https://api.openai.com/v1/models/gpt-6-astra");
     assert.equal(options.method, "GET");
     assert.equal(options.redirect, "error");
-    assert.equal(options.headers.Authorization, `Bearer ${key}`);
+    assert.equal(new Headers(options.headers).get("Authorization"), `Bearer ${key}`);
     assert.equal(options.body, undefined);
     assert.ok(options.signal instanceof AbortSignal);
     return ok();
@@ -63,6 +65,7 @@ test("failed model access never uploads secrets or exposes provider error text",
     async () => new Response(key, { status: 200 }),
     async () => Response.json({ id: "other", object: "model", secret: key })]) {
     await assert.rejects(connectOpenAI({ OPENAI_API_KEY: key }, { fetcher, upload }), (error) => {
+      assert.ok(error instanceof Error);
       assert.ok(!error.message.includes(key)); return true;
     });
   }
@@ -86,12 +89,13 @@ test("Worker synchronization uses stdin, not shell arguments, files or child sec
   }, { OPENAI_API_KEY: key, GENERATION_ACCESS_TOKEN: access, CLOUDFLARE_API_TOKEN: "test-cloudflare-token" });
   assert.equal(calls, 1);
   assert.throws(() => uploadWorkerSecrets(payload, () => ({ status: 1, stderr: key })), (error) => {
+    assert.ok(error instanceof Error);
     assert.ok(!error.message.includes(key)); return true;
   });
 });
 
 test("successful simulated provisioning is CONFIGURED, never LIVE evidence", async () => {
-  let uploaded;
+  let uploaded: WorkerSecrets | undefined;
   const result = await connectOpenAI({ OPENAI_API_KEY: key, GENERATION_ACCESS_TOKEN: access },
     { fetcher: async () => ok(), upload: (payload) => { uploaded = payload; } });
   assert.deepEqual(uploaded, { OPENAI_API_KEY: key, GENERATION_ACCESS_TOKEN: access });

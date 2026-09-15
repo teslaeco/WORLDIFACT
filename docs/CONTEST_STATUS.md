@@ -15,7 +15,7 @@ Decision: **Public DEMO deployed; NO-GO for final contest launch or manufacturin
 | Generation proof | IMPLEMENTED | Provider response ID, UTC, scene SHA-256 and token usage; evidence excludes secrets and reference images. Provider tests are simulated |
 | Other portals | PLANNED | Chess engine, playable ISS mission, live Earth observation and eight-planet gameplay remain outside this implemented prototype |
 | Verified code baseline | PASS | Successful release ran 41/41 tests, lint, TypeScript, local HTTP smoke, production build and Worker packaging. Shared Three.js chunk still has a size warning |
-| New automation tests | LOCAL PASS; SEE PR CHECKS | Seven new isolated tests passed locally; full Node 24 CI and packaging must pass for the exact PR #4 head. See current GitHub checks rather than treating isolated tests as full verification |
+| New automation tests | FULL LOCAL PASS; SEE PR CHECKS | After fixing the new script's TypeScript errors, full verification passes 48/48 tests, lint, TypeScript, local DEMO HTTP and production build. The seven connection tests also reject trailing-newline keys. Cloudflare packaging and diff checks also pass locally. Require CI on the exact completed PR #4 head before merge |
 | Cloudflare credentials | SUCCESSFULLY USED | Existing production environment account ID and API token published the Worker. Values were not read. Full token scope/expiry and account plan remain separate owner checks |
 | Cloudflare public release | PASS | [Run 34956564451](https://github.com/teslaeco/WORLDIFACT/actions/runs/34956564451) completed at 2026-09-15T10:12:00Z on `2304d4717f77e220bf8145d39a5905b9698a0a60`; version `8fc7aa65-eb6e-482b-9de7-e62e49101f13` |
 | Public HTTP verification | PASS | https://worldifact.xodobrox.workers.dev — five exact HTML routes, eleven matching JS/CSS assets, API 404, DEMO generation and origin rejection passed in the real release job |
@@ -37,3 +37,5 @@ Before claiming contest readiness, complete desktop/physical Android QA, explici
 The earlier night-shift notes remain historical evidence; their no-public-URL and manual-only statements are superseded by this post-deployment continuation. See AUTOMATION_STATUS.md and CLOUDFLARE_SETUP.md for current operations, and MANUFACTURING_AUDIT.md for the unchanged model/quote evidence.
 
 Primary references: [official contest](https://www.producthunt.com/contests/gpt-6-astra-challenge), [linked launch guide](https://app.notion.com/p/teamhome1431/GPT-6-Astra-Challenge-Product-Hunt-Launch-Guide-3d62e1256c9e80f39bccdd2ab93bb306), [Astra guide](https://developers.openai.com/api/docs/guides/latest-model), [Astra model/pricing](https://developers.openai.com/api/docs/models/gpt-6-astra).
+
+Updated: 2026-09-15T10:38:23Z
