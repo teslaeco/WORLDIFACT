@@ -44,6 +44,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GENERATION_ACCESS_TOKEN: ${{ secrets.GENERATION_ACCESS_TOKEN }}
+      - name: Sync optional owner and Oracle connection secrets
+        run: node scripts/connect-platform.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OWNER_ACCESS_TOKEN: ${{ secrets.OWNER_ACCESS_TOKEN }}
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
       - name: Deploy verified DEMO source
         run: npm run deploy
         env:

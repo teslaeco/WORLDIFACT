@@ -2,7 +2,7 @@ Updated: 2026-09-15T11:27:40Z
 
 # WORLDIFACT night shift
 
-Owner: root conversation. State: IDLE — open meadow/PV vehicle/camera/audio changes verified locally; publication evidence belongs in the presentation PR. No paid generation authorized. Set ACTIVE before editing.
+Owner: root conversation. State: IDLE — platform control centre verified: 69 tests, lint/type/build/HTTP and Worker dry-run pass. See PLATFORM_CONNECTIONS.md; exact publication evidence belongs in the integration PR. No paid generation.
 
 ## Authorized scope
 

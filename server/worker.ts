@@ -1,3 +1,5 @@
+import { platformApi } from "./platform.ts";
+import type { PlatformEnv } from "./platform.ts";
 import {
   blueprintSchema,
   demoBlueprint,
@@ -6,7 +8,7 @@ import {
 import { budgetSettings } from "./budget.ts";
 import type { BudgetEnv, BudgetNamespace } from "./budget.ts";
 export { GenerationBudget } from "./budget.ts";
-export interface Env extends BudgetEnv {
+export interface Env extends BudgetEnv, PlatformEnv {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   ENABLE_PAID_GENERATION?: string;
@@ -89,6 +91,8 @@ export async function handle(
   fetcher: typeof fetch = fetch,
 ): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === "/api/platform" || url.pathname.startsWith("/api/platform/"))
+    return platformApi(request, env, fetcher);
   const configured =
     !!env.OPENAI_API_KEY && env.ENABLE_PAID_GENERATION === "true";
   const configuredModel = env.OPENAI_MODEL || "gpt-6-astra";

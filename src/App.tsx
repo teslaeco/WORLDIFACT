@@ -7,11 +7,14 @@ const PortalPage = lazy(async () => import('./pages/PortalPage'))
 const InfoPage = lazy(async () => import('./pages/InfoPage'))
 const WorkbenchPage = lazy(async () => import('./pages/WorkbenchPage'))
 
+const ControlPage = lazy(async () => import('./pages/ControlPage'))
+
 export default function App() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/control" element={<ControlPage />} />
         <Route path="/portal/:portalId" element={<PortalPage />} />
         {['/chess', '/chess/shop', '/iss', '/planets', '/shop', '/lab', '/terra'].map(path => (
           <Route key={path} path={path} element={<PortalPage />} />
@@ -23,6 +26,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <nav className="legal-nav" aria-label="Project information">
+        <Link to="/control">Platform connections</Link>
         <Link to="/privacy">Privacy and data</Link>
         <Link to="/terms">Preview terms</Link>
         <a href="https://github.com/teslaeco/WORLDIFACT" target="_blank" rel="noreferrer">Source and licences ↗</a>
