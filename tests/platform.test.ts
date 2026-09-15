@@ -9,6 +9,8 @@ const request = (code = token, origin = 'https://worldifact.test') => new Reques
   method: 'POST', headers: { Origin: origin, 'X-WORLDIFACT-Owner': code },
 });
 
+const oracleHealth = { ready: true, provider: 'openai', model: 'gpt-6-astra', connectorVersion: 33, characterStandard: 20 };
+
 test('public status does not contact providers or disclose credentials and endpoints', async () => {
   const r = await platformApi(new Request('https://worldifact.test/api/platform'), env, (() => { throw Error('No network expected'); }) as typeof fetch);
   const text = await r.text();
@@ -24,15 +26,18 @@ test('one read-only Oracle health check is shared across all five worlds', async
     assert.equal(init?.method, 'GET');
     assert.equal(init?.redirect, 'manual');
     assert.equal(init?.headers && (init.headers as Record<string, string>).Authorization, `Bearer ${env.ORACLE_API_TOKEN}`);
-    return Response.json({ ready: true, connectorVersion: 18 });
+    return Response.json(oracleHealth);
   }) as typeof fetch;
   const response = await platformApi(new Request('https://worldifact.test/api/platform/oracle-worlds', {
     headers: { 'CF-Connecting-IP': '203.0.113.7' },
   }), { ...env, GENERATION_LIMITER: { limit: async ({ key }) => { limiterKeys.push(key); return { success: true }; } } }, fetcher);
   assert.equal(response.status, 200);
-  const result = await response.json() as { oracle: string; connectorVersion: number; worlds: { id: string; oracle: string }[]; evidence: string };
+  const result = await response.json() as { oracle: string; connectorVersion: number; characterStandard: number; provider: string; model: string; worlds: { id: string; oracle: string }[]; evidence: string };
   assert.equal(result.oracle, 'CONNECTOR_READY');
-  assert.equal(result.connectorVersion, 18);
+  assert.equal(result.connectorVersion, 33);
+  assert.equal(result.characterStandard, 20);
+  assert.equal(result.provider, 'openai');
+  assert.equal(result.model, 'gpt-6-astra');
   assert.deepEqual(result.worlds.map(item => item.id), [...ORACLE_WORLD_IDS]);
   assert.ok(result.worlds.every(item => item.oracle === 'CONNECTOR_READY'));
   assert.deepEqual(paths, [env.ORACLE_ENDPOINT + '/v1/health']);
@@ -63,7 +68,7 @@ test('authorized checks use GET metadata and health only', async () => {
   const paths: string[] = [];
   const fetcher = (async (input, init) => {
     paths.push(String(input)); assert.equal(init?.method, 'GET'); assert.equal(init?.redirect, 'manual');
-    return Response.json(paths.length === 1 ? { object: 'model', id: 'gpt-6-astra' } : { ready: true, connectorVersion: 18 });
+    return Response.json(paths.length === 1 ? { object: 'model', id: 'gpt-6-astra' } : oracleHealth);
   }) as typeof fetch;
   const result = await (await platformApi(request(), env, fetcher)).json() as Record<string, unknown>;
   assert.equal(result.openai, 'MODEL_ACCESS_VERIFIED'); assert.equal(result.oracle, 'CONNECTOR_READY');
@@ -79,7 +84,14 @@ test('Oracle URLs reject arbitrary hosts, private networks and credential redire
 });
 
 test('HTML, malformed and oversized connector responses do not imply readiness', async () => {
-  for (const r of [new Response('<html>login</html>'), Response.json({ ready: true }), Response.json({ data: 'x'.repeat(17000) })]) {
+  const malformed = [
+    new Response('<html>login</html>'),
+    Response.json({ ready: true }),
+    Response.json({ ...oracleHealth, provider: 'unexpected' }),
+    Response.json({ ...oracleHealth, model: 'bad model value' }),
+    Response.json({ data: 'x'.repeat(17000) }),
+  ];
+  for (const r of malformed) {
     const result = await (await platformApi(request(), { ...env, OPENAI_API_KEY: undefined }, (async () => r) as typeof fetch)).json() as Record<string, unknown>;
     assert.notEqual(result.oracle, 'CONNECTOR_READY');
   }
