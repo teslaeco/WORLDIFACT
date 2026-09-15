@@ -80,11 +80,22 @@ async function readOracleHealth(env: PlatformEnv, fetcher: typeof fetch) {
       headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: 'application/json' },
     });
     const body = await smallJson(r);
-    if (typeof body.ready !== 'boolean' || !Number.isSafeInteger(body.connectorVersion))
+    const connectorVersion = body.connectorVersion;
+    const characterStandard = body.characterStandard;
+    const provider = body.provider;
+    const model = body.model;
+    if (typeof body.ready !== 'boolean' || !Number.isSafeInteger(connectorVersion) ||
+      connectorVersion < 1 || connectorVersion > 10_000 ||
+      (characterStandard !== undefined && (!Number.isSafeInteger(characterStandard) || characterStandard < 1 || characterStandard > 10_000)) ||
+      (provider !== undefined && !['openai', 'ollama'].includes(String(provider))) ||
+      (model !== undefined && (typeof model !== 'string' || !/^[A-Za-z0-9._:-]{1,120}$/.test(model))))
       return { oracle: 'INVALID_HEALTH_RESPONSE' as const };
     return {
       oracle: body.ready === true ? 'CONNECTOR_READY' as const : 'CONNECTOR_NOT_READY' as const,
-      connectorVersion: body.connectorVersion as number,
+      connectorVersion: connectorVersion as number,
+      ...(typeof characterStandard === 'number' ? { characterStandard } : {}),
+      ...(typeof provider === 'string' ? { provider } : {}),
+      ...(typeof model === 'string' ? { model } : {}),
     };
   } catch {
     return { oracle: 'CHECK_FAILED' as const };
@@ -110,7 +121,10 @@ export async function platformApi(request: Request, env: PlatformEnv, fetcher: t
     return reply({
       checkedAt: new Date().toISOString(),
       oracle: health.oracle,
-      ...(health.connectorVersion ? { connectorVersion: health.connectorVersion } : {}),
+      ...('connectorVersion' in health ? { connectorVersion: health.connectorVersion } : {}),
+      ...('characterStandard' in health ? { characterStandard: health.characterStandard } : {}),
+      ...('provider' in health ? { provider: health.provider } : {}),
+      ...('model' in health ? { model: health.model } : {}),
       worlds: ORACLE_WORLD_IDS.map(id => ({ id, oracle: health.oracle })),
       evidence: 'One authenticated read-only Oracle health check shared by all five WORLDIFACT worlds. No generation, render or job was requested.',
     }, health.oracle === 'CONNECTOR_READY' || health.oracle === 'CONNECTOR_NOT_READY' ? 200 : 502);
