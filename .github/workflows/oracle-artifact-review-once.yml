@@ -16,7 +16,7 @@ jobs:
   artifact-review:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Check out exact deployed main commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -58,12 +58,39 @@ jobs:
           OWNER_ACCESS_TOKEN: ${{ secrets.OWNER_ACCESS_TOKEN }}
         run: node scripts/oracle-artifact-inspect.mjs
 
+      - name: Capture desktop and Android-sized public QA evidence
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .evidence/qa
+          curl --fail --silent --show-error --max-time 20 "$WORLDIFACT_URL/api/health" > .evidence/qa/health.json
+          curl --fail --silent --show-error --max-time 20 "$WORLDIFACT_URL/lab" > .evidence/qa/lab-http.html
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          test -n "$chrome" || { echo 'Chrome/Chromium not available on runner'; exit 1; }
+          timeout 40 "$chrome" --headless=new --no-sandbox --use-gl=swiftshader --enable-webgl \
+            --window-size=1440,1000 --virtual-time-budget=10000 \
+            --screenshot=.evidence/qa/lab-desktop.png "$WORLDIFACT_URL/lab"
+          timeout 40 "$chrome" --headless=new --no-sandbox --use-gl=swiftshader --enable-webgl \
+            --user-agent='Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 Chrome/152 Mobile Safari/537.36' \
+            --window-size=412,915 --virtual-time-budget=10000 \
+            --screenshot=.evidence/qa/lab-android.png "$WORLDIFACT_URL/lab"
+          timeout 40 "$chrome" --headless=new --no-sandbox --disable-webgl \
+            --window-size=412,915 --virtual-time-budget=10000 \
+            --dump-dom "$WORLDIFACT_URL/" > .evidence/qa/home-no-webgl-dom.html
+          grep -q 'WORLDIFACT' .evidence/qa/home-no-webgl-dom.html
+          test -s .evidence/qa/lab-desktop.png
+          test -s .evidence/qa/lab-android.png
+          printf '%s\n' 'PASS: production HTTP, desktop screenshot, Android-sized screenshot and no-WebGL DOM fallback evidence captured.' > .evidence/qa/summary.txt
+
       - name: Upload private review evidence
         if: steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: worldifact-oracle-generated-unreviewed-${{ github.event.workflow_run.head_sha }}
-          path: .evidence/oracle-artifact/
+          name: worldifact-p0-review-${{ github.event.workflow_run.head_sha }}
+          path: |
+            .evidence/oracle-artifact/
+            .evidence/qa/
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
