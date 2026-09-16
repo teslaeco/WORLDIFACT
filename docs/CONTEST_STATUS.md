@@ -1,44 +1,42 @@
-# Contest status — foundation integration, 16 September 2026
+# Contest status — AI Game Lab P0, 16 September 2026
 
-Decision: **Public DEMO exists; final contest readiness is NO-GO.** Paid generation remains disabled. The preserved Oracle Blender service is connected to WORLDIFACT in production as one shared read-only backend for the five primary worlds. A reviewed owner-only Oracle job path is prepared behind a separate disabled production gate.
+Decision: **P0 implementation in progress; final contest readiness is NO-GO.** The current competition priority is one clear AI Game Lab flow: `PROMPT / IMAGE → GPT-6 ASTRA → WorldBlueprint + AssetSpec → visible 3D scene change → GAME / MAKE`. The other four worlds stay connected but are not the P0 completion gate.
 
 | Item | Status | Evidence / remaining work |
 |---|---|---|
-| Official contest | DATE DISPLAY VERIFIED; FORM UNRESOLVED | [Official page](https://www.producthunt.com/contests/gpt-6-astra-challenge) still displays 18 September 2026 and a zero countdown. Confirm the actual launch/submission form and all applicable rules before final submission |
-| Main baseline | DEPLOYED | Main `bfc187a1cf795487c0f6c5614b1623f4a0c35380`; deployment run `35036960083`; Cloudflare version `99ded65a-89b6-4372-98cc-931c3aa0cb5c`; production: https://worldifact.xodobrox.workers.dev |
-| Meadow / flowing river | CODE DEPLOYED; VISUAL QA OUTSTANDING | Green meadow and river, no houses/bridge, five portals aligned. PV vehicle, visible mannequin, camera overview and opt-in local audio. Physical Android/WebGL acceptance remains outstanding |
-| Portal controls | CODE VERIFIED | Analogue joystick, independent camera pointer, swept walk-in entry, action priority and collision-resolved routes along the river |
-| Original Chess / ISS / Terra | BUILT AND DEPLOYED; PUBLIC INTEGRITY PASS | Pinned source builds and existing ISS asset hashes remain published. Chess keeps its original public host; ISS/Terra sources remain inside WORLDIFACT |
-| World Builder / Shop / Studio | PUBLIC ORIGINALS CONNECTED; NOT FULLY MIGRATED | Existing Sites applications remain the active sources of owner data and UI. WORLDIFACT wraps/navigates them; authenticated storage/source migration is still incomplete |
-| Eight Planets campaign | INCOMPLETE | Existing FORGE World Builder is the supplied foundation; eight finished platform levels have not been demonstrated |
-| Chess shop | PARTIAL | Existing shop connected as a tab. Direct board/piece-to-catalog transfer and automated ordering still need implementation |
-| Oracle VM | LIVE HEALTH VERIFIED; STORAGE CLEANED | Existing `froge-blender` VM is active. Owner-run authenticated health returned `ready=true`, provider `openai`, model `gpt-6-astra`, connector `33`, character standard `20`. This is service-health evidence, not a render/generation proof |
-| Five-world Oracle bridge | DEPLOYED READ-ONLY | One server-side authenticated `/v1/health` check is shared across Chess, ISS, Planets, Shop and Game Lab. Secrets stay server-side; `/control` shows sanitized per-world status. No generation/render/job request is made by the deployed bridge |
-| Oracle job write path | REVIEWED BRANCH; GREEN CI; BLOCKED | PR #12 / `feat/oracle-job-gate-20260916` adds owner-only prompt job submit/poll routes against the verified `/v1/jobs` connector contract. Exact-head run `35038681965` passed verify, foundation assembly and Worker dry-run. `ENABLE_ORACLE_JOBS=false` is required by automatic releases, so no job or provider cost can occur from this configuration. Image-to-Oracle is `BLOCKED_UNVERIFIED` |
-| OpenAI | CONFIGURED; PAID OFF | Deployment synchronized the OpenAI secret and verified model access. `ENABLE_PAID_GENERATION=false`; allowance remains 0; no paid generation was performed |
-| LIVE Astra evidence | ABSENT FOR WORLDIFACT GENERATION | The deployed bridge proves model/service configuration only. A controlled LIVE Astra generation still requires explicit spending authorization and separate evidence |
-| Verification | PRODUCTION PASS + PR #12 PASS | Current production baseline passed 71 tests and deployment smoke. PR #12 exact-head run `35038681965` also passed `npm run verify`, foundation builds and `deploy:check` with both paid/write gates disabled |
-| Browser/device | PARTIAL | Owner screenshot confirms `/control` on Android shows all five Oracle cards `Connector ready` with v33 / character standard 20 / OpenAI / gpt-6-astra. Full WebGL interaction/FPS/accessibility QA remains outstanding |
-| Source models / MAKE | NOT APPROVED | Preserved models are GAME/design assets unless separately validated for manufacturing |
-| Launch materials | DRAFT | Final screenshots/video, final Product Hunt form/rules review and LIVE Astra proof remain outstanding |
+| Official contest | DATE VERIFIED; FINAL FORM REVIEW PENDING | Official Product Hunt contest page names the GPT-6 Astra Challenge and 18 September 2026. Re-open the form/rules before final submission |
+| Production baseline | DEPLOYED | https://worldifact.xodobrox.workers.dev; shared Oracle health bridge deployed and production smoke passed |
+| AI Game Lab P0 | REVIEW BRANCH | PR #13 / `feat/p0-game-lab-astra-20260916` makes `/lab` the native reference workbench, requires Astra Structured Output `WorldBlueprint + AssetSpec`, validates both server-side, applies the blueprint to the Three.js scene and exposes a visible Astra trace with separate GAME/MAKE plans |
+| WorldBlueprint | IMPLEMENTED / TESTING | Strict schema and server validation already existed; P0 keeps the visible scene application path and makes it the primary judging flow |
+| AssetSpec | IMPLEMENTED ON PR #13 | New strict contract includes GAME geometry/material/animation/gameplay plan and MAKE candidate dimensions/material/process/constraints. MAKE validation status is forced to `validation-required` |
+| Visible Astra role | IMPLEMENTED ON PR #13 | UI explicitly shows `PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT → SCENE CHANGE → GAME / MAKE` and lets the user inspect generated blueprint/spec JSON |
+| GAME output | PARTIAL / TRUTHFUL | Procedural preview geometry can be added to the scene and exported as GLB. This is not claimed as an Oracle-generated production asset unless a separate Blender job actually produces it |
+| MAKE output | BLOCKED / VALIDATION REQUIRED | Candidate manufacturing plan only. No manufacturing-ready file, quote, order or approval is claimed |
+| Oracle VM | LIVE HEALTH VERIFIED; STORAGE URGENT | Running connector v33 / character standard 20 / OpenAI / gpt-6-astra is healthy. Owner reports only about 2 GB free now; do not start a Blender batch before storage is expanded and rechecked |
+| Five-world Oracle bridge | DEPLOYED READ-ONLY | All five world cards report shared Oracle readiness; secrets stay server-side |
+| Oracle prompt job path | PR #12 GREEN; NOT DEPLOYED | Owner-only prompt submit/poll path is reviewed and green behind `ENABLE_ORACLE_JOBS=false`. Image-to-Oracle remains `BLOCKED_UNVERIFIED` |
+| Paid Astra | OWNER APPROVED IN PRINCIPLE; NUMERIC PILOT CEILING REQUIRED | User authorized paid Astra use on 16 Sep. Before incurring spend, set a concrete request ceiling/expiry and preview/public access policy, then deploy the approved P0 configuration |
+| Public no-login P0 | INCOMPLETE | Current LIVE blueprint path still expects a preview access code. Contest P0 requires a clean-session public flow without login; replace maker-code friction with a tightly budgeted public pilot or another reviewed public allowance before launch |
+| Android/browser QA | PARTIAL | Owner screenshot confirms `/control` on Android and five Oracle-ready cards. Full P0 WebGL interaction/accessibility/fallback QA remains |
+| Launch materials | DRAFT | Final genuine screenshots/video need the real LIVE Astra run and visible GAME/MAKE trace |
 
-## Current Oracle bridge milestone
+## Current P0 implementation
 
-The deployed topology is: **one Oracle backend, five WORLDIFACT worlds, one Cloudflare Worker gateway**. The browser never receives the Oracle bearer credential or Quick Tunnel URL. `ORACLE_ENDPOINT`, `ORACLE_API_TOKEN` and `OWNER_ACCESS_TOKEN` are stored in the GitHub `production` environment and were synchronized into the Worker during deployment run `35036960083`.
+PR #13 is layered on PR #12 so the infrastructure write path and the contest-facing Astra path remain reviewable separately.
 
-Deployment evidence: main `bfc187a1cf795487c0f6c5614b1623f4a0c35380`, Cloudflare version `99ded65a-89b6-4372-98cc-931c3aa0cb5c`, release smoke PASS. The deployed bridge is intentionally read-only.
+The P0 server request uses `gpt-6-astra` through the Responses API, keeps `OPENAI_API_KEY` server-side, uses strict Structured Outputs, validates prompt/image size, rate limits, times out, and preserves the explicit DEMO fallback. A LIVE result must contain both a valid `WorldBlueprint` and a valid `AssetSpec`. Applying the result changes the 3D scene; the trace panel exposes the generated plan to the user/juror.
 
-PR #12 fixes the top Oracle status card to use the same verified shared health result as the five world cards and prepares a separate `/api/oracle/jobs` write path. That path is owner-only, same-origin, rate-limited, requires connector v33 + OpenAI + `gpt-6-astra`, supports prompt-only input under the verified public connector contract, and remains blocked unless `ENABLE_ORACLE_JOBS=true`. Automatic releases require that flag to remain `false`.
+The Oracle Blender path remains separate because the current public connector contract verifies prompt jobs but not reference-image jobs. A real Oracle-produced GLB must be labeled as such only after a succeeded job and artifact retrieval.
 
-## Next concrete gates
+## Immediate gates
 
-1. PR #12 has green exact-head CI. Do not merge/deploy it without explicit owner approval; production remains on the deployed read-only bridge.
-2. Keep `ENABLE_ORACLE_JOBS=false` and `ENABLE_PAID_GENERATION=false` in production until a controlled cost-approved pilot. The prepared job path is not LIVE generation evidence while blocked.
-3. Before any paid pilot, verify the running v33 job contract directly on Oracle, choose one world (AI Game Lab first), define a request ceiling/expiry, then enable only the reviewed path.
-4. Produce one end-to-end LIVE proof after budget approval: prompt + optional image → Astra → structured blueprint/spec → visible scene change; Oracle/Blender prompt job is a separate model-generation step and image-to-Oracle remains blocked until verified.
-5. Complete physical Android/WebGL interaction, accessibility and fallback QA.
-6. Re-open the official Product Hunt contest page and submission form, then finalize media, Maker Comment, Shoutouts, topics and the scheduled 18 September launch.
+1. Finish exact-head CI for PR #13 and fix any failures; do not merge/deploy on a red head.
+2. Expand Oracle storage before new Blender jobs. Back up first; online boot-volume expansion is preferred for the fastest P0 recovery, then extend the Linux filesystem and verify free space.
+3. Obtain a concrete paid pilot ceiling and expiry. Recommended first pilot: three WORLDIFACT Astra requests plus one Oracle prompt-only Blender job, with a small hard dollar ceiling.
+4. After explicit merge/deploy approval, deploy PR #12 + PR #13 and the reviewed paid flags/limits.
+5. Run clean-session public P0 evidence: text prompt first, optional image second → LIVE Astra response → validated blueprint/spec → visible scene change → GAME/MAKE panels. Capture response evidence and media.
+6. Only after P0 works, reconnect the same engine to Enchanted AI Shop and the other worlds.
 
-## Platform integration continuation
+## Truth boundary
 
-Froge public source remains v18 at `bac2827fc1ec31e71dc0f5c586df43c507338725`; this does not establish parity with the running Oracle connector v33. `/control` is the canonical WORLDIFACT owner starting point. Unified owner editing, current Shop/Studio source migration, shared D1/R2 ownership and production job routing remain incomplete until their separate authenticated migrations are implemented and tested.
+Use `LIVE / DEMO / PLANNED / BLOCKED` and `REAL / GENERATED / MOCK`. Never present a procedural preview as an Oracle-generated 3D model, a MAKE candidate as manufacturing-ready, or an estimate as an actual quote/order.
