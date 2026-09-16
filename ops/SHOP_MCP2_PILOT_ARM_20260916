@@ -1,0 +1,3 @@
+OWNER APPROVAL: 2026-09-16
+SCOPE: raise the existing cumulative generation ceiling from 4 to exactly 5 and leave the one remaining reservation for one real Enchanted AI Shop prompt -> GPT-6 Astra -> Oracle -> Blender -> GLB Android test.
+SAFETY: paid WorldBlueprint generation stays disabled; image-to-model remains BLOCKED_UNVERIFIED; CI must not consume the reservation.
