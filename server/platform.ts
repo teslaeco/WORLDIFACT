@@ -4,6 +4,7 @@ export interface PlatformEnv {
   OWNER_ACCESS_TOKEN?: string;
   ORACLE_ENDPOINT?: string;
   ORACLE_API_TOKEN?: string;
+  ENABLE_ORACLE_JOBS?: string;
   GENERATION_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
@@ -35,12 +36,13 @@ export function platformStatus(env: PlatformEnv) {
     cloudflare: 'RESPONDING',
     openai: env.OPENAI_API_KEY ? 'KEY_CONFIGURED' : 'NOT_CONFIGURED',
     oracle: oracleOrigin(env.ORACLE_ENDPOINT) && env.ORACLE_API_TOKEN ? 'CONFIGURED_NOT_CHECKED' : 'NOT_CONFIGURED',
+    oracleJobs: env.ENABLE_ORACLE_JOBS === 'true' ? 'OWNER_ONLY' : 'BLOCKED',
     ownerChecks: (env.OWNER_ACCESS_TOKEN?.length ?? 0) >= 32 &&
       (env.OWNER_ACCESS_TOKEN?.length ?? 0) <= 256 && !!env.GENERATION_LIMITER,
   };
 }
 
-async function authorized(request: Request, expected: string) {
+export async function ownerAuthorized(request: Request, expected: string) {
   const supplied = request.headers.get('X-WORLDIFACT-Owner') || '';
   if (supplied.length < 32 || supplied.length > 256) return false;
   const digest = (v: string) => crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
@@ -134,7 +136,7 @@ export async function platformApi(request: Request, env: PlatformEnv, fetcher: t
   if (request.method !== 'POST') return reply({ error: 'Use POST' }, 405);
   if (request.headers.get('Origin') !== url.origin) return reply({ error: 'Same-origin request required' }, 403);
   if (!platformStatus(env).ownerChecks) return reply({ error: 'Owner diagnostics are not configured' }, 503);
-  if (!await authorized(request, env.OWNER_ACCESS_TOKEN!)) return reply({ error: 'Owner access required' }, 401);
+  if (!await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) return reply({ error: 'Owner access required' }, 401);
   try {
     if (!(await env.GENERATION_LIMITER!.limit({ key: 'platform-owner-check' })).success)
       return reply({ error: 'Please wait before checking again' }, 429);
