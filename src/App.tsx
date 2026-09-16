@@ -16,10 +16,11 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/control" element={<ControlPage />} />
         <Route path="/portal/:portalId" element={<PortalPage />} />
-        {['/chess', '/chess/shop', '/iss', '/planets', '/terra'].map(path => (
+        {['/chess', '/iss', '/planets', '/terra'].map(path => (
           <Route key={path} path={path} element={<PortalPage />} />
         ))}
         <Route path="/shop" element={<ShopPage />} />
+        <Route path="/chess/shop" element={<Navigate to="/shop" replace />} />
         <Route path="/lab" element={<WorkbenchPage kind="builder" />} />
         <Route path="/builder" element={<WorkbenchPage kind="builder" />} />
         <Route path="/make" element={<WorkbenchPage kind="make" />} />
