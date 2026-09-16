@@ -9,7 +9,7 @@ on:
       request_limit:
         description: Absolute lifetime request ceiling for the shared pilot budget (1-5)
         required: true
-        default: '3'
+        default: '4'
         type: string
       duration_minutes:
         description: Public pilot duration before automatic expiry (15-360 minutes)
