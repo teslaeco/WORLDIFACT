@@ -17,6 +17,14 @@ const liveEnv = {
   },
   GENERATION_LIMITER: { limit: async () => ({ success: true }) },
 }
+const combinedProvider = (blueprint = demoBlueprint('moon workshop')) => {
+  const assetSpec = assetSpecForBlueprint(blueprint)
+  return (async (_url: unknown, init: RequestInit | undefined) => new Response(JSON.stringify({
+    status: 'completed', model: 'gpt-6-astra', id: 'resp_p0_stub',
+    usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 },
+    output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint, assetSpec }) }] }],
+  }))) as typeof fetch
+}
 
 test('AssetSpec keeps GAME separate from validation-required MAKE', () => {
   const spec = assetSpecForBlueprint(demoBlueprint('red rover'))
@@ -33,9 +41,9 @@ test('strict Astra schema requires both WorldBlueprint and AssetSpec', () => {
 })
 
 test('simulated LIVE Astra result returns validated blueprint and AssetSpec', async () => {
+  let sent: any
   const blueprint = demoBlueprint('moon workshop')
   const assetSpec = assetSpecForBlueprint(blueprint)
-  let sent: any
   const provider = (async (_url: unknown, init: RequestInit | undefined) => {
     sent = JSON.parse(String(init?.body))
     return new Response(JSON.stringify({
@@ -56,4 +64,30 @@ test('simulated LIVE Astra result returns validated blueprint and AssetSpec', as
   assert.equal(result.assetSpec?.make.validationStatus, 'validation-required')
   assert.equal(sent.model, 'gpt-6-astra')
   assert.deepEqual(sent.text.format.schema.required, ['blueprint', 'assetSpec'])
+})
+
+test('public pilot removes login/access-code friction but keeps limiter and global budget gates', async () => {
+  let limiterCalls = 0, budgetCalls = 0
+  const env = {
+    ...liveEnv,
+    PUBLIC_PILOT: 'true',
+    GENERATION_ACCESS_TOKEN: undefined,
+    GENERATION_LIMITER: { limit: async () => { limiterCalls++; return { success: true } } },
+    GENERATION_BUDGET: {
+      idFromName: (name: string) => name,
+      get: () => ({ fetch: async () => { budgetCalls++; return Response.json({ allowed: true, remaining: 0 }) } }),
+    },
+  }
+  const health = await (await handle(new Request('https://worldifact.test/api/health'), env)).json() as { generationReady: boolean; accessRequired: boolean; publicPilot: boolean }
+  assert.equal(health.generationReady, true)
+  assert.equal(health.accessRequired, false)
+  assert.equal(health.publicPilot, true)
+  const response = await handle(new Request('https://worldifact.test/api/blueprint', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt: 'public pilot rover', mode: 'live' }),
+  }), env, combinedProvider())
+  assert.equal(response.status, 200)
+  assert.equal(limiterCalls, 1)
+  assert.equal(budgetCalls, 1)
+  assert.equal(validateGenerationResult(await response.json()).mode, 'LIVE')
 })
