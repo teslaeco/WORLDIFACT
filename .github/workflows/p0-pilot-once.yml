@@ -1,0 +1,119 @@
+name: Execute approved WORLDIFACT P0 pilot once
+
+on:
+  workflow_run:
+    workflows: ["Publish WORLDIFACT and verify OpenAI setup"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+
+jobs:
+  paid-p0:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    environment:
+      name: production
+      url: https://worldifact.xodobrox.workers.dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact deployed main commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+
+      - name: Gate this workflow to the one approved marker commit
+        id: gate
+        shell: bash
+        run: |
+          if git show --pretty='' --name-only HEAD | grep -qx 'ops/P0_PILOT_ARM_20260916'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            echo 'Approved one-time P0 pilot marker found.'
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            echo 'No P0 pilot marker in this deployment commit; exiting without paid calls.'
+          fi
+
+      - name: Set up Node
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Check deployment credentials
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/release-check.ts credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: npm ci
+
+      - name: Verify exact source
+        if: steps.gate.outputs.run == 'true'
+        run: npm run verify
+
+      - name: Assemble pinned foundation apps
+        if: steps.gate.outputs.run == 'true'
+        uses: ./.github/actions/foundations
+
+      - name: Verify and sync OpenAI secret
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/connect-openai.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GENERATION_ACCESS_TOKEN: ${{ secrets.GENERATION_ACCESS_TOKEN }}
+
+      - name: Sync Oracle and owner secrets
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/connect-platform.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OWNER_ACCESS_TOKEN: ${{ secrets.OWNER_ACCESS_TOKEN }}
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+
+      - name: Build owner-approved 4-attempt / 180-minute pilot config
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/build-pilot-config.ts
+        env:
+          PILOT_CONFIRMATION: ASTRA-PILOT
+          PILOT_REQUEST_LIMIT: '4'
+          PILOT_DURATION_MINUTES: '180'
+          PILOT_ORACLE_JOBS: 'true'
+
+      - name: Dry-run exact pilot config
+        if: steps.gate.outputs.run == 'true'
+        run: npx wrangler deploy --dry-run --config .pilot.wrangler.json --outdir .wrangler/pilot-preview
+
+      - name: Deploy hard-capped pilot
+        if: steps.gate.outputs.run == 'true'
+        run: npx wrangler deploy --config .pilot.wrangler.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-pilot-deploy.ndjson
+
+      - name: Verify pilot readiness without spending
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/pilot-smoke.ts
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-pilot-deploy.ndjson
+
+      - name: Execute exactly 3 LIVE Astra calls plus 1 owner-only Oracle job
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/p0-paid-pilot.mjs
+        env:
+          WORLDIFACT_URL: https://worldifact.xodobrox.workers.dev
+          OWNER_ACCESS_TOKEN: ${{ secrets.OWNER_ACCESS_TOKEN }}
