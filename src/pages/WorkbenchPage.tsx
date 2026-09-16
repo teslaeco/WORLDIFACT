@@ -2,8 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import LoadingFallback from '../components/LoadingFallback'
 
-const WorldStudio = lazy(() => import('../components/WorldStudio'))
-const AstraTracePanel = lazy(() => import('../components/AstraTracePanel'))
+const P0GameLab = lazy(() => import('../components/P0GameLab'))
 const ManufacturingPanel = lazy(() => import('../components/ManufacturingPanel'))
 
 export default function WorkbenchPage({ kind }: { kind: 'builder' | 'make' }) {
@@ -16,10 +15,7 @@ export default function WorkbenchPage({ kind }: { kind: 'builder' | 'make' }) {
       </nav>
     </header>
     <Suspense fallback={<LoadingFallback message="Opening the workbench…" />}>
-      {kind === 'builder' ? <>
-        <WorldStudio />
-        <AstraTracePanel />
-      </> : <>
+      {kind === 'builder' ? <P0GameLab /> : <>
         <h1>Manufacturing audit</h1>
         <p>Check original model files, materials and supplier requirements before ordering.</p>
         <ManufacturingPanel />
