@@ -7,6 +7,8 @@ import type { GenerationResult, WorldBlueprint } from '../lib/blueprint'
 import { saveArchive } from '../lib/archive'
 import { routeForPortal } from '../lib/portalRouting'
 import { createWorldObject, disposeObject } from '../lib/worldGeometry'
+import { DEMO_EXAMPLES } from '../lib/demoExamples'
+import { REFERENCE_LINKS } from '../config/references'
 
 function download(data: Blob, name: string) {
   const url = URL.createObjectURL(data)
@@ -55,17 +57,18 @@ export default function P0GameLab() {
     reader.readAsDataURL(file)
   }
 
-  function generateDemo() {
+  function generateDemo(input = prompt) {
     if (busy) return
     setError('')
-    if (prompt.trim().length < 3 || prompt.length > 2000) {
+    if (input.trim().length < 3 || input.length > 2000) {
       setError('Use a prompt between 3 and 2000 characters.')
       return
     }
     const demo = localSceneResult(
-      demoBlueprint(prompt),
+      demoBlueprint(input),
       'DEMO / MOCK local scene. No GPT-6 Astra request was made; MAKE remains validation-required.',
     )
+    setPrompt(input)
     setBlueprint(demo.blueprint)
     setResult(demo)
   }
@@ -120,6 +123,11 @@ export default function P0GameLab() {
       <div><span className="eyebrow">AI GAME LAB · P0</span><h1>Ideas become playable worlds.</h1></div>
       <span className="pill">{health.generationReady ? (health.publicPilot ? 'LIVE public Astra pilot' : 'LIVE Astra preview') : 'DEMO only'}</span>
     </div>
+    <nav className="world-tabs" aria-label="AI Game Lab views">
+      <span className="active" aria-current="page">WORLDIFACT P0</span>
+      <a href={REFERENCE_LINKS.gameLabPublic} target="_blank" rel="noreferrer">World #5 · Forge Studio ↗</a>
+      <a href={REFERENCE_LINKS.gameLabSource} target="_blank" rel="noreferrer">ForgeMCP source ↗</a>
+    </nav>
     <p><strong>PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → SCENE CHANGE → GAME / MAKE</strong></p>
     <p className="result-note">You are already inside AI Game Lab. Its portal is marked YOU ARE HERE; the other four portals open their worlds.</p>
     <div className="studio-layout">
@@ -134,11 +142,14 @@ export default function P0GameLab() {
       <aside className="creator-panel">
         <span className="eyebrow">WORLD INPUT</span>
         <label>Prompt<textarea rows={6} maxLength={2000} value={prompt} disabled={busy} onChange={e => setPrompt(e.target.value)} /></label>
+        <div className="prompt-presets" aria-label="No-cost demo examples">
+          {DEMO_EXAMPLES.map(example => <button key={example.id} type="button" disabled={busy} onClick={() => generateDemo(example.prompt)}>{example.label}</button>)}
+        </div>
         <label>Reference image · optional<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
         {image ? <><img className="reference-preview" src={image} alt="Selected reference" /><button disabled={busy} onClick={() => setImage(null)}>Remove reference</button></> : null}
         {health.accessRequired ? <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /><small>Temporary maker preview gate; a hard-capped public pilot does not require login.</small></label> : null}
         <button className="primary" disabled={busy || !health.generationReady} onClick={() => void generateLive()}>{busy ? `Astra working · ${seconds}s` : 'Create with GPT-6 Astra'}</button>
-        <button disabled={busy} onClick={generateDemo}>Try DEMO locally · no API cost</button>
+        <button disabled={busy} onClick={() => generateDemo()}>Try DEMO locally · no API cost</button>
         {busy ? <button onClick={() => abort.current?.abort()}>Cancel</button> : null}
         {error ? <p role="alert" className="error">{error}</p> : null}
         {!health.generationReady ? <p className="result-note">LIVE Astra is currently blocked by the exhausted pilot quota. DEMO works locally and is clearly labelled MOCK.</p> : null}
