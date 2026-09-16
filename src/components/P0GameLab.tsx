@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Group } from 'three'
 import StartingWorld from './StartingWorld'
-import { meadowBlueprint, validateGenerationResult } from '../lib/blueprint'
+import { demoBlueprint, localSceneResult, meadowBlueprint, validateGenerationResult } from '../lib/blueprint'
 import type { GenerationResult, WorldBlueprint } from '../lib/blueprint'
 import { saveArchive } from '../lib/archive'
 import { routeForPortal } from '../lib/portalRouting'
@@ -55,13 +55,28 @@ export default function P0GameLab() {
     reader.readAsDataURL(file)
   }
 
+  function generateDemo() {
+    if (busy) return
+    setError('')
+    if (prompt.trim().length < 3 || prompt.length > 2000) {
+      setError('Use a prompt between 3 and 2000 characters.')
+      return
+    }
+    const demo = localSceneResult(
+      demoBlueprint(prompt),
+      'DEMO / MOCK local scene. No GPT-6 Astra request was made; MAKE remains validation-required.',
+    )
+    setBlueprint(demo.blueprint)
+    setResult(demo)
+  }
+
   async function generateLive() {
     if (busy) return
     setBusy(true); setSeconds(0); setError('')
     const controller = new AbortController(); abort.current = controller
     const timeout = window.setTimeout(() => controller.abort(), 40_000)
     try {
-      if (!health.generationReady) throw new Error('LIVE Astra is not enabled yet. DEMO remains available.')
+      if (!health.generationReady) throw new Error('LIVE Astra is not enabled yet. Use the no-cost DEMO button instead.')
       if (prompt.trim().length < 3 || prompt.length > 2000) throw new Error('Use a prompt between 3 and 2000 characters.')
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (health.accessRequired) {
@@ -99,6 +114,7 @@ export default function P0GameLab() {
   }
 
   const spec = result?.assetSpec
+  const live = result?.mode === 'LIVE' && result.provenance === 'GENERATED'
   return <div className="studio">
     <div className="studio-heading">
       <div><span className="eyebrow">AI GAME LAB · P0</span><h1>Ideas become playable worlds.</h1></div>
@@ -116,28 +132,29 @@ export default function P0GameLab() {
         </div>
       </div>
       <aside className="creator-panel">
-        <span className="eyebrow">LIVE ASTRA INPUT</span>
+        <span className="eyebrow">WORLD INPUT</span>
         <label>Prompt<textarea rows={6} maxLength={2000} value={prompt} disabled={busy} onChange={e => setPrompt(e.target.value)} /></label>
         <label>Reference image · optional<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
         {image ? <><img className="reference-preview" src={image} alt="Selected reference" /><button disabled={busy} onClick={() => setImage(null)}>Remove reference</button></> : null}
         {health.accessRequired ? <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /><small>Temporary maker preview gate; a hard-capped public pilot does not require login.</small></label> : null}
         <button className="primary" disabled={busy || !health.generationReady} onClick={() => void generateLive()}>{busy ? `Astra working · ${seconds}s` : 'Create with GPT-6 Astra'}</button>
+        <button disabled={busy} onClick={generateDemo}>Try DEMO locally · no API cost</button>
         {busy ? <button onClick={() => abort.current?.abort()}>Cancel</button> : null}
         {error ? <p role="alert" className="error">{error}</p> : null}
-        {!health.generationReady ? <p className="result-note">DEMO FALLBACK remains available in the existing scene editor until the approved paid pilot is deployed.</p> : null}
+        {!health.generationReady ? <p className="result-note">LIVE Astra is currently blocked by the exhausted pilot quota. DEMO works locally and is clearly labelled MOCK.</p> : null}
       </aside>
     </div>
-    <section className="generation-evidence" aria-label="Astra generated result">
-      <span className="eyebrow">ASTRA OUTPUT</span>
-      {!result ? <p>No LIVE result yet. The current scene is the non-AI starting state.</p> : <>
-        <p><strong>LIVE · GENERATED</strong> · {result.model} · request {result.requestId.slice(0, 12)}…</p>
+    <section className="generation-evidence" aria-label="World generation result">
+      <span className="eyebrow">WORLD OUTPUT</span>
+      {!result ? <p>No result yet. The current scene is the starting state.</p> : <>
+        <p><strong>{live ? 'LIVE · GENERATED' : 'DEMO · MOCK'}</strong>{live ? ` · ${result.model} · request ${result.requestId.slice(0, 12)}…` : ' · local no-cost fallback'}</p>
         <div className="workflow-pair">
-          <article><span className="eyebrow">GAME · GENERATED SPEC / PROCEDURAL PREVIEW</span><h3>{spec?.name ?? result.blueprint.title}</h3><p>{spec?.game.gameplayRole}</p><p>{spec?.game.materialPlan}</p><p>{spec?.game.animationPlan}</p></article>
+          <article><span className="eyebrow">GAME · {live ? 'GENERATED SPEC' : 'MOCK SPEC'} / PROCEDURAL PREVIEW</span><h3>{spec?.name ?? result.blueprint.title}</h3><p>{spec?.game.gameplayRole}</p><p>{spec?.game.materialPlan}</p><p>{spec?.game.animationPlan}</p></article>
           <article><span className="eyebrow">MAKE · BLOCKED / VALIDATION REQUIRED</span><h3>{spec?.make.materialCandidate ?? 'No MAKE candidate'}</h3>{spec ? <><p>{spec.make.dimensionsMm.x} × {spec.make.dimensionsMm.y} × {spec.make.dimensionsMm.z} mm · {spec.make.processCandidate}</p><ul>{spec.make.constraints.map(c => <li key={c}>{c}</li>)}</ul></> : null}</article>
         </div>
-        <details><summary>Inspect generated WorldBlueprint</summary><pre>{JSON.stringify(result.blueprint, null, 2)}</pre></details>
-        <details><summary>Inspect generated AssetSpec</summary><pre>{JSON.stringify(result.assetSpec, null, 2)}</pre></details>
-        {result.evidence ? <details><summary>Provider evidence</summary><p>{result.evidence.receivedAt} · {result.evidence.totalTokens ?? 'usage unavailable'} tokens</p><p>Blueprint SHA-256: {result.evidence.blueprintSha256}</p></details> : null}
+        <details><summary>Inspect WorldBlueprint</summary><pre>{JSON.stringify(result.blueprint, null, 2)}</pre></details>
+        <details><summary>Inspect AssetSpec</summary><pre>{JSON.stringify(result.assetSpec, null, 2)}</pre></details>
+        {live && result.evidence ? <details><summary>Provider evidence</summary><p>{result.evidence.receivedAt} · {result.evidence.totalTokens ?? 'usage unavailable'} tokens</p><p>Blueprint SHA-256: {result.evidence.blueprintSha256}</p></details> : null}
         <p><small>{result.limitation}</small></p>
       </>}
     </section>
