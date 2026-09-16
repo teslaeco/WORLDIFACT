@@ -14,16 +14,19 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { disposeObject } from '../lib/worldGeometry'
+import { createModelSlot } from '../lib/modelSlot'
 
 type View = 'all' | 'face' | 'clothes' | 'shoes' | 'back'
 type Props = { url: string; label?: string }
 
-/**
- * WORLDIFACT adaptation of the proven MCP2/Froge AiModelViewer interaction.
- * Source: teslaeco/Froge-MPC-2-test/src/components/AiModelViewer.tsx (MIT).
- * The generated GLB stays in memory and is never downloaded automatically.
- */
+/** WORLDIFACT viewer; the externally hosted Froge generator is not modified. */
 export default function OracleModelPreview({ url, label = 'Generated 3D model' }: Props) {
+  // A new source gets clean loading/error state before it can show an old result.
+  return <ModelPreviewSession key={JSON.stringify([url, label])} url={url} label={label} />
+}
+
+function ModelPreviewSession({ url, label }: { url: string; label: string }) {
   const host = useRef<HTMLDivElement>(null)
   const fitView = useRef<((view?: View) => void) | null>(null)
   const [error, setError] = useState('')
@@ -36,6 +39,11 @@ export default function OracleModelPreview({ url, label = 'Generated 3D model' }
     let disposed = false
     let renderer: WebGLRenderer
     let model: Group | null = null
+    let isPerson = false
+    const slot = createModelSlot<Group>(loaded => {
+      loaded.removeFromParent()
+      disposeObject(loaded)
+    })
 
     try {
       renderer = new WebGLRenderer({ antialias: true, alpha: false })
@@ -81,7 +89,8 @@ export default function OracleModelPreview({ url, label = 'Generated 3D model' }
       const vertical = camera.fov * Math.PI / 360
       const horizontal = Math.atan(Math.tan(vertical) * camera.aspect)
       const framing = box.clone()
-      if (person && view !== 'all' && view !== 'back') {
+      // Use this load's metadata, not React state as an effect dependency.
+      if (isPerson && view !== 'all' && view !== 'back') {
         const [low, high, breadth] = view === 'face' ? [0.8, 1, 0.38] : view === 'shoes' ? [0, 0.2, 0.85] : [0.38, 0.84, 1]
         framing.min.y = box.min.y + size.y * low
         framing.max.y = box.min.y + size.y * high
@@ -128,20 +137,26 @@ export default function OracleModelPreview({ url, label = 'Generated 3D model' }
 
     const loader = new GLTFLoader()
     loader.load(url, gltf => {
-      if (disposed) return
+      // Even a load that completes after unmount owns disposable GPU resources.
+      if (!slot.replace(gltf.scene)) return
       model = gltf.scene
-      let isPerson = false
       model.traverse(object => { if (object.userData.froge_kind === 'person') isPerson = true })
-      setPerson(isPerson)
-      scene.add(model)
       box = new Box3().setFromObject(model)
       center = box.getCenter(new Vector3())
       size = box.getSize(new Vector3())
+      if (box.isEmpty() || ![...center.toArray(), ...size.toArray()].every(Number.isFinite)) {
+        slot.dispose()
+        model = null
+        setError('The GLB has empty or invalid bounds. The source artifact was not modified.')
+        return
+      }
       max = Math.max(size.x, size.y, size.z, 0.001)
+      setPerson(isPerson)
+      scene.add(model)
       framed = false
       resize()
       fit()
-      setStatus('LIVE · GENERATED-UNREVIEWED GLB loaded in the browser')
+      setStatus('GENERATED-UNREVIEWED GLB loaded in the browser; visual review is still required.')
     }, undefined, () => {
       if (!disposed) setError('The generated GLB could not be rendered. The artifact remains available for explicit download.')
     })
@@ -157,20 +172,13 @@ export default function OracleModelPreview({ url, label = 'Generated 3D model' }
       renderer.setAnimationLoop(null)
       controls.dispose()
       environment.dispose()
-      if (model) {
-        scene.remove(model)
-        model.traverse(object => {
-          const mesh = object as { geometry?: { dispose?: () => void }; material?: unknown }
-          mesh.geometry?.dispose?.()
-          const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []
-          for (const material of materials) (material as { dispose?: () => void }).dispose?.()
-        })
-      }
+      slot.dispose()
+      model = null
       renderer.dispose()
       renderer.domElement.remove()
       fitView.current = null
     }
-  }, [url, label, person])
+  }, [url, label])
 
   return <div className="oracle-model-preview">
     <div ref={host} className="oracle-model-canvas" />
