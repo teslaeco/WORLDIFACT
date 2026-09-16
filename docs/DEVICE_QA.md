@@ -1,35 +1,50 @@
 # Browser and device release evidence
 
-Status: **PARTIAL / ANDROID PORTAL REGRESSION FOUND; FIX PREPARED, RE-TEST REQUIRED**. Local browser and shared-file preview actions were previously rejected by automatic approval review. Do not work around that restriction through another browser, CDP, file route or indirect app rendering. Source/HTTP tests are separate evidence.
+Status: **PARTIAL / TWO ANDROID UX FAILURES OBSERVED; FIX PREPARED, RE-TEST REQUIRED**.
 
-Run the remaining browser checklist only through an authorized browser path or on the owner's device. Record date, device/browser, exact commit and actual public origin. Leave unobserved items UNKNOWN.
+Run browser checks only on the owner's device or another authorized browser path. Record the deployed commit and public origin. Leave unobserved items UNKNOWN.
 
 | Scenario | Acceptance | Current evidence |
 |---|---|---|
-| Android portrait/landscape | Readable controls; movement and camera usable together; no horizontal overflow | **PARTIAL PASS** on owner Android portrait at deployed `/lab`: layout and WebGL scene render. Landscape remains UNKNOWN |
-| Desktop controls | WASD/arrows, mouse look, E and Escape; typing a prompt does not move the player | UNKNOWN |
-| Workshop | Closed doors block entry; open doors permit entry/exit at rotated/scaled habitats | Movement logic tests only |
-| Rover | Enter, steer, drive, exit; body does not pass through walls; exit remains in bounds | Movement logic tests only |
-| Portals | Five direct routes and refresh work; planned gameplay is labelled | **FAIL observed on Android 2026-09-16**: while inside `/lab`, crossing Chess Cube set `Entering world…` but the page never navigated because P0 Game Lab passed a no-op `onPortalOpen`. Fix branch routes the four non-current portals through React Router. Re-test after deployment required |
-| AI Game Lab portal | Current-world portal must not pretend to navigate to itself | In `/lab`, `ai-game-lab` is intentionally `activePortalId` and labelled `YOU ARE HERE`; it is excluded from entry detection. UI now explains this in the fix branch |
-| AI Game Lab UI | Prompt/image controls, progress/cancel, Astra output, visible scene change, GAME/MAKE labels | **PARTIAL PASS**: prompt/image panel, scene and labels visible on owner Android. LIVE button correctly disabled because approved 4/4 pilot is exhausted. Fresh paid generation not authorized |
-| Archive | Successful generation saves; reload/search/load/combine/import/export work; corrupt records handled | Archive tests only |
-| WebGL | Fallback navigation; context loss pauses; recovery and teardown do not leak | **WebGL render observed on owner Android**; context-loss/fallback behavior remains UNKNOWN |
-| Privacy | Notices reachable; access code never appears in exports or URLs | Source/API tests only |
-| Public HTTPS | Root, `/lab`, assets/API reachable without ChatGPT login | **HTTP PASS** on deployed origin `https://worldifact.xodobrox.workers.dev`; owner Android also loaded `/lab` without ChatGPT login |
-| Oracle generated GLB | Real artifact can be retrieved owner-only without new generation | **STRUCTURAL PASS**: 204,732-byte glTF 2.0, SHA-256 verified; visual quality still UNKNOWN |
+| Android portrait | Readable controls; no horizontal overflow; primary interaction usable | **PARTIAL PASS**: `/lab` layout and WebGL render correctly on owner Android |
+| Android landscape | Same core controls remain usable | UNKNOWN |
+| Desktop controls | WASD/arrows, mouse look, E/Escape; prompt typing does not move player | UNKNOWN |
+| Portal navigation | Non-current portals leave `/lab`; current Game Lab does not re-enter itself | Previous freeze fixed and deployed in PR #19; owner-device cross-route re-test still incomplete |
+| AI Game Lab scene | 3D scene renders and accepts controls | **PASS observed on owner Android** |
+| AI Game Lab LIVE | LIVE button only enabled with an authorized Astra allowance | **EXPECTED BLOCKED**: approved 4/4 paid pilot is exhausted |
+| AI Game Lab DEMO | A no-cost clearly labelled MOCK flow changes scene and exposes GAME/MAKE | **FAIL on current production**: screen shows `DEMO only` but no usable local DEMO action; fix branch adds `Try DEMO locally · no API cost` |
+| 8 Planets | Public no-login content renders inside WORLDIFACT | **FAIL on current production**: owner Android shows blank/broken external FORGE iframe |
+| 8 Planets fallback | A local clearly-labelled demo works even when external prototype cannot embed | **PREPARED** on `fix/nonworking-embedded-worlds-20260916`: local 8-stage interaction replaces the broken iframe; original remains an external prototype link |
+| Other tested routes | Open without the two failures above | Owner reports other tested pages working; exact route-by-route evidence not yet recorded |
+| WebGL fallback/context loss | Fallback navigation works and context recovery is safe | Code tests only; device context-loss behavior UNKNOWN |
+| Public HTTPS | Root, `/lab`, assets/API reachable without ChatGPT login | HTTP PASS; owner Android loaded `/lab` without login |
+| Oracle generated GLB | Existing generated model can be retrieved owner-only without new generation | STRUCTURAL PASS; visual quality remains `GENERATED-UNREVIEWED` |
 
-## Android regression found on 2026-09-16
+## Android findings — 16 September 2026
 
-Owner-device evidence showed `/lab` rendering successfully in Chrome on Android, but portal navigation from the embedded meadow was broken. Root cause: `P0GameLab` supplied `onPortalOpen={() => {}}` to `StartingWorld`. `StartingWorld` correctly detected the portal, entered its transition state and stopped the animation loop, but the callback never changed route, so `Entering world…` remained indefinitely.
+### 1. AI Game Lab
+
+The native `/lab` UI and Three.js scene render on Android. The `Create with GPT-6 Astra` button is disabled because the approved paid pilot quota is exhausted. That is correct for cost control, but the page currently advertises `DEMO only` without providing a usable local DEMO action.
 
 Prepared fix:
 
-- resolve portal ids through the central WORLDIFACT portal configuration;
-- navigate the four non-current portals from `/lab` instead of using a no-op callback;
-- keep `ai-game-lab` marked as the current world (`YOU ARE HERE`) rather than re-entering the same route;
-- add route-resolution regression coverage.
+- add a no-cost local `DEMO / MOCK` generation button using the existing validated `demoBlueprint` + `localSceneResult` path;
+- visibly change the same Three.js scene;
+- expose the local WorldBlueprint and AssetSpec while keeping MAKE `validation-required`;
+- keep LIVE disabled until a separate paid allowance is explicitly approved;
+- never label local DEMO output as Astra-generated.
 
-This fix is not a browser PASS until the owner re-tests the deployed build.
+### 2. 8 Planets in 8 Days
 
-Do not create final Product Hunt screenshots/video from mocked LIVE responses. Device FPS remains unmeasured; structural draw-call reductions are not FPS results. The Oracle GLB remains `GENERATED-UNREVIEWED` until visually inspected.
+The `/planets` route currently embeds the external FORGE World Builder URL in an iframe. Owner Android shows that frame as a blank/broken document. The exact remote cause is not asserted; embedding/authentication/CSP/remote availability are outside the reliable no-login contest path.
+
+Prepared fix:
+
+- stop depending on the remote iframe for the primary `/planets` experience;
+- render a local no-login eight-stage `DEMO · MOCK GAMEPLAY` fallback with Move/Jump/progress and planet selection;
+- retain the original FORGE prototype only as an explicitly external link;
+- label the full eight-level campaign as PLANNED.
+
+The fixes are not production PASS until CI is green, the owner approves merge/deploy, and the deployed Android re-test succeeds.
+
+Do not create final Product Hunt screenshots/video from mocked LIVE responses. The Oracle GLB remains `GENERATED-UNREVIEWED` until visually inspected.
