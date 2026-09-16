@@ -22,6 +22,7 @@ export function checkDemoConfig(config: unknown) {
   if (!isRecord(config) || config.name !== "worldifact" || !isRecord(config.vars) ||
       config.vars.OPENAI_MODEL !== MODEL ||
       config.vars.ENABLE_PAID_GENERATION !== "false" ||
+      config.vars.ENABLE_ORACLE_JOBS !== "false" ||
       config.vars.GENERATION_REQUEST_LIMIT !== "0" || config.vars.GENERATION_EXPIRES_AT !== "") {
     fail("Automatic releases require the reviewed WORLDIFACT DEMO configuration. Paid activation needs a separate approved release.");
   }
