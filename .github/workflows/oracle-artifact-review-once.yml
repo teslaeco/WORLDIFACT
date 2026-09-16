@@ -15,6 +15,8 @@ env:
 jobs:
   artifact-review:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    environment:
+      name: production
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -29,12 +31,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git show --pretty='' --name-only HEAD | grep -qx 'ops/ORACLE_ARTIFACT_REVIEW_ARM_20260916'; then
+          if test -f ops/ORACLE_ARTIFACT_REVIEW_ARM_20260916 && grep -q 'No new Astra generation or Blender generation is authorized' ops/ORACLE_ARTIFACT_REVIEW_ARM_20260916; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
             echo 'Approved read-only Oracle artifact review marker found.'
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
-            echo 'No artifact-review marker in this deployment commit; exiting without Oracle artifact access.'
+            echo 'No valid artifact-review marker in this deployed commit; exiting without Oracle artifact access.'
           fi
 
       - name: Set up Node
