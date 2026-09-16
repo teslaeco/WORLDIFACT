@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import LoadingFallback from '../components/LoadingFallback'
+import '../components/WorldTabs.css'
 
 const P0GameLab = lazy(() => import('../components/P0GameLab'))
 const ManufacturingPanel = lazy(() => import('../components/ManufacturingPanel'))
