@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { PORTALS } from '../src/config/portals.ts'
 import { foundationForPath } from '../src/config/foundations.ts'
 import { REFERENCE_LINKS } from '../src/config/references.ts'
@@ -48,5 +49,16 @@ test('external reference tabs use explicit HTTPS destinations', () => {
     assert.ok(url.hostname.length > 3)
   }
   assert.match(REFERENCE_LINKS.gameLabPublic, /forge-studio-public/)
+  assert.match(REFERENCE_LINKS.shopLegacy, /forge-studio-public/)
   assert.match(REFERENCE_LINKS.planetsOriginal, /forge-world-builder/)
+})
+
+test('Enchanted AI Shop is native and preview-first instead of auto-downloading a brief', async () => {
+  const portalPage = await readFile(new URL('../src/pages/PortalPage.tsx', import.meta.url), 'utf8')
+  const studio = await readFile(new URL('../src/components/P0GameLab.tsx', import.meta.url), 'utf8')
+  assert.match(portalPage, /nativeShop \? <P0GameLab surface="shop" \/>/)
+  assert.match(studio, /Generate DEMO concept · no download/)
+  assert.match(studio, /does not auto-download a project file/)
+  assert.match(studio, /Create product concept with GPT-6 Astra/)
+  assert.match(studio, /MAKE · BLOCKED \/ VALIDATION REQUIRED/)
 })

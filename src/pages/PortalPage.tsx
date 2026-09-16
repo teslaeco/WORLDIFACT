@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
+import P0GameLab from '../components/P0GameLab'
 import PlanetsWorld from '../components/PlanetsWorld'
 import '../components/WorldTabs.css'
 import { PORTALS, getPortalById } from '../config/portals'
@@ -18,6 +19,7 @@ export default function PortalPage() {
   if (!app) return <Navigate to="/" replace />
   const chessShop = pathname === '/chess/shop'
   const planets = app.route === '/planets'
+  const nativeShop = pathname === '/shop'
   return <main className="portal-page foundation-page">
     <header className="portal-header">
       <Link to="/" className="brand">WORLDIFACT<span>← Back to the meadow</span></Link>
@@ -27,7 +29,7 @@ export default function PortalPage() {
         <Link to="/terra" className={app.route === '/terra' ? 'active' : ''}>Earth observation</Link>
       </nav>
     </header>
-    {!planets ? <>
+    {planets ? <PlanetsWorld /> : nativeShop ? <P0GameLab surface="shop" /> : <>
       <div className="foundation-heading">
         <h1>{chessShop ? 'Chess · Boards and pieces shop' : app.title}</h1>
         <a href={app.original} target="_blank" rel="noreferrer" className="button-link">Open original ↗</a>
@@ -59,6 +61,6 @@ export default function PortalPage() {
           allow="fullscreen; clipboard-write" allowFullScreen
           onLoad={() => setLoadedFrame(app.frame)} />
       </div>}
-    </> : <PlanetsWorld />}
+    </>}
   </main>
 }
