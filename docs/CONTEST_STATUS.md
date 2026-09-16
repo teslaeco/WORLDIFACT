@@ -1,70 +1,67 @@
 # WORLDIFACT status — 17 September 2026
 
-## Current work: English UI and 3D quality
+## Current review scope: English UI and 3D quality
 
-The owner has now requested a five-hour work period to finish the existing Froge integration, improve models/textures and translate all worlds, pages and tabs to English. This supersedes the earlier decision to defer quality work. It does not authorize an unlimited API/GPU budget or replacement of the existing hosted generator.
-
-Work is in **draft PR #28**, branch `work/five-hour-quality-english-20260917`. It is **not merged or deployed**. Scheduled continuation coordination and the exact remaining tasks are in [QUALITY_EN_SHIFT.md](QUALITY_EN_SHIFT.md).
+The owner requested five bounded continuations to finish the existing Froge integration, improve model/texture quality and move all five worlds toward English UI. Work remains in **draft PR #28**, branch `work/five-hour-quality-english-20260917`; it is **not merged or deployed**. Coordination is in [QUALITY_EN_SHIFT.md](QUALITY_EN_SHIFT.md), and the source-by-source language ledger is [LANGUAGE_AUDIT.md](LANGUAGE_AUDIT.md).
 
 | Item | Status | Evidence / remaining work |
 |---|---|---|
-| Existing hosted Froge integration | DEPLOYED, unchanged by PR #28 | PR #27, application merge `e2446816708783532a26c2c949c733e19ca84e96`; production `/shop` embeds/links the original Studio |
-| Initial new code checks | VERIFIED | PR #28 code head `daf94e66df65356fd5e19da0049b4d85535535a3`; run `35158775458` passed 107/107 tests, lint, TypeScript, HTTP smoke, build, foundation assembly and Worker dry-run |
-| Initial ISS English translation | SOURCE IMPLEMENTED / PARTIAL | Static HTML, help/accessibility text, document language, all eight repair-task definitions, item names and state messages translated; dynamic `game.js` and canvas/geometry labels still need translation |
-| Repair progress compatibility | TESTED | Task IDs, steps, parts consumption and version-2 save restoration preserved. The eight-task regression and English DOM hooks pass |
-| WORLDIFACT model preview reliability | SOURCE IMPLEMENTED / TESTED IN PART | Person metadata no longer triggers a second GLB load. Model state is isolated per source; disposed sessions reject/release late models. Shared geometry/material/texture disposal tests pass |
-| Preview rendering / model appearance | NOT VISUALLY VERIFIED | Object lifecycle tests are not Android/WebGL/likeness evidence. The actual hosted Froge viewer was not changed |
-| Other worlds and subpages | ENGLISH AUDIT IN PROGRESS | Do not infer complete translation from the parent WORLDIFACT page. Include copied/pinned Chess and Terra, native Planets/Lab and external Studio |
-| Newer Froge source | FOUND, NOT ASSUMED DEPLOYED | `codex/v27-mcp-startup-audit` at `735058af6e53a2e44f417b5dcf864f62bd334bb2` includes source-only history and v35 runtime work; this is newer than Froge main |
-| Hosted Studio source/deployment parity | UNKNOWN / EDIT ACCESS BLOCKED | Prior source checkpoint records Site v47 and source `e3d60697db43744f6c09157328560c66a031f9a2`, Git source errors and protected archives. No canonical source editing tool is currently available. Do not downgrade the live Studio to a GitHub snapshot |
-| Model/texture quality improvement | NOT YET PROVEN | Next: inspect newer source runtime and actual texture/UV/PBR validation, preserve originals and compare outputs only with authorized assets/runtime. No new geometry, texture detail or likeness improvement is claimed yet |
-| New costs | NONE INITIATED | No new paid generation, quota change, Oracle installation, GPU provisioning or secret change. Current CI uses stubs and no-cost metadata checks |
-| Five-hour continuation | SCHEDULED | Five hourly resumptions, not uninterrupted execution. Stop after the fifth and report actual code, tests and blockers |
-| Final contest release | NO-GO pending evidence | Device and hosted generation checks, full language coverage, quality review and final form/media review are incomplete. No submission made |
+| Existing hosted Froge integration | DEPLOYED / UNCHANGED | PR #27, application merge `e2446816708783532a26c2c949c733e19ca84e96`; production `/shop` embeds/links the original Studio |
+| Continuation 1 WORLDIFACT code | VERIFIED | Code head `f2d7f9000e9194ae93c973967a3f597a8a1ba02a`; PR CI run `35163081507` passed 108/108 tests, lint, TypeScript, HTTP smoke, build, foundation assembly and Worker dry-run |
+| ISS English | SOURCE IMPLEMENTED / TESTED | Static UI, eight repair tasks/tools/state messages, dynamic HUD/actions/errors, canvas signs and Model Context tool copy are English; IDs/save schema/mechanics preserved |
+| Five-world English coverage | AUDIT IN PROGRESS | Native shell/workbench inspected English. Pinned Chess and Terra build successfully; exact-source deep scans remain. 8 Planets and hosted Froge are external and are not considered translated merely because their wrappers are English |
+| WORLDIFACT model preview reliability | SOURCE IMPLEMENTED / TESTED | Person metadata no longer causes a second GLB load; model lifetime is source-bound; late stale models are rejected/released; shared PBR resources dispose once |
+| Froge texture truth/evidence patch | DRAFT SOURCE PR | Froge PR #16 against `codex/v27-mcp-startup-audit` reports actual source/export max edge, requested-edge reach, texture/downsample counts, preserves no-upscale policy and adds tests. It is not deployed to Oracle or the private Site |
+| Hosted Studio source parity | UNKNOWN / EDIT ACCESS BLOCKED | Project checkpoint records a newer private Site source than the GitHub snapshot and previous Git source errors. Do not replace the live Studio with the older repository branch |
+| Visual likeness / anatomy | NOT PROVEN | Hair, face/neck/jaw/shoulder proportions, hands, clothing intersections and controlled visual comparison still need canonical-source/runtime work; structural tests are not a likeness pass |
+| Texture quality | BETTER EVIDENCE, NOT NEW DETAIL | PR #16 can distinguish an 8192 request from a 1122×1402 actual source. No upscaling is counted as recovered detail; real UV/PBR appearance still needs export/render review |
+| New costs | NONE | No paid generation, GPU/API job, quota increase, secret change, Oracle install, order or private archive bypass |
+| Final contest release | NO-GO | Full source language coverage, hosted/device generation, controlled visual quality and final submission/media checks remain incomplete |
 
-Initial verification logs contain nine lint warnings and no errors. The GLB viewer's WebGL-unavailable effect-state warning and imported-source warnings remain; do not describe the tree as warning-free.
+Current code verification logs contain nine lint warnings and zero errors. Do not call the draft warning-free. CI assembled the exact pinned Chess commit `e134964e9c8b7edc43c26b508973f6fb658af90d` and Terra commit `ae90f7367587e0973782c470cde3f5103c0540fc` successfully. The credential-free hosted Studio probe again returned HTTP 200; this is reachability evidence only, not authenticated iframe, upload, Android or generation evidence.
 
-## The correct generator remains the existing hosted application
+## Correct generator boundary
+
+The active generator remains:
 
 **https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/**
 
-The active path is `WORLDIFACT -> /shop -> existing hosted Froge MPC 2 Studio`. WORLDIFACT provides a frame and permanent new-tab/same-tab direct links above it. The original Studio owns prompts/photos, Codex/Blender execution, model previews, exports, accounts and stored work. A change to the wrapper does not translate or improve the external app.
+WORLDIFACT `/shop` provides English navigation and permanent direct-open fallbacks. The hosted Studio owns prompts/photos, Codex/Blender execution, previews, exports, accounts and stored work. The old `forge-studio-public` page is not the active generator. PR #28 does not copy private assets or migrate the Studio backend.
 
-The old `forge-studio-public` page is a named legacy reference, not a model generator. The other four worlds and separate GAME/MAKE tools remain in place. No user's prompt, model title, stored job or source asset is translated or overwritten.
+The newer reviewable GitHub source branch is `teslaeco/Froge-MPC-2-test:codex/v27-mcp-startup-audit` at `735058af6e53a2e44f417b5dcf864f62bd334bb2` as checked during continuation 1. It contains the previously merged v35 acceptance/runtime work and saved-model-history corrections, but project records explicitly say that GitHub source is not proven identical to the newer private Site. Source-only patches must therefore stay review-only until ported to the canonical runtime.
 
-## Completed production integration — retained evidence
+## Continuation 1 evidence
 
-- PR #27: https://github.com/teslaeco/WORLDIFACT/pull/27
-- Reviewed integration head: `be9b00adc465c67fe5a02d2aa04b27fd392af2de`
-- Deployed application merge: `e2446816708783532a26c2c949c733e19ca84e96`
-- Production Shop: https://worldifact.xodobrox.workers.dev/shop
-- Previous documentation main: `495a6524d7b597403eefd5b62bfbf8ee9fedc4e0`
-- Integration PR CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35153954093 (102 tests)
-- Integration main CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35154269149
-- Verified deployment and public HTML/assets/DEMO smoke: https://github.com/teslaeco/WORLDIFACT/actions/runs/35154269208
-- No-op Shop pilot gate: https://github.com/teslaeco/WORLDIFACT/actions/runs/35154374131
-- No-op P0 pilot gate: https://github.com/teslaeco/WORLDIFACT/actions/runs/35154374091
-- Integration implementation brief: [CODEX_TASK_FROGE_HOSTED_GENERATOR.md](CODEX_TASK_FROGE_HOSTED_GENERATOR.md)
+WORLDIFACT PR: https://github.com/teslaeco/WORLDIFACT/pull/28
 
-The original Studio returned HTTP 200 in the previous credential-free diagnostic and again in initial PR #28 CI. HTTP success does not prove authenticated iframe use, Android uploads or generation. The direct-open links remain available when embedding is blocked or sign-in is needed.
+Verified code CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35163081507
 
-The previous integration removed the viewport-covering `.webgl-fallback` from the active Shop. It made no paid generation request, copied no private asset, migrated no account and raised no quota. Its implementation was performed directly through connected GitHub tools, not an unobserved separate Codex/Copilot cloud run.
+Froge source-only texture PR: https://github.com/teslaeco/Froge-MPC-2-test/pull/16
 
-## Current verification and publication boundaries
+The ISS regression now checks static/runtime English, canvas labels, DOM hooks, eight fixed repair IDs/order, six consumed replacement parts and version-2 save restoration. Model-slot regressions cover late previous-session results and one-time resource disposal. These checks do not substitute for physical Android/WebGL or visual-likeness QA.
 
-Current draft: https://github.com/teslaeco/WORLDIFACT/pull/28
-Initial code verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35158775458
+Froge PR #16 changes only source evidence/reporting: requested 4K/8K is not treated as actual resolution unless exported pixels reach it. Its new tests explicitly include a requested 8192 px case whose source is only 1122×1402 and an 8192→4096 downsample. It does not generate a new character, improve facial geometry automatically, or alter the hosted Site.
 
-Continue from the checkpoint rather than restarting the completed integration. Verify each final changed head, preserve original author/license attribution and record specific checks. New quality/localization changes remain in review until production publication is authorized for them. Do not change any paid-pilot marker, reset a job or silently run a new paid request to obtain a passing screenshot.
+## Remaining work
 
-Official Product Hunt/model pages were reopened during the initial audit, but no final submission form or eligibility decision was completed. Reopen the official contest page, guide and form immediately before any actual competition scheduling/submission decision. No guarantee of competition success is made.
+1. Complete exact-source English scans for native WORLDIFACT, pinned Chess/Terra and locate the real editable source for 8 Planets.
+2. Keep hosted Froge internal UI localization BLOCKED rather than faking a translation in the parent iframe.
+3. Continue model-quality work only against preserved originals: hair/root continuity, face/neck/jaw/shoulders, hands, garment intersections, UV/PBR evidence and GLB/FBX reimport/material preservation.
+4. Check CI for every changed head and keep the draft unmerged/unpublished until the reviewed scope receives explicit release approval.
+5. On the fifth continuation provide the consolidated Polish GO/NO-GO report; no contest submission is authorized here.
 
-## Historical generated artifacts
+## Historical production evidence retained
 
-Earlier records reported successful real Astra text/image blueprint output and a controlled Oracle job with a structurally checked GLB. They are historical, not new tests of the hosted integration or quality work. PR #26 passed build/HTTP checks but failed subsequent owner Android UI QA. The previous cumulative native WORLDIFACT ceiling was 6; this session does not extend or re-arm it. The normal native production configuration remains cost-disabled; hosted Froge settings are independent.
+PR #27: https://github.com/teslaeco/WORLDIFACT/pull/27
 
-Owner screenshots demonstrate a real working-result interface, but also quality/validation failures. Reported 2048 skin and 512 other packed textures must not be described as native 4K/8K. Existing illustration/reference sheets do not establish an official OpenAI mascot or guarantee geometric likeness.
+Deployed integration merge: `e2446816708783532a26c2c949c733e19ca84e96`
+
+Production Shop: https://worldifact.xodobrox.workers.dev/shop
+
+Verified deployment run: https://github.com/teslaeco/WORLDIFACT/actions/runs/35154269208
+
+Earlier native Astra/Oracle generated-artifact evidence remains historical and is not a new quality test. The previous native WORLDIFACT paid ceiling is not extended or re-armed by this work.
 
 ## Truth boundary
 
-Distinguish DEPLOYED, SOURCE IMPLEMENTED, TESTED, OWNER-REPORTED and UNKNOWN/BLOCKED. Never call a linked Studio a migrated backend, a model-viewer cleanup a proven improvement to generated facial likeness, a test fixture a real generated model, HTTP success a device pass, upscaling new detail, or an unreviewed MAKE candidate manufacturing-ready.
+Distinguish DEPLOYED, SOURCE IMPLEMENTED, TESTED, OWNER-REPORTED and UNKNOWN/BLOCKED. Never call a linked Studio a migrated backend, preview cleanup a proven likeness improvement, pixel-size metadata new texture detail, test fixtures real generated models, HTTP success a device pass, or an unreviewed MAKE candidate manufacturing-ready.
