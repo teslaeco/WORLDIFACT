@@ -5,11 +5,12 @@ import { ITEMS, TASKS, freshState, takeBag, equipSuit, enterZone, selectItem, pe
 
 const polish = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]|\b(?:Zapisz|Wczytaj|Torba|Skafander|Zamknij|Nawigacja)\b/u
 
-test('ISS static interface is English and preserves the DOM hooks used by its engine', async () => {
+test('ISS static and runtime interface are English and preserve DOM hooks used by the engine', async () => {
   const html = await readFile(new URL('../public/apps/iss/index.html', import.meta.url), 'utf8')
   const engine = await readFile(new URL('../public/apps/iss/game.js', import.meta.url), 'utf8')
   assert.match(html, /<html lang="en">/)
   assert.doesNotMatch(html, polish)
+  assert.doesNotMatch(engine, polish)
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1])
   assert.equal(new Set(ids).size, ids.length, 'HTML IDs must remain unique')
   for (const match of engine.matchAll(/\$\('([^']+)'\)/g))
@@ -20,6 +21,9 @@ test('ISS static interface is English and preserves the DOM hooks used by its en
   assert.match(html, /not a real torque measurement/)
   assert.match(html, /do not represent a list of current ISS failures/)
   assert.match(html, /src="\.\/game.js"/)
+  assert.match(engine, /title:'ISS game state'/)
+  assert.match(engine, /title:'Select tool'/)
+  assert.match(engine, /title:'Set navigation goal'/)
 })
 
 test('ISS in-world canvas signs are English without changing geometry identifiers', async () => {
