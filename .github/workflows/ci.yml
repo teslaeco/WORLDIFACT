@@ -23,3 +23,5 @@ jobs:
       - run: npm run verify
       - uses: ./.github/actions/foundations
       - run: npm run deploy:check
+      - name: Inspect hosted Studio access without login or generation
+        run: node scripts/check-froge-external.mjs
