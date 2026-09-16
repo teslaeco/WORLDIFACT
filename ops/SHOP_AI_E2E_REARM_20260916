@@ -1,0 +1,3 @@
+Owner approval: 2026-09-16.
+Purpose: after repairing the native WORLDIFACT AI Shop portal and same-job recovery, raise the cumulative REAL 3D generation ceiling from 5 to exactly 6 for one additional controlled Astra + Oracle + Blender test.
+CI must not execute a paid generation. The browser test consumes at most the one newly available reservation.
