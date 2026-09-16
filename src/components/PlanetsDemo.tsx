@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import './PlanetsDemo.css'
 
 const PLANETS = [
   { name: 'Mercury', day: 1, hazard: 'Solar heat', mission: 'Cross the sunlit ridge and cool the rover.' },
