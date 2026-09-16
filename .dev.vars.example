@@ -3,6 +3,8 @@ OPENAI_API_KEY=
 OPENAI_MODEL=gpt-6-astra
 # Enable only after the owner approves paid API use.
 ENABLE_PAID_GENERATION=false
+# Separate Oracle/Blender write gate. Keep false until an explicit cost-approved pilot.
+ENABLE_ORACLE_JOBS=false
 # Preview access secret (32–256 random characters), never an OpenAI API key.
 GENERATION_ACCESS_TOKEN=
 # Absolute lifetime request ceiling, including failures. Zero disables LIVE.
