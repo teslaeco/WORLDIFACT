@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Group } from 'three'
 import StartingWorld from './StartingWorld'
 import { meadowBlueprint, validateGenerationResult } from '../lib/blueprint'
 import type { GenerationResult, WorldBlueprint } from '../lib/blueprint'
 import { saveArchive } from '../lib/archive'
+import { routeForPortal } from '../lib/portalRouting'
 import { createWorldObject, disposeObject } from '../lib/worldGeometry'
 
 function download(data: Blob, name: string) {
@@ -16,6 +18,7 @@ function download(data: Blob, name: string) {
 type Health = { generationReady?: boolean; accessRequired?: boolean; publicPilot?: boolean; model?: string | null }
 
 export default function P0GameLab() {
+  const navigate = useNavigate()
   const [blueprint, setBlueprint] = useState<WorldBlueprint>(() => meadowBlueprint())
   const [result, setResult] = useState<GenerationResult | null>(null)
   const [health, setHealth] = useState<Health>({})
@@ -102,9 +105,10 @@ export default function P0GameLab() {
       <span className="pill">{health.generationReady ? (health.publicPilot ? 'LIVE public Astra pilot' : 'LIVE Astra preview') : 'DEMO only'}</span>
     </div>
     <p><strong>PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → SCENE CHANGE → GAME / MAKE</strong></p>
+    <p className="result-note">You are already inside AI Game Lab. Its portal is marked YOU ARE HERE; the other four portals open their worlds.</p>
     <div className="studio-layout">
       <div className="studio-scene">
-        <StartingWorld blueprint={blueprint} activePortalId="ai-game-lab" onPortalOpen={() => {}} />
+        <StartingWorld blueprint={blueprint} activePortalId="ai-game-lab" onPortalOpen={(id) => navigate(routeForPortal(id))} />
         <div className="scene-toolbar">
           <button onClick={exportGameGlb}>Export GAME · procedural GLB</button>
           <button onClick={() => download(new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' }), 'WORLDIFACT-WorldBlueprint.json')}>Download WorldBlueprint</button>
