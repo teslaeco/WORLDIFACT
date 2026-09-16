@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { FOUNDATIONS } from '../config/foundations'
 import './control.css'
 
-type Status = { checkedAt: string; cloudflare: string; openai: string; oracle: string; ownerChecks: boolean }
+type Status = { checkedAt: string; cloudflare: string; openai: string; oracle: string; oracleJobs: string; ownerChecks: boolean }
 type OracleWorlds = {
   checkedAt: string
   oracle: string
@@ -14,6 +14,7 @@ type OracleWorlds = {
   worlds: { id: string; oracle: string }[]
   evidence?: string
 }
+type OracleJobGate = { mode: string; prompt: string; image: string; requiredConnectorVersion: number; note: string }
 
 const labels: Record<string, string> = {
   RESPONDING: 'Worker responding', KEY_CONFIGURED: 'Key configured; no live generation proof',
@@ -21,6 +22,7 @@ const labels: Record<string, string> = {
   MODEL_ACCESS_VERIFIED: 'Model access verified; generation not tested', CHECK_FAILED: 'Check failed',
   INVALID_METADATA: 'Unexpected model response', INVALID_HEALTH_RESPONSE: 'Unexpected connector response',
   CONNECTOR_READY: 'Connector ready for shared world services', CONNECTOR_NOT_READY: 'Connector reports not ready',
+  BLOCKED: 'Blocked by production safety gate', OWNER_ONLY: 'Owner-only write path enabled',
 }
 const editors = [
   { url: 'https://github.dev/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer', label: 'Open source editor', note: 'GitHub sign-in and repository write access are required. Publish through the original repository.' },
@@ -33,6 +35,7 @@ const editors = [
 export default function ControlPage() {
   const [state, setState] = useState<Status | null>(null)
   const [oracleWorlds, setOracleWorlds] = useState<OracleWorlds | null>(null)
+  const [oracleJobGate, setOracleJobGate] = useState<OracleJobGate | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [owner, setOwner] = useState('')
@@ -51,6 +54,13 @@ export default function ControlPage() {
       if (!Array.isArray(data.worlds) || typeof data.oracle !== 'string') throw new Error('Invalid Oracle bridge response')
       setOracleWorlds(data)
     }).catch(() => { if (!abort.signal.aborted) setOracleWorlds(null) })
+
+    fetch('/api/oracle/jobs/status', { signal: abort.signal, cache: 'no-store' }).then(async r => {
+      if (!r.ok) throw new Error('Oracle job gate unavailable')
+      const data = await r.json() as OracleJobGate
+      if (typeof data.mode !== 'string' || typeof data.note !== 'string') throw new Error('Invalid Oracle job gate response')
+      setOracleJobGate(data)
+    }).catch(() => { if (!abort.signal.aborted) setOracleJobGate(null) })
     return () => abort.abort()
   }, [])
   async function check() {
@@ -65,18 +75,19 @@ export default function ControlPage() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Connection check failed') }
     finally { setBusy(false); setOwner('') }
   }
+  const oracleDisplay = oracleWorlds?.oracle || state?.oracle
+  const lastChecked = oracleWorlds?.checkedAt || state?.checkedAt
   return <main className="control-page">
     <Link to="/">← Back to WORLDIFACT</Link>
     <span className="eyebrow">PLATFORM CONTROL</span><h1>Five worlds. One starting point.</h1>
     <p>Open each world, access its existing editing tools and check the shared services.</p>
     <section className="control-services" aria-label="Connection status">
-      {(['cloudflare', 'openai', 'oracle'] as const).map(service => <article key={service}>
-        <h2>{service === 'openai' ? 'OpenAI' : service === 'oracle' ? 'Oracle · Blender' : 'Cloudflare'}</h2>
-        <p>{state ? labels[state[service]] || 'Unknown status' : 'Reading status…'}</p>
-      </article>)}
+      <article><h2>Cloudflare</h2><p>{state ? labels[state.cloudflare] || 'Unknown status' : 'Reading status…'}</p></article>
+      <article><h2>OpenAI</h2><p>{state ? labels[state.openai] || 'Unknown status' : 'Reading status…'}</p></article>
+      <article><h2>Oracle · Blender</h2><p>{oracleDisplay ? labels[oracleDisplay] || oracleDisplay : 'Reading status…'}</p></article>
     </section>
     <p>Connection checks never generate models, images or paid AI responses. The scene editor remains available in DEMO mode.</p>
-    {state && <small>Last status: {new Date(state.checkedAt).toLocaleString()}</small>}
+    {lastChecked && <small>Last Oracle/status check: {new Date(lastChecked).toLocaleString()}</small>}
     <details className="control-owner"><summary>Owner connection checks</summary>
       {state?.ownerChecks ? <form onSubmit={e => { e.preventDefault(); void check() }}>
         <label>Owner access code<input type="password" value={owner} minLength={32} maxLength={256}
@@ -111,6 +122,10 @@ export default function ControlPage() {
       <Link to="/builder">Edit a WORLDIFACT scene</Link><Link to="/make">Check manufacturing requirements</Link>
       <Link to="/terra">Earth observations</Link>
       <a href="https://github.com/teslaeco/WORLDIFACT/actions" target="_blank" rel="noreferrer">Deployment history ↗</a>
-    </div><p>Oracle is one shared backend for the five WORLDIFACT worlds. This bridge currently proves authenticated health only; job creation and shared publishing stay disabled until their write paths are reviewed and enabled explicitly.</p></section>
+    </div>
+      <p><strong>Oracle job write path:</strong> {oracleJobGate ? labels[oracleJobGate.mode] || oracleJobGate.mode : 'Checking gate…'}.</p>
+      {oracleJobGate && <p>{oracleJobGate.note} Prompt input is {oracleJobGate.prompt.toLowerCase()}; image-to-Oracle remains {oracleJobGate.image.toLowerCase().replaceAll('_', ' ')} until the connector contract is verified.</p>}
+      <p>Oracle is one shared backend for the five WORLDIFACT worlds. The deployed bridge proves authenticated health. Job creation remains blocked in automatic releases until an explicit owner-approved cost pilot.</p>
+    </section>
   </main>
 }
