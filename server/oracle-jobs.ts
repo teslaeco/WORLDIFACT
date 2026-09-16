@@ -5,6 +5,7 @@ import type { BudgetEnv, BudgetNamespace } from './budget.ts';
 
 export interface OracleJobEnv extends PlatformEnv, BudgetEnv {
   ENABLE_ORACLE_JOBS?: string;
+  PUBLIC_PILOT?: string;
   GENERATION_BUDGET?: BudgetNamespace;
 }
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -163,27 +164,32 @@ async function validatedGlb(response: Response) {
 export async function oracleJobApi(request: Request, env: OracleJobEnv, fetcher: typeof fetch = fetch) {
   const url = new URL(request.url);
   const enabled = env.ENABLE_ORACLE_JOBS === 'true';
+  const publicPilot = enabled && env.PUBLIC_PILOT === 'true';
   if (url.pathname === '/api/oracle/jobs/status' && request.method === 'GET') {
     return reply({
-      mode: enabled ? 'OWNER_ONLY' : 'BLOCKED',
+      mode: publicPilot ? 'PUBLIC_PILOT' : enabled ? 'OWNER_ONLY' : 'BLOCKED',
       prompt: 'SUPPORTED',
       image: 'BLOCKED_UNVERIFIED',
-      artifactRead: 'OWNER_ONLY',
+      artifactRead: publicPilot ? 'PUBLIC_PILOT' : 'OWNER_ONLY',
       requiredConnectorVersion: 33,
       budget: enabled && budgetSettings(env) && env.GENERATION_BUDGET ? 'SHARED_HARD_CAP' : 'BLOCKED',
-      note: enabled
-        ? 'Owner-only Oracle prompt jobs require the same absolute pilot budget as WORLDIFACT Astra calls. Existing succeeded GLB artifacts are read-only and do not consume that budget.'
-        : 'Oracle writes are disabled. Owner-only read access to an existing job/model remains available; read-only health remains available for all five worlds.',
+      note: publicPilot
+        ? 'A short hard-capped public Oracle/Blender prompt pilot is armed. Every submission reserves the shared cumulative generation budget; no browser receives the Oracle endpoint or bearer token.'
+        : enabled
+          ? 'Owner-only Oracle prompt jobs require the same absolute pilot budget as WORLDIFACT Astra calls. Existing succeeded GLB artifacts are read-only and do not consume that budget.'
+          : 'Oracle writes are disabled. Owner-only read access to an existing job/model remains available; read-only health remains available for all five worlds.',
     });
   }
   if (!url.pathname.startsWith('/api/oracle/jobs')) return reply({ error: 'Not found' }, 404);
   if (request.method !== 'GET' && request.headers.get('Origin') !== url.origin) {
     return reply({ error: 'Same-origin request required.' }, 403);
   }
-  if ((env.OWNER_ACCESS_TOKEN?.length ?? 0) < 32 || (env.OWNER_ACCESS_TOKEN?.length ?? 0) > 256) {
-    return reply({ error: 'Owner access is not configured.' }, 503);
+  if (!publicPilot) {
+    if ((env.OWNER_ACCESS_TOKEN?.length ?? 0) < 32 || (env.OWNER_ACCESS_TOKEN?.length ?? 0) > 256) {
+      return reply({ error: 'Owner access is not configured.' }, 503);
+    }
+    if (!await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) return reply({ error: 'Owner access required.' }, 401);
   }
-  if (!await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) return reply({ error: 'Owner access required.' }, 401);
   if (!oracleOrigin(env.ORACLE_ENDPOINT) || !env.ORACLE_API_TOKEN) return reply({ error: 'Oracle is not configured.' }, 503);
   if (!env.GENERATION_LIMITER) return reply({ error: 'Oracle job limiter is not configured.' }, 503);
   try {
@@ -272,7 +278,9 @@ export async function oracleJobApi(request: Request, env: OracleJobEnv, fetcher:
       worldId,
       job: sanitizedJob(body, id),
       connectorVersion: health.connectorVersion,
-      evidence: 'Oracle accepted an owner-authorized prompt job under the shared hard pilot ceiling. The browser never received the Oracle endpoint or bearer token.',
+      evidence: publicPilot
+        ? 'Oracle accepted a public hard-capped prompt job. The browser never received the Oracle endpoint or bearer token.'
+        : 'Oracle accepted an owner-authorized prompt job under the shared hard pilot ceiling. The browser never received the Oracle endpoint or bearer token.',
     }, upstream.status === 202 ? 202 : 200);
   } catch (error) {
     const code = error instanceof Error ? error.message : '';
@@ -282,7 +290,7 @@ export async function oracleJobApi(request: Request, env: OracleJobEnv, fetcher:
         : code === 'BUDGET_EXHAUSTED'
           ? 'The shared Astra pilot request ceiling is exhausted.'
           : code === 'BUDGET_DISABLED'
-            ? 'The shared Astra pilot budget is not enabled.'
+            ? 'The shared Astra pilot budget is not enabled or has expired.'
             : 'Oracle job submission failed safely.',
     }, code.startsWith('BUDGET_') ? (code === 'BUDGET_EXHAUSTED' ? 429 : 503) : 502);
   }
