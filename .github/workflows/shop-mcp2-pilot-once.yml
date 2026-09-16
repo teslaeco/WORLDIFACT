@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: worldifact-production
+  group: worldifact-shop-mcp2-pilot
   cancel-in-progress: false
 
 jobs:
@@ -27,16 +27,16 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 2
 
-      - name: Gate to the one approved Shop pilot marker
+      - name: Gate to the approved Shop pilot re-arm marker
         id: gate
         shell: bash
         run: |
-          if git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/SHOP_MCP2_PILOT_ARM_20260916'; then
+          if git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/SHOP_MCP2_PILOT_REARM_20260916'; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
-            echo 'Approved MCP2 Shop pilot marker found in this deployment commit.'
+            echo 'Approved MCP2 Shop pilot re-arm marker found in this deployment commit.'
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
-            echo 'No Shop pilot marker in this deployment commit; exiting without changing pilot state.'
+            echo 'No Shop pilot re-arm marker in this deployment commit; exiting without changing pilot state.'
           fi
 
       - name: Set up Node
