@@ -1,3 +1,5 @@
+import { REFERENCE_LINKS } from './references.ts'
+
 export const FOUNDATIONS = [
   {
     id: 'chess-cube-512-ai', route: '/chess', title: 'Chess Cube 512 AI',
@@ -18,15 +20,15 @@ export const FOUNDATIONS = [
     hosting: 'connected',
   },
   {
-    id: 'enchanted-ai-shop', route: '/shop', title: 'Enchanted AI Shop',
-    frame: 'https://forge-studio-public.terraformingplanet.chatgpt.site/',
-    original: 'https://forge-studio-public.terraformingplanet.chatgpt.site/',
+    id: 'enchanted-ai-shop', route: '/shop', title: 'Enchanted AI Shop · Froge MPC 2 generator',
+    frame: REFERENCE_LINKS.modelGenerator,
+    original: REFERENCE_LINKS.modelGenerator,
     hosting: 'connected',
   },
   {
     id: 'ai-game-lab', route: '/lab', title: 'AI Game Lab · Froge MPC 2',
-    frame: 'https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/',
-    original: 'https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/',
+    frame: REFERENCE_LINKS.modelGenerator,
+    original: REFERENCE_LINKS.modelGenerator,
     hosting: 'connected',
   },
   {

@@ -1,77 +1,52 @@
-# Contest status — WORLDIFACT, 16 September 2026
+# WORLDIFACT status — hosted Froge generator integration, 16 September 2026
 
-Decision: **NO-GO for final contest launch until the repaired AI Shop completes one clean Android REAL 3D generation and the final five-world device pass.** Core P0 has real LIVE Astra evidence, a verified prior Oracle/Blender GLB, green CI, and the repaired native AI Shop is now deployed.
+## Current task and authorization
 
-Reference flows:
+The owner identified **https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/** as the working generator and asked to add that existing application to WORLDIFACT before any quality improvements. The latest instruction requests a complete Codex task and its execution. This supersedes the earlier proposal to recreate a limited native generator from the Froge GitHub snapshot.
 
-- concept: `PROMPT / IMAGE → GPT-6 ASTRA → WorldBlueprint + AssetSpec → visible scene change → GAME / MAKE`;
-- real Shop model: `PROMPT → GPT-6 ASTRA / Oracle connector → Blender job → SAME-JOB recovery/polling → validated GLB → in-page 3D preview → explicit download`.
+PR #27 is being revised in place on `fix/port-mpc2-generator-20260916`. Its old native-generator implementation is replaced, not promoted. Integration publication is authorized in the conversation; new paid generations, increased quotas and contest submission are not part of this task.
 
-| Item | Status | Evidence / remaining work |
+Implementation brief: [CODEX_TASK_FROGE_HOSTED_GENERATOR.md](CODEX_TASK_FROGE_HOSTED_GENERATOR.md).
+
+## Evidence matrix
+
+| Item | Status | Evidence / boundary |
 |---|---|---|
-| Official contest | DATE VERIFIED; FINAL FORM REVIEW PENDING | Re-open official Product Hunt contest page, launch guide and submission form immediately before scheduling/submitting |
-| Production | DEPLOYED | `https://worldifact.xodobrox.workers.dev`; repaired app merge commit `d26e13b842b05bf57179378d71dd2def0f8ec5d6` |
-| Production CI | VERIFIED | Main verify, foundations and deploy-check all passed after merge |
-| Production deploy | VERIFIED | Cloudflare deploy and public HTML/assets/DEMO smoke completed successfully |
-| Five primary worlds | SOURCE/ROUTE VERIFIED | Exactly five primary routes remain configured |
-| Chess Cube 512 AI | ROUTE VERIFIED | `/chess` hands off to the public Chess Cube app |
-| Terra — Fix ISS | COPIED APP VERIFIED | `/iss` is assembled into the release manifest; Earth observation remains separately labelled |
-| 8 Planets in 8 Days | DEPLOYED / DEVICE RE-TEST NEEDED | `/planets` remains native WORLDIFACT with external FORGE reference separated |
-| AI Shop legacy FORGE page | LEGACY EXPORT ONLY | Android screenshot proved `FORGE-projekt.json` download; it is no longer the primary generation flow |
-| AI Shop repaired native `/shop` | DEPLOYED | Dedicated generator UI, same-job recovery, persisted job id, bounded polling/model retries, in-page GLB, explicit download only |
-| AI Shop portal entry | DEPLOYED / ANDROID RE-TEST NEEDED | Mobile portal collision/reach made more forgiving; route resolves directly to `/shop` |
-| AI Shop image-to-model | BLOCKED_UNVERIFIED | REAL Oracle connector remains prompt-only until reference-image input is proven end-to-end |
-| AI Game Lab P0 | DEPLOYED | Native `/lab`; validated Blueprint+AssetSpec; GAME/MAKE separation; local DEMO and LIVE evidence remain distinct |
-| Text Astra proof | LIVE / GENERATED | Validated provider result recorded |
-| Image Astra proof | LIVE / GENERATED | Validated provider result recorded |
-| Oracle job evidence | LIVE / GENERATED-UNREVIEWED | Previous controlled Oracle job succeeded and produced a GLB |
-| Oracle GLB evidence | VERIFIED BINARY / QUALITY UNREVIEWED | glTF 2.0 artifact verified by server-side binary/header/hash checks; no manufacturing approval implied |
-| Shared paid pilot | ARMED / HARD CAPPED | Absolute cumulative ceiling is exactly 6; paid `/api/blueprint` stays OFF; Oracle jobs are enabled for at most one additional repaired-Shop REAL 3D test |
-| Shop pilot smoke | VERIFIED | First post-deploy smoke hit stale edge state; rerunning the same no-cost workflow passed without any paid generation |
-| Launch materials | DRAFT | Capture final screenshots/video only after repaired production passes Android + desktop QA |
+| Correct original generator | OWNER-IDENTIFIED | Exact hosted Froge MPC 2 Studio URL above. The supplied screenshots show prompt, multiple reference photos, Codex instructions, a model viewer and export actions |
+| Hosted generation quality | UNREVIEWED | Owner screenshots also show a working-result validation/quality failure. This task does not improve or approve the model |
+| Source parity | UNKNOWN | `teslaeco/Froge-MPC-2-test` is a separate snapshot, not proof of parity with the current hosted Studio |
+| Previous production | DEPLOYED / SHOP UI FAIL OBSERVED | App commit `d26e13b842b05bf57179378d71dd2def0f8ec5d6`, documentation main `f225cb8acf1f2ee02c964bf0ce517971f9aac4ea`; Android screenshots show a full-page placeholder covering Shop controls |
+| Revised Shop | IMPLEMENTED / CI AND DEPLOY PENDING | Embeds the exact hosted application; primary full-generator and same-tab links appear before the frame and remain available independently of it |
+| Entry points | IMPLEMENTED | AI Shop remains `/shop`; `/chess/shop` redirects there; platform-centre originals and Game Lab original-Studio links use the same canonical URL |
+| Absolute overlay | REMOVED FROM ACTIVE SHOP | No generic `.webgl-fallback`, custom native form, fake job status or native generation API in ShopPage |
+| Public hosted HTTP access | PROBE PENDING | Local direct read failed due to tool/network restrictions. The CI read-only probe records public status without credentials or following login redirects |
+| Authenticated Studio / real iframe | UNKNOWN | The wrapper cannot verify cross-origin sign-in or frame contents. Permanent direct-open links are provided; no onLoad-based success claim or timed redirect |
+| Tests | PENDING FINAL HEAD | Server-render regression tests exercise the actual Shop component; HTTP probe tests forbid paid POSTs and authentication redirects. These are not browser/device tests |
+| Cost / data | NO GENERATION REQUESTED | No native paid POST, job reset, model download, archive migration, API-key change or paid-pilot re-arm in this integration. Original Studio usage is governed by its own account and configuration |
+| Contest publication | NOT ASSESSED / NOT SUBMITTED | Prior final-launch gates remain unresolved. Official pages have not been rechecked in this integration task; do not infer eligibility or no-login readiness from linking a site |
 
-## Repaired AI Shop deployment
+## Scope that is actually implemented
 
-PR #26 was merged after exact-head CI passed. Production deployment then passed full verify, foundation assembly, deploy-check, secret synchronization, Cloudflare deployment, and public HTML/assets/DEMO smoke.
+The active path is `WORLDIFACT -> /shop -> existing hosted Froge MPC 2 Studio`. WORLDIFACT provides navigation and an embedded view with direct-open alternatives. The original application continues to own prompt/photo input, Codex/Blender execution, model previews, exports, sessions and storage. No code or private assets are copied from the hosted app.
 
-The native `/shop` now provides:
+The former `forge-studio-public` page remains a named legacy reference; it is not the active model generator. The four other WORLDIFACT worlds and separate GAME/MAKE tools remain in place.
 
-- one paid POST per REAL 3D job only;
-- job id persisted before submission;
-- no automatic paid POST retry after a lost response;
-- recovery by polling the same saved job id after refresh/network interruption;
-- bounded retries for transient fetch, HTTP 429 and 5xx status/model reads;
-- generated GLB loaded into the page before any download;
-- explicit GLB download action only;
-- `LIVE / GENERATED-UNREVIEWED` truth label;
-- MAKE remains validation-required.
+The original working Studio must not be downgraded to the prompt-only native Oracle contract. Conversely, owner screenshots do not prove that every generation succeeds or that the displayed model is approved. Keep these distinctions visible.
 
-## Paid pilot state
+## Verification and release procedure
 
-The marker-gated Shop workflow deployed a cumulative ceiling of exactly 6 with:
+1. Run full `npm run verify`, foundation assembly and `npm run deploy:check` on the final PR head.
+2. Read the `Inspect hosted Studio access without login or generation` diagnostic separately. HTTP 200 is not live-generation or successful-embedding evidence; access restrictions are not bypassed.
+3. Publish only the reviewed final head through the existing Cloudflare workflow and verify public HTML/assets smoke.
+4. Do not alter any `ops/*PILOT*` / re-arm marker or generation configuration. Normal automatic releases retain the reviewed disabled-cost configuration. The hosted Froge app's independent settings are untouched.
+5. Record actual merge/deploy results here after completion. Browser/Android sign-in, uploads and generation in the original application remain separate device checks; do not spend a new generation to validate navigation.
 
-- `ENABLE_PAID_GENERATION=false`;
-- `PUBLIC_PILOT=true`;
-- `ENABLE_ORACLE_JOBS=true`;
-- `GENERATION_REQUEST_LIMIT=6`;
-- a three-hour expiry window;
-- no paid generation performed by CI.
+## Historical evidence retained
 
-The first immediate smoke ran before edge propagation completed and failed its status assertion. The exact same no-cost workflow was rerun; the second attempt passed the Shop pilot smoke. No paid generation was used by either workflow attempt.
+Previous P0 records reported successful Astra text/image blueprint output and a controlled Oracle job producing a structurally checked GLB. Those are historical results, not a new test of this integration. PR #26 passed build and public HTTP smoke but subsequently failed owner Android UI QA. Previous cumulative WORLDIFACT pilot ceiling was 6; it is not extended or re-armed by this task. See earlier revisions of this ledger for the corresponding job/hash records.
 
-## Immediate gates
-
-1. Android clean-session test: meadow portal → `/shop`.
-2. Submit one REAL 3D prompt only once.
-3. Confirm progress survives transient mobile/network failures by recovering the same job id.
-4. Confirm the completed GLB renders in-page and nothing downloads automatically.
-5. Verify the explicit GLB download button separately.
-6. Re-test `/planets`, `/lab`, `/chess`, `/iss` and `/terra` in the same Android session.
-7. Run desktop/responsive/accessibility QA.
-8. Visually review the generated GLB before any quality or manufacturing claim.
-9. Capture final launch media only after production device QA passes.
-10. Re-open official contest rules, launch guide and submission form immediately before Product Hunt scheduling/submission.
+The green checks on PR #27's old native version do not verify this revised external integration. Only checks for the final changed head apply.
 
 ## Truth boundary
 
-Use `LIVE / DEMO / PLANNED / BLOCKED` and `REAL / GENERATED / MOCK`. Never present the legacy JSON brief as a generated 3D model, a failed-fetch job as a successful artifact, procedural preview geometry as Oracle-generated geometry, `GENERATED-UNREVIEWED` as quality-approved, or a MAKE candidate as manufacturing-ready.
+Use EXTERNAL TOOL / OWNER-REPORTED WORKING for this integration until stronger evidence exists. Never describe linking or framing the Studio as migration of its accounts/backend, a new native model generator, a verified fresh AI result, manufacturing approval, an official OpenAI character, or satisfaction of competition requirements. Quality improvements and final contest scheduling remain separate work.
