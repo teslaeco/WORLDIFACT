@@ -99,20 +99,20 @@ export function makeInterior(){const group=new T.Group();group.name='FORGE_Train
  box(terminal,'keyboard',[.94,.08,.48],[0,-.02,.30],mat.blue);
  sign(terminal,'TERRA / EARTH OBSERVATION',[0,.48,.122],.89,.14);
  sign(terminal,'NILE RIVER MISSION',[0,1.02,.06],1.7,.2);
- const doors=[hatch(group,10,'LABORATORIUM'),hatch(group,20,'ŚLUZA EVA')];
+ const doors=[hatch(group,10,'LABORATORY'),hatch(group,20,'EVA AIRLOCK')];
  group.updateMatrixWorld(true);
  for(const d of doors)for(const o of [...d.group.children])if(o.name.startsWith('bulkhead_'))solids.attach(o);
- const bag=makeBag();bag.position.set(1.7,-.85,4);group.add(bag);sign(group,'TORBA Z NARZĘDZIAMI',[1.5,-.1,4],1.9,.2)?.rotateY(Math.PI);
+ const bag=makeBag();bag.position.set(1.7,-.85,4);group.add(bag);sign(group,'TOOL BAG',[1.5,-.1,4],1.9,.2)?.rotateY(Math.PI);
  const locker=box(solids,'suit_locker',[.6,2.7,1.6],[-2.6,-.2,24],mat.blue);
  const mannequin=makeAstronaut();mannequin.group.position.set(-1.9,-.55,24);mannequin.setEquipment(false,true);mannequin.group.rotation.y=Math.PI/2;group.add(mannequin.group);
- sign(group,'SKAFANDER EVA',[-1.8,1,24],1.5,.2)?.rotateY(Math.PI);
- ring(group,'airlock_portal',1.2,.12,[0,0,27.85],mat.silver);sign(group,'WYJŚCIE NA ZEWNĄTRZ',[0,1.48,27.75],2.4,.22)?.rotateY(Math.PI);
+ sign(group,'EVA SUIT',[-1.8,1,24],1.5,.2)?.rotateY(Math.PI);
+ ring(group,'airlock_portal',1.2,.12,[0,0,27.85],mat.silver);sign(group,'EXTERIOR EXIT',[0,1.48,27.75],2.4,.22)?.rotateY(Math.PI);
  const tasks={};for(const t of TASKS.filter(t=>t.zone==='inside')){const o=makeStationTask(t);o.group.rotation.y=t.pos[0]<0?Math.PI/2:-Math.PI/2;group.add(o.group);tasks[t.id]=o;}
  return {group,solids,doors,bag,mannequin,tasks};
 }
 export const EXIT=[-5.2,-4.7,0];
 export function makeExteriorTraining(){const group=new T.Group();group.name='FORGE_Exterior_Training_Overlay';const tasks={};
- const portal=new T.Group();portal.position.fromArray(EXIT);group.add(portal);ring(portal,'training_entry',.9,.09,[0,0,0],mat.blue);sign(portal,'POWRÓT DO ŚLUZY',[0,1.3,0],2.2,.25);
+ const portal=new T.Group();portal.position.fromArray(EXIT);group.add(portal);ring(portal,'training_entry',.9,.09,[0,0,0],mat.blue);sign(portal,'RETURN TO AIRLOCK',[0,1.3,0],2.2,.25);
  rod(group,'training_rail',[-8,-5.9,-.4],[-28,-5.9,-.4],.05,mat.orange);
  for(let x=-8;x>=-28;x-=2){rod(group,'rail_stanchion',[x,-5.9,-.4],[x,-6.7,-.4],.035);rod(group,'rail_tie',[x,-6.7,-.4],[x+1,-5.9,-.4],.025);}
  rod(group,'second_rail',[-8,-5.9,4.2],[-24,-5.9,4.2],.05,mat.orange);
