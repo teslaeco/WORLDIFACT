@@ -1,1 +1,98 @@
-.mpc2-shop-page{min-height:100vh}.mpc2-shop{display:grid;gap:1.25rem;padding:1rem 0 2rem}.mpc2-shop-intro{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.mpc2-shop-intro h1{margin:.25rem 0 .5rem}.mpc2-shop-intro p{max-width:760px;margin:0}.mpc2-shop-layout{display:grid;grid-template-columns:minmax(320px,.9fr) minmax(0,1.25fr);gap:1.25rem;align-items:start}.mpc2-command,.mpc2-preview{min-width:0;border:1px solid #354e59;border-radius:12px;background:#122630;padding:1rem}.mpc2-command{display:grid;gap:.85rem}.mpc2-prompt-label{font-weight:800}.mpc2-command textarea,.mpc2-command input{box-sizing:border-box;width:100%;min-width:0;border:1px solid #536b83;border-radius:8px;background:#0d1d26;color:#eef6f1;padding:.85rem;font:inherit}.mpc2-command textarea{resize:vertical;min-height:150px}.mpc2-prompt-meta{display:flex;justify-content:space-between;gap:1rem;font-size:.8rem;color:#aac0c9}.mpc2-connection,.mpc2-job{border:1px solid #35465b;border-radius:10px;padding:14px;background:#111f2d;line-height:1.5;overflow-wrap:anywhere}.mpc2-connection p,.mpc2-job p{margin:.4rem 0}.mpc2-connection small,.mpc2-job small{display:block;color:#a8bdcf}.mpc2-primary{min-height:48px;background:#e9bc73;color:#16232a;border:0;border-radius:8px;font-weight:800;padding:.7rem 1rem}.mpc2-primary:disabled{opacity:.45}.mpc2-preview{display:grid;gap:.9rem}.mpc2-preview-heading small{display:block;color:#9eb4bd;font-weight:700;letter-spacing:.08em}.mpc2-preview-heading h2{margin:.2rem 0 0}.mpc2-preview-stage{position:relative;min-height:520px;border:1px solid #294854;border-radius:10px;overflow:hidden;background:#18303c}.mpc2-preview-stage>div{min-height:520px}.mpc2-empty-preview{display:grid;place-content:center;text-align:center;padding:2rem;color:#e8f1ed}.mpc2-empty-preview p{max-width:520px;color:#c3d0d5}.mpc2-preview-actions{display:flex;gap:.6rem;flex-wrap:wrap}.mpc2-job.state-failed,.mpc2-job.state-cancelled{border-color:#aa6666}.mpc2-job.state-succeeded{border-color:#628b7d}.mpc2-shop :focus-visible{outline:2px solid #f6b17d;outline-offset:3px}@media(max-width:760px){.mpc2-shop{padding-top:.5rem}.mpc2-shop-intro{display:grid}.mpc2-shop-layout{display:flex;flex-direction:column}.mpc2-command{order:1;width:100%;box-sizing:border-box}.mpc2-preview{order:2;width:100%;box-sizing:border-box}.mpc2-preview-stage{min-height:320px}.mpc2-preview-stage>div{min-height:320px}.mpc2-command textarea{min-height:130px}.mpc2-primary{width:100%}.mpc2-shop-intro .pill{justify-self:start}}
+.froge-shop-page {
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 0 clamp(12px, 3vw, 32px) 24px;
+}
+.froge-shop-launch {
+  padding: 16px 0;
+}
+.froge-shop-launch h1 {
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  margin: 6px 0 10px;
+}
+.froge-shop-launch p {
+  max-width: 78ch;
+  margin: 10px 0;
+}
+.froge-shop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.froge-shop-actions a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  box-sizing: border-box;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.froge-shop-actions .froge-shop-open {
+  border-radius: 8px;
+  background: #e9bc73;
+  color: #14252e;
+  font-weight: 800;
+  text-decoration: none;
+}
+.froge-shop-help {
+  color: #d3e4ec;
+  line-height: 1.6;
+}
+.froge-shop-embed-section {
+  min-width: 0;
+}
+.froge-shop-embed-section h2 {
+  font-size: 1.1rem;
+  margin: 8px 0 12px;
+}
+.froge-shop-embed-shell {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #36525f;
+  border-radius: 12px;
+  background: #0d1723;
+  box-sizing: border-box;
+}
+.froge-shop-frame {
+  position: static;
+  display: block;
+  width: 100%;
+  height: 75vh;
+  height: 75dvh;
+  min-height: 360px;
+  max-height: 960px;
+  border: 0;
+}
+.froge-shop-notes {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #36525f;
+  border-radius: 10px;
+  line-height: 1.6;
+}
+.froge-shop-notes p {
+  margin: 0 0 12px;
+}
+.froge-shop-page a:focus-visible {
+  outline: 3px solid #e9bc73;
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .froge-shop-page .portal-header { gap: 8px; }
+  .froge-shop-launch { padding-top: 8px; }
+  .froge-shop-actions .froge-shop-open {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+  .froge-shop-frame { min-height: 320px; }
+}
+@media (max-height: 480px) {
+  .froge-shop-frame { min-height: 240px; }
+}
