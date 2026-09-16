@@ -1,0 +1,4 @@
+OWNER APPROVAL: 2026-09-16
+SCOPE: re-arm the already approved one-slot Enchanted AI Shop MCP2 pilot after workflow run 35105669756 was cancelled before creating any job or paid request.
+COST BOUNDARY: cumulative generation ceiling remains exactly 5 with four existing reservations; CI must not consume the remaining reservation.
+SAFETY: paid WorldBlueprint generation stays disabled; only prompt-only Oracle/Blender Shop generation may use the remaining reservation; image-to-model remains BLOCKED_UNVERIFIED.
