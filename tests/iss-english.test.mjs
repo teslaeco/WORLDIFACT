@@ -22,6 +22,15 @@ test('ISS static interface is English and preserves the DOM hooks used by its en
   assert.match(html, /src="\.\/game.js"/)
 })
 
+test('ISS in-world canvas signs are English without changing geometry identifiers', async () => {
+  const geometry = await readFile(new URL('../public/apps/iss/geometry.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(geometry, polish)
+  for (const text of ['LABORATORY', 'EVA AIRLOCK', 'TOOL BAG', 'EVA SUIT', 'EXTERIOR EXIT', 'RETURN TO AIRLOCK'])
+    assert.match(geometry, new RegExp(`'${text}'`))
+  for (const id of ['FORGE_Training_Interior', 'Terra_Observation_Computer', 'FORGE_Exterior_Training_Overlay'])
+    assert.match(geometry, new RegExp(`'${id}'`))
+})
+
 test('all eight English repair sequences keep tool IDs, consumption and ordering intact', () => {
   assert.deepEqual(ITEMS.map(item => item.id), ['hand','wrench','driver','meter','fuse','parts','patch','filter','connector'])
   assert.deepEqual(TASKS.map(task => task.id), ['rack','filter','seal','bolts','nuts','fuse','connector','solar'])
