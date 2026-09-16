@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { oracleJobApi } from '../server/oracle-jobs.ts';
 
 const owner = 'o'.repeat(40);
@@ -26,12 +27,27 @@ const post = (body: unknown, code = owner, origin = 'https://worldifact.test') =
   headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Owner': code, 'CF-Connecting-IP': '203.0.113.9' },
   body: JSON.stringify(body),
 });
+const ownerGet = (path: string, code = owner) => new Request('https://worldifact.test' + path, {
+  headers: { 'X-WORLDIFACT-Owner': code, 'CF-Connecting-IP': '203.0.113.9' },
+});
+
+function validGlb() {
+  const bytes = new Uint8Array(24);
+  const view = new DataView(bytes.buffer);
+  bytes.set([0x67, 0x6c, 0x54, 0x46], 0);
+  view.setUint32(4, 2, true);
+  view.setUint32(8, bytes.byteLength, true);
+  view.setUint32(12, 4, true);
+  view.setUint32(16, 0x4e4f534a, true);
+  bytes.set([0x7b, 0x7d, 0x20, 0x20], 20);
+  return bytes;
+}
 
 test('public Oracle job status exposes the safety gate without secrets', async () => {
   const result = await oracleJobApi(new Request('https://worldifact.test/api/oracle/jobs/status'), { ...env, ENABLE_ORACLE_JOBS: 'false' }, (() => { throw new Error('No network expected'); }) as typeof fetch);
   assert.equal(result.status, 200);
   const text = await result.text();
-  assert.match(text, /BLOCKED/); assert.match(text, /BLOCKED_UNVERIFIED/);
+  assert.match(text, /BLOCKED/); assert.match(text, /BLOCKED_UNVERIFIED/); assert.match(text, /OWNER_ONLY/);
   assert.ok(!text.includes(endpoint)); assert.ok(!text.includes(oracleToken)); assert.ok(!text.includes(owner));
 });
 
@@ -86,14 +102,46 @@ test('job submission rejects unsupported worlds, images and unreviewed connector
   assert.equal(rejected.status, 502); assert.match((await rejected.json() as { error: string }).error, /not ready/);
 });
 
-test('owner can poll an existing Oracle job without consuming the paid budget or exposing connector secrets', async () => {
+test('owner can poll an existing Oracle job without consuming the paid budget even after writes are disabled', async () => {
   budgetCalls = 0;
   const fetcher = (async (input, init) => {
     assert.equal(String(input), endpoint + '/v1/jobs/' + id); assert.equal(init?.method, 'GET');
     return Response.json({ id, state: 'building', detail: 'Blender is building geometry.' });
   }) as typeof fetch;
-  const request = new Request('https://worldifact.test/api/oracle/jobs/' + id, { headers: { 'X-WORLDIFACT-Owner': owner, 'CF-Connecting-IP': '203.0.113.9' } });
-  const response = await oracleJobApi(request, env, fetcher);
+  const response = await oracleJobApi(ownerGet('/api/oracle/jobs/' + id), { ...env, ENABLE_ORACLE_JOBS: 'false' }, fetcher);
   assert.equal(response.status, 200); assert.equal(budgetCalls, 0);
   const text = await response.text(); assert.match(text, /building/); assert.ok(!text.includes(endpoint)); assert.ok(!text.includes(oracleToken));
+});
+
+test('owner can retrieve and cryptographically identify an existing valid GLB without consuming budget', async () => {
+  budgetCalls = 0;
+  const glb = validGlb();
+  const expectedSha = createHash('sha256').update(glb).digest('hex');
+  const fetcher = (async (input, init) => {
+    assert.equal(String(input), endpoint + '/v1/jobs/' + id + '/model');
+    assert.equal(init?.method, 'GET');
+    const requestHeaders = new Headers(init?.headers);
+    assert.equal(requestHeaders.get('Authorization'), `Bearer ${oracleToken}`);
+    assert.equal(requestHeaders.get('Accept'), 'model/gltf-binary');
+    return new Response(glb, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(glb.byteLength) } });
+  }) as typeof fetch;
+  const response = await oracleJobApi(ownerGet('/api/oracle/jobs/' + id + '/model'), { ...env, ENABLE_ORACLE_JOBS: 'false' }, fetcher);
+  assert.equal(response.status, 200); assert.equal(budgetCalls, 0);
+  assert.equal(response.headers.get('Content-Type'), 'model/gltf-binary');
+  assert.equal(response.headers.get('X-WORLDIFACT-SHA256'), expectedSha);
+  assert.equal(response.headers.get('X-WORLDIFACT-Provenance'), 'GENERATED-UNREVIEWED');
+  assert.match(response.headers.get('Content-Disposition') || '', new RegExp(id));
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), glb);
+});
+
+test('artifact proxy rejects invalid or oversized Oracle model responses without leaking upstream bodies', async () => {
+  budgetCalls = 0;
+  const bad = new Uint8Array(24);
+  const invalid = await oracleJobApi(ownerGet('/api/oracle/jobs/' + id + '/model'), env,
+    (async () => new Response(bad, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(bad.byteLength) } })) as typeof fetch);
+  assert.equal(invalid.status, 502);
+  assert.match((await invalid.json() as { error: string }).error, /unavailable or invalid/);
+  const oversized = await oracleJobApi(ownerGet('/api/oracle/jobs/' + id + '/model'), env,
+    (async () => new Response(null, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(13 * 1024 * 1024) } })) as typeof fetch);
+  assert.equal(oversized.status, 502); assert.equal(budgetCalls, 0);
 });
