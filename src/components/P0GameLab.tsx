@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Group } from 'three'
 import StartingWorld from './StartingWorld'
+import OracleModelPreview from './OracleModelPreview'
 import { demoBlueprint, localSceneResult, meadowBlueprint, validateGenerationResult } from '../lib/blueprint'
 import type { GenerationResult, WorldBlueprint } from '../lib/blueprint'
 import { saveArchive } from '../lib/archive'
@@ -17,11 +18,36 @@ function download(data: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 
+function wait(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      window.clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 type Health = { generationReady?: boolean; accessRequired?: boolean; publicPilot?: boolean; model?: string | null }
+type OracleJobGate = { mode?: string; prompt?: string; image?: string; artifactRead?: string; note?: string }
+type OracleJob = { id: string; state: string; detail?: string }
+type OracleArtifact = { jobId: string; blob: Blob; url: string; sha256: string; provenance: string }
 type StudioSurface = 'lab' | 'shop'
+type BusyKind = 'astra' | 'oracle' | null
 
 type Props = {
   surface?: StudioSurface
+}
+
+function parseOracleJob(value: unknown, expectedId: string): OracleJob {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Oracle returned an invalid job response.')
+  const job = value as Record<string, unknown>
+  if (job.id !== expectedId || typeof job.state !== 'string') throw new Error('Oracle returned an invalid job response.')
+  return { id: expectedId, state: job.state, ...(typeof job.detail === 'string' ? { detail: job.detail } : {}) }
 }
 
 export default function P0GameLab({ surface = 'lab' }: Props) {
@@ -31,28 +57,46 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
   const [blueprint, setBlueprint] = useState<WorldBlueprint>(() => meadowBlueprint())
   const [result, setResult] = useState<GenerationResult | null>(null)
   const [health, setHealth] = useState<Health>({})
+  const [oracleGate, setOracleGate] = useState<OracleJobGate | null>(null)
+  const [oracleJob, setOracleJob] = useState<OracleJob | null>(null)
+  const [oracleArtifact, setOracleArtifact] = useState<OracleArtifact | null>(null)
+  const [ownerAccess, setOwnerAccess] = useState('')
   const [prompt, setPrompt] = useState(shop
     ? 'Design a blue solar rover collectible for a game world and a display concept.'
     : 'Design a solar exploration workshop with a rover beside a restored forest.')
   const [image, setImage] = useState<string | null>(null)
   const [accessCode, setAccessCode] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busyKind, setBusyKind] = useState<BusyKind>(null)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState('')
   const abort = useRef<AbortController | null>(null)
+  const busy = busyKind !== null
 
   useEffect(() => {
-    fetch('/api/health', { cache: 'no-store' })
+    const controller = new AbortController()
+    fetch('/api/health', { cache: 'no-store', signal: controller.signal })
       .then(r => r.ok ? r.json() : null)
       .then(v => setHealth(v || {}))
-      .catch(() => setHealth({ generationReady: false }))
-  }, [])
+      .catch(() => { if (!controller.signal.aborted) setHealth({ generationReady: false }) })
+    if (shop) {
+      fetch('/api/oracle/jobs/status', { cache: 'no-store', signal: controller.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(v => setOracleGate(v || { mode: 'BLOCKED' }))
+        .catch(() => { if (!controller.signal.aborted) setOracleGate({ mode: 'BLOCKED' }) })
+    }
+    return () => controller.abort()
+  }, [shop])
+
   useEffect(() => {
     if (!busy) return
     const started = Date.now()
     const timer = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 500)
     return () => window.clearInterval(timer)
   }, [busy])
+
+  useEffect(() => () => {
+    if (oracleArtifact?.url) URL.revokeObjectURL(oracleArtifact.url)
+  }, [oracleArtifact])
 
   async function pickImage(file?: File) {
     setError(''); setImage(null)
@@ -86,7 +130,7 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
 
   async function generateLive() {
     if (busy) return
-    setBusy(true); setSeconds(0); setError('')
+    setBusyKind('astra'); setSeconds(0); setError('')
     const controller = new AbortController(); abort.current = controller
     const timeout = window.setTimeout(() => controller.abort(), 40_000)
     try {
@@ -110,7 +154,79 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
     } catch (e) {
       setError(e instanceof Error && e.name === 'AbortError' ? 'Generation timed out; the previous scene is unchanged.' : e instanceof Error ? e.message : 'Generation failed.')
     } finally {
-      window.clearTimeout(timeout); abort.current = null; setBusy(false)
+      window.clearTimeout(timeout); abort.current = null; setBusyKind(null)
+    }
+  }
+
+  async function generateOracleModel() {
+    if (busy || !shop) return
+    setError('')
+    if (oracleGate?.mode !== 'OWNER_ONLY') {
+      setError('REAL 3D model generation is still blocked by the production safety gate.')
+      return
+    }
+    if (prompt.trim().length < 3 || prompt.length > 2000) {
+      setError('Use a prompt between 3 and 2000 characters.')
+      return
+    }
+    if (image) {
+      setError('The reviewed Oracle connector currently accepts prompt-only 3D jobs. Remove the reference image for a REAL model job; image-to-model remains BLOCKED_UNVERIFIED.')
+      return
+    }
+    const owner = ownerAccess.trim()
+    if (owner.length < 32 || owner.length > 256) {
+      setError('Enter the owner generation code (32–256 characters). It is not saved in browser storage.')
+      return
+    }
+
+    setBusyKind('oracle'); setSeconds(0); setOracleJob(null)
+    const controller = new AbortController(); abort.current = controller
+    const id = crypto.randomUUID()
+    setOwnerAccess('')
+    try {
+      const submit = await fetch('/api/oracle/jobs', {
+        method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Owner': owner },
+        body: JSON.stringify({ worldId: 'enchanted-ai-shop', id, prompt: prompt.trim() }),
+      })
+      const submitted = await submit.json() as { error?: string; job?: unknown }
+      if (!submit.ok) throw new Error(submitted.error || `Oracle job submission failed (HTTP ${submit.status}).`)
+      let job = parseOracleJob(submitted.job, id)
+      setOracleJob(job)
+
+      for (let attempt = 0; job.state !== 'succeeded' && attempt < 80; attempt++) {
+        if (['failed', 'cancelled'].includes(job.state)) throw new Error(job.detail || `Oracle job ${job.state}.`)
+        await wait(6000, controller.signal)
+        const status = await fetch(`/api/oracle/jobs/${id}`, {
+          headers: { 'X-WORLDIFACT-Owner': owner, Accept: 'application/json' },
+          cache: 'no-store', signal: controller.signal,
+        })
+        const statusBody = await status.json() as { error?: string; job?: unknown }
+        if (!status.ok) throw new Error(statusBody.error || `Oracle job status failed (HTTP ${status.status}).`)
+        job = parseOracleJob(statusBody.job, id)
+        setOracleJob(job)
+      }
+      if (job.state !== 'succeeded') throw new Error(`Oracle job is still ${job.state} after 8 minutes. The server job may continue, but no model was downloaded automatically.`)
+
+      const modelResponse = await fetch(`/api/oracle/jobs/${id}/model`, {
+        headers: { 'X-WORLDIFACT-Owner': owner, Accept: 'model/gltf-binary' },
+        cache: 'no-store', signal: controller.signal,
+      })
+      if (!modelResponse.ok) {
+        const modelError = await modelResponse.json().catch(() => null) as { error?: string } | null
+        throw new Error(modelError?.error || `Generated GLB is unavailable (HTTP ${modelResponse.status}).`)
+      }
+      const blob = await modelResponse.blob()
+      if (blob.size < 20) throw new Error('Generated GLB is unexpectedly empty.')
+      const url = URL.createObjectURL(blob)
+      const sha256 = modelResponse.headers.get('X-WORLDIFACT-SHA256') || 'server-verified hash unavailable to browser'
+      const provenance = modelResponse.headers.get('X-WORLDIFACT-Provenance') || 'GENERATED-UNREVIEWED'
+      setOracleArtifact({ jobId: id, blob, url, sha256, provenance })
+      setResult(null)
+    } catch (e) {
+      setError(e instanceof Error && e.name === 'AbortError' ? '3D generation was cancelled in this browser. No automatic download was started.' : e instanceof Error ? e.message : '3D model generation failed.')
+    } finally {
+      abort.current = null; setBusyKind(null)
     }
   }
 
@@ -129,17 +245,18 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
 
   const spec = result?.assetSpec
   const live = result?.mode === 'LIVE' && result.provenance === 'GENERATED'
+  const realModel = shop ? oracleArtifact : null
   return <div className="studio">
     <div className="studio-heading">
       <div>
         <span className="eyebrow">{shop ? 'ENCHANTED AI SHOP · NATIVE' : 'AI GAME LAB · P0'}</span>
-        <h1>{shop ? 'Create a concept. See it in 3D before any download.' : 'Ideas become playable worlds.'}</h1>
+        <h1>{shop ? 'Create a real 3D model, or preview a no-cost concept.' : 'Ideas become playable worlds.'}</h1>
       </div>
-      <span className="pill">{health.generationReady ? (health.publicPilot ? 'LIVE public Astra pilot' : 'LIVE Astra preview') : 'DEMO only'}</span>
+      <span className="pill">{shop && oracleGate?.mode === 'OWNER_ONLY' ? 'REAL 3D owner pilot available' : health.generationReady ? (health.publicPilot ? 'LIVE public Astra pilot' : 'LIVE Astra preview') : 'DEMO only'}</span>
     </div>
     {shop ? <nav className="world-tabs" aria-label="Enchanted AI Shop views">
       <span className="active" aria-current="page">WORLDIFACT Shop Studio</span>
-      <a href={REFERENCE_LINKS.shopLegacy} target="_blank" rel="noreferrer">Legacy Forge Studio ↗</a>
+      <a href={REFERENCE_LINKS.shopLegacy} target="_blank" rel="noreferrer">Legacy Forge Studio · brief export only ↗</a>
       <Link to="/make">Manufacturing audit</Link>
       <Link to="/lab">AI Game Lab</Link>
     </nav> : <nav className="world-tabs" aria-label="AI Game Lab views">
@@ -149,18 +266,25 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
       <Link to="/shop">AI Shop</Link>
     </nav>}
     <p><strong>{shop
-      ? 'PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → 3D PRODUCT PREVIEW → GAME / MAKE'
+      ? 'PROMPT → GPT-6 ASTRA / ORACLE → BLENDER JOB → REAL GLB → IN-PAGE 3D PREVIEW → EXPLICIT DOWNLOAD · IMAGE-TO-MODEL PENDING CONNECTOR VALIDATION'
       : 'PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → SCENE CHANGE → GAME / MAKE'}</strong></p>
     <p className="result-note">{shop
-      ? 'This native shop does not auto-download a project file. A preview appears on the page first; downloads happen only from explicit Export / Download buttons.'
+      ? 'The WORLDIFACT Shop is the generation surface. The legacy Forge Studio button from your screenshot only exports a JSON project brief; it is kept as a labelled reference and is not proof of model generation.'
       : 'You are already inside AI Game Lab. Its portal is marked YOU ARE HERE; the other four portals open their worlds.'}</p>
     <div className="studio-layout">
       <div className="studio-scene">
-        <StartingWorld blueprint={blueprint} activePortalId={currentPortalId} onPortalOpen={(id) => navigate(routeForPortal(id))} />
+        {realModel
+          ? <OracleModelPreview url={realModel.url} label="REAL generated Oracle Blender GLB preview" />
+          : <StartingWorld blueprint={blueprint} activePortalId={currentPortalId} onPortalOpen={(id) => navigate(routeForPortal(id))} />}
         <div className="scene-toolbar">
-          <button onClick={exportGameGlb}>Export GAME · procedural GLB</button>
-          <button onClick={() => download(new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' }), shop ? 'WORLDIFACT-Shop-WorldBlueprint.json' : 'WORLDIFACT-WorldBlueprint.json')}>Download WorldBlueprint</button>
-          {spec ? <button onClick={() => download(new Blob([JSON.stringify(spec, null, 2)], { type: 'application/json' }), shop ? 'WORLDIFACT-Shop-AssetSpec.json' : 'WORLDIFACT-AssetSpec.json')}>Download AssetSpec</button> : null}
+          {realModel ? <>
+            <button onClick={() => download(realModel.blob, `WORLDIFACT-Shop-${realModel.jobId}.glb`)}>Download REAL generated GLB</button>
+            <button onClick={() => setOracleArtifact(null)}>Return to concept scene</button>
+          </> : <>
+            <button onClick={exportGameGlb}>Export GAME · procedural GLB</button>
+            <button onClick={() => download(new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' }), shop ? 'WORLDIFACT-Shop-WorldBlueprint.json' : 'WORLDIFACT-WorldBlueprint.json')}>Download WorldBlueprint</button>
+            {spec ? <button onClick={() => download(new Blob([JSON.stringify(spec, null, 2)], { type: 'application/json' }), shop ? 'WORLDIFACT-Shop-AssetSpec.json' : 'WORLDIFACT-AssetSpec.json')}>Download AssetSpec</button> : null}
+          </>}
         </div>
       </div>
       <aside className="creator-panel">
@@ -171,18 +295,39 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
         </div>
         <label>Reference image · optional<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
         {image ? <><img className="reference-preview" src={image} alt="Selected reference" /><button disabled={busy} onClick={() => setImage(null)}>Remove reference</button></> : null}
-        {!health.generationReady && image ? <small>The selected image is shown locally, but the no-cost DEMO uses the text prompt only. Image understanding requires a future LIVE Astra allowance.</small> : null}
+        {shop && image ? <small>Reference-image understanding works only on the Astra blueprint path today. REAL Oracle/Blender model jobs are prompt-only until image input is verified end-to-end.</small> : !health.generationReady && image ? <small>The selected image is shown locally, but the no-cost DEMO uses the text prompt only. Image understanding requires a future LIVE Astra allowance.</small> : null}
+
+        {shop ? <>
+          <span className="eyebrow">REAL 3D · ASTRA + ORACLE + BLENDER</span>
+          {oracleGate?.mode === 'OWNER_ONLY' ? <>
+            <label>Owner generation code<input type="password" minLength={32} maxLength={256} autoComplete="off" value={ownerAccess} disabled={busy} onChange={e => setOwnerAccess(e.target.value)} /><small>Used only for this model job and cleared from the field when generation starts.</small></label>
+            <button className="primary" disabled={busy || !!image} onClick={() => void generateOracleModel()}>{busyKind === 'oracle' ? `REAL 3D · ${oracleJob?.state || 'starting'} · ${seconds}s` : 'Generate REAL 3D model · Astra + Blender'}</button>
+          </> : <button className="primary" disabled>REAL 3D generation locked</button>}
+          <p className="result-note">{oracleGate?.mode === 'OWNER_ONLY'
+            ? 'The server can submit a prompt-only Oracle/Blender job. The GLB is fetched into the page and rendered first; downloading remains an explicit action.'
+            : oracleGate?.note || 'Production Oracle model writes are disabled until an explicit cost-approved pilot is enabled.'}</p>
+          {oracleJob ? <p role="status" className="result-note">Oracle job: <strong>{oracleJob.state}</strong>{oracleJob.detail ? ` · ${oracleJob.detail}` : ''}</p> : null}
+        </> : null}
+
         {health.accessRequired ? <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /><small>Temporary maker preview gate; a hard-capped public pilot does not require login.</small></label> : null}
-        <button className="primary" disabled={busy || !health.generationReady} onClick={() => void generateLive()}>{busy ? `Astra working · ${seconds}s` : shop ? 'Create product concept with GPT-6 Astra' : 'Create with GPT-6 Astra'}</button>
+        <button className={shop ? '' : 'primary'} disabled={busy || !health.generationReady} onClick={() => void generateLive()}>{busyKind === 'astra' ? `Astra working · ${seconds}s` : shop ? 'Create Astra product specification' : 'Create with GPT-6 Astra'}</button>
         <button disabled={busy} onClick={() => generateDemo()}>{shop ? 'Generate DEMO concept · no download' : 'Try DEMO locally · no API cost'}</button>
-        {busy ? <button onClick={() => abort.current?.abort()}>Cancel</button> : null}
+        {busy ? <button onClick={() => abort.current?.abort()}>Cancel current generation</button> : null}
         {error ? <p role="alert" className="error">{error}</p> : null}
-        {!health.generationReady ? <p className="result-note">LIVE Astra is currently blocked by the exhausted pilot quota. DEMO works locally, changes the 3D preview and is clearly labelled MOCK.</p> : null}
+        {!health.generationReady ? <p className="result-note">LIVE Astra blueprint generation is currently blocked by the exhausted pilot quota. DEMO remains local and clearly labelled MOCK.</p> : null}
       </aside>
     </div>
+
+    {realModel ? <section className="generation-evidence" aria-label="Real generated model evidence">
+      <span className="eyebrow">REAL 3D MODEL OUTPUT</span>
+      <p><strong>LIVE · {realModel.provenance}</strong> · Oracle job <code>{realModel.jobId}</code></p>
+      <p>Server-validated GLB: {realModel.blob.size.toLocaleString()} bytes. SHA-256: <code>{realModel.sha256}</code></p>
+      <p><small>This is a generated 3D artifact, not a manufacturing approval. Geometry, likeness, topology, textures, scale and MAKE suitability still require review.</small></p>
+    </section> : null}
+
     <section className="generation-evidence" aria-label={shop ? 'Product concept result' : 'World generation result'}>
       <span className="eyebrow">{shop ? 'PRODUCT CONCEPT OUTPUT' : 'WORLD OUTPUT'}</span>
-      {!result ? <p>{shop ? 'No concept yet. Enter a prompt and use DEMO to preview on-page without downloading a file.' : 'No result yet. The current scene is the starting state.'}</p> : <>
+      {!result ? <p>{shop ? (realModel ? 'A REAL GLB is shown above. Astra/DEMO specification output is separate.' : 'No concept specification yet. DEMO can preview a local concept without downloading a file.') : 'No result yet. The current scene is the starting state.'}</p> : <>
         <p><strong>{live ? 'LIVE · GENERATED' : 'DEMO · MOCK'}</strong>{live ? ` · ${result.model} · request ${result.requestId.slice(0, 12)}…` : ' · local no-cost fallback'}</p>
         <div className="workflow-pair">
           <article><span className="eyebrow">GAME · {live ? 'GENERATED SPEC' : 'MOCK SPEC'} / PROCEDURAL PREVIEW</span><h3>{spec?.name ?? result.blueprint.title}</h3><p>{spec?.game.gameplayRole}</p><p>{spec?.game.materialPlan}</p><p>{spec?.game.animationPlan}</p></article>
