@@ -50,11 +50,10 @@ test('simulated LIVE Astra result returns validated blueprint and AssetSpec', as
     body: JSON.stringify({ prompt: 'moon workshop', mode: 'live' }),
   }), liveEnv, provider)
   assert.equal(response.status, 200)
-  const result = await response.json()
-  validateGenerationResult(result)
+  const result = validateGenerationResult(await response.json())
   assert.equal(result.mode, 'LIVE')
   assert.equal(result.provenance, 'GENERATED')
-  assert.equal(result.assetSpec.make.validationStatus, 'validation-required')
+  assert.equal(result.assetSpec?.make.validationStatus, 'validation-required')
   assert.equal(sent.model, 'gpt-6-astra')
   assert.deepEqual(sent.text.format.schema.required, ['blueprint', 'assetSpec'])
 })
