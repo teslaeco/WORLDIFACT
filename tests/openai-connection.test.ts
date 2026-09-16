@@ -6,7 +6,7 @@ import type { WorkerSecrets } from "../scripts/connect-openai.ts";
 const key = "sk-test-" + "a".repeat(40);
 const access = "b".repeat(40);
 const validConfig = (): { name: string; vars: Record<string, string> } => ({ name: "worldifact", vars: {
-  OPENAI_MODEL: "gpt-6-astra", ENABLE_PAID_GENERATION: "false",
+  OPENAI_MODEL: "gpt-6-astra", ENABLE_PAID_GENERATION: "false", ENABLE_ORACLE_JOBS: "false",
   GENERATION_REQUEST_LIMIT: "0", GENERATION_EXPIRES_AT: "",
 } });
 const ok = () => Response.json({ id: "gpt-6-astra", object: "model" });
@@ -20,8 +20,8 @@ test("automatic connection is BLOCKED without a key and makes no external call",
 
 test("automation refuses paid or altered production configuration", () => {
   checkDemoConfig(validConfig());
-  for (const [field, value] of [["ENABLE_PAID_GENERATION", "true"], ["GENERATION_REQUEST_LIMIT", "2"],
-    ["GENERATION_EXPIRES_AT", "2026-10-01T00:00:00Z"], ["OPENAI_MODEL", "other-model"]]) {
+  for (const [field, value] of [["ENABLE_PAID_GENERATION", "true"], ["ENABLE_ORACLE_JOBS", "true"],
+    ["GENERATION_REQUEST_LIMIT", "2"], ["GENERATION_EXPIRES_AT", "2026-10-01T00:00:00Z"], ["OPENAI_MODEL", "other-model"]]) {
     const config = validConfig();
     config.vars[field] = value;
     assert.throws(() => checkDemoConfig(config), /DEMO configuration/);

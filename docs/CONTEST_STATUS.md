@@ -1,6 +1,6 @@
 # Contest status — foundation integration, 16 September 2026
 
-Decision: **Public DEMO exists; final contest readiness is NO-GO.** Paid generation remains disabled. The preserved Oracle Blender service is now connected to WORLDIFACT in production as one shared read-only backend for the five primary worlds.
+Decision: **Public DEMO exists; final contest readiness is NO-GO.** Paid generation remains disabled. The preserved Oracle Blender service is connected to WORLDIFACT in production as one shared read-only backend for the five primary worlds. A reviewed owner-only Oracle job path is prepared behind a separate disabled production gate.
 
 | Item | Status | Evidence / remaining work |
 |---|---|---|
@@ -13,27 +13,31 @@ Decision: **Public DEMO exists; final contest readiness is NO-GO.** Paid generat
 | Eight Planets campaign | INCOMPLETE | Existing FORGE World Builder is the supplied foundation; eight finished platform levels have not been demonstrated |
 | Chess shop | PARTIAL | Existing shop connected as a tab. Direct board/piece-to-catalog transfer and automated ordering still need implementation |
 | Oracle VM | LIVE HEALTH VERIFIED; STORAGE CLEANED | Existing `froge-blender` VM is active. Owner-run authenticated health returned `ready=true`, provider `openai`, model `gpt-6-astra`, connector `33`, character standard `20`. This is service-health evidence, not a render/generation proof |
-| Five-world Oracle bridge | DEPLOYED READ-ONLY | One server-side authenticated `/v1/health` check is shared across Chess, ISS, Planets, Shop and Game Lab. Secrets stay server-side; `/control` shows sanitized per-world status. No generation/render/job request is made by the bridge |
+| Five-world Oracle bridge | DEPLOYED READ-ONLY | One server-side authenticated `/v1/health` check is shared across Chess, ISS, Planets, Shop and Game Lab. Secrets stay server-side; `/control` shows sanitized per-world status. No generation/render/job request is made by the deployed bridge |
+| Oracle job write path | REVIEWED BRANCH; GREEN CI; BLOCKED | PR #12 / `feat/oracle-job-gate-20260916` adds owner-only prompt job submit/poll routes against the verified `/v1/jobs` connector contract. Exact-head run `35038681965` passed verify, foundation assembly and Worker dry-run. `ENABLE_ORACLE_JOBS=false` is required by automatic releases, so no job or provider cost can occur from this configuration. Image-to-Oracle is `BLOCKED_UNVERIFIED` |
 | OpenAI | CONFIGURED; PAID OFF | Deployment synchronized the OpenAI secret and verified model access. `ENABLE_PAID_GENERATION=false`; allowance remains 0; no paid generation was performed |
 | LIVE Astra evidence | ABSENT FOR WORLDIFACT GENERATION | The deployed bridge proves model/service configuration only. A controlled LIVE Astra generation still requires explicit spending authorization and separate evidence |
-| Verification | 71/71 PASS + DEPLOY SMOKE PASS | Exact-head tests, lint, typecheck, build, foundation assembly, Worker dry-run and production release smoke passed. Release smoke verified 13 HTML routes, 17 hub assets and 102 original app entries/assets without a paid API call |
-| Browser/device | BLOCKED / NEXT GATE | Clean-session verification of `/api/platform/oracle-worlds`, `/control` and physical Android/WebGL remains outstanding |
+| Verification | PRODUCTION PASS + PR #12 PASS | Current production baseline passed 71 tests and deployment smoke. PR #12 exact-head run `35038681965` also passed `npm run verify`, foundation builds and `deploy:check` with both paid/write gates disabled |
+| Browser/device | PARTIAL | Owner screenshot confirms `/control` on Android shows all five Oracle cards `Connector ready` with v33 / character standard 20 / OpenAI / gpt-6-astra. Full WebGL interaction/FPS/accessibility QA remains outstanding |
 | Source models / MAKE | NOT APPROVED | Preserved models are GAME/design assets unless separately validated for manufacturing |
 | Launch materials | DRAFT | Final screenshots/video, final Product Hunt form/rules review and LIVE Astra proof remain outstanding |
 
 ## Current Oracle bridge milestone
 
-The deployed topology is now: **one Oracle backend, five WORLDIFACT worlds, one Cloudflare Worker gateway**. The browser never receives the Oracle bearer credential or Quick Tunnel URL. `ORACLE_ENDPOINT`, `ORACLE_API_TOKEN` and `OWNER_ACCESS_TOKEN` are stored in the GitHub `production` environment and were synchronized into the Worker during deployment run `35036960083`.
+The deployed topology is: **one Oracle backend, five WORLDIFACT worlds, one Cloudflare Worker gateway**. The browser never receives the Oracle bearer credential or Quick Tunnel URL. `ORACLE_ENDPOINT`, `ORACLE_API_TOKEN` and `OWNER_ACCESS_TOKEN` are stored in the GitHub `production` environment and were synchronized into the Worker during deployment run `35036960083`.
 
-Deployment evidence: main `bfc187a1cf795487c0f6c5614b1623f4a0c35380`, Cloudflare version `99ded65a-89b6-4372-98cc-931c3aa0cb5c`, release smoke PASS. The bridge is intentionally read-only and cannot create a model, render a scene or submit a Blender job.
+Deployment evidence: main `bfc187a1cf795487c0f6c5614b1623f4a0c35380`, Cloudflare version `99ded65a-89b6-4372-98cc-931c3aa0cb5c`, release smoke PASS. The deployed bridge is intentionally read-only.
+
+PR #12 fixes the top Oracle status card to use the same verified shared health result as the five world cards and prepares a separate `/api/oracle/jobs` write path. That path is owner-only, same-origin, rate-limited, requires connector v33 + OpenAI + `gpt-6-astra`, supports prompt-only input under the verified public connector contract, and remains blocked unless `ENABLE_ORACLE_JOBS=true`. Automatic releases require that flag to remain `false`.
 
 ## Next concrete gates
 
-1. From a clean browser session, verify `https://worldifact.xodobrox.workers.dev/api/platform/oracle-worlds` and `/control`, confirming all five world IDs report the shared Oracle status without exposing secrets.
-2. Add reviewed authenticated write paths world-by-world only after the read-only bridge is stable. Do not route job creation from all five worlds at once without tests and rollback.
-3. Preserve `ENABLE_PAID_GENERATION=false` until an explicit controlled Astra budget is approved; then produce one end-to-end LIVE proof: prompt/image → Astra → structured blueprint/spec → visible scene change → separate GAME/MAKE plans.
-4. Complete physical Android/browser QA and accessibility checks.
-5. Re-open the official Product Hunt contest page and submission form, then finalize media, Maker Comment, Shoutouts, topics and the scheduled 18 September launch.
+1. PR #12 has green exact-head CI. Do not merge/deploy it without explicit owner approval; production remains on the deployed read-only bridge.
+2. Keep `ENABLE_ORACLE_JOBS=false` and `ENABLE_PAID_GENERATION=false` in production until a controlled cost-approved pilot. The prepared job path is not LIVE generation evidence while blocked.
+3. Before any paid pilot, verify the running v33 job contract directly on Oracle, choose one world (AI Game Lab first), define a request ceiling/expiry, then enable only the reviewed path.
+4. Produce one end-to-end LIVE proof after budget approval: prompt + optional image → Astra → structured blueprint/spec → visible scene change; Oracle/Blender prompt job is a separate model-generation step and image-to-Oracle remains blocked until verified.
+5. Complete physical Android/WebGL interaction, accessibility and fallback QA.
+6. Re-open the official Product Hunt contest page and submission form, then finalize media, Maker Comment, Shoutouts, topics and the scheduled 18 September launch.
 
 ## Platform integration continuation
 

@@ -1,5 +1,6 @@
 import { platformApi } from "./platform.ts";
 import type { PlatformEnv } from "./platform.ts";
+import { oracleJobApi } from "./oracle-jobs.ts";
 import {
   blueprintSchema,
   demoBlueprint,
@@ -91,6 +92,8 @@ export async function handle(
   fetcher: typeof fetch = fetch,
 ): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname.startsWith("/api/oracle/jobs"))
+    return oracleJobApi(request, env, fetcher);
   if (url.pathname === "/api/platform" || url.pathname.startsWith("/api/platform/"))
     return platformApi(request, env, fetcher);
   const configured =
