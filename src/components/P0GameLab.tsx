@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Group } from 'three'
 import StartingWorld from './StartingWorld'
 import { demoBlueprint, localSceneResult, meadowBlueprint, validateGenerationResult } from '../lib/blueprint'
@@ -18,13 +18,22 @@ function download(data: Blob, name: string) {
 }
 
 type Health = { generationReady?: boolean; accessRequired?: boolean; publicPilot?: boolean; model?: string | null }
+type StudioSurface = 'lab' | 'shop'
 
-export default function P0GameLab() {
+type Props = {
+  surface?: StudioSurface
+}
+
+export default function P0GameLab({ surface = 'lab' }: Props) {
   const navigate = useNavigate()
+  const shop = surface === 'shop'
+  const currentPortalId = shop ? 'enchanted-ai-shop' : 'ai-game-lab'
   const [blueprint, setBlueprint] = useState<WorldBlueprint>(() => meadowBlueprint())
   const [result, setResult] = useState<GenerationResult | null>(null)
   const [health, setHealth] = useState<Health>({})
-  const [prompt, setPrompt] = useState('Design a solar exploration workshop with a rover beside a restored forest.')
+  const [prompt, setPrompt] = useState(shop
+    ? 'Design a blue solar rover collectible for a game world and a display concept.'
+    : 'Design a solar exploration workshop with a rover beside a restored forest.')
   const [image, setImage] = useState<string | null>(null)
   const [accessCode, setAccessCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -66,7 +75,9 @@ export default function P0GameLab() {
     }
     const demo = localSceneResult(
       demoBlueprint(input),
-      'DEMO / MOCK local scene. No GPT-6 Astra request was made; MAKE remains validation-required.',
+      shop
+        ? 'DEMO / MOCK local product concept. No GPT-6 Astra request was made; no order was placed and MAKE remains validation-required.'
+        : 'DEMO / MOCK local scene. No GPT-6 Astra request was made; MAKE remains validation-required.',
     )
     setPrompt(input)
     setBlueprint(demo.blueprint)
@@ -111,7 +122,7 @@ export default function P0GameLab() {
       for (const object of blueprint.objects) scene.add(createWorldObject(object))
       try {
         const output = await new GLTFExporter().parseAsync(scene, { binary: true })
-        download(new Blob([output as ArrayBuffer], { type: 'model/gltf-binary' }), 'WORLDIFACT-GAME-procedural.glb')
+        download(new Blob([output as ArrayBuffer], { type: 'model/gltf-binary' }), shop ? 'WORLDIFACT-SHOP-GAME-procedural.glb' : 'WORLDIFACT-GAME-procedural.glb')
       } finally { disposeObject(scene) }
     } catch { setError('GAME GLB export failed; the generated scene is still available.') }
   }
@@ -120,44 +131,58 @@ export default function P0GameLab() {
   const live = result?.mode === 'LIVE' && result.provenance === 'GENERATED'
   return <div className="studio">
     <div className="studio-heading">
-      <div><span className="eyebrow">AI GAME LAB · P0</span><h1>Ideas become playable worlds.</h1></div>
+      <div>
+        <span className="eyebrow">{shop ? 'ENCHANTED AI SHOP · NATIVE' : 'AI GAME LAB · P0'}</span>
+        <h1>{shop ? 'Create a concept. See it in 3D before any download.' : 'Ideas become playable worlds.'}</h1>
+      </div>
       <span className="pill">{health.generationReady ? (health.publicPilot ? 'LIVE public Astra pilot' : 'LIVE Astra preview') : 'DEMO only'}</span>
     </div>
-    <nav className="world-tabs" aria-label="AI Game Lab views">
+    {shop ? <nav className="world-tabs" aria-label="Enchanted AI Shop views">
+      <span className="active" aria-current="page">WORLDIFACT Shop Studio</span>
+      <a href={REFERENCE_LINKS.shopLegacy} target="_blank" rel="noreferrer">Legacy Forge Studio ↗</a>
+      <Link to="/make">Manufacturing audit</Link>
+      <Link to="/lab">AI Game Lab</Link>
+    </nav> : <nav className="world-tabs" aria-label="AI Game Lab views">
       <span className="active" aria-current="page">WORLDIFACT P0</span>
       <a href={REFERENCE_LINKS.gameLabPublic} target="_blank" rel="noreferrer">World #5 · Forge Studio ↗</a>
       <a href={REFERENCE_LINKS.gameLabSource} target="_blank" rel="noreferrer">ForgeMCP source ↗</a>
-    </nav>
-    <p><strong>PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → SCENE CHANGE → GAME / MAKE</strong></p>
-    <p className="result-note">You are already inside AI Game Lab. Its portal is marked YOU ARE HERE; the other four portals open their worlds.</p>
+      <Link to="/shop">AI Shop</Link>
+    </nav>}
+    <p><strong>{shop
+      ? 'PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → 3D PRODUCT PREVIEW → GAME / MAKE'
+      : 'PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → SCENE CHANGE → GAME / MAKE'}</strong></p>
+    <p className="result-note">{shop
+      ? 'This native shop does not auto-download a project file. A preview appears on the page first; downloads happen only from explicit Export / Download buttons.'
+      : 'You are already inside AI Game Lab. Its portal is marked YOU ARE HERE; the other four portals open their worlds.'}</p>
     <div className="studio-layout">
       <div className="studio-scene">
-        <StartingWorld blueprint={blueprint} activePortalId="ai-game-lab" onPortalOpen={(id) => navigate(routeForPortal(id))} />
+        <StartingWorld blueprint={blueprint} activePortalId={currentPortalId} onPortalOpen={(id) => navigate(routeForPortal(id))} />
         <div className="scene-toolbar">
           <button onClick={exportGameGlb}>Export GAME · procedural GLB</button>
-          <button onClick={() => download(new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' }), 'WORLDIFACT-WorldBlueprint.json')}>Download WorldBlueprint</button>
-          {spec ? <button onClick={() => download(new Blob([JSON.stringify(spec, null, 2)], { type: 'application/json' }), 'WORLDIFACT-AssetSpec.json')}>Download AssetSpec</button> : null}
+          <button onClick={() => download(new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' }), shop ? 'WORLDIFACT-Shop-WorldBlueprint.json' : 'WORLDIFACT-WorldBlueprint.json')}>Download WorldBlueprint</button>
+          {spec ? <button onClick={() => download(new Blob([JSON.stringify(spec, null, 2)], { type: 'application/json' }), shop ? 'WORLDIFACT-Shop-AssetSpec.json' : 'WORLDIFACT-AssetSpec.json')}>Download AssetSpec</button> : null}
         </div>
       </div>
       <aside className="creator-panel">
-        <span className="eyebrow">WORLD INPUT</span>
+        <span className="eyebrow">{shop ? 'PRODUCT INPUT' : 'WORLD INPUT'}</span>
         <label>Prompt<textarea rows={6} maxLength={2000} value={prompt} disabled={busy} onChange={e => setPrompt(e.target.value)} /></label>
         <div className="prompt-presets" aria-label="No-cost demo examples">
           {DEMO_EXAMPLES.map(example => <button key={example.id} type="button" disabled={busy} onClick={() => generateDemo(example.prompt)}>{example.label}</button>)}
         </div>
         <label>Reference image · optional<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
         {image ? <><img className="reference-preview" src={image} alt="Selected reference" /><button disabled={busy} onClick={() => setImage(null)}>Remove reference</button></> : null}
+        {!health.generationReady && image ? <small>The selected image is shown locally, but the no-cost DEMO uses the text prompt only. Image understanding requires a future LIVE Astra allowance.</small> : null}
         {health.accessRequired ? <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /><small>Temporary maker preview gate; a hard-capped public pilot does not require login.</small></label> : null}
-        <button className="primary" disabled={busy || !health.generationReady} onClick={() => void generateLive()}>{busy ? `Astra working · ${seconds}s` : 'Create with GPT-6 Astra'}</button>
-        <button disabled={busy} onClick={() => generateDemo()}>Try DEMO locally · no API cost</button>
+        <button className="primary" disabled={busy || !health.generationReady} onClick={() => void generateLive()}>{busy ? `Astra working · ${seconds}s` : shop ? 'Create product concept with GPT-6 Astra' : 'Create with GPT-6 Astra'}</button>
+        <button disabled={busy} onClick={() => generateDemo()}>{shop ? 'Generate DEMO concept · no download' : 'Try DEMO locally · no API cost'}</button>
         {busy ? <button onClick={() => abort.current?.abort()}>Cancel</button> : null}
         {error ? <p role="alert" className="error">{error}</p> : null}
-        {!health.generationReady ? <p className="result-note">LIVE Astra is currently blocked by the exhausted pilot quota. DEMO works locally and is clearly labelled MOCK.</p> : null}
+        {!health.generationReady ? <p className="result-note">LIVE Astra is currently blocked by the exhausted pilot quota. DEMO works locally, changes the 3D preview and is clearly labelled MOCK.</p> : null}
       </aside>
     </div>
-    <section className="generation-evidence" aria-label="World generation result">
-      <span className="eyebrow">WORLD OUTPUT</span>
-      {!result ? <p>No result yet. The current scene is the starting state.</p> : <>
+    <section className="generation-evidence" aria-label={shop ? 'Product concept result' : 'World generation result'}>
+      <span className="eyebrow">{shop ? 'PRODUCT CONCEPT OUTPUT' : 'WORLD OUTPUT'}</span>
+      {!result ? <p>{shop ? 'No concept yet. Enter a prompt and use DEMO to preview on-page without downloading a file.' : 'No result yet. The current scene is the starting state.'}</p> : <>
         <p><strong>{live ? 'LIVE · GENERATED' : 'DEMO · MOCK'}</strong>{live ? ` · ${result.model} · request ${result.requestId.slice(0, 12)}…` : ' · local no-cost fallback'}</p>
         <div className="workflow-pair">
           <article><span className="eyebrow">GAME · {live ? 'GENERATED SPEC' : 'MOCK SPEC'} / PROCEDURAL PREVIEW</span><h3>{spec?.name ?? result.blueprint.title}</h3><p>{spec?.game.gameplayRole}</p><p>{spec?.game.materialPlan}</p><p>{spec?.game.animationPlan}</p></article>
