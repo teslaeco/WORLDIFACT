@@ -1,0 +1,10 @@
+WORLDIFACT P0 paid pilot approval marker
+
+Approved by owner on 2026-09-16:
+- max 4 shared attempts
+- max 180 minutes
+- Astra pilot budget ceiling USD 5
+- Oracle prompt jobs enabled only inside the shared hard cap
+- Oracle storage verified after expansion: 83G root, about 54G free, worker/tunnel active
+
+This marker is consumed only by .github/workflows/p0-pilot-once.yml after the exact commit is successfully published to production.
