@@ -1,7 +1,11 @@
 import type { PointXZ } from "./movement.ts";
 interface PortalTarget { id: string; position: PointXZ }
-export const PORTAL_RADIUS = 1.45;
-export const PORTAL_REACH = 3.6;
+
+// Mobile joystick movement and collision correction can leave the avatar just
+// outside the old 1.45 m portal disk. Keep portal entry intentional, but make
+// the water gate large enough to register reliably on coarse-pointer devices.
+export const PORTAL_RADIUS = 2.2;
+export const PORTAL_REACH = 5.0;
 
 export function nearestPortal<T extends PortalTarget>(point: PointXZ, portals: readonly T[], activeId?: string): T | undefined {
   return portals.filter(p => p.id !== activeId)
