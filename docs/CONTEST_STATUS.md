@@ -1,12 +1,12 @@
 # Contest status — AI Game Lab P0, 16 September 2026
 
-Decision: **P0 technical flow has real LIVE evidence; final contest readiness is still NO-GO pending clean-session/device QA, final media, launch-time Astra allowance, and final Product Hunt form/rules review.** The reference flow is `PROMPT / IMAGE → GPT-6 ASTRA → WorldBlueprint + AssetSpec → visible 3D scene change → GAME / MAKE`. The other four worlds remain connected but are not the P0 completion gate.
+Decision: **P0 technical flow has real LIVE evidence; final contest readiness is still NO-GO. Android clean-session QA exposed a portal-navigation regression in `/lab`; a code fix is prepared on `fix/mobile-portal-navigation-20260916` and must pass CI plus owner-device re-test before release.** The reference flow is `PROMPT / IMAGE → GPT-6 ASTRA → WorldBlueprint + AssetSpec → visible 3D scene change → GAME / MAKE`. The other four worlds remain connected but are not the P0 completion gate.
 
 | Item | Status | Evidence / remaining work |
 |---|---|---|
 | Official contest | DATE VERIFIED; FINAL FORM REVIEW PENDING | Official Product Hunt contest page names the GPT-6 Astra Challenge and 18 September 2026. Re-open the official contest/form immediately before final submission |
 | Production baseline | DEPLOYED | `https://worldifact.xodobrox.workers.dev`; P0 implementation and owner-only Oracle artifact readback are on `main` |
-| AI Game Lab P0 | LIVE IMPLEMENTATION DEPLOYED | `/lab` is the native reference workbench; Astra Structured Output requires and validates both `WorldBlueprint` and `AssetSpec`; the validated blueprint drives the visible Three.js scene |
+| AI Game Lab P0 | LIVE IMPLEMENTATION DEPLOYED; PORTAL FIX PENDING | `/lab` is the native reference workbench; Astra Structured Output requires and validates both `WorldBlueprint` and `AssetSpec`; the validated blueprint drives the visible Three.js scene. Android QA found that the embedded meadow used a no-op portal callback, so non-current portal transitions could freeze at `Entering world…` |
 | Text Astra proof | LIVE / GENERATED | Paid pilot reservation #1 succeeded: `Green Valley Solar Rover Workshop`, 3 scene objects, main asset `Workshop Rover`, 905 total provider-reported tokens |
 | Image Astra proof | LIVE / GENERATED | Paid recovery reservation #3 succeeded: `Blue and Green Valley Garden`, 6 scene objects, `Blue Garden Monument`, 1,594 total provider-reported tokens, response `resp_074915dbcf617af1016aaa3474281c87d19318b0b7abbbae56` |
 | Failed image attempt | SAFE FAILURE | Reservation #2 returned sanitized HTTP 502. The attempt still consumed the global reservation by design; no automatic retry occurred |
@@ -18,7 +18,7 @@ Decision: **P0 technical flow has real LIVE evidence; final contest readiness is
 | Public pilot quota | EXHAUSTED / HARD CAPPED | The approved cumulative ceiling was exactly 4 reservations. All four are consumed. Do not make another paid generation call without a new explicit owner approval |
 | Public no-login flow | IMPLEMENTED; LIVE QUOTA CURRENTLY EXHAUSTED | The no-login route is implemented and was proven with real Astra calls under rate limiting, expiry and persistent global quota. A launch allowance must be separately approved before public judges can make fresh LIVE calls |
 | Public HTTPS | VERIFIED HTTP | Automated no-browser evidence confirmed `/`, `/lab`, and `/api/health` respond over public HTTPS. This is not browser/WebGL/device QA |
-| Android/browser QA | PARTIAL / MANUAL TEST REQUIRED | `/control` was visually checked earlier on Android. Full clean-session `/lab` WebGL interaction, scene change, accessibility and fallback QA remains |
+| Android/browser QA | REGRESSION FOUND / FIX PREPARED | Owner Android loaded `/lab` without login, WebGL and responsive layout rendered, but crossing Chess Cube inside `/lab` froze at `Entering world…`. Root cause identified as `onPortalOpen={() => {}}` in `P0GameLab`. Fix routes non-current portals through React Router and explains that Game Lab is already the current portal. Deployment and re-test remain required |
 | Launch materials | DRAFT | Capture genuine P0 screenshots/video from the deployed interface and clearly separate LIVE generated specifications, procedural GAME geometry, Oracle `GENERATED-UNREVIEWED` output and MAKE validation-required concepts |
 
 ## LIVE P0 evidence
@@ -47,6 +47,20 @@ The structural report includes rover-related names such as `Chamfered chassis`, 
 
 Artifact review workflow run `35079392864` completed successfully and also confirmed public HTTP responses for `/`, `/lab`, and `/api/health`. The one-time review marker was removed after the evidence was captured so future deployments cannot repeat the artifact review accidentally.
 
+## Android portal regression — 16 September
+
+Owner-device clean-session QA reached `/lab` on Android and rendered the WebGL scene. Crossing the Chess Cube portal then showed `Entering world…` indefinitely. Inspection found the deterministic cause: `P0GameLab` passed a no-op `onPortalOpen` callback to `StartingWorld`, while `StartingWorld` correctly stops its animation loop during navigation. The Game Lab portal itself is intentionally excluded inside `/lab` because it is the current destination (`YOU ARE HERE`).
+
+Prepared fix on `fix/mobile-portal-navigation-20260916`:
+
+- resolve portal ids through the central portal configuration;
+- navigate the four non-current portals instead of using a no-op callback;
+- keep Game Lab visibly marked as the current world rather than pretending to re-enter `/lab`;
+- add route-resolution regression coverage;
+- update device QA with the observed failure and required re-test.
+
+The fix is **not** considered deployed or verified on device until CI is green, owner approves merge/deploy, and the same Android test passes.
+
 ## What P0 now proves
 
 WORLDIFACT has real server-side GPT-6 Astra execution using Structured Outputs. Successful production requests returned validated `WorldBlueprint + AssetSpec`; the blueprint uses the same client contract that drives the Three.js scene, while the UI exposes the generated plan and separates GAME from MAKE. Both text-only and image-input Astra requests succeeded in production.
@@ -55,11 +69,13 @@ A separate owner-only Oracle route also completed an Astra/Codex/Blender job and
 
 ## Immediate gates
 
-1. Run clean-session Android + desktop QA of `/lab`: scene rendering/change, blueprint/spec visibility, GAME/MAKE labels, WebGL/fallback, responsiveness and accessibility. No further paid call is permitted under the exhausted four-attempt pilot.
-2. Visually review the retrieved Oracle GLB before using it in Product Hunt media or upgrading its status beyond `GENERATED-UNREVIEWED`.
-3. Decide a separate launch-time Astra allowance/cost ceiling if public Product Hunt visitors should be able to make fresh LIVE calls. Until approved, keep further paid generation blocked/exhausted rather than silently increasing the budget.
-4. Capture real screenshots/demo video from the deployed product and finalize Product Hunt copy, Shoutouts, topics and Maker Comment.
-5. Re-open the official contest page and final submission form immediately before scheduling/submitting.
+1. Get green CI for the Android portal-navigation fix, then obtain explicit owner approval before merging/deploying it.
+2. Re-test deployed `/lab` on owner Android: cross Chess/ISS/Planets/Shop portals, confirm each route opens; confirm Game Lab says `YOU ARE HERE` and does not freeze; rotate portrait/landscape.
+3. Run desktop QA of `/lab`: scene rendering/change, blueprint/spec visibility, GAME/MAKE labels, WebGL/fallback, responsiveness and accessibility. No further paid call is permitted under the exhausted four-attempt pilot.
+4. Visually review the retrieved Oracle GLB before using it in Product Hunt media or upgrading its status beyond `GENERATED-UNREVIEWED`.
+5. Decide a separate launch-time Astra allowance/cost ceiling if public Product Hunt visitors should be able to make fresh LIVE calls. Until approved, keep further paid generation blocked/exhausted rather than silently increasing the budget.
+6. Capture real screenshots/demo video from the deployed product and finalize Product Hunt copy, Shoutouts, topics and Maker Comment.
+7. Re-open the official contest page and final submission form immediately before scheduling/submitting.
 
 ## Truth boundary
 
