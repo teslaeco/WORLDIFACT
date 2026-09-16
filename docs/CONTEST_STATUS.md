@@ -12,8 +12,8 @@ Decision: **P0 implementation in progress; final contest readiness is NO-GO.** T
 | Visible Astra role | IMPLEMENTED ON PR #13 | UI explicitly shows `PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → SCENE CHANGE → GAME / MAKE` and lets the user inspect generated blueprint/spec JSON |
 | GAME output | PARTIAL / TRUTHFUL | Procedural preview geometry can be added to the scene and exported as GLB. This is not claimed as an Oracle-generated production asset unless a separate Blender job actually produces it |
 | MAKE output | BLOCKED / VALIDATION REQUIRED | Candidate manufacturing plan only. No manufacturing-ready file, quote, order or approval is claimed |
-| Oracle VM | LIVE HEALTH VERIFIED; STORAGE GATE | Running connector v33 / character standard 20 / OpenAI / gpt-6-astra is healthy. Owner reports only about 2 GB free now. Owner approved boot-volume expansion to 100 GB provided yearly incremental cost stays <= EUR 40 |
-| Oracle storage economics | COST APPROVED; RESIZE NOT EXECUTED | Oracle documents 200 GB combined boot/block storage in the home region as Always Free. If the extra 70 GB were fully billed at current standard Block Volume + Balanced performance rates, it is about USD 35.70/year before tax. Actual tenancy-wide volume usage must be checked before resize |
+| Oracle VM | STORAGE EXPANDED; SERVICES HEALTHY | OCI boot volume is 100 GB. Linux now sees `sda=100G`, `sda3=97.9G`, root LV `82.9G`, root filesystem `83G` with about `54G` free. `froge-worker` and `froge-tunnel` both remained active. Running connector remains v33 / character standard 20 / OpenAI / gpt-6-astra |
+| Oracle storage economics | COST APPROVED; RESIZE COMPLETE | Owner approved 100 GB provided yearly incremental cost stays <= EUR 40. Oracle documents 200 GB combined boot/block storage in the home region as Always Free for eligible tenancies; actual billing remains tenancy-specific. No second data disk was created |
 | Five-world Oracle bridge | DEPLOYED READ-ONLY | All five world cards report shared Oracle readiness; secrets stay server-side |
 | Oracle prompt job path | PR #12 GREEN; NOT DEPLOYED | Owner-only prompt submit/poll path is reviewed and green behind `ENABLE_ORACLE_JOBS=false`. Image-to-Oracle remains `BLOCKED_UNVERIFIED` |
 | Paid Astra | OWNER COST APPROVED; NOT YET ARMED | Owner approved up to USD 5 total for the first pilot, with an absolute shared ceiling of 4 attempts over 3 hours. Current production remains paid-OFF until the merge/deploy approval and pilot workflow activation |
@@ -33,23 +33,23 @@ The Oracle Blender path remains separate because the current public connector co
 
 Owner approval recorded 16 September 2026:
 
-- Oracle boot volume target: **100 GB**.
+- Oracle boot volume target: **100 GB — completed**.
 - Oracle incremental cost ceiling: **EUR 40/year**.
 - Astra pilot spending ceiling: **USD 5 total**.
 - Hard execution ceiling: **4 shared attempts maximum** over **3 hours**.
 - Suggested allocation: 3 public P0 Astra blueprint/spec calls + 1 owner-only Oracle prompt job.
-- No batch of Blender jobs until Oracle free space is expanded and verified.
+- No batch of Blender jobs; start with one controlled Oracle prompt job only after production deployment.
 - These approvals do not by themselves authorize merging or production deployment; those remain separate explicit gates.
 
 Current OpenAI model documentation identifies `gpt-6-astra` as the production model ID and lists text pricing at USD 10 / 1M input tokens and USD 50 / 1M output tokens. Image input is supported through the Responses API. The product hard cap remains the primary spend control.
 
 ## Immediate gates
 
-1. Audit current Oracle boot/block volume usage in the Amsterdam home region, create/confirm a backup, resize the existing boot volume to 100 GB, run `oci-growfs`, and verify filesystem free space plus Froge worker/tunnel health.
-2. Obtain explicit merge/deploy approval for PR #12 + PR #13; do not infer it from the cost approval.
-3. After deployment, arm the reviewed manual pilot for 4 attempts / 3 hours and keep the USD 5 account-side spending ceiling.
-4. Run clean-session public P0 evidence: text prompt first, optional image second → LIVE Astra response → validated blueprint/spec → visible scene change → GAME/MAKE panels. Capture response evidence and media.
-5. Run one owner-only Oracle prompt job only after storage is healthy; call its GLB GENERATED only after a succeeded job and artifact retrieval.
+1. Obtain explicit merge/deploy approval for PR #12 + PR #13; do not infer it from the cost approval.
+2. After deployment, arm the reviewed manual pilot for 4 attempts / 3 hours and keep the USD 5 spending ceiling.
+3. Run clean-session public P0 evidence: text prompt first, optional image second → LIVE Astra response → validated blueprint/spec → visible scene change → GAME/MAKE panels. Capture response evidence and media.
+4. Run one owner-only Oracle prompt job; call its GLB GENERATED only after a succeeded job and artifact retrieval.
+5. Complete Android/WebGL interaction, accessibility and fallback QA.
 6. Only after P0 works, reconnect the same engine to Enchanted AI Shop and the other worlds.
 
 ## Truth boundary
