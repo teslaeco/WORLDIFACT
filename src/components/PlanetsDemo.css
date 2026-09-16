@@ -1,0 +1,17 @@
+.planets-demo { display:grid; gap:1rem; }
+.planet-stage { display:grid; gap:1rem; padding:1rem; border:1px solid #425a64; border-radius:12px; background:linear-gradient(180deg,#172d39,#10222b); }
+.planet-track { position:relative; height:120px; border-radius:16px; overflow:hidden; border:1px solid #496774; background:linear-gradient(180deg,#0c1a24 0 58%,#694d3d 58% 66%,#263f3f 66%); }
+.planet-track::before { content:""; position:absolute; left:6%; right:8%; bottom:30px; height:4px; background:#e7bb73; opacity:.7; }
+.planet-runner { position:absolute; bottom:22px; font-size:2rem; transition:left .22s ease; z-index:2; }
+.planet-finish { position:absolute; right:10px; bottom:18px; font-size:2rem; }
+.planets-demo .planet-list { margin:0; }
+.planets-demo .planet-list li { align-items:center; border:1px solid #3b535e; border-radius:10px; }
+.planets-demo .planet-list li > div { display:grid; min-width:0; flex:1; }
+.planets-demo .planet-list button { min-height:36px; padding:.35rem .65rem; }
+.planets-demo .planet-list button[aria-current="step"] { border-color:#e9bc73; color:#f7d59d; }
+@media (max-width:760px) {
+  .planets-demo .planet-list { grid-template-columns:1fr; }
+  .planet-stage { padding:.8rem; }
+  .planet-track { height:100px; }
+}
+@media (prefers-reduced-motion:reduce) { .planet-runner { transition:none; } }
