@@ -27,16 +27,16 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 2
 
-      - name: Gate to the approved Shop pilot re-arm marker
+      - name: Gate to the approved AI Shop E2E re-arm marker
         id: gate
         shell: bash
         run: |
-          if git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/SHOP_MCP2_PILOT_REARM_20260916'; then
+          if git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/SHOP_AI_E2E_REARM_20260916'; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
-            echo 'Approved MCP2 Shop pilot re-arm marker found in this deployment commit.'
+            echo 'Approved AI Shop E2E re-arm marker found in this deployment commit.'
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
-            echo 'No Shop pilot re-arm marker in this deployment commit; exiting without changing pilot state.'
+            echo 'No AI Shop E2E re-arm marker in this deployment commit; exiting without changing pilot state.'
           fi
 
       - name: Set up Node
@@ -75,12 +75,12 @@ jobs:
           ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
           ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
 
-      - name: Build exactly one remaining cumulative Shop reservation
+      - name: Build exactly one additional cumulative Shop reservation
         if: steps.gate.outputs.run == 'true'
         run: node scripts/build-shop-mcp2-pilot-config.ts
         env:
           SHOP_PILOT_CONFIRMATION: MCP2-SHOP-PILOT
-          SHOP_PILOT_REQUEST_LIMIT: '5'
+          SHOP_PILOT_REQUEST_LIMIT: '6'
           SHOP_PILOT_DURATION_MINUTES: '180'
 
       - name: Dry-run exact Shop pilot config
@@ -103,5 +103,5 @@ jobs:
       - name: Record operator handoff
         if: steps.gate.outputs.run == 'true'
         run: |
-          echo 'MCP2 Shop pilot armed. No paid request was executed by CI.'
-          echo 'The owner-approved remaining reservation is intentionally left for the Android /shop Generate REAL 3D model button.'
+          echo 'AI Shop E2E pilot armed. CI executed no paid generation.'
+          echo 'Cumulative ceiling is exactly 6; prior reservations remain counted, leaving at most one additional REAL 3D job after the failed-fetch attempt.'
