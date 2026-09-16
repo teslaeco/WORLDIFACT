@@ -19,7 +19,7 @@ const liveEnv = {
 }
 const combinedProvider = (blueprint = demoBlueprint('moon workshop')) => {
   const assetSpec = assetSpecForBlueprint(blueprint)
-  return (async (_url: unknown, init: RequestInit | undefined) => new Response(JSON.stringify({
+  return (async (_url: unknown, _init: RequestInit | undefined) => new Response(JSON.stringify({
     status: 'completed', model: 'gpt-6-astra', id: 'resp_p0_stub',
     usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 },
     output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint, assetSpec }) }] }],
