@@ -15,6 +15,7 @@ export interface Env extends BudgetEnv, PlatformEnv {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   ENABLE_PAID_GENERATION?: string;
+  PUBLIC_PILOT?: string;
   GENERATION_ACCESS_TOKEN?: string;
   GENERATION_BUDGET?: BudgetNamespace;
   GENERATION_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
@@ -57,9 +58,10 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (url.pathname === "/api/platform" || url.pathname.startsWith("/api/platform/")) return platformApi(request, env, fetcher);
   const configured = !!env.OPENAI_API_KEY && env.ENABLE_PAID_GENERATION === "true";
   const configuredModel = env.OPENAI_MODEL || "gpt-6-astra";
-  const generationReady = configured && !!env.GENERATION_LIMITER && !!env.GENERATION_BUDGET && !!budgetSettings(env) &&
-    (env.GENERATION_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.GENERATION_ACCESS_TOKEN?.length ?? 0) <= 256 && configuredModel === "gpt-6-astra";
-  if (url.pathname === "/api/health" && request.method === "GET") return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady, model: generationReady ? configuredModel : null });
+  const publicPilot = env.PUBLIC_PILOT === "true";
+  const accessConfigured = publicPilot || ((env.GENERATION_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.GENERATION_ACCESS_TOKEN?.length ?? 0) <= 256);
+  const generationReady = configured && !!env.GENERATION_LIMITER && !!env.GENERATION_BUDGET && !!budgetSettings(env) && accessConfigured && configuredModel === "gpt-6-astra";
+  if (url.pathname === "/api/health" && request.method === "GET") return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady && !publicPilot, publicPilot: generationReady && publicPilot, model: generationReady ? configuredModel : null });
   if (url.pathname !== "/api/blueprint") return url.pathname.startsWith("/api/") ? json({ error: "Not found" }, 404) : (env.ASSETS?.fetch(request) ?? new Response("Not found", { status: 404 }));
   if (request.method !== "POST") return json({ error: "Use POST" }, 405);
   if (request.headers.get("origin") && request.headers.get("origin") !== url.origin) return json({ error: "Cross-origin request rejected" }, 403);
@@ -77,7 +79,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
       limitation: "Local rule-based scene. Reference images are not analyzed. GAME uses procedural meshes; MAKE remains validation-required." });
   }
   if (!generationReady) return json({ error: "Generation is not enabled safely yet.", requestId }, 503);
-  if (!(await validAccess(request, env.GENERATION_ACCESS_TOKEN!))) return json({ error: "A valid preview access code is required.", requestId }, 401);
+  if (!publicPilot && !(await validAccess(request, env.GENERATION_ACCESS_TOKEN!))) return json({ error: "A valid preview access code is required.", requestId }, 401);
   try { const { success } = await env.GENERATION_LIMITER!.limit({ key: request.headers.get("CF-Connecting-IP") || "unknown-client" }); if (!success) return json({ error: "Generation limit reached. Please try again later.", requestId }, 429); }
   catch { return json({ error: "Generation limit service unavailable.", requestId }, 503); }
   const model = configuredModel;
@@ -107,7 +109,6 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     if (parts.some((p: { type: string }) => p.type === "refusal")) return json({ error: "This request could not be generated. Try a different scene.", requestId }, 422);
     const result = parts.filter((p: { type: string }) => p.type === "output_text").map((p: { text: string }) => p.text).join("");
     const parsed = JSON.parse(result) as Record<string, unknown>;
-    // Production requests use the strict combined schema above. The blueprint-only fallback keeps old test/provider stubs readable without changing the public contract.
     const blueprint = validateBlueprint(Object.hasOwn(parsed, "blueprint") ? parsed.blueprint : parsed);
     const assetSpec = Object.hasOwn(parsed, "assetSpec") ? validateAssetSpec(parsed.assetSpec) : assetSpecForBlueprint(blueprint);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(blueprint)));
