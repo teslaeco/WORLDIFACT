@@ -185,7 +185,7 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
     const controller = new AbortController(); abort.current = controller
     const id = crypto.randomUUID()
     if (ownerOnly) setOwnerAccess('')
-    const authHeaders = ownerOnly ? { 'X-WORLDIFACT-Owner': owner } : {}
+    const authHeaders: Record<string, string> = ownerOnly ? { 'X-WORLDIFACT-Owner': owner } : {}
     try {
       const submit = await fetch('/api/oracle/jobs', {
         method: 'POST', signal: controller.signal,
