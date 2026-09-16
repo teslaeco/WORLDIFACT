@@ -1,0 +1,85 @@
+name: Arm hard-capped WORLDIFACT Astra pilot
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type ASTRA-PILOT after owner cost approval
+        required: true
+        type: string
+      request_limit:
+        description: Absolute lifetime request ceiling for the shared pilot budget (1-5)
+        required: true
+        default: '4'
+        type: string
+      duration_minutes:
+        description: Public pilot duration before automatic expiry (15-360 minutes)
+        required: true
+        default: '180'
+        type: string
+      oracle_jobs:
+        description: Enable owner-only Oracle prompt jobs too (only after storage check)
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+jobs:
+  pilot:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'ASTRA-PILOT'
+    environment:
+      name: production
+      url: ${{ steps.smoke.outputs.url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Check deployment credentials
+        run: node scripts/release-check.ts credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - name: Verify and sync OpenAI secret
+        run: node scripts/connect-openai.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GENERATION_ACCESS_TOKEN: ${{ secrets.GENERATION_ACCESS_TOKEN }}
+      - name: Sync Oracle/owner secrets
+        run: node scripts/connect-platform.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OWNER_ACCESS_TOKEN: ${{ secrets.OWNER_ACCESS_TOKEN }}
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - name: Build reviewed pilot config
+        run: node scripts/build-pilot-config.ts
+        env:
+          PILOT_CONFIRMATION: ${{ inputs.confirmation }}
+          PILOT_REQUEST_LIMIT: ${{ inputs.request_limit }}
+          PILOT_DURATION_MINUTES: ${{ inputs.duration_minutes }}
+          PILOT_ORACLE_JOBS: ${{ inputs.oracle_jobs }}
+      - name: Dry-run exact pilot config
+        run: npx wrangler deploy --dry-run --config .pilot.wrangler.json --outdir .wrangler/pilot-preview
+      - name: Deploy hard-capped pilot
+        run: npx wrangler deploy --config .pilot.wrangler.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-pilot-deploy.ndjson
+      - name: Verify pilot readiness without spending
+        id: smoke
+        run: node scripts/pilot-smoke.ts
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-pilot-deploy.ndjson

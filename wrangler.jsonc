@@ -12,6 +12,7 @@
   "vars": {
     "OPENAI_MODEL": "gpt-6-astra",
     "ENABLE_PAID_GENERATION": "false",
+    "PUBLIC_PILOT": "false",
     "ENABLE_ORACLE_JOBS": "false",
     "GENERATION_REQUEST_LIMIT": "0",
     "GENERATION_EXPIRES_AT": ""

@@ -1,11 +1,13 @@
 # Local server only. Copy to .dev.vars, which is ignored by git.
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-6-astra
-# Enable only after the owner approves paid API use.
+# Enable only after the owner approves paid API use and a hard request ceiling/expiry.
 ENABLE_PAID_GENERATION=false
-# Separate Oracle/Blender write gate. Keep false until an explicit cost-approved pilot.
+# Contest pilot: when true, no login/access code is required, so keep a tiny global Durable Object ceiling and short expiry.
+PUBLIC_PILOT=false
+# Separate Oracle/Blender write gate. Keep false until storage is healthy and an explicit cost-approved pilot is ready.
 ENABLE_ORACLE_JOBS=false
-# Preview access secret (32–256 random characters), never an OpenAI API key.
+# Private preview secret (32–256 random characters), never an OpenAI API key. Not required when PUBLIC_PILOT=true.
 GENERATION_ACCESS_TOKEN=
 # Absolute lifetime request ceiling, including failures. Zero disables LIVE.
 GENERATION_REQUEST_LIMIT=0
