@@ -161,7 +161,9 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
   async function generateOracleModel() {
     if (busy || !shop) return
     setError('')
-    if (oracleGate?.mode !== 'OWNER_ONLY') {
+    const publicPilot = oracleGate?.mode === 'PUBLIC_PILOT'
+    const ownerOnly = oracleGate?.mode === 'OWNER_ONLY'
+    if (!publicPilot && !ownerOnly) {
       setError('REAL 3D model generation is still blocked by the production safety gate.')
       return
     }
@@ -174,7 +176,7 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
       return
     }
     const owner = ownerAccess.trim()
-    if (owner.length < 32 || owner.length > 256) {
+    if (ownerOnly && (owner.length < 32 || owner.length > 256)) {
       setError('Enter the owner generation code (32–256 characters). It is not saved in browser storage.')
       return
     }
@@ -182,11 +184,12 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
     setBusyKind('oracle'); setSeconds(0); setOracleJob(null)
     const controller = new AbortController(); abort.current = controller
     const id = crypto.randomUUID()
-    setOwnerAccess('')
+    if (ownerOnly) setOwnerAccess('')
+    const authHeaders = ownerOnly ? { 'X-WORLDIFACT-Owner': owner } : {}
     try {
       const submit = await fetch('/api/oracle/jobs', {
         method: 'POST', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Owner': owner },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ worldId: 'enchanted-ai-shop', id, prompt: prompt.trim() }),
       })
       const submitted = await submit.json() as { error?: string; job?: unknown }
@@ -197,19 +200,34 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
       for (let attempt = 0; job.state !== 'succeeded' && attempt < 80; attempt++) {
         if (['failed', 'cancelled'].includes(job.state)) throw new Error(job.detail || `Oracle job ${job.state}.`)
         await wait(6000, controller.signal)
-        const status = await fetch(`/api/oracle/jobs/${id}`, {
-          headers: { 'X-WORLDIFACT-Owner': owner, Accept: 'application/json' },
-          cache: 'no-store', signal: controller.signal,
-        })
+        let status: Response
+        try {
+          status = await fetch(`/api/oracle/jobs/${id}`, {
+            headers: { ...authHeaders, Accept: 'application/json' },
+            cache: 'no-store', signal: controller.signal,
+          })
+        } catch (networkError) {
+          if (!navigator.onLine) {
+            setOracleJob({ ...job, detail: 'Connection lost on this phone. Oracle may still be generating; retrying the same job.' })
+            continue
+          }
+          throw networkError
+        }
         const statusBody = await status.json() as { error?: string; job?: unknown }
-        if (!status.ok) throw new Error(statusBody.error || `Oracle job status failed (HTTP ${status.status}).`)
+        if (!status.ok) {
+          if (status.status >= 500 || status.status === 429) {
+            setOracleJob({ ...job, detail: 'Status temporarily unavailable. Retrying the same Oracle job without starting a new paid request.' })
+            continue
+          }
+          throw new Error(statusBody.error || `Oracle job status failed (HTTP ${status.status}).`)
+        }
         job = parseOracleJob(statusBody.job, id)
         setOracleJob(job)
       }
-      if (job.state !== 'succeeded') throw new Error(`Oracle job is still ${job.state} after 8 minutes. The server job may continue, but no model was downloaded automatically.`)
+      if (job.state !== 'succeeded') throw new Error(`Oracle job is still ${job.state} after 8 minutes. The server job may continue, but no second paid job was started.`)
 
       const modelResponse = await fetch(`/api/oracle/jobs/${id}/model`, {
-        headers: { 'X-WORLDIFACT-Owner': owner, Accept: 'model/gltf-binary' },
+        headers: { ...authHeaders, Accept: 'model/gltf-binary' },
         cache: 'no-store', signal: controller.signal,
       })
       if (!modelResponse.ok) {
@@ -224,7 +242,7 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
       setOracleArtifact({ jobId: id, blob, url, sha256, provenance })
       setResult(null)
     } catch (e) {
-      setError(e instanceof Error && e.name === 'AbortError' ? '3D generation was cancelled in this browser. No automatic download was started.' : e instanceof Error ? e.message : '3D model generation failed.')
+      setError(e instanceof Error && e.name === 'AbortError' ? '3D generation was cancelled in this browser. No second paid request was started.' : e instanceof Error ? e.message : '3D model generation failed.')
     } finally {
       abort.current = null; setBusyKind(null)
     }
@@ -246,13 +264,15 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
   const spec = result?.assetSpec
   const live = result?.mode === 'LIVE' && result.provenance === 'GENERATED'
   const realModel = shop ? oracleArtifact : null
+  const publicOraclePilot = shop && oracleGate?.mode === 'PUBLIC_PILOT'
+  const ownerOraclePilot = shop && oracleGate?.mode === 'OWNER_ONLY'
   return <div className="studio">
     <div className="studio-heading">
       <div>
-        <span className="eyebrow">{shop ? 'ENCHANTED AI SHOP · NATIVE' : 'AI GAME LAB · P0'}</span>
+        <span className="eyebrow">{shop ? 'ENCHANTED AI SHOP · MCP2 GENERATOR PORT' : 'AI GAME LAB · P0'}</span>
         <h1>{shop ? 'Create a real 3D model, or preview a no-cost concept.' : 'Ideas become playable worlds.'}</h1>
       </div>
-      <span className="pill">{shop && oracleGate?.mode === 'OWNER_ONLY' ? 'REAL 3D owner pilot available' : health.generationReady ? (health.publicPilot ? 'LIVE public Astra pilot' : 'LIVE Astra preview') : 'DEMO only'}</span>
+      <span className="pill">{publicOraclePilot ? 'REAL 3D public hard-capped pilot' : ownerOraclePilot ? 'REAL 3D owner pilot available' : health.generationReady ? (health.publicPilot ? 'LIVE public Astra pilot' : 'LIVE Astra preview') : 'DEMO only'}</span>
     </div>
     {shop ? <nav className="world-tabs" aria-label="Enchanted AI Shop views">
       <span className="active" aria-current="page">WORLDIFACT Shop Studio</span>
@@ -266,15 +286,15 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
       <Link to="/shop">AI Shop</Link>
     </nav>}
     <p><strong>{shop
-      ? 'PROMPT → GPT-6 ASTRA / ORACLE → BLENDER JOB → REAL GLB → IN-PAGE 3D PREVIEW → EXPLICIT DOWNLOAD · IMAGE-TO-MODEL PENDING CONNECTOR VALIDATION'
+      ? 'PROMPT → GPT-6 ASTRA / MCP2 ORACLE CONNECTOR → BLENDER JOB → REAL GLB → IN-PAGE 3D PREVIEW → EXPLICIT DOWNLOAD · IMAGE-TO-MODEL PENDING CONNECTOR VALIDATION'
       : 'PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → SCENE CHANGE → GAME / MAKE'}</strong></p>
     <p className="result-note">{shop
-      ? 'The WORLDIFACT Shop is the generation surface. The legacy Forge Studio button from your screenshot only exports a JSON project brief; it is kept as a labelled reference and is not proof of model generation.'
+      ? 'This Shop now uses the proven MCP2 generation pattern: submit one job, keep polling that same job even after mobile connection problems, load the GLB into the viewer, and never auto-download it. The old Forge page remains only a legacy brief-export reference.'
       : 'You are already inside AI Game Lab. Its portal is marked YOU ARE HERE; the other four portals open their worlds.'}</p>
     <div className="studio-layout">
       <div className="studio-scene">
         {realModel
-          ? <OracleModelPreview url={realModel.url} label="REAL generated Oracle Blender GLB preview" />
+          ? <OracleModelPreview url={realModel.url} label="REAL generated MCP2 Oracle Blender GLB preview" />
           : <StartingWorld blueprint={blueprint} activePortalId={currentPortalId} onPortalOpen={(id) => navigate(routeForPortal(id))} />}
         <div className="scene-toolbar">
           {realModel ? <>
@@ -298,14 +318,19 @@ export default function P0GameLab({ surface = 'lab' }: Props) {
         {shop && image ? <small>Reference-image understanding works only on the Astra blueprint path today. REAL Oracle/Blender model jobs are prompt-only until image input is verified end-to-end.</small> : !health.generationReady && image ? <small>The selected image is shown locally, but the no-cost DEMO uses the text prompt only. Image understanding requires a future LIVE Astra allowance.</small> : null}
 
         {shop ? <>
-          <span className="eyebrow">REAL 3D · ASTRA + ORACLE + BLENDER</span>
-          {oracleGate?.mode === 'OWNER_ONLY' ? <>
+          <span className="eyebrow">REAL 3D · ASTRA + MCP2 ORACLE + BLENDER</span>
+          {publicOraclePilot ? <>
+            <button className="primary" disabled={busy || !!image} onClick={() => void generateOracleModel()}>{busyKind === 'oracle' ? `REAL 3D · ${oracleJob?.state || 'starting'} · ${seconds}s` : 'Generate REAL 3D model · Astra + Blender'}</button>
+            <small>No owner code is needed during this short public hard-capped pilot. The shared cumulative ceiling still controls cost.</small>
+          </> : ownerOraclePilot ? <>
             <label>Owner generation code<input type="password" minLength={32} maxLength={256} autoComplete="off" value={ownerAccess} disabled={busy} onChange={e => setOwnerAccess(e.target.value)} /><small>Used only for this model job and cleared from the field when generation starts.</small></label>
             <button className="primary" disabled={busy || !!image} onClick={() => void generateOracleModel()}>{busyKind === 'oracle' ? `REAL 3D · ${oracleJob?.state || 'starting'} · ${seconds}s` : 'Generate REAL 3D model · Astra + Blender'}</button>
           </> : <button className="primary" disabled>REAL 3D generation locked</button>}
-          <p className="result-note">{oracleGate?.mode === 'OWNER_ONLY'
-            ? 'The server can submit a prompt-only Oracle/Blender job. The GLB is fetched into the page and rendered first; downloading remains an explicit action.'
-            : oracleGate?.note || 'Production Oracle model writes are disabled until an explicit cost-approved pilot is enabled.'}</p>
+          <p className="result-note">{publicOraclePilot
+            ? 'One reviewed public MCP2-style Oracle/Blender job can use the remaining hard-capped reservation. The GLB appears here first; nothing downloads automatically.'
+            : ownerOraclePilot
+              ? 'The server can submit a prompt-only Oracle/Blender job. The GLB is fetched into the page and rendered first; downloading remains an explicit action.'
+              : oracleGate?.note || 'Production Oracle model writes are disabled until an explicit cost-approved pilot is enabled.'}</p>
           {oracleJob ? <p role="status" className="result-note">Oracle job: <strong>{oracleJob.state}</strong>{oracleJob.detail ? ` · ${oracleJob.detail}` : ''}</p> : null}
         </> : null}
 
