@@ -1,4 +1,26 @@
+.planets-world { display:grid; gap:1rem; }
 .planets-demo { display:grid; gap:1rem; }
+.planets-heading { margin-bottom:.25rem; }
+.planet-expedition { display:grid; grid-template-columns:minmax(240px,.72fr) minmax(0,1.4fr); gap:1rem; }
+.planet-route { display:grid; grid-template-columns:1fr 1fr; gap:.65rem; align-content:start; }
+.planet-route button { display:grid; grid-template-columns:32px 1fr; gap:.15rem .55rem; align-items:center; text-align:left; min-height:72px; background:#182f39; border:1px solid #3d5965; }
+.planet-route button > span { grid-row:1 / 3; display:grid; place-items:center; width:32px; height:32px; border-radius:50%; background:#0c222d; color:#e9bc73; font-weight:800; }
+.planet-route button strong { font-size:.95rem; }
+.planet-route button small { font-size:.72rem; }
+.planet-route button.selected { border-color:#e9bc73; box-shadow:0 0 0 1px #e9bc7344 inset; background:#233d47; }
+.planet-mission-card { min-height:430px; display:grid; align-content:start; gap:.8rem; padding:1.2rem; border:1px solid #425a64; border-radius:14px; background:radial-gradient(circle at 75% 15%,#294a59 0 2%,transparent 22%),linear-gradient(180deg,#142c39,#0b1b23); }
+.planet-visual { position:relative; min-height:220px; border:1px solid #35515f; border-radius:14px; overflow:hidden; background:radial-gradient(circle at 20% 18%,#ffffff20 0 1px,transparent 2px),radial-gradient(circle at 75% 35%,#ffffff26 0 1px,transparent 2px),linear-gradient(180deg,#07131d,#132733); }
+.planet-sphere { position:absolute; width:130px; height:130px; right:10%; top:26px; border-radius:50%; box-shadow:inset -22px -14px 30px #00131f88,0 0 35px #9bd8ff22; background:linear-gradient(135deg,#c9a86d,#5f6f73); }
+.planet-mercury { background:linear-gradient(135deg,#c5b9a4,#6e6256); }
+.planet-venus { background:linear-gradient(135deg,#f1c17f,#8c4f2d); }
+.planet-earth { background:linear-gradient(135deg,#59bce5,#2b6f4e 55%,#e8f6ff 56%); }
+.planet-mars { background:linear-gradient(135deg,#e47c52,#7b2f27); }
+.planet-jupiter { background:linear-gradient(180deg,#e7c9a4 0 20%,#9d624e 20% 35%,#ead3ad 35% 53%,#b87954 53% 67%,#efe1c6 67%); }
+.planet-saturn { background:linear-gradient(135deg,#e7d39d,#9d8357); box-shadow:inset -22px -14px 30px #00131f88,0 0 0 16px #cbb47a40,0 0 35px #9bd8ff22; }
+.planet-uranus { background:linear-gradient(135deg,#b4edf1,#4ba1ae); }
+.planet-neptune { background:linear-gradient(135deg,#5c8df1,#1b347a); }
+.planet-flight-line { position:absolute; left:8%; right:26%; bottom:54px; height:3px; background:linear-gradient(90deg,#e9bc73,#8ad9eb); opacity:.75; transform:rotate(-4deg); }
+.planet-rover { position:absolute; left:12%; bottom:55px; color:#fff; transform:rotate(90deg); text-shadow:0 0 8px #8ad9eb; }
 .planet-stage { display:grid; gap:1rem; padding:1rem; border:1px solid #425a64; border-radius:12px; background:linear-gradient(180deg,#172d39,#10222b); }
 .planet-track { position:relative; height:120px; border-radius:16px; overflow:hidden; border:1px solid #496774; background:linear-gradient(180deg,#0c1a24 0 58%,#694d3d 58% 66%,#263f3f 66%); }
 .planet-track::before { content:""; position:absolute; left:6%; right:8%; bottom:30px; height:4px; background:#e7bb73; opacity:.7; }
@@ -10,8 +32,14 @@
 .planets-demo .planet-list button { min-height:36px; padding:.35rem .65rem; }
 .planets-demo .planet-list button[aria-current="step"] { border-color:#e9bc73; color:#f7d59d; }
 @media (max-width:760px) {
+  .planet-expedition { grid-template-columns:1fr; }
+  .planet-route { grid-template-columns:1fr 1fr; }
+  .planet-mission-card { min-height:0; }
+  .planet-visual { min-height:180px; }
+  .planet-sphere { width:105px; height:105px; }
   .planets-demo .planet-list { grid-template-columns:1fr; }
   .planet-stage { padding:.8rem; }
   .planet-track { height:100px; }
 }
+@media (max-width:480px) { .planet-route { grid-template-columns:1fr; } }
 @media (prefers-reduced-motion:reduce) { .planet-runner { transition:none; } }

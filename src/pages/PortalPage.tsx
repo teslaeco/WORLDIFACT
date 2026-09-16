@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
-import PlanetsDemo from '../components/PlanetsDemo'
+import PlanetsWorld from '../components/PlanetsWorld'
+import '../components/WorldTabs.css'
 import { PORTALS, getPortalById } from '../config/portals'
 import { foundationForPath } from '../config/foundations'
 
@@ -58,6 +59,6 @@ export default function PortalPage() {
           allow="fullscreen; clipboard-write" allowFullScreen
           onLoad={() => setLoadedFrame(app.frame)} />
       </div>}
-    </> : <PlanetsDemo />}
+    </> : <PlanetsWorld />}
   </main>
 }
