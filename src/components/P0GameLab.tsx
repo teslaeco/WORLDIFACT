@@ -104,7 +104,7 @@ export default function P0GameLab() {
     <p><strong>PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → SCENE CHANGE → GAME / MAKE</strong></p>
     <div className="studio-layout">
       <div className="studio-scene">
-        <StartingWorld blueprint={blueprint} activePortalId="ai-game-lab" />
+        <StartingWorld blueprint={blueprint} activePortalId="ai-game-lab" onPortalOpen={() => {}} />
         <div className="scene-toolbar">
           <button onClick={exportGameGlb}>Export GAME · procedural GLB</button>
           <button onClick={() => download(new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' }), 'WORLDIFACT-WorldBlueprint.json')}>Download WorldBlueprint</button>
