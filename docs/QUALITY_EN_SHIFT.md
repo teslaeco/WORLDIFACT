@@ -7,7 +7,7 @@ Date: 17 September 2026 (Europe/Amsterdam). Owner: Sebastian.
 - Branch: `work/five-hour-quality-english-20260917`.
 - Draft PR: https://github.com/teslaeco/WORLDIFACT/pull/28
 - Base: `495a6524d7b597403eefd5b62bfbf8ee9fedc4e0`.
-- Editor: **IDLE — root first-stage source edits complete; available for the next scheduled continuation.** A continuation must claim the editor marker before writing and release it at handoff. If another editor is active, do independent reads rather than conflicting writes. Always inspect the current branch/PR; never reset its history.
+- Editor: **ACTIVE — continuation 1 is translating the remaining ISS runtime/canvas UI and then recording an all-world language inventory. Do not edit this branch concurrently.**
 - Scheduled continuations completed: **0 of 5**. Planned starts: 01:31, 02:31, 03:31, 04:31 and 05:31 CEST on 17 September. These are hourly resumptions, not continuous background execution.
 - Next task: finish ISS dynamic/canvas English and begin the all-world language inventory; then advance genuine source-level model/texture work using the newer Froge branch below.
 
