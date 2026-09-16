@@ -6,17 +6,18 @@ Decision: **P0 implementation in progress; final contest readiness is NO-GO.** T
 |---|---|---|
 | Official contest | DATE VERIFIED; FINAL FORM REVIEW PENDING | Official Product Hunt contest page names the GPT-6 Astra Challenge and 18 September 2026. Re-open the form/rules before final submission |
 | Production baseline | DEPLOYED | https://worldifact.xodobrox.workers.dev; shared Oracle health bridge deployed and production smoke passed |
-| AI Game Lab P0 | REVIEW BRANCH | PR #13 / `feat/p0-game-lab-astra-20260916` makes `/lab` the native reference workbench, requires Astra Structured Output `WorldBlueprint + AssetSpec`, validates both server-side, applies the blueprint to the Three.js scene and exposes a visible Astra trace with separate GAME/MAKE plans |
-| WorldBlueprint | IMPLEMENTED / TESTING | Strict schema and server validation already existed; P0 keeps the visible scene application path and makes it the primary judging flow |
+| AI Game Lab P0 | REVIEW BRANCH; GREEN CI | PR #13 / `feat/p0-game-lab-astra-20260916` makes `/lab` the native reference workbench, requires Astra Structured Output `WorldBlueprint + AssetSpec`, validates both server-side, applies the blueprint to the Three.js scene and exposes a visible Astra trace with separate GAME/MAKE plans. Current exact-head CI is green |
+| WorldBlueprint | IMPLEMENTED / TESTED | Strict schema and server validation already existed; P0 keeps the visible scene application path and makes it the primary judging flow |
 | AssetSpec | IMPLEMENTED ON PR #13 | New strict contract includes GAME geometry/material/animation/gameplay plan and MAKE candidate dimensions/material/process/constraints. MAKE validation status is forced to `validation-required` |
-| Visible Astra role | IMPLEMENTED ON PR #13 | UI explicitly shows `PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT → SCENE CHANGE → GAME / MAKE` and lets the user inspect generated blueprint/spec JSON |
+| Visible Astra role | IMPLEMENTED ON PR #13 | UI explicitly shows `PROMPT / IMAGE → GPT-6 ASTRA → WORLD BLUEPRINT + ASSET SPEC → SCENE CHANGE → GAME / MAKE` and lets the user inspect generated blueprint/spec JSON |
 | GAME output | PARTIAL / TRUTHFUL | Procedural preview geometry can be added to the scene and exported as GLB. This is not claimed as an Oracle-generated production asset unless a separate Blender job actually produces it |
 | MAKE output | BLOCKED / VALIDATION REQUIRED | Candidate manufacturing plan only. No manufacturing-ready file, quote, order or approval is claimed |
-| Oracle VM | LIVE HEALTH VERIFIED; STORAGE URGENT | Running connector v33 / character standard 20 / OpenAI / gpt-6-astra is healthy. Owner reports only about 2 GB free now; do not start a Blender batch before storage is expanded and rechecked |
+| Oracle VM | LIVE HEALTH VERIFIED; STORAGE GATE | Running connector v33 / character standard 20 / OpenAI / gpt-6-astra is healthy. Owner reports only about 2 GB free now. Owner approved boot-volume expansion to 100 GB provided yearly incremental cost stays <= EUR 40 |
+| Oracle storage economics | COST APPROVED; RESIZE NOT EXECUTED | Oracle documents 200 GB combined boot/block storage in the home region as Always Free. If the extra 70 GB were fully billed at current standard Block Volume + Balanced performance rates, it is about USD 35.70/year before tax. Actual tenancy-wide volume usage must be checked before resize |
 | Five-world Oracle bridge | DEPLOYED READ-ONLY | All five world cards report shared Oracle readiness; secrets stay server-side |
 | Oracle prompt job path | PR #12 GREEN; NOT DEPLOYED | Owner-only prompt submit/poll path is reviewed and green behind `ENABLE_ORACLE_JOBS=false`. Image-to-Oracle remains `BLOCKED_UNVERIFIED` |
-| Paid Astra | OWNER APPROVED IN PRINCIPLE; NUMERIC PILOT CEILING REQUIRED | User authorized paid Astra use on 16 Sep. Before incurring spend, set a concrete request ceiling/expiry and preview/public access policy, then deploy the approved P0 configuration |
-| Public no-login P0 | INCOMPLETE | Current LIVE blueprint path still expects a preview access code. Contest P0 requires a clean-session public flow without login; replace maker-code friction with a tightly budgeted public pilot or another reviewed public allowance before launch |
+| Paid Astra | OWNER COST APPROVED; NOT YET ARMED | Owner approved up to USD 5 total for the first pilot, with an absolute shared ceiling of 4 attempts over 3 hours. Current production remains paid-OFF until the merge/deploy approval and pilot workflow activation |
+| Public no-login P0 | PREPARED ON PR #13 | Reviewed public pilot path removes login friction only when hard-capped rate limit, expiry and Durable Object global request ceiling are armed. Default automatic releases stay OFF |
 | Android/browser QA | PARTIAL | Owner screenshot confirms `/control` on Android and five Oracle-ready cards. Full P0 WebGL interaction/accessibility/fallback QA remains |
 | Launch materials | DRAFT | Final genuine screenshots/video need the real LIVE Astra run and visible GAME/MAKE trace |
 
@@ -28,13 +29,27 @@ The P0 server request uses `gpt-6-astra` through the Responses API, keeps `OPENA
 
 The Oracle Blender path remains separate because the current public connector contract verifies prompt jobs but not reference-image jobs. A real Oracle-produced GLB must be labeled as such only after a succeeded job and artifact retrieval.
 
+## Approved pilot envelope
+
+Owner approval recorded 16 September 2026:
+
+- Oracle boot volume target: **100 GB**.
+- Oracle incremental cost ceiling: **EUR 40/year**.
+- Astra pilot spending ceiling: **USD 5 total**.
+- Hard execution ceiling: **4 shared attempts maximum** over **3 hours**.
+- Suggested allocation: 3 public P0 Astra blueprint/spec calls + 1 owner-only Oracle prompt job.
+- No batch of Blender jobs until Oracle free space is expanded and verified.
+- These approvals do not by themselves authorize merging or production deployment; those remain separate explicit gates.
+
+Current OpenAI model documentation identifies `gpt-6-astra` as the production model ID and lists text pricing at USD 10 / 1M input tokens and USD 50 / 1M output tokens. Image input is supported through the Responses API. The product hard cap remains the primary spend control.
+
 ## Immediate gates
 
-1. Finish exact-head CI for PR #13 and fix any failures; do not merge/deploy on a red head.
-2. Expand Oracle storage before new Blender jobs. Back up first; online boot-volume expansion is preferred for the fastest P0 recovery, then extend the Linux filesystem and verify free space.
-3. Obtain a concrete paid pilot ceiling and expiry. Recommended first pilot: three WORLDIFACT Astra requests plus one Oracle prompt-only Blender job, with a small hard dollar ceiling.
-4. After explicit merge/deploy approval, deploy PR #12 + PR #13 and the reviewed paid flags/limits.
-5. Run clean-session public P0 evidence: text prompt first, optional image second → LIVE Astra response → validated blueprint/spec → visible scene change → GAME/MAKE panels. Capture response evidence and media.
+1. Audit current Oracle boot/block volume usage in the Amsterdam home region, create/confirm a backup, resize the existing boot volume to 100 GB, run `oci-growfs`, and verify filesystem free space plus Froge worker/tunnel health.
+2. Obtain explicit merge/deploy approval for PR #12 + PR #13; do not infer it from the cost approval.
+3. After deployment, arm the reviewed manual pilot for 4 attempts / 3 hours and keep the USD 5 account-side spending ceiling.
+4. Run clean-session public P0 evidence: text prompt first, optional image second → LIVE Astra response → validated blueprint/spec → visible scene change → GAME/MAKE panels. Capture response evidence and media.
+5. Run one owner-only Oracle prompt job only after storage is healthy; call its GLB GENERATED only after a succeeded job and artifact retrieval.
 6. Only after P0 works, reconnect the same engine to Enchanted AI Shop and the other worlds.
 
 ## Truth boundary
