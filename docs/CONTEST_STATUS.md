@@ -1,82 +1,61 @@
 # Contest status — AI Game Lab P0, 16 September 2026
 
-Decision: **P0 technical flow has real LIVE evidence; final contest readiness is still NO-GO. Android clean-session QA exposed a portal-navigation regression in `/lab`; a code fix is prepared on `fix/mobile-portal-navigation-20260916` and must pass CI plus owner-device re-test before release.** The reference flow is `PROMPT / IMAGE → GPT-6 ASTRA → WorldBlueprint + AssetSpec → visible 3D scene change → GAME / MAKE`. The other four worlds remain connected but are not the P0 completion gate.
+Decision: **P0 has real LIVE Astra evidence, but final contest readiness remains NO-GO pending device QA and launch preparation. Owner Android QA found two additional presentation failures: the external 8 Planets iframe is blank, and `/lab` says DEMO only while offering no usable local DEMO action. A no-cost fix is prepared on `fix/nonworking-embedded-worlds-20260916`.**
+
+Reference flow: `PROMPT / IMAGE → GPT-6 ASTRA → WorldBlueprint + AssetSpec → visible 3D scene change → GAME / MAKE`.
 
 | Item | Status | Evidence / remaining work |
 |---|---|---|
-| Official contest | DATE VERIFIED; FINAL FORM REVIEW PENDING | Official Product Hunt contest page names the GPT-6 Astra Challenge and 18 September 2026. Re-open the official contest/form immediately before final submission |
-| Production baseline | DEPLOYED | `https://worldifact.xodobrox.workers.dev`; P0 implementation and owner-only Oracle artifact readback are on `main` |
-| AI Game Lab P0 | LIVE IMPLEMENTATION DEPLOYED; PORTAL FIX PENDING | `/lab` is the native reference workbench; Astra Structured Output requires and validates both `WorldBlueprint` and `AssetSpec`; the validated blueprint drives the visible Three.js scene. Android QA found that the embedded meadow used a no-op portal callback, so non-current portal transitions could freeze at `Entering world…` |
-| Text Astra proof | LIVE / GENERATED | Paid pilot reservation #1 succeeded: `Green Valley Solar Rover Workshop`, 3 scene objects, main asset `Workshop Rover`, 905 total provider-reported tokens |
-| Image Astra proof | LIVE / GENERATED | Paid recovery reservation #3 succeeded: `Blue and Green Valley Garden`, 6 scene objects, `Blue Garden Monument`, 1,594 total provider-reported tokens, response `resp_074915dbcf617af1016aaa3474281c87d19318b0b7abbbae56` |
-| Failed image attempt | SAFE FAILURE | Reservation #2 returned sanitized HTTP 502. The attempt still consumed the global reservation by design; no automatic retry occurred |
-| AssetSpec / GAME / MAKE | VERIFIED CONTRACT | Astra output includes separate GAME and MAKE plans. MAKE is forced to `validation-required`; no manufacturing-ready file, quote, order or approval is claimed |
-| Oracle VM | STORAGE EXPANDED; SERVICES HEALTHY | Boot volume 100 GB; Linux `sda=100G`, `sda3=97.9G`, root LV `82.9G`, root filesystem `83G` with about `54G` free. `froge-worker` and `froge-tunnel` remained active |
-| Oracle model job | LIVE / GENERATED-UNREVIEWED | Job `4a1db549-cc82-4b2e-bf15-7877e06fc968` reached `succeeded` after 249.9 s. The resulting GLB was retrieved read-only and cryptographically/structurally verified. Connector detail still says the working result requires corrections/review, so visual/model-quality approval is not claimed |
-| Oracle GLB evidence | VERIFIED BINARY / QUALITY UNREVIEWED | GLB: 204,732 bytes; SHA-256 `73823a6e463df2b91a716c1afb50068cc150ed6003a177073f9048528c4c4dbc`; glTF 2.0; Blender glTF exporter; 30 named meshes / 31 primitives, 30 nodes, 7 materials, 0 textures, 0 images, 0 animations, 5,132 declared vertices, 9,024 indexed elements. Provenance remains `GENERATED-UNREVIEWED` |
-| Five-world Oracle bridge | DEPLOYED | One server-side Oracle connection is shared by Chess, ISS, Planets, Shop and Game Lab; secrets stay server-side |
-| Public pilot quota | EXHAUSTED / HARD CAPPED | The approved cumulative ceiling was exactly 4 reservations. All four are consumed. Do not make another paid generation call without a new explicit owner approval |
-| Public no-login flow | IMPLEMENTED; LIVE QUOTA CURRENTLY EXHAUSTED | The no-login route is implemented and was proven with real Astra calls under rate limiting, expiry and persistent global quota. A launch allowance must be separately approved before public judges can make fresh LIVE calls |
-| Public HTTPS | VERIFIED HTTP | Automated no-browser evidence confirmed `/`, `/lab`, and `/api/health` respond over public HTTPS. This is not browser/WebGL/device QA |
-| Android/browser QA | REGRESSION FOUND / FIX PREPARED | Owner Android loaded `/lab` without login, WebGL and responsive layout rendered, but crossing Chess Cube inside `/lab` froze at `Entering world…`. Root cause identified as `onPortalOpen={() => {}}` in `P0GameLab`. Fix routes non-current portals through React Router and explains that Game Lab is already the current portal. Deployment and re-test remain required |
-| Launch materials | DRAFT | Capture genuine P0 screenshots/video from the deployed interface and clearly separate LIVE generated specifications, procedural GAME geometry, Oracle `GENERATED-UNREVIEWED` output and MAKE validation-required concepts |
+| Official contest | DATE VERIFIED; FINAL FORM REVIEW PENDING | Re-open the official Product Hunt contest page, launch guide and submission form immediately before scheduling/submitting |
+| Production | DEPLOYED | `https://worldifact.xodobrox.workers.dev` |
+| AI Game Lab P0 | LIVE IMPLEMENTATION DEPLOYED | Native `/lab`; validated `WorldBlueprint + AssetSpec`; Three.js scene; GAME/MAKE separation |
+| Text Astra proof | LIVE / GENERATED | Reservation #1: `Green Valley Solar Rover Workshop`, 3 scene objects, `Workshop Rover`, 905 provider-reported tokens |
+| Image Astra proof | LIVE / GENERATED | Reservation #3: `Blue and Green Valley Garden`, 6 objects, `Blue Garden Monument`, 1,594 tokens; response `resp_074915dbcf617af1016aaa3474281c87d19318b0b7abbbae56` |
+| Failed Astra image attempt | SAFE FAILURE | Reservation #2 returned sanitized HTTP 502; no retry and no secret leakage |
+| GAME / MAKE contract | VERIFIED | Separate GAME and MAKE plans; MAKE forced to `validation-required` |
+| Public pilot quota | EXHAUSTED / HARD CAPPED | Exactly 4/4 approved reservations consumed. No further paid generation without new explicit owner approval |
+| Oracle VM | HEALTHY | 100 GB boot volume; root ~83 GB with ~54 GB free; worker/tunnel active after expansion |
+| Oracle job | LIVE / GENERATED-UNREVIEWED | Job `4a1db549-cc82-4b2e-bf15-7877e06fc968` succeeded after 249.9 s |
+| Oracle GLB | VERIFIED BINARY / QUALITY UNREVIEWED | 204,732 B; SHA-256 `73823a6e463df2b91a716c1afb50068cc150ed6003a177073f9048528c4c4dbc`; glTF 2.0; 30 meshes; 7 materials; no textures/images/animations |
+| Portal navigation hotfix | DEPLOYED / SOURCE+CI PASS | PR #19 routes non-current portals out of `/lab`; production CI and deploy passed; full owner-device cross-route re-test remains |
+| AI Game Lab Android UI | PARTIAL | WebGL scene and controls render. LIVE correctly blocked by exhausted quota. Current production lacks a usable local DEMO action |
+| AI Game Lab no-cost fallback | PREPARED | Fix branch adds `Try DEMO locally · no API cost`, produces clearly-labelled `DEMO / MOCK`, changes scene and exposes local Blueprint/AssetSpec |
+| 8 Planets Android | FAIL ON CURRENT PRODUCTION | `/planets` displays a blank/broken external FORGE World Builder iframe on owner Android |
+| 8 Planets no-login fallback | PREPARED | Fix branch replaces the primary iframe with local eight-stage `DEMO · MOCK GAMEPLAY`; original FORGE prototype stays an external link; full campaign remains PLANNED |
+| Other tested pages | OWNER-REPORTED WORKING | User reports other tested pages work; exact per-route evidence still needs recording |
+| Launch materials | DRAFT | Capture screenshots/video only after device QA of the repaired production build |
 
 ## LIVE P0 evidence
 
-The approved pilot had an absolute persistent ceiling of four reservations over three hours. Provider failures were intentionally not refunded and no automatic generation retries were allowed.
+The approved pilot used a persistent absolute ceiling of four reservations. Provider failures were intentionally not refunded and automatic generation retry was disabled.
 
-1. **Reservation #1 — LIVE Astra text:** success. `Green Valley Solar Rover Workshop`; 3 scene objects; `Workshop Rover`; 905 total tokens.
-2. **Reservation #2 — LIVE Astra image:** safe failure. Provider returned sanitized HTTP 502; no secret/provider body leaked and no retry was issued.
-3. **Reservation #3 — LIVE Astra image:** success. `Blue and Green Valley Garden`; 6 objects; `Blue Garden Monument`; MAKE `validation-required`; 1,594 total tokens; blueprint SHA-256 `4af2418993a9052db2b2265c6a4e235c3ebc0d2298ba0ef43f0fb0982b4feb1b`.
-4. **Reservation #4 — Oracle prompt job:** success at the generation/job level. Job `4a1db549-cc82-4b2e-bf15-7877e06fc968` completed through connector v33 / Astra / Codex / Blender in 249.9 s.
+1. **#1 LIVE Astra text — PASS.** `Green Valley Solar Rover Workshop`; 3 objects; `Workshop Rover`; 905 tokens.
+2. **#2 LIVE Astra image — SAFE FAILURE.** Sanitized HTTP 502; no retry.
+3. **#3 LIVE Astra image — PASS.** `Blue and Green Valley Garden`; 6 objects; `Blue Garden Monument`; MAKE `validation-required`; 1,594 tokens; blueprint SHA-256 `4af2418993a9052db2b2265c6a4e235c3ebc0d2298ba0ef43f0fb0982b4feb1b`.
+4. **#4 Oracle prompt job — PASS at generation/job level.** Astra/Codex/Blender completed and produced the retrieved GLB.
 
-## Oracle artifact evidence
+## Current Android findings and prepared fix
 
-The completed Oracle job was later retrieved through an owner-only, read-only endpoint. This retrieval did **not** reserve generation budget and did **not** call Astra or start Blender again.
+### AI Game Lab
 
-- file size: **204,732 bytes**;
-- SHA-256: **`73823a6e463df2b91a716c1afb50068cc150ed6003a177073f9048528c4c4dbc`**;
-- glTF version: **2.0**;
-- generator metadata: **Khronos glTF Blender I/O v4.3.47**;
-- scene count: 1; nodes: 30; meshes: 30; primitives: 31;
-- materials: 7; textures: 0; images: 0; animations: 0;
-- declared vertices: 5,132; indexed elements: 9,024;
-- provenance label: **`GENERATED-UNREVIEWED`**.
+Current production correctly blocks new LIVE Astra generation because the 4/4 pilot is exhausted. The owner device nevertheless sees `DEMO only` with no usable DEMO generation button. The fix branch activates the existing local validated `demoBlueprint` / `localSceneResult` path so a visitor can enter a prompt and see a no-cost, clearly marked `DEMO / MOCK` scene change. It does not call OpenAI or Oracle and cannot be represented as a LIVE Astra result.
 
-The structural report includes rover-related names such as `Chamfered chassis`, `Six low poly tires`, `Three solar panel frames`, `Solar cell array`, `Sensor mast`, camera lenses and rear vent slots. This confirms a real generated GLB with non-empty rover geometry, but it does **not** prove visual quality, printability or manufacturing readiness. The connector itself reported that corrections/review are still required.
+### 8 Planets in 8 Days
 
-Artifact review workflow run `35079392864` completed successfully and also confirmed public HTTP responses for `/`, `/lab`, and `/api/health`. The one-time review marker was removed after the evidence was captured so future deployments cannot repeat the artifact review accidentally.
-
-## Android portal regression — 16 September
-
-Owner-device clean-session QA reached `/lab` on Android and rendered the WebGL scene. Crossing the Chess Cube portal then showed `Entering world…` indefinitely. Inspection found the deterministic cause: `P0GameLab` passed a no-op `onPortalOpen` callback to `StartingWorld`, while `StartingWorld` correctly stops its animation loop during navigation. The Game Lab portal itself is intentionally excluded inside `/lab` because it is the current destination (`YOU ARE HERE`).
-
-Prepared fix on `fix/mobile-portal-navigation-20260916`:
-
-- resolve portal ids through the central portal configuration;
-- navigate the four non-current portals instead of using a no-op callback;
-- keep Game Lab visibly marked as the current world rather than pretending to re-enter `/lab`;
-- add route-resolution regression coverage;
-- update device QA with the observed failure and required re-test.
-
-The fix is **not** considered deployed or verified on device until CI is green, owner approves merge/deploy, and the same Android test passes.
-
-## What P0 now proves
-
-WORLDIFACT has real server-side GPT-6 Astra execution using Structured Outputs. Successful production requests returned validated `WorldBlueprint + AssetSpec`; the blueprint uses the same client contract that drives the Three.js scene, while the UI exposes the generated plan and separates GAME from MAKE. Both text-only and image-input Astra requests succeeded in production.
-
-A separate owner-only Oracle route also completed an Astra/Codex/Blender job and produced a real GLB that was retrieved and structurally verified. This file is evidence of actual 3D generation, but remains `GENERATED-UNREVIEWED` until a human visually reviews the geometry/material result.
+Current `/planets` depends on an iframe pointing to the external FORGE World Builder prototype. Owner Android shows a broken blank frame. The fix branch makes WORLDIFACT itself provide a no-login local eight-stage DEMO with Move, Jump, course progress and planet selection. The external prototype remains available only through a separate link. This is intentionally labelled DEMO/MOCK; the complete eight-level game remains PLANNED.
 
 ## Immediate gates
 
-1. Get green CI for the Android portal-navigation fix, then obtain explicit owner approval before merging/deploying it.
-2. Re-test deployed `/lab` on owner Android: cross Chess/ISS/Planets/Shop portals, confirm each route opens; confirm Game Lab says `YOU ARE HERE` and does not freeze; rotate portrait/landscape.
-3. Run desktop QA of `/lab`: scene rendering/change, blueprint/spec visibility, GAME/MAKE labels, WebGL/fallback, responsiveness and accessibility. No further paid call is permitted under the exhausted four-attempt pilot.
-4. Visually review the retrieved Oracle GLB before using it in Product Hunt media or upgrading its status beyond `GENERATED-UNREVIEWED`.
-5. Decide a separate launch-time Astra allowance/cost ceiling if public Product Hunt visitors should be able to make fresh LIVE calls. Until approved, keep further paid generation blocked/exhausted rather than silently increasing the budget.
-6. Capture real screenshots/demo video from the deployed product and finalize Product Hunt copy, Shoutouts, topics and Maker Comment.
-7. Re-open the official contest page and final submission form immediately before scheduling/submitting.
+1. Get green exact-head CI for `fix/nonworking-embedded-worlds-20260916`.
+2. Obtain explicit owner approval before merge/deploy.
+3. Re-test `/lab` on Android: local DEMO changes the scene, output says `DEMO · MOCK`, GAME/MAKE is visible, and portal routing remains functional.
+4. Re-test `/planets` on Android: local content renders without the broken remote iframe and controls respond.
+5. Test portrait + landscape and record exact routes that pass.
+6. Run desktop QA.
+7. Decide a separate launch-time Astra budget only if judges should be able to make fresh LIVE requests.
+8. Visually review the Oracle GLB before using it as a quality claim.
+9. Capture real launch media and finalize Product Hunt copy.
 
 ## Truth boundary
 
-Use `LIVE / DEMO / PLANNED / BLOCKED` and `REAL / GENERATED / MOCK`. Never present a procedural preview as an Oracle-generated model, an Oracle `GENERATED-UNREVIEWED` file as quality-approved or manufacturing-ready, a MAKE candidate as manufacturing-ready, or an estimate as an actual quote/order.
+Use `LIVE / DEMO / PLANNED / BLOCKED` and `REAL / GENERATED / MOCK`. Never present a local DEMO as an Astra result, procedural preview as Oracle-generated geometry, the Oracle `GENERATED-UNREVIEWED` GLB as quality-approved/manufacturing-ready, or a MAKE candidate as production-ready.
