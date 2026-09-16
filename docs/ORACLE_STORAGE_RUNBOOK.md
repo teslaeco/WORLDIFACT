@@ -2,7 +2,7 @@
 
 ## Recommendation
 
-For the contest P0, expand the **existing boot volume in place** instead of migrating jobs to a second filesystem tonight. It is the smallest operational change to the preserved v33 VM and can be expanded again later. Recommended first target: **100 GB**.
+For the contest P0, expand the **existing boot volume in place** instead of migrating jobs to a second filesystem tonight. It is the smallest operational change to the preserved v33 VM and can be expanded again later. Approved target: **100 GB**.
 
 Do not run Blender jobs when the connector is near its 2 GB free-space guard. Back up before resizing.
 
@@ -38,19 +38,15 @@ This inventory does not resize or create storage.
 
 ## 2. Cost/entitlement gate
 
-Official OCI documentation currently describes an Always Free combined boot + block volume allowance, while Oracle's current public global price list presents a different free-volume quantity. Treat free entitlement as **UNKNOWN until the tenancy's actual usage/eligibility is checked**. Do not assume the resize is free.
+Oracle's current Always Free documentation states that eligible tenancies receive **200 GB total combined boot + block volume storage in the home region**, plus five volume backups. WORLDIFACT's Oracle Cloud Shell showed the tenancy home region as Netherlands Northwest (Amsterdam), but actual tenancy-wide storage usage still needs to be checked before relying on the free allowance.
 
-Published Netherlands PAYG list prices are approximately:
+Oracle's current global price list publishes standard Block Volume storage at **USD 0.0255/GB-month** and Balanced performance at **USD 0.017/GB-month** (10 VPUs/GB). If the current boot volume is 30 GB and all added 70 GB were billed at those list rates, the incremental list-price estimate is about **USD 2.975/month or USD 35.70/year**, before tax/discount/free entitlement. This remains an estimate, not an Oracle quote.
 
-- block-volume storage: €0.023715 / GB-month;
-- performance units: €0.001581 / VPU-GB-month;
-- Balanced uses 10 VPUs/GB, so list price is about €0.039525 / GB-month before any free entitlement/discount.
+Owner-approved ceiling: **EUR 40/year incremental**. If the OCI console/CLI indicates a higher charge or a configuration outside this envelope, stop before resize.
 
-If the current volume is 30 GB, expanding to 100 GB adds 70 GB. At the published Balanced list rate that is approximately **€2.77/month or €33.20/year incremental**, before any Always Free entitlement. This is an estimate, not an Oracle quote.
+## 3. Cost-changing action — approved up to the stated ceiling
 
-## 3. Cost-changing action — only after explicit approval
-
-First create/confirm a recoverable boot-volume backup or another approved rollback point. Backup storage itself can affect billing.
+First create/confirm a recoverable boot-volume backup or another approved rollback point. Oracle documents five Always Free volume backups in the home region for eligible tenancies, but actual usage must be checked before assuming another backup is free.
 
 Then online-resize the existing boot volume:
 
@@ -62,7 +58,7 @@ oci bv boot-volume update \
   --wait-for-state AVAILABLE
 ```
 
-OCI volume resize is grow-only; do not choose a target larger than needed.
+OCI documents online boot-volume expansion without detaching the instance. Resize is grow-only: do not choose a target larger than needed.
 
 ## 4. Extend Oracle Linux root filesystem
 
@@ -82,7 +78,7 @@ lsblk
 df -h /
 ```
 
-If `oci-growfs` is unavailable or the disk layout differs, stop and inspect the partition/LVM layout instead of improvising destructive partition commands.
+Oracle documents `oci-growfs` for extending an XFS/ext4 root filesystem after boot-volume expansion. If `oci-growfs` is unavailable or the disk layout differs, stop and inspect the partition/LVM layout instead of improvising destructive partition commands.
 
 ## 5. WORLDIFACT verification after resize
 
@@ -93,4 +89,11 @@ systemctl --user is-active froge-worker.service
 systemctl --user is-active froge-tunnel.service
 ```
 
-Then repeat authenticated `/v1/health`. Only after storage and health are good should `ENABLE_ORACLE_JOBS` be considered for a single controlled prompt job.
+Then repeat authenticated `/v1/health`. Only after storage and health are good should `ENABLE_ORACLE_JOBS` be considered for the single controlled prompt job inside the approved 4-attempt / 3-hour pilot.
+
+## Official references re-checked 2026-09-16
+
+- Oracle Always Free resources: combined 200 GB boot/block volume allowance in the tenancy home region.
+- Oracle Block Volume online resize: boot/block volumes can be expanded online; they cannot be reduced.
+- Oracle OCI Utilities: `oci-growfs` expands the root partition/filesystem after boot-volume growth.
+- Oracle Cloud price list: Block Volume storage and performance units are billed per GB-month when not covered by entitlement/discount.
