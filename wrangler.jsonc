@@ -7,21 +7,47 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": [
+      "/api/*"
+    ]
   },
   "vars": {
     "OPENAI_MODEL": "gpt-6-astra",
-    "ENABLE_PAID_GENERATION": "false",
-    "PUBLIC_PILOT": "false",
-    "ENABLE_ORACLE_JOBS": "false",
-    "GENERATION_REQUEST_LIMIT": "0",
-    "GENERATION_EXPIRES_AT": "",
-    "ENABLE_APPROVED_FAST_TEST": "true"
+    "ENABLE_PAID_GENERATION": "true",
+    "PUBLIC_PILOT": "true",
+    "ENABLE_ORACLE_JOBS": "true",
+    "GENERATION_REQUEST_LIMIT": "10000",
+    "GENERATION_EXPIRES_AT": "2026-09-20T23:59:59Z",
+    "ENABLE_APPROVED_FAST_TEST": "false",
+    "ENABLE_STUDIO_JOBS": "true"
   },
   "durable_objects": {
-    "bindings": [{"name": "GENERATION_BUDGET", "class_name": "GenerationBudget"}]
+    "bindings": [
+      {
+        "name": "GENERATION_BUDGET",
+        "class_name": "GenerationBudget"
+      }
+    ]
   },
-  "migrations": [{"tag": "v1", "new_sqlite_classes": ["GenerationBudget"]}],
-  "ratelimits": [{"name":"GENERATION_LIMITER", "namespace_id":"5122026", "simple":{"limit":3,"period":60}}],
-  "observability": {"enabled":false}
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "GenerationBudget"
+      ]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "GENERATION_LIMITER",
+      "namespace_id": "5122026",
+      "simple": {
+        "limit": 3,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": false
+  }
 }

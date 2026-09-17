@@ -111,8 +111,10 @@ export async function checkPublishedRelease(deployment: Deployment,
     }
   };
   const health = await json(await request("/api/health"), "/api/health");
-  requireCheck(health.mode === "DEMO" && health.generationReady === false && health.model === null,
-    "This first-release check requires DEMO with paid generation unavailable.");
+  const demoHealth = health.mode === "DEMO" && health.generationReady === false && health.model === null;
+  const readyHealth = health.mode === "READY" && health.generationReady === true && health.model === "gpt-6-astra";
+  requireCheck(demoHealth || readyHealth,
+    "Release health must be either reviewed DEMO or reviewed GPT-6 Astra READY configuration.");
 
   const expectedHtml = await readFile(join(dist, "index.html"));
   requireCheck(/id=["']root["']/.test(expectedHtml.toString()), "Built app entry point is missing.");
@@ -167,7 +169,7 @@ export async function checkPublishedRelease(deployment: Deployment,
     ...options, headers: { ...options.headers, Origin: "https://invalid-origin.example" },
   });
   await json(rejected, "Cross-origin blueprint request", 403);
-  return { origin, versionId, mode: "DEMO", htmlRoutes: routes.length, verifiedAssets: assets.length, foundationAssets: foundation.files.length };
+  return { origin, versionId, mode: String(health.mode), htmlRoutes: routes.length, verifiedAssets: assets.length, foundationAssets: foundation.files.length };
 }
 
 async function main() {
@@ -182,10 +184,10 @@ async function main() {
   console.log(`Deployed URL: ${deployment.origin}`);
   console.log(`Cloudflare version: ${deployment.versionId}`);
   const result = await checkPublishedRelease(deployment);
-  console.log(`PASS: ${result.htmlRoutes} HTML routes, ${result.verifiedAssets} matching hub assets, ${result.foundationAssets} original app entries/assets, API 404, DEMO generation and origin rejection. No paid API call.`);
+  console.log(`PASS: ${result.htmlRoutes} HTML routes, ${result.verifiedAssets} matching hub assets, ${result.foundationAssets} original app entries/assets, API 404, explicit no-cost DEMO request and origin rejection. Health: ${result.mode}. No paid API call.`);
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `url=${result.origin}\n`);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY,
-    `## WORLDIFACT DEMO release\n\n[Open WORLDIFACT](${result.origin})\n\n` +
+    `## WORLDIFACT release · ${result.mode}\n\n[Open WORLDIFACT](${result.origin})\n\n` +
     `Cloudflare version: \`${result.versionId}\`\n\n` +
     `HTTP checks passed: ${result.htmlRoutes} application routes, ${result.verifiedAssets} hub files, ${result.foundationAssets} copied application entries/assets matching the build, API 404, DEMO generation and origin rejection.\n\n` +
     "No paid API call. Browser appearance, WebGL and physical Android still require device QA.\n");

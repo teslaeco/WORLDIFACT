@@ -177,13 +177,16 @@ test("release smoke rejects a lazy asset silently replaced by HTML or stale Java
   }
 });
 
-test("release smoke refuses a READY health response before making a generation request", async (t) => {
+test("release smoke accepts reviewed READY health while still making only explicit DEMO POSTs", async (t) => {
   const f = await fixture(t);
   const fetcher = async (url: URL, init: RequestInit) => url.pathname === "/api/health"
     ? Response.json({ mode: "READY", generationReady: true, model: "gpt-6-astra" }) : f.fetcher(url, init);
-  await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /requires DEMO/);
-  assert.equal(f.requests.length, 0);
+  const result = await checkPublishedRelease({ origin, versionId }, { ...f, fetcher });
+  assert.equal(result.mode, "READY");
   assert.equal(f.providerCalls(), 0);
+  const posts = f.requests.filter(request => request.method === "POST");
+  assert.equal(posts.length, 2);
+  for (const request of posts) assert.equal((await request.json() as { mode: string }).mode, "demo");
 });
 
 test("release smoke detects a missing panorama served as HTML or a stale image", async (t) => {
