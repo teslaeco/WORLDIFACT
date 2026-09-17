@@ -20,6 +20,7 @@ type Health = {
   model?: string | null
 }
 
+const MAX_REFERENCE_BYTES = 6 * 1024 * 1024
 const DEFAULT_PROMPTS: Record<WorldId, string> = {
   'chess-cube-512-ai': 'Design a playable 8×8×8 chess arena asset with a clear board silhouette, safe readable geometry and a GAME plan.',
   'terra-fix-iss': 'Design an ISS repair-training scene that explores maintenance and preservation without claiming real current ISS failures or proven preservation feasibility.',
@@ -53,8 +54,8 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
     setError('')
     setImage(null)
     if (!file) return
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 1_000_000) {
-      setError('Choose PNG, JPEG or WebP up to 1 MB.')
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > MAX_REFERENCE_BYTES) {
+      setError('Choose PNG, JPEG or WebP up to 6 MB.')
       return
     }
     const reader = new FileReader()
@@ -91,9 +92,7 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
         headers['X-WORLDIFACT-Access'] = accessCode.trim()
       }
       const response = await fetch('/api/blueprint', {
-        method: 'POST',
-        headers,
-        signal: controller.signal,
+        method: 'POST', headers, signal: controller.signal,
         body: JSON.stringify({ worldId, prompt, image, mode: 'live' }),
       })
       const body = await response.json()
@@ -125,7 +124,8 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
       </div>
       <div className="portal-astra-controls">
         <label>Portal prompt<textarea rows={5} maxLength={2000} value={prompt} disabled={busy} onChange={event => setPrompt(event.target.value)} /></label>
-        <label>Reference image · optional<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={event => { void chooseImage(event.target.files?.[0]) }} /></label>
+        <label>Reference image · optional · max 6 MB<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={event => { void chooseImage(event.target.files?.[0]) }} /></label>
+        <label className="scan-input">Scan with phone camera · BETA<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={event => { void chooseImage(event.target.files?.[0]) }} /></label>
         {image && <div className="portal-astra-reference"><img src={image} alt="Selected portal reference" /><button type="button" disabled={busy} onClick={() => setImage(null)}>Remove image</button></div>}
         {health.accessRequired && <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={event => setAccessCode(event.target.value)} /></label>}
         <div className="portal-astra-buttons">
