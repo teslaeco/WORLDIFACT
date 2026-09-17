@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { avatarApi, NEPTUNE_QUEEN_JOB_ID } from '../server/avatar.ts';
+import { avatarApi, NEPTUNE_QUEEN_JOB_ID, RAPPER_ARCHIVE_URL } from '../server/avatar.ts';
 
 function minimalGlb() {
   const bytes = new Uint8Array(20);
@@ -38,6 +38,20 @@ test('avatar endpoint fails closed and never invents an old queen asset', async 
   const source = await readFile(new URL('../src/lib/playerAvatar.ts', import.meta.url), 'utf8');
   assert.match(source, /99397623-e45c-48dc-95ec-6f84446a54d5/);
   assert.doesNotMatch(source, /queen\.glb|E19/i);
+});
+
+
+test('shared world avatar picker offers the exact current Queen and archived rapper without old queen assets', async () => {
+  const player = await readFile(new URL('../src/lib/playerAvatar.ts', import.meta.url), 'utf8');
+  const world = await readFile(new URL('../src/components/StartingWorld.tsx', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../src/mobile-hotfix.css', import.meta.url), 'utf8');
+  assert.match(player, /99397623-e45c-48dc-95ec-6f84446a54d5/);
+  assert.match(player, /\/api\/avatar\/rapper-la/);
+  assert.match(world, /Neptune Queen · current MPC2 preview/);
+  assert.match(world, /Rapper · MPC2 archive/);
+  assert.match(css, /avatar-picker/);
+  assert.equal(RAPPER_ARCHIVE_URL, 'https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/models/rapper-v10.glb');
+  assert.doesNotMatch(player, /queen\.glb|E19/i);
 });
 
 test('Game Lab and portal reference uploads are raised to six MB and include phone scan entry points', async () => {
