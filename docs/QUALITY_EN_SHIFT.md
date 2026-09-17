@@ -7,11 +7,10 @@ Date: 17 September 2026 (Europe/Amsterdam). Owner: Sebastian.
 - Branch: `work/five-hour-quality-english-20260917`.
 - Draft WORLDIFACT PR: https://github.com/teslaeco/WORLDIFACT/pull/28
 - Base: `495a6524d7b597403eefd5b62bfbf8ee9fedc4e0`.
-- Editor: **ACTIVE — continuation 4 is working on measurable Froge/Blender quality evidence plus another bounded English-source batch. Do not edit this branch concurrently.**
-- Scheduled continuations completed: **3 of 5**.
-- Latest verified WORLDIFACT code head remains `8b53331195d22de1d2b1dd770fa92b698592ea76` because continuation 3 changed only upstream Terra source plus review documentation.
-- WORLDIFACT verification retained: run `35168300680` completed successfully.
-- Current task: add measurable source/Blender structural quality evidence without claiming photographic likeness, and advance a real editable English source surface. Keep the live Froge Site untouched.
+- Editor: **IDLE — continuation 4 completed; the next continuation may claim this branch.**
+- Scheduled continuations completed: **4 of 5**.
+- Latest verified WORLDIFACT code head remains `8b53331195d22de1d2b1dd770fa92b698592ea76`; continuation 4 changed upstream review source plus documentation, not WORLDIFACT runtime code.
+- WORLDIFACT branch verification after the continuation-4 coordination/doc changes must be read from the exact new PR head before the final handoff.
 
 ## Non-negotiable continuity
 
@@ -36,74 +35,74 @@ Canonical hosted Froge source editing remains **BLOCKED/UNKNOWN** in this work s
 
 ## Continuation 3 — Terra standalone English source work
 
-A focused upstream Terra draft PR was created instead of pretending that WORLDIFACT's parent wrapper translates nested static pages:
+Draft upstream Terra PR: https://github.com/Terraforming-Planet/Polar-Sun-Moon-Analysis/pull/271
 
-https://github.com/Terraforming-Planet/Polar-Sun-Moon-Analysis/pull/271
+Review head: `4a34ce18fe552f19aaa2e604b50260ecba5b40c8`.
 
-Final review head: `4a34ce18fe552f19aaa2e604b50260ecba5b40c8`.
+Translated real authored source includes `web/public/eclipse-live/gallery.html`, `web/public/404.html`, and `web/public/multi-angle/index.html` + `app.js`. NOAA manifest/source/hash/log evidence, observation/capture UTC meaning, the `/Polar-Sun-Moon-Analysis/` redirect target, and Copernicus STAC search semantics were preserved. Final Terra runs `35169328621`, `35169328579`, `35169328498` and `35169328503` all pass.
 
-### Source changes
+WORLDIFACT still uses reviewed Terra pin `ae90f7367587e0973782c470cde3f5103c0540fc`. PR #271 is based on newer Terra main `4d422e97121fda7199ce9320e0bba10a487cca42`, so a direct pin jump is intentionally not performed because it could import unrelated upstream work. Many other Terra standalone pages remain Polish.
 
-- `web/public/eclipse-live/gallery.html` now declares `lang=en` and uses English headings, notices, playback controls, facts, dynamic labels and errors.
-- Scientific provenance is preserved: the archived manifest path, NOAA source URLs, SHA-256 values, observation/capture UTC semantics and `session.log` / `capture.log` / `provenance.log` evidence remain unchanged.
-- `web/public/404.html` now uses English copy while preserving the exact canonical and JavaScript redirect target `/Polar-Sun-Moon-Analysis/`.
-- `web/public/multi-angle/index.html` and `app.js` now use English for the place/address form, manual coordinates, search hints, geocoder states, empty/error/result states and satellite metadata labels.
-- The official Copernicus STAC endpoint remains exactly `https://stac.dataspace.copernicus.eu/v1/search`; bbox, collection, date, cloud-cover and sorting semantics were not changed.
-- `web/staticEnglishPages.test.mjs` guards the translated standalone surfaces plus the NOAA/Copernicus provenance/endpoint invariants.
-- Existing Python gallery evidence tests were updated only from the old Polish truth statement to its English equivalent; archived-frame/source/hash/log assertions remain.
+## Continuation 4 — measurable rooted-hair evidence and review-source English
 
-### CI failures found and fixed, not hidden
+Draft Froge source PR: https://github.com/teslaeco/Froge-MPC-2-test/pull/16
 
-1. The first test file was placed inside `web/src` and referenced `node:fs/promises`, which is intentionally unavailable to the browser TypeScript build. It was moved outside the browser compilation tree rather than weakening tsconfig.
-2. The next main CI run passed the web checks but the Python suite still asserted the old Polish sentence `Animacja nie tworzy nowych danych`. The assertion was updated to `The animation does not create new data`; the data-truth requirements were preserved.
+Final continuation-4 review head: `656b12164bc9e08921067c2959ee326e9e7d64fe`.
 
-Final head `4a34ce18fe552f19aaa2e604b50260ecba5b40c8` is **green across all four Terra review workflows**:
+### Measured geometry evidence
 
-- CI run `35169328621`: PASS;
-- PR Validation run `35169328579`: PASS;
-- Validate web application run `35169328498`: PASS;
-- Validate Terra Observation Planet Site run `35169328503`: PASS.
+- `hair_root_attachment_evidence()` now measures the first generated `hair_lock()` root ring against the evaluated scalp BVH in world coordinates.
+- Evidence records ring size, authored root radius, centre-to-scalp gap, minimum/maximum first-ring gap, explicit tolerances and a structural pass/fail result.
+- It always records `likeness_assessed=false`.
+- The official-Blender regression creates a fitted closed UV hair lock that must pass, then translates the exact same mesh 0.6 scene units away and requires it to fail with a larger root-centre gap. This is a positive/negative geometry control, not a visual likeness score.
+- The separate `portrait_hair.py` builder remains outside this specific metric and must not be described as covered.
 
-### Important Terra pin boundary
+### English source evidence
 
-WORLDIFACT still uses the separately reviewed Terra pin `ae90f7367587e0973782c470cde3f5103c0540fc`. Terra PR #271 is based on current Terra main `4d422e97121fda7199ce9320e0bba10a487cca42`.
+In the reviewable GitHub snapshot only:
 
-Therefore PR #271 is **reviewable source evidence, not an automatic WORLDIFACT repin**. Directly moving WORLDIFACT from `ae90f73...` to `4a34ce...` could import unrelated upstream work. A later release must deliberately review/cherry-pick or approve the larger pin jump.
+- dictation locale is `en-US` and touched microphone/dictation errors are English;
+- the research-report error fallback and recovery actions are English;
+- touched rooted-hair diagnostics are English;
+- focused source regressions guard these translations.
 
-### Remaining Terra backlog
+This does **not** establish that the newer private hosted Studio UI is translated; canonical Site source parity remains BLOCKED/UNKNOWN.
 
-Many real standalone Terra pages remain Polish, including `eclipse-live/index.html`, `eclipse-live/close.html`, casebook/forum/Copernicus and experiment/archive pages. Continuation 3 is a bounded source batch, not an all-Terra completion claim.
+### Exact-head verification
 
-## 3D / texture quality status after continuation 3
+No-paid workflow `35171423726` on exact head `656b12164bc9e08921067c2959ee326e9e7d64fe` completed successfully:
 
-No new paid generation or live Studio code was used in this continuation. Existing review-only Froge PR #16 remains the current quality branch:
+- frontend locked install, lint, TypeScript, focused English regression and production build: PASS;
+- Python 3.12 unit + Codex/MCP fixture path: PASS;
+- Python 3.9 unit + Codex/MCP fixture + official Blender 4.3 build/render/FBX + edit helpers + rooted-hair attachment regression + anatomy diagnostics + atlas/material checks + board checks + v35 package/artifact: PASS.
 
-https://github.com/teslaeco/Froge-MPC-2-test/pull/16
+A broader diagnostic run `35171308192` exposed three unrelated/pre-existing frontend-suite issues instead of hiding them: a stale import in `docs/reviews/v32/remote-poll-race.test.tsx`, a commerce assertion expecting two legacy `Niepołączony` labels, and a photo-generation assertion expecting an older retry-button label. Those failures were not weakened or relabelled as passing tests. The continuation gate therefore uses focused localization regression plus lint, full TypeScript and production build for the touched UI source while the no-paid Python/Blender quality suite remains fully green.
 
-Review head remains `ab5b6523c45dfc45cddeffe35d979290a38d9d72`; no-paid run `35167461563` passed.
+## Current 3D / texture truth boundary
 
-Existing evidence includes truthful source/export pixel reporting, GLB texture/UV checks, garment/body intersection checks, anatomy metadata and real Blender FBX reimport with material-name and UV-presence validation. This still does **not** prove photographic likeness, hair-root continuity, face/neck/jaw/shoulder proportions, hand quality, shader equivalence or print readiness.
+Review-only Froge PR #16 now has evidence for truthful source/export pixel reporting, no-upscale handling, GLB texture/UV checks, structural FBX reimport, garment/body intersection checks, anatomy metadata, and one measured rooted-hair/scalp attachment failure class.
 
-Continuation 4 should improve one of those properties only where it can be measured by actual Blender/source checks. A source-only older Froge snapshot must not be described as a live generator improvement.
+It still does **not** prove photographic identity likeness, a natural hairline, face/neck/jaw/shoulder proportions, hand quality, every hair construction path, full PBR shader equivalence, or manufacturing/print readiness. No paid reference generation was executed to make those claims.
 
 ## External localization boundaries
 
-- **8 Planets:** recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5` is known from records, but no editable canonical source is exposed through the connected tools. Internal translation remains **BLOCKED**, not faked through the iframe wrapper.
-- **Hosted Froge:** the live Site remains preserved. Reviewable `teslaeco/Froge-MPC-2-test` contains Polish UI but is not proven source-identical to the current Site. Internal live localization remains **BLOCKED/UNKNOWN**.
+- **8 Planets:** recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5` is known from records, but no editable canonical source is exposed through connected tools. Internal translation remains **BLOCKED**, not faked through the iframe wrapper.
+- **Hosted Froge:** the live Site remains preserved. Reviewable `teslaeco/Froge-MPC-2-test` is not proven source-identical to the current Site. Internal live localization remains **BLOCKED/UNKNOWN**.
+- **Terra:** PR #271 proves a real bounded English source batch, not full Terra localization; integration requires a deliberate review instead of an unsafe pin jump.
 
-## Remaining priorities
+## Final continuation priorities
 
-1. Add measurable source/Blender evidence for hair-root/scalp continuity or another concrete anatomy/intersection defect without claiming likeness from structural tests.
-2. Strengthen material/PBR evidence beyond structural FBX reimport where the format actually permits verification.
-3. Continue Terra standalone English pages in bounded upstream batches after keeping PR #271 review-only.
-4. Continue reviewable Froge English only as source evidence until canonical Site parity/access is restored.
-5. Translate 8 Planets only when real editable source access is restored.
-6. Keep WORLDIFACT PR #28, Chess PR #143, Froge PR #16 and Terra PR #271 unmerged/unpublished until a deliberate release decision.
+1. Re-read exact current PR/CI state and do not repeat already-green work.
+2. Consolidate English coverage and remaining source-access blockers for all five worlds; translate another real source only if it can be safely reviewed without unsafe repinning or live-Site overwrite.
+3. Reconcile PR #16 diagnostic baseline failures as known debt, not as quality evidence; do not weaken tests merely for green CI.
+4. Recheck current-head WORLDIFACT verification after this documentation update.
+5. Produce the consolidated Polish GO/NO-GO report with actual changes, SHAs/PRs/tests, remaining canonical-source/device/visual blockers and costs. Do not extend the schedule.
+6. Keep WORLDIFACT PR #28, Chess PR #143, Froge PR #16 and Terra PR #271 unmerged/unpublished unless a later explicit release decision authorizes them.
 
-No new paid API/GPU generation, quota increase, secret change, Oracle installation, private archive access, model download, merge, production deployment or contest submission occurred in continuation 3. No separate Codex/Copilot cloud agent was launched; work was executed through connected GitHub tools.
+No new paid API/GPU generation, quota increase, secret change, Oracle installation, private archive access, model download, merge, production deployment or contest submission occurred in continuation 4. No separate Codex/Copilot cloud agent was launched; work was executed through connected GitHub tools.
 
 ## Continuation protocol
 
-Read current main/PR, `AGENTS.md`, `CONTEST_STATUS.md`, `LANGUAGE_AUDIT.md` and this checkpoint. Claim the editor marker, take the next incomplete package, make actual source/test changes, check current-head CI, update the ledger, increment the count exactly once, and return the marker to IDLE. Reuse WORLDIFACT PR #28. Keep upstream quality/localization PRs review-only unless later explicitly authorized for merge/deployment.
+Read current main/PR, `AGENTS.md`, `CONTEST_STATUS.md`, `LANGUAGE_AUDIT.md` and this checkpoint. Claim the editor marker, take the next incomplete package, make actual source/test changes where evidence supports them, check exact-head CI, update the ledger, increment the count exactly once, and return the marker to IDLE.
 
-After continuation 5 provide the consolidated Polish GO/NO-GO report with actual changes/tests/SHA/PRs, remaining source-access and visual-quality blockers and costs. Do not extend the work window or start another schedule.
+After continuation 5 provide the consolidated Polish GO/NO-GO report. Do not extend the work window or start another schedule.
