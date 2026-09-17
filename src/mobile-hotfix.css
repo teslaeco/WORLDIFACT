@@ -2,25 +2,7 @@
 :root { --mobile-dock: 64px; }
 html, body, #root { max-width: 100%; min-width: 0; }
 body { overflow-x: hidden; }
-.avatar-note:not(.avatar-picker) { display:none !important; }
-.avatar-picker {
-  position:absolute;
-  top:.75rem;
-  right:.75rem;
-  z-index:18;
-  pointer-events:auto;
-  display:grid;
-  gap:.25rem;
-  max-width:260px;
-  padding:.42rem .5rem;
-  border:1px solid #55727b;
-  border-radius:8px;
-  background:#0a2230e8;
-  color:#eaf2ee;
-  font-size:.72rem;
-}
-.avatar-picker select { min-height:34px; padding:.3rem .4rem; font-size:.72rem; background:#102a35; }
-.portal-generator-drawer { margin: 1rem 0 calc(1rem + env(safe-area-inset-bottom, 0px)); border: 1px solid #3b5961; border-radius: 12px; background:#10232b; }
+.avatar-note { display:none !important; }\n.portal-generator-drawer { margin: 1rem 0 calc(1rem + env(safe-area-inset-bottom, 0px)); border: 1px solid #3b5961; border-radius: 12px; background:#10232b; }
 .portal-generator-drawer > summary { cursor:pointer; padding: .9rem 1rem; font-weight: 800; color:#e9c27f; }
 .portal-generator-drawer[open] > summary { border-bottom:1px solid #3b5961; }
 .scan-input { border:1px dashed #5f7d85; border-radius:8px; padding:.6rem; background:#132932; }
@@ -67,7 +49,24 @@ body { overflow-x: hidden; }
   .foundation-actions a { flex:0 0 auto; min-height:38px; font-size:.72rem; padding:.4rem .55rem; white-space:nowrap; }
   .foundation-note { font-size:.76rem; line-height:1.45; }
   .world-primary-frame { margin-left:-.55rem; margin-right:-.55rem; border-radius:0; border-left:0; border-right:0; }
-  .foundation-frame { height:calc(100dvh - 138px); min-height:590px; }
+  .foundation-frame { height:calc(100dvh - 92px); min-height:560px; }
+
+  /* Fix ISS: preserve the game viewport instead of spending mobile height on page chrome. */
+  .foundation-terra-fix-iss { padding-top:.2rem; }
+  .foundation-terra-fix-iss .portal-header { min-height:34px; padding:.2rem .15rem .3rem; }
+  .foundation-terra-fix-iss .portal-header .brand { font-size:.8rem; }
+  .foundation-terra-fix-iss .portal-header .brand span { display:none; }
+  .foundation-terra-fix-iss .foundation-heading { margin:.1rem 0 .25rem; min-height:0; }
+  .foundation-terra-fix-iss .foundation-heading h1 { font-size:.92rem; margin:0; }
+  .foundation-terra-fix-iss .foundation-heading .button-link,
+  .foundation-terra-fix-iss .foundation-actions { display:none; }
+  .foundation-terra-fix-iss .foundation-loading {
+    top:6px; left:6px; max-width:45%; padding:4px 6px;
+    font-size:.62rem; line-height:1.15; opacity:.86;
+  }
+  .foundation-terra-fix-iss .foundation-frame { height:calc(100dvh - 92px); min-height:620px; }
+  .foundation-terra-fix-iss .foundation-note { margin:.35rem 0 .5rem; font-size:.68rem; line-height:1.35; }
+
 
   .starting-world-shell,
   .home-world .starting-world-shell,
@@ -79,15 +78,6 @@ body { overflow-x: hidden; }
     border-radius:10px;
   }
   .world-actions { display:none !important; }
-  .avatar-picker {
-    top:.55rem;
-    right:.55rem;
-    max-width:34%;
-    padding:.32rem .38rem;
-    font-size:.58rem;
-    background:#082434d9;
-  }
-  .avatar-picker select { min-height:30px; padding:.2rem .25rem; font-size:.6rem; }
   .world-top {
     top:.55rem; left:.55rem;
     max-width:62%;
