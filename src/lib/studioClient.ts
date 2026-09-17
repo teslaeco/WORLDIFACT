@@ -55,7 +55,13 @@ export class StudioCoordinator {
   private submitting = false
   private store: ReceiptStore
   private fetcher: Fetcher
-  constructor(store: ReceiptStore, fetcher: Fetcher = fetch) { this.store = store; this.fetcher = fetcher }
+  constructor(store: ReceiptStore, fetcher: Fetcher = fetch) {
+    this.store = store
+    // Browser fetch is a Window/Worker method. Calling an unbound copy as
+    // this.fetcher(...) gives it a StudioCoordinator receiver and throws
+    // "Illegal invocation" before any request. Bind once for every job path.
+    this.fetcher = fetcher.bind(globalThis)
+  }
   get current() { return this.saved }
   restore() { this.saved = readSavedStudioJob(this.store); return this.saved }
   async start(input: StudioInput, onPrepared: (saved: SavedStudioJob) => void, owner = ''): Promise<StudioJob> {
