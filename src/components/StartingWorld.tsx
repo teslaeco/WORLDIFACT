@@ -42,7 +42,6 @@ export default function StartingWorld({
   const zoom = useRef(6);
   const overview = useRef(false);
   const [music, setMusic] = useState(false);
-  const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("queen");
   const [transition, setTransition] = useState(false);
   const [captureNotice, setCaptureNotice] = useState("");
   const [wide, setWide] = useState(false);
