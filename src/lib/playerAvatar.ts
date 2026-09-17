@@ -34,7 +34,7 @@ function proceduralQueenFallback() {
     part(hip, .072, .32, -.2, skin);
     const knee = new THREE.Group(); knee.position.y = -.42; hip.add(knee); knees.push(knee);
     part(knee, .06, .3, -.21, skin);
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(.13,.09,.25), dark); shoe.position.set(0,-.49,-.06); knee.add(shoe);
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(.13,.09,.25), dark); shoe.position.set(0,-.45,-.06); knee.add(shoe);
     const shoulder = new THREE.Group(); shoulder.position.set(side * .27,1.38,0); root.add(shoulder); arms.push(shoulder);
     const spike = new THREE.Mesh(new THREE.ConeGeometry(.16,.36,4), side < 0 ? emerald : teal); spike.rotation.z = side * Math.PI / 2; spike.position.set(side * .12,.02,0); shoulder.add(spike);
     part(shoulder,.058,.2,-.14,dark);
