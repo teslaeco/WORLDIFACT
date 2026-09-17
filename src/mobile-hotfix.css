@@ -60,10 +60,7 @@ body { overflow-x: hidden; }
   .foundation-terra-fix-iss .foundation-heading h1 { font-size:.92rem; margin:0; }
   .foundation-terra-fix-iss .foundation-heading .button-link,
   .foundation-terra-fix-iss .foundation-actions { display:none; }
-  .foundation-terra-fix-iss .foundation-loading {
-    top:6px; left:6px; max-width:45%; padding:4px 6px;
-    font-size:.62rem; line-height:1.15; opacity:.86;
-  }
+  .foundation-terra-fix-iss .foundation-loading { display:none; }
   .foundation-terra-fix-iss .foundation-frame { height:calc(100dvh - 92px); min-height:620px; }
   .foundation-terra-fix-iss .foundation-note { margin:.35rem 0 .5rem; font-size:.68rem; line-height:1.35; }
 
