@@ -74,7 +74,7 @@ async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init:
   const origin = oracleOrigin(env.ORACLE_ENDPOINT)
   if (!origin || !env.ORACLE_API_TOKEN) throw new StudioError('The existing Oracle connection is not configured.', 503)
   return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(path.includes('/model') || path.includes('/exports/') ? 180_000 : 25_000),
-    headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: path.includes('/model') ? 'model/gltf-binary' : 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) } })
+    headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: path.includes('/model') ? 'model/gltf-binary' : path.includes('/exports/') ? 'application/octet-stream, application/zip' : 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) } })
 }
 async function health(env: StudioEnv, fetcher: typeof fetch) {
   const response = await oracle(env, '/v1/health', fetcher)
@@ -175,7 +175,9 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
     if (match && request.method === 'GET') {
       const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', match[1])
       await limit(request, env, match[2] ? 'artifact' : `poll:${auth.id}`)
-      if (match[2]) return modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
+      // Await here: returning a rejected Promise directly bypasses this catch
+      // and produces an unhandled Worker error instead of a safe JSON response.
+      if (match[2]) return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
       const response = await oracle(env, `/v1/jobs/${auth.id}`, fetcher)
       if (response.status === 404) { await response.body?.cancel(); const state = Date.now() - auth.issued < 180_000 ? 'pending' : 'failed'; return json({ job: { id: auth.id, state, detail: JOB_DETAILS[state] } }) }
       if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
