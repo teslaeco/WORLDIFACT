@@ -1,6 +1,8 @@
 import { JOB_DETAILS, STUDIO_MODEL_LIMIT, FAST_DRAFT_PROFILE, generationProfile, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
+import { canSubmitNewDraft } from './studioDraft.ts'
 
 export const STUDIO_RECEIPT_KEY = 'worldifact-studio-current-v1'
+export const STUDIO_RECEIPT_HISTORY_PREFIX = 'worldifact-studio-receipt-v1:'
 export type SavedStudioJob = { receipt: StudioReceipt; prompt: string; startedAt: string; generationProfile?: typeof FAST_DRAFT_PROFILE }
 export type ReceiptStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type Fetcher = typeof fetch
@@ -51,40 +53,56 @@ export async function checkStudio(fetcher: Fetcher = fetch, owner = ''): Promise
   return { ...value, fastReady: value.fastReady === true } as unknown as StudioStatus
 }
 
-/** Own exactly one generation intent. Network recovery NEVER invokes start(). */
+/** The selected receipt belongs to one submitted job, not the editable form.
+ * A later job requires an explicit start with a confirmed terminal selection.
+ */
 export class StudioCoordinator {
   private saved: SavedStudioJob | null = null
+  private confirmedJob: StudioJob | null = null
   private submitting = false
   private store: ReceiptStore
   private fetcher: Fetcher
   constructor(store: ReceiptStore, fetcher: Fetcher = fetch) {
     this.store = store
-    // Preserve PR #34: native Window.fetch requires its global receiver.
     this.fetcher = fetcher.bind(globalThis)
   }
   get current() { return this.saved }
-  restore() { this.saved = readSavedStudioJob(this.store); return this.saved }
-  async start(input: StudioInput, onPrepared: (saved: SavedStudioJob) => void, owner = ''): Promise<StudioJob> {
-    if (this.submitting || this.saved) throw new Error('A job is already selected. Recover it instead of sending another paid request.')
+  restore() { this.saved = readSavedStudioJob(this.store); this.confirmedJob = null; return this.saved }
+  private preserveReceipt(saved: SavedStudioJob) {
+    const key = STUDIO_RECEIPT_HISTORY_PREFIX + saved.receipt.id, text = JSON.stringify(saved)
+    const existing = this.store.getItem(key)
+    if (existing !== null && existing !== text) throw new Error('A different receipt is already retained for this model. Nothing was overwritten.')
+    if (existing === null) this.store.setItem(key, text)
+    if (this.store.getItem(key) !== text) throw new Error('The previous receipt could not be retained. No new model was submitted.')
+  }
+  async start(input: StudioInput, onPrepared: (saved: SavedStudioJob) => void, owner = '', replaceCompleted = false): Promise<StudioJob> {
+    if (this.submitting || (this.saved && (!replaceCompleted || !canSubmitNewDraft(this.saved.receipt.id, this.confirmedJob))))
+      throw new Error('A job is already selected. Recover it instead of sending another paid request.')
     this.submitting = true
+    const previous = this.saved
+    // Capture once before awaiting: later draft edits cannot change this intent.
+    const body = JSON.stringify(input), snapshot = JSON.parse(body) as StudioInput
     try {
       const prepared = await this.fetcher('/api/studio/prepare', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner) }, body: JSON.stringify(input), signal: AbortSignal.timeout(45_000),
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner) }, body, signal: AbortSignal.timeout(45_000),
       })
       const receipt = readReceipt(await responseJson(prepared))
-      const saved: SavedStudioJob = { receipt, prompt: input.prompt, startedAt: new Date().toISOString(),
-        ...(input.generationProfile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
-      // Synchronous durable write MUST succeed before the only paid POST.
+      if (previous?.receipt.id === receipt.id) throw new Error('A new model requires a new receipt. The previous model was not changed.')
+      const saved: SavedStudioJob = { receipt, prompt: snapshot.prompt, startedAt: new Date().toISOString(),
+        ...(snapshot.generationProfile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
+      if (previous) this.preserveReceipt(previous)
       this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
       if (this.store.getItem(STUDIO_RECEIPT_KEY) !== JSON.stringify(saved)) throw new Error('The browser could not retain your receipt. No paid request was submitted.')
-      this.saved = saved
+      this.saved = saved; this.confirmedJob = null
       onPrepared(saved)
       try {
         const result = await this.fetcher('/api/studio/jobs', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': receipt.ticket, ...accessHeaders(owner) },
-          body: JSON.stringify(input), signal: AbortSignal.timeout(45_000),
+          body, signal: AbortSignal.timeout(45_000),
         })
-        return parseStudioJob(await responseJson(result), receipt.id)
+        const job = parseStudioJob(await responseJson(result), receipt.id)
+        this.confirmedJob = job
+        return job
       } catch {
         return { id: receipt.id, state: 'pending', detail: JOB_DETAILS.pending }
       }
@@ -95,7 +113,9 @@ export class StudioCoordinator {
     const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}`, {
       headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(40_000),
     })
-    return parseStudioJob(await responseJson(response), saved.receipt.id)
+    const job = parseStudioJob(await responseJson(response), saved.receipt.id)
+    if (this.saved?.receipt.id === job.id) this.confirmedJob = job
+    return job
   }
   async artifact(format: 'model' | 'pbr' | 'fbx' | 'blend', saved = this.saved): Promise<Blob> {
     if (!saved) throw new Error('No job receipt is selected.')
@@ -122,7 +142,8 @@ export class StudioCoordinator {
   }
   clearSelection() {
     if (this.submitting) throw new Error('Wait for submission to finish before changing jobs.')
+    if (this.saved) this.preserveReceipt(this.saved)
     this.store.removeItem(STUDIO_RECEIPT_KEY)
-    this.saved = null
+    this.saved = null; this.confirmedJob = null
   }
 }
