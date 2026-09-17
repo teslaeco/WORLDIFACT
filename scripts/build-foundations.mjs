@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readFile, writeFile, cp, mkdir, readdir, stat } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { assertEnglishFoundationOutput } from './lib/english-ui.mjs';
+import { assertEnglishFoundationOutput, assertEnglishLocaleSource } from './lib/english-ui.mjs';
 const sources = JSON.parse(await readFile('config/foundation-sources.json', 'utf8'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 function run(command, args, cwd, extra = {}) {
@@ -25,6 +25,12 @@ for (const [app, source] of Object.entries(sources)) {
       .replace(tab, "useState<Tab>(new URLSearchParams(location.search).get('mission') === 'nile' ? 'earth' : 'ai')");
     await writeFile(main, text);
   }
+  if (app === 'chess') {
+    // Cube Chess intentionally ships optional locale catalogs. Verify that the
+    // English catalog itself is clean and remains the fallback rather than
+    // rejecting legitimate Polish/German/etc. translations bundled for users.
+    assertEnglishLocaleSource(await readFile(join(root, 'web/i18n/locales.js'), 'utf8'), 'Cube Chess locales.js');
+  }
   run('npm', ['ci', '--no-audit', '--no-fund'], work);
   if (app === 'chess') run('npm', ['run', 'build', '--', '--base', source.base], work);
   else run('npm', ['run', 'build'], work, {
@@ -32,7 +38,7 @@ for (const [app, source] of Object.entries(sources)) {
     VITE_EVIDENCE_API_URL: (await readFile(join(root, 'config/evidence-worker-url.txt'), 'utf8')).trim(),
   });
   const entries = app === 'chess' ? ['index.html', 'guest.html'] : ['index.html'];
-  await assertEnglishFoundationOutput(join(work, 'dist'), entries);
+  await assertEnglishFoundationOutput(join(work, 'dist'), entries, { scanJavaScript: app !== 'chess' });
   const destination = resolve('dist/apps', app);
   await mkdir(destination, { recursive: true });
   await cp(join(work, 'dist'), destination, { recursive: true, dereference: false });
