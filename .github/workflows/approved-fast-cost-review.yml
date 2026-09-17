@@ -1,0 +1,50 @@
+name: Review approved FAST cost guard
+on:
+  pull_request:
+    paths:
+      - 'tools/fast_preview/*spend*'
+      - 'tools/fast_preview/oracle_budget_launch.py'
+      - '.github/workflows/approved-fast-cost-review.yml'
+      - 'server/budget.ts'
+      - 'server/studio.ts'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .budget-source
+          persist-credentials: false
+      - name: Reproduce the previously installed hash-identified FAST files
+        run: |
+          python3 - <<'PY'
+          import sys,shutil
+          from pathlib import Path
+          sys.path.insert(0,'tools/fast_preview')
+          from installed_v33 import installed_server_from_reviewed,stage,INSTALLED
+          original=Path('.budget-review/original');original.mkdir(parents=True)
+          for name in INSTALLED:
+              target=original/name;target.parent.mkdir(parents=True,exist_ok=True)
+              source=Path('.budget-source/oracle_connector')/name
+              target.write_bytes(installed_server_from_reviewed(source.read_bytes()) if name=='server.py' else source.read_bytes())
+          stage(original,Path('.budget-review/installed'))
+          PY
+      - name: Cost, source identity and maintenance regressions (no AI)
+        env:
+          FAST_INSTALLED_FIXTURE: ${{ github.workspace }}/.budget-review/installed/patch
+        run: |
+          python3 -m py_compile tools/fast_preview/fast_spend.py tools/fast_preview/install_spend.py
+          python3 tools/fast_preview/test_fast_spend.py -v
+          sha256sum tools/fast_preview/fast_spend.py tools/fast_preview/install_spend.py
+      - name: Test launcher when present
+        run: |
+          if test -f tools/fast_preview/oracle_budget_launch.py; then
+            python3 -m py_compile tools/fast_preview/oracle_budget_launch.py
+            python3 tools/fast_preview/oracle_budget_launch.py
+          fi
