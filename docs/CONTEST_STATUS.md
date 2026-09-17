@@ -1,74 +1,56 @@
-# WORLDIFACT status — Oracle preflight passed, 17 September 2026
+# WORLDIFACT status — FAST maintenance authorized, 17 September 2026
 
-## New owner-side evidence
+## Latest owner authorization
 
-The owner supplied the completed read-only Cloud Shell/SSH preflight (screenshot showing 15:13). It reports the actual generator VM, not the temporary Cloud Shell filesystem:
+After the passed VM preflight and explanation of backup, temporary stop/restart, rollback and later PR #36 publication, the owner replied: "Tak róbmy to tak by działało prawidłowo zrób to ale później uruchamiamy go na nowo".
 
-| Check | Owner-side result |
-|---|---|
-| Worker found / primary source hashes | `true` / `source_matches=true` |
-| Architecture and Python | `aarch64`, Python `3.9.25` |
-| Installer helper | `ee6e3471d947a69196d1d554a6f22acf080b53e9` |
-| Runtime-check helper | `d55115d74925b10661c8407f4db87ec52a9f0d79` |
-| Official Codex binaries verified | `true` |
-| Existing MCP receipt matches current sources | `true` |
-| Unfinished model jobs | `0` |
-| Worker / tunnel services | both `active` |
-| FAST helper present | `false` |
-| Generation requested by preflight | `false` |
+This authorizes the described exact-v33 maintenance and automatic worker restart. The website merge/publication remains conditional on successful worker verification. It does NOT authorize a new paid model test, a larger allowance, a refund/reset, an expiry extension, another VM or a contest submission. No further repeated consent is needed for the already specified maintenance.
 
-This removes the earlier pending preflight blocker. It is owner-provided evidence from a bounded read-only script, not an administrative connection held by this assistant. The screenshot does not mean FAST is installed or that its speed target has been met.
+**Current execution boundary: NOT INSTALLED / NOT MERGED / NOT DEPLOYED in this turn.** The assistant can edit and test repository code, but the user's existing Cloud Shell/SSH session is the administrative execution channel. The command delivered to that session is the installation action; writing this ledger or creating a launcher is not proof of its execution.
 
-Exact primary hashes and the three reviewed v33/v35 differences are retained in the earlier ledger:
+## Owner-side preflight retained
+
+The screenshot at 15:13 reports the correct `opc` VM with `aarch64`, Python `3.9.25`, source_matches=true, verified Codex binaries, a genuine matching MCP/Blender receipt, zero unfinished jobs, active worker/tunnel services and no FAST helper. This was read-only and requested no model.
+
+Exact v33 source identity and adapter evidence:
 https://github.com/teslaeco/WORLDIFACT/blob/a02d74529a6b9b754f7e46765867e71404b5a48c/docs/CONTEST_STATUS.md
 
-## Prepared next step: an opt-in narrow installer
+Complete prior installer design, failure boundaries and 10/10 installation-safety tests:
+https://github.com/teslaeco/WORLDIFACT/blob/a1dfc7b847043d6f0f9f682ddd9db6137c5e5d9b/docs/CONTEST_STATUS.md
 
-PR #36 remains the single review branch: `perf/fast-preview-profile-20260917`.
+The exact installer revision `a1dfc7b847043d6f0f9f682ddd9db6137c5e5d9b` passed all three final-head checks: installation safety `35228541886`, full WORLDIFACT `35228542037`, and FAST worker/real-Blender fixture `35228541986`. Artifact `10500245980` was downloaded through the authorized GitHub action; its outer SHA-256 `c7994e312dae4c44295ec4a7bde7a665748ab9716446088ea698025eff0f2c87` and all 43 inner-manifest entries were verified locally.
 
-Added:
-- `tools/fast_preview/install_v33.py` — exact-v33 maintenance engine, default PLAN ONLY.
-- `tools/fast_preview/test_install_v33.py` — ten installation/rollback regression tests.
-- `.github/workflows/fast-install-review.yml` — no-paid installation-safety checks.
+## Implemented delivery step
 
-The installer requires an explicit `--approve-service-restart` flag. It is NOT a Cloud Shell launcher and has NOT run on the owner's VM. A brief service-maintenance authorization and a pinned, verified delivery step remain necessary. Do not tell the owner to run it in Cloud Shell as though that were the VM, or unzip the older v35 source package over the working v33 directory.
+`tools/fast_preview/oracle_launch.py` is now a self-contained Cloud Shell launcher, not another diagnostic or a replacement generator. It pins the five installation/patch files to `a1dfc7b...` and verifies each SHA-256 both before transfer and on the VM. No ZIP extraction into the running generator is required.
 
-### Implemented maintenance safeguards
+The launcher resolves only the existing RUNNING `froge-blender` instance in eu-amsterdam-1. It uses the existing SSH key via SSH without reading key contents; strict known-host verification stays enabled. It does not upload secrets, configuration, models or job data.
 
-The engine rechecks the four exact installed files, the existing installer/runtime-check helpers, and the exact offline verifier before stopping anything. Unknown source, active work, a mismatched service directory, an existing FAST override or invalid current verification stops the operation.
+Only the explicit `--approve-service-restart` invocation can start installation. Default invocation is PLAN ONLY, and `--status` cannot start it. The remote intent is saved before the transient service is launched. Repeating the same command, a lost launch acknowledgement, or a phone reconnect observes that same record rather than starting installation again.
 
-It stages only the five reviewed FAST source files and retains the four original files plus the genuine old verification receipt in a new rollback workspace outside the live source. It does not migrate or delete model archives, provider settings, jobs or private keys. A process lock prevents two copies of this installer from running together.
+The existing user service manager must have lingering enabled; the launcher refuses to change that setting if it is absent. A detached transient `.service` runs the reviewed installer independently of the phone/SSH session. The launcher does not use a synchronous scope, pipe or interactive TTY. Its user-visible status excludes private logs and reports worker/tunnel states plus the rollback directory.
 
-Before stopping the worker, a SQLite write reservation is held while checking the unfinished-job count. The check changes no database rows and prevents a new job row from committing between the idle check and the confirmed worker stop. The existing tunnel is not restarted. Users may see temporary service unavailability during maintenance; this is not a zero-downtime update.
+`tools/fast_preview/test_oracle_launch.py` adds 11 no-network regressions using real temporary files with mocked service-manager/transport operations. They cover PLAN ONLY, status-only reads, changed payload/package refusal, one launch after a lost acknowledgement, existing-source protection, linger refusal, symlink rejection, strict SSH, safe rollback reporting and requiring actual running services before reporting success. `.github/workflows/fast-launch-review.yml` runs these tests and Python 3.9 syntax checks. Local execution passed all 11 tests. CI evidence for the final head belongs in the PR handoff; these tests do not claim an actual systemd launch or a completed Oracle installation.
 
-After applying source, the engine runs the exact reviewed `codex_smoke.py --build`: real local Codex/Code Mode/MCP/Blender operations with model responses replaced by fixtures. The genuine verifier, not the installer, creates the new source-verification receipt after passing. It does not run the binary installer, paid-trial script or a new provider generation.
+## Actual installer behavior (unchanged)
 
-Only then does it set the job-scoped FAST capability flag through an owned systemd user drop-in, start the worker and check the loopback health response. The existing connection token stays on the VM, used only for that local GET, and is never printed or copied. Failures attempt restoration of original source and receipt, restart and local verification. Concurrent unexpected edits are not overwritten; unsuccessful recovery is explicitly marked `RECOVERY_REQUIRED`. A host crash or uncatchable termination is not claimed covered by the tested rollback paths.
+The reviewed engine rechecks exact source and verifier hashes, active services, the real current binary/source verification and empty queue. It makes original-code and genuine-receipt backups in a separate rollback directory, holds a SQLite reservation while rechecking idle and stopping the worker, and changes no existing model/job rows.
 
-## Verified source/test milestone
+It applies only five source files, runs genuine local `codex_smoke.py --build` with provider responses replaced by fixtures, and lets that verifier create its receipt. It does not fabricate the receipt, run a binary installer or call a paid provider. Only after successful verification does it enable the explicit FAST capability, restart `froge-worker.service` and check loopback health. The tunnel is not restarted.
 
-Source head `f8995f7e8d8c6392b089c98a9872719d3801d641` passed all three checks:
+Failure handling attempts restoration of original code/receipt and checks the restarted original worker. Unexpected concurrent edits are not overwritten. Failed recovery is reported as RECOVERY_REQUIRED; machine failure or uncatchable termination is not claimed covered. The remote installation service is not automatically retried.
 
-- WORLDIFACT complete verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35228099157
-- Existing FAST worker, v33/standard regressions, actual Blender fixture and packaging: https://github.com/teslaeco/WORLDIFACT/actions/runs/35228099072
-- New installer safety: https://github.com/teslaeco/WORLDIFACT/actions/runs/35228099194
+Expected handoff on success: `phase=INSTALLED_AND_LOCALLY_VERIFIED`, worker_service=active, tunnel_service=active, paid_generation_requested=false. Only after receiving verified installation output should PR #36 be merged and the existing website release followed. A code merge alone does not install the worker.
 
-The installer workflow reports **10/10 tests passed**: approval refusal, active-job refusal, source mismatch, successful source staging/install simulation, offline-verifier failure, failed post-start health, preservation after concurrent source changes, idle recheck failure, partial-write failure after rename, symlink rejection and SQLite admission protection (several cases share a test). It uses real temporary files/SQLite with injected service and verifier operations. It is not an actual systemd/Oracle installation or paid AI run. Python 3.9 syntax is checked; execution on the owner's ARM/Python combination remains a deployment check.
+## Performance and cost truth
 
-Default execution prints PLAN ONLY and changes no source or service. Later documentation commits require their own final-head check before merge; the verified runtime code above remains unchanged by this ledger update.
+The owner's approximately 16-minute successful chess-knight generation and saved original remain the baseline. FAST is opt-in; STANDARD remains unchanged. Prior fixed-Blender comparisons (roughly 41–44 seconds with optional review versus 0.615 seconds for the same GLB without it) exclude AI, Oracle queue/startup, transfer and browser rendering. A real 60–120-second model is still UNVERIFIED. No new paid test was run.
 
-## Release decision and remaining work
+The last user screenshot showed the original six reservations used. The previous deadline was 2026-09-17T09:23:37.535Z. Nothing in this maintenance increases that counter ceiling, resets/refunds it, or extends the window. A fresh bounded benchmark requires separate approval after installation and publication.
 
-**GO for requesting scoped maintenance approval. NOT INSTALLED / NOT MERGED / NOT DEPLOYED.**
+PR #36: https://github.com/teslaeco/WORLDIFACT/pull/36
+Task: [CODEX_TASK_FAST_PREVIEW.md](CODEX_TASK_FAST_PREVIEW.md)
+Working Shop: https://worldifact.xodobrox.workers.dev/shop
+Original hosted Studio: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
 
-The next approval should cover the exact-v33 installation, backup, temporary worker stop/restart and controlled rollback. Website PR #36 publication is a separate release step after worker readiness, because a site merge alone cannot update the Oracle process. No new paid trial or additional capacity is included. The installer repeats all preconditions so an old screenshot cannot authorize interrupting a later active job.
-
-The owner’s successful chess-knight generation and approximately 16-minute observation remain the real baseline. Earlier matched Blender fixture measurements (about 41–44 seconds with optional review versus 0.615 seconds without it for the same rocket GLB) exclude real AI, Oracle startup/queue, transfer and browser rendering. FAST's 60–120-second end-to-end target is still unverified. STANDARD is unchanged and remains the default until capability is confirmed.
-
-The last owner screen showed all six original reservations used. No counter reset/refund, seventh attempt, new expiry, new cloud resource or paid benchmark was authorized or performed in this step. A fresh bounded model test must be approved separately after installation and publication.
-
-Working public Shop: https://worldifact.xodobrox.workers.dev/shop
-Original hosted Studio, unchanged: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
-Full instruction: [CODEX_TASK_FAST_PREVIEW.md](CODEX_TASK_FAST_PREVIEW.md)
-
-No changes were made on Oracle or production by this task. Preparation and tests used connected GitHub tools; no separate cloud-agent session is claimed. Saved knight/original assets, secrets, private archives and other worlds remain untouched. MAKE remains validation-required, and this work does not establish native 4K/8K detail, sale approval, a public product catalog or competition readiness/submission.
+Existing knight/assets, private archives and other worlds are not migrated. MAKE remains validation-required. No native 4K/8K, likeness, sale approval, public catalog or contest-readiness claim is made. Recorded browser restrictions remain respected.
