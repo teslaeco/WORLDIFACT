@@ -74,7 +74,7 @@ export function createPlayerAvatar() {
   let loaded: THREE.Object3D | null = null, rig: Rig = {}, mixer: THREE.AnimationMixer | null = null, last = 0;
   let loadedBaseY = 0;
 
-  if (typeof window !== 'undefined') {
+  if ('document' in globalThis) {
     new GLTFLoader().load(AVATAR_URL, gltf => {
       const model = gltf.scene;
       const bounds = new THREE.Box3().setFromObject(model), size = bounds.getSize(new THREE.Vector3());
