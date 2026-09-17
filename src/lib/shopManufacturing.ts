@@ -1,6 +1,7 @@
 export type ClientMaterial = 'plastic' | 'metal' | 'wood' | 'stone'
 export type ClientMachine = '3d-print' | 'laser' | 'cnc'
 export type ClientColor = 'plain' | 'color'
+export type ClientDimensions = { xMm: number; yMm: number; zMm: number }
 
 export const CLIENT_MATERIALS: readonly { id: ClientMaterial; label: string }[] = [
   { id: 'plastic', label: 'Plastic' },
@@ -10,73 +11,87 @@ export const CLIENT_MATERIALS: readonly { id: ClientMaterial; label: string }[] 
 ]
 
 export const CLIENT_MACHINES: readonly { id: ClientMachine; label: string }[] = [
-  { id: '3d-print', label: '3D printer' },
-  { id: 'laser', label: 'Laser' },
-  { id: 'cnc', label: 'CNC' },
+  { id: '3d-print', label: '3D printing' },
+  { id: 'laser', label: 'Laser manufacturing' },
+  { id: 'cnc', label: 'CNC machining' },
 ]
 
 export const CLIENT_SIZES_MM = [50, 75, 100, 125, 150, 175, 200] as const
+export const DEFAULT_DIMENSIONS_MM: ClientDimensions = { xMm: 100, yMm: 100, zMm: 100 }
 
-export type OfferEvidence = {
-  label: string
-  baselineUsd: number | null
-  baselineSizeMm: number
-  evidence: string
-  status: 'ESTIMATE' | 'QUOTE REQUIRED'
+export function sanitizeDimensions(value: ClientDimensions): ClientDimensions {
+  const safe = (n: number) => Number.isFinite(n) ? Math.min(1000, Math.max(5, Math.round(n * 10) / 10)) : 100
+  return { xMm: safe(value.xMm), yMm: safe(value.yMm), zMm: safe(value.zMm) }
+}
+
+export function largestDimensionMm(value: ClientDimensions) {
+  const size = sanitizeDimensions(value)
+  return Math.max(size.xMm, size.yMm, size.zMm)
+}
+
+export type VerifiedSupplierQuote = {
+  id: string
+  productId: 'iss-source-370'
+  material: ClientMaterial
+  machine: ClientMachine
+  color: ClientColor
+  maximumDimensionMm: number
+  printUsd: number
+  observedShippingUsd: number | null
+  quotedAt: string
+  source: string
+  supplierAcceptedGeometry: boolean
+  finalPriceVerified: boolean
   note: string
 }
 
-const OFFER_ROUTES: Record<string, OfferEvidence> = {
-  'plastic:3d-print:plain': {
-    label: 'Monochrome resin print',
-    baselineUsd: 2.72,
-    baselineSizeMm: 100,
-    evidence: 'Observed calculator benchmark · 100 mm reference model · 14 Sep 2026',
-    status: 'ESTIMATE',
-    note: 'Screening estimate only. Exact geometry, hollowing, supports, finishing, tax and shipping require a fresh quote.',
-  },
-  'plastic:3d-print:color': {
-    label: 'Full-texture color resin print',
-    baselineUsd: 27.27,
-    baselineSizeMm: 100,
-    evidence: 'Observed calculator benchmark · 100 mm reference model · 14 Sep 2026',
-    status: 'ESTIMATE',
-    note: 'Requires a supported color package and supplier review. The displayed values are not binding offers.',
-  },
-  'metal:3d-print:plain': {
-    label: '316L metal print',
-    baselineUsd: 53.13,
-    baselineSizeMm: 100,
-    evidence: 'Observed calculator benchmark · 100 mm reference model · 14 Sep 2026',
-    status: 'ESTIMATE',
-    note: 'Support strategy and finishing can change price materially. Final engineering review is required.',
-  },
+// Real recorded supplier calculator evidence. This is deliberately not exposed as a
+// checkout price until the exact repaired file is accepted and a current final total
+// (including delivery/tax for the customer's address) is confirmed.
+export const ISS_RECORDED_QUOTE: VerifiedSupplierQuote = {
+  id: 'iss-wjp-370-2026-09-14',
+  productId: 'iss-source-370',
+  material: 'plastic',
+  machine: '3d-print',
+  color: 'color',
+  maximumDimensionMm: 370,
+  printUsd: 213.53,
+  observedShippingUsd: 55.72,
+  quotedAt: '2026-09-14',
+  source: 'Recorded JLC3DP 3MF calculator/order screenshot',
+  supplierAcceptedGeometry: false,
+  finalPriceVerified: false,
+  note: 'Thin walls were flagged. The quoted 3MF dimensions must be reconciled with the audited source before a sellable final price can be published.',
 }
 
-export function clientOffer(material: ClientMaterial, machine: ClientMachine, color: ClientColor): OfferEvidence {
-  const key = `${material}:${machine}:${color}`
-  const route = OFFER_ROUTES[key]
-  if (route) return route
-  const compatibility =
-    material === 'wood' && machine === 'laser' ? 'Laser-cut / engraved wood candidate' :
-    material === 'wood' && machine === 'cnc' ? 'CNC-machined wood candidate' :
-    material === 'stone' && machine === 'cnc' ? 'CNC-machined stone candidate' :
-    material === 'metal' && machine === 'cnc' ? 'CNC-machined metal candidate' :
-    material === 'plastic' && machine === 'cnc' ? 'CNC-machined plastic candidate' :
-    'Selected material / machine route'
-  return {
-    label: compatibility,
-    baselineUsd: null,
-    baselineSizeMm: 100,
-    evidence: 'No verified size-specific benchmark stored for this route.',
-    status: 'QUOTE REQUIRED',
-    note: 'WORLDIFACT will not invent a supplier price. A connected contractor quote is required for this combination.',
+export type CustomerPrice = {
+  status: 'VERIFIED' | 'PENDING_VERIFIED_QUOTE'
+  amountUsd: number | null
+  shippingUsd: number | null
+  orderable: boolean
+  customerMessage: string
+}
+
+export function customerPriceForSelection(
+  material: ClientMaterial,
+  machine: ClientMachine,
+  color: ClientColor,
+  dimensions: ClientDimensions,
+  exactApprovedQuote?: VerifiedSupplierQuote | null,
+): CustomerPrice {
+  const quote = exactApprovedQuote ?? null
+  const largest = largestDimensionMm(dimensions)
+  const exact = quote && quote.supplierAcceptedGeometry && quote.finalPriceVerified &&
+    quote.material === material && quote.machine === machine && quote.color === color &&
+    Math.abs(quote.maximumDimensionMm - largest) < 0.05
+  if (exact) return {
+    status: 'VERIFIED', amountUsd: quote.printUsd, shippingUsd: quote.observedShippingUsd, orderable: true,
+    customerMessage: 'Verified manufacturing price for this exact approved file and configuration.',
   }
-}
-
-export function scaledScreeningUsd(offer: OfferEvidence, sizeMm: number): number | null {
-  if (offer.baselineUsd === null || !Number.isFinite(sizeMm) || sizeMm <= 0) return null
-  return offer.baselineUsd * (sizeMm / offer.baselineSizeMm) ** 3
+  return {
+    status: 'PENDING_VERIFIED_QUOTE', amountUsd: null, shippingUsd: null, orderable: false,
+    customerMessage: 'Final price will appear only after a manufacturing partner verifies this exact model, size and finish.',
+  }
 }
 
 export const ISS_SOURCE = {
@@ -90,17 +105,6 @@ export const ISS_SOURCE = {
   warning: 'Supplier review flagged thin walls around solar-array / fragile structural areas. Scaling this source down can make those features even weaker.',
 } as const
 
-export const ISS_PRINT_PREP_PROMPT = `Prepare a manufacturing candidate of the International Space Station from the project-provided original-source ISS model. Preserve the recognizable ISS proportions, truss layout, modules and solar-array silhouette; do not redesign it into a generic spacecraft. This is a MAKE revision, not a claim of production approval.
+export const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for every generated asset:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
 
-Print-prep requirements:
-- correct non-manifold/open geometry and self-intersections where found;
-- reinforce fragile truss members and especially thin solar-array edges/supports that were flagged during supplier review;
-- use a project wall target of at least 1.5 mm for resin-print candidates where the intended scale allows it, without visibly bloating the model;
-- split fragile arrays/truss into sensible printable modules when one-piece printing would be unsafe;
-- add practical keyed joints / assembly clearances for separated modules;
-- keep units explicit and preserve the requested final largest dimension;
-- preserve color/material regions for a full-color 3MF/OBJ path and also provide a paintable monochrome path;
-- avoid unsupported needles, zero-thickness planes and decorative details that cannot survive printing;
-- report every deliberate thickness or geometry change and any remaining blockers.
-
-Label the result only as: "Original source + Astra-assisted print-prep revision · VALIDATION REQUIRED" until a real manufacturing review approves it.`
+export const ISS_PRINT_PREP_PROMPT = `Prepare the next manufacturing-safety revision of the International Space Station from the project-provided original-source ISS model. Preserve the recognizable ISS proportions, truss layout, modules and solar-array silhouette; do not redesign it into a generic spacecraft. Treat the recorded thin-wall supplier warning as a hard blocker that must be addressed, but do not claim supplier approval until the exact revised file is reviewed again.\n\n${MANUFACTURING_HARD_RULES}\n\nISS-specific requirements:\n- reinforce fragile truss members and especially thin solar-array edges/supports that were flagged during supplier review;\n- split fragile arrays/truss into sensible printable modules when one-piece printing would be unsafe;\n- preserve the full-color path and a paintable monochrome path;\n- compare the revised dimensions against the intended final X/Y/Z dimensions and report every change;\n- output a new revision for another B2B safety review, not a production approval.\n\nInternal label only: "ISS print-prep revision · B2B VALIDATION REQUIRED".`
