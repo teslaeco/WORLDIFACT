@@ -2,7 +2,24 @@
 :root { --mobile-dock: 64px; }
 html, body, #root { max-width: 100%; min-width: 0; }
 body { overflow-x: hidden; }
-.avatar-note { display: none !important; }
+.avatar-note:not(.avatar-picker) { display:none !important; }
+.avatar-picker {
+  position:absolute;
+  top:.75rem;
+  right:.75rem;
+  z-index:18;
+  pointer-events:auto;
+  display:grid;
+  gap:.25rem;
+  max-width:260px;
+  padding:.42rem .5rem;
+  border:1px solid #55727b;
+  border-radius:8px;
+  background:#0a2230e8;
+  color:#eaf2ee;
+  font-size:.72rem;
+}
+.avatar-picker select { min-height:34px; padding:.3rem .4rem; font-size:.72rem; background:#102a35; }
 .portal-generator-drawer { margin: 1rem 0 calc(1rem + env(safe-area-inset-bottom, 0px)); border: 1px solid #3b5961; border-radius: 12px; background:#10232b; }
 .portal-generator-drawer > summary { cursor:pointer; padding: .9rem 1rem; font-weight: 800; color:#e9c27f; }
 .portal-generator-drawer[open] > summary { border-bottom:1px solid #3b5961; }
@@ -62,6 +79,15 @@ body { overflow-x: hidden; }
     border-radius:10px;
   }
   .world-actions { display:none !important; }
+  .avatar-picker {
+    top:.55rem;
+    right:.55rem;
+    max-width:34%;
+    padding:.32rem .38rem;
+    font-size:.58rem;
+    background:#082434d9;
+  }
+  .avatar-picker select { min-height:30px; padding:.2rem .25rem; font-size:.6rem; }
   .world-top {
     top:.55rem; left:.55rem;
     max-width:62%;
