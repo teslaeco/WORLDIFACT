@@ -89,7 +89,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   const requestId = crypto.randomUUID();
   if (input.mode === "demo" || !configured) {
     const blueprint = demoBlueprint(`${PORTAL_CONTEXT[worldId]} ${input.prompt}`);
-    return json({ worldId, mode: "DEMO", provenance: "MOCK", blueprint, assetSpec: assetSpecForBlueprint(blueprint), requestId, model: null,
+    return json({ mode: "DEMO", provenance: "MOCK", blueprint, assetSpec: assetSpecForBlueprint(blueprint), requestId, model: null,
       limitation: "Local rule-based scene. Reference images are not analyzed. GAME uses procedural meshes; MAKE remains validation-required." });
   }
   if (!generationReady) return json({ error: "Generation is not enabled safely yet.", requestId }, 503);
@@ -133,7 +133,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
       providerResponseId: body.id, receivedAt: new Date().toISOString(), blueprintSha256,
       inputTokens: usageAvailable ? usage.input_tokens : null, outputTokens: usageAvailable ? usage.output_tokens : null, totalTokens: usageAvailable ? usage.total_tokens : null,
     } : undefined;
-    return json({ worldId, mode: "LIVE", provenance: "GENERATED", blueprint, assetSpec, requestId, model, ...(evidence ? { evidence } : {}),
+    return json({ mode: "LIVE", provenance: "GENERATED", blueprint, assetSpec, requestId, model, ...(evidence ? { evidence } : {}),
       limitation: "Astra created a validated WorldBlueprint and AssetSpec. The scene change is real, but GAME uses procedural preview geometry and MAKE remains validation-required; no production file, quote or order was generated." });
   } catch (e) {
     return json({ error: e instanceof Error && ["TimeoutError", "AbortError"].includes(e.name) ? "Generation timed out. Previous scene is unchanged." : "Invalid AI result. Previous scene is unchanged.", requestId }, 502);
