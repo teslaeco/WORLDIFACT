@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { assertEnglishDocument, inspectEnglishUiText } from '../scripts/lib/english-ui.mjs'
+import { assertEnglishDocument, assertEnglishLocaleSource, inspectEnglishUiText } from '../scripts/lib/english-ui.mjs'
 
 const FIRST_PARTY_UI = [
   '../src/pages/HomePage.tsx',
@@ -27,6 +27,18 @@ test('English UI guard rejects high-signal Polish interface strings', () => {
   for (const phrase of ['Zaloguj', 'Załóż konto', 'Zagraj jako gość', 'Wczytaj', 'Ustawienia', 'Błąd']) {
     assert.throws(() => inspectEnglishUiText(`prefix ${phrase} suffix`, 'fixture'), new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
+})
+
+test('locale source may keep optional translations but must have a clean English catalog and fallback', () => {
+  const valid = `
+    export const ENGLISH_CATALOG = Object.freeze({ save: "Save", settings: "Settings" });
+    export const POLISH_CATALOG = Object.freeze({ save: "Zapisz", settings: "Ustawienia" });
+    function resolveLocale(value) { if (value === "pl") return "pl"; return "en"; }
+    function getCatalog(locale) { const resolved = resolveLocale(locale); if (resolved === "en") return ENGLISH_CATALOG; return POLISH_CATALOG; }
+  `
+  assert.doesNotThrow(() => assertEnglishLocaleSource(valid, 'fixture locales'))
+  assert.throws(() => assertEnglishLocaleSource(valid.replace('save: "Save"', 'save: "Zapisz"'), 'fixture locales'), /English catalog contains Polish UI copy/)
+  assert.throws(() => assertEnglishLocaleSource(valid.replace('return "en";', 'return "pl";'), 'fixture locales'), /English fallback/)
 })
 
 test('native WORLDIFACT shell and AI Game Lab stay English at source', async () => {
