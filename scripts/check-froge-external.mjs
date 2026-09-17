@@ -37,7 +37,9 @@ export async function inspectWorldifactServices(fetcher = fetch) {
         text += new TextDecoder().decode(next.value)
       }
       const body = JSON.parse(text)
-      for (const key of ['generationReady', 'ready', 'photoReady']) if (typeof body[key] === 'boolean') record[key] = body[key]
+      // Worker profile support is independent of the user's paid allowance.
+      // Keep both values visible; never turn fastReady into generationReady.
+      for (const key of ['generationReady', 'ready', 'photoReady', 'fastReady']) if (typeof body[key] === 'boolean') record[key] = body[key]
       for (const key of ['oracle', 'mode', 'reason']) if (typeof body[key] === 'string' && /^[A-Z_]{1,60}$/.test(body[key])) record[key] = body[key]
       for (const key of ['connectorVersion', 'characterStandard']) if (Number.isSafeInteger(body[key])) record[key] = body[key]
       if (body.allowance) record.allowance = Object.fromEntries(['used', 'limit', 'remaining'].filter(key => Number.isSafeInteger(body.allowance[key])).map(key => [key, body.allowance[key]]))
