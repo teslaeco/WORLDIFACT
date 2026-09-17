@@ -39,7 +39,7 @@ test('legacy Queen avatar endpoint still fails closed when its upstream is unava
 
 test('shared world uses only the owner-uploaded character and removes the Queen/rapper selector', async () => {
   const player = await readFile(new URL('../src/lib/playerAvatar.ts', import.meta.url), 'utf8');
-  const embedded = await readFile(new URL('../src/generated/uploadedPlayer.ts', import.meta.url), 'utf8');
+  const embedded = await readFile(new URL('../src/generated/uploadedPlayer.js', import.meta.url), 'utf8');
   const world = await readFile(new URL('../src/components/StartingWorld.tsx', import.meta.url), 'utf8');
   assert.match(player, /owner-upload:model-mm-1\.stl/);
   assert.match(player, /uploadedPlayerGlbUrl/);
