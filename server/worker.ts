@@ -1,6 +1,7 @@
 import { platformApi } from "./platform.ts";
 import type { PlatformEnv } from "./platform.ts";
 import { oracleJobApi } from "./oracle-jobs.ts";
+import { studioApi } from "./studio.ts";
 import {
   astraGenerationSchema,
   assetSpecForBlueprint,
@@ -54,6 +55,7 @@ function validImage(value: unknown) {
 }
 export async function handle(request: Request, env: Env = {}, fetcher: typeof fetch = fetch): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === "/api/studio" || url.pathname.startsWith("/api/studio/")) return studioApi(request, env, fetcher);
   if (url.pathname.startsWith("/api/oracle/jobs")) return oracleJobApi(request, env, fetcher);
   if (url.pathname === "/api/platform" || url.pathname.startsWith("/api/platform/")) return platformApi(request, env, fetcher);
   const configured = !!env.OPENAI_API_KEY && env.ENABLE_PAID_GENERATION === "true";

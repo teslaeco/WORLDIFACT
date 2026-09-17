@@ -14,17 +14,13 @@ export interface BudgetNamespace {
 
 export function budgetSettings(env: BudgetEnv, now = Date.now()) {
   const limit = Number(env.GENERATION_REQUEST_LIMIT);
-  const expiresAt = Date.parse(env.GENERATION_EXPIRES_AT || "");
-  return Number.isSafeInteger(limit) && limit > 0 && limit <= 10_000 &&
-    Number.isFinite(expiresAt) && expiresAt > now
-    ? { limit, expiresAt }
-    : null;
+  const expiresAt = Date.parse(env.GENERATION_EXPIRES_AT || '');
+  return Number.isSafeInteger(limit) && limit > 0 && limit <= 10_000 && Number.isFinite(expiresAt) && expiresAt > now
+    ? { limit, expiresAt } : null;
 }
 
-// One named Durable Object serializes reservations across all clients/locations.
-// Attempts are never refunded: a timeout can still have incurred provider cost.
-// The counter persists across restarts, UTC days and deployments. Raising the
-// absolute ceiling is an operator action; this class exposes no reset endpoint.
+// One named object retains the original cumulative counter across deployments.
+// No reset/refund endpoint exists. A failed upstream call may still cost money.
 export class GenerationBudget {
   private storage: BudgetStorage;
   private env: BudgetEnv;
@@ -33,26 +29,45 @@ export class GenerationBudget {
     this.env = env;
   }
   async fetch(request: Request): Promise<Response> {
-    if (request.method !== "POST" || new URL(request.url).pathname !== "/reserve")
-      return Response.json({ allowed: false }, { status: 404 });
-    try {
-      const result = await this.storage.transaction(async (storage) => {
+    const path = new URL(request.url).pathname;
+    const reply = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
+    if (request.method === 'GET' && path === '/status') {
+      try {
+        const used = (await this.storage.get<number>('reserved-attempts')) ?? 0;
+        if (!Number.isSafeInteger(used) || used < 0) throw new Error('Invalid allowance state');
         const settings = budgetSettings(this.env);
-        if (!settings) return { allowed: false, reason: "disabled" };
-        const used = (await storage.get<number>("reserved-attempts")) ?? 0;
-        if (!Number.isSafeInteger(used) || used < 0)
-          throw new Error("Invalid quota state");
-        if (used >= settings.limit)
-          return { allowed: false, reason: "exhausted" };
-        await storage.put("reserved-attempts", used + 1);
+        const limit = Number(this.env.GENERATION_REQUEST_LIMIT);
+        const validLimit = Number.isSafeInteger(limit) && limit >= 0 && limit <= 10_000 ? limit : 0;
+        return reply({ used, limit: validLimit, remaining: settings ? Math.max(0, settings.limit - used) : 0,
+          enabled: !!settings, expiresAt: settings ? new Date(settings.expiresAt).toISOString() : null });
+      } catch { return reply({ error: 'Allowance unavailable' }, 503); }
+    }
+    if (request.method !== 'POST' || !['/reserve', '/reserve-studio'].includes(path)) return reply({ allowed: false }, 404);
+    let jobId: string | null = null;
+    if (path === '/reserve-studio') {
+      try {
+        const text = await request.text();
+        if (text.length > 100) throw new Error('Invalid intent');
+        const input = JSON.parse(text);
+        if (!input || Object.keys(input).length !== 1 || typeof input.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(input.id)) throw new Error('Invalid intent');
+        jobId = input.id;
+      } catch { return reply({ allowed: false, reason: 'invalid' }, 400); }
+    }
+    try {
+      const result = await this.storage.transaction(async storage => {
+        // Check the receipt first, even when writes have since expired. A retry
+        // must recover the old job rather than receive another paid reservation.
+        if (jobId && await storage.get<number>(`studio-submitted:${jobId}`)) return { allowed: false, reason: 'already-submitted' };
+        const settings = budgetSettings(this.env);
+        if (!settings) return { allowed: false, reason: 'disabled' };
+        const used = (await storage.get<number>('reserved-attempts')) ?? 0;
+        if (!Number.isSafeInteger(used) || used < 0) throw new Error('Invalid allowance state');
+        if (used >= settings.limit) return { allowed: false, reason: 'exhausted' };
+        await storage.put('reserved-attempts', used + 1);
+        if (jobId) await storage.put(`studio-submitted:${jobId}`, 1);
         return { allowed: true, remaining: settings.limit - used - 1 };
       });
-      return Response.json(result, {
-        status: result.allowed ? 200 : 429,
-        headers: { "Cache-Control": "no-store" },
-      });
-    } catch {
-      return Response.json({ allowed: false }, { status: 503 });
-    }
+      return reply(result, result.allowed ? 200 : result.reason === 'already-submitted' ? 409 : 429);
+    } catch { return reply({ allowed: false }, 503); }
   }
 }

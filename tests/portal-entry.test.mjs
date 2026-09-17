@@ -11,14 +11,15 @@ import * as portals from '../src/config/portals.ts'
 import * as foundations from '../src/config/foundations.ts'
 import * as references from '../src/config/references.ts'
 import * as campaign from '../src/lib/planetCampaign.ts'
+import { loadShopComponent } from './shop-render-helper.mjs'
 
-// Actual source components, server-rendered without a browser or external API.
 const files = {
   portal: new URL('../src/pages/PortalPage.tsx', import.meta.url),
-  shop: new URL('../src/pages/ShopPage.tsx', import.meta.url),
   planets: new URL('../src/components/PlanetsWorld.tsx', import.meta.url),
 }
 async function renderPortal(path) {
+  const Shop = await loadShopComponent()
+  assert.equal(typeof Shop, 'function', 'The real checked-in Shop component must be loaded')
   const sources = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([key, url]) => [key, await readFile(url, 'utf8')])))
   const cache = new Map()
   function load(key) {
@@ -36,9 +37,12 @@ async function renderPortal(path) {
         if (id === '../config/foundations') return foundations
         if (id === '../config/references') return references
         if (id === '../lib/planetCampaign') return campaign
-        if (id === './ShopPage') return load('shop')
+        // The source is an ES module with a default export. Without this marker,
+        // transpiled __importDefault wraps the adapter again and React sees an
+        // object, not the actual component. This is a harness fix, not a stub.
+        if (id === './ShopPage') return { __esModule: true, default: Shop }
         if (id === '../components/PlanetsWorld') return load('planets')
-        if (id === './PlanetsDemo') return { default: () => React.createElement('span', null, 'Mini test not exercised by this server render') }
+        if (id === './PlanetsDemo') return { __esModule: true, default: () => React.createElement('span', null, 'Mini test not exercised by this server render') }
         if (['react', 'react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
         throw new Error(`Unexpected portal dependency: ${id}`)
       },
@@ -58,15 +62,13 @@ test('Chess visitors get the reviewed copied guest build rather than an unpinned
   assert.doesNotMatch(source, /window\.location|location\.replace|location\.assign|Opening the original Chess Cube website/)
 })
 
-test('direct PortalPage Shop entry keeps the exact Studio and a parent return link without redirecting', async () => {
+test('direct PortalPage Shop renders the real native generation form and WORLDIFACT return', async () => {
   const html = await renderPortal('/shop')
-  const exact = references.REFERENCE_LINKS.modelGenerator
-  assert.ok(html.includes(`href="${exact}"`))
-  assert.ok(html.includes(`src="${exact}"`))
   assert.match(html, /Back to WORLDIFACT/)
-  assert.ok(html.indexOf('return-to-worldifact') < html.indexOf('<iframe'))
+  assert.match(html, /id="studio-prompt"/)
+  assert.match(html, /Generate 3D model \+ materials/)
   assert.match(html, /target="_blank"/)
-  assert.doesNotMatch(html, /target="_(top|self|parent)"|<textarea|3D result appears here|FORGE-projekt|Generate REAL 3D model/)
+  assert.doesNotMatch(html, /<iframe|target="_(top|self|parent)"|3D result appears here|FORGE-projekt/)
 })
 
 test('native Planets entry renders all eight English stages and labels its separate external prototype', async () => {
