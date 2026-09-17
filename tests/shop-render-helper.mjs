@@ -14,12 +14,36 @@ import * as archive from '../src/lib/studioArchive.ts'
 import * as view from '../src/lib/studioView.ts'
 import * as draft from '../src/lib/studioDraft.ts'
 import * as glb from '../src/lib/glb.ts'
+import * as shopManufacturing from '../src/lib/shopManufacturing.ts'
+
+async function loadShopManufacturingOptions(react) {
+  const url = new URL('../src/components/ShopManufacturingOptions.tsx', import.meta.url)
+  const source = await readFile(url, 'utf8')
+  const module = { exports: {} }
+  const localRequire = createRequire(url)
+  const code = ts.transpileModule(source, {
+    fileName: url.pathname,
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  runInNewContext(code, {
+    module,
+    exports: module.exports,
+    require(id) {
+      if (id === '../lib/shopManufacturing') return shopManufacturing
+      if (id === 'react') return react
+      if (id === 'react/jsx-runtime') return localRequire(id)
+      throw new Error(`Unexpected ShopManufacturingOptions dependency: ${id}`)
+    },
+  }, { filename: url.pathname, timeout: 1000 })
+  return module.exports
+}
 
 // Compile the actual checked-in component. Optional adapters isolate browser
 // storage, timers and server responses for lifecycle tests; no UI stub is used.
 export async function loadShopComponent({ react = React, adapters = {}, globals = {} } = {}) {
   const url = new URL('../src/pages/ShopPage.tsx', import.meta.url)
   const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
+  const shopOptions = await loadShopManufacturingOptions(react)
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, {
     ...globals, module, exports: module.exports,
@@ -28,6 +52,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
         '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb }
       if (id in modules) return adapters[id] || modules[id]
+      if (id === '../components/ShopManufacturingOptions') return shopOptions
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
       if (id.endsWith('.css')) return {}
       if (id === 'react') return react
