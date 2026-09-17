@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export const NEPTUNE_QUEEN_AVATAR_JOB = '99397623-e45c-48dc-95ec-6f84446a54d5';
-const AVATAR_URL = '/api/avatar/neptune-queen';
+export type AvatarChoice = 'queen' | 'rapper';
+const AVATAR_URLS: Record<AvatarChoice, string> = { queen: '/api/avatar/neptune-queen', rapper: '/api/avatar/rapper-la' };
 
 type Rig = {
   hips?: THREE.Bone; head?: THREE.Bone;
@@ -50,6 +51,36 @@ function proceduralQueenFallback() {
   return { root, legs, knees, arms };
 }
 
+
+function proceduralRapperFallback() {
+  const root = new THREE.Group(); root.name = 'rapper-fallback';
+  const skin = new THREE.MeshStandardMaterial({ color: '#a97b62', roughness: .72 });
+  const shirt = new THREE.MeshStandardMaterial({ color: '#252b34', roughness: .8 });
+  const denim = new THREE.MeshStandardMaterial({ color: '#304b66', roughness: .82 });
+  const shoeMat = new THREE.MeshStandardMaterial({ color: '#ececec', roughness: .6 });
+  const hair = new THREE.MeshStandardMaterial({ color: '#3a332d', roughness: .85 });
+  const part = (parent: THREE.Group, radius: number, length: number, y: number, mat = shirt) => {
+    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 6, 10), mat);
+    mesh.position.y = y; mesh.castShadow = true; parent.add(mesh); return mesh;
+  };
+  part(root, .2, .42, 1.18, shirt);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.15, 18, 14), skin); head.position.y = 1.69; head.scale.set(.92, 1.08, .95); root.add(head);
+  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(.153, 18, 10, 0, Math.PI * 2, 0, Math.PI * .45), hair); hairCap.position.y = 1.735; root.add(hairCap);
+  const legs: THREE.Group[] = [], knees: THREE.Group[] = [], arms: THREE.Group[] = [];
+  for (const side of [-1, 1]) {
+    const hip = new THREE.Group(); hip.position.set(side * .12, .9, 0); root.add(hip); legs.push(hip);
+    part(hip, .075, .34, -.2, denim);
+    const knee = new THREE.Group(); knee.position.y = -.43; hip.add(knee); knees.push(knee);
+    part(knee, .064, .31, -.21, denim);
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(.145,.095,.27), shoeMat); shoe.position.set(0,-.455,-.07); knee.add(shoe);
+    const shoulder = new THREE.Group(); shoulder.position.set(side * .25,1.37,0); root.add(shoulder); arms.push(shoulder);
+    part(shoulder,.06,.23,-.15,shirt);
+    const fore = new THREE.Group(); fore.position.y=-.31; shoulder.add(fore); part(fore,.048,.22,-.14,skin);
+  }
+  root.userData.avatarSource = 'procedural-fallback-rapper';
+  return { root, legs, knees, arms };
+}
+
 function findBone(root: THREE.Object3D, patterns: RegExp[]) {
   let found: THREE.Bone | undefined;
   root.traverse(object => {
@@ -67,15 +98,16 @@ function findRig(root: THREE.Object3D): Rig {
   };
 }
 
-export function createPlayerAvatar() {
-  const fallback = proceduralQueenFallback();
-  const root = new THREE.Group(); root.name = 'neptune-queen-player'; root.userData.avatarSource = `oracle-job:${NEPTUNE_QUEEN_AVATAR_JOB}`;
+export function createPlayerAvatar(choice: AvatarChoice = 'queen') {
+  const fallback = choice === 'rapper' ? proceduralRapperFallback() : proceduralQueenFallback();
+  const root = new THREE.Group(); root.name = choice === 'rapper' ? 'rapper-player' : 'neptune-queen-player'; root.userData.avatarSource = choice === 'rapper' ? 'froge-archive:rapper-v10.glb' : `oracle-job:${NEPTUNE_QUEEN_AVATAR_JOB}`;
+  const avatarUrl = AVATAR_URLS[choice];
   root.add(fallback.root);
   let loaded: THREE.Object3D | null = null, rig: Rig = {}, mixer: THREE.AnimationMixer | null = null, last = 0;
   let loadedBaseY = 0;
 
   if ('document' in globalThis) {
-    new GLTFLoader().load(AVATAR_URL, gltf => {
+    new GLTFLoader().load(avatarUrl, gltf => {
       const model = gltf.scene;
       const bounds = new THREE.Box3().setFromObject(model), size = bounds.getSize(new THREE.Vector3());
       if (!Number.isFinite(size.y) || size.y <= .01) return;
@@ -84,7 +116,7 @@ export function createPlayerAvatar() {
       const scaled = new THREE.Box3().setFromObject(model), center = scaled.getCenter(new THREE.Vector3());
       model.position.x -= center.x; model.position.z -= center.z; model.position.y -= scaled.min.y;
       loadedBaseY = model.position.y;
-      model.name = 'Neptune_Queen_current_99397623';
+      model.name = choice === 'rapper' ? 'Rapper_archive_v10' : 'Neptune_Queen_current_99397623';
       model.traverse(part => { if (part instanceof THREE.Mesh) { part.castShadow = true; part.receiveShadow = true; } });
       fallback.root.visible = false; loaded = model; root.add(model); rig = findRig(model);
       if (gltf.animations.length) {
