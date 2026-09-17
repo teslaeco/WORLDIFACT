@@ -11,11 +11,6 @@ export const CLIENT_MATERIALS: readonly { id: ClientMaterial; label: string }[] 
 ]
 
 export const CLIENT_MACHINES: readonly { id: ClientMachine; label: string }[] = [
-  { id: 'plastic' as never, label: '' } as never,
-]
-
-// Keep the public labels customer-friendly while retaining the existing ids.
-export const CUSTOMER_MACHINES: readonly { id: ClientMachine; label: string }[] = [
   { id: '3d-print', label: '3D printing' },
   { id: 'laser', label: 'Laser manufacturing' },
   { id: 'cnc', label: 'CNC machining' },
