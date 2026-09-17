@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { assertEnglishDocument, assertEnglishLocaleSource, inspectEnglishUiText } from '../scripts/lib/english-ui.mjs'
+import { assertEnglishDocument, assertEnglishLocaleSource, assertRuntimeTranslationPairs, inspectEnglishUiText } from '../scripts/lib/english-ui.mjs'
 
 const FIRST_PARTY_UI = [
   '../src/pages/HomePage.tsx',
@@ -39,6 +39,12 @@ test('locale source may keep optional translations but must have a clean English
   assert.doesNotThrow(() => assertEnglishLocaleSource(valid, 'fixture locales'))
   assert.throws(() => assertEnglishLocaleSource(valid.replace('save: "Save"', 'save: "Zapisz"'), 'fixture locales'), /English catalog contains Polish UI copy/)
   assert.throws(() => assertEnglishLocaleSource(valid.replace('return "en";', 'return "pl";'), 'fixture locales'), /English fallback/)
+})
+
+test('reviewed runtime translator must contain each required source-to-English pair', () => {
+  const source = `const pairs = [['Zapisz', 'Save'], ['Błąd', 'Error']]`
+  assert.doesNotThrow(() => assertRuntimeTranslationPairs(source, [['Zapisz', 'Save'], ['Błąd', 'Error']], 'fixture runtime'))
+  assert.throws(() => assertRuntimeTranslationPairs(source, [['Otwórz', 'Open']], 'fixture runtime'), /missing the reviewed translation/)
 })
 
 test('native WORLDIFACT shell and AI Game Lab stay English at source', async () => {
