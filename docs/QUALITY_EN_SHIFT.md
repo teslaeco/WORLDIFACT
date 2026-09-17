@@ -5,11 +5,13 @@ Date: 17 September 2026 (Europe/Amsterdam). Owner: Sebastian.
 ## Coordination
 
 - Branch: `work/five-hour-quality-english-20260917`.
-- Draft PR: https://github.com/teslaeco/WORLDIFACT/pull/28
+- Draft WORLDIFACT PR: https://github.com/teslaeco/WORLDIFACT/pull/28
 - Base: `495a6524d7b597403eefd5b62bfbf8ee9fedc4e0`.
 - Editor: **IDLE — continuation 2 complete. A later continuation may claim this marker before editing.**
 - Scheduled continuations completed: **2 of 5**.
-- Next task: continue preserved-original 3D quality work, especially UV/PBR material survival through GLB/FBX export and reimport, then tackle reviewable-source Froge English without claiming the older GitHub snapshot is the live Site.
+- Latest verified WORLDIFACT code head before this documentation-only checkpoint: `8b53331195d22de1d2b1dd770fa92b698592ea76`.
+- Verification: run `35168300680` completed successfully.
+- Next task: continue source-level quality/localization work without touching the live Froge Site: prioritize remaining Terra static subpages, reviewable Froge English, and anatomy/PBR evidence where real Blender validation exists.
 
 ## Non-negotiable continuity
 
@@ -20,61 +22,119 @@ Canonical hosted Froge source editing remains **BLOCKED/UNKNOWN** in this work s
 ## Continuation 1 — retained evidence
 
 - ISS static UI/help/accessibility copy, all eight repairs/tools/state messages, runtime HUD/actions/errors, in-world signs and Model Context copy were translated to English while preserving task IDs, mechanics and version-2 saves.
-- WORLDIFACT model preview lifetime was made source/session-bound so stale/late GLBs cannot replace the current preview; released shared geometry/material/texture resources dispose once.
+- WORLDIFACT model preview lifetime became source/session-bound so stale/late GLBs cannot replace the current preview; released shared geometry/material/texture resources dispose once.
 - Draft Froge PR #16 introduced truthful texture-resolution evidence: requested 4K/8K is separated from actual source/export pixels and no upscaling is counted as recovered detail.
 - WORLDIFACT code head `f2d7f9000e9194ae93c973967a3f597a8a1ba02a` passed run `35163081507` with 108/108 tests, TypeScript, HTTP smoke, build, foundation assembly and Worker dry-run; lint had nine warnings and zero errors.
 
 ## Continuation 2 — completed changes
 
-### English enforcement on real shipped sources
+### 1. English localization now distinguishes defaults from legitimate translated catalogs
 
-Added `scripts/lib/english-ui.mjs` and `tests/english-ui.test.mjs`.
+Added/expanded:
 
-The guard is deliberately bounded to authored interface text. It checks explicit English document language and a curated set of high-signal Polish UI phrases that occurred in earlier builds. It intentionally ignores user prompts/data, scientific identifiers, provenance fields, model/job names and proper nouns.
+- `scripts/lib/english-ui.mjs`;
+- `tests/english-ui.test.mjs`;
+- `scripts/build-foundations.mjs`;
+- `.github/actions/foundations/action.yml`;
+- reviewed foundation pins in `config/foundation-sources.json`.
 
-`tests/english-ui.test.mjs` now covers the native WORLDIFACT shell and AI Game Lab source: `index.html`, Home, Portal, Shop, Workbench, Control, `P0GameLab` and portal configuration.
+The guard is deliberately bounded to authored interface behavior. It verifies explicit English document language, a curated set of high-signal Polish UI phrases, a clean English locale catalog/fallback where multiple languages are intentionally bundled, and reviewed runtime source→English translation pairs. It does **not** rewrite user prompts/data, scientific identifiers, provenance fields, model/job names, proper nouns or optional user-selected locale catalogs.
 
-`scripts/build-foundations.mjs` now checks the *compiled output* of the exact pinned Chess and Terra builds before copying them into WORLDIFACT. A future pinned build that reintroduces the guarded Polish interface phrases or loses `lang=en` fails foundation assembly instead of silently shipping mixed-language UI.
+Native WORLDIFACT/AI Game Lab coverage includes `index.html`, Home, Portal, Shop, Workbench, Control, `P0GameLab` and portal configuration.
 
-Material code commits for this package include:
+### 2. Chess: one real Polish runtime defect fixed upstream
 
-- `cad51fad82bd0921b3f8e79bb63fe45180bac161` — bounded English guard;
-- `bfe9298c208faf31576a3c45440a162743509009` — guard unit tests;
-- `fae365ba2618dd697bc56284d99820b65d0da02e` — enforce guard on compiled Chess/Terra output;
-- `9761b8293accb3343834cea8d078b1268fcb54be` — native WORLDIFACT/Game Lab regression coverage.
+The exact earlier pin `e134964e9c8b7edc43c26b508973f6fb658af90d` already had an English document, English auth UI and an English default catalog, while legitimately keeping optional locale catalogs including Polish.
 
-### Exact-source language evidence
+A deeper source audit found one direct non-catalog runtime fallback in `web/main.js`: remote online players were named `Gracz online` even under the English UI.
 
-- **Chess:** exact pinned commit `e134964e9c8b7edc43c26b508973f6fb658af90d` is the signed `Fix remaining mixed-language Cube judge UI (#141)` change. `guest.html` declares English and exact `web/auth/AuthGate.js` contains English account/auth/guest labels. A high-signal Polish UI search returned no matches.
-- **Terra:** exact pinned commit `ae90f7367587e0973782c470cde3f5103c0540fc` has `web/index.html` with `lang=en`, English metadata/title/project link, and no matches for the same high-signal Polish UI search. Scientific/data-contract identifiers are not renamed.
-- **8 Planets:** integration records identify recovered source revision `6f5f239239f05e72b029cc1014e982a587a2ece5`, but the connected GitHub search does not expose an editable repository/source for that revision. Exact URL/revision searches only resolve WORLDIFACT integration records. Internal localization therefore remains **BLOCKED**, not faked through the parent iframe.
-- **AI Game Lab / native shell:** first-party authored UI is now covered by the source regression guard.
-- **Hosted Froge:** reviewable GitHub `ModelStudio.tsx` still contains Polish product copy, which further confirms that wrapper English cannot be described as a translation of the live cross-origin Studio. The live canonical source remains inaccessible here.
+Focused draft Chess PR #143:
+
+https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/143
+
+- source revision: `705d7b0fe5fff03a5d7975fe094804af1eef44ea`;
+- only changes the fallback to `Online player`;
+- does not change rules, networking, IDs, saves or rendering;
+- workflow run `35167870190` passed typecheck, tests, production build and smoke; deploy/E2E were not run for this review branch.
+
+WORLDIFACT review config now pins this source revision for CI. Nothing is merged or published.
+
+### 3. Terra: real English runtime exists, but static Polish subpages remain
+
+Pinned Terra revision remains `ae90f7367587e0973782c470cde3f5103c0540fc`.
+
+The main document is English, but the source still contains legacy Polish literals. `web/public/contest-runtime.js` explicitly maps reviewed product phrases to English at runtime. CI now verifies required pairs such as Save/Load/Open/Close/Error/Next/Previous/Loading/Advanced/Simple instead of incorrectly treating the translation table itself as untranslated output.
+
+An intentionally broad first attempt also exposed a genuine separate backlog: standalone static pages such as `web/public/eclipse-live/gallery.html` are authored in Polish (`lang=pl`, Polish headings/buttons/errors) and are not automatically converted into English by the main app contract. The foundation guard therefore checks the reviewed main entry/runtime mechanism and records the static-page backlog instead of falsely calling every nested page English.
+
+Continuation 3 should translate those real static pages upstream in bounded batches rather than hiding them behind a wrapper.
+
+### 4. Foundation checkout pins now have one source of truth
+
+Changing the Chess review pin exposed a duplicated hardcoded SHA in `.github/actions/foundations/action.yml`. CI correctly failed because the action checked out the old source while `config/foundation-sources.json` expected the new one.
+
+The composite action now resolves and validates the reviewed Chess/Terra SHAs directly from `config/foundation-sources.json` before checkout. This removes that synchronization bug.
+
+### 5. 8 Planets and hosted Froge localization boundaries
+
+- **8 Planets:** records identify recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5`, but the connected GitHub search exposes no editable source for that revision. Internal localization remains **BLOCKED**, not faked through the parent iframe.
+- **Hosted Froge:** reviewable GitHub `ModelStudio.tsx` still contains Polish product copy, confirming that English WORLDIFACT wrapper text is not equivalent to live Studio localization. Canonical hosted Site source/parity remains inaccessible here, so no stale snapshot is deployed over it.
 
 See [LANGUAGE_AUDIT.md](LANGUAGE_AUDIT.md) for the source-by-source ledger.
 
-### 3D / texture quality evidence
+## 3D / texture quality evidence in continuation 2
 
-Froge PR #16 remains draft/source-only. Its head `9cfc57f7f57b67a6ceb468e4025c32b53d8fa881` passed workflow run `35163335466` (`Oracle Codex MCP (no paid API)`). The workflow covers Python 3.9/3.12 regressions, real Codex/Code Mode MCP fixtures, official Blender 4.3 build/render/FBX checks and packaging without a paid API call.
+Draft Froge source PR #16:
 
-Inspection of the newer source also confirmed that `runtime/couture_qa.py` already checks garment/body containment, free-hand garment crossings, fan apertures, grip contacts, packed GLB textures, UV retention, portrait anatomy metadata and GLB reimport. It explicitly leaves `likeness_assessed=false` and `print_readiness_assessed=false`. Real UV/PBR appearance and FBX material preservation still need stronger review; no new likeness claim is made.
+https://github.com/teslaeco/Froge-MPC-2-test/pull/16
 
-## Verification state for continuation 2
+Current review head: `ab5b6523c45dfc45cddeffe35d979290a38d9d72`.
 
-A new WORLDIFACT CI run was started for the English guard package. The last observed run for the material head was `35167247789`; `npm run verify` had started successfully and foundation assembly was pending/in progress at the checkpoint update. A later continuation must read the completed result before treating this package as verified. Do not substitute earlier run `35163081507` for the new material changes.
+Besides truthful source/export texture-resolution reporting, continuation 2 added a real Blender FBX round-trip gate in `oracle_connector/runtime/scene_exports.py`:
 
-## Remaining quality priorities
+- Blender reopens the exported `model.fbx`;
+- the export is rejected if reimport has no mesh, non-finite geometry, loses authored material names, or loses all UVs when the source had UVs;
+- a failed artifact is deleted and removed from advertised formats instead of being labelled ready;
+- success records reimport mesh/material counts and UV presence;
+- `pbr_shader_equivalence_verified=false` and `likeness_assessed=false` remain explicit because structural reimport does not prove visual equivalence or identity likeness.
 
-1. Add/strengthen preserved-original export evidence for UV/PBR materials through GLB/FBX reimport without inventing visual quality.
-2. Continue anatomy/garment quality only where real source and Blender validation exist: hair/root continuity, face/neck/jaw/shoulders, hands and clothing intersections.
-3. Translate reviewable Froge source in a source-only PR where safe, but never present it as live until canonical Site parity and deployment are verified.
-4. Translate the real 8 Planets source only when editable source access is restored.
-5. Keep PR #28 and Froge PR #16 unmerged/unpublished until explicit release approval.
+No-paid workflow run `35167461563` passed for this head. It includes Python 3.9/3.12 regressions, fixture Codex→MCP work, official Blender 4.3, actual Blender geometry/render/FBX paths, anatomy/atlas helpers and package build. It does **not** prove photographic likeness or print readiness.
+
+Reviewable `runtime/couture_qa.py` also already checks garment/body containment, free-hand garment crossings, fan apertures, grip contacts, packed GLB textures, UV retention, anatomy metadata and GLB reimport while explicitly leaving likeness/print readiness unassessed.
+
+## Final continuation-2 verification
+
+Latest verified WORLDIFACT code head: `8b53331195d22de1d2b1dd770fa92b698592ea76`.
+
+Run: https://github.com/teslaeco/WORLDIFACT/actions/runs/35168300680
+
+Result: **PASS**.
+
+- `npm run verify`: PASS;
+- 114/114 tests: PASS;
+- lint: nine warnings, zero errors;
+- TypeScript: PASS;
+- local HTTP DEMO smoke: PASS;
+- production build: PASS;
+- reviewed Chess `705d7b0...` and Terra `ae90f73...` foundation checkout/build/assembly: PASS;
+- Worker `deploy:check`: PASS;
+- hosted Froge read-only diagnostic: PASS without generation.
+
+Earlier red runs in this continuation were diagnostic and fixed rather than bypassed: first an over-broad language scan treated legitimate localization data as displayed UI; later duplicate foundation pin sources caused the old Chess SHA to be checked out. Both causes were corrected before the final green run.
+
+## Remaining priorities
+
+1. Translate real Terra standalone/static subpages upstream in bounded batches; `eclipse-live/gallery.html` is a confirmed Polish example.
+2. Continue reviewable Froge English only as source-only work until canonical Site parity exists.
+3. Continue anatomy/garment quality where real Blender validation can measure something concrete: hair/root continuity, face/neck/jaw/shoulders, hands and clothing intersections.
+4. Strengthen material evidence beyond structural FBX reimport where possible, while never claiming every glTF/Blender PBR channel survives FBX equivalently without proof.
+5. Translate real 8 Planets source only when editable source access is restored.
+6. Keep WORLDIFACT PR #28, Chess PR #143 and Froge PR #16 unmerged/unpublished until explicit release approval.
 
 No new paid API/GPU generation, quota increase, secret change, Oracle installation, private archive access, model download, merge, production deployment or contest submission occurred in continuation 2. No separate Codex/Copilot cloud agent was launched; work was executed through connected GitHub tools.
 
 ## Continuation protocol
 
-Read current main/PR, `AGENTS.md`, `CONTEST_STATUS.md`, `LANGUAGE_AUDIT.md` and this checkpoint. Claim the editor marker, take the next incomplete package, make actual source/test changes, check current-head CI, update the ledger, increment the count exactly once, and return the marker to IDLE. Reuse WORLDIFACT PR #28. Keep Froge PR #16 draft/review-only unless later explicitly authorized for merge/deployment.
+Read current main/PR, `AGENTS.md`, `CONTEST_STATUS.md`, `LANGUAGE_AUDIT.md` and this checkpoint. Claim the editor marker, take the next incomplete package, make actual source/test changes, check current-head CI, update the ledger, increment the count exactly once, and return the marker to IDLE. Reuse WORLDIFACT PR #28. Keep upstream quality/localization PRs review-only unless later explicitly authorized for merge/deployment.
 
 After continuation 5 provide the consolidated Polish GO/NO-GO report with actual changes/tests/SHA/PRs, remaining source-access and visual-quality blockers and costs. Do not extend the work window or start another schedule.
