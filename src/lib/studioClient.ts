@@ -1,7 +1,7 @@
-import { JOB_DETAILS, STUDIO_MODEL_LIMIT, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
+import { JOB_DETAILS, STUDIO_MODEL_LIMIT, FAST_DRAFT_PROFILE, generationProfile, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
 
 export const STUDIO_RECEIPT_KEY = 'worldifact-studio-current-v1'
-export type SavedStudioJob = { receipt: StudioReceipt; prompt: string; startedAt: string }
+export type SavedStudioJob = { receipt: StudioReceipt; prompt: string; startedAt: string; generationProfile?: typeof FAST_DRAFT_PROFILE }
 export type ReceiptStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type Fetcher = typeof fetch
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -17,7 +17,9 @@ export function readSavedStudioJob(store: ReceiptStore): SavedStudioJob | null {
   if (!text) return null
   const value: unknown = JSON.parse(text)
   if (!object(value) || typeof value.prompt !== 'string' || value.prompt.length > 4000 || typeof value.startedAt !== 'string' || !Number.isFinite(Date.parse(value.startedAt))) throw new Error('The saved job receipt is damaged. Do not submit a duplicate job.')
-  return { receipt: readReceipt(value.receipt), prompt: value.prompt, startedAt: value.startedAt }
+  const profile = generationProfile(value.generationProfile)
+  return { receipt: readReceipt(value.receipt), prompt: value.prompt, startedAt: value.startedAt,
+    ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
 }
 export function parseStudioJob(value: unknown, id: string): StudioJob {
   if (!object(value) || !object(value.job) || value.job.id !== id || typeof value.job.state !== 'string' || !Object.hasOwn(JOB_DETAILS, value.job.state)) throw new Error('The response does not belong to the current model. The previous model will not be substituted.')
@@ -46,7 +48,7 @@ export async function checkStudio(fetcher: Fetcher = fetch, owner = ''): Promise
   const response = await fetcher('/api/studio/status', { headers: accessHeaders(owner), cache: 'no-store', signal: AbortSignal.timeout(40_000) })
   const value = await responseJson(response)
   if (!object(value) || typeof value.ready !== 'boolean' || typeof value.reason !== 'string' || typeof value.photoReady !== 'boolean' || typeof value.oracle !== 'string') throw new Error('The Studio status could not be verified.')
-  return value as unknown as StudioStatus
+  return { ...value, fastReady: value.fastReady === true } as unknown as StudioStatus
 }
 
 /** Own exactly one generation intent. Network recovery NEVER invokes start(). */
@@ -57,10 +59,7 @@ export class StudioCoordinator {
   private fetcher: Fetcher
   constructor(store: ReceiptStore, fetcher: Fetcher = fetch) {
     this.store = store
-    // Browser fetch is a Web API method. Storing it unbound and later calling
-    // this.fetcher(...) supplies this coordinator as its receiver, causing
-    // "Failed to execute 'fetch' on 'Window': Illegal invocation" before I/O.
-    // Bind once for prepare, submit, recovery and artifact requests alike.
+    // Preserve PR #34: native Window.fetch requires its global receiver.
     this.fetcher = fetcher.bind(globalThis)
   }
   get current() { return this.saved }
@@ -73,7 +72,8 @@ export class StudioCoordinator {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner) }, body: JSON.stringify(input), signal: AbortSignal.timeout(45_000),
       })
       const receipt = readReceipt(await responseJson(prepared))
-      const saved = { receipt, prompt: input.prompt, startedAt: new Date().toISOString() }
+      const saved: SavedStudioJob = { receipt, prompt: input.prompt, startedAt: new Date().toISOString(),
+        ...(input.generationProfile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
       // Synchronous durable write MUST succeed before the only paid POST.
       this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
       if (this.store.getItem(STUDIO_RECEIPT_KEY) !== JSON.stringify(saved)) throw new Error('The browser could not retain your receipt. No paid request was submitted.')
