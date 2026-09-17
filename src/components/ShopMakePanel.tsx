@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { OBSERVED_BATCH_QUOTES, OBSERVED_QUOTES } from '../lib/manufacturing'
+import './ShopMakePanel.css'
 
 export const ISS_PRINT_PRESET = `Create an International Space Station collectible as a MAKE candidate for additive manufacturing, based on the provided historical NASA VTAD source geometry rather than inventing a new station configuration. Preserve the recognizable modules, truss and solar-array layout. Work in millimetres. Repair degenerate or loose fragments where safe, avoid zero-thickness surfaces, and keep connected solids or explicit assembly joints. The previous supplier review flagged thin-wall risk around the solar arrays: add structural backing or otherwise thicken fragile panel sheets and thin truss/strut features to the selected process target without erasing the recognizable ISS silhouette. For SLA-style screening use a 1.5 mm project wall target unless a stricter process/size target is supplied. Keep source provenance metadata. Do not call the output manufacturing-approved: report remaining open/non-manifold geometry, support/orientation needs, clearances and color-package limitations. Return an editable GLB with materials for review; MAKE remains VALIDATION REQUIRED until slicer and supplier engineering review pass.`
 
