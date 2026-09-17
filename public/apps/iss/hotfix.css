@@ -28,3 +28,91 @@
   .navigation-card{top:58px;width:165px}.topbar{height:56px}.view-controls{top:58px}.interaction{bottom:62px}.telemetry,.world-note,.message{display:none!important}
   body.touch-mode .joystick-wrap{bottom:48px}#joystick{width:86px;height:86px}body.touch-mode .action-button{bottom:50px;width:58px;height:58px}body.touch-mode .vertical-pad{bottom:118px}
 }
+
+
+/* Contest recording HUD: preserve the center of the ISS scene on phones. */
+@media (max-width:760px) {
+  .topbar { height:46px !important; min-height:46px !important; padding:3px 7px !important; }
+  .topbar .brand strong { font-size:18px !important; line-height:1 !important; }
+  .topbar .brand small, .zone-block, .telemetry { display:none !important; }
+  .mission-button { min-height:32px !important; padding:4px 8px !important; font-size:10px !important; }
+  .icon-button { width:32px !important; height:32px !important; min-height:32px !important; }
+
+  .navigation-card {
+    top:50px !important;
+    left:5px !important;
+    width:132px !important;
+    max-width:36vw !important;
+    min-width:0 !important;
+    padding:7px 8px !important;
+    border-radius:10px !important;
+  }
+  .navigation-card .eyebrow { font-size:7px !important; letter-spacing:.08em !important; }
+  .navigation-card strong { display:block; margin-top:2px !important; font-size:13px !important; line-height:1.08 !important; }
+  .navigation-card .distance { margin-top:2px !important; font-size:11px !important; }
+  .quick-goals { display:none !important; }
+
+  .view-controls {
+    top:50px !important;
+    right:5px !important;
+    width:138px !important;
+    max-width:38vw !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:3px !important;
+  }
+  .view-controls button {
+    min-width:0 !important;
+    min-height:28px !important;
+    padding:2px 4px !important;
+    border-radius:7px !important;
+    font-size:8px !important;
+    line-height:1.05 !important;
+  }
+  .view-controls kbd { display:none !important; }
+
+  .interaction {
+    left:50% !important;
+    bottom:82px !important;
+    width:min(48vw,190px) !important;
+    max-width:190px !important;
+    min-height:0 !important;
+    padding:6px 8px !important;
+    transform:translateX(-50%) !important;
+    border-radius:8px !important;
+  }
+  .interaction-copy strong, .interaction strong { font-size:10px !important; line-height:1.1 !important; }
+  .interaction-copy p, .interaction p { margin:2px 0 0 !important; font-size:8px !important; line-height:1.1 !important; }
+  #torque { max-height:42px !important; overflow:hidden !important; }
+
+  .world-note, .message, .look-hint { display:none !important; }
+  body.touch-mode .joystick-wrap { left:6px !important; bottom:48px !important; }
+  #joystick { width:86px !important; height:86px !important; }
+  #joystick-knob { width:38px !important; height:38px !important; }
+  .joystick-cross { inset:18px !important; }
+  body.touch-mode .vertical-pad { right:5px !important; bottom:116px !important; gap:3px !important; }
+  .vertical-pad button { width:39px !important; height:39px !important; }
+  .vertical-pad button b { font-size:15px !important; }
+  .vertical-pad button span { font-size:7px !important; }
+  body.touch-mode .action-button { right:7px !important; bottom:48px !important; width:58px !important; height:58px !important; font-size:8px !important; }
+  .action-button kbd { font-size:17px !important; }
+
+  body.touch-mode .inventory-drawer {
+    min-height:38px !important;
+    max-height:44px !important;
+    padding:3px 6px calc(3px + var(--safe)) !important;
+    overflow:hidden !important;
+  }
+  body.touch-mode .inventory-drawer.expanded {
+    max-height:min(48dvh,340px) !important;
+    overflow:auto !important;
+  }
+  #inventory-toggle { min-height:30px !important; padding:3px 7px !important; font-size:9px !important; }
+  .inventory-heading small { font-size:8px !important; }
+  .inventory-heading strong, .save-actions, .keyboard-help { display:none !important; }
+}
+
+@media (max-width:430px) {
+  .navigation-card { width:118px !important; max-width:34vw !important; }
+  .view-controls { width:124px !important; max-width:36vw !important; }
+  .interaction { width:46vw !important; }
+}
