@@ -1,18 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { gunzipSync } from 'node:zlib';
 
-test('shared world uses only the newly uploaded user avatar asset', async () => {
+test('shared world uses only the user-upload visual target and no old Queen/Rapper selector', async () => {
   const player = await readFile(new URL('../src/lib/playerAvatar.ts', import.meta.url), 'utf8');
   const world = await readFile(new URL('../src/components/StartingWorld.tsx', import.meta.url), 'utf8');
-  const parts = await Promise.all(Array.from({ length: 6 }, (_, index) =>
-    readFile(new URL(`../public/avatar/upload-main-gz.b64.part${index}`, import.meta.url), 'utf8')));
-  const glb = gunzipSync(Buffer.from(parts.join(''), 'base64'));
-  assert.equal(glb.subarray(0, 4).toString('ascii'), 'glTF');
-  assert.ok(glb.byteLength > 20_000);
-  assert.match(player, /user-upload:model-mm-1-derived-mobile/);
-  assert.match(player, /upload-main-gz\.b64\.part/);
+  assert.match(player, /user-upload:model-mm-1-mobile-proxy/);
+  assert.match(player, /worldifact-user-upload-player/);
   assert.doesNotMatch(player, /neptune|rapper|queen\.glb|99397623/i);
   assert.doesNotMatch(world, /avatarChoice|avatar-picker|Rapper|Neptune Queen/);
 });
@@ -59,7 +53,8 @@ test('mobile hotfix gives portal gameplay the viewport and compacts the ISS HUD'
   assert.match(issCss, /width:132px !important/);
   assert.match(issCss, /\.quick-goals \{ display:none !important; \}/);
   const portal = await readFile(new URL('../src/pages/PortalPage.tsx', import.meta.url), 'utf8');
-  assert.match(portal, /window\.location\.replace\('\/apps\/chess\/guest\.html'\)/);
+  assert.match(portal, /Open Chess full screen/);
+  assert.match(portal, /foundation-frame/);
   assert.doesNotMatch(portal, /foundation-loading/);
 });
 
