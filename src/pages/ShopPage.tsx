@@ -251,6 +251,7 @@ export default function ShopPage() {
         <p>Describe the object you want and optionally add up to three reference images. Model generation is free for customers during this experimental test phase.</p>
         <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'You can describe your next model while the current preview stays unchanged.' : 'You can prepare the next idea while the current model is being completed.' : 'No payment is taken when you create a model.'}</p>
         <button type="button" data-testid="clear-studio-draft" disabled={busy || photoBusy} onClick={clearDraft}>Clear description</button>
+        <button type="button" className="shop-internal-only" hidden disabled={busy || photoBusy} onClick={clearDraft}>Clear next-model draft</button>
         <form onSubmit={generate} aria-describedby="studio-draft-help">
           <div className="shop-internal-only" hidden>
             <label htmlFor="studio-mode">Generation mode</label>
@@ -260,6 +261,7 @@ export default function ShopPage() {
               setProfile(next)
               if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
             }}><option value="standard">STANDARD · current quality workflow</option><option value={FAST_DRAFT_PROFILE} disabled={!status?.fastReady || !!photos.length || purpose === 'terrain'}>FAST DRAFT · simple text-only object</option></select>
+            <small>STANDARD is unchanged. FAST becomes selectable only when the connected worker confirms its verified profile. A shorter timeout is not proof of a faster model.</small>
             <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
             <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
           </div>
