@@ -13,7 +13,7 @@ function storage(): ReceiptStore {
 function browserReceiverFixture(store: ReceiptStore) {
   const calls: { path: string; method: string }[] = []
   // An ordinary function is essential: arrow stubs hide the receiver defect.
-  const fetcher = function (this: unknown, resource: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const fetcher = function (this: unknown, resource: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> {
     if (this !== globalThis) throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation")
     const path = String(resource), method = init?.method || 'GET'
     calls.push({ path, method })
