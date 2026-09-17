@@ -10,10 +10,10 @@ Product UI and authored user-facing messages should be English by default. Stabl
 
 | World / route | Source used by WORLDIFACT | Current English status | Remaining work / boundary |
 |---|---|---|---|
-| Chess Cube 512 AI `/chess` | Review branch pins focused source revision `705d7b0fe5fff03a5d7975fe094804af1eef44ea` from draft Chess PR #143 | ENGLISH DEFAULT / SOURCE FIX PREPARED | `guest.html` declares `lang=en`; auth copy is English; `ENGLISH_CATALOG` is the fallback while Polish and other locales remain legitimate opt-in translations. The one audited direct runtime fallback `Gracz online` is changed to `Online player` in draft PR #143. Run `35167870190` passed. Nothing is merged/deployed. |
-| Terra — Fix ISS `/iss` | First-party ISS source plus reviewed WORLDIFACT Terra pin `ae90f7367587e0973782c470cde3f5103c0540fc`; newer upstream localization is in draft Terra PR #271 | ISS ENGLISH / TERRA MAIN ENGLISH PRESENTATION / STATIC BATCH PREPARED | ISS static/runtime UI is English with IDs/mechanics/save schema preserved. Terra main uses an English document plus reviewed runtime translations. Draft Terra PR #271 translates real standalone gallery/404/multi-angle source. Many other standalone pages remain Polish. The draft is based on newer Terra main and is not automatically pinned into WORLDIFACT. |
-| 8 Planets in 8 Days `/planets` | External FORGE World Builder `https://forge-world-builder.terraformingplanet.chatgpt.site/` | WRAPPER ENGLISH / EDITABLE SOURCE BLOCKED | Records identify recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5`, but connected GitHub search exposes no editable canonical source. A parent iframe wrapper is not treated as translation of the external app. |
-| Enchanted AI Shop `/shop` | English WORLDIFACT wrapper around exact hosted Froge MPC 2 Studio `https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/` | WRAPPER ENGLISH / CANONICAL STUDIO SOURCE BLOCKED | The live generator is deliberately preserved. Its canonical Site source is unavailable here, so internal Studio Polish copy is not claimed translated and the older GitHub snapshot is not deployed over it. |
+| Chess Cube 512 AI `/chess` | Review branch pins focused source revision `705d7b0fe5fff03a5d7975fe094804af1eef44ea` from draft Chess PR #143 | ENGLISH DEFAULT / SOURCE FIX PREPARED | `guest.html` declares `lang=en`; auth copy is English; `ENGLISH_CATALOG` is fallback while Polish and other locales remain legitimate opt-in translations. Audited direct fallback `Gracz online` is changed to `Online player`. Run `35167870190` passed. Nothing is merged/deployed. |
+| Terra — Fix ISS `/iss` | First-party ISS source plus reviewed WORLDIFACT Terra pin `ae90f7367587e0973782c470cde3f5103c0540fc`; newer upstream localization is in draft Terra PR #271 | ISS ENGLISH / TERRA MAIN ENGLISH PRESENTATION / STATIC BATCH PREPARED | ISS static/runtime UI is English with IDs/mechanics/save schema preserved. Terra main uses an English document plus reviewed runtime translations. Draft Terra PR #271 translates real standalone gallery/404/multi-angle source. Many other standalone pages remain Polish; draft is not automatically pinned into WORLDIFACT. |
+| 8 Planets in 8 Days `/planets` | External FORGE World Builder `https://forge-world-builder.terraformingplanet.chatgpt.site/` | WRAPPER ENGLISH / EDITABLE SOURCE BLOCKED | Records identify recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5`, but connected tools expose no editable canonical source. A parent iframe wrapper is not treated as translation of the external app. |
+| Enchanted AI Shop `/shop` | English WORLDIFACT wrapper around exact hosted Froge MPC 2 Studio `https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/` | WRAPPER ENGLISH / REVIEW SNAPSHOT PARTIAL / LIVE SOURCE BLOCKED | The live generator is deliberately preserved. Reviewable Froge PR #16 translates touched rooted-hair diagnostics, dictation locale/errors and research fallback, but the GitHub snapshot is not proven identical to the live Site and is not deployed over it. |
 | AI Game Lab `/lab` | Native WORLDIFACT `WorkbenchPage` + `P0GameLab` | FIRST-PARTY SOURCE GUARDED | `index.html`, Home/Portal/Shop/Workbench/Control, `P0GameLab` and portal definitions are regression-checked for explicit English document language and curated high-signal Polish UI copy. |
 
 ## Shared WORLDIFACT shell
@@ -22,11 +22,12 @@ Product UI and authored user-facing messages should be English by default. Stabl
 
 The source-aware English guard handles deliberate localization mechanisms separately:
 
-- **Cube Chess** intentionally bundles optional translated catalogs. CI checks that the English catalog is clean, `en` selects it and English remains the fallback; it does not reject legitimate opt-in Polish/German/etc. strings in the same bundle.
-- **Terra main app** intentionally ships a reviewed runtime translation map over legacy Polish source labels. CI checks the English main document plus required source→English pairs in `web/public/contest-runtime.js`; it does not call the translation table itself an untranslated user surface.
-- **Terra standalone pages** are separate authored surfaces. They are translated in upstream source when available rather than being hidden behind WORLDIFACT wrapper text.
+- **Cube Chess** intentionally bundles optional translated catalogs. CI checks that the English catalog is clean, `en` selects it and English remains fallback; it does not reject legitimate opt-in locale strings.
+- **Terra main app** intentionally ships a reviewed runtime translation map over legacy Polish source labels. CI checks the English main document plus required source→English pairs; the translation table itself is not counted as untranslated UI.
+- **Terra standalone pages** are separate authored surfaces. They are translated in upstream source when available rather than hidden behind WORLDIFACT wrapper text.
+- **Hosted Froge** remains cross-origin. English strings in the reviewable snapshot are recorded as snapshot evidence only; the live Site is not labelled translated until source parity/access is restored.
 
-The foundation composite action resolves reviewed Chess/Terra SHAs directly from `config/foundation-sources.json`, avoiding duplicate hardcoded pin sources.
+Foundation checkout revisions are resolved from `config/foundation-sources.json`, avoiding duplicate hardcoded pin sources.
 
 ## ISS translation completed in continuation 1
 
@@ -34,51 +35,49 @@ The source-owned ISS surface uses English for static controls/help/accessibility
 
 ## Terra continuation-3 source batch
 
-Draft upstream PR #271:
+Draft upstream PR #271: https://github.com/Terraforming-Planet/Polar-Sun-Moon-Analysis/pull/271
 
-https://github.com/Terraforming-Planet/Polar-Sun-Moon-Analysis/pull/271
-
-Final review head: `4a34ce18fe552f19aaa2e604b50260ecba5b40c8`.
+Review head: `4a34ce18fe552f19aaa2e604b50260ecba5b40c8`.
 
 Translated real source surfaces:
 
-- `web/public/eclipse-live/gallery.html`: document language, archive explanation, animation controls, timestamps/source labels, dynamic frame text and errors are English. Manifest path, NOAA source links, SHA-256 values and saved-log evidence remain unchanged.
-- `web/public/404.html`: English fallback copy with the same canonical/JavaScript redirect target.
-- `web/public/multi-angle/index.html`: English navigation, place/address form, manual coordinate controls, cloud/date/collection labels and help/status text.
-- `web/public/multi-angle/app.js`: English geocoding, no-data, product/result metadata, empty states and errors. The official Copernicus STAC endpoint and search/query semantics are unchanged.
+- `web/public/eclipse-live/gallery.html`: English document language, archive explanation, animation controls, timestamps/source labels, dynamic frame text and errors; manifest path, NOAA links, SHA-256 values and log evidence preserved.
+- `web/public/404.html`: English fallback copy with unchanged canonical/JavaScript redirect target.
+- `web/public/multi-angle/index.html` and `app.js`: English navigation, place/address/manual coordinate controls, geocoder/search/result/error copy; Copernicus STAC endpoint and query semantics unchanged.
 
-Regression coverage is in `web/staticEnglishPages.test.mjs` plus the existing Python eclipse gallery test. Final head is green across:
+Final review head is green across CI `35169328621`, PR Validation `35169328579`, Validate web `35169328498` and Terra Site `35169328503`.
 
-- CI `35169328621`;
-- PR Validation `35169328579`;
-- Validate web application `35169328498`;
-- Validate Terra Observation Planet Site `35169328503`.
+WORLDIFACT still pins Terra `ae90f7367587e0973782c470cde3f5103c0540fc`; direct repinning to newer upstream PR #271 could import unrelated changes. Remaining Polish Terra surfaces include `eclipse-live/index.html`, `eclipse-live/close.html` and casebook/forum/Copernicus/experiment/archive pages. Terra is not globally all-English.
 
-Earlier red attempts were fixed rather than suppressed: the Node filesystem test was moved outside browser TypeScript compilation, then the existing archived-data Python assertion was translated from its old Polish sentence to the equivalent English sentence without removing manifest/source/hash/log checks.
+## Froge continuation-4 review-source batch
 
-### Terra pin boundary
+Draft source PR #16: https://github.com/teslaeco/Froge-MPC-2-test/pull/16
 
-WORLDIFACT still pins Terra `ae90f7367587e0973782c470cde3f5103c0540fc`. PR #271 is based on current Terra main `4d422e97121fda7199ce9320e0bba10a487cca42`. The PR is therefore reviewable source evidence, not a safe automatic pin update. Repinning WORLDIFACT directly to `4a34ce...` could import unrelated upstream changes and requires a separate review/release decision.
+Review head: `656b12164bc9e08921067c2959ee326e9e7d64fe`.
 
-Remaining Terra Polish surfaces include `eclipse-live/index.html`, `eclipse-live/close.html` and multiple casebook/forum/Copernicus/experiment/archive pages. Terra is not yet globally all-English.
+English source changes in this **review snapshot only**:
 
-## External-source boundary
+- `src/studio/useDictation.ts`: dictation locale `en-US`; unsupported-browser, microphone-permission, stopped-dictation and microphone-start errors are English;
+- `src/components/ResearchErrorBoundary.tsx`: report failure explanation and `Try again` / `Open research archive` recovery actions are English;
+- touched rooted-hair runtime diagnostics are English;
+- `src/tests/english-review-source.test.ts` guards the above source contracts.
 
-The active model generator remains `https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/`. The reviewable `teslaeco/Froge-MPC-2-test` runtime is useful for source-only patches but is not proven identical to the current hosted Site. Draft Froge PR #16 therefore remains review-only.
+Exact-head no-paid run `35171423726` passes the frontend locked install, lint, full TypeScript, focused English regression and production build, alongside the Python/Codex/MCP/official-Blender quality suite.
 
-The reviewable Studio snapshot still contains Polish product copy in `ModelStudio.tsx`; wrapper English must not be described as translation of the live cross-origin Studio. Publishing that older snapshot over a newer canonical Site without parity evidence would risk a downgrade.
+A broader diagnostic run `35171308192` intentionally exposed existing Polish-label/baseline frontend debt instead of hiding it: one stale docs test import, one commerce assertion expecting two legacy `Niepołączony` labels, and one photo-generation assertion expecting an older retry label. Those failures were not weakened to create a false all-English/all-green claim.
+
+The snapshot still contains substantial Polish product UI, notably the current `ModelStudio`/remote generator flow. Because the current private hosted Studio's canonical source parity is unavailable, translating the entire old snapshot and publishing it over the live Site would risk a downgrade. Live internal Studio localization therefore remains BLOCKED/UNKNOWN.
 
 ## Verification ledger
 
-Latest verified WORLDIFACT code head before documentation-only continuation-3 commits: `8b53331195d22de1d2b1dd770fa92b698592ea76`.
+Latest verified WORLDIFACT runtime-code head remains `8b53331195d22de1d2b1dd770fa92b698592ea76`; run `35168300680` passed 114/114 tests, lint with nine warnings/zero errors, TypeScript, HTTP smoke, production build, reviewed Chess/Terra foundation assembly, Worker dry-run and the read-only hosted-Studio probe.
 
-Run `35168300680` passed 114/114 tests, lint with nine warnings/zero errors, TypeScript, HTTP smoke, production build, reviewed Chess/Terra foundation assembly, Worker dry-run and the read-only hosted-Studio probe.
-
-Terra source batch verification is recorded separately above because it is upstream and not yet integrated into the reviewed WORLDIFACT Terra pin.
+Terra and Froge upstream review-source verification are recorded separately because neither source patch is yet merged/deployed into the active production composition.
 
 ## Remaining localization work
 
-1. Continue Terra standalone/static pages upstream in bounded batches; do not describe the current batch as complete Terra localization.
+1. Continue Terra standalone/static pages upstream only in bounded, reviewable batches; do not describe the current batch as complete Terra localization.
 2. Keep Chess PR #143 review-only until a deliberate upstream/WORLDIFACT pin/release decision is made.
 3. Translate real 8 Planets authored UI only when editable canonical source access is restored.
-4. Translate live Froge internal UI only when canonical Site source access/parity is restored; do not simulate it from the wrapper or publish the stale snapshot over the live Site.
+4. Translate live Froge internal UI only when canonical Site source access/parity is restored; review-snapshot English is not live-Site evidence.
+5. Final continuation must report blockers honestly rather than replacing inaccessible applications with older copies merely to achieve an English-language claim.
