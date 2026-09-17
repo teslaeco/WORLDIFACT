@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readFile, writeFile, cp, mkdir, readdir, stat } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { assertEnglishFoundationOutput } from './lib/english-ui.mjs';
 const sources = JSON.parse(await readFile('config/foundation-sources.json', 'utf8'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 function run(command, args, cwd, extra = {}) {
@@ -30,6 +31,8 @@ for (const [app, source] of Object.entries(sources)) {
     TERRA_PUBLIC_BASE: source.base,
     VITE_EVIDENCE_API_URL: (await readFile(join(root, 'config/evidence-worker-url.txt'), 'utf8')).trim(),
   });
+  const entries = app === 'chess' ? ['index.html', 'guest.html'] : ['index.html'];
+  await assertEnglishFoundationOutput(join(work, 'dist'), entries);
   const destination = resolve('dist/apps', app);
   await mkdir(destination, { recursive: true });
   await cp(join(work, 'dist'), destination, { recursive: true, dereference: false });
@@ -37,7 +40,6 @@ for (const [app, source] of Object.entries(sources)) {
   if (app === 'terra') await cp(join(root, 'published'), join(destination, 'published'), {
     recursive: true, filter: path => !/\.(tiff?|zip)$/i.test(path), dereference: false,
   });
-  const entries = app === 'chess' ? ['index.html', 'guest.html'] : ['index.html'];
   for (const entry of entries) {
     const path = join(destination, entry);
     let html = await readFile(path, 'utf8');
