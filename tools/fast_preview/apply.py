@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+from completion import finish_patch
 
 PIN = 'd3f61b842dcfeda2ed794210caafc391919a75be'
 HASHES = {
@@ -72,7 +73,6 @@ def patch_mcp(s):
                 'from agent_limits import MAX_BUILDS, BUILD_DEADLINE\nfrom fast_preview import policy as fast_policy, fast_scene_guard')
     start, rest = s.split('class JobTools:', 1)
     body, end = rest.split('\ndef retain_candidate(', 1)
-    # Instance limits prevent one job from changing another job's policy.
     body = body.replace('MAX_BUILDS', 'self.build_limit').replace('BUILD_DEADLINE', 'self.work_limit')
     body = replace(body, 'self.folder = Path(folder)', "self.folder = Path(folder)\n        self.fast_limits = fast_policy(folder, standard_seconds=BUILD_DEADLINE)\n        self.build_limit = 1 if self.fast_limits['fast'] else MAX_BUILDS\n        self.work_limit = self.fast_limits['seconds']")
     body = replace(body, 'validate_photo_plan(scene, self.photos)', "if self.fast_limits['fast']:\n            fast_scene_guard(scene)\n        validate_photo_plan(scene, self.photos)")
@@ -105,7 +105,7 @@ def build(source, destination):
         raw = path.read_bytes()
         if blob_sha(raw) != expected:
             raise ValueError('Source parity not confirmed: ' + name + '. No files were changed.')
-        patched = transforms[name](raw.decode('utf-8'))
+        patched = finish_patch(name, transforms[name](raw.decode('utf-8')))
         compile(patched, name, 'exec')
         updates[name] = patched
     helper = Path(__file__).with_name('fast_preview.py').read_text(encoding='utf-8')
