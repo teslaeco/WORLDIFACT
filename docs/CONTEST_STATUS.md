@@ -1,3 +1,55 @@
+# WORLDIFACT status — Shop MAKE options released
+
+Date: 17 September 2026. PR #40 was reviewed, merged and published to production after all final-head checks passed.
+
+## Completed release
+
+- PR #40: https://github.com/teslaeco/WORLDIFACT/pull/40 — **MERGED**.
+- Reviewed PR head: `4c53d2f164e6a9823a3b7f80387414c07aa85dab`.
+- Squash merge on `main`: `d63573d39996df8f1b4b61cfa88a3fe52c3c07b9`.
+- Final-head checks: `35254977101` FAST v33 installation safety PASS; `35254977119` FAST draft worker PASS; `35254977047` Cloud Shell launcher PASS; `35254977214` WORLDIFACT verification PASS.
+- Post-merge main verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35255225486 — **SUCCESS**.
+- Production workflow: https://github.com/teslaeco/WORLDIFACT/actions/runs/35255225453 — **SUCCESS**.
+- Cloudflare version: `36fd0264-e65a-40df-bf71-6b2bcfd9bc4e`.
+- Public Shop: https://worldifact.xodobrox.workers.dev/shop
+- Production suite: **184/184 PASS**, zero failed, skipped or cancelled tests; lint has nine existing warnings and zero errors; typecheck, local HTTP smoke and production build PASS.
+- Release smoke: **PASS** for 13 HTML routes, 23 matching hub assets, 102 original app entries/assets, API 404 behavior, DEMO generation path and origin rejection. The deployment did not make a paid API generation call.
+
+## Published Shop behavior
+
+- Client reference input is limited to **maximum 3 images**.
+- 8K remains visible but disabled as **coming soon**. The UI does not claim unavailable 8K output.
+- Client MAKE choices now include **Plastic / Metal / Wood / Stone**, **3D printer / Laser / CNC**, size choices from **5 cm through 20 cm**, and plain/full-color paths.
+- Promoted client routes reuse the existing stored manufacturing evidence without exposing contractor names. Only evidence-backed benchmark combinations show numeric screening estimates; unsupported combinations say **Quote required**.
+- The 5–20 cm plastic price table is explicitly a solid-volume screening extrapolation from the stored 100 mm observations, not a live or binding supplier quote.
+- The ISS card records the project-provided source, nominal `370 × 227.3 × 194.1 mm` bounds, `469,984` STL triangles and the prior thin-wall warning around solar-array / fragile structural areas.
+- **Prepare ISS print-repair draft** fills a STANDARD Astra/Blender manufacturing draft without generating, ordering or spending credits. It requests geometry cleanup, reinforcement of fragile/thin sections, sensible module splits, joints/clearance, explicit units and color/paintable paths.
+- The production UI deliberately keeps ISS at **PRINT-PREP PASS REQUIRED / VALIDATION REQUIRED**. It does not claim that Astra already repaired the uploaded model. Only an actually generated and reviewed corrected artifact may later be labelled `Original source + Astra-assisted print-prep revision · VALIDATION REQUIRED`.
+
+## Latest production capability snapshot
+
+The read-only deployment diagnostic at `2026-09-17T17:52:29.869Z` reported:
+
+```json
+{
+  "health": { "mode": "DEMO", "generationReady": false, "generation": "NOT_REQUESTED" },
+  "oracleWorlds": { "oracle": "CONNECTOR_READY", "connectorVersion": 33, "characterStandard": 20, "generation": "NOT_REQUESTED" },
+  "studio": {
+    "ready": false,
+    "photoReady": true,
+    "fastReady": true,
+    "oracle": "CONNECTOR_READY",
+    "reason": "ALLOWANCE_EXHAUSTED",
+    "allowance": { "used": 7, "limit": 7, "remaining": 0 },
+    "generation": "NOT_REQUESTED"
+  }
+}
+```
+
+This is the newest timestamped status and supersedes older allowance snapshots below. It proves connector/capability state only; it does not prove a fresh model generation, ISS repair, 8K output or manufacturing approval. No supplier order or Product Hunt submission was made by this release.
+
+---
+
 # WORLDIFACT status — Shop MAKE options and ISS print-prep draft
 
 Date: 17 September 2026. Branch milestone only; **not merged and not deployed**.
