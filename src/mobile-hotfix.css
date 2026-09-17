@@ -151,3 +151,62 @@ body { overflow-x: hidden; }
   .joystick-base { width:88px; height:88px; }
   .world-interact { width:105px; }
 }
+
+
+/* Final contest recording pass: the world owns the mobile viewport; secondary chrome stays out of frame. */
+@media (max-width:760px) {
+  .foundation-page > .portal-header {
+    height:0 !important;
+    min-height:0 !important;
+    padding:0 !important;
+    margin:0 !important;
+    border:0 !important;
+    overflow:visible !important;
+  }
+  .foundation-page > .portal-header > .brand,
+  .foundation-page > .foundation-heading,
+  .foundation-page > .foundation-actions,
+  .foundation-page > .foundation-note {
+    display:none !important;
+  }
+  .foundation-page .world-primary-frame {
+    margin-top:0 !important;
+    min-height:calc(100dvh - var(--mobile-dock) - env(safe-area-inset-bottom,0px));
+    background:#07141d;
+  }
+  .foundation-page .foundation-frame {
+    display:block;
+    width:100%;
+    height:calc(100dvh - var(--mobile-dock) - env(safe-area-inset-bottom,0px)) !important;
+    min-height:560px !important;
+    border:0 !important;
+  }
+  .foundation-page .portal-generator-drawer {
+    margin-top:.45rem;
+  }
+  .foundation-loading { display:none !important; }
+  .avatar-picker { display:none !important; }
+  .chess-launch {
+    min-height:calc(100dvh - var(--mobile-dock));
+    display:grid;
+    place-content:center;
+    text-align:center;
+    gap:1rem;
+  }
+  .native-shop {
+    padding-left:.5rem !important;
+    padding-right:.5rem !important;
+  }
+  .native-shop .native-shop-workspace {
+    gap:.7rem !important;
+  }
+  .native-shop .native-shop-form,
+  .native-shop .native-shop-preview,
+  .shop-make {
+    min-width:0;
+    max-width:100%;
+  }
+  .studio {
+    min-height:calc(100dvh - var(--mobile-dock) - env(safe-area-inset-bottom,0px));
+  }
+}
