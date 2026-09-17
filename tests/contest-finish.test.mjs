@@ -36,13 +36,29 @@ test('unknown portal IDs fail before any provider call', async () => {
   assert.match((await response.json()).error, /five supported WORLDIFACT portal IDs/i)
 })
 
-test('portal UI labels LIVE and DEMO truthfully and exposes no server secrets', async () => {
+test('portal UI labels LIVE and DEMO truthfully, stays usable when LIVE is gated and exposes no server secrets', async () => {
   const source = await readFile(new URL('../src/components/PortalAstraGenerator.tsx', import.meta.url), 'utf8')
   assert.match(source, /LIVE · GENERATED/)
   assert.match(source, /DEMO · MOCK/)
   assert.match(source, /MAKE: VALIDATION REQUIRED/)
   assert.match(source, /\/api\/blueprint/)
+  assert.match(source, /Generate DEMO · no API cost/)
+  assert.match(source, /onClick=\{generatePrimary\}/)
+  assert.doesNotMatch(source, /disabled=\{busy \|\| !health\.generationReady\}/)
   assert.doesNotMatch(source, /OPENAI_API_KEY|ORACLE_API_TOKEN|CLOUDFLARE_API_TOKEN/)
+})
+
+test('Game Lab primary generation action falls back to labelled no-cost DEMO instead of dead-ending', async () => {
+  const source = await readFile(new URL('../src/components/P0GameLab.tsx', import.meta.url), 'utf8')
+  assert.match(source, /Generate DEMO world · no API cost/)
+  assert.match(source, /onClick=\{generatePrimary\}/)
+  assert.doesNotMatch(source, /disabled=\{busy \|\| !health\.generationReady\}/)
+})
+
+test('contest portal generators are expanded by default for immediate review', async () => {
+  const source = await readFile(new URL('../src/pages/PortalPage.tsx', import.meta.url), 'utf8')
+  assert.match(source, /<details open className="portal-generator-drawer portal-page">/)
+  assert.match(source, /<details open className="portal-generator-drawer">/)
 })
 
 test('Fix ISS reuses Terra Observation NASA GIBS Earth source and preserves attribution', async () => {

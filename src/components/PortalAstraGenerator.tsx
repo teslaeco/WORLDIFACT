@@ -111,6 +111,11 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
     }
   }
 
+  function generatePrimary() {
+    if (health.generationReady) { void generateLive(); return }
+    generateDemo()
+  }
+
   const live = result?.mode === 'LIVE' && result.provenance === 'GENERATED'
   return <section className="portal-astra" aria-label={`${title} Astra generator`}>
     <div className="portal-astra-head">
@@ -129,10 +134,11 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
         {image && <div className="portal-astra-reference"><img src={image} alt="Selected portal reference" /><button type="button" disabled={busy} onClick={() => setImage(null)}>Remove image</button></div>}
         {health.accessRequired && <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={event => setAccessCode(event.target.value)} /></label>}
         <div className="portal-astra-buttons">
-          <button className="primary" type="button" disabled={busy || !health.generationReady} onClick={() => { void generateLive() }}>{busy ? 'Astra working…' : 'Generate with Astra'}</button>
-          <button type="button" disabled={busy} onClick={generateDemo}>Try DEMO · no API cost</button>
+          <button className="primary" type="button" disabled={busy || prompt.trim().length < 3} onClick={generatePrimary}>{busy ? 'Astra working…' : health.generationReady ? 'Generate with Astra' : 'Generate DEMO · no API cost'}</button>
+          <button type="button" disabled={busy} onClick={generateDemo}>Refresh DEMO preview</button>
           {busy && <button type="button" onClick={() => abort.current?.abort()}>Stop waiting</button>}
         </div>
+        <small>{health.generationReady ? 'LIVE is available through the reviewed server-side Astra path.' : 'LIVE is currently gated; the primary button runs the clearly labelled local DEMO so this generator stays usable without API cost.'}</small>
         {error && <p role="alert" className="error">{error}</p>}
         {result && <div className="portal-astra-result">
           <strong>{live ? 'LIVE · GENERATED' : 'DEMO · MOCK'}</strong>

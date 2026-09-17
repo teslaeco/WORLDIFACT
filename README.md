@@ -15,7 +15,7 @@ The first successful public release passed [GitHub deployment and public HTTP ve
 - Enchanted AI Shop: local GLB review with geometry/textured views and SHA-256, two supplier candidates, observed preliminary JLC3DP prices, explicit cost assumptions and a production revision checklist.
 - Cloudflare Worker + static assets configuration, CI, main-branch release automation, optional secure OpenAI provisioning and a retained manual DEPLOY control.
 
-Chess Cube 512 AI and 8 Planets are planned portal previews. Terra links to a separate project; a playable ISS mission and live Earth-observation feed are not integrated here. No complete five-game collection is claimed.
+WORLDIFACT now exposes five primary contest worlds at `/chess`, `/iss`, `/planets`, `/shop` and `/lab`. Each world has the shared validated GPT-6 Astra blueprint surface; when the paid LIVE gate is not armed, the same primary action falls back to an explicit no-cost `DEMO · MOCK` result instead of becoming unusable. Detailed Shop 3D model generation is a separate Oracle/Blender workflow and remains truthfully gated whenever that backend allowance is unavailable. Terra Earth observation is also available at `/terra` and remains distinct from the Fix ISS game simulation.
 
 The original main-branch product vision is preserved in `docs/PROJECT_VISION.md` as a roadmap, separate from implemented features.
 
@@ -47,11 +47,12 @@ Move with WASD/arrows or the left analogue joystick; drag on the scene with anot
 | Route | Current scope |
 |---|---|
 | `/` | Mirror Lake, rover, workshop, walk-in portal navigation |
-| `/portal/ai-game-lab` | Scene studio and device archive |
-| `/portal/enchanted-ai-shop` | Model review and manufacturing workbench |
-| `/portal/chess-cube-512-ai` | Planned integration; optional `VITE_WORLDIFACT_CHESS_DEMO_URL` |
-| `/portal/terra-fix-iss` | Context and external Terra project link |
-| `/portal/8-planets-in-8-days` | Planned mission preview |
+| `/chess` | Chess Cube 512 AI + shared Astra blueprint generator |
+| `/iss` | Fix ISS simulation + shared Astra blueprint generator |
+| `/planets` | 8 Planets campaign + shared Astra blueprint generator |
+| `/shop` | Customer 3D-model storefront + shared Astra blueprint generator |
+| `/lab` | Native AI Game Lab world-blueprint generator and archive |
+| `/terra` | Source/date-aware Earth observation presentation |
 | `/privacy`, `/terms` | Data and preview notices; final operator contact requires review |
 
 ## Generation and data boundaries

@@ -84,6 +84,11 @@ function WorldBlueprintLab() {
     } catch (e) { setError(e instanceof Error && e.name === 'AbortError' ? 'Generation timed out; the previous scene is unchanged.' : e instanceof Error ? e.message : 'Generation failed.') }
     finally { window.clearTimeout(timeout); abort.current = null; setBusy(false) }
   }
+  function generatePrimary() {
+    if (health.generationReady) { void generateLive(); return }
+    generateDemo()
+  }
+
   async function exportGameGlb() {
     try {
       const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js')
@@ -123,8 +128,8 @@ function WorldBlueprintLab() {
         {image && <><img className="reference-preview" src={image} alt="Selected reference" /><button disabled={busy} onClick={() => setImage(null)}>Remove reference</button></>}
         {!health.generationReady && image && <small>The no-cost scene demo uses text only. LIVE image analysis starts only when the reviewed Astra generation gate is enabled.</small>}
         {health.accessRequired && <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /></label>}
-        <button className="primary" disabled={busy || !health.generationReady} onClick={() => void generateLive()}>{busy ? `Astra working · ${seconds}s` : 'Generate world blueprint · Astra'}</button>
-        <button disabled={busy} onClick={() => generateDemo()}>Try DEMO locally · no API cost</button>
+        <button className="primary" disabled={busy || prompt.trim().length < 3} onClick={generatePrimary}>{busy ? `Astra working · ${seconds}s` : health.generationReady ? 'Generate world blueprint · Astra' : 'Generate DEMO world · no API cost'}</button>
+        <button disabled={busy} onClick={() => generateDemo()}>Refresh DEMO locally</button>
         <Link to="/shop" className="button-link">Create a 3D model + textures →</Link>
         {busy && <button onClick={() => abort.current?.abort()}>Stop waiting in this browser</button>}
         {error && <p role="alert" className="error">{error}</p>}
