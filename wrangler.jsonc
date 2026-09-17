@@ -15,7 +15,8 @@
     "PUBLIC_PILOT": "false",
     "ENABLE_ORACLE_JOBS": "false",
     "GENERATION_REQUEST_LIMIT": "0",
-    "GENERATION_EXPIRES_AT": ""
+    "GENERATION_EXPIRES_AT": "",
+    "ENABLE_APPROVED_FAST_TEST": "true"
   },
   "durable_objects": {
     "bindings": [{"name": "GENERATION_BUDGET", "class_name": "GenerationBudget"}]

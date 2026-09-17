@@ -52,20 +52,14 @@ export async function checkStudio(fetcher: Fetcher = fetch, owner = ''): Promise
   if (!object(value) || typeof value.ready !== 'boolean' || typeof value.reason !== 'string' || typeof value.photoReady !== 'boolean' || typeof value.oracle !== 'string') throw new Error('The Studio status could not be verified.')
   return { ...value, fastReady: value.fastReady === true } as unknown as StudioStatus
 }
-
-/** The selected receipt belongs to one submitted job, not the editable form.
- * A later job requires an explicit start with a confirmed terminal selection.
- */
+/** A new job needs an explicit start; recovery never sends another paid POST. */
 export class StudioCoordinator {
   private saved: SavedStudioJob | null = null
   private confirmedJob: StudioJob | null = null
   private submitting = false
   private store: ReceiptStore
   private fetcher: Fetcher
-  constructor(store: ReceiptStore, fetcher: Fetcher = fetch) {
-    this.store = store
-    this.fetcher = fetcher.bind(globalThis)
-  }
+  constructor(store: ReceiptStore, fetcher: Fetcher = fetch) { this.store = store; this.fetcher = fetcher.bind(globalThis) }
   get current() { return this.saved }
   restore() { this.saved = readSavedStudioJob(this.store); this.confirmedJob = null; return this.saved }
   private preserveReceipt(saved: SavedStudioJob) {
@@ -80,11 +74,13 @@ export class StudioCoordinator {
       throw new Error('A job is already selected. Recover it instead of sending another paid request.')
     this.submitting = true
     const previous = this.saved
-    // Capture once before awaiting: later draft edits cannot change this intent.
-    const body = JSON.stringify(input), snapshot = JSON.parse(body) as StudioInput
     try {
+      const body = JSON.stringify(input), snapshot = JSON.parse(body) as StudioInput
+      // The previous signed receipt proves existing access for the one approved
+      // trial. It stays in a same-origin header, never a URL or a public log.
+      const previousHeaders: Record<string, string> = previous ? { 'X-WORLDIFACT-Previous-Job': previous.receipt.ticket } : {}
       const prepared = await this.fetcher('/api/studio/prepare', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner) }, body, signal: AbortSignal.timeout(45_000),
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner), ...previousHeaders }, body, signal: AbortSignal.timeout(45_000),
       })
       const receipt = readReceipt(await responseJson(prepared))
       if (previous?.receipt.id === receipt.id) throw new Error('A new model requires a new receipt. The previous model was not changed.')
@@ -93,19 +89,15 @@ export class StudioCoordinator {
       if (previous) this.preserveReceipt(previous)
       this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
       if (this.store.getItem(STUDIO_RECEIPT_KEY) !== JSON.stringify(saved)) throw new Error('The browser could not retain your receipt. No paid request was submitted.')
-      this.saved = saved; this.confirmedJob = null
-      onPrepared(saved)
+      this.saved = saved; this.confirmedJob = null; onPrepared(saved)
       try {
         const result = await this.fetcher('/api/studio/jobs', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': receipt.ticket, ...accessHeaders(owner) },
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': receipt.ticket, ...accessHeaders(owner), ...previousHeaders },
           body, signal: AbortSignal.timeout(45_000),
         })
         const job = parseStudioJob(await responseJson(result), receipt.id)
-        this.confirmedJob = job
-        return job
-      } catch {
-        return { id: receipt.id, state: 'pending', detail: JOB_DETAILS.pending }
-      }
+        this.confirmedJob = job; return job
+      } catch { return { id: receipt.id, state: 'pending', detail: JOB_DETAILS.pending } }
     } finally { this.submitting = false }
   }
   async poll(saved = this.saved): Promise<StudioJob> {
@@ -131,8 +123,7 @@ export class StudioCoordinator {
     if (!reader) throw new Error('The artifact has no content.')
     const chunks: Uint8Array<ArrayBuffer>[] = []; let size = 0
     for (;;) {
-      const next = await reader.read()
-      if (next.done) break
+      const next = await reader.read(); if (next.done) break
       size += next.value.byteLength
       if (size > maximum) { await reader.cancel(); throw new Error('Artifact size limit exceeded.') }
       chunks.push(new Uint8Array(next.value))
@@ -143,7 +134,6 @@ export class StudioCoordinator {
   clearSelection() {
     if (this.submitting) throw new Error('Wait for submission to finish before changing jobs.')
     if (this.saved) this.preserveReceipt(this.saved)
-    this.store.removeItem(STUDIO_RECEIPT_KEY)
-    this.saved = null; this.confirmedJob = null
+    this.store.removeItem(STUDIO_RECEIPT_KEY); this.saved = null; this.confirmedJob = null
   }
 }
