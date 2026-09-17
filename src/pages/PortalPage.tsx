@@ -19,7 +19,7 @@ export default function PortalPage() {
 
   if (app.route === '/shop') return <>
     <ShopPage />
-    <details className="portal-generator-drawer portal-page">
+    <details open className="portal-generator-drawer portal-page">
       <summary>Create a world blueprint with GPT-6 Astra</summary>
       <PortalAstraGenerator worldId="enchanted-ai-shop" title="Enchanted AI Shop" />
     </details>
@@ -72,7 +72,7 @@ export default function PortalPage() {
       The reviewed application above is the primary world. Use “Open original” only for saved projects or features that require the separate original host.
     </p>}
 
-    {app.route !== '/terra' && <details className="portal-generator-drawer">
+    {app.route !== '/terra' && <details open className="portal-generator-drawer">
       <summary>Create inside this world with GPT-6 Astra</summary>
       <PortalAstraGenerator worldId={worldId} title={app.title} />
     </details>}
