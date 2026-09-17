@@ -1,53 +1,95 @@
-# WORLDIFACT status — Shop draft editing repair
+# WORLDIFACT status — Shop draft fields repaired and published
 
-Date: 17 September 2026. Active scoped repair: PR #37, `fix/shop-edit-after-result-20260917`.
+Date: 17 September 2026. Scoped UI repair completed; the separately approved paid FAST test has not been activated or executed.
 
-## Owner report and verified cause
+## Completed release
 
-The owner's 17:08 Android screenshot shows the successfully generated knight, its saved receipt and archive, but the prompt/mode/purpose controls are disabled. Production code used `disabled={busy || !!saved}` and equivalent expressions. Any selected receipt therefore kept the form locked indefinitely, even after success, despite the help text saying drafts remain editable.
+- PR #37: https://github.com/teslaeco/WORLDIFACT/pull/37 — MERGED.
+- Reviewed head: `856e7310a1b8fc36b0f1ac9b30a407b535391857`.
+- Deployed merge: `94adf640aef3847dcd470c8af240dc497c132074`.
+- Cloudflare version: `5ba82762-f24f-4806-b39e-5b756f7d4369`.
+- Public Shop: https://worldifact.xodobrox.workers.dev/shop
+- Production workflow: https://github.com/teslaeco/WORLDIFACT/actions/runs/35240617074 — all steps SUCCESS, job `105267796416`.
+- Post-merge main verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35240617012 — SUCCESS.
 
-This is a frontend lifecycle defect, distinct from the expired/disabled paid window. A functioning FAST connector does not make a form editable if it has an explicit disabled attribute. No Oracle reinstall, model regeneration, browser-data clearing or secret change is needed for this defect.
+The requested repair was implemented, tested, reviewed and published directly through connected GitHub tools. No separate unobserved Codex/Copilot agent run is claimed. This documentation-only `[skip ci]` update changes no runtime or production settings.
 
-Official control semantics checked: https://react.dev/reference/react-dom/components/textarea and https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/disabled.
+## Cause and fix
 
-## Implemented in PR #37
+The owner's 17:08 Android screenshot showed the successful restored chess knight but disabled prompt, generation mode and purpose controls. The source used `disabled={busy || !!saved}` and equivalent expressions: a selected receipt remained present after success, so the form stayed locked indefinitely. This was a frontend lifecycle defect, not proof of an Oracle outage or insufficient API credits.
 
-- The description, generation mode, purpose and STANDARD reference controls now edit a next-model draft independently of the selected result and available paid allowance. Inputs only lock for the submission/preparation operation that owns them, not forever because a receipt exists.
-- A running job remains immutable. The user may draft the next request while it runs, but no second job can start until the selected receipt's own terminal status is confirmed.
-- The prior preview, submitted description, downloads and archive stay unchanged during editing, switching mode and clearing the draft. A visible `Clear next-model draft` action affects only draft description/photos, with confirmation, and never removes the receipt or archived model.
-- Only an explicit Generate action can replace a completed selection. The coordinator verifies its own latest confirmed terminal state, snapshots inputs before waiting, and preserves the old receipt in same-origin device history before storing the new one.
-- Free preparation failure, unavailable allowance and storage failure do not discard the previous model or send a paid POST. Failed acceptance recovers only the newly prepared receipt by GET. Existing double-click protection, fetch binding, exact-input signature, server limits and archive-original preservation remain.
-- FAST retains its capability check and v1 restrictions: text-only, no reference photos/terrain, up-to-2K map ceiling. Choosing STANDARD restores the applicable photo/texture controls. Draft mode does not change the original result's generation profile or export identity.
-- No CSS, generator/Oracle source, cloud infrastructure, secrets, provider model, request ceiling or pilot/expiry marker was changed.
+The published fix separates the editable next-model draft from the immutable submitted job/result and from the paid server gate.
 
-## Tests and evidence boundary
+- Description, generation mode, purpose and applicable STANDARD photo/texture controls remain editable after a completed model and while a prior result is being checked. Brief submission/photo-preparation operations may lock only the affected inputs.
+- A current running or unconfirmed job cannot be replaced or duplicated. Its own terminal status must be confirmed before a new explicit Generate action can prepare another job.
+- Editing the next description or switching STANDARD/FAST does not change the old preview, submitted description, file identity, downloads, receipt or archived original.
+- The visible `Clear next-model draft` action clears only new text/reference images after confirmation. It does not remove the displayed model, recovery receipt or archive, and does not cancel or create a server job.
+- Before a new paid submission, the real coordinator snapshots inputs once, preserves the previous receipt in same-origin device history, and verifies storage of the new receipt. Failed free preparation retains the previous result/selection. Storage failure prevents a paid POST.
+- Double-click protection, native fetch binding, exact-input receipt signatures, same-job GET recovery and archive-original preservation remain intact. Late old responses cannot confirm a different current job.
+- FAST retains its versioned capability check, text-only v1 scope, no-photo/terrain restriction and up-to-2K map ceiling. Choosing STANDARD restores applicable reference/texture controls. Draft mode never changes the old model's mode or export identity.
 
-New tests exercise the actual checked-in Shop component, its effect lifecycle and real input/submit handlers with deterministic storage/timer/HTTP adapters. They restore a completed result with zero allowance, edit the prompt, switch STANDARD/FAST, select/clear new references, preserve the old preview/receipt/archive, reject active-job replacement and verify one submission only after an explicit Generate action with a simulated available allowance.
+No Oracle installation/restart, generator backend change, provider/model change, new cloud resource, new credential, allowance reset/refund or pilot/expiry marker change was part of this repair. The existing hosted Froge application and previous models remain unchanged.
 
-Additional real-client tests cover terminal identity, unknown restored state, unchanged old receipt after failed free preparation, storage failure, lost next-job response and snapshot stability if a draft object changes while preparation is waiting.
+## Verification performed
 
-Initial run `35239946404` passed 175/176 tests, including all ten new behavioral cases; the only failure was the pre-existing native-fetch fixture's explicit dependency bundle not yet including the new `studioDraft.ts` helper. It was fixed by including that exact module, preserving the unknown-import assertion. The existing standalone Chromium API test now also exercises explicit next-job receipt preservation. It still uses inert data URLs only and is NOT a website preview or Android/WebGL test.
+| Check | Actual result |
+|---|---|
+| Final-head WORLDIFACT verification | PASS, `35240295838` |
+| Final-head FAST worker regression | PASS, `35240295782` |
+| Final-head v33 installation safety | PASS, `35240295830` |
+| Final-head Cloud Shell launcher safety | PASS, `35240295792` |
+| Production complete test suite | **176/176 PASS**, zero failed/skipped/cancelled tests |
+| Lint / TypeScript / build | PASS; nine existing lint warnings, zero errors |
+| Local HTTP smoke | PASS; deterministic DEMO only, no paid provider request |
+| Reviewed Chess/Terra/ISS assembly | PASS |
+| Worker dry-run and deployment | PASS |
+| Public release smoke | PASS: 13 HTML routes, 23 matching hub assets, 102 original app entries/assets, API 404, DEMO and origin rejection |
+| New physical Android interaction / fresh AI generation | NOT TESTED by this repair |
 
-Complete final-head verification is required before publication. Test fixtures are not a paid AI result, and successful source checks do not prove physical-device behavior. Recorded browser-preview security restrictions remain respected; no blocked page preview is retried indirectly.
+Ten new behavioral cases exercise the actual checked-in Shop component, its effects and event handlers with deterministic hook/storage/timer/HTTP adapters, plus the real coordinator. They restore a completed model with zero allowance, edit prompt/mode/reference fields, keep the old result, reject active-job replacement and verify one paid-intent fixture only after an explicit Generate action.
 
-## Scope and approval
+The existing native Chromium regression remains a standalone data-URL-only browser API test, not a site preview or physical Android test. It now also checks explicit next-job receipt preservation. Initial run `35239946404` passed 175/176 tests; its one failure was an explicit browser fixture dependency list that needed the new reviewed `studioDraft.ts` helper. The exact helper was included without weakening the unexpected-import assertion or removing any test.
 
-The user requested that these broken fields be fixed on the existing site, continuing the already authorized scoped repair/publication workflow. This branch contains only the edit/next-job lifecycle repair and its tests/docs. Release only the reviewed expected head after full CI and public asset verification.
+No blocked site preview was rerouted through another browser or tool. A tiny deterministic material-bearing GLB proves parser/lifecycle behavior, not AI quality, a new knight or real device rendering.
 
-The previous conversation includes approval of **one FAST test up to USD 5**. That approval is acknowledged; it is not missing and should not be requested again. It is also not proof of actual server activation, a successful request or an enforced monetary cap. This UI repair does not enable or execute that test and must not be reported as doing so. No seventh request, paid benchmark, budget reset/refund or expiry extension has occurred in this repair.
+## Public post-release capability and paid gate
 
-Editing must work even when the paid window is disabled. The Generate button must accurately remain disabled when the server cannot accept a paid request. Do not promise that simply selecting FAST or editing a prompt reopens paid capacity.
+At **2026-09-17T15:31:07.789Z** (**17:31 Poland/Netherlands**), the existing authorized credential-free release probe returned:
 
-## Preserved installation and production baseline
+```json
+{
+  "path": "/api/studio/status",
+  "http": 200,
+  "generation": "NOT_REQUESTED",
+  "ready": false,
+  "photoReady": true,
+  "fastReady": true,
+  "oracle": "CONNECTOR_READY",
+  "reason": "DISABLED_OR_EXPIRED",
+  "allowance": { "used": 6, "limit": 0, "remaining": 0 }
+}
+```
 
-Prior release ledger, including the complete Oracle installation/verification/rollback evidence and public FAST capability: https://github.com/teslaeco/WORLDIFACT/blob/19f9cd57573b3966d258c227813a105ca2aed611/docs/CONTEST_STATUS.md.
+The five-world Oracle endpoint separately returned CONNECTOR_READY, connectorVersion 33 and characterStandard 20. Blueprint `/api/health` remains DEMO with `generationReady=false`. These are timestamped observations, not an indefinitely current balance.
 
-- FAST installed by the owner on the exact reviewed Oracle v33, locally verified and restarted. Worker and tunnel were active; no paid model request by the installer.
-- PR #36 merged as `8b95f95c6b015bd645020cded76e174fb78a83fc`; preceding Cloudflare version `9cfc1b17-2c6f-4af5-9464-49cb5cc4ed3a`.
-- Prior public probe at 14:54:27 UTC showed `fastReady=true`, `photoReady=true`, Oracle `CONNECTOR_READY`, paid `ready=false`, `DISABLED_OR_EXPIRED`, six reserved attempts and zero remaining. These are timestamped observations, not an indefinitely current counter.
-- Original hosted Studio remains https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/ . WORLDIFACT entry remains https://worldifact.xodobrox.workers.dev/shop . No authenticated iframe, top-level redirect or brief-export substitute is restored.
-- The owner's successful knight and approximately 16-minute duration remain the real baseline. No new 1–2-minute end-to-end performance, improved likeness, native 4K/8K, manufacturing approval, public store catalog/order or contest readiness is claimed.
+**Form editing is repaired and published. Installed FAST capability is confirmed. New paid submission remains disabled.** These are separate facts. Do not imply that selecting a mode or refreshing the page activates more capacity.
 
-## Handoff
+The user has already approved **one FAST test up to USD 5**. This consent is known and should not be requested again. The prior assistant's instruction to click Generate did not actually activate the server gate. This UI repair has NOT activated or executed that test, and no enforceable new monetary cap or seventh reservation is claimed. The outstanding paid-test work must establish the bounded capacity and execute/measure one explicit intent, without a reset/refund, unlimited opening or silent STANDARD fallback.
 
-GO for this UI repair only after final exact-head checks. Record merge SHA, publication outcome and public probe in the PR and this ledger after success. Keep actual field editing, paid capacity and fresh model performance as three separate claims. Do not tell the user to clear browser storage or install the Oracle patch again.
+No additional paid generation, provider cost or deadline extension was initiated by this repair. The prior six reservations and expired pilot remain intact. A standard disabled-cost deployment does not grant fresh capacity.
+
+## User-facing handoff
+
+Open the same Shop and reload normally once to receive the changed JavaScript. The old knight may remain visible while the next description/mode is edited. Do not clear browser/site storage: it contains the local model archive and recovery receipts. Do not rerun the Oracle installer to fix fields or paid allowance.
+
+`Clear next-model draft` is optional and clears only draft text/photos. The Generate button remains governed by actual server readiness. An unavailable paid window must not prevent writing a draft or selecting supported STANDARD/FAST mode.
+
+## Preserved installation and wider boundaries
+
+Full preceding FAST installation/restart/verification/rollback and website release ledger: https://github.com/teslaeco/WORLDIFACT/blob/19f9cd57573b3966d258c227813a105ca2aed611/docs/CONTEST_STATUS.md.
+
+PR #36 installed-support/website baseline: merge `8b95f95c6b015bd645020cded76e174fb78a83fc`, previous Cloudflare version `9cfc1b17-2c6f-4af5-9464-49cb5cc4ed3a`. Owner-side exact-v33 installer verified/restarted the generator; the tunnel and original data were preserved. No repeat installation was performed here.
+
+Original hosted Studio: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
+
+The owner's successful knight and approximately 16-minute duration remain the live baseline. This repair does not prove a new 1–2-minute FAST result, better likeness, native 4K/8K detail, manufacturing approval, public shop catalog/order or contest readiness. GAME outputs remain review-required and MAKE remains validation-required. No contest eligibility decision or submission was performed.
