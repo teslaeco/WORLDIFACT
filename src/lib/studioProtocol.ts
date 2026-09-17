@@ -53,7 +53,7 @@ export function validateStudioInput(value: unknown): StudioInput {
     throw new Error('Enter a 3–4000 character description, a supported purpose and a texture-size limit.')
   const profile = generationProfile(value.generationProfile)
   const source = value.photos === undefined ? [] : value.photos
-  if (!Array.isArray(source) || source.length > 4) throw new Error('Use at most four reference photos.')
+  if (!Array.isArray(source) || source.length > 3) throw new Error('Use at most three reference photos.')
   if (profile === FAST_DRAFT_PROFILE && (source.length > 0 || value.textureMaxSize !== 2048 || value.purpose === 'terrain'))
     throw new Error('FAST v1 supports one text-only object and a 2K texture ceiling. Use STANDARD for photos, terrain or larger textures.')
   let totalBytes = 0, totalPixels = 0
@@ -81,7 +81,7 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
     id, generationProfile: FAST_DRAFT_PROFILE,
     prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.',
   }
-  const instruction = `\n\nWORLDIFACT output: create an editable 3D ${input.purpose} asset with UVs and PBR materials, exported as a self-contained GLB. Reference images describe the same requested object; preserve their visible proportions and colors. Request an upper texture limit of ${input.textureMaxSize}px, never upscale and call that recovered detail. Keep originals; use a game preview below 3 million rendered triangles where practical. Record visual/geometry limitations; MAKE is unapproved. Do not return a brief instead of a model.`
+  const instruction = `\n\nWORLDIFACT output: create an editable 3D ${input.purpose} asset with UVs and PBR materials, exported as a self-contained GLB. Reference images describe the same requested object; preserve their visible proportions and colors. Request an upper texture limit of ${input.textureMaxSize}px, never upscale and call that recovered detail. Keep originals; use a game preview below 3 million rendered triangles where practical. For figurine/object geometry, prefer physically connected solids and avoid zero-thickness decorative sheets where practical. If the prompt requests printing or manufacturing, work in millimetres, honor every supplied minimum-wall and clearance target, thicken fragile unsupported sheets/struts instead of leaving paper-thin surfaces, keep intentional assemblies explicit, and report remaining open/non-manifold geometry plus support/orientation needs. Record visual/geometry limitations; MAKE is unapproved until slicer/process and supplier engineering review. Do not return a brief instead of a model.`
   return { id, prompt: input.prompt + instruction, ...(input.photos.length ? { photos: input.photos } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {

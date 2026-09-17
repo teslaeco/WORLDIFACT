@@ -5,16 +5,31 @@ import { PORTALS } from '../src/config/portals.ts'
 import { REFERENCE_LINKS } from '../src/config/references.ts'
 import { renderShopMarkup } from './shop-render-helper.mjs'
 
-test('native Shop has a permanent parent return, all five worlds, prompt, photos and texture controls', async () => {
+test('native Shop has a permanent parent return, all five worlds, prompt, three-photo and texture controls', async () => {
   const html = await renderShopMarkup()
   assert.match(html, /href="\/"[^>]*>← Back to WORLDIFACT/)
   for (const portal of PORTALS) assert.ok(html.includes(`href="${portal.route}"`))
   assert.match(html, /<form/)
   assert.match(html, /id="studio-prompt"/)
   assert.match(html, /id="studio-photos"/)
+  assert.match(html, /Up to 3 views of the same object/)
   assert.match(html, /id="studio-texture"/)
+  assert.match(html, /Up to 8K · available soon/)
+  assert.match(html, /value="8192" disabled=""/)
   assert.match(html, /Generate 3D model \+ materials/)
   assert.doesNotMatch(html, /<iframe|<object|<embed|Opening the original generator/)
+})
+
+test('customer MAKE panel keeps contractor identities private and exposes the requested choices', async () => {
+  const html = await renderShopMarkup()
+  assert.match(html, /MAKE · CUSTOMER PREVIEW/)
+  for (const label of ['Plastic', 'Metal', 'Wood', 'Stone', '3D printer', 'Laser', 'CNC', 'Without full color', 'Full color']) assert.ok(html.includes(label), label)
+  for (const size of ['5 cm', '10 cm', '15 cm', '20 cm']) assert.ok(html.includes(size), size)
+  assert.match(html, /PROMOTED MATCH FOR THIS SELECTION/)
+  assert.match(html, /International Space Station · 5–20 cm/)
+  assert.match(html, /thin-wall/i)
+  assert.match(html, /Astra provenance/)
+  assert.doesNotMatch(html, /JLC3DP|Sculpteo/)
 })
 
 test('old half-skull character is only an example; it cannot masquerade as the current generated result', async () => {
@@ -32,7 +47,7 @@ test('generation is disabled until server readiness; unavailable is not falsely 
   assert.match(html, /Generation not ready/)
   assert.match(html, /read-only check is required/)
   assert.doesNotMatch(html, /blocked by the exhausted pilot quota/)
-  assert.match(html, /not guaranteed detail/)
+  assert.match(html, /actual texture quality depends on the worker and source images/)
   assert.match(html, /manufacturing approval/)
 })
 
