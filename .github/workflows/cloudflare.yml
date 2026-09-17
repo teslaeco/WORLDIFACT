@@ -63,3 +63,11 @@ jobs:
         run: node scripts/release-check.ts smoke
         env:
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson
+      - name: Report deployed Studio capability without paid generation
+        run: |
+          node --input-type=module - <<'JS'
+          import { inspectWorldifactServices } from './scripts/check-froge-external.mjs'
+          const services = await inspectWorldifactServices()
+          console.log(JSON.stringify({ checkedAt: new Date().toISOString(), services }, null, 2))
+          console.log('Read-only deployment diagnostic. FAST capability, remaining allowance and a generated result are separate facts. No model request or budget change.')
+          JS
