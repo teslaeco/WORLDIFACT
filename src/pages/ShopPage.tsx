@@ -10,6 +10,7 @@ import { listStudioModels, readStudioModel, saveStudioModel, type StudioArchiveE
 import { mayExportCurrentJob, previewFileName, type StudioPreviewIdentity } from '../lib/studioView'
 import { canSubmitNewDraft } from '../lib/studioDraft'
 import { inspectGLB } from '../lib/glb'
+import { DEFAULT_DIMENSIONS_MM, type ClientDimensions } from '../lib/shopManufacturing'
 import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, validateStudioInput, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
 import './ShopPage.css'
 
@@ -59,6 +60,7 @@ export default function ShopPage() {
   const [search, setSearch] = useState('')
   const [sampleView, setSampleView] = useState('front')
   const [sampleMissing, setSampleMissing] = useState(false)
+  const [dimensions, setDimensions] = useState<ClientDimensions>(DEFAULT_DIMENSIONS_MM)
   const fast = profile === FAST_DRAFT_PROFILE
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
 
@@ -125,8 +127,8 @@ export default function ShopPage() {
       try {
         await saveStudioModel(selected, blob)
         const entries = await listStudioModels()
-        if (mounted.current && token === epoch.current) { setArchive(entries); setNotice('Original GLB and embedded materials saved on this device. Not published or approved for sale.') }
-      } catch (e) { if (mounted.current && token === epoch.current) setNotice(e instanceof Error ? e.message : 'Save failed. Download the original model to keep it.') }
+        if (mounted.current && token === epoch.current) { setArchive(entries); setNotice('Your preview is ready.') }
+      } catch (e) { if (mounted.current && token === epoch.current) setNotice(e instanceof Error ? e.message : 'The preview is ready, but local recovery storage is unavailable.') }
     } catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Could not load the model. Retry the same result.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
@@ -204,7 +206,7 @@ export default function ShopPage() {
     setProfile('standard')
     setTextureLimit(4096)
     setError('')
-    setNotice('ISS print-repair instructions loaded into the draft. Nothing was generated or ordered.')
+    setNotice('ISS manufacturing-repair instructions loaded internally. Nothing was generated or ordered.')
     promptInput.current?.focus()
   }
   const exportFile = async (format: 'pbr' | 'fbx' | 'blend') => {
@@ -229,50 +231,52 @@ export default function ShopPage() {
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview)
 
   return <main className="portal-page native-shop">
-    <header className="native-shop-nav"><Link to="/" className="native-shop-back">← Back to WORLDIFACT</Link><strong>AI Shop · 3D Studio</strong><nav aria-label="World portals">{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></header>
-    <section className="native-shop-workspace" aria-label="Create and review a 3D model">
+    <header className="native-shop-nav"><Link to="/" className="native-shop-back">← Back to WORLDIFACT</Link><strong>AI Shop</strong><nav aria-label="World portals">{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></header>
+    <section className="native-shop-workspace" aria-label="Create and preview a 3D product">
       <div className="native-shop-preview">
-        <span className="eyebrow">{preview?.origin === 'archive' ? 'ARCHIVED MODEL · UNREVIEWED' : saved || preview ? saved?.generationProfile === FAST_DRAFT_PROFILE ? 'FAST DRAFT · NOT VISUALLY REVIEWED' : 'YOUR MODEL JOB · REVIEW REQUIRED' : 'EXISTING FORGE CHARACTER · EXAMPLE ONLY'}</span>
+        <span className="eyebrow">3D PREVIEW</span>
         {preview ? <>
-          {preview.url ? <OracleModelPreview url={preview.url} label={preview.label} /> : <p role="status">{preview.warning} The original GLB is preserved for explicit download.</p>}
-          <small>Model ID: {preview.id}</small><small data-testid="result-description">Submitted description: {preview.label}</small>
-          <button type="button" onClick={() => download(preview.blob, previewFileName(preview))}>Download GLB + embedded materials · {(preview.blob.size / 1048576).toFixed(1)} MB</button>
-        </> : saved ? <div className="native-shop-progress" role="status"><h2>{artifactBusy ? 'Loading your generated model…' : job?.state === 'failed' ? 'This job needs attention' : 'Your model job'}</h2><p>{job?.detail || JOB_DETAILS.pending}</p><p>Elapsed: {Math.floor(seconds / 60)}m {seconds % 60}s · no invented progress percentage</p><p>Job: <code>{saved.receipt.id}</code></p></div> : <>
-          {!sampleMissing ? <img className="native-shop-sample" src={`${EXAMPLE_ORIGIN}/assets/model-${sampleView}.webp`} alt="Existing FORGE character in a two-tone dress, with a living and skull half-face. This is an example, not a new generation." referrerPolicy="no-referrer" onError={() => setSampleMissing(true)} /> : <p>The existing character preview is unavailable. The generation form remains usable.</p>}
+          {preview.url ? <OracleModelPreview url={preview.url} label="Your 3D product preview" targetDimensionsMm={[dimensions.xMm, dimensions.yMm, dimensions.zMm]} customerMode /> : <p role="status">This preview could not be displayed. Your generation result is preserved.</p>}
+          <small hidden data-testid="result-description">Submitted description: {preview.label}</small>
+          <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>
+        </> : saved ? <div className="native-shop-progress" role="status"><h2>{job?.state === 'failed' ? 'We could not finish this model' : 'Preparing your model…'}</h2><p>{job?.state === 'failed' ? 'Your description is still saved. You can retry without creating a different order.' : 'Please keep this page open. Your preview will appear here when it is ready.'}</p><p>Elapsed: {Math.floor(seconds / 60)}m {seconds % 60}s</p></div> : <>
+          {!sampleMissing ? <img className="native-shop-sample" src={`${EXAMPLE_ORIGIN}/assets/model-${sampleView}.webp`} alt="Example 3D product preview" referrerPolicy="no-referrer" onError={() => setSampleMissing(true)} /> : <p>The example preview is temporarily unavailable. You can still create your own model.</p>}
           <div className="native-shop-views">{['front', 'left', 'back', 'face'].map(view => <button key={view} type="button" aria-pressed={sampleView === view} onClick={() => { setSampleView(view); setSampleMissing(false) }}>{view === 'left' ? 'Left side' : view[0].toUpperCase() + view.slice(1)}</button>)}</div>
-          <small>The earlier half-skull character is kept as a reference display. Your new result replaces this example only after its own job succeeds.</small>
+          <small>Example only. Your own generated preview replaces it after generation succeeds.</small>
         </>}
-        {saved && <div className="native-shop-actions"><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
+        {saved && <div className="native-shop-actions shop-internal-only" hidden><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
       </div>
       <div className="native-shop-form">
-        <span className="eyebrow">CREATE SOMETHING OF YOUR OWN</span><h1>From your idea<br />to a 3D model.</h1>
-        <p>Describe an object or add its reference views. The existing Oracle / Astra / Blender worker builds the model; WORLDIFACT shows its result here.</p>
-        <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'Next model draft: edit the description and mode freely. Your displayed model and its downloads remain unchanged until you explicitly submit another job.' : 'You can prepare the next draft while this job is being checked or completed. A second job cannot start until the current one finishes.' : 'Draft editing is free and stays available even when paid generation is disabled.'}</p>
-        <button type="button" data-testid="clear-studio-draft" disabled={busy || photoBusy} onClick={clearDraft}>Clear next-model draft</button>
+        <span className="eyebrow">CREATE YOUR PRODUCT</span><h1>Describe it.<br />See it in 3D.</h1>
+        <p>Describe the object you want and optionally add up to three reference images. Model generation is free for customers during this experimental test phase.</p>
+        <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'You can describe your next model while the current preview stays unchanged.' : 'You can prepare the next idea while the current model is being completed.' : 'No payment is taken when you create a model.'}</p>
+        <button type="button" data-testid="clear-studio-draft" disabled={busy || photoBusy} onClick={clearDraft}>Clear description</button>
         <form onSubmit={generate} aria-describedby="studio-draft-help">
-          <label htmlFor="studio-mode">Generation mode</label>
-          <select id="studio-mode" value={profile} disabled={busy || photoBusy} onChange={e => {
-            const next = generationProfile(e.target.value)
-            if (next === FAST_DRAFT_PROFILE && (!status?.fastReady || photos.length || purpose === 'terrain')) return
-            setProfile(next)
-            if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
-          }}><option value="standard">STANDARD · current quality workflow</option><option value={FAST_DRAFT_PROFILE} disabled={!status?.fastReady || !!photos.length || purpose === 'terrain'}>FAST DRAFT · simple text-only object</option></select>
-          <small>{fast ? 'FAST target: 1–2 minutes, not a guarantee. One compact build, up to 2K maps. Visual review and optional formats are deferred; no automatic paid fallback.' : 'STANDARD is unchanged. FAST becomes selectable only when the connected worker confirms its verified profile. A shorter timeout is not proof of a faster model.'}</small>
-          <label htmlFor="studio-prompt">Describe your next model</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic skull study with ivory bone materials, a stable base and clearly defined teeth." required />
-          <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
-          <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select><small>8K is shown as coming soon and cannot be selected for a new draft. References are never upscaled. Actual texture quality depends on the worker and source images.</small>
-          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require STANDARD mode' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Up to 3 views of the same object. Maximum 12 MB per original and 6 MB combined after preparation.</small>
+          <div className="shop-internal-only" hidden>
+            <label htmlFor="studio-mode">Generation mode</label>
+            <select id="studio-mode" value={profile} disabled={busy || photoBusy} onChange={e => {
+              const next = generationProfile(e.target.value)
+              if (next === FAST_DRAFT_PROFILE && (!status?.fastReady || photos.length || purpose === 'terrain')) return
+              setProfile(next)
+              if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
+            }}><option value="standard">STANDARD · current quality workflow</option><option value={FAST_DRAFT_PROFILE} disabled={!status?.fastReady || !!photos.length || purpose === 'terrain'}>FAST DRAFT · simple text-only object</option></select>
+            <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
+            <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
+          </div>
+          <label htmlFor="studio-prompt">Describe your model</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic chess knight with a stable base, smooth material and clean details." required />
+          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
-          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Submitting this model…' : fast ? 'Generate FAST draft + materials' : 'Generate 3D model + materials'}</button><small>Only this button submits a new paid job. Editing, switching mode and clearing the draft do not generate anything or change your saved models.</small>
+          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D model + materials · free' : 'Generate 3D model + materials · free'}</button><small>No customer payment is taken at generation. Manufacturing and delivery are a separate purchase step.</small>
         </form>
-        <div className="native-shop-connection" role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}{photos.length > 0 && status && !status.photoReady && <p>Photo input has not been confirmed on this worker. The images will not be silently ignored.</p>}<button type="button" disabled={checking} onClick={() => void refresh()}>Check connection · no generation</button></div>
-        {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /><small>Held only in this page's memory. Then check the connection again.</small></label>}
-        {error && <p className="native-shop-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
-        <p><strong>MAKE: validation required.</strong> A finished GLB is not manufacturing approval. Review geometry, dimensions, materials and licensing before sale.</p>
+        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : status?.ready ? 'Free generation available' : 'Generation temporarily unavailable'}</strong><p>{status?.ready ? 'You can create a model now.' : 'You can still prepare your description and photos. Try again shortly.'}</p><button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
+        <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
+        {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}
+        {error && <p className="native-shop-error" role="alert">We could not complete that step. Please try again.</p>}{notice && <p role="status">{notice}</p>}
+        <p className="shop-beta-note"><strong>Experimental beta.</strong> Manufacturing requires a real production review before an order can be completed. Delivery times can change if the supplier requests another safety or geometry check.</p>
       </div>
     </section>
-    <ShopManufacturingOptions onPrepareIssDraft={prepareIssDraft} />
-    <section aria-labelledby="studio-archive-title"><h2 id="studio-archive-title">Your models · device archive</h2><p>Completed originals are saved on this device, not automatically published to a store. Clearing browser storage removes this archive; keep explicit file backups.</p><label>Find a saved model<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions" /></label><div className="native-shop-archive">{archive.filter(item => item.prompt.toLowerCase().includes(search.toLowerCase())).map(item => <article key={item.id}><strong>{item.prompt}</strong><small>{(item.byteLength / 1048576).toFixed(1)} MB · UNREVIEWED</small><button type="button" disabled={busy || (!!saved && !terminal(job?.state)) || artifactBusy} onClick={() => void openArchived(item)}>Open saved model</button></article>)}</div>{archive.length === 0 && <p>No models saved on this device yet. Existing private Froge archives have not been copied or deleted.</p>}</section>
-    <footer><Link to="/lab">AI Game Lab</Link> · <Link to="/make">Manufacturing review</Link> · <Link to="/control">Platform connections</Link> · <a href={REFERENCE_LINKS.modelGenerator} target="_blank" rel="noopener noreferrer">Original Froge Studio ↗</a><p>Same-origin WORLDIFACT interface connected to the existing worker. The original hosted Studio is unchanged; there is no embedded login or automatic redirect.</p></footer>
+    <ShopManufacturingOptions dimensions={dimensions} hasGeneratedModel={!!preview && preview.origin === 'job'} onDimensionsChange={setDimensions} onPrepareIssDraft={prepareIssDraft} />
+    <section className="shop-internal-only" hidden aria-labelledby="studio-archive-title"><h2 id="studio-archive-title">Your models · device archive</h2><p>Completed originals are saved on this device, not automatically published to a store. Clearing browser storage removes this archive; keep explicit file backups.</p><label>Find a saved model<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions" /></label><div className="native-shop-archive">{archive.filter(item => item.prompt.toLowerCase().includes(search.toLowerCase())).map(item => <article key={item.id}><strong>{item.prompt}</strong><small>{(item.byteLength / 1048576).toFixed(1)} MB · UNREVIEWED</small><button type="button" disabled={busy || (!!saved && !terminal(job?.state)) || artifactBusy} onClick={() => void openArchived(item)}>Open saved model</button></article>)}</div>{archive.length === 0 && <p>No models saved on this device yet. Existing private Froge archives have not been copied or deleted.</p>}</section>
+    <footer className="shop-customer-footer"><Link to="/">WORLDIFACT</Link><p>Customer storefront · experimental beta. Payment and automated supplier settlement are not connected yet.</p><a className="shop-internal-only" hidden href={REFERENCE_LINKS.modelGenerator} target="_blank" rel="noopener noreferrer">Original Froge Studio</a></footer>
   </main>
 }
