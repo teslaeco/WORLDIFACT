@@ -57,9 +57,10 @@ export class StudioCoordinator {
   private fetcher: Fetcher
   constructor(store: ReceiptStore, fetcher: Fetcher = fetch) {
     this.store = store
-    // Browser fetch is a Window/Worker method. Calling an unbound copy as
-    // this.fetcher(...) gives it a StudioCoordinator receiver and throws
-    // "Illegal invocation" before any request. Bind once for every job path.
+    // Browser fetch is a Web API method. Storing it unbound and later calling
+    // this.fetcher(...) supplies this coordinator as its receiver, causing
+    // "Failed to execute 'fetch' on 'Window': Illegal invocation" before I/O.
+    // Bind once for prepare, submit, recovery and artifact requests alike.
     this.fetcher = fetcher.bind(globalThis)
   }
   get current() { return this.saved }
