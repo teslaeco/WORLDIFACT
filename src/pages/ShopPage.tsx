@@ -185,7 +185,8 @@ export default function ShopPage() {
     const flags = operations.current
     if (!files || flags.photos || flags.submit) return
     if (photos.length + files.length > 3) { setError('Use at most three views of the same object.'); return }
-    flags.photos = true; setPhotoBusy(true); setError('')\n    if (fast) setProfile('standard')
+    flags.photos = true; setPhotoBusy(true); setError('')
+    if (fast) setProfile('standard')
     try {
       const additions: StudioPhoto[] = [], views = ['front', 'side', 'back'] as const
       for (const file of Array.from(files)) additions.push(await prepareStudioPhoto(file, textureLimit, views[photos.length + additions.length]))
