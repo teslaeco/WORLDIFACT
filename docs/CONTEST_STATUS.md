@@ -1,31 +1,54 @@
-# WORLDIFACT status — customer storefront, cart and verified-quote gate
+# WORLDIFACT status — customer storefront published
 
-Date: 17 September 2026. PR #41 is a review milestone only; **not merged, not deployed, no payment connected and no paid generation executed**.
+Date: 17 September 2026. PR #41 was reviewed, merged and published to production after the final-head checks passed.
 
-## Current review branch
+## Completed release
 
-- PR #41: https://github.com/teslaeco/WORLDIFACT/pull/41
-- Branch: `feat/customer-store-cart-true-quotes`.
-- Customer Shop now hides engineering diagnostics, model IDs, raw recovery/export controls, the device archive, owner controls and the internal ISS repair action.
-- Customer creation remains prompt + up to three reference images. The customer-facing copy states that model generation is free during the experimental beta; the existing server budget/generation gate still controls whether a real job can actually start.
-- Customer manufacturing options now include material/process/finish, quick 5–20 cm presets and explicit custom X/Y/Z dimensions from 5–1000 mm. X/Y/Z changes are passed into the WebGL preview so the displayed proportions change without silently changing the saved source artifact.
-- A cart and explicit experimental-risk / possible-delivery-delay acknowledgements are present. Checkout stays disabled until an exact manufacturing quote is verified for the exact accepted revision and configuration.
-- Customer pricing no longer scales or extrapolates old benchmark prices. It returns a numeric sell price only when an exact supplier quote has `supplierAcceptedGeometry=true` and `finalPriceVerified=true` for the same configuration and size.
-- Recorded ISS evidence is preserved internally: nominal 370 mm WJP full-color route, USD 213.53 print price and an observed USD 55.72 UPS DDP line from 14 Sep 2026. These values are **not published as a final customer checkout price** because the supplier flagged thin walls and the quoted 3MF dimensions still need reconciliation against the audited source/repaired revision.
-- Manufacturing hard rules are appended to both STANDARD and FAST Studio generation payloads: explicit units/X-Y-Z, non-manifold/open-shell/self-intersection/degenerate/zero-thickness checks, fragile-feature avoidance, conservative resin-wall guidance, practical splits/keyed joints/clearances, material/UV preservation, change reporting and a hard rule that no generated file is called safe/production-ready until a real B2B manufacturing partner accepts that exact revision.
-- The next ISS repair prompt is internal-only and prepares another supplier-validation revision. No fresh paid Astra pass has been run by this milestone. Current auditable repo evidence does not establish that a prior mesh cleanup was specifically produced by Astra, so the project must not label an unverified historical cleanup as “Astra pass 1”.
-- Revolut/payment settlement is **not connected** and no customer or supplier money movement is implemented in this branch.
-- The visible pre-purchase GLB download button is removed, but secure “full 3D file only after payment” entitlement is still **BLOCKED**: the current interactive WebGL preview obtains the full GLB bytes in the browser. True enforcement requires a derived preview-only artifact before payment plus server-side protection of the original and a payment-confirmed entitlement endpoint.
+- PR #41: https://github.com/teslaeco/WORLDIFACT/pull/41 — **MERGED**.
+- Reviewed PR head: `bc9c5788a2474f7d502f3186273ee7da8c764c55`.
+- Squash merge on `main`: `a61137ea92c1f55761d103aadd126bd463b0aa0a`.
+- Final-head checks: `35261421749` WORLDIFACT verification PASS; `35261421731` FAST draft worker PASS; `35261421745` FAST v33 installation safety PASS; `35261421746` Cloud Shell launcher PASS.
+- Post-merge main verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35262509570 — **SUCCESS**.
+- Production workflow: https://github.com/teslaeco/WORLDIFACT/actions/runs/35262509550 — **SUCCESS**.
+- Cloudflare version: `122e9057-1d38-4ec6-995f-9cfb5cb23fd5`.
+- Public Shop: https://worldifact.xodobrox.workers.dev/shop
+- Production suite: **185/185 PASS**, zero failed, skipped or cancelled tests; lint has nine existing warnings and zero errors; typecheck, local HTTP smoke and production build PASS.
+- Release smoke: **PASS** for 13 HTML routes, 23 matching hub assets, 102 original app entries/assets, API 404 behavior, DEMO generation path and origin rejection. The deployment made no paid API generation call.
 
-## Verification
+## Published customer Shop behavior
 
-- Code head `5f1a757b757cdb4f482a49f201c8f5469368e3b9`: WORLDIFACT verification run `35261080518` — **SUCCESS**.
-- The same run completed **185/185 tests PASS**, zero failed/skipped/cancelled; typecheck, local HTTP smoke and production build PASS. Existing lint warnings remained; two new quote-escape warnings were then removed by the lint-only cleanup commit `9b0e68edeb1e595e1bb73a8111f7995c69384000`.
-- FAST no-paid-API worker review for code head `5f1a757b757cdb4f482a49f201c8f5469368e3b9`: run `35261080631` — **SUCCESS**.
-- A dedicated regression now asserts that both STANDARD and FAST Studio payloads contain the manufacturing hard rules.
-- No production deployment, supplier order, payment, customer entitlement, Revolut transfer or Product Hunt action has been performed by PR #41.
+- Customer-facing Shop hides engineering diagnostics, model IDs, raw recovery/export controls, device archive, owner controls and the internal ISS repair action.
+- Customer creation remains prompt + up to **three** reference images. 8K remains unavailable/coming soon; no 8K output is claimed.
+- Customer manufacturing options include material/process/finish, quick 5–20 cm presets and explicit custom X/Y/Z dimensions from 5–1000 mm. X/Y/Z changes alter the WebGL preview proportions without silently rewriting the saved source artifact.
+- A customer cart and explicit experimental-risk / possible-delivery-delay acknowledgements are visible.
+- Customer pricing no longer scales or extrapolates old benchmark prices. A numeric sell price appears only after an exact supplier quote is verified for the exact accepted revision, configuration and size.
+- Recorded ISS evidence remains internal: nominal 370 mm WJP full-color route, USD 213.53 print price and an observed USD 55.72 UPS DDP line from 14 September 2026. These values are **not** published as a final checkout price because the supplier flagged thin walls and the repaired revision has not been accepted yet.
+- Manufacturing hard rules are appended to both STANDARD and FAST Studio payloads: explicit units/X-Y-Z, non-manifold/open-shell/self-intersection/degenerate/zero-thickness checks, fragile-feature avoidance, conservative resin-wall guidance, practical splits/keyed joints/clearances, material/UV preservation, change reporting and a hard rule that no generated file is called safe/production-ready until a real B2B manufacturing partner accepts that exact revision.
+- The next ISS repair prompt remains internal-only and prepares another supplier-validation revision. This release did **not** run a fresh paid Astra repair pass and did not submit an ISS file to a supplier.
+- Revolut/payment settlement is **not connected** and no customer or supplier money movement was implemented by this release.
+- The visible pre-purchase GLB download button is removed, but secure “full 3D file only after payment” entitlement remains **BLOCKED**: the interactive WebGL preview still receives full GLB bytes in the browser. True enforcement still requires a derived preview-only artifact, server-side protection of the original and a payment-confirmed entitlement endpoint.
 
-Before merge/deploy, rerun the final-head checks after this documentation milestone and present GO/NO-GO to the owner.
+## Latest production capability snapshot
+
+The deployment diagnostic at `2026-09-17T19:04:08.220Z` reported:
+
+```json
+{
+  "health": { "mode": "DEMO", "generationReady": false, "generation": "NOT_REQUESTED" },
+  "oracleWorlds": { "oracle": "CONNECTOR_READY", "connectorVersion": 33, "characterStandard": 20, "generation": "NOT_REQUESTED" },
+  "studio": {
+    "ready": false,
+    "photoReady": true,
+    "fastReady": true,
+    "oracle": "CONNECTOR_READY",
+    "reason": "APPROVED_TEST_PENDING_ACTIVATION",
+    "allowance": { "used": 7, "limit": 0, "remaining": 0 },
+    "generation": "NOT_REQUESTED"
+  }
+}
+```
+
+This proves the published connector/capability state only. It does not prove a new model generation, ISS repair, manufacturing approval, checkout payment or supplier settlement. The storefront is deployed, but new real model generation remains unavailable until a separately controlled generation window is activated.
 
 ---
 
