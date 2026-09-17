@@ -32,11 +32,25 @@
 .native-shop .oracle-model-canvas { position: relative; width: 100%; height: 510px; max-height: 65dvh; min-height: 280px; overflow: hidden; }
 .native-shop .oracle-model-canvas canvas { width: 100%; height: 100%; display: block; }
 .native-shop .scene-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.shop-make { margin: 10px 0 30px; padding: clamp(16px, 3vw, 28px); border: 1px solid #476470; border-radius: 14px; background: #10242c; }
+.shop-make .section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 12px; }
+.shop-make h2, .shop-make h3 { margin: 8px 0; }
+.shop-make .pill { border: 1px solid #6f8d98; border-radius: 999px; padding: 6px 10px; font-size: .75rem; }
+.shop-make-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.shop-make-controls label { display: grid; gap: 8px; }
+.shop-promoted-offer, .shop-iss-card { border: 1px solid #4e6e79; border-radius: 12px; padding: 16px; background: #142b34; margin: 16px 0; }
+.shop-promoted-offer { box-shadow: inset 4px 0 0 #b7eed4; }
+.shop-price { font-size: clamp(1.35rem, 4vw, 2rem); font-weight: 800; margin: 6px 0; }
+.table-wrap { width: 100%; overflow-x: auto; }
+.shop-price-grid { width: 100%; border-collapse: collapse; min-width: 460px; }
+.shop-price-grid th, .shop-price-grid td { text-align: left; padding: 10px; border-bottom: 1px solid #38545f; }
+.shop-iss-card button { font-weight: 750; }
 .native-shop-archive { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; margin-top: 16px; }
 .native-shop-archive article { border: 1px solid #476470; border-radius: 9px; padding: 12px; overflow-wrap: anywhere; }
 .native-shop-archive strong { display: block; max-height: 5em; overflow: auto; }
 .native-shop footer { margin-top: 24px; }
 .native-shop :is(a, button, input, select, textarea):focus-visible { outline: 3px solid #e9bc73; outline-offset: 3px; }
+@media (max-width: 900px) { .shop-make-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
  .native-shop { padding: 0 12px 24px; }
  .native-shop .native-shop-workspace { display: flex; flex-direction: column; gap: 24px; }
@@ -46,4 +60,5 @@
  .native-shop-nav nav { margin-left: 0; }
  .native-shop-sample { min-height: 260px; height: 420px; max-height: 60dvh; }
  .native-shop .oracle-model-canvas { height: 380px; }
+ .shop-make-controls { grid-template-columns: 1fr; }
 }

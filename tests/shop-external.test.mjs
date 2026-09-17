@@ -32,7 +32,8 @@ test('generation is disabled until server readiness; unavailable is not falsely 
   assert.match(html, /Generation not ready/)
   assert.match(html, /read-only check is required/)
   assert.doesNotMatch(html, /blocked by the exhausted pilot quota/)
-  assert.match(html, /not guaranteed detail/)
+  assert.match(html, /value="8192" disabled="">Up to 8K · coming soon/)
+  assert.match(html, /Actual texture quality depends on the worker and source images/)
   assert.match(html, /manufacturing approval/)
 })
 
