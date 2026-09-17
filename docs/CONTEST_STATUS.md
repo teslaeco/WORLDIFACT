@@ -37,7 +37,7 @@ Reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Err
 | Complete final-source tests | **155/155 PASS** | Final continuation log at 08:04:53 UTC; zero failed/skipped/cancelled tests; lint 9 warnings / 0 errors; TypeScript, HTTP, build and reviewed foundations passed |
 | Fresh paid model request | **NOT REQUESTED** | Tests use controlled responses; final status log records `paidGenerationRequested: false` |
 
-Three new receiver-sensitive regressions demonstrate the old error before transport, exercise the real default constructor through prepare/one submit/poll/GLB/PBR, and check injected fetch plus lost-response/reload recovery without another submission. The old Node fetch and arrow-function mocks did not enforce this browser API requirement. The new tests explicitly model it; they are not a physical Android or real browser session.
+Three new receiver-sensitive regressions demonstrate the old error before transport, exercise the real default constructor through prepare/one submit/poll/GLB/PBR, and check injected fetch plus lost-response/reload recovery without another submission. The old Node fetch and arrow-function mocks did not enforce this browser API requirement. These three tests explicitly model it; separate native-browser evidence was subsequently added in PR #35 below. Neither is a physical Android test.
 
 A further regression proves hotfix publication cannot extend the original deadline or enable an expired window. Existing tests were retained.
 
@@ -78,3 +78,11 @@ The native Shop stays within WORLDIFACT with a return link and all five worlds. 
 Actual fresh AI generation, physical Android/WebGL interaction, visual likeness, native 4K/8K detail and complete export-material equivalence are **not tested by this hotfix**. Connector readiness, source tests and deployment are separate from successful generated output. Device archive is not a public product catalog. MAKE stays validation-required. No contest decision or submission is performed.
 
 Earlier full release ledger, including PRs #28–33 and their evidence: https://github.com/teslaeco/WORLDIFACT/blob/3c7307ac594f2e37df55e6bf0ed5434b4e132ad8/docs/CONTEST_STATUS.md . The original implementation brief remains `docs/CODEX_TASK_SHOP31_FINISH.md`.
+
+## Independent native-browser regression — PR #35
+
+Concurrent repair work was reconciled with the already merged PR #34 instead of deploying a duplicate runtime or allowance configuration. The final PR #35 diff contains only `tests/studio-native-fetch-browser.test.mjs` (80 added lines). It was merged as `4967e3f7d5441558ff7b5d660b0903b13292aceb` with `[skip ci]` after full final-head CI https://github.com/teslaeco/WORLDIFACT/actions/runs/35197912951 passed on `b4c713b73889963aa810d49576d8da7e1058901f`. The previous evidence-only main update was retained.
+
+The test uses the actual compiled client and native Chromium fetch. It reproduces the old wrong-receiver Illegal invocation, then verifies repaired preparation, exactly one fixture submission, restored same-job polling and all four artifact paths. All responses are inert data URLs with no Oracle, OpenAI, HTTP server, protected site, session or account access. Its initial independent run `35197613097`, job `105124463546`, also passed and logged the native reproduction at 08:03:36 UTC. That earlier branch had 157 passing tests; its duplicate changes were removed before reconciliation, so this number is not substituted for the reconciled suite count.
+
+This adds real browser API coverage, not a generated model, WebGL rendering or physical Android verification. No marker, live bundle, original deadline or cumulative allowance was changed by the test-only merge or this documentation update. The deployed runtime and capacity evidence remain the PR #34 publication recorded above.
