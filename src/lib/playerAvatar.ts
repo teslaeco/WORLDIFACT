@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { uploadedPlayerGlbUrl } from '../generated/uploadedPlayer'
+import { uploadedPlayerGlbUrl } from '../generated/uploadedPlayer.js'
 
 /**
  * Shared WORLDIFACT player avatar.
@@ -30,7 +30,7 @@ export function createPlayerAvatar() {
   }
 
   if ('document' in globalThis) {
-    void uploadedPlayerGlbUrl().then(url => {
+    void uploadedPlayerGlbUrl().then((url: string) => {
       modelUrl = url
       new GLTFLoader().load(url, gltf => {
         const model = gltf.scene
