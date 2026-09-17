@@ -1,4 +1,5 @@
 """Exercise the patched run supervisor with an inert local child, never AI."""
+import json
 import os
 from pathlib import Path
 import sys
@@ -40,7 +41,8 @@ time.sleep(30)
 '''
             setup='ROOT='+repr(str(ROOT))+';FOLDER='+repr(str(folder))+';DATA='+repr(triangle().hex())+'\n'
             started=time.monotonic()
-            with patch('codex_runner.executable',return_value=Path(sys.executable)),patch('codex_runner.command',return_value=[sys.executable,'-c',setup+script]),patch('codex_runner.urllib.request.build_opener',side_effect=AssertionError('No provider access in this fixture')):
+            background_errors=[]
+            with patch('codex_runner.executable',return_value=Path(sys.executable)),patch('codex_runner.command',return_value=[sys.executable,'-c',setup+script]),patch('codex_runner.urllib.request.build_opener',side_effect=AssertionError('No provider access in this fixture')),patch('threading.excepthook',side_effect=lambda args:background_errors.append(args.exc_type.__name__)):
                 result=codex_runner.run(folder,'One rocket','', 'fixture-only-key',threading.Event(),lambda *_:None)
             elapsed=time.monotonic()-started
             self.assertLess(elapsed,10,'Supervisor must not wait for the 30-second inert child sleep')
@@ -49,9 +51,48 @@ time.sleep(30)
             self.assertEqual((folder/'model.glb').read_bytes(),triangle())
             self.assertFalse((folder/'agent-outcome.json').exists())
             self.assertIsNone(blender_mcp.completed_outcome(folder))
+            self.assertEqual(background_errors,[],'Event reader must drain before its log is closed')
             pid=int((folder/'fixture-child.pid').read_text())
             with self.assertRaises(ProcessLookupError): os.kill(pid,0)
             print('PASS: actual FAST supervisor retained the checked fixture and stopped the idle child in %.3f s; no AI request.'%elapsed)
+
+    def test_cli_effort_agrees_with_profile_and_standard_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder=Path(temp)
+            def settings():
+                args=codex_runner.command(Path('/fixture/not-executed/codex'),folder,1234)
+                return {args[i+1].split('=',1)[0]:json.loads(args[i+1].split('=',1)[1])
+                        for i,value in enumerate(args[:-1]) if value=='-c'}
+            standard=settings()
+            self.assertEqual(standard['model_reasoning_effort'],'high')
+            self.assertEqual(standard['model_providers.forge.request_max_retries'],0)
+            (folder/'generation-profile.json').write_text('{"profile":"fast-draft-v1"}')
+            fast=settings()
+            self.assertEqual(fast['model_reasoning_effort'],'low')
+            self.assertEqual({k:v for k,v in fast.items() if k!='model_reasoning_effort'},
+                             {k:v for k,v in standard.items() if k!='model_reasoning_effort'})
+
+    def test_fast_continuation_has_the_real_budget_and_no_standard_review_instruction(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder=Path(temp)
+            with codex_runner.Gateway('fixture-only-key',folder,threading.Event()) as gateway:
+                standard=gateway.execution_guidance()
+                self.assertIn('model requests remaining=32',standard)
+                self.assertIn('Return render image blocks',standard)
+                self.assertEqual(gateway.requests,0)
+            (folder/'generation-profile.json').write_text('{"profile":"fast-draft-v1"}')
+            with codex_runner.Gateway('fixture-only-key',folder,threading.Event()) as gateway:
+                for used,remaining in ((0,6),(2,4),(6,0),(7,0)):
+                    gateway.requests=used
+                    text=gateway.execution_guidance()
+                    self.assertIn('model requests remaining=%d'%remaining,text)
+                    self.assertIn('one build only',text)
+                    self.assertIn('do not call inspect_render, edit_model or finish_model',text)
+                    self.assertNotIn('Return render image blocks',text)
+                    self.assertNotIn('successful finish_model',text)
+                gateway.execution_calls=[{'errors':['TypeError: fixture argument']}]
+                self.assertIn('Correct this exact failed call',gateway.execution_guidance())
+                self.assertIn('TypeError: fixture argument',gateway.execution_guidance())
 
 
 if __name__=='__main__': unittest.main()
