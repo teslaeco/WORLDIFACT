@@ -1,68 +1,61 @@
 # WORLDIFACT status — 17 September 2026
 
-## PR #29 released: original Froge Studio without the failed iframe
+## Current correction: Studio ON the WORLDIFACT page
 
-The owner explicitly authorized merging and deploying this scoped entry repair. **PR #29 is merged and deployed to production.** The larger localization/quality PR #28 and its upstream source changes were not merged.
+The owner rejected PR #29's top-level redirect because it removes the visible way back to WORLDIFACT. The corrected requirement is **the original Studio inside WORLDIFACT, with a persistent return link**, not another redirect and not a new generator.
 
-- PR: https://github.com/teslaeco/WORLDIFACT/pull/29
-- Reviewed PR head: `5080dd450eca746e93610b3ef133c927e06be38b`
-- Application merge: `3f22fe5a8b4844d1415a35a622c061a9c19d48d2`
-- Production Shop: https://worldifact.xodobrox.workers.dev/shop
-- Cloudflare version: `3904adb7-9354-4d3b-87d1-a07c24cc54d8`
-- Published and public smoke verified: 17 September 2026, 04:09:26 UTC.
+**PR #30 is implemented and its first complete CI passed. It is not merged or deployed.** The last documentation-only update needs the final-head CI check before release.
 
-The exact original generator remains:
+- PR: https://github.com/teslaeco/WORLDIFACT/pull/30
+- Branch: `fix/shop-stay-in-worldifact-20260917`
+- Verified source head: `fbd02d9e6691ffb3f02d1b2117dae529cfe69727`
+- Full verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35182183652
+- Job: `105076523433`, every step SUCCESS: locked install, full verify, foundations, Worker dry-run and read-only hosted probe step.
+- Production remains PR #29 merge `3f22fe5a8b4844d1415a35a622c061a9c19d48d2`, documentation main `b71b89db53343930e990369b70eebefb07cdc87c`.
+- Exact Studio: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
+- WORLDIFACT entry: https://worldifact.xodobrox.workers.dev/shop
 
-https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
+## Implemented behavior
 
-## Deployed behavior
+1. No `location.replace`, navigation effect, `_top` or same-tab external links. Opening Shop does not navigate the WORLDIFACT document away.
+2. A sticky parent toolbar keeps a real `Back to WORLDIFACT` link (`/`), Studio title, all five world links and session controls outside the embedded app.
+3. The exact Studio appears in a bounded normal-flow iframe. Its cross-origin sandbox permits reviewed app capabilities but grants **no top-navigation permission**. No proxy, credentialless mode, script injection or cookie/token copying.
+4. Sign-in/full Studio access is an ordinary `_blank` anchor with `noopener noreferrer`; WORLDIFACT stays open. No authentication claim or automatic reload on focus, load, login or tab return.
+5. Only explicit `Reload Studio view` may recreate the iframe, after a warning about unsent text/photos. Cancelling preserves the frame. A wrapper reload neither cancels a server job nor submits another generation.
+6. English help says separate-tab sign-in might not share a session with the embedded view. The separate Studio tab remains available without replacing WORLDIFACT.
 
-The Studio iframe and obsolete frame styles have been removed from `/shop`. A top-level Shop visit opens the original generator in its own full browser document with `location.replace`, avoiding a Back-button bounce through the launcher. Visible top-level and new-tab links remain available if automatic opening is denied. Embedded WORLDIFACT never automatically navigates its ancestor.
+This corrects navigation/return behavior. The earlier failing authenticated iframe is **not** claimed repaired merely by restoring embedding. The live generator's source, accounts, saved models, original quality and backend remain unchanged.
 
-No prompt/query/hash/token is forwarded. There is no automatic login, cookie copying, Oracle pairing, model generation, JSON brief download or source replacement. The hosted Studio's code, accounts, archive, language, models and quality are unchanged. This release repairs entry, not the model generator itself.
+## Evidence matrix
 
-The owner's 05:04 Android screenshots showed re-login errors and an unreadable saved connection inside the iframe. They did not prove that an old generator build was served or that Oracle had failed. The exact cookie/server root cause remains UNKNOWN. Normal account sign-in may still be needed on the original Studio page.
-
-## Verified release evidence
-
-| Check | Result | Evidence / boundary |
+| Check | Status | Boundary |
 |---|---|---|
-| Final PR CI | PASS | Run `35177396129`, exact reviewed head `5080dd4...`; no review comments or changed head blocked release |
-| Post-merge main CI | PASS | Run `35180772209`, job `105072222470`; verify, foundations, Worker dry-run and read-only hosted probe steps succeeded |
-| Production release | PASS | Run `35180772180`, job `105072222555`; deployed application merge `3f22fe5...` |
-| Tests in deployed source | 105/105 PASS | Full test output in deployment log; lint nine warnings / zero errors; TypeScript and production build passed. This is the isolated production baseline, not PR #28's larger suite |
-| Public release smoke | PASS | 13 HTML routes, 23 matching hub assets, 102 original-app entries/assets, API 404, DEMO generation and origin rejection passed at 04:09:26 UTC; no paid API call |
-| Active Shop source | VERIFIED | Exact original Studio URL retained, iframe removed, guarded top-level navigation and manual fallbacks tested |
-| Authenticated Android/browser generation | NOT TESTED | Source/effect tests and HTTP asset hashes do not prove account login or a freshly generated GLB. A separate web-tool open was unavailable; no browser/access workaround was attempted |
-| Native paid configuration | DISABLED | Deployed `ENABLE_PAID_GENERATION=false`, `ENABLE_ORACLE_JOBS=false`, `PUBLIC_PILOT=false`, request limit 0; independent hosted Studio settings untouched |
-| Downstream paid/re-arm workflows | SKIPPED AFTER GATES | P0 run `35180849177`, Shop arm `35180849200`, recovery `35180849289` all skipped paid/deployment steps; no new generation or pilot re-arm |
-| Artifact-review workflow | SKIPPED AFTER GATE | Run `35180849210` skipped model retrieval and private artifact upload |
-| Existing release secrets | SYNCHRONIZED BY UNCHANGED WORKFLOW | Existing GitHub environment values synchronized server-side; no new credentials supplied or disclosed. Configuration is not generation evidence |
-| PR #28 | NOT MERGED / NOT DEPLOYED | Remains a draft at observed head `65e1e5cb413502d4b6f17248c5396870252a94d8`; must reconcile with updated main and rerun CI before any later approved merge |
-| Contest submission | NOT PERFORMED | This is a scoped production repair, not a new contest-rules or final-readiness decision |
+| Explicit in-page requirement | VERIFIED | Latest owner feedback supersedes the redirect-only entry decision |
+| Actual Shop source/handler tests | PASS | Eight updated regressions using rendered TSX and its real reload handler with test adapters |
+| Exact Studio and permanent return | SOURCE / TEST PASS | Return anchor precedes/is outside frame; no parent navigation effect; scoped sticky toolbar |
+| New-tab-only authentication fallback | SOURCE / TEST PASS | Only external anchor uses `_blank` + `noopener noreferrer`; no `_top`, `_self` or `_parent` |
+| Sandbox navigation boundary | STATIC CONTRACT PASS | Top navigation not granted; normal reviewed capabilities retained; no claim of a real browser sandbox run |
+| Unsaved-work preservation | HANDLER TEST PASS | Cancelled reload keeps key; confirmed reload changes only frame key; rerenders do not reload |
+| Full code/build/package verification | PASS | Run `35182183652` on source head above |
+| Authenticated embedded generation | UNKNOWN / PREVIOUS OWNER ERROR | Existing re-login screenshot is still failure evidence; no fresh model job or authenticated device test |
+| Android visual behavior | NOT TESTED | CSS/source/SSR evidence, not a physical-device screenshot or WebGL test |
+| Production release | NOT PERFORMED | Merge/deploy is a separate gated step; current production still has PR #29's redirect |
+| New paid operations | NONE | No new model/GPU request, quota, secret, Oracle installation or private archive migration |
+| Wider PR #28 | NOT INCLUDED | Comment `5708560274` records the newest contract and warns against restoring #29's redirect when reconciling |
 
-Release logs: https://github.com/teslaeco/WORLDIFACT/actions/runs/35180772180
+The eight Shop regressions cover embedded target/parent return, separate-tab fallback, frame permissions, stable rerender/no auth claim, cancelled reload, confirmed frame-only reload, five-world links and absence of paid/storage/navigation side effects. Old redirect assertions were replaced because the user rejected that behavior, not to hide a failing build.
 
-Main CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35180772209
+## Browser documentation, not device proof
 
-Final PR CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35177396129
+- https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe — nested documents, sandbox permissions and load/error limitations.
+- https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies — embedded authentication depends on cookie/storage policy.
 
-The Shop regression tests exercise the actual component and captured effect: exact destination, no token/query forwarding, effect replay once, no automatic ancestor navigation, denied-navigation fallback, five-world links and no generation/storage side effects. They are not authenticated device tests.
+Signing in in a separate tab does not guarantee cookie access in a cross-site frame. No security restriction is bypassed. A complete integrated login solution still requires the actual hosted source and session contract. HTTP/source checks do not prove generation.
 
-## Preservation and follow-up
+## Release and continuity
 
-Only PR #29's four-file patch was released. No hosted generator or saved model was deleted, migrated or replaced by a GitHub snapshot. The former `forge-studio-public` exporter is not the destination. The prior iframe-first task document is superseded only for Shop entry; the canonical generator URL is unchanged.
+Keep all paid-pilot markers/configuration unchanged. Release only this four-file correction under the applicable merge/production authorization, not #28 or upstream source changes. Record the actual merge SHA, deployed version and public smoke only after success. Model quality, complete English localization, private Site updates and contest submission remain outside this fix.
 
-PR #28's five-pass quality and English work remains separate. Its later source already incorporates no-iframe behavior, but the observed PR is not mergeable against the new main and still needs reconciliation, fresh CI and its own release authorization. Do not restore the failed iframe while resolving those differences.
+Historical iframe-first and redirect-only instructions are superseded for this UI by the current **in-page Studio + persistent WORLDIFACT return + separate-tab sign-in/fallback + confirmed manual reload** contract.
 
-## Historical evidence
-
-Pre-release ledger: https://github.com/teslaeco/WORLDIFACT/blob/3f22fe5a8b4844d1415a35a622c061a9c19d48d2/docs/CONTEST_STATUS.md
-
-Earlier production ledger: https://github.com/teslaeco/WORLDIFACT/blob/495a6524d7b597403eefd5b62bfbf8ee9fedc4e0/docs/CONTEST_STATUS.md
-
-PR #27 was deployed as `e2446816708783532a26c2c949c733e19ca84e96` in run `35154269208`. Its successful HTTP smoke did not prove iframe session usability; the subsequent owner screenshots exposed that gap. PR #29 removes the embedded entry instead of disguising the authentication failure as an older model version.
-
-## Truth boundary
-
-Keep source saved, tests passed, production deployed, account access and actual generation separate. Removing an iframe does not translate the external UI, restore Oracle, install a newer generator, improve model/texture fidelity or establish manufacturing readiness. No new paid generation or competition submission occurred in this release.
+PR #29 did deploy successfully in run `35180772180`, version `3904adb7-9354-4d3b-87d1-a07c24cc54d8`, with 105 tests and static smoke. That did not prove accepted navigation or authentication. Previous production ledger is preserved at https://github.com/teslaeco/WORLDIFACT/blob/b71b89db53343930e990369b70eebefb07cdc87c/docs/CONTEST_STATUS.md.
