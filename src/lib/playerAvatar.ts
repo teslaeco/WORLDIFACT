@@ -14,6 +14,15 @@ export function createPlayerAvatar() {
   root.name = 'worldifact-uploaded-player'
   root.userData.avatarSource = 'owner-upload:model-mm-1.stl'
   root.userData.avatarLoaded = false
+  // Invisible layout anchor keeps the world framed while the embedded uploaded
+  // GLB is decoded asynchronously. It is not a fallback character.
+  const boundsAnchor = new THREE.Mesh(
+    new THREE.BoxGeometry(0.01, 1.78, 0.01),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  )
+  boundsAnchor.position.y = 0.89
+  boundsAnchor.name = 'uploaded-avatar-bounds-anchor'
+  root.add(boundsAnchor)
 
   let loaded: THREE.Object3D | null = null
   let baseY = 0
