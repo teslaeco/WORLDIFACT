@@ -1,68 +1,104 @@
-# WORLDIFACT status — native Shop repair, 17 September 2026
+# WORLDIFACT status — native Shop deployed, 17 September 2026
 
-## Current task
+## Completed implementation and release
 
-The owner requested a complete Codex instruction and execution of the failing Shop repair, continuing earlier explicit integration/merge/deployment authorization. The active implementation is **PR #31**, `work/native-shop-models-20260917`.
+The owner requested a full Codex instruction and execution of the Shop repair. **The instruction is committed, the native Shop is deployed, and the unused portion of the previously approved generation allowance has been restored and verified.** A fresh AI model generation was not requested by this task and is not claimed proven.
 
-- Task: [CODEX_TASK_SHOP31_FINISH.md](CODEX_TASK_SHOP31_FINISH.md)
-- PR: https://github.com/teslaeco/WORLDIFACT/pull/31
-- Public entry: https://worldifact.xodobrox.workers.dev/shop
-- Original hosted Studio, preserved unchanged: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
+- Public Shop: https://worldifact.xodobrox.workers.dev/shop
+- Full executed task: [CODEX_TASK_SHOP31_FINISH.md](CODEX_TASK_SHOP31_FINISH.md)
+- Main repair: https://github.com/teslaeco/WORLDIFACT/pull/31
+- Release queue correction: https://github.com/teslaeco/WORLDIFACT/pull/32
+- Tested Git history gate correction: https://github.com/teslaeco/WORLDIFACT/pull/33
+- Final deployed source: `69fb684914450508d48433b49e7581801acac81b`
+- Final Cloudflare version: `612d5a88-be90-4bdd-994c-e4f958b96e06`
+- Original hosted Froge, unchanged: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
 
-The instruction was written and the implementation executed directly through the connected GitHub tools. No separate Codex/Copilot cloud-agent job is claimed.
+Implementation was performed directly through the connected GitHub tools. Writing the Codex task does not imply that a separate Codex/Copilot cloud-agent job ran.
 
-## Correct production baseline
+## Verified availability and original allowance
 
-PR #30 and reconciled PR #28 were merged previously. Main application commit `3680fba140148530b4e5a16ff1a7a1cdaa332d6d` passed main verification `35184355581` and Cloudflare release `35184355592`. The former ledger's claim that PR #30 was still unmerged was stale.
+Final public read-only check at **2026-09-17T06:23:45.992Z** returned:
 
-That deployed version still embedded the original Studio. The owner's Android screenshots show repeated authentication failures. An iframe restoring navigation is not a successful generation repair. PR #31 removes that dependency from the active Shop rather than cycling back to another iframe or redirect.
+```json
+{
+  "ready": true,
+  "used": 5,
+  "remaining": 1,
+  "expiresAt": "2026-09-17T09:23:37.535Z",
+  "paidGenerationRequested": false
+}
+```
 
-## Implemented in PR #31
+This is **one genuinely unused attempt within the original cumulative ceiling of six**, not a new allowance or six additional attempts. The generation window expires at **09:23:37 UTC / 11:23:37 Europe/Amsterdam and Europe/Warsaw on 17 September 2026**, or capacity ends earlier if that remaining attempt is reserved. These values describe the recorded check, not an indefinitely current balance.
 
-The in-page flow is `WORLDIFACT form -> same-origin Worker -> existing Oracle /v1/jobs -> same-job status recovery -> actual GLB -> preview and explicit downloads`.
+The resume operation required confirmed photo-capable Oracle readiness and a real read of the original counter before activation. It made no model request. Tests use controlled fixtures, not paid provider calls.
 
-- Familiar existing half-skull character display beside the creation form, clearly labelled EXAMPLE ONLY. It is not substituted for a failed new result. These existing render images are referenced from the owner's legacy public Studio; no private original model was copied or changed.
-- English description, reference-view/photo controls and requested texture-size ceiling. Photo normalization never upscales originals. Texture ceilings are not guaranteed detail or native-resolution evidence.
-- Native same-origin API using existing Oracle secrets. No ChatGPT login iframe, HTML proxy, credential copying, automatic external redirect or brief-export generation button.
-- Signed input-bound job receipt persisted before the only submission; a shared cumulative Durable Object reservation permits at most one Oracle POST per receipt. Lost responses recover via GET, not another paid request.
-- Original GLB/materials and available worker exports remain explicit downloads. The local IndexedDB archive records hashes and UNREVIEWED status; it does not publish a product or claim manufacturing approval.
-- Current job, archived model and example identities are distinct. Downloads use the visible model ID; archived models cannot inherit another job's PBR/FBX/Blender buttons. Different bytes cannot silently overwrite a previously saved original.
-- Polling waits for submission to settle, serializes status requests and stops at terminal results. Repeated reads, double clicks and stale selection results do not create new paid jobs.
-- Lab now explains the difference between procedural world blueprints and detailed model/texture generation. Disabled AI is no longer automatically described as exhausted credits.
+Final deployed gates:
 
-## Verification evidence
+| Setting | Value |
+|---|---|
+| `ENABLE_STUDIO_JOBS` | `true` |
+| `PUBLIC_PILOT` | `true` |
+| `GENERATION_REQUEST_LIMIT` | `6` cumulatively |
+| `GENERATION_EXPIRES_AT` | `2026-09-17T09:23:37.535Z` |
+| `ENABLE_ORACLE_JOBS` | `false` for the legacy public route |
+| `ENABLE_PAID_GENERATION` | `false` for procedural world blueprints |
 
-Starting run `35186713564` had 141 passes and two failures. Both were fixed without removing their assertions:
+The original Durable Object identity `worldifact-generation-budget-v1` and `reserved-attempts` counter are unchanged. No reset, refund, higher ceiling, extra paid test, new API secret, Oracle installation or private archive migration occurred.
 
-1. The actual-source portal renderer needed correct ES-module default-export semantics in its test adapter; the real Shop component remains under test.
-2. The asynchronous artifact operation needed to be awaited inside the safe API catch. Invalid GLBs now yield bounded JSON errors rather than unhandled Worker exceptions.
+**Important for later releases:** an ordinary production publication uses the reviewed disabled-cost base configuration. Do not assume it preserves this temporary activation, and do not re-arm or increase capacity automatically on unrelated commits. This evidence update is documentation-only with `[skip ci]` so it does not redeploy and close the current window.
 
-Code head `e35b18ab862d22d19f70a5dd39a4049bd4d331ee` passed **143/143 tests**, lint (10 warnings, zero errors), TypeScript, local HTTP smoke, production build, reviewed foundations and Worker dry-run in run https://github.com/teslaeco/WORLDIFACT/actions/runs/35187415145.
+## What users now receive
 
-Subsequent hardening adds exact preview identities, archive preservation, strict enum types, stale-deployment guards and tests through the actual Worker route using a deterministic complete triangle GLB. The final head must pass the full gate again before publication; preceding green checks do not stand in for it.
+The active flow is `WORLDIFACT form -> same-origin Worker -> existing Oracle /v1/jobs -> same-job recovery -> actual GLB -> in-page preview and explicit downloads`.
 
-The read-only public probe in that run confirmed `/api/platform/oracle-worlds` HTTP 200 / CONNECTOR_READY / connector 33 / character standard 20, and `/api/health` DEMO. `/api/studio/status` was 404 because this new API was not deployed yet. This is connection evidence only, not a new generated model or remaining-allowance reading.
+- The familiar half-living/half-skull character display appears beside the description/reference form and is labelled **EXAMPLE ONLY**. It is not returned as a replacement for a failed generation. Its existing public render images are referenced; no private source model was copied or altered.
+- The active Shop no longer depends on a cross-site ChatGPT authentication iframe or an automatic redirect. `Back to WORLDIFACT` and all five worlds remain available. The original hosted Studio remains an optional safe new-tab link.
+- English prompt, purpose, up to four reference views and requested texture-size ceilings. References are normalized without upscaling. 2K/4K/8K are ceilings, not a guarantee of recovered detail.
+- A signed exact-input receipt is stored before the only generation submission. Server-side atomic reservation prevents duplicate submissions for that receipt. A failed response or reload recovers the same job by GET, not by a new paid POST.
+- The generated GLB is loaded into the page; file downloads are explicit. PBR/FBX/Blender exports are requested only from files the existing worker can provide; unavailable exports produce an error instead of a false success.
+- Current job, archived model and example identities are separated. An archived model cannot receive another job's filename or export controls. Original bytes in the device archive are not silently overwritten by a different revision.
+- Completed models are saved to a private device IndexedDB archive with prompt, ID, timestamp, size, SHA-256 and UNREVIEWED status. This is not a public store catalog, sale approval or manufacturing validation. Clearing browser storage can remove it; explicit backups remain necessary.
+- Game Lab now distinguishes procedural world blueprints from detailed model/texture generation and links to the actual Shop. A disabled blueprint service is no longer automatically labelled exhausted credits.
 
-## Budget / release boundary
+## Verification and release evidence
 
-The existing approval is **six attempts cumulatively**, not six new attempts. No provider generation has been requested by this task. No quota reset/refund, increased ceiling, key change, Oracle installation or private archive migration.
+| Milestone | Result | Source |
+|---|---|---|
+| PR #31 final source verification | PASS | Head `2d3a908d13b687a1f670d59a95730482048174bb`, run `35188352307` |
+| PR #31 merge and initial production | PASS | Merge `8835d2bd077ead1604ecd288e335ce88edc04e73`, release `35188501496`, public HTML/assets/DEMO smoke passed |
+| PR #32 queue correction | PASS | Head `bf38b3f101a3b38901c5bd611713f23afbe7f27c`, CI `35188897973`, merge `030f940052b9c65a17d6f9b70ed0ccccc666005e`, release `35189029946` |
+| PR #33 tested history gate | PASS | Head `5512ab652d34f56d555f169534387be62d368447`, CI `35189399898`, merge `69fb684914450508d48433b49e7581801acac81b` |
+| Final production publication | PASS | Run `35189491035`, job `105098691033`, including public HTML/assets/DEMO smoke |
+| Final allowance resume | PASS / ACTUALLY EXECUTED | Run `35189566878`, job `105098924866`; all steps executed successfully, including counter read, conditional deploy and final public readiness check |
+| Final complete test suite | **151/151 PASS** | Same final-source resume run; zero failures, skipped or cancelled tests; lint 9 warnings / 0 errors; TypeScript, HTTP, build and reviewed foundations passed |
+| New paid model request | **NOT REQUESTED** | Readiness report explicitly records `paidGenerationRequested: false` |
 
-Initial publication uses the reviewed disabled-cost production configuration. A one-time post-release workflow may resume ONLY the genuinely unspent part of the original six-attempt ceiling, for no more than the original 180-minute window, after a real counter read and photo-capable Oracle readiness. It never starts a model itself. At six or more used attempts it must skip activation and report that blocker.
+Direct release evidence:
 
-The signed Studio gate is independent of legacy Oracle writes. Legacy public Oracle jobs and procedural blueprint spending remain disabled. Workflow marker checks use the first-parent change and compare the exact release with current main before deployment; an obsolete workflow cannot roll production back.
+- https://github.com/teslaeco/WORLDIFACT/actions/runs/35189491035
+- https://github.com/teslaeco/WORLDIFACT/actions/runs/35189566878
+- https://github.com/teslaeco/WORLDIFACT/actions/runs/35189399898
 
-No unlimited or extra paid allowance is authorized. Production deployment success, capacity resumption and successful model generation are separate results and must be recorded separately.
+### Failures fixed rather than hidden
+
+Starting run `35186713564` had two failing tests. Correct ES-module default-export handling fixed the actual-source portal renderer. Awaiting artifact validation inside the API catch fixed invalid GLBs escaping as unhandled Worker failures. Assertions were retained. Later regressions cover exact model identities, archive collision preservation, strict enum input, signed receipts, double clicks, lost-response recovery and the actual Worker route with a complete deterministic material-bearing triangle GLB.
+
+The first allowance continuation `35188573555` was cancelled before any job started due to the shared legacy queue. PR #32 isolated that queue. Its subsequent run `35189108573` skipped because a depth-one fetch made `HEAD^1` unavailable, and the shell conditional concealed the failed diff. PR #33 replaced the mutating fetch with read-only remote-ref inspection and a gate tested using actual local bare Git repositories and shallow clones. Missing history now fails explicitly; stale or unrelated releases cannot pass the marker check. Neither failed operational attempt reserved capacity or started generation.
+
+## Preserved earlier work
+
+PR #30 and reconciled PR #28 had already merged as the preceding baseline `3680fba140148530b4e5a16ff1a7a1cdaa332d6d`, with successful main and deployment checks. Their English ISS/native-world and safer model-inspection work remains. The former ledger statement that PR #30 was unmerged was stale and is superseded.
+
+PR #31 deliberately replaces the rejected embedded Shop surface, not the original Froge hosted application or its private data. Separate upstream quality/source PRs are not made live merely by this integration.
 
 ## Remaining truth boundaries
 
-- CPU, actual-source server rendering, API fixtures and HTTP probes are not Android/WebGL or authenticated-device tests. Browser security restrictions are respected.
-- A fixture GLB proves transport/parser behavior, not new Astra output, likeness or texture quality.
-- PBR/FBX/Blender exports depend on actual worker availability; failure must remain explicit.
-- Device archive is not a public store catalog and may be lost if browser storage is cleared.
-- Model quality/likeness, native 4K/8K detail, full texture equivalence and manufacturing suitability remain unreviewed.
-- Wider hosted-source localization and upstream Froge quality changes are not deployed merely by this interface repair.
-- Contest eligibility/submission is not assessed or performed in this scoped repair. Earlier final-launch blockers still require separate verification.
+- **Actual end-to-end fresh generation through this UI: NOT TESTED in this task.** Connector readiness and capacity are confirmed separately; the owner's explicit Generate action may use the one remaining approved attempt.
+- **Physical Android / WebGL visual verification: NOT TESTED.** CPU, server-render, local HTTP, Git and API fixture tests are not device screenshots or real renderer evidence. Recorded browser restrictions were respected.
+- **Likeness and texture detail: UNREVIEWED.** No claim of a new improved character, native 4K/8K detail, full export shader equivalence or sale-ready quality follows from these tests.
+- **MAKE: VALIDATION REQUIRED.** No manufacturing approval, order, quote, automatic sale or product publication is performed.
+- **Full hosted-site localization/source parity: not solved by this repair.** Existing hosted Froge is unchanged; the new WORLDIFACT interface is English.
+- **Contest submission/eligibility: not assessed or executed here.** Earlier final-launch requirements still need their own official-source and product verification.
 
-## Release handoff
-
-GO only after full final-head verification and reviewed diff. Existing owner authorization covers publishing this repair without another terminal handoff. Record actual merge SHA, production workflow, public smoke and capacity-resume outcome here after completion. Do not claim that generation is unlocked or proven successful based solely on green CI.
+The scoped code repair, public deployment and remaining-capacity activation are complete. Further claims must distinguish those verified milestones from actual generated output and device usability.
