@@ -24,8 +24,7 @@ function proceduralQueenFallback() {
   };
   part(root, .19, .33, 1.16, dark);
   const waist = new THREE.Mesh(new THREE.ConeGeometry(.24, .17, 8), teal); waist.position.y = .96; root.add(waist);
-  const neck = part(root, .07, .05, 1.48, skin);
-  neck.scale.x = .9;
+  const neck = part(root, .07, .05, 1.48, skin); neck.scale.x = .9;
   const head = new THREE.Mesh(new THREE.SphereGeometry(.15, 18, 14), skin); head.position.y = 1.69; head.scale.set(.9, 1.15, .9); root.add(head);
   const bun = new THREE.Mesh(new THREE.SphereGeometry(.095, 14, 10), hair); bun.position.set(0,1.86,.01); bun.scale.set(.9,1.2,.9); root.add(bun);
   const collar = new THREE.Mesh(new THREE.ConeGeometry(.2,.25,.14,6), teal); collar.position.set(0,1.44,.02); collar.rotation.x = Math.PI; root.add(collar);
@@ -41,14 +40,12 @@ function proceduralQueenFallback() {
     part(shoulder,.058,.2,-.14,dark);
     const fore = new THREE.Group(); fore.position.y=-.29; shoulder.add(fore); part(fore,.047,.2,-.14,skin);
   }
-  // Six-segment fan silhouette carried on the left; this is a fallback only,
-  // never labelled as the exact generated shop asset.
   const fan = new THREE.Group(); fan.position.set(-.26,1.2,-.02); fan.rotation.z=-.35; root.add(fan);
   for(let i=0;i<6;i++){
     const blade=new THREE.Mesh(new THREE.ConeGeometry(.075,.48,3),i%2?teal:emerald);
     blade.position.y=.24; blade.rotation.z=(i-2.5)*.22; blade.position.x=(i-2.5)*.055; fan.add(blade);
   }
-  const hub=new THREE.Mesh(new THREE.SphereGeometry(.065,12,8),chrome); fan.add(hub);
+  fan.add(new THREE.Mesh(new THREE.SphereGeometry(.065,12,8),chrome));
   root.userData.avatarSource = 'procedural-fallback-current-queen-target';
   return { root, legs, knees, arms };
 }
@@ -75,6 +72,7 @@ export function createPlayerAvatar() {
   const root = new THREE.Group(); root.name = 'neptune-queen-player'; root.userData.avatarSource = `oracle-job:${NEPTUNE_QUEEN_AVATAR_JOB}`;
   root.add(fallback.root);
   let loaded: THREE.Object3D | null = null, rig: Rig = {}, mixer: THREE.AnimationMixer | null = null, last = 0;
+  let loadedBaseY = 0;
 
   if (typeof window !== 'undefined') {
     new GLTFLoader().load(AVATAR_URL, gltf => {
@@ -85,6 +83,7 @@ export function createPlayerAvatar() {
       model.scale.setScalar(scale); model.updateMatrixWorld(true);
       const scaled = new THREE.Box3().setFromObject(model), center = scaled.getCenter(new THREE.Vector3());
       model.position.x -= center.x; model.position.z -= center.z; model.position.y -= scaled.min.y;
+      loadedBaseY = model.position.y;
       model.name = 'Neptune_Queen_current_99397623';
       model.traverse(part => { if (part instanceof THREE.Mesh) { part.castShadow = true; part.receiveShadow = true; } });
       fallback.root.visible = false; loaded = model; root.add(model); rig = findRig(model);
@@ -112,9 +111,8 @@ export function createPlayerAvatar() {
       if (rig.leftArm) rig.leftArm.rotation.z = -reaching*.55;
       if (rig.head) rig.head.rotation.y = Math.sin(time*.8)*.025;
     }
-    // Tiny breathing/weight shift keeps the avatar alive without moving its collision anchor.
     const visual = loaded ?? fallback.root;
-    visual.position.y += Math.sin(time*1.7)*.003;
+    visual.position.y = (loaded ? loadedBaseY : 0) + Math.sin(time*1.7)*.003;
     visual.rotation.z = Math.sin(time*.75)*.004;
   } };
 }
