@@ -36,10 +36,12 @@ export function jpegSize(bytes: Uint8Array): [number, number] {
 
 export function validateStudioInput(value: unknown): StudioInput {
   if (!record(value) || !keys(value, ['worldId', 'prompt', 'purpose', 'textureMaxSize', 'photos']) ||
-    !['enchanted-ai-shop', 'ai-game-lab'].includes(String(value.worldId)) || typeof value.prompt !== 'string' || value.prompt.trim().length < 3 || value.prompt.length > 4000 ||
-    !['game', 'figurine', 'terrain', 'object'].includes(String(value.purpose)) || ![2048, 4096, 8192].includes(Number(value.textureMaxSize)) || typeof value.textureMaxSize !== 'number')
+    typeof value.worldId !== 'string' || !['enchanted-ai-shop', 'ai-game-lab'].includes(value.worldId) ||
+    typeof value.prompt !== 'string' || value.prompt.trim().length < 3 || value.prompt.length > 4000 ||
+    typeof value.purpose !== 'string' || !['game', 'figurine', 'terrain', 'object'].includes(value.purpose) ||
+    typeof value.textureMaxSize !== 'number' || ![2048, 4096, 8192].includes(value.textureMaxSize))
     throw new Error('Enter a 3–4000 character description, a supported purpose and a texture-size limit.')
-  const source = value.photos ?? []
+  const source = value.photos === undefined ? [] : value.photos
   if (!Array.isArray(source) || source.length > 4) throw new Error('Use at most four reference photos.')
   let totalBytes = 0, totalPixels = 0
   const photos = source.map((photo): StudioPhoto => {
