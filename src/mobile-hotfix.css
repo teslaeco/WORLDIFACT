@@ -1,0 +1,153 @@
+/* Contest-day mobile hotfix: gameplay stays visible, navigation moves to the edges. */
+:root { --mobile-dock: 64px; }
+html, body, #root { max-width: 100%; min-width: 0; }
+body { overflow-x: hidden; }
+.avatar-note:not(.avatar-picker) { display:none !important; }
+.avatar-picker {
+  position:absolute;
+  top:.75rem;
+  right:.75rem;
+  z-index:18;
+  pointer-events:auto;
+  display:grid;
+  gap:.25rem;
+  max-width:260px;
+  padding:.42rem .5rem;
+  border:1px solid #55727b;
+  border-radius:8px;
+  background:#0a2230e8;
+  color:#eaf2ee;
+  font-size:.72rem;
+}
+.avatar-picker select { min-height:34px; padding:.3rem .4rem; font-size:.72rem; background:#102a35; }
+.portal-generator-drawer { margin: 1rem 0 calc(1rem + env(safe-area-inset-bottom, 0px)); border: 1px solid #3b5961; border-radius: 12px; background:#10232b; }
+.portal-generator-drawer > summary { cursor:pointer; padding: .9rem 1rem; font-weight: 800; color:#e9c27f; }
+.portal-generator-drawer[open] > summary { border-bottom:1px solid #3b5961; }
+.scan-input { border:1px dashed #5f7d85; border-radius:8px; padding:.6rem; background:#132932; }
+.world-primary-frame { isolation:isolate; }
+
+@media (max-width: 760px) {
+  body { padding-bottom: calc(var(--mobile-dock) + env(safe-area-inset-bottom, 0px)); }
+  .portal-page { padding-left:.55rem; padding-right:.55rem; }
+  .portal-page .portal-header { padding:.65rem .15rem .75rem; min-height:58px; }
+  .portal-header .brand { font-size:1rem; }
+  .portal-header .brand span { font-size:.62rem; }
+  .portal-header nav,
+  .studio > .world-tabs {
+    position:fixed;
+    z-index:120;
+    left:0; right:0; bottom:0;
+    height:calc(var(--mobile-dock) + env(safe-area-inset-bottom, 0px));
+    padding:6px max(8px,env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left));
+    margin:0;
+    display:flex;
+    flex-wrap:nowrap;
+    gap:6px;
+    overflow-x:auto;
+    align-items:center;
+    background:#081923f5;
+    border-top:1px solid #47636e;
+    box-shadow:0 -8px 24px #0006;
+    -webkit-overflow-scrolling:touch;
+  }
+  .portal-header nav a,
+  .studio > .world-tabs > * {
+    flex:0 0 auto;
+    width:auto;
+    min-height:46px;
+    white-space:nowrap;
+    padding:.55rem .75rem;
+    font-size:.73rem;
+    border-radius:9px;
+  }
+  .foundation-heading { margin:.3rem 0 .55rem; }
+  .foundation-heading h1 { font-size:1.15rem; }
+  .foundation-heading .button-link { min-height:38px; padding:.42rem .6rem; font-size:.75rem; }
+  .foundation-actions { margin:.2rem 0 .55rem; gap:6px; overflow-x:auto; flex-wrap:nowrap; }
+  .foundation-actions a { flex:0 0 auto; min-height:38px; font-size:.72rem; padding:.4rem .55rem; white-space:nowrap; }
+  .foundation-note { font-size:.76rem; line-height:1.45; }
+  .world-primary-frame { margin-left:-.55rem; margin-right:-.55rem; border-radius:0; border-left:0; border-right:0; }
+  .foundation-frame { height:calc(100dvh - 138px); min-height:590px; }
+
+  .starting-world-shell,
+  .home-world .starting-world-shell,
+  .studio-scene .starting-world-shell,
+  .portal-astra-preview .starting-world-shell {
+    height:min(72svh, 640px);
+    min-height:500px;
+    width:100%;
+    border-radius:10px;
+  }
+  .world-actions { display:none !important; }
+  .avatar-picker {
+    top:.55rem;
+    right:.55rem;
+    max-width:34%;
+    padding:.32rem .38rem;
+    font-size:.58rem;
+    background:#082434d9;
+  }
+  .avatar-picker select { min-height:30px; padding:.2rem .25rem; font-size:.6rem; }
+  .world-top {
+    top:.55rem; left:.55rem;
+    max-width:62%;
+    padding:.4rem .5rem;
+    background:#082434c2;
+  }
+  .world-top .eyebrow { font-size:.55rem; letter-spacing:.08em; }
+  .world-top strong { font-size:1rem; }
+  .world-top > span:last-child { font-size:.66rem; }
+  .world-hint {
+    left:50%; transform:translateX(-50%);
+    bottom:.65rem;
+    width:auto; max-width:48%;
+    font-size:.65rem; line-height:1.25;
+    padding:.35rem .5rem;
+    text-align:center;
+  }
+  .joystick-control { left:max(.55rem,env(safe-area-inset-left)); bottom:max(.45rem,env(safe-area-inset-bottom)); }
+  .joystick-base { width:104px; height:104px; }
+  .joystick-track { width:70px; height:70px; }
+  .joystick-thumb { width:44px; height:44px; }
+  .joystick-caption,.world-interact>span { font-size:.62rem; }
+  .world-interact { right:max(.55rem,env(safe-area-inset-right)); bottom:max(.55rem,env(safe-area-inset-bottom)); width:118px; gap:.35rem; }
+  .world-interact button { min-height:54px; border-radius:14px; font-size:.82rem; padding:.45rem; }
+  .capture-notice { width:calc(100% - 2rem); text-align:center; font-size:.76rem; }
+
+  .studio-heading { margin:.55rem 0 .75rem; }
+  .studio-heading h1 { font-size:1.55rem; }
+  .studio-layout { display:flex; flex-direction:column; gap:.75rem; }
+  .studio-scene { order:0; min-width:0; }
+  .creator-panel { order:1; padding:.75rem; }
+  .scene-toolbar { overflow-x:auto; flex-wrap:nowrap; padding-bottom:.25rem; }
+  .scene-toolbar > * { flex:0 0 auto; }
+  .generation-evidence { margin-bottom:1rem; }
+
+  .portal-astra { padding:.65rem !important; }
+  .portal-astra-layout { display:flex !important; flex-direction:column; }
+  .portal-astra-preview { order:0; min-height:0 !important; }
+  .portal-astra-controls { order:1; }
+  .portal-astra-preview .starting-world,
+  .portal-astra-preview .starting-world-shell { min-height:500px !important; }
+  .portal-astra-head h2 { font-size:1.15rem; }
+  .portal-generator-drawer .portal-astra-preview { display:none; }
+  .portal-generator-drawer .portal-astra-layout { display:block !important; }
+
+  .planets-world { padding:.65rem !important; }
+  .planets-world > .world-tabs { display:flex !important; flex-wrap:nowrap !important; overflow-x:auto; gap:.35rem; margin:.2rem 0 .7rem; }
+  .planets-world > .world-tabs > * { flex:0 0 auto; width:auto !important; min-height:38px; padding:.4rem .6rem; font-size:.7rem; }
+  .planet-expedition { grid-template-columns:1fr !important; }
+  .planet-route { grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:.35rem !important; }
+  .planet-route button { min-width:0; padding:.45rem .3rem !important; }
+  .planet-route button small { display:none; }
+  .planet-mission-card { min-width:0; padding:.8rem !important; }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  body { padding-bottom:0; }
+  .portal-header nav,.studio>.world-tabs { position:static; height:auto; box-shadow:none; border:0; padding:.25rem 0; }
+  .starting-world-shell,.home-world .starting-world-shell,.studio-scene .starting-world-shell { height:92svh; min-height:330px; }
+  .foundation-frame { height:92dvh; min-height:330px; }
+  .joystick-base { width:88px; height:88px; }
+  .world-interact { width:105px; }
+}

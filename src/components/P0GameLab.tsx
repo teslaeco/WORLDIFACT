@@ -11,6 +11,7 @@ import { createWorldObject, disposeObject } from '../lib/worldGeometry'
 import { DEMO_EXAMPLES } from '../lib/demoExamples'
 import { REFERENCE_LINKS } from '../config/references'
 
+const MAX_REFERENCE_BYTES = 6 * 1024 * 1024
 function download(data: Blob, name: string) {
   const url = URL.createObjectURL(data), a = document.createElement('a')
   a.href = url; a.download = name; a.click()
@@ -18,7 +19,6 @@ function download(data: Blob, name: string) {
 }
 type Health = { generationReady?: boolean; accessRequired?: boolean; publicPilot?: boolean; model?: string | null }
 export default function P0GameLab({ surface = 'lab' }: { surface?: 'lab' | 'shop' }) {
-  // Preserve old callers while ensuring no retired prompt-only Shop can return.
   return surface === 'shop' ? <ShopPage /> : <WorldBlueprintLab />
 }
 function WorldBlueprintLab() {
@@ -48,7 +48,7 @@ function WorldBlueprintLab() {
   async function pickImage(file?: File) {
     setError(''); setImage(null)
     if (!file) return
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 1_000_000) { setError('Choose PNG, JPEG or WebP up to 1 MB.'); return }
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > MAX_REFERENCE_BYTES) { setError('Choose PNG, JPEG or WebP up to 6 MB.'); return }
     const reader = new FileReader()
     reader.onload = () => setImage(String(reader.result))
     reader.onerror = () => setError('Reference image could not be read.')
@@ -74,7 +74,7 @@ function WorldBlueprintLab() {
         if (accessCode.trim().length < 32) throw new Error('Enter the preview access code.')
         headers['X-WORLDIFACT-Access'] = accessCode.trim()
       }
-      const response = await fetch('/api/blueprint', { method: 'POST', headers, signal: controller.signal, body: JSON.stringify({ prompt, image, mode: 'live' }) })
+      const response = await fetch('/api/blueprint', { method: 'POST', headers, signal: controller.signal, body: JSON.stringify({ worldId: 'ai-game-lab', prompt, image, mode: 'live' }) })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || 'Astra generation failed; the previous scene is unchanged.')
       const validated = validateGenerationResult(body)
@@ -118,16 +118,17 @@ function WorldBlueprintLab() {
         <span className="eyebrow">WORLD INPUT</span>
         <label>Prompt<textarea rows={6} maxLength={2000} value={prompt} disabled={busy} onChange={e => setPrompt(e.target.value)} /></label>
         <div className="prompt-presets" aria-label="No-cost demo examples">{DEMO_EXAMPLES.map(example => <button key={example.id} type="button" disabled={busy} onClick={() => generateDemo(example.prompt)}>{example.label}</button>)}</div>
-        <label>Reference image · optional<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
+        <label>Reference image · optional · max 6 MB<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
+        <label className="scan-input">Scan with phone camera · BETA<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
         {image && <><img className="reference-preview" src={image} alt="Selected reference" /><button disabled={busy} onClick={() => setImage(null)}>Remove reference</button></>}
-        {!health.generationReady && image && <small>The no-cost scene demo uses text only. Use the model Studio for photo-to-model generation when its connection and allowance are ready.</small>}
+        {!health.generationReady && image && <small>The no-cost scene demo uses text only. LIVE image analysis starts only when the reviewed Astra generation gate is enabled.</small>}
         {health.accessRequired && <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /></label>}
         <button className="primary" disabled={busy || !health.generationReady} onClick={() => void generateLive()}>{busy ? `Astra working · ${seconds}s` : 'Generate world blueprint · Astra'}</button>
         <button disabled={busy} onClick={() => generateDemo()}>Try DEMO locally · no API cost</button>
         <Link to="/shop" className="button-link">Create a 3D model + textures →</Link>
         {busy && <button onClick={() => abort.current?.abort()}>Stop waiting in this browser</button>}
         {error && <p role="alert" className="error">{error}</p>}
-        {!health.generationReady && <p className="result-note">World blueprint AI is disabled or unavailable. This is not proof that your credits are exhausted. Detailed models use the separate Studio connection; the local scene demo remains MOCK.</p>}
+        {!health.generationReady && <p className="result-note">World blueprint AI is currently gated. Detailed models use the separate Studio connection; the local scene demo remains MOCK.</p>}
       </aside>
     </div>
     <section className="generation-evidence" aria-label="World generation result"><span className="eyebrow">WORLD OUTPUT</span>

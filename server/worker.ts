@@ -2,6 +2,7 @@ import { ORACLE_WORLD_IDS, platformApi } from "./platform.ts";
 import type { PlatformEnv } from "./platform.ts";
 import { oracleJobApi } from "./oracle-jobs.ts";
 import { studioApi } from "./studio.ts";
+import { avatarApi } from "./avatar.ts";
 import {
   astraGenerationSchema,
   assetSpecForBlueprint,
@@ -22,7 +23,9 @@ export interface Env extends BudgetEnv, PlatformEnv {
   GENERATION_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
   ASSETS?: { fetch(request: Request): Promise<Response> };
 }
-const MAX_BODY = 1_500_000;
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+const MAX_IMAGE_BASE64 = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
+const MAX_BODY = MAX_IMAGE_BASE64 + 64_000;
 const headers = { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
 type PortalId = (typeof ORACLE_WORLD_IDS)[number];
@@ -51,18 +54,28 @@ async function limitedBody(request: Request) {
   catch (e) { await reader.cancel(); throw e; }
   const bytes = new Uint8Array(length); let offset = 0;
   for (const c of chunks) { bytes.set(c, offset); offset += c.length; }
-  return JSON.parse(new TextDecoder().decode(bytes));
+  const parsed = JSON.parse(new TextDecoder().decode(bytes));
+  // The body ceiling is larger to carry a validated 6 MB reference image, but a
+  // pathological text-only prompt is still rejected as a payload-size error.
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
+      typeof parsed.prompt === "string" && parsed.prompt.length > 100_000) throw new Error("TOO_LARGE");
+  return parsed;
 }
 function validImage(value: unknown) {
   if (value === undefined || value === null) return true;
-  if (typeof value !== "string" || value.length > 1_400_000) return false;
+  if (typeof value !== "string") return false;
   const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
-  if (!m || m[2].length % 4 !== 0) return false;
+  if (!m || m[2].length % 4 !== 0 || m[2].length > MAX_IMAGE_BASE64) return false;
+  const padding = m[2].endsWith('==') ? 2 : m[2].endsWith('=') ? 1 : 0;
+  const decodedBytes = m[2].length * 3 / 4 - padding;
+  if (decodedBytes > MAX_IMAGE_BYTES) return false;
   try { const start = atob(m[2].slice(0, 32)); return m[1] === "png" ? start.startsWith("\x89PNG\r\n\x1a\n") : m[1] === "jpeg" ? start.startsWith("\xff\xd8\xff") : start.startsWith("RIFF") && start.slice(8, 12) === "WEBP"; }
   catch { return false; }
 }
 export async function handle(request: Request, env: Env = {}, fetcher: typeof fetch = fetch): Promise<Response> {
   const url = new URL(request.url);
+  const avatar = await avatarApi(request, env, fetcher);
+  if (avatar) return avatar;
   if (url.pathname === "/api/studio" || url.pathname.startsWith("/api/studio/")) return studioApi(request, env, fetcher);
   if (url.pathname.startsWith("/api/oracle/jobs")) return oracleJobApi(request, env, fetcher);
   if (url.pathname === "/api/platform" || url.pathname.startsWith("/api/platform/")) return platformApi(request, env, fetcher);
@@ -71,7 +84,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   const publicPilot = env.PUBLIC_PILOT === "true";
   const accessConfigured = publicPilot || ((env.GENERATION_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.GENERATION_ACCESS_TOKEN?.length ?? 0) <= 256);
   const generationReady = configured && !!env.GENERATION_LIMITER && !!env.GENERATION_BUDGET && !!budgetSettings(env) && accessConfigured && configuredModel === "gpt-6-astra";
-  if (url.pathname === "/api/health" && request.method === "GET") return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady && !publicPilot, publicPilot: generationReady && publicPilot, model: generationReady ? configuredModel : null });
+  if (url.pathname === "/api/health" && request.method === "GET") return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady && !publicPilot, publicPilot: generationReady && publicPilot, model: generationReady ? configuredModel : null, maxReferenceImageMb: 6 });
   if (url.pathname !== "/api/blueprint") return url.pathname.startsWith("/api/") ? json({ error: "Not found" }, 404) : (env.ASSETS?.fetch(request) ?? new Response("Not found", { status: 404 }));
   if (request.method !== "POST") return json({ error: "Use POST" }, 405);
   if (request.headers.get("origin") && request.headers.get("origin") !== url.origin) return json({ error: "Cross-origin request rejected" }, 403);
@@ -81,7 +94,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   catch (e) { return json({ error: e instanceof Error && e.message === "TOO_LARGE" ? "Request too large" : "Invalid request" }, e instanceof Error && e.message === "TOO_LARGE" ? 413 : 400); }
   if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some((k) => !["worldId", "prompt", "image", "mode"].includes(k)) ||
       typeof input.prompt !== "string" || input.prompt.trim().length < 3 || input.prompt.length > 2000 || !validImage(input.image) || !["demo", "live"].includes(input.mode))
-    return json({ error: "Use a supported WORLDIFACT portal, 3–2000 characters and an optional PNG, JPEG or WebP up to 1 MB." }, 400);
+    return json({ error: "Use a supported WORLDIFACT portal, 3–2000 characters and an optional PNG, JPEG or WebP up to 6 MB." }, 400);
   const requestedWorld = input.worldId === undefined ? "ai-game-lab" : input.worldId;
   if (typeof requestedWorld !== "string" || !ORACLE_WORLD_IDS.includes(requestedWorld as PortalId))
     return json({ error: "Use one of the five supported WORLDIFACT portal IDs." }, 400);

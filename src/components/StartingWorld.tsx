@@ -8,7 +8,7 @@ import { movementAxes, STILL } from "../lib/gameControls";
 import type { MoveAxes } from "../lib/gameControls";
 import { enteredPortal, nearestPortal, PORTAL_RADIUS } from "../lib/portalNavigation";
 import { createLakeEnvironment } from "../lib/lakeEnvironment";
-import { createPlayerAvatar } from "../lib/playerAvatar";
+import { createPlayerAvatar, type AvatarChoice } from "../lib/playerAvatar";
 import { createWorldAudio } from "../lib/worldAudio";
 import TouchJoystick from "./TouchJoystick";
 import {
@@ -42,6 +42,7 @@ export default function StartingWorld({
   const zoom = useRef(6);
   const overview = useRef(false);
   const [music, setMusic] = useState(false);
+  const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("queen");
   const [transition, setTransition] = useState(false);
   const [captureNotice, setCaptureNotice] = useState("");
   const [wide, setWide] = useState(false);
@@ -241,7 +242,7 @@ export default function StartingWorld({
       scene.add(g);
       return { g, face, ripple, i, id: p.id };
     });
-    const avatar = createPlayerAvatar();
+    const avatar = createPlayerAvatar(avatarChoice);
     scene.add(avatar.root);
     let boarding: { car: RuntimeObject; from: THREE.Vector3; outside: THREE.Vector3; seat: THREE.Vector3; time: number; exiting: boolean } | null = null;
     const player = new THREE.Vector3(0, 2.3, 17),
@@ -622,7 +623,7 @@ export default function StartingWorld({
       renderer.forceContextLoss();
       renderer.domElement.remove();
     };
-  }, [sceneStructure, activePortalId]);
+  }, [sceneStructure, activePortalId, avatarChoice]);
   useEffect(() => {
     const byId = new Map(blueprint.objects.map((o) => [o.id, o]));
     for (const runtime of runtimeObjects.current) {
@@ -684,7 +685,12 @@ export default function StartingWorld({
         <button onClick={() => capture.current?.()}>Save view PNG</button>
         <label className="camera-zoom">Camera <input aria-label="Camera distance" type="range" min="3" max="24" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
       </div>
-      <div className="avatar-note">Animation mannequin · shop character pending</div>
+      <label className="avatar-note avatar-picker">Character
+        <select value={avatarChoice} onChange={e => setAvatarChoice(e.target.value as AvatarChoice)} aria-label="Choose player character">
+          <option value="queen">Neptune Queen · current MPC2 preview</option>
+          <option value="rapper">Rapper · MPC2 archive</option>
+        </select>
+      </label>
       {captureNotice && <div className="capture-notice" role="status">{captureNotice}</div>}
       <div className="world-hint" role="status">
         {hint}
