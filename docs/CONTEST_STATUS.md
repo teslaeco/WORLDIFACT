@@ -17,7 +17,20 @@ Implemented without a paid generation or production deployment:
 
 Truth boundary: the uploaded 3MF says `FORGE print preparation` and identifies NASA Visualization Technology Applications and Development as the source. It does **not** contain a verifiable Astra job receipt, so the current source/candidates are not labelled `Astra corrected`. A future successful paid Astra job may label its own result `GENERATED · Astra-assisted print-prep · VALIDATION REQUIRED` after the receipt is recorded.
 
-This milestone is **not merged and not deployed**. Exact-head CI and review are required before asking for merge/deploy approval.
+### Verification checkpoint
+
+Code/test head `4f604a5ee3749616e2089d16dd9642bd096c4962` passed every PR workflow triggered for this change:
+
+| Check | Result |
+|---|---|
+| Verify WORLDIFACT | PASS — run `35254347023`; `npm run verify`, foundations, deploy check and credential-free no-generation Studio probe all succeeded |
+| Review FAST draft worker (no paid API) | PASS — run `35254346935` |
+| Review FAST v33 installation safety | PASS — run `35254347072` |
+| Review FAST Cloud Shell launcher | PASS — run `35254347186` |
+
+The first verification attempt failed only because the strict Shop SSR test helper rejected the newly added `ShopMakePanel` dependency. The helper was then changed to compile the actual checked-in MAKE component rather than weakening the unexpected-import guard; the new three-photo/print-safety tests and customer-MAKE render assertions pass in the successful run.
+
+This status entry is a documentation-only `[skip ci]` commit after that verified code/test head. The milestone remains **not merged and not deployed**. Before production merge, rerun/check the required exact final head if the merge gate requires the documentation commit itself to be covered.
 
 ## Completed release before this branch
 
