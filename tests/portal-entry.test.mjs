@@ -58,13 +58,13 @@ test('Chess visitors get the reviewed copied guest build rather than an unpinned
   assert.doesNotMatch(source, /window\.location|location\.replace|location\.assign|Opening the original Chess Cube website/)
 })
 
-test('even direct PortalPage Shop rendering uses the original hosted Studio, not a retired form', async () => {
+test('even direct PortalPage Shop rendering opens only the original hosted Studio, never the failed iframe or retired form', async () => {
   const html = await renderPortal('/shop')
   const exact = references.REFERENCE_LINKS.modelGenerator
-  assert.ok(html.includes(`src="${exact}"`))
   assert.ok(html.includes(`href="${exact}"`))
-  assert.match(html, /Open full 3D generator/)
-  assert.doesNotMatch(html, /<textarea|3D result appears here|FORGE-projekt|Generate REAL 3D model/)
+  assert.match(html, /Open 3D generator/)
+  assert.match(html, /embedded Studio has been removed/)
+  assert.doesNotMatch(html, /<iframe|<textarea|3D result appears here|FORGE-projekt|Generate REAL 3D model/)
 })
 
 test('native Planets entry renders all eight English stages and labels its separate external prototype', async () => {
