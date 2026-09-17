@@ -1,5 +1,5 @@
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
-import { budgetSettings, type BudgetEnv, type BudgetNamespace } from './budget.ts'
+import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
 import { inputDigest, oracleStudioPayload, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; GENERATION_BUDGET?: BudgetNamespace }
@@ -68,7 +68,8 @@ async function allowance(env: StudioEnv) {
   if (!response.ok) throw new StudioError('The shared allowance could not be read.', 503)
   const state = await limitedJson(response, 2000)
   if (![state.used, state.limit, state.remaining].every(n => Number.isSafeInteger(n) && Number(n) >= 0) || typeof state.enabled !== 'boolean') throw new StudioError('Invalid allowance response.', 503)
-  return { used: Number(state.used), limit: Number(state.limit), remaining: Number(state.remaining), enabled: state.enabled, expiresAt: typeof state.expiresAt === 'string' ? state.expiresAt : null }
+  return { used: Number(state.used), limit: Number(state.limit), remaining: Number(state.remaining), enabled: state.enabled,
+    expiresAt: typeof state.expiresAt === 'string' ? state.expiresAt : null, fastOnly: state.fastOnly === true }
 }
 async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init: RequestInit = {}) {
   const origin = oracleOrigin(env.ORACLE_ENDPOINT)
@@ -81,19 +82,27 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
   if (!response.ok) { await response.body?.cancel(); throw new StudioError('The existing worker did not confirm readiness.', 503) }
   const state = await limitedJson(response, 16_384)
   const compatible = state.ready === true && state.provider === 'openai' && state.model === 'gpt-6-astra' && Number.isSafeInteger(state.connectorVersion) && Number(state.connectorVersion) >= 33
-  return { ready: compatible, photoReady: compatible && state.photoInput === true, fastReady: compatible && supportsFastDraft(state), promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
+  const fastReady = compatible && supportsFastDraft(state)
+  return { ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
+    fastBudgetReady: fastReady && state.fastBudgetRevision === 'fast-usd4-v1' && state.fastBudgetMaxUsd === 4,
+    promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
 }
 async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch, input: StudioInput) {
-  if (env.ENABLE_STUDIO_JOBS !== 'true' || !budgetSettings(env)) throw new StudioError('Model generation is disabled or its allowance has expired.', 503)
-  if (env.PUBLIC_PILOT !== 'true' && !await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) throw new StudioError('This generation window requires owner access.', 401)
+  const pool = await allowance(env)
+  const trial = pool.fastOnly && env.ENABLE_APPROVED_FAST_TEST === 'true'
+  if (!trial && (env.ENABLE_STUDIO_JOBS !== 'true' || !budgetSettings(env))) throw new StudioError('Model generation is disabled or its allowance has expired.', 503)
+  if (trial) {
+    if (input.generationProfile !== FAST_DRAFT_PROFILE) throw new StudioError('The approved extra attempt is FAST only. Select FAST DRAFT; no request was charged.', 409)
+    if (!await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
+      await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Previous-Job') || '')
+  } else if (env.PUBLIC_PILOT !== 'true' && !await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) throw new StudioError('This generation window requires owner access.', 401)
   const current = await health(env, fetcher)
   if (!current.ready) throw new StudioError('The existing Astra/Blender worker is not ready.', 503)
-  // Never send an unknown field to an old worker that could silently run the
-  // slow default. Check before receipt preparation and again before reservation.
+  if (trial && !current.fastBudgetReady) throw new StudioError('The approved cost guard is not confirmed. No paid request was sent.', 503)
   if (input.generationProfile === FAST_DRAFT_PROFILE && !current.fastReady) throw new StudioError('The worker has not confirmed FAST DRAFT v1. No paid job was submitted; STANDARD remains available.', 409)
   if (input.photos.length && !current.photoReady) throw new StudioError('This worker has not confirmed photo input. Nothing was submitted.', 409)
   if (oracleStudioPayload('', input).prompt.length > current.promptMaxLength) throw new StudioError(`Shorten the description: the worker accepts ${current.promptMaxLength} characters including export instructions.`)
-  return current
+  return { ...current, trial }
 }
 async function modelOrExport(env: StudioEnv, id: string, format: string, fetcher: typeof fetch) {
   const model = format === 'model'
@@ -136,15 +145,29 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
   const url = new URL(request.url)
   try {
     if (request.method !== 'GET' && request.headers.get('Origin') !== url.origin) throw new StudioError('Same-origin request required.', 403)
+    if (url.pathname === '/api/studio/approved-test/activate' && request.method === 'POST') {
+      if (env.ENABLE_APPROVED_FAST_TEST !== 'true' || !env.ORACLE_API_TOKEN || !await ownerAuthorized(request, env.ORACLE_API_TOKEN)) throw new StudioError('Installer authorization required.', 401)
+      await limit(request, env, 'activate')
+      const input = await limitedJson(request, 256)
+      if (Object.keys(input).length !== 1 || input.approval !== APPROVED_FAST_TEST) throw new StudioError('Unknown approval.', 400)
+      if (!(await health(env, fetcher)).fastBudgetReady) throw new StudioError('Installed FAST monetary guard not verified.', 409)
+      const response = await budget(env).fetch(new Request('https://budget.internal/activate-approved-fast', { method: 'POST', body: APPROVED_FAST_TEST }))
+      if (!response.ok) throw new StudioError('This single approval cannot be activated or renewed.', response.status)
+      const pool = await allowance(env)
+      return json({ activated: pool.enabled && pool.fastOnly, remaining: pool.remaining, used: pool.used, limit: pool.limit, expiresAt: pool.expiresAt, paidGenerationRequested: false })
+    }
     if (url.pathname === '/api/studio/status' && request.method === 'GET') {
       await limit(request, env, 'status')
       let pool = null, state = null
       try { pool = await allowance(env) } catch { /* Unknown is not exhausted. */ }
       try { state = await health(env, fetcher) } catch { /* Read-only check, no job. */ }
-      const enabled = env.ENABLE_STUDIO_JOBS === 'true' && !!budgetSettings(env)
-      const authorized = env.PUBLIC_PILOT === 'true' || (secretReady(env) && await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
-      const reason = !enabled ? 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : !pool.remaining ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
-      return json({ ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY', photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, promptMaxLength: Math.max(3, (state?.promptMaxLength ?? 2000) - 600), allowance: pool })
+      const trial = pool?.fastOnly === true && env.ENABLE_APPROVED_FAST_TEST === 'true'
+      const enabled = trial || (env.ENABLE_STUDIO_JOBS === 'true' && !!budgetSettings(env))
+      const authorized = trial || env.PUBLIC_PILOT === 'true' || (secretReady(env) && await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
+      const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : !pool.remaining ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
+      return json({ ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
+        photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, fastBudgetReady: state?.fastBudgetReady === true,
+        fastOnly: trial, promptMaxLength: Math.max(3, (state?.promptMaxLength ?? 2000) - 600), allowance: pool })
     }
     if (!secretReady(env)) throw new StudioError('The job receipt service is not configured.', 503)
     if (url.pathname === '/api/studio/prepare' && request.method === 'POST') {
@@ -160,8 +183,8 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (Date.now() - auth.issued > 30 * 60_000) throw new StudioError('This unsubmitted receipt expired. Review your inputs before preparing another.', 409)
       const input = await inputFrom(request)
       if (await inputDigest(input) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
-      await preflight(request, env, fetcher, input)
-      const reserved = await budget(env).fetch(new Request('https://budget.internal/reserve-studio', { method: 'POST', body: JSON.stringify({ id: auth.id }), signal: AbortSignal.timeout(5000) }))
+      const checked = await preflight(request, env, fetcher, input)
+      const reserved = await budget(env).fetch(new Request('https://budget.internal/reserve-studio', { method: 'POST', body: JSON.stringify({ id: auth.id, ...(checked.trial ? { profile: FAST_DRAFT_PROFILE } : {}) }), signal: AbortSignal.timeout(5000) }))
       if (reserved.status === 409) return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending }, recoveryOnly: true }, 202)
       if (!reserved.ok || (await reserved.json() as { allowed?: boolean }).allowed !== true) throw new StudioError('The cumulative allowance is exhausted or unavailable. No new job was submitted.', reserved.status === 429 ? 429 : 503)
       try {
