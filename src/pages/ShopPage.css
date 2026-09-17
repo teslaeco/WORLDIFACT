@@ -1,133 +1,49 @@
-.froge-shop-page {
-  width: 100%;
-  max-width: 1440px;
-  margin: 0 auto;
-  box-sizing: border-box;
-  padding: 0 clamp(8px, 2vw, 24px) 24px;
-}
-.froge-shop-controls {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  padding: 10px 0;
-  background: #0c1b23;
-  border-bottom: 1px solid #36525f;
-}
-.froge-shop-heading {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
-.froge-shop-heading h1 {
-  font-size: clamp(1.05rem, 2.5vw, 1.4rem);
-  margin: 0;
-}
-.froge-shop-return {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 8px 12px;
-  font-weight: 800;
-  border: 1px solid #76bfd1;
-  border-radius: 8px;
-  color: #c1f1ff;
-  text-decoration: none;
-}
-.froge-shop-worlds { margin-left: auto; }
-.froge-shop-page summary {
-  cursor: pointer;
-  min-height: 44px;
-  padding: 10px 8px;
-}
-.froge-shop-worlds nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.froge-shop-worlds nav a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 8px;
-}
-.froge-shop-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin-top: 6px;
-}
-.froge-shop-actions a,
-.froge-shop-actions button {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  box-sizing: border-box;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  text-align: center;
-  border-radius: 8px;
-}
-.froge-shop-open {
-  background: #e9bc73;
-  color: #14252e;
-  font-weight: 700;
-  text-decoration: none;
-}
-.froge-shop-actions button {
-  border: 1px solid #76bfd1;
-  background: #16303b;
-  color: #eaf2f6;
-  cursor: pointer;
-}
-.froge-shop-help {
-  margin: 8px 0 0;
-  color: #d3e4ec;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  max-width: 90ch;
-}
-.froge-shop-viewport {
-  position: relative;
-  isolation: isolate;
-  margin-top: 12px;
-  border: 1px solid #36525f;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #0d1723;
-}
-.froge-shop-frame {
-  position: static;
-  display: block;
-  width: 100%;
-  height: 72vh;
-  height: 72dvh;
-  min-height: 280px;
-  max-height: 1000px;
-  border: 0;
-}
-.froge-shop-notes {
-  margin-top: 12px;
-  padding: 8px 12px;
-  border: 1px solid #36525f;
-  border-radius: 10px;
-  line-height: 1.6;
-}
-.froge-shop-page :is(a, button, summary):focus-visible {
-  outline: 3px solid #e9bc73;
-  outline-offset: 3px;
-}
+.native-shop { max-width: 1320px; width: 100%; padding: 0 20px 30px; color: #e8eef2; }
+.native-shop-nav { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 0; background: #102028; border-bottom: 1px solid #38545f; }
+.native-shop-nav nav { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.native-shop-nav a { min-height: 44px; padding: 10px 12px; display: inline-flex; align-items: center; }
+.native-shop-back { border: 1px solid #8bd7e2; border-radius: 8px; font-weight: 800; text-decoration: none; }
+.native-shop .native-shop-workspace { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: start; gap: clamp(20px, 4vw, 56px); background: none; border: 0; padding: 28px 0; }
+.native-shop-preview { min-width: 0; background: #242f35; border: 1px solid #46535a; border-radius: 14px; padding: 16px; }
+.native-shop-sample { width: 100%; height: min(65vh, 650px); min-height: 260px; display: block; object-fit: contain; background: #434e55; margin: 12px 0; }
+.native-shop-form { min-width: 0; }
+.native-shop-form h1 { font-size: clamp(1.8rem, 4vw, 2.65rem); line-height: 1.08; margin: 12px 0 20px; }
+.native-shop .eyebrow { font-size: 0.73rem; letter-spacing: 0.12em; color: #addbcc; font-weight: 750; }
+.native-shop form, .native-shop-form label { display: grid; gap: 10px; }
+.native-shop label { font-weight: 650; }
+.native-shop input, .native-shop select, .native-shop textarea { width: 100%; box-sizing: border-box; background: #14252e; border: 1px solid #54707c; border-radius: 7px; color: #f1f5f7; font: inherit; min-height: 44px; padding: 10px; }
+.native-shop textarea { resize: vertical; min-height: 145px; }
+.native-shop p { line-height: 1.6; }
+.native-shop small { display: block; font-size: 0.78rem; font-weight: 400; line-height: 1.5; color: #b6c7d0; margin: 6px 0 12px; }
+.native-shop button, .native-shop-upload { min-height: 44px; border: 1px solid #6c8895; border-radius: 7px; padding: 10px 14px; font: inherit; background: #223c48; color: #ecf4f8; cursor: pointer; }
+.native-shop button:disabled { cursor: not-allowed; opacity: 0.52; }
+.native-shop .native-shop-generate { width: 100%; background: #b7eed4; color: #16342c; font-weight: 800; margin-top: 10px; }
+.native-shop-upload { text-align: center; font-weight: 650; }
+.native-shop .native-shop-file { width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; opacity: 0; overflow: hidden; }
+.native-shop-file:focus-visible { opacity: 1; width: 100%; height: auto; min-height: 44px; }
+.native-shop-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.native-shop-photos img { width: 100%; height: 140px; object-fit: contain; background: #09141b; }
+.native-shop-photos button { width: 100%; font-size: 0.8rem; }
+.native-shop-connection { border: 1px solid #536876; background: #122631; border-radius: 10px; padding: 14px; margin: 16px 0; }
+.native-shop-error { border-left: 4px solid #f0a08d; padding: 12px; background: #452c32; overflow-wrap: anywhere; }
+.native-shop-views, .native-shop-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.native-shop-views button[aria-pressed="true"] { background: #e0eee8; color: #172c26; }
+.native-shop-progress { min-height: 280px; display: grid; align-content: center; padding: 18px; overflow-wrap: anywhere; }
+.native-shop .oracle-model-canvas { position: relative; width: 100%; height: 510px; max-height: 65dvh; min-height: 280px; overflow: hidden; }
+.native-shop .oracle-model-canvas canvas { width: 100%; height: 100%; display: block; }
+.native-shop .scene-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.native-shop-archive { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; margin-top: 16px; }
+.native-shop-archive article { border: 1px solid #476470; border-radius: 9px; padding: 12px; overflow-wrap: anywhere; }
+.native-shop-archive strong { display: block; max-height: 5em; overflow: auto; }
+.native-shop footer { margin-top: 24px; }
+.native-shop :is(a, button, input, select, textarea):focus-visible { outline: 3px solid #e9bc73; outline-offset: 3px; }
 @media (max-width: 760px) {
-  .froge-shop-heading h1 { flex: 1 1 160px; }
-  .froge-shop-worlds { margin-left: 0; }
-  .froge-shop-return { flex: 1 0 200px; justify-content: center; }
-  .froge-shop-actions { gap: 6px; }
-  .froge-shop-actions a, .froge-shop-actions button { flex: 1 1 170px; }
-}
-@media (max-height: 480px) {
-  .froge-shop-help { font-size: 0.8rem; }
-  .froge-shop-frame { min-height: 220px; }
+ .native-shop { padding: 0 12px 24px; }
+ .native-shop .native-shop-workspace { display: flex; flex-direction: column; gap: 24px; }
+ .native-shop-form { order: 0; width: 100%; }
+ .native-shop-preview { order: 1; width: 100%; box-sizing: border-box; }
+ .native-shop-nav { position: static; }
+ .native-shop-nav nav { margin-left: 0; }
+ .native-shop-sample { min-height: 260px; height: 420px; max-height: 60dvh; }
+ .native-shop .oracle-model-canvas { height: 380px; }
 }
