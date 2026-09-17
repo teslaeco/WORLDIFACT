@@ -1,0 +1,30 @@
+/* Contest hotfix: protect the center of the ISS viewport on Android and small screens. */
+#view { height:100dvh; min-height:100svh; }
+#reset-view,#eva-guide { min-height:40px; }
+@media(max-width:760px){
+  .topbar{height:68px;padding:9px 10px;align-items:flex-start;background:linear-gradient(#071827f5,#071827a0,transparent)}
+  .brand strong{font-size:20px}.brand-mark{font-size:22px}.brand small{font-size:8px}.mission-button{font-size:11px;padding:6px 8px;min-height:38px}.icon-button{width:38px;min-height:38px;font-size:18px}
+  .navigation-card{top:72px;left:8px;width:min(48vw,190px);padding:8px;border-radius:10px;background:#102332cf}
+  .navigation-card .eyebrow{font-size:9px}.navigation-card strong{font-size:13px}.distance{font-size:11px}.quick-goals{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:6px}.quick-goals button{font-size:9px;min-height:31px;padding:3px}
+  .telemetry{display:none!important}
+  .view-controls{top:72px;right:8px;left:auto;display:grid;grid-template-columns:repeat(2,auto);gap:4px;z-index:6}.view-controls button{font-size:10px;min-height:34px;padding:5px 7px}.view-controls #reset-view,.view-controls #eva-guide{grid-column:auto}
+  .world-note{display:none!important}
+  .interaction{bottom:calc(116px + var(--safe));left:50%;width:min(48vw,230px);padding:7px 8px;transform:translateX(-50%);border-radius:9px;background:#102332d9}.interaction strong{font-size:11px}.interaction p{font-size:9px;margin-top:2px;line-height:1.2}.interaction #torque{font-size:9px}
+  .message{bottom:calc(174px + var(--safe));left:50%;width:min(52vw,250px);max-height:34px;overflow:hidden;font-size:9px;line-height:1.2;padding:4px 6px;background:#102333d8}
+  body.touch-mode .joystick-wrap{left:max(8px,env(safe-area-inset-left));bottom:calc(60px + var(--safe));gap:3px;font-size:9px}
+  #joystick{width:104px;height:104px}#joystick-knob{width:44px;height:44px}.joystick-cross{inset:22px}
+  body.touch-mode .vertical-pad{right:8px;bottom:calc(154px + var(--safe));gap:4px}.vertical-pad button{width:47px;height:47px}.vertical-pad button b{font-size:18px}.vertical-pad button span{font-size:8px}
+  body.touch-mode .action-button{right:12px;bottom:calc(66px + var(--safe));width:68px;height:68px;font-size:9px}.action-button kbd{font-size:20px}
+  .look-hint{bottom:calc(51px + var(--safe));font-size:8px;left:31%;right:24%;white-space:nowrap}
+  body.touch-mode .inventory-drawer{padding:5px 8px calc(4px + var(--safe));width:100%;border-radius:10px 10px 0 0}.inventory-heading{gap:6px}.inventory-heading small{font-size:10px!important}#inventory-toggle{font-size:11px!important;min-height:36px!important;padding:5px 8px!important}.inventory-heading strong{font-size:9px!important}
+  body.touch-mode .expanded .inventory{grid-template-columns:repeat(3,1fr);margin-top:42px}.slot{height:46px}.slot span,.slot b,.slot kbd{font-size:9px}
+  dialog{max-height:82dvh;padding:16px}dialog h1{font-size:22px}.help-grid{grid-template-columns:1fr}
+}
+@media(max-width:430px){
+  .navigation-card{width:44vw}.quick-goals{grid-template-columns:1fr 1fr}.view-controls{grid-template-columns:1fr 1fr;max-width:48vw}
+  .interaction{width:43vw}.message{display:none}.look-hint{display:none}
+}
+@media(max-height:560px) and (orientation:landscape){
+  .navigation-card{top:58px;width:165px}.topbar{height:56px}.view-controls{top:58px}.interaction{bottom:62px}.telemetry,.world-note,.message{display:none!important}
+  body.touch-mode .joystick-wrap{bottom:48px}#joystick{width:86px;height:86px}body.touch-mode .action-button{bottom:50px;width:58px;height:58px}body.touch-mode .vertical-pad{bottom:118px}
+}
