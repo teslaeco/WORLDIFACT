@@ -183,12 +183,14 @@ export default function ShopPage() {
   }
   const addPhotos = async (files: FileList | null) => {
     const flags = operations.current
-    if (!files || flags.photos || flags.submit || fast) return
+    if (!files || flags.photos || flags.submit) return
     if (photos.length + files.length > 3) { setError('Use at most three views of the same object.'); return }
+    const referenceLimit: TextureLimit = fast ? 4096 : textureLimit
     flags.photos = true; setPhotoBusy(true); setError('')
     try {
+      if (fast) { setProfile('standard'); setTextureLimit(referenceLimit) }
       const additions: StudioPhoto[] = [], views = ['front', 'side', 'back'] as const
-      for (const file of Array.from(files)) additions.push(await prepareStudioPhoto(file, textureLimit, views[photos.length + additions.length]))
+      for (const file of Array.from(files)) additions.push(await prepareStudioPhoto(file, referenceLimit, views[photos.length + additions.length]))
       if (mounted.current) setPhotos(previous => [...previous, ...additions])
     } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'Photo preparation failed.') }
     finally { flags.photos = false; if (mounted.current) setPhotoBusy(false) }
@@ -266,7 +268,7 @@ export default function ShopPage() {
             <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
           </div>
           <label htmlFor="studio-prompt">Describe your model</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic chess knight with a stable base, smooth material and clean details." required />
-          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
+          <label className="native-shop-upload" htmlFor="studio-photos">{photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object. Selecting an image automatically switches FAST to the STANDARD photo workflow. Originals up to 12 MB are prepared locally before upload.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D model + materials · free' : 'Generate 3D model + materials · free'}</button><small>No customer payment is taken at generation. Manufacturing and delivery are a separate purchase step.</small>
         </form>
