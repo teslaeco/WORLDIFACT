@@ -27,7 +27,7 @@ export default function PortalPage() {
 
   const planets = app.route === '/planets'
   const worldId = app.id as 'chess-cube-512-ai' | 'terra-fix-iss' | '8-planets-in-8-days'
-  return <main className="portal-page foundation-page">
+  return <main className={`portal-page foundation-page foundation-${app.id}`}>
     <header className="portal-header">
       <Link to="/" className="brand">WORLDIFACT<span>← Back to the meadow</span></Link>
       <nav aria-label="World portals">

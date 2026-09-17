@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { avatarApi, NEPTUNE_QUEEN_JOB_ID, RAPPER_ARCHIVE_URL } from '../server/avatar.ts';
+import { avatarApi, NEPTUNE_QUEEN_JOB_ID } from '../server/avatar.ts';
 
 function minimalGlb() {
   const bytes = new Uint8Array(20);
@@ -31,27 +31,21 @@ test('exact current Neptune Queen is proxied read-only from the saved Oracle job
   assert.equal(response.headers.get('X-WORLDIFACT-Source-Job'), '99397623-e45c-48dc-95ec-6f84446a54d5');
 });
 
-test('avatar endpoint fails closed and never invents an old queen asset', async () => {
+test('legacy Queen avatar endpoint still fails closed when its upstream is unavailable', async () => {
   const response = await avatarApi(new Request('https://worldifact.test/api/avatar/neptune-queen'), {}, (() => { throw new Error('network must not run'); }) as typeof fetch);
   assert.ok(response);
   assert.equal(response.status, 503);
-  const source = await readFile(new URL('../src/lib/playerAvatar.ts', import.meta.url), 'utf8');
-  assert.match(source, /99397623-e45c-48dc-95ec-6f84446a54d5/);
-  assert.doesNotMatch(source, /queen\.glb|E19/i);
 });
 
-
-test('shared world avatar picker offers the exact current Queen and archived rapper without old queen assets', async () => {
+test('shared world uses only the owner-uploaded character and removes the Queen/rapper selector', async () => {
   const player = await readFile(new URL('../src/lib/playerAvatar.ts', import.meta.url), 'utf8');
+  const embedded = await readFile(new URL('../src/generated/uploadedPlayer.js', import.meta.url), 'utf8');
   const world = await readFile(new URL('../src/components/StartingWorld.tsx', import.meta.url), 'utf8');
-  const css = await readFile(new URL('../src/mobile-hotfix.css', import.meta.url), 'utf8');
-  assert.match(player, /99397623-e45c-48dc-95ec-6f84446a54d5/);
-  assert.match(player, /\/api\/avatar\/rapper-la/);
-  assert.match(world, /Neptune Queen · current MPC2 preview/);
-  assert.match(world, /Rapper · MPC2 archive/);
-  assert.match(css, /avatar-picker/);
-  assert.equal(RAPPER_ARCHIVE_URL, 'https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/models/rapper-v10.glb');
-  assert.doesNotMatch(player, /queen\.glb|E19/i);
+  assert.match(player, /owner-upload:model-mm-1\.stl/);
+  assert.match(player, /uploadedPlayerGlbUrl/);
+  assert.match(embedded, /UPLOADED_PLAYER_GZIP_B64/);
+  assert.doesNotMatch(player, /\/api\/avatar\/(?:neptune-queen|rapper-la)|queen\.glb|E19/i);
+  assert.doesNotMatch(world, /avatar-picker|Neptune Queen|Rapper · MPC2 archive/);
 });
 
 test('Game Lab and portal reference uploads are raised to six MB and include phone scan entry points', async () => {
@@ -87,4 +81,14 @@ test('mobile hotfix hides non-critical meadow controls and docks navigation outs
   assert.match(css, /foundation-frame/);
   const portal = await readFile(new URL('../src/pages/PortalPage.tsx', import.meta.url), 'utf8');
   assert.match(portal, /world-primary-frame[\s\S]*portal-generator-drawer/, 'primary world must render before Astra drawer');
+});
+
+
+test('Cube Chess route uses the reviewed index guest auto-entry and Shop accepts photos while FAST is selected', async () => {
+  const foundations = await readFile(new URL('../src/config/foundations.ts', import.meta.url), 'utf8');
+  assert.match(foundations, /\/apps\/chess\/index\.html\?guest=1/);
+  const shop = await readFile(new URL('../src/pages/ShopPage.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(shop, /if \(!files \|\| flags\.photos \|\| flags\.submit \|\| fast\) return/);
+  assert.match(shop, /if \(fast\) setProfile\('standard'\)/);
+  assert.match(shop, /Adding a reference image switches this job to STANDARD quality automatically/);
 });

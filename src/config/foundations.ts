@@ -3,7 +3,7 @@ import { REFERENCE_LINKS } from './references.ts'
 export const FOUNDATIONS = [
   {
     id: 'chess-cube-512-ai', route: '/chess', title: 'Chess Cube 512 AI',
-    frame: '/apps/chess/guest.html',
+    frame: '/apps/chess/index.html?guest=1',
     original: 'https://teslaeco.github.io/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/',
     hosting: 'copied',
   },

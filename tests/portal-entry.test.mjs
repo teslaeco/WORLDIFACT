@@ -55,9 +55,9 @@ async function renderPortal(path) {
   return renderToStaticMarkup(React.createElement(MemoryRouter, { initialEntries: [path] }, React.createElement(load('portal').default)))
 }
 
-test('Chess visitors get the reviewed copied guest build rather than an unpinned redirect', async () => {
+test('Chess visitors get the reviewed copied build with guest auto-entry rather than an unpinned redirect', async () => {
   const html = await renderPortal('/chess')
-  assert.match(html, /<iframe[^>]+src="\/apps\/chess\/guest\.html"/)
+  assert.match(html, /<iframe[^>]+src="\/apps\/chess\/index\.html\?guest=1"/)
   assert.match(html, /data-world="chess-cube-512-ai"/)
   assert.match(html, /Shop boards and pieces/)
   assert.match(html, /Open original/)
