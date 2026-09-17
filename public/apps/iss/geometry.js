@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {TASKS} from './game-state.js';
 import {makeDetailedAstronaut,makeDetailedBag} from './astronaut.js';
+import {makeTerraObservationEarth} from './terra-earth.js';
 export const mat={
  white:new T.MeshStandardMaterial({color:0xe7e9e5,roughness:.63,metalness:.08}),
  silver:new T.MeshStandardMaterial({color:0xa8b6bd,roughness:.3,metalness:.7}),
@@ -112,6 +113,7 @@ export function makeInterior(){const group=new T.Group();group.name='FORGE_Train
 }
 export const EXIT=[-5.2,-4.7,0];
 export function makeExteriorTraining(){const group=new T.Group();group.name='FORGE_Exterior_Training_Overlay';const tasks={};
+ group.add(makeTerraObservationEarth());
  const portal=new T.Group();portal.position.fromArray(EXIT);group.add(portal);ring(portal,'training_entry',.9,.09,[0,0,0],mat.blue);sign(portal,'RETURN TO AIRLOCK',[0,1.3,0],2.2,.25);
  rod(group,'training_rail',[-8,-5.9,-.4],[-28,-5.9,-.4],.05,mat.orange);
  for(let x=-8;x>=-28;x-=2){rod(group,'rail_stanchion',[x,-5.9,-.4],[x,-6.7,-.4],.035);rod(group,'rail_tie',[x,-6.7,-.4],[x+1,-5.9,-.4],.025);}

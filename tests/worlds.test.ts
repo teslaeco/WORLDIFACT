@@ -63,6 +63,7 @@ test('Shop and platform originals use the exact hosted MPC2 generator, not the b
   }
   assert.equal(PORTALS.find(portal => portal.id === 'enchanted-ai-shop')?.route, '/shop')
   const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8')
-  assert.match(app, /path="\/shop" element=\{<ShopPage \/>\}/)
+  assert.match(app, /\['\/chess', '\/iss', '\/planets', '\/terra', '\/shop'\]\.map/)
+  assert.match(app, /<Route key=\{path\} path=\{path\} element=\{<PortalPage \/>\}/)
   assert.match(app, /path="\/chess\/shop" element=\{<Navigate to="\/shop" replace \/>\}/)
 })

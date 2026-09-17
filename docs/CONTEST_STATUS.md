@@ -1,3 +1,25 @@
+# WORLDIFACT status — five Astra portal surfaces + Terra Earth EVA
+
+Date: 17 September 2026. PR #42 is a reviewed branch milestone; **not merged and not deployed to production**.
+
+## Current branch milestone
+
+- PR #42: https://github.com/teslaeco/WORLDIFACT/pull/42 — **OPEN DRAFT**.
+- Branch: `feat/contest-five-portals-terra-earth`.
+- Reviewed code head before this documentation-only `[skip ci]` update: `6fba3120f2082a5521ddb59d7fc31a8bcdecc7a1`.
+- Final code verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35272650802 — **SUCCESS**. `npm run verify`, reviewed foundation assembly, Wrangler dry-run and hosted-Studio read-only inspection all passed.
+- The single server-side `/api/blueprint` path now accepts the exact five WORLDIFACT portal IDs and reuses the existing GPT-6 Astra Responses API integration rather than creating five separate backends. Legacy requests with no `worldId` remain compatible and resolve to AI Game Lab.
+- Chess Cube, Fix ISS, 8 Planets and Enchanted AI Shop now have a reusable portal Astra surface with prompt + optional reference image, a procedural preview, explicit `LIVE · GENERATED` / `DEMO · MOCK` provenance and `MAKE: VALIDATION REQUIRED`. AI Game Lab retains its existing native Astra workbench.
+- Unknown portal IDs are rejected before any provider call. Server-only credentials, current validation, limiter/budget gate, safe errors and the no-cost DEMO fallback are preserved.
+- Fix ISS now explains that it is a repair/preservation simulation exploring whether ISS can be maintained and considered for preservation as a human heritage object. It explicitly does not claim NASA endorsement or prove that preserving the complete station in orbit is feasible.
+- Fix ISS displays **Sales starting soon** while model/manufacturing validation is refined and labels as **PLANNED** that part of future sales revenue is intended for promotion/awareness supporting the ISS preservation campaign at `https://c.org/QkbzHd5kWN`. No current donation or guaranteed percentage is claimed.
+- EVA Earth now adapts the actual Earth visual-source logic from `Terraforming-Planet/Polar-Sun-Moon-Analysis` commit `c91d59eafb87cf9657f8bf78a5e431fb35665849`, file `web/src/CleanRealisticEarthGlobe.tsx`, under MIT. It uses the same official NASA GIBS `BlueMarble_ShadedRelief_Bathymetry` base/fallback and dated `VIIRS_SNPP_CorrectedReflectance_TrueColor` visual instead of inventing a new Earth asset. Attribution is recorded in `ASSET_LICENSES.md`.
+- The EVA globe is explicitly a visual backdrop; it is not labelled as live scientific observation evidence. Terra Observation remains the source/date-aware Earth-observation application.
+- No paid model request, new public generation budget, supplier order or production deployment was made by PR #42.
+- A fresh paid ISS mesh-repair claim remains **BLOCKED**: production previously reported `used: 7` with no remaining slot, and the current Studio/Oracle mesh workflow does not accept the saved original ISS 3MF/GLB as an input mesh. Do not call a structured prompt/specification a repaired original mesh.
+
+---
+
 # WORLDIFACT status — customer storefront published
 
 Date: 17 September 2026. PR #41 was reviewed, merged and published to production after the final-head checks passed.
