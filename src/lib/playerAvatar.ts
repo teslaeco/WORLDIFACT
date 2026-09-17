@@ -27,7 +27,7 @@ function proceduralQueenFallback() {
   const neck = part(root, .07, .05, 1.48, skin); neck.scale.x = .9;
   const head = new THREE.Mesh(new THREE.SphereGeometry(.15, 18, 14), skin); head.position.y = 1.69; head.scale.set(.9, 1.15, .9); root.add(head);
   const bun = new THREE.Mesh(new THREE.SphereGeometry(.095, 14, 10), hair); bun.position.set(0,1.86,.01); bun.scale.set(.9,1.2,.9); root.add(bun);
-  const collar = new THREE.Mesh(new THREE.ConeGeometry(.2,.25,.14,6), teal); collar.position.set(0,1.44,.02); collar.rotation.x = Math.PI; root.add(collar);
+  const collar = new THREE.Mesh(new THREE.ConeGeometry(.2,.25,6,1), teal); collar.position.set(0,1.44,.02); collar.rotation.x = Math.PI; root.add(collar);
   const legs: THREE.Group[] = [], knees: THREE.Group[] = [], arms: THREE.Group[] = [];
   for (const side of [-1, 1]) {
     const hip = new THREE.Group(); hip.position.set(side * .115, .88, 0); root.add(hip); legs.push(hip);
