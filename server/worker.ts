@@ -54,7 +54,12 @@ async function limitedBody(request: Request) {
   catch (e) { await reader.cancel(); throw e; }
   const bytes = new Uint8Array(length); let offset = 0;
   for (const c of chunks) { bytes.set(c, offset); offset += c.length; }
-  return JSON.parse(new TextDecoder().decode(bytes));
+  const parsed = JSON.parse(new TextDecoder().decode(bytes));
+  // The body ceiling is larger to carry a validated 6 MB reference image, but a
+  // pathological text-only prompt is still rejected as a payload-size error.
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
+      typeof parsed.prompt === "string" && parsed.prompt.length > 100_000) throw new Error("TOO_LARGE");
+  return parsed;
 }
 function validImage(value: unknown) {
   if (value === undefined || value === null) return true;
