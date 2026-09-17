@@ -41,7 +41,7 @@ async function responseJson(response: Response) {
   if (!response.ok) throw new Error(object(value) && typeof value.error === 'string' ? value.error.slice(0, 600) : `Request failed (${response.status}).`)
   return value
 }
-const accessHeaders = (owner: string) => owner ? { 'X-WORLDIFACT-Owner': owner } : {}
+const accessHeaders = (owner: string): Record<string, string> => owner ? { 'X-WORLDIFACT-Owner': owner } : {}
 export async function checkStudio(fetcher: Fetcher = fetch, owner = ''): Promise<StudioStatus> {
   const response = await fetcher('/api/studio/status', { headers: accessHeaders(owner), cache: 'no-store', signal: AbortSignal.timeout(40_000) })
   const value = await responseJson(response)
@@ -53,7 +53,9 @@ export async function checkStudio(fetcher: Fetcher = fetch, owner = ''): Promise
 export class StudioCoordinator {
   private saved: SavedStudioJob | null = null
   private submitting = false
-  constructor(private store: ReceiptStore, private fetcher: Fetcher = fetch) {}
+  private store: ReceiptStore
+  private fetcher: Fetcher
+  constructor(store: ReceiptStore, fetcher: Fetcher = fetch) { this.store = store; this.fetcher = fetcher }
   get current() { return this.saved }
   restore() { this.saved = readSavedStudioJob(this.store); return this.saved }
   async start(input: StudioInput, onPrepared: (saved: SavedStudioJob) => void, owner = ''): Promise<StudioJob> {
@@ -77,8 +79,6 @@ export class StudioCoordinator {
         })
         return parseStudioJob(await responseJson(result), receipt.id)
       } catch {
-        // Acceptance can be ambiguous. Keep the receipt and perform GET-only
-        // recovery. Never automatically repeat submission after a fetch error.
         return { id: receipt.id, state: 'pending', detail: JOB_DETAILS.pending }
       }
     } finally { this.submitting = false }
