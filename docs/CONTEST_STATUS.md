@@ -1,65 +1,68 @@
 # WORLDIFACT status — 17 September 2026
 
-## Current urgent task: replace the failed embedded entry
+## PR #29 released: original Froge Studio without the failed iframe
 
-Owner Android screenshots at 05:04 show the production Shop's embedded Froge UI asking the user to sign in again and unable to read its saved Oracle connection. They do not establish an old deployed version, erased connection or a failed Oracle server.
+The owner explicitly authorized merging and deploying this scoped entry repair. **PR #29 is merged and deployed to production.** The larger localization/quality PR #28 and its upstream source changes were not merged.
 
-The production source already targets the exact owner-selected generator:
+- PR: https://github.com/teslaeco/WORLDIFACT/pull/29
+- Reviewed PR head: `5080dd450eca746e93610b3ef133c927e06be38b`
+- Application merge: `3f22fe5a8b4844d1415a35a622c061a9c19d48d2`
+- Production Shop: https://worldifact.xodobrox.workers.dev/shop
+- Cloudflare version: `3904adb7-9354-4d3b-87d1-a07c24cc54d8`
+- Published and public smoke verified: 17 September 2026, 04:09:26 UTC.
+
+The exact original generator remains:
 
 https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
 
-The old `forge-studio-public` brief exporter is not that target. Do not replace the live Studio with an older repository snapshot or attempt to copy/bypass its authenticated session.
+## Deployed behavior
 
-## Implemented fix — PR #29
+The Studio iframe and obsolete frame styles have been removed from `/shop`. A top-level Shop visit opens the original generator in its own full browser document with `location.replace`, avoiding a Back-button bounce through the launcher. Visible top-level and new-tab links remain available if automatic opening is denied. Embedded WORLDIFACT never automatically navigates its ancestor.
 
-PR: https://github.com/teslaeco/WORLDIFACT/pull/29
+No prompt/query/hash/token is forwarded. There is no automatic login, cookie copying, Oracle pairing, model generation, JSON brief download or source replacement. The hosted Studio's code, accounts, archive, language, models and quality are unchanged. This release repairs entry, not the model generator itself.
 
-Branch: `fix/shop-top-level-studio-20260917`, based only on production main `495a6524d7b597403eefd5b62bfbf8ee9fedc4e0`. Broader English/quality PR #28 remains separate.
+The owner's 05:04 Android screenshots showed re-login errors and an unreadable saved connection inside the iframe. They did not prove that an old generator build was served or that Oracle had failed. The exact cookie/server root cause remains UNKNOWN. Normal account sign-in may still be needed on the original Studio page.
 
-- Removed the Studio iframe, its shell and old frame CSS from `/shop`.
-- A top-level Shop visit opens the exact original Studio with `location.replace`. Replacing the launcher entry prevents Back from bouncing through `/shop` again.
-- An explicit top-level anchor and a safe new-tab anchor remain visible if automatic opening is denied. Embedded WORLDIFACT does not automatically navigate its ancestor.
-- No query strings, hashes, tokens or prompts are forwarded. No timers, automatic login, cookie manipulation, Oracle pairing, paid POST, archive read, model download or quota change.
-- The original hosted generator, its stored work, language and model quality are unchanged. This is an entry repair, not installation of a new generator build.
+## Verified release evidence
 
-## Verification
-
-| Check | Status | Evidence / boundary |
+| Check | Result | Evidence / boundary |
 |---|---|---|
-| Android re-login failure in embedded UI | OWNER SCREENSHOT VERIFIED | No private session headers or backend traffic inspected |
-| Exact generator destination | SOURCE VERIFIED | Canonical `REFERENCE_LINKS.modelGenerator` retained unchanged |
-| Cookie/server root cause | UNKNOWN | Cross-site session restrictions are plausible, not proved on this device |
-| No-iframe/direct navigation source | IMPLEMENTED / TESTED | Actual Shop server-render and captured-effect regression tests |
-| Full verification | PASS | Reviewed head `ce1cf8a8e9af9530bba734dd4ec8db162825c4f0`, run `35177256931`, job `105061604113`: locked install, full verify, pinned foundation assembly, Worker dry-run and read-only hosted probe step all succeeded |
-| Browser authentication / real generation | NOT TESTED | Tests use test window objects; no authenticated Android/browser or fresh model generation is claimed |
-| PR #29 publication | NOT DEPLOYED | Ready for scoped merge/release review; a source/CI success is not production publication |
-| PR #28 compatibility | HANDOFF RECORDED | Comment `5707899926` warns that its old Shop-iframe assertion must change after adoption, and the failed frame must not return |
-| New paid generation | NONE | No paid model API/GPU job, quota increase, secret change, Oracle install or private data migration |
-| Contest release | NOT ASSESSED / NOT SUBMITTED | This repair is not a new competition-readiness decision |
+| Final PR CI | PASS | Run `35177396129`, exact reviewed head `5080dd4...`; no review comments or changed head blocked release |
+| Post-merge main CI | PASS | Run `35180772209`, job `105072222470`; verify, foundations, Worker dry-run and read-only hosted probe steps succeeded |
+| Production release | PASS | Run `35180772180`, job `105072222555`; deployed application merge `3f22fe5...` |
+| Tests in deployed source | 105/105 PASS | Full test output in deployment log; lint nine warnings / zero errors; TypeScript and production build passed. This is the isolated production baseline, not PR #28's larger suite |
+| Public release smoke | PASS | 13 HTML routes, 23 matching hub assets, 102 original-app entries/assets, API 404, DEMO generation and origin rejection passed at 04:09:26 UTC; no paid API call |
+| Active Shop source | VERIFIED | Exact original Studio URL retained, iframe removed, guarded top-level navigation and manual fallbacks tested |
+| Authenticated Android/browser generation | NOT TESTED | Source/effect tests and HTTP asset hashes do not prove account login or a freshly generated GLB. A separate web-tool open was unavailable; no browser/access workaround was attempted |
+| Native paid configuration | DISABLED | Deployed `ENABLE_PAID_GENERATION=false`, `ENABLE_ORACLE_JOBS=false`, `PUBLIC_PILOT=false`, request limit 0; independent hosted Studio settings untouched |
+| Downstream paid/re-arm workflows | SKIPPED AFTER GATES | P0 run `35180849177`, Shop arm `35180849200`, recovery `35180849289` all skipped paid/deployment steps; no new generation or pilot re-arm |
+| Artifact-review workflow | SKIPPED AFTER GATE | Run `35180849210` skipped model retrieval and private artifact upload |
+| Existing release secrets | SYNCHRONIZED BY UNCHANGED WORKFLOW | Existing GitHub environment values synchronized server-side; no new credentials supplied or disclosed. Configuration is not generation evidence |
+| PR #28 | NOT MERGED / NOT DEPLOYED | Remains a draft at observed head `65e1e5cb413502d4b6f17248c5396870252a94d8`; must reconcile with updated main and rerun CI before any later approved merge |
+| Contest submission | NOT PERFORMED | This is a scoped production repair, not a new contest-rules or final-readiness decision |
 
-Verification run: https://github.com/teslaeco/WORLDIFACT/actions/runs/35177256931
+Release logs: https://github.com/teslaeco/WORLDIFACT/actions/runs/35180772180
 
-The regression suite checks the exact original URL, absence of iframe/legacy form, no query/token forwarding, repeated effect setup causing only one navigation, no automatic ancestor navigation, denied-navigation fallback, five-world links and no paid/storage side effects. Existing safety checks remain in place. The previous iframe assertion was replaced because the owner-reported failure changes the intended product behavior; it was not removed to conceal a failure.
+Main CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35180772209
 
-The user may still need to sign in to the existing account on the original Studio page. Do not tell the user that Oracle was reconnected or that all generation/quality issues are resolved merely because entry no longer uses a frame.
+Final PR CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35177396129
 
-Background on the session hypothesis, not device evidence: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value . SameSite rules distinguish top-level navigation from cross-site iframe requests.
+The Shop regression tests exercise the actual component and captured effect: exact destination, no token/query forwarding, effect replay once, no automatic ancestor navigation, denied-navigation fallback, five-world links and no generation/storage side effects. They are not authenticated device tests.
 
-## Release boundary
+## Preservation and follow-up
 
-Publish only PR #29 under the applicable approval, not the wider PR #28 or its upstream source changes. Keep all native paid gates/markers unchanged. Record the actual merge SHA and final production deployment/smoke outcome after release. Authenticated device use remains separate from HTTP/static checks. No bypass of prior browser/security restrictions is allowed.
+Only PR #29's four-file patch was released. No hosted generator or saved model was deleted, migrated or replaced by a GitHub snapshot. The former `forge-studio-public` exporter is not the destination. The prior iframe-first task document is superseded only for Shop entry; the canonical generator URL is unchanged.
 
-Historical iframe-first instructions in `docs/CODEX_TASK_FROGE_HOSTED_GENERATOR.md` are superseded for the Shop entry by PR #29. The canonical generator URL is not superseded.
+PR #28's five-pass quality and English work remains separate. Its later source already incorporates no-iframe behavior, but the observed PR is not mergeable against the new main and still needs reconciliation, fresh CI and its own release authorization. Do not restore the failed iframe while resolving those differences.
 
-## Historical production and review evidence
+## Historical evidence
 
-The complete previous production ledger is preserved at:
-https://github.com/teslaeco/WORLDIFACT/blob/495a6524d7b597403eefd5b62bfbf8ee9fedc4e0/docs/CONTEST_STATUS.md
+Pre-release ledger: https://github.com/teslaeco/WORLDIFACT/blob/3f22fe5a8b4844d1415a35a622c061a9c19d48d2/docs/CONTEST_STATUS.md
 
-PR #27 merged `e2446816708783532a26c2c949c733e19ca84e96` and deployed in run `35154269208`; public HTML/assets/DEMO smoke passed. Its 102 tests and HTTP 200 probe did not prove authenticated iframe usability. Owner device evidence now demonstrates that missing gate.
+Earlier production ledger: https://github.com/teslaeco/WORLDIFACT/blob/495a6524d7b597403eefd5b62bfbf8ee9fedc4e0/docs/CONTEST_STATUS.md
 
-The paid pilot workflows skipped their paid/re-arm steps on that release. This fix changes neither those markers nor their configuration. Review-only English/model improvements remain on PR #28 and separate upstream branches. Their GitHub snapshots are not assumed identical to the current hosted Studio.
+PR #27 was deployed as `e2446816708783532a26c2c949c733e19ca84e96` in run `35154269208`. Its successful HTTP smoke did not prove iframe session usability; the subsequent owner screenshots exposed that gap. PR #29 removes the embedded entry instead of disguising the authentication failure as an older model version.
 
 ## Truth boundary
 
-Keep source saved, CI passed, deployed, authenticated session and actual generation as separate facts. Removing an iframe does not translate the external UI, restore an account, install a new model, improve texture detail or establish manufacturing readiness. Preserve the original generator and all saved user work.
+Keep source saved, tests passed, production deployed, account access and actual generation separate. Removing an iframe does not translate the external UI, restore Oracle, install a newer generator, improve model/texture fidelity or establish manufacturing readiness. No new paid generation or competition submission occurred in this release.
