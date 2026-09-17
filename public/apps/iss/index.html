@@ -1,58 +1,57 @@
 <!doctype html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#101b27">
-  <meta name="description" content="Załóż skafander, zabierz torbę i naprawiaj. Interaktywna gra 3D FORGE na historycznym modelu ISS NASA, z autorskim wnętrzem treningowym.">
-  <title>Fix ISS · Astronauta w służbie napraw</title>
+  <meta name="description" content="Suit up, collect your tool bag and make repairs. A FORGE interactive 3D training game using NASA's historical ISS model and an original training interior.">
+  <title>Fix ISS · Astronaut on repair duty</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23101b27'/%3E%3Ccircle cx='32' cy='31' r='19' fill='%23ece7dc'/%3E%3Crect x='18' y='22' width='28' height='17' rx='8' fill='%23e19b53'/%3E%3Cpath d='M23 52h18' stroke='%23ece7dc' stroke-width='6'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./style.css">
   <script type="importmap">{"imports":{"three":"./vendor/build/three.module.js"}}</script>
 </head>
 <body>
- <main id="view" aria-label="Symulator napraw ISS">
-  <div id="loading" class="loading"><span class="loader-orbit"></span><strong>Przygotowanie astronauty…</strong><p>Najpierw torba. Potem naprawy.</p></div>
+ <main id="view" aria-label="ISS repair simulator">
+  <div id="loading" class="loading"><span class="loader-orbit"></span><strong>Preparing the astronaut…</strong><p>First the tool bag. Then the repairs.</p></div>
   <div id="goal-dot" hidden aria-hidden="true"><span></span></div>
  </main>
  <header class="topbar">
-  <div class="brand"><span class="brand-mark" aria-hidden="true">✦</span><div><strong>FIX <em>ISS</em></strong><small>FORGE / NAPRAWIAMY</small></div></div>
-  <div class="zone-block"><span class="status-light"></span><span id="zone">WNĘTRZE TRENINGOWE</span></div>
-  <div class="header-actions"><button id="missions" class="mission-button">Zadania <b id="completed">0 / 8</b></button><button id="help" class="icon-button" title="Sterowanie i informacje" aria-label="Sterowanie i informacje">?</button></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true">✦</span><div><strong>FIX <em>ISS</em></strong><small>FORGE / REPAIR TEAM</small></div></div>
+  <div class="zone-block"><span class="status-light"></span><span id="zone">TRAINING INTERIOR</span></div>
+  <div class="header-actions"><button id="missions" class="mission-button">Tasks <b id="completed">0 / 8</b></button><button id="help" class="icon-button" title="Controls and information" aria-label="Controls and information">?</button></div>
  </header>
- <aside class="navigation-card panel" aria-label="Nawigacja">
-  <div class="eyebrow">CEL WYPRAWY <span id="goal-arrow" aria-hidden="true">➜</span></div>
-  <strong id="goal-name">Torba z narzędziami</strong>
-  <span id="goal-distance" class="distance">2,6 m</span>
-  <div class="quick-goals"><button id="quick-bag" title="Prowadź do torby">Torba</button><button id="quick-suit" title="Prowadź do skafandra">Skafander</button><button id="quick-earth" title="Prowadź do komputera Terra">Terra</button><button id="quick-airlock" title="Prowadź do śluzy">Śluza</button></div>
+ <aside class="navigation-card panel" aria-label="Navigation">
+  <div class="eyebrow">MISSION TARGET <span id="goal-arrow" aria-hidden="true">➜</span></div>
+  <strong id="goal-name">Tool bag</strong>
+  <span id="goal-distance" class="distance">2.6 m</span>
+  <div class="quick-goals"><button id="quick-bag" title="Navigate to the tool bag">Tool bag</button><button id="quick-suit" title="Navigate to the suit">Suit</button><button id="quick-earth" title="Navigate to the Terra computer">Terra</button><button id="quick-airlock" title="Navigate to the airlock">Airlock</button></div>
  </aside>
- <aside class="telemetry panel" aria-label="Wyposażenie astronauty"><div class="eyebrow">ASTRONAUTA / 01</div><span id="suit-status">UBRANIE POKŁADOWE</span><div class="oxygen-line"><span>O₂ <small>zapas w grze</small></span><strong id="oxygen">—</strong></div></aside>
- <div class="view-controls"><button id="view-toggle">Widok: postać</button><button id="map" aria-pressed="false">Mapa <kbd>M</kbd></button></div>
- <div class="world-note"><span id="map-loading">Model ISS…</span><button id="retry" hidden>Ponów pobieranie</button><span id="safety-note">Uproszczony układ wnętrza, inspirowany ISS.</span></div>
- <section class="interaction panel" aria-label="Bieżąca czynność">
-  <div class="interaction-copy"><strong id="interaction-title">Podejdź do torby</strong><p id="interaction-detail">WASD · poruszanie / przeciągnij · kamera</p></div>
-
-  <div id="torque" hidden><div class="torque-heading"><span id="torque-label">Puść w zielonym zakresie.</span><b id="torque-value">0%</b></div><div class="torque-track"><span class="torque-target"></span><span id="torque-fill"></span><i class="torque-start"></i><i class="torque-end"></i></div><small>Wskaźnik gry 65–85% · bez rzeczywistych wartości momentu</small></div>
+ <aside class="telemetry panel" aria-label="Astronaut equipment"><div class="eyebrow">ASTRONAUT / 01</div><span id="suit-status">CABIN CLOTHING</span><div class="oxygen-line"><span>O₂ <small>in-game supply</small></span><strong id="oxygen">—</strong></div></aside>
+ <div class="view-controls"><button id="view-toggle">View: character</button><button id="map" aria-pressed="false">Map <kbd>M</kbd></button></div>
+ <div class="world-note"><span id="map-loading">ISS model…</span><button id="retry" hidden>Retry download</button><span id="safety-note">Simplified interior layout inspired by the ISS.</span></div>
+ <section class="interaction panel" aria-label="Current action">
+  <div class="interaction-copy"><strong id="interaction-title">Approach the tool bag</strong><p id="interaction-detail">WASD · move / drag · camera</p></div>
+  <div id="torque" hidden><div class="torque-heading"><span id="torque-label">Release in the green zone.</span><b id="torque-value">0%</b></div><div class="torque-track"><span class="torque-target"></span><span id="torque-fill"></span><i class="torque-start"></i><i class="torque-end"></i></div><small>Game indicator: 65–85% · not a real torque measurement</small></div>
  </section>
- <button id="action" class="action-button" disabled aria-label="Wykonaj czynność; przytrzymaj przy dokręcaniu"><kbd>E</kbd><span>WYKONAJ</span></button>
- <div id="message" class="message" role="status" aria-live="polite">Podejdź do pomarańczowej torby i naciśnij E.</div>
+ <button id="action" class="action-button" disabled aria-label="Perform action; hold while tightening"><kbd>E</kbd><span>ACT</span></button>
+ <div id="message" class="message" role="status" aria-live="polite">Approach the orange tool bag and press E.</div>
  <footer id="inventory-drawer" class="inventory-drawer">
-  <div class="inventory-heading"><button id="inventory-toggle" aria-expanded="false">Torba <span aria-hidden="true">⌄</span></button><span><strong id="bag-status">TORBA NIEZABRANA</strong><small>W DŁONI: <b id="selected-tool">Ręce</b></small></span><div class="save-actions"><button id="save" title="Pobierz plik z postępem">Zapisz</button><button id="load" title="Wczytaj plik z postępem">Wczytaj</button><input id="load-file" type="file" accept=".json,application/json" hidden></div></div>
-  <div id="inventory" class="inventory" aria-label="Narzędzia i części"></div>
-  <p class="keyboard-help"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ruch <span>·</span> <kbd>Space</kbd> w górę <kbd>Ctrl</kbd> w dół <span>·</span> <kbd>0–8</kbd> ekwipunek <span>·</span> <kbd>R</kbd> powrót do wejścia</p>
+  <div class="inventory-heading"><button id="inventory-toggle" aria-expanded="false">Tool bag <span aria-hidden="true">⌄</span></button><span><strong id="bag-status">TOOL BAG NOT COLLECTED</strong><small>IN HAND: <b id="selected-tool">Hands</b></small></span><div class="save-actions"><button id="save" title="Download a progress file">Save</button><button id="load" title="Load a progress file">Load</button><input id="load-file" type="file" accept=".json,application/json" hidden></div></div>
+  <div id="inventory" class="inventory" aria-label="Tools and parts"></div>
+  <p class="keyboard-help"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move <span>·</span> <kbd>Space</kbd> up <kbd>Ctrl</kbd> down <span>·</span> <kbd>0–8</kbd> inventory <span>·</span> <kbd>R</kbd> return to entrance</p>
  </footer>
- <div class="touch-controls" aria-label="Sterowanie dotykowe">
-  <div class="joystick-wrap"><div id="joystick" aria-label="Joystick ruchu: przeciągnij i przytrzymaj"><div class="joystick-cross" aria-hidden="true"></div><div id="joystick-knob" aria-hidden="true"></div></div><span>RUCH</span></div>
-  <div class="vertical-pad"><button data-move="Space" aria-label="Leć w górę"><b>↑</b><span>GÓRA</span></button><button data-move="KeyQ" aria-label="Leć w dół"><b>↓</b><span>DÓŁ</span></button></div>
-  <span class="look-hint">Przeciągnij scenę, aby się rozejrzeć</span>
+ <div class="touch-controls" aria-label="Touch controls">
+  <div class="joystick-wrap"><div id="joystick" aria-label="Movement joystick: drag and hold"><div class="joystick-cross" aria-hidden="true"></div><div id="joystick-knob" aria-hidden="true"></div></div><span>MOVE</span></div>
+  <div class="vertical-pad"><button data-move="Space" aria-label="Fly up"><b>↑</b><span>UP</span></button><button data-move="KeyQ" aria-label="Fly down"><b>↓</b><span>DOWN</span></button></div>
+  <span class="look-hint">Drag the scene to look around</span>
  </div>
- <dialog id="missions-dialog"><div class="dialog-top"><div><span class="eyebrow">DZIENNIK EKSPEDYCJI</span><h1>Osiem napraw.<br>Jedna wspólna stacja.</h1></div><button data-close class="icon-button" aria-label="Zamknij">×</button></div><p>Wybierz zadanie, aby ustawić cel. Doleć do stanowiska, wybierz narzędzie i wykonaj wskazane czynności.</p><div id="missions-list"></div><p class="muted">Zadania i części są autorskim scenariuszem treningowym FORGE. Nie przedstawiają listy aktualnych awarii ISS.</p></dialog>
- <dialog id="help-dialog"><div class="dialog-top"><div><span class="eyebrow">FORGE / UCZYMY SIĘ NAPRAWIAĆ</span><h1>Małe czynności.<br>Wielka odpowiedzialność.</h1></div><button data-close class="icon-button" aria-label="Zamknij">×</button></div>
-  <p><strong>Na początek:</strong> doleć do pomarańczowej torby, zabierz ją przyciskiem WYKONAJ lub klawiszem <kbd>E</kbd> i otwórz dziennik zadań. Skafander czeka w ostatnim pomieszczeniu, za dwoma włazami otwieranymi przez <kbd>E</kbd>.</p>
-  <div class="help-grid"><div><strong>Ruch w 3D</strong><p>Na telefonie użyj dużego joysticka po lewej. Małe wychylenie daje wolniejszy ruch. Przyciski GÓRA i DÓŁ zmieniają wysokość. Na komputerze: WASD, Space i Ctrl/Q. Shift przyspiesza EVA.</p></div><div><strong>Kamera</strong><p>Przeciągaj scenę prawym kciukiem, jednocześnie prowadząc postać lewym. Dwa palce lub kółko zmieniają odległość. Kamera pokazuje całą postać, a przesłaniające ją ściany stają się przezroczyste. V zmienia widok, M pokazuje mapę.</p></div><div><strong>Narzędzia</strong><p>Dotknij Torba, wybierz narzędzie i naciśnij WYKONAJ w zasięgu stanowiska. Śruby: przytrzymaj przycisk i puść w zielonym zakresie. Na komputerze działają również klawisze 0–8 oraz E.</p></div><div><strong>Postęp i części</strong><p>Naprawy zużywają części z torby. Przy miejscu jej odbioru uzupełnisz zapas. Zapisz pobiera plik postępu; Wczytaj przywraca go w bezpiecznym miejscu wewnątrz.</p></div></div>
-  <h2>Model i ćwiczenia</h2><p>Zewnętrzna mapa korzysta z <a href="https://science.nasa.gov/resource/international-space-station-3d-model/" target="_blank" rel="noopener">modelu ISS NASA / Visualization Technology Applications and Development</a>. To konfiguracja historyczna: zawiera Pirs, nie obejmuje Nauki, Priczału ani iROSA.</p>
-  <p>Wnętrze, astronauta, narzędzia i pomarańczowe stanowiska są modelami autorskimi. Lewa rękawica obejmuje uchwyt torby czterema palcami i kciukiem; prawa obsługuje narzędzie. Wnętrze jest uproszczone. Rozdzielnia z kasetą F-A, ćwiczenia szczelności, wskaźnik dokręcenia, tlen i cykl śluzy służą nauce przez zabawę; nie są procedurami operacyjnymi ISS. Linka pokazuje połączenie ze śluzą, bez symulacji jej naprężeń.</p>
-  <p><strong>Idea projektu:</strong> poznawać technikę utrzymania stacji i rozmawiać o ochronie jej dziedzictwa. Wyniki gry nie rozstrzygają, czy zachowanie całej ISS na orbicie jest technicznie możliwe.</p>
-  <div class="asset-links"><a href="./assets/astronaut-forge.glb" download>Astronauta 3D (.glb)</a><a href="./assets/interior-training.glb" download>Wnętrze 3D (.glb)</a></div>
+ <dialog id="missions-dialog"><div class="dialog-top"><div><span class="eyebrow">EXPEDITION LOG</span><h1>Eight repairs.<br>One shared station.</h1></div><button data-close class="icon-button" aria-label="Close">×</button></div><p>Select a task to set your target. Fly to the workstation, choose a tool and follow the indicated steps.</p><div id="missions-list"></div><p class="muted">The tasks and parts belong to an original FORGE training scenario. They do not represent a list of current ISS failures.</p></dialog>
+ <dialog id="help-dialog"><div class="dialog-top"><div><span class="eyebrow">FORGE / LEARNING TO REPAIR</span><h1>Small actions.<br>Great responsibility.</h1></div><button data-close class="icon-button" aria-label="Close">×</button></div>
+  <p><strong>Getting started:</strong> fly to the orange tool bag, collect it with ACT or <kbd>E</kbd>, then open the task log. The suit is in the last room, beyond two hatches opened with <kbd>E</kbd>.</p>
+  <div class="help-grid"><div><strong>Moving in 3D</strong><p>On a phone, use the large joystick on the left. A small movement gives a slower speed. UP and DOWN change altitude. On a computer: WASD, Space and Ctrl/Q. Shift increases EVA speed.</p></div><div><strong>Camera</strong><p>Drag the scene with your right thumb while moving the character with your left. Pinch or use the wheel to zoom. The camera shows the whole character; obstructing walls become transparent. V changes the view and M opens the map.</p></div><div><strong>Tools</strong><p>Open Tool bag, select a tool and press ACT within range of the workstation. For bolts, hold the button and release in the green zone. Keyboard controls also include 0–8 and E.</p></div><div><strong>Progress and parts</strong><p>Repairs consume parts from the bag. Refill supplies where you collected it. Save downloads a progress file; Load restores it at a safe position inside the station.</p></div></div>
+  <h2>Model and exercises</h2><p>The exterior map uses the <a href="https://science.nasa.gov/resource/international-space-station-3d-model/" target="_blank" rel="noopener">NASA / Visualization Technology Applications and Development ISS model</a>. This historical configuration includes Pirs but does not include Nauka, Prichal or iROSA.</p>
+  <p>The interior, astronaut, tools and orange workstations are original models. The left glove grips the bag handle with four fingers and a thumb; the right hand operates the tool. The interior is simplified. The F-A training switchboard, leak-test exercises, tightening indicator, oxygen and airlock cycle support learning through play; they are not ISS operating procedures. The tether illustrates a connection to the airlock without simulating its tension.</p>
+  <p><strong>Project idea:</strong> explore station maintenance and discuss protecting its heritage. Game results do not determine whether preserving the entire ISS in orbit is technically feasible.</p>
+  <div class="asset-links"><a href="./assets/astronaut-forge.glb" download>3D astronaut (.glb)</a><a href="./assets/interior-training.glb" download>3D training interior (.glb)</a></div>
  </dialog>
  <dialog id="earth-dialog" aria-labelledby="earth-title">
   <div class="earth-toolbar"><div><span class="eyebrow">EARTH OBSERVATION · REAL IMAGE SOURCES</span><h1 id="earth-title">Mission: the Nile River</h1></div><button data-close>← Back to the station</button><a href="/" target="_top">← Back to WORLDIFACT</a></div>

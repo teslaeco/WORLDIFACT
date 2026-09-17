@@ -29,10 +29,10 @@ function safe(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
 function progress(){return TASKS.filter(t=>state.tasks[t.id].done).length;}
 function goals(){return [
- {id:'earth-console',name:'Komputer Terra — rzeka Nil',zone:'inside',pos:earthConsolePos},
- {id:'bag',name:state.bag?'Magazynek części':'Torba z narzędziami',zone:'inside',pos:bagPos},
- {id:'suit',name:'Szafka ze skafandrem',zone:'inside',pos:suitPos},
- {id:'airlock',name:state.zone==='inside'?'Śluza — wyjście':'Śluza — powrót',zone:state.zone,pos:state.zone==='inside'?airlockPos:EXIT},
+ {id:'earth-console',name:'Terra computer — Nile River',zone:'inside',pos:earthConsolePos},
+ {id:'bag',name:state.bag?'Parts rack':'Tool bag',zone:'inside',pos:bagPos},
+ {id:'suit',name:'EVA suit locker',zone:'inside',pos:suitPos},
+ {id:'airlock',name:state.zone==='inside'?'Airlock — exit':'Airlock — return',zone:state.zone,pos:state.zone==='inside'?airlockPos:EXIT},
  ...TASKS
  ];}
 function syncVisuals(){
@@ -54,68 +54,68 @@ function syncVisuals(){
 }
 function drawInventory(){
  $('inventory').innerHTML=ITEMS.map(i=>`<button data-item="${i.id}" class="slot ${state.selected===i.id?'selected':''}" ${!state.bag&&i.id!=='hand'?'disabled':''} title="${safe(i.name)}"><kbd>${i.key}</kbd><span>${i.abbr}</span>${state.items[i.id]!==undefined?`<b>${state.items[i.id]}</b>`:''}</button>`).join('');
- $('bag-status').textContent=state.bag?`TORBA · zużyte części: ${state.used}`:'TORBA NIEZABRANA';
+ $('bag-status').textContent=state.bag?`BAG · parts used: ${state.used}`:'BAG NOT COLLECTED';
  $('selected-tool').textContent=nameOf(state.selected);
- $('inventory-toggle').setAttribute('aria-label','Otwórz ekwipunek. Wybrano: '+nameOf(state.selected));
+ $('inventory-toggle').setAttribute('aria-label','Open inventory. Selected: '+nameOf(state.selected));
 }
 function drawMissions(){
- $('missions-list').innerHTML=TASKS.map((t,i)=>{const s=state.tasks[t.id],count=t.kind==='torque'?t.count:t.steps.length;return `<button class="mission ${selectedGoal===t.id?'targeted':''} ${s.done?'done':''}" data-goal="${t.id}"><span class="mission-index">${s.done?'✓':String(i+1).padStart(2,'0')}</span><span><strong>${safe(t.name)}</strong><small>${t.zone==='inside'?'WNĘTRZE':'EVA'} · ${s.step}/${count}</small></span><span class="aim">⌖</span></button>`;}).join('');
+ $('missions-list').innerHTML=TASKS.map((t,i)=>{const s=state.tasks[t.id],count=t.kind==='torque'?t.count:t.steps.length;return `<button class="mission ${selectedGoal===t.id?'targeted':''} ${s.done?'done':''}" data-goal="${t.id}"><span class="mission-index">${s.done?'✓':String(i+1).padStart(2,'0')}</span><span><strong>${safe(t.name)}</strong><small>${t.zone==='inside'?'INTERIOR':'EVA'} · ${s.step}/${count}</small></span><span class="aim">⌖</span></button>`;}).join('');
  $('completed').textContent=progress()+' / '+TASKS.length;
- if(progress()===TASKS.length)say('8/8 — wszystkie ćwiczenia ukończone. Zapisz postęp i wróć przez śluzę.');
+ if(progress()===TASKS.length)say('8/8 — all training tasks complete. Save your progress and return through the airlock.');
 }
 function updateHUD(){
  if(!ready)return;
- $('zone').textContent=state.zone==='inside'?'WNĘTRZE TRENINGOWE':'ZEWNĘTRZNA MAPA ISS';
- $('suit-status').textContent=state.suit?'SKAFANDER ZAŁOŻONY':'UBRANIE POKŁADOWE';
+ $('zone').textContent=state.zone==='inside'?'TRAINING INTERIOR':'EXTERIOR ISS MAP';
+ $('suit-status').textContent=state.suit?'EVA SUIT ON':'CABIN CLOTHING';
  $('oxygen').textContent=state.zone==='outside'?Math.ceil(state.oxygen)+'%':'—';
  $('message').textContent=state.message;
  const p=astronaut.group.position;
  const goal=goals().find(g=>g.id===selectedGoal);
- if(goal){const same=goal.zone===state.zone,d=tmp.fromArray(goal.pos).distanceTo(p);$('goal-name').textContent=goal.name;$('goal-distance').textContent=same?d.toFixed(1)+' m':goal.zone==='outside'?'Przejdź przez śluzę':'Wróć do wnętrza';
+ if(goal){const same=goal.zone===state.zone,d=tmp.fromArray(goal.pos).distanceTo(p);$('goal-name').textContent=goal.name;$('goal-distance').textContent=same?d.toFixed(1)+' m':goal.zone==='outside'?'Go through the airlock':'Return inside';
   if(same){tmp.fromArray(goal.pos).project(showMap?mapCam:camera);const inView=tmp.z<1&&Math.abs(tmp.x)<.93&&Math.abs(tmp.y)<.83;
    $('goal-dot').hidden=!inView;$('goal-dot').style.left=(tmp.x*.5+.5)*100+'%';$('goal-dot').style.top=(-tmp.y*.5+.5)*100+'%';
    $('goal-arrow').style.transform=`rotate(${Math.atan2(tmp.x,-tmp.y)*180/Math.PI+90}deg)`;
   }else $('goal-dot').hidden=true;
  }
  document.body.classList.toggle('eva',state.zone==='outside');
- if(cycle){$('interaction-title').textContent='Cykl śluzy';$('interaction-detail').textContent='Uproszczone przejście treningowe…';$('action').disabled=true;return;}
+ if(cycle){$('interaction-title').textContent='Airlock cycle';$('interaction-detail').textContent='Simplified training transition…';$('action').disabled=true;return;}
  $('action').disabled=!nearest||paused||showMap;
  if(nearest){$('interaction-title').textContent=nearest.name;let detail=nearest.hint;
-  if(nearest.task){const r=requirement(state,nearest.id);detail=r.done?'Naprawa zakończona':`${r.hold?(isTouch?'Przytrzymaj przycisk':'Przytrzymaj E'):(isTouch?'Wykonaj':'E')} · ${r.label} · ${nameOf(r.tool)}`;}
+  if(nearest.task){const r=requirement(state,nearest.id);detail=r.done?'Repair complete':`${r.hold?(isTouch?'Hold the button':'Hold E'):(isTouch?'Perform':'E')} · ${r.label} · ${nameOf(r.tool)}`;}
   $('interaction-detail').textContent=detail;
- }else{$('interaction-title').textContent='Doleć do stanowiska';$('interaction-detail').textContent=isTouch?'Lewy kciuk: ruch · przeciągnij scenę: kamera':'WASD: lot · Space / Ctrl: góra, dół · przeciągnij: kamera';}
- $('safety-note').textContent=state.zone==='inside'?'Uproszczony układ wnętrza, inspirowany ISS.':'NASA VTAD: konfiguracja historyczna. Stanowiska naprawcze FORGE są treningowe.';
+ }else{$('interaction-title').textContent='Fly to a station';$('interaction-detail').textContent=isTouch?'Left thumb: move · drag scene: camera':'WASD: move · Space / Ctrl: up, down · drag: camera';}
+ $('safety-note').textContent=state.zone==='inside'?'Simplified interior layout inspired by the ISS.':'NASA VTAD: historical configuration. FORGE repair stations are training simulations.';
 }
 function findNearest(){
  if(!astronaut)return;const p=astronaut.group.position,candidates=[];
  const add=(id,name,pos,hint,task=false)=>{const d=tmp.fromArray(pos).distanceTo(p);if(d<2.35)candidates.push({id,name,pos,hint,task,d});};
  if(state.zone==='inside'){
-  add('earth-console','Komputer Terra — rzeka Nil',earthConsolePos,'E · otwórz obserwacje Ziemi');
-  add('bag',state.bag?'Magazynek części':'Torba z narzędziami',bagPos,state.bag?'E · uzupełnij zapas części':'E · zabierz torbę');
-  add('suit','Skafander EVA',suitPos,state.suit?'E · sprawdź wyposażenie':'E · załóż skafander');
-  for(const d of interior.doors)add('door'+d.z,'Właz między modułami',[0,0,d.z],state.doors[d.z]?'E · zamknij właz':'E · otwórz właz');
-  add('airlock','Śluza EVA',airlockPos,'E · rozpocznij wyjście na zewnątrz');
- }else add('airlock','Śluza EVA',EXIT,'E · wróć do wnętrza');
+  add('earth-console','Terra computer — Nile River',earthConsolePos,'E · open Earth observation');
+  add('bag',state.bag?'Parts rack':'Tool bag',bagPos,state.bag?'E · refill parts':'E · collect bag');
+  add('suit','EVA suit',suitPos,state.suit?'E · check equipment':'E · put on suit');
+  for(const d of interior.doors)add('door'+d.z,'Module hatch',[0,0,d.z],state.doors[d.z]?'E · close hatch':'E · open hatch');
+  add('airlock','EVA airlock',airlockPos,'E · begin exterior transition');
+ }else add('airlock','EVA airlock',EXIT,'E · return inside');
  for(const t of TASKS.filter(t=>t.zone===state.zone&&!state.tasks[t.id].done))add(t.id,t.name,t.pos,'',true);
  nearest=candidates.sort((a,b)=>a.d-b.d)[0]||null;
 }
 function chooseTool(id){try{const r=selectItem(state,id);if(!r.ok)say(r.message);toolId=null;drawInventory();syncVisuals();updateHUD();if(r.ok&&isTouch)setInventory(false);}catch(e){say(e.message);}}
 function beginAction(){
  if(!ready||paused||showMap||cycle||holding)return;
- findNearest();if(!nearest){say('Zbliż się do torby, włazu lub stanowiska.');return;}
+ findNearest();if(!nearest){say('Move closer to the bag, hatch, or training station.');return;}
  const n=nearest;
  if(n.id==='earth-console'){paused=true;resetKeys();$('earth-dialog').showModal();if(!$('earth-frame').getAttribute('src'))$('earth-frame').src='/apps/terra/index.html?mission=nile';return;}
  if(n.id==='bag'){if(state.bag)refill(state);else{takeBag(state);selectedGoal='rack';}toolId=null;drawInventory();syncVisuals();return;}
  if(n.id==='suit'){equipSuit(state);selectedGoal='airlock';syncVisuals();return;}
- if(n.id.startsWith('door')){const z=Number(n.id.slice(4));if(state.doors[z]&&Math.abs(astronaut.group.position.z-z)<1.1){say('Odsuń się od otworu przed zamknięciem włazu.');return;}state.doors[z]=!state.doors[z];syncVisuals();say(state.doors[z]?'Właz otwarty.':'Właz zamknięty.');return;}
+ if(n.id.startsWith('door')){const z=Number(n.id.slice(4));if(state.doors[z]&&Math.abs(astronaut.group.position.z-z)<1.1){say('Move away from the opening before closing the hatch.');return;}state.doors[z]=!state.doors[z];syncVisuals();say(state.doors[z]?'Hatch open.':'Hatch closed.');return;}
  if(n.id==='airlock'){
-  if(state.zone==='inside'&&!outsideReady){say('Mapa zewnętrzna jeszcze się wczytuje. Poczekaj na zakończenie pobierania.');return;}
-  if(state.zone==='inside'&&!canExit(state)){say('Weź torbę i załóż skafander w szafce przy śluzie.');return;}
-  cycle={end:performance.now()+2500,to:state.zone==='inside'?'outside':'inside'};velocity.set(0,0,0);say('Śluza wykonuje uproszczony cykl treningowy.');return;
+  if(state.zone==='inside'&&!outsideReady){say('The exterior map is still loading. Wait for the download to finish.');return;}
+  if(state.zone==='inside'&&!canExit(state)){say('Collect the tool bag and put on the EVA suit from the locker by the airlock.');return;}
+  cycle={end:performance.now()+2500,to:state.zone==='inside'?'outside':'inside'};velocity.set(0,0,0);say('The airlock is running a simplified training cycle.');return;
  }
  if(n.task){const r=requirement(state,n.id);
   if(r.hold){if(!state.bag||state.selected!==r.tool){perform(state,n.id,{distance:n.d,torque:0});return;}
-   holding={id:n.id,value:0,index:state.tasks[n.id].step};$('torque').hidden=false;$('torque-label').textContent=isTouch?'Trzymaj przycisk. Puść w zielonym zakresie.':'Przytrzymaj E. Puść w zakresie 65–85%.';
+   holding={id:n.id,value:0,index:state.tasks[n.id].step};$('torque').hidden=false;$('torque-label').textContent=isTouch?'Hold the button. Release in the green range.':'Hold E. Release in the 65–85% range.';
    const dir=tmp.fromArray(n.pos).sub(astronaut.group.position);astronaut.group.rotation.y=Math.atan2(-dir.x,-dir.z);
   }else{const result=perform(state,n.id,{distance:n.d});if(result.ok){workUntil=performance.now()+650;const dir=tmp.fromArray(n.pos).sub(astronaut.group.position);astronaut.group.rotation.y=Math.atan2(-dir.x,-dir.z);}syncVisuals();drawInventory();drawMissions();}
  }
@@ -125,8 +125,8 @@ function switchZone(zone){
  if(!enterZone(state,zone).ok)return;
  interior.group.visible=zone==='inside';exterior.group.visible=zone==='outside';if(nasa)nasa.visible=zone==='outside';earth.visible=stars.visible=zone==='outside';tether.visible=zone==='outside';
  resetKeys();cameraSnap=true;astronaut.group.position.fromArray(zone==='inside'?[0,-.55,25]:spawnOutside);velocity.set(0,0,0);camYaw=zone==='inside'?Math.PI:0;camPitch=.28;firstPerson=false;showMap=false;
- $('map').setAttribute('aria-pressed','false');$('view-toggle').textContent='Widok: postać';scene.background=new T.Color(zone==='inside'?0x0e2335:0x030916);
- state.doors[20]=false;syncVisuals();selectedGoal=zone==='outside'?'fuse':'bag';drawMissions();say(zone==='outside'?'EVA rozpoczęta. Pomarańczowe poręcze prowadzą do stanowisk treningowych.':'Jesteś wewnątrz. Postęp napraw i zawartość torby zachowano.');
+ $('map').setAttribute('aria-pressed','false');$('view-toggle').textContent='View: character';scene.background=new T.Color(zone==='inside'?0x0e2335:0x030916);
+ state.doors[20]=false;syncVisuals();selectedGoal=zone==='outside'?'fuse':'bag';drawMissions();say(zone==='outside'?'EVA started. Follow the orange handrails to the training stations.':'You are inside. Repair progress and bag contents are preserved.');
 }
 function movement(dt){
  if(paused||showMap||cycle){velocity.set(0,0,0);moveAmount=0;return;}
@@ -144,7 +144,7 @@ function movement(dt){
  if(state.zone==='inside'){
   next.x=T.MathUtils.clamp(next.x,-2.55,2.55);next.y=T.MathUtils.clamp(next.y,-1.02,.82);next.z=T.MathUtils.clamp(next.z,.42,27.52);
   for(const d of interior.doors)if(!state.doors[d.z]&&Math.abs(next.z-d.z)<.6){next.z=p.z<d.z?d.z-.61:d.z+.61;velocity.z=0;}
- }else if(next.length()>150){next.copy(p);velocity.set(0,0,0);say('Granica obszaru treningowego. R przywraca pozycję przy śluzie.');}
+ }else if(next.length()>150){next.copy(p);velocity.set(0,0,0);say('Training-area boundary. Press R to return to the airlock entry point.');}
  p.copy(next);
  if(velocity.x**2+velocity.z**2>.04&&!holding){const target=Math.atan2(-velocity.x,-velocity.z),delta=T.MathUtils.euclideanModulo(target-astronaut.group.rotation.y+Math.PI,2*Math.PI)-Math.PI;astronaut.group.rotation.y+=delta*Math.min(1,dt*8);}
 }
@@ -154,7 +154,7 @@ function animate(dt,now){
  document.body.classList.toggle('working',!!holding);
  if(cycle&&now>=cycle.end){const to=cycle.to;cycle=null;switchZone(to);}
  movement(dt);
- if(state.zone==='outside'&&!paused&&!showMap){state.oxygen=Math.max(0,state.oxygen-dt*.035);if(state.oxygen===0){switchZone('inside');say('Zapas symulatora wyczerpany. Ćwiczenie EVA zakończono i przeniesiono astronautę do śluzy.');}}
+ if(state.zone==='outside'&&!paused&&!showMap){state.oxygen=Math.max(0,state.oxygen-dt*.035);if(state.oxygen===0){switchZone('inside');say('The simulator reserve is depleted. EVA training ended and the astronaut was returned to the airlock.');}}
  if(holding){holding.value=Math.min(1.08,holding.value+dt*.38);$('torque-fill').style.width=Math.min(100,holding.value*100)+'%';$('torque-value').textContent=Math.round(holding.value*100)+'%';
   const t=TASKS.find(t=>t.id===holding.id),obj=(t.zone==='inside'?interior:exterior).tasks[t.id],b=obj.bolts[holding.index];if(b){b.rotateOnWorldAxis(new T.Vector3(0,0,1).applyQuaternion(obj.group.quaternion),dt*9);b.position.z=b.userData.initialZ-holding.value*.02;}
  }
@@ -206,7 +206,7 @@ document.addEventListener('keydown',e=>{
  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
  keys.add(e.code);if(e.repeat)return;
  if(e.code==='KeyE')beginAction();if(e.code==='KeyV')toggleView();if(e.code==='KeyM')toggleMap();if(e.code==='KeyI')setInventory(!$('inventory-drawer').classList.contains('expanded'));
- if(e.code==='KeyR'&&ready){resetKeys();cameraSnap=true;astronaut.group.position.fromArray(state.zone==='inside'?spawnInside:spawnOutside);velocity.set(0,0,0);say('Powrót do punktu wejścia. Postęp zachowany.');}
+ if(e.code==='KeyR'&&ready){resetKeys();cameraSnap=true;astronaut.group.position.fromArray(state.zone==='inside'?spawnInside:spawnOutside);velocity.set(0,0,0);say('Returned to the entry point. Progress preserved.');}
  const i=ITEMS.find(i=>'Digit'+i.key===e.code);if(i)chooseTool(i.id);
 });
 document.addEventListener('keyup',e=>{keys.delete(e.code);if(e.code==='KeyE')endAction();});
@@ -219,17 +219,17 @@ $('inventory').addEventListener('click',e=>{const b=e.target.closest('[data-item
 $('missions-list').addEventListener('click',e=>{const b=e.target.closest('[data-goal]');if(b){selectedGoal=b.dataset.goal;drawMissions();$('missions-dialog').close();paused=false;showMap=false;say(TASKS.find(t=>t.id===selectedGoal).detail);}});
 $('quick-bag').onclick=()=>{selectedGoal=state.zone==='inside'?'bag':'airlock';updateHUD();};
 $('quick-suit').onclick=()=>{selectedGoal=state.zone==='inside'?'suit':'airlock';updateHUD();};
-$('quick-earth').onclick=()=>{selectedGoal=state.zone==='inside'?'earth-console':'airlock';say('Doleć do komputera Terra w pierwszym module i naciśnij E lub WYKONAJ.');updateHUD();};
+$('quick-earth').onclick=()=>{selectedGoal=state.zone==='inside'?'earth-console':'airlock';say('Fly to the Terra computer in the first module and press E or PERFORM.');updateHUD();};
 $('quick-airlock').onclick=()=>{selectedGoal='airlock';updateHUD();};
-function toggleView(){cameraSnap=true;firstPerson=!firstPerson;showMap=false;$('view-toggle').textContent=firstPerson?'Widok: oczy':'Widok: postać';$('map').setAttribute('aria-pressed','false');}
-function toggleMap(){resetKeys();showMap=!showMap;firstPerson=false;astronaut.group.visible=true;$('view-toggle').textContent='Widok: postać';$('map').setAttribute('aria-pressed',String(showMap));if(showMap)say('Mapa poglądowa. Naciśnij M, aby wrócić do astronauty.');}
+function toggleView(){cameraSnap=true;firstPerson=!firstPerson;showMap=false;$('view-toggle').textContent=firstPerson?'View: eyes':'View: character';$('map').setAttribute('aria-pressed','false');}
+function toggleMap(){resetKeys();showMap=!showMap;firstPerson=false;astronaut.group.visible=true;$('view-toggle').textContent='View: character';$('map').setAttribute('aria-pressed',String(showMap));if(showMap)say('Overview map. Press M to return to the astronaut.');}
 $('view-toggle').onclick=toggleView;$('map').onclick=toggleMap;
 $('missions').onclick=()=>{paused=true;resetKeys();drawMissions();$('missions-dialog').showModal();};
 $('help').onclick=()=>{paused=true;resetKeys();$('help-dialog').showModal();};
 for(const d of [$('help-dialog'),$('missions-dialog'),$('earth-dialog')]){d.addEventListener('close',()=>{resetKeys();paused=false;});d.querySelector('[data-close]').onclick=()=>d.close();}
-$('save').onclick=()=>download(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),'Fix_ISS_postep_v2.json');
+$('save').onclick=()=>download(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),'Fix_ISS_progress_v2.json');
 $('load').onclick=()=>$('load-file').click();
-$('load-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>100000)throw Error('Plik jest za duży.');const data=JSON.parse(await f.text());if(data.version!==2)throw Error('To nie jest zapis gry v2.');state=restoreState(data);switchZone('inside');astronaut.group.position.fromArray(spawnInside);toolId=null;syncVisuals();drawInventory();drawMissions();say('Wczytano postęp napraw i ekwipunek.');}catch(err){say('Nie wczytano pliku: '+err.message);}e.target.value='';};
+$('load-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>100000)throw Error('The file is too large.');const data=JSON.parse(await f.text());if(data.version!==2)throw Error('This is not a version 2 game save.');state=restoreState(data);switchZone('inside');astronaut.group.position.fromArray(spawnInside);toolId=null;syncVisuals();drawInventory();drawMissions();say('Repair progress and inventory loaded.');}catch(err){say('Could not load file: '+err.message);}e.target.value='';};
 for(const b of document.querySelectorAll('[data-move]')){
  let id=null;
  b.onpointerdown=e=>{if(id!==null)return;e.preventDefault();id=e.pointerId;b.setPointerCapture(id);keys.add(b.dataset.move);b.classList.add('pressed');};
@@ -253,14 +253,14 @@ const releaseLook=e=>{lookTouches.delete(e.pointerId);if(drag?.id===e.pointerId)
 for(const type of ['pointerup','pointercancel','lostpointercapture'])view.addEventListener(type,releaseLook);
 view.addEventListener('wheel',e=>{e.preventDefault();camDistance=T.MathUtils.clamp(camDistance+e.deltaY*.004,4.6,9);},{passive:false});
 async function loadNASA(){
- $('map-loading').hidden=false;$('map-loading').textContent='ISS NASA: pobieranie modelu…';
+ $('map-loading').hidden=false;$('map-loading').textContent='NASA ISS: loading model…';
  new GLTFLoader().load('./assets/iss-nasa.glb',gltf=>{
   nasa=gltf.scene;nasa.name='NASA_VTAD_ISS_HISTORICAL';nasa.visible=state.zone==='outside';scene.add(nasa);nasa.updateMatrixWorld(true);
-  $('map-loading').textContent='ISS NASA: przygotowanie kolizji…';
+  $('map-loading').textContent='NASA ISS: preparing collision…';
   new GLTFLoader().load('./assets/iss-collision.glb',collision=>{
-   setTimeout(()=>{try{outsideTree=new Octree().fromGraphNode(collision.scene);outsideReady=true;$('map-loading').textContent='MAPA ISS GOTOWA';$('map-loading').classList.add('ready');}catch(e){say('Model otwarto, ale nie udało się przygotować kolizji. Wyjście EVA jest wstrzymane.');$('map-loading').textContent='Błąd kolizji mapy';}},30);
-  },undefined,()=>{say('Nie pobrano warstwy kolizji. Ponów pobieranie mapy.');$('map-loading').textContent='Błąd pobierania kolizji';$('retry').hidden=false;});
- },e=>{if(e.lengthComputable)$('map-loading').textContent=`ISS NASA: ${Math.floor(e.loaded/e.total*100)}%`;},err=>{console.error(err);$('map-loading').textContent='Nie pobrano mapy ISS';$('retry').hidden=false;});
+   setTimeout(()=>{try{outsideTree=new Octree().fromGraphNode(collision.scene);outsideReady=true;$('map-loading').textContent='ISS MAP READY';$('map-loading').classList.add('ready');}catch(e){say('The model opened, but collision setup failed. EVA exit is paused.');$('map-loading').textContent='Map collision error';}},30);
+  },undefined,()=>{say('The collision layer could not be loaded. Retry the ISS map.');$('map-loading').textContent='Collision download error';$('retry').hidden=false;});
+ },e=>{if(e.lengthComputable)$('map-loading').textContent=`NASA ISS: ${Math.floor(e.loaded/e.total*100)}%`;},err=>{console.error(err);$('map-loading').textContent='ISS map could not be loaded';$('retry').hidden=false;});
 }
 $('retry').onclick=()=>{
  $('retry').hidden=true;
@@ -280,9 +280,9 @@ function registerTools(){
  if(!document.modelContext?.registerTool)return;
  const controller=new AbortController();
  const tools=[
- {name:'read_iss_game_state',title:'Stan gry ISS',description:'Odczytaj strefę, pozycję astronauty, ekwipunek, najbliższe stanowisko i postęp napraw.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:()=>({zone:state.zone,position:astronaut.group.position.toArray(),bag:state.bag,suit:state.suit,selected:state.selected,items:state.items,tasks:state.tasks,nearest:nearest?.id||null})},
- {name:'select_iss_tool',title:'Wybierz narzędzie',description:'Wybierz dostępne narzędzie w tym samym ekwipunku co gracz. Nie wykonuje naprawy.',inputSchema:{type:'object',properties:{item:{type:'string',enum:ITEMS.map(i=>i.id)}},required:['item'],additionalProperties:false},execute:input=>{if(!input||typeof input.item!=='string'||Object.keys(input).some(k=>k!=='item'))throw Error('Nieprawidłowe dane');const r=selectItem(state,input.item);toolId=null;syncVisuals();drawInventory();return {...r,selected:state.selected};}},
- {name:'set_iss_navigation_goal',title:'Ustaw cel nawigacji',description:'Wskaż istniejące stanowisko lub śluzę. Nie teleportuje astronauty i nie wykonuje napraw.',inputSchema:{type:'object',properties:{goal:{type:'string',enum:['bag','suit','airlock','earth-console',...TASKS.map(t=>t.id)]}},required:['goal'],additionalProperties:false},execute:input=>{if(!input||!goals().some(g=>g.id===input.goal)||Object.keys(input).some(k=>k!=='goal'))throw Error('Nieprawidłowy cel');selectedGoal=input.goal;drawMissions();updateHUD();return {goal:selectedGoal};}}
+ {name:'read_iss_game_state',title:'ISS game state',description:'Read the current zone, astronaut position, inventory, nearest station, and repair progress.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:()=>({zone:state.zone,position:astronaut.group.position.toArray(),bag:state.bag,suit:state.suit,selected:state.selected,items:state.items,tasks:state.tasks,nearest:nearest?.id||null})},
+ {name:'select_iss_tool',title:'Select tool',description:'Select an available tool from the same inventory used by the player. Does not perform a repair.',inputSchema:{type:'object',properties:{item:{type:'string',enum:ITEMS.map(i=>i.id)}},required:['item'],additionalProperties:false},execute:input=>{if(!input||typeof input.item!=='string'||Object.keys(input).some(k=>k!=='item'))throw Error('Invalid input');const r=selectItem(state,input.item);toolId=null;syncVisuals();drawInventory();return {...r,selected:state.selected};}},
+ {name:'set_iss_navigation_goal',title:'Set navigation goal',description:'Select an existing station or airlock as the navigation target. Does not teleport the astronaut or perform repairs.',inputSchema:{type:'object',properties:{goal:{type:'string',enum:['bag','suit','airlock','earth-console',...TASKS.map(t=>t.id)]}},required:['goal'],additionalProperties:false},execute:input=>{if(!input||!goals().some(g=>g.id===input.goal)||Object.keys(input).some(k=>k!=='goal'))throw Error('Invalid goal');selectedGoal=input.goal;drawMissions();updateHUD();return {goal:selectedGoal};}}
  ];
  for(const t of tools)try{Promise.resolve(document.modelContext.registerTool(t,{signal:controller.signal})).catch(()=>{});}catch{}
  window.addEventListener('pagehide',()=>controller.abort(),{once:true});
@@ -290,7 +290,7 @@ function registerTools(){
 function init(){
  try{
   scene=new T.Scene();scene.background=new T.Color(0x0e2335);camera=new T.PerspectiveCamera(72,1,.06,1800);camera.position.set(0,1.45,-.4);
-  renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.65));renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.92;renderer.outputColorSpace=T.SRGBColorSpace;view.prepend(renderer.domElement);renderer.domElement.setAttribute('aria-label','Mapa 3D i sterowany astronauta');
+  renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.65));renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.92;renderer.outputColorSpace=T.SRGBColorSpace;view.prepend(renderer.domElement);renderer.domElement.setAttribute('aria-label','3D map and controllable astronaut');
   scene.add(new T.HemisphereLight(0xd4eeff,0x334353,2.3));const sun=new T.DirectionalLight(0xfff1d1,2.3);sun.position.set(-25,50,35);scene.add(sun);
   const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
   interior=makeInterior();exterior=makeExteriorTraining();scene.add(interior.group,exterior.group);exterior.group.visible=false;
@@ -305,6 +305,6 @@ function init(){
   const resize=()=>{const w=view.clientWidth,h=view.clientHeight;renderer.setSize(w,h);camera.aspect=mapCam.aspect=w/h;camera.updateProjectionMatrix();mapCam.updateProjectionMatrix();};new ResizeObserver(resize).observe(view);resize();
   ready=true;$('loading').hidden=true;syncVisuals();drawInventory();drawMissions();registerTools();loadNASA();
   renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.04);last=now;animate(dt,now);});
- }catch(e){console.error(e);$('loading').innerHTML='<strong>Nie udało się uruchomić grafiki 3D.</strong><p>Włącz obsługę WebGL lub otwórz grę w aktualnej przeglądarce.</p><small>'+safe(e.message)+'</small>';}
+ }catch(e){console.error(e);$('loading').innerHTML='<strong>3D graphics could not start.</strong><p>Enable WebGL or open the game in an up-to-date browser.</p><small>'+safe(e.message)+'</small>';}
 }
 init();

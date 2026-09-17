@@ -3,18 +3,31 @@ description: Build pinned owner repositories and preserve their assets and licen
 runs:
   using: composite
   steps:
+    - name: Resolve reviewed foundation revisions
+      id: pins
+      shell: bash
+      run: |
+        node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+        import { readFileSync } from 'node:fs'
+        const pins = JSON.parse(readFileSync('config/foundation-sources.json', 'utf8'))
+        for (const name of ['chess', 'terra']) {
+          const value = pins[name]?.commit
+          if (!/^[0-9a-f]{40}$/.test(value || '')) throw new Error(`Invalid ${name} foundation commit`)
+          console.log(`${name}=${value}`)
+        }
+        NODE
     - name: Check out the existing Chess Cube engine
       uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         repository: teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer
-        ref: e134964e9c8b7edc43c26b508973f6fb658af90d
+        ref: ${{ steps.pins.outputs.chess }}
         path: .upstream/chess
         persist-credentials: false
     - name: Check out the existing Terra frontend and published evidence
       uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         repository: Terraforming-Planet/Polar-Sun-Moon-Analysis
-        ref: ae90f7367587e0973782c470cde3f5103c0540fc
+        ref: ${{ steps.pins.outputs.terra }}
         path: .upstream/terra
         persist-credentials: false
         sparse-checkout: |

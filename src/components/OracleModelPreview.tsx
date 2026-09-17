@@ -1,34 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ACESFilmicToneMapping,
-  Box3,
-  Color,
-  DirectionalLight,
-  PerspectiveCamera,
-  PMREMGenerator,
-  Scene,
-  Vector3,
-  WebGLRenderer,
-  type Group,
+  ACESFilmicToneMapping, Box3, Color, DirectionalLight, PerspectiveCamera,
+  PMREMGenerator, Scene, WebGLRenderer, type Group,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { disposeObject } from '../lib/worldGeometry'
+import { createModelSlot } from '../lib/modelSlot'
+import { frameModel, type ModelBounds, type ModelView } from '../lib/modelFraming'
 
-type View = 'all' | 'face' | 'clothes' | 'shoes' | 'back'
 type Props = { url: string; label?: string }
 
-/**
- * WORLDIFACT adaptation of the proven MCP2/Froge AiModelViewer interaction.
- * Source: teslaeco/Froge-MPC-2-test/src/components/AiModelViewer.tsx (MIT).
- * The generated GLB stays in memory and is never downloaded automatically.
- */
+/** WORLDIFACT viewer; the externally hosted Froge generator is not modified. */
 export default function OracleModelPreview({ url, label = 'Generated 3D model' }: Props) {
+  return <ModelPreviewSession key={JSON.stringify([url, label])} url={url} label={label} />
+}
+
+function ModelPreviewSession({ url, label }: { url: string; label: string }) {
   const host = useRef<HTMLDivElement>(null)
-  const fitView = useRef<((view?: View) => void) | null>(null)
+  const fitView = useRef<((view?: ModelView) => void) | null>(null)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('Loading generated GLB…')
   const [person, setPerson] = useState(false)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const element = host.current
@@ -36,14 +31,17 @@ export default function OracleModelPreview({ url, label = 'Generated 3D model' }
     let disposed = false
     let renderer: WebGLRenderer
     let model: Group | null = null
-
+    let isPerson = false
+    const slot = createModelSlot<Group>(loaded => {
+      loaded.removeFromParent()
+      disposeObject(loaded)
+    })
     try {
       renderer = new WebGLRenderer({ antialias: true, alpha: false })
     } catch {
       setError('WebGL is unavailable on this device. The GLB can still be downloaded explicitly.')
       return
     }
-
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     renderer.setClearColor(new Color('#070e18'))
     renderer.toneMapping = ACESFilmicToneMapping
@@ -55,7 +53,6 @@ export default function OracleModelPreview({ url, label = 'Generated 3D model' }
     const camera = new PerspectiveCamera(40, 1, 0.001, 100000)
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
-
     const pmrem = new PMREMGenerator(renderer)
     const room = new RoomEnvironment()
     const environment = pmrem.fromScene(room, 0.04)
@@ -63,7 +60,6 @@ export default function OracleModelPreview({ url, label = 'Generated 3D model' }
     scene.environmentIntensity = 0.6
     room.dispose()
     pmrem.dispose()
-
     const key = new DirectionalLight(0xfff4e8, 1.5)
     key.position.set(3, 4, 5)
     scene.add(key)
@@ -71,56 +67,45 @@ export default function OracleModelPreview({ url, label = 'Generated 3D model' }
     fill.position.set(-3, 1, -3)
     scene.add(fill)
 
-    let box = new Box3()
-    let center = new Vector3()
-    let size = new Vector3(1, 1, 1)
-    let max = 1
+    let bounds: ModelBounds | null = null
+    let preset: ModelView = 'all'
+    let framed = false
+    let preserveUserOrbit = false
+    const interactionStarted = () => { preserveUserOrbit = true }
+    controls.addEventListener('start', interactionStarted)
 
-    const fit = (view: View = 'all') => {
-      if (!model) return
-      const vertical = camera.fov * Math.PI / 360
-      const horizontal = Math.atan(Math.tan(vertical) * camera.aspect)
-      const framing = box.clone()
-      if (person && view !== 'all' && view !== 'back') {
-        const [low, high, breadth] = view === 'face' ? [0.8, 1, 0.38] : view === 'shoes' ? [0, 0.2, 0.85] : [0.38, 0.84, 1]
-        framing.min.y = box.min.y + size.y * low
-        framing.max.y = box.min.y + size.y * high
-        framing.min.x = center.x - size.x * breadth / 2
-        framing.max.x = center.x + size.x * breadth / 2
-      }
-      const target = framing.getCenter(new Vector3())
-      const direction = new Vector3(view === 'face' ? 0.12 : 0.55, view === 'shoes' ? 0.7 : 0.18, view === 'back' ? -1.7 : 1.7).normalize()
-      const right = new Vector3(0, 1, 0).cross(direction).normalize()
-      const up = direction.clone().cross(right).normalize()
-      let distance = 0
-      for (const x of [framing.min.x, framing.max.x]) for (const y of [framing.min.y, framing.max.y]) for (const z of [framing.min.z, framing.max.z]) {
-        const offset = new Vector3(x, y, z).sub(target)
-        distance = Math.max(
-          distance,
-          Math.abs(offset.dot(right)) / Math.tan(horizontal) + offset.dot(direction),
-          Math.abs(offset.dot(up)) / Math.tan(vertical) + offset.dot(direction),
-        )
-      }
-      controls.minDistance = Math.max(max * 0.08, 0.001)
-      controls.maxDistance = Math.max(max * 12, 1)
-      controls.target.copy(target)
-      camera.position.copy(target).add(direction.multiplyScalar(Math.max(distance * 1.12, max * 0.8)))
-      camera.near = Math.max(max / 1000, 0.0001)
-      camera.far = Math.max(max * 100, 100)
+    const fit = (view: ModelView) => {
+      if (!model || !bounds) return
+      const frame = frameModel(bounds, camera.aspect, camera.getEffectiveFOV(), view, isPerson)
+      // Finish old damping before applying a preset so residual drag cannot move it.
+      const damping = controls.enableDamping
+      controls.enableDamping = false
+      controls.update()
+      controls.minDistance = frame.minDistance
+      controls.maxDistance = frame.maxDistance
+      controls.target.set(...frame.target)
+      camera.position.set(...frame.position)
+      camera.near = frame.near
+      camera.far = frame.far
       camera.updateProjectionMatrix()
       controls.update()
+      controls.enableDamping = damping
+      framed = true
     }
-    fitView.current = fit
-
-    let framed = false
+    fitView.current = (view = 'all') => {
+      preset = view
+      preserveUserOrbit = false
+      fit(view)
+    }
     const resize = () => {
-      const width = element.clientWidth
-      const height = element.clientHeight
+      const width = element.clientWidth, height = element.clientHeight
       if (!width || !height) return
       renderer.setSize(width, height, false)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
-      if (!framed && model) { fit(); framed = true }
+      // Refit the selected preset on orientation/layout changes, but do not
+      // discard a manually chosen orbit/zoom because a phone keyboard resized UI.
+      if (model && (!framed || !preserveUserOrbit)) fit(preset)
     }
     const observer = new ResizeObserver(resize)
     observer.observe(element)
@@ -128,62 +113,65 @@ export default function OracleModelPreview({ url, label = 'Generated 3D model' }
 
     const loader = new GLTFLoader()
     loader.load(url, gltf => {
-      if (disposed) return
+      if (!slot.replace(gltf.scene)) return
       model = gltf.scene
-      let isPerson = false
       model.traverse(object => { if (object.userData.froge_kind === 'person') isPerson = true })
+      const box = new Box3().setFromObject(model)
+      bounds = { min: box.min.toArray(), max: box.max.toArray() }
+      try {
+        // Validate before rendering; input geometry/materials are never rescaled.
+        frameModel(bounds, camera.aspect, camera.getEffectiveFOV())
+      } catch {
+        slot.dispose()
+        model = null
+        bounds = null
+        setError('The GLB has empty or invalid bounds. The source artifact was not modified.')
+        return
+      }
       setPerson(isPerson)
       scene.add(model)
-      box = new Box3().setFromObject(model)
-      center = box.getCenter(new Vector3())
-      size = box.getSize(new Vector3())
-      max = Math.max(size.x, size.y, size.z, 0.001)
       framed = false
       resize()
-      fit()
-      setStatus('LIVE · GENERATED-UNREVIEWED GLB loaded in the browser')
+      setReady(true)
+      setStatus('GENERATED-UNREVIEWED GLB loaded in the browser; visual review is still required.')
     }, undefined, () => {
       if (!disposed) setError('The generated GLB could not be rendered. The artifact remains available for explicit download.')
     })
-
     renderer.setAnimationLoop(() => {
       controls.update()
       renderer.render(scene, camera)
     })
-
     return () => {
       disposed = true
       observer.disconnect()
       renderer.setAnimationLoop(null)
+      controls.removeEventListener('start', interactionStarted)
       controls.dispose()
       environment.dispose()
-      if (model) {
-        scene.remove(model)
-        model.traverse(object => {
-          const mesh = object as { geometry?: { dispose?: () => void }; material?: unknown }
-          mesh.geometry?.dispose?.()
-          const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []
-          for (const material of materials) (material as { dispose?: () => void }).dispose?.()
-        })
-      }
+      slot.dispose()
+      model = null
       renderer.dispose()
       renderer.domElement.remove()
       fitView.current = null
     }
-  }, [url, label, person])
+  }, [url, label])
 
   return <div className="oracle-model-preview">
     <div ref={host} className="oracle-model-canvas" />
     <p role="status" className="result-note">{error || status}</p>
     <div className="scene-toolbar" aria-label="Generated model views">
-      <button onClick={() => fitView.current?.('all')}>Whole model</button>
+      <button disabled={!ready} onClick={() => fitView.current?.('all')}>Whole model</button>
+      <button disabled={!ready} onClick={() => fitView.current?.('front')}>Front</button>
+      <button disabled={!ready} onClick={() => fitView.current?.('left')}>Left side</button>
+      <button disabled={!ready} onClick={() => fitView.current?.('right')}>Right side</button>
+      <button disabled={!ready} onClick={() => fitView.current?.('back')}>Back</button>
       {person ? <>
-        <button onClick={() => fitView.current?.('face')}>Face</button>
-        <button onClick={() => fitView.current?.('clothes')}>Clothes</button>
-        <button onClick={() => fitView.current?.('shoes')}>Shoes</button>
-        <button onClick={() => fitView.current?.('back')}>Back</button>
+        <button disabled={!ready} onClick={() => fitView.current?.('face')}>Face</button>
+        <button disabled={!ready} onClick={() => fitView.current?.('clothes')}>Clothes</button>
+        <button disabled={!ready} onClick={() => fitView.current?.('shoes')}>Shoes</button>
       </> : null}
       <span className="result-note">Drag to rotate · pinch to zoom</span>
     </div>
+    <small className="result-note">Views use the model’s authored +Y up / +Z front axes. Character detail regions are approximate. Switching views does not regenerate or alter the model.</small>
   </div>
 }
