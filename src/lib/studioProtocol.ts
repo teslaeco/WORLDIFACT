@@ -1,6 +1,6 @@
 // WORLDIFACT adapter to the existing Froge /v1/jobs contract; no new AI provider.
 // Reviewed reference: Froge-MPC-2-test @ d3f61b842dcfeda2ed794210caafc391919a75be.
-import { MANUFACTURING_HARD_RULES } from './shopManufacturing'
+import { MANUFACTURING_HARD_RULES } from './shopManufacturing.js'
 
 export const STUDIO_BODY_LIMIT = 9 * 1024 * 1024
 export const STUDIO_MODEL_LIMIT = 48 * 1024 * 1024
