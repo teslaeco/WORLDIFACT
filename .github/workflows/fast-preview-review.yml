@@ -1,0 +1,60 @@
+name: Review FAST draft worker (no paid API)
+on:
+  pull_request:
+    paths:
+      - 'tools/fast_preview/**'
+      - 'docs/CODEX_TASK_FAST_PREVIEW.md'
+      - '.github/workflows/fast-preview-review.yml'
+      - 'src/lib/generationProfile.ts'
+      - 'tests/generation-profile.test.ts'
+permissions:
+  contents: read
+concurrency:
+  group: fast-draft-review-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .upstream/fast-froge
+          persist-credentials: false
+      - name: Assemble a new output from hash-verified sources
+        run: python3 tools/fast_preview/apply.py .upstream/fast-froge/oracle_connector .fast-review/worker
+      - name: Compile all patched Python
+        run: python3 -m compileall -q .fast-review/worker
+      - name: FAST profile, artifact identity and actual local HTTP regressions
+        env:
+          FROGE_PATCH_ROOT: ${{ github.workspace }}/.fast-review/worker
+        run: python3 tools/fast_preview/test_fast_preview.py -v
+      - name: Preserve existing STANDARD control-plane behavior
+        working-directory: .fast-review/worker
+        run: python3 -m unittest test_blender_mcp test_agent_execution test_agent_lifecycle test_connector test_mcp_snapshot test_validation_preflight -v
+      - name: Source package manifest only, not an Oracle installation
+        run: |
+          cp .upstream/fast-froge/LICENSE .fast-review/FROGE_LICENSE
+          cp tools/fast_preview/README.md .fast-review/README.md
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+          root=Path('.fast-review')
+          manifest={}
+          with zipfile.ZipFile('WORLDIFACT-fast-draft-review.zip','w',zipfile.ZIP_DEFLATED) as output:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file() and '__pycache__' not in path.parts and 'state' not in path.parts and path.suffix != '.pyc':
+                      data=path.read_bytes();name=path.relative_to(root).as_posix()
+                      output.writestr(name,data);manifest[name]=hashlib.sha256(data).hexdigest()
+              output.writestr('SHA256.json',json.dumps(manifest,indent=2))
+          print('Review source package built; no production install, no provider request.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: worldifact-fast-draft-review-${{ github.event.pull_request.head.sha }}
+          path: WORLDIFACT-fast-draft-review.zip
+          if-no-files-found: error
+          retention-days: 14
