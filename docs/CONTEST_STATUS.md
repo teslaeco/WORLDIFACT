@@ -7,21 +7,23 @@ The owner requested five bounded continuations to preserve the existing hosted F
 | Item | Status | Evidence / remaining work |
 |---|---|---|
 | Existing hosted Froge integration | DEPLOYED / UNCHANGED | PR #27, application merge `e2446816708783532a26c2c949c733e19ca84e96`; production `/shop` still embeds/links the exact original Studio |
-| Continuations completed | 2 OF 5 | Continuation 1 translated ISS and fixed preview lifetime. Continuation 2 added source-aware English enforcement, fixed one real Chess runtime literal and strengthened Blender export evidence |
+| Continuations completed | 3 OF 5 | Continuation 1 translated ISS/fixed preview lifetime; continuation 2 added source-aware English enforcement, Chess fix and Blender export evidence; continuation 3 translated a bounded real Terra static/runtime batch upstream |
 | ISS English | SOURCE IMPLEMENTED / TESTED | Static UI, eight repairs/tools/state messages, dynamic HUD/actions/errors, canvas signs and Model Context tool copy are English; IDs/save schema/mechanics preserved |
 | Native WORLDIFACT / AI Game Lab English | SOURCE GUARDED | `index.html`, Home, Portal, Shop, Workbench, Control, `P0GameLab` and portal definitions have English regression coverage |
 | Chess English | SOURCE FIX PREPARED / TESTED | Draft Chess PR #143, revision `705d7b0fe5fff03a5d7975fe094804af1eef44ea`, changes the remaining direct `Gracz online` fallback to `Online player`. Optional translated catalogs remain supported. Chess run `35167870190` passed typecheck/tests/build/smoke |
-| Terra main English presentation | VERIFIED MECHANISM / STATIC BACKLOG | Pin `ae90f7367587e0973782c470cde3f5103c0540fc`; main document is English and `contest-runtime.js` maps reviewed legacy UI phrases to English. Standalone pages such as `eclipse-live/gallery.html` remain genuinely Polish and must be translated upstream in later batches |
-| Foundation source pins | SINGLE SOURCE OF TRUTH | Composite foundation action now reads validated Chess/Terra SHAs from `config/foundation-sources.json`, fixing the duplicate hardcoded-pin failure exposed during this continuation |
-| 8 Planets English | WRAPPER ENGLISH / SOURCE BLOCKED | Records identify recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5`, but no editable GitHub source for it is exposed here. Cross-origin UI is not falsely labelled translated |
+| Terra main English presentation | VERIFIED MECHANISM | WORLDIFACT pin `ae90f7367587e0973782c470cde3f5103c0540fc`; main document is English and `contest-runtime.js` maps reviewed legacy UI phrases to English |
+| Terra standalone English | SOURCE BATCH PREPARED / TESTED | Draft Terra PR #271 head `4a34ce18fe552f19aaa2e604b50260ecba5b40c8` translates eclipse gallery, 404 and multi-angle form/runtime while preserving NOAA/Copernicus provenance and STAC semantics. Four review workflows pass. Many other static pages remain Polish |
+| Terra integration into WORLDIFACT | REVIEW REQUIRED | PR #271 is based on current Terra main `4d422e97121fda7199ce9320e0bba10a487cca42`, not the older WORLDIFACT pin. Direct repinning could import unrelated upstream changes and is intentionally deferred |
+| Foundation source pins | SINGLE SOURCE OF TRUTH | Composite foundation action reads validated Chess/Terra SHAs from `config/foundation-sources.json` |
+| 8 Planets English | WRAPPER ENGLISH / SOURCE BLOCKED | Records identify recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5`, but no editable canonical source is exposed here. Cross-origin UI is not falsely labelled translated |
 | Hosted Froge English | WRAPPER ENGLISH / CANONICAL SOURCE BLOCKED | Live Studio remains preserved. Reviewable GitHub source contains Polish product UI but is not proven identical to the hosted Site and is not deployed over it |
 | WORLDIFACT model preview reliability | SOURCE IMPLEMENTED / TESTED | Stale/late GLBs cannot replace the current model and shared PBR resources dispose once |
-| Froge texture/FBX evidence | DRAFT SOURCE PR / CI PASS | Froge PR #16 head `ab5b6523c45dfc45cddeffe35d979290a38d9d72`; run `35167461563` passed the no-paid Python/Codex/MCP/Blender workflow. Requested 4K/8K is separated from actual pixels and FBX is rejected if Blender cannot reopen it with finite geometry/material names/UV presence |
+| Froge texture/FBX evidence | DRAFT SOURCE PR / CI PASS | Froge PR #16 head `ab5b6523c45dfc45cddeffe35d979290a38d9d72`; run `35167461563` passed no-paid Python/Codex/MCP/Blender workflow. Requested 4K/8K is separated from actual pixels and FBX is rejected if Blender cannot reopen it with finite geometry/material names/UV presence |
 | Visual likeness / anatomy | NOT PROVEN | Hair/root continuity, face/neck/jaw/shoulder proportions, hands and controlled visual comparison still need canonical-source/runtime evidence; structural tests are not a likeness pass |
-| UV/PBR preservation | PARTIAL | GLB texture/UV checks plus real Blender FBX reimport now exist. FBX shader equivalence remains explicitly unverified |
-| Continuation-2 WORLDIFACT CI | PASS | Code head `8b53331195d22de1d2b1dd770fa92b698592ea76`, run `35168300680`: 114/114 tests, lint 9 warnings/0 errors, TS, HTTP smoke, build, reviewed foundation assembly, Worker dry-run and read-only hosted-Studio check all passed |
+| UV/PBR preservation | PARTIAL | GLB texture/UV checks plus real Blender FBX reimport exist. FBX shader equivalence remains explicitly unverified |
+| Latest WORLDIFACT code verification | PASS | Code head `8b53331195d22de1d2b1dd770fa92b698592ea76`, run `35168300680`: 114/114 tests, lint 9 warnings/0 errors, TS, HTTP smoke, build, reviewed foundation assembly, Worker dry-run and read-only hosted-Studio check passed |
 | New costs | NONE | No paid generation, GPU/API job, quota increase, secret change, Oracle install, order or private archive bypass |
-| Final contest release | NO-GO | Canonical hosted source/device generation, controlled visual quality, Terra/static + 8 Planets + live Froge localization and final submission/media checks remain incomplete |
+| Final contest release | NO-GO | Canonical hosted-source/device generation, controlled visual quality, remaining Terra/static + 8 Planets + live Froge localization and final submission/media checks remain incomplete |
 
 ## Correct generator boundary
 
@@ -33,26 +35,51 @@ WORLDIFACT `/shop` provides English navigation and permanent direct-open fallbac
 
 The reviewable GitHub source branch for Froge remains useful for source-only improvements but is not proven identical to the newer private Site. Source patches remain review-only until deliberately ported to the canonical runtime.
 
-## Continuation-2 verification notes
+## Continuation-3 Terra evidence
 
-The final green WORLDIFACT run is:
-https://github.com/teslaeco/WORLDIFACT/actions/runs/35168300680
+Draft upstream PR:
+https://github.com/Terraforming-Planet/Polar-Sun-Moon-Analysis/pull/271
 
-It verified the reviewed Chess revision `705d7b0...` and Terra revision `ae90f73...` through the foundation checkout/build path. Earlier red runs were not ignored: one exposed an over-broad localization scan that confused optional locale data with default UI, another exposed duplicate hardcoded foundation pins, and another exposed genuinely Polish standalone Terra HTML. The final implementation distinguishes these cases instead of weakening them into a false all-English claim.
+Final review head: `4a34ce18fe552f19aaa2e604b50260ecba5b40c8`.
+
+Changes translate real authored surfaces rather than wrapper text:
+
+- eclipse archive gallery document, controls, dynamic playback/facts/errors;
+- public 404 redirect copy;
+- multi-angle observation form, help, geocoder/search states, result labels and errors.
+
+Preserved evidence and behavior include the NOAA archive manifest path, NOAA source links, SHA-256/timestamp/log evidence, `/Polar-Sun-Moon-Analysis/` redirect target, Copernicus STAC endpoint and search geometry/query semantics.
+
+Final workflows all pass:
+
+- CI `35169328621`;
+- PR Validation `35169328579`;
+- Validate web application `35169328498`;
+- Validate Terra Observation Planet Site `35169328503`.
+
+Two earlier failures were treated as real diagnostics and corrected rather than bypassed: a Node filesystem regression test was initially placed under browser TypeScript compilation, and the existing Python gallery test still asserted the old Polish evidence sentence. The test was moved to a Node-side MJS file and the semantic assertion was translated while retaining all archived-manifest/source/hash/log requirements.
+
+### Pin boundary
+
+WORLDIFACT still uses reviewed Terra pin `ae90f7367587e0973782c470cde3f5103c0540fc`. Terra PR #271 is based on current Terra main `4d422e97121fda7199ce9320e0bba10a487cca42`. It is **not merged, deployed or automatically adopted by WORLDIFACT**. A direct pin jump could bring unrelated upstream changes; a later integration needs an explicit review/cherry-pick or deliberate pin decision.
+
+Many Terra standalone pages remain Polish, including eclipse observer/night-mode and casebook/forum/Copernicus/experiment/archive surfaces. This batch is not a full-Terra English claim.
+
+## Existing 3D quality evidence
 
 Froge PR #16 no-paid verification:
 https://github.com/teslaeco/Froge-MPC-2-test/actions/runs/35167461563
 
-This verifies source/runtime/export contracts using Python regression suites and real Blender 4.3 paths; it does not prove identity likeness or manufacturing readiness.
+This verifies source/runtime/export contracts using Python regressions and real Blender 4.3 paths. It separates requested texture size from real pixel evidence, checks GLB texture/UV properties and performs structural FBX reimport verification. It does not prove identity likeness, hair-root continuity, every PBR channel or manufacturing readiness.
 
 ## Remaining work
 
-1. Translate Terra standalone/static pages upstream in bounded batches; `web/public/eclipse-live/gallery.html` is a confirmed Polish example.
-2. Continue reviewable Froge English separately without claiming it changes the live hosted Site.
-3. Continue anatomy/garment quality only where real Blender validation exists: hair/root continuity, face/neck/jaw/shoulders, hands and intersections.
-4. Strengthen PBR/material evidence beyond structural FBX reimport without inventing shader equivalence.
-5. Translate 8 Planets only when real editable source access is restored.
-6. Keep WORLDIFACT PR #28, Chess PR #143 and Froge PR #16 unmerged/unpublished until explicit release approval. Continuation 5 will provide the consolidated Polish GO/NO-GO report.
+1. Add measurable Blender/source QA for hair-root/scalp continuity or another concrete anatomy/garment intersection property without claiming photographic likeness from a structural test.
+2. Strengthen PBR/material evidence beyond structural FBX reimport where technically verifiable.
+3. Continue Terra standalone/static English source in bounded upstream batches, then review how to integrate the source changes without an unsafe Terra pin jump.
+4. Continue reviewable Froge English separately without claiming it changes the live hosted Site.
+5. Translate 8 Planets only when real editable canonical source access is restored.
+6. Keep WORLDIFACT PR #28, Chess PR #143, Froge PR #16 and Terra PR #271 unmerged/unpublished until explicit release approval. Continuation 5 will provide the consolidated Polish GO/NO-GO report.
 
 ## Historical production evidence retained
 
