@@ -5,8 +5,11 @@ on:
     types: [completed]
 permissions:
   contents: read
+# Legacy P0 continuations share worldifact-production and can cancel pending
+# peers before a job exists. Keep this continuation independently serialized;
+# both source guards below still prevent deploying an obsolete main revision.
 concurrency:
-  group: worldifact-production
+  group: worldifact-native-studio-resume
   cancel-in-progress: false
 jobs:
   resume:
