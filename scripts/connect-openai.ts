@@ -23,6 +23,21 @@ export function checkDemoConfig(config: unknown) {
     fail("Automatic releases require the reviewed WORLDIFACT DEMO configuration. Paid activation needs a separate approved release.");
   }
 }
+export function checkDeployConfig(config: unknown) {
+  if (!isRecord(config) || config.name !== "worldifact" || !isRecord(config.vars) || config.vars.OPENAI_MODEL !== MODEL)
+    fail("WORLDIFACT deployment configuration is invalid.");
+  const vars = config.vars as Record<string, unknown>;
+  const demo = vars.ENABLE_PAID_GENERATION === "false" && vars.PUBLIC_PILOT === "false" &&
+    vars.ENABLE_ORACLE_JOBS === "false" && vars.GENERATION_REQUEST_LIMIT === "0" && vars.GENERATION_EXPIRES_AT === "";
+  const limit = Number(vars.GENERATION_REQUEST_LIMIT);
+  const expires = Date.parse(String(vars.GENERATION_EXPIRES_AT || ""));
+  const launch = vars.ENABLE_PAID_GENERATION === "true" && vars.PUBLIC_PILOT === "true" &&
+    vars.ENABLE_STUDIO_JOBS === "true" && vars.ENABLE_ORACLE_JOBS === "true" &&
+    Number.isSafeInteger(limit) && limit > 0 && limit <= 10_000 &&
+    Number.isFinite(expires) && expires > Date.now() && vars.ENABLE_APPROVED_FAST_TEST !== "true";
+  if (!demo && !launch) fail("Automatic deployment requires either the reviewed DEMO configuration or the explicitly approved public contest generation configuration.");
+}
+
 export function readSecretInputs(env: SecretInputs): WorkerSecrets | null {
   const key = env.OPENAI_API_KEY || "", access = env.GENERATION_ACCESS_TOKEN || "";
   if (!key) return null;
@@ -52,13 +67,13 @@ export async function connectOpenAI(env: SecretInputs, { fetcher = fetch, upload
   return { status: "CONFIGURED", reason: "Model access verified and Worker secrets synchronized. This is not LIVE generation evidence.", model: MODEL };
 }
 async function main() {
-  checkDemoConfig(JSON.parse(await readFile("wrangler.jsonc", "utf8")));
+  checkDeployConfig(JSON.parse(await readFile("wrangler.jsonc", "utf8")));
   const result = await connectOpenAI(process.env);
   console.log(`OpenAI connection: ${result.status}. ${result.reason}`);
-  if (result.status === "BLOCKED") console.log("::warning::OPENAI_API_KEY is missing. DEMO deployment continues; LIVE remains blocked.");
+  if (result.status === "BLOCKED") console.log("::warning::OPENAI_API_KEY is missing. Deployment continues, but LIVE generation remains blocked.");
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `status=${result.status}\n`);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY,
-    `## OpenAI connection: ${result.status}\n\n${result.reason}\n\nNo paid generation was requested. Connecting a key does not enable paid generation. A real LIVE pilot still needs an approved hard ceiling, expiry and reviewed public/preview access policy.\n`);
+    `## OpenAI connection: ${result.status}\n\n${result.reason}\n\nSecret/model access check only; this setup step sends no generation request. Runtime generation follows the reviewed Worker configuration, persistent request ceiling, rate limiter and expiry.\n`);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch(() => { console.error("::error::OpenAI setup failed. Check secure secrets, model permissions and DEMO configuration. No paid generation was requested; sensitive error details were suppressed."); process.exitCode = 1; });
