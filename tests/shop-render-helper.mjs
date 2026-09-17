@@ -12,21 +12,26 @@ import * as client from '../src/lib/studioClient.ts'
 import * as photos from '../src/lib/studioPhotos.ts'
 import * as archive from '../src/lib/studioArchive.ts'
 import * as view from '../src/lib/studioView.ts'
+import * as draft from '../src/lib/studioDraft.ts'
 import * as glb from '../src/lib/glb.ts'
 
-export async function loadShopComponent() {
+// Compile the actual checked-in component. Optional adapters isolate browser
+// storage, timers and server responses for lifecycle tests; no UI stub is used.
+export async function loadShopComponent({ react = React, adapters = {}, globals = {} } = {}) {
   const url = new URL('../src/pages/ShopPage.tsx', import.meta.url)
   const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, {
-    module, exports: module.exports,
+    ...globals, module, exports: module.exports,
     require(id) {
       const modules = { '../config/portals': portals, '../config/references': references,
-        '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive, '../lib/studioView': view, '../lib/glb': glb }
-      if (id in modules) return modules[id]
+        '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
+        '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb }
+      if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
       if (id.endsWith('.css')) return {}
-      if (['react', 'react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
+      if (id === 'react') return react
+      if (['react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
       throw new Error(`Unexpected Shop dependency: ${id}`)
     },
   }, { filename: url.pathname, timeout: 1000 })
