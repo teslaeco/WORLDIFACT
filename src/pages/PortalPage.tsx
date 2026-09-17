@@ -18,10 +18,11 @@ export default function PortalPage() {
   if (!app) return <Navigate to="/" replace />
 
   if (app.route === '/shop') return <>
-    <div className="portal-page">
-      <PortalAstraGenerator worldId="enchanted-ai-shop" title="Enchanted AI Shop" />
-    </div>
     <ShopPage />
+    <details className="portal-generator-drawer portal-page">
+      <summary>Create a world blueprint with GPT-6 Astra</summary>
+      <PortalAstraGenerator worldId="enchanted-ai-shop" title="Enchanted AI Shop" />
+    </details>
   </>
 
   const planets = app.route === '/planets'
@@ -49,7 +50,16 @@ export default function PortalPage() {
       {app.route === '/terra' && <Link to="/iss">← Return to the ISS station</Link>}
     </nav>
 
-    {app.route !== '/terra' && <PortalAstraGenerator worldId={worldId} title={app.title} />}
+    {app.route === '/terra' && <p className="foundation-note">
+      <strong>EARTH OBSERVATION</strong> · Check each image’s source and acquisition date. The ISS repair game is a separate simulation.
+    </p>}
+
+    {planets ? <PlanetsWorld /> : <div className="foundation-frame-shell world-primary-frame">
+      {loadedFrame !== app.frame && <p className="foundation-loading" role="status">Opening {app.title}…</p>}
+      <iframe key={app.frame} src={app.frame} title={app.title} className="foundation-frame"
+        allow="fullscreen; clipboard-write" allowFullScreen
+        onLoad={() => setLoadedFrame(app.frame)} />
+    </div>}
 
     {app.route === '/iss' && <section className="foundation-note" aria-label="ISS preservation mission">
       <strong>LIVE SIMULATION · PRESERVATION CONCEPT</strong>
@@ -59,17 +69,12 @@ export default function PortalPage() {
     </section>}
 
     {app.hosting === 'connected' && <p className="foundation-note">
-      Your original application opens below. If it asks you to sign in or does not appear,
-      use “Open original” to access your saved projects in a separate tab.
+      The reviewed application above is the primary world. Use “Open original” only for saved projects or features that require the separate original host.
     </p>}
-    {app.route === '/terra' && <p className="foundation-note">
-      <strong>EARTH OBSERVATION</strong> · Check each image’s source and acquisition date. The ISS repair game is a separate simulation.
-    </p>}
-    {planets ? <PlanetsWorld /> : <div className="foundation-frame-shell">
-      {loadedFrame !== app.frame && <p className="foundation-loading" role="status">Opening {app.title}…</p>}
-      <iframe key={app.frame} src={app.frame} title={app.title} className="foundation-frame"
-        allow="fullscreen; clipboard-write" allowFullScreen
-        onLoad={() => setLoadedFrame(app.frame)} />
-    </div>}
+
+    {app.route !== '/terra' && <details className="portal-generator-drawer">
+      <summary>Create inside this world with GPT-6 Astra</summary>
+      <PortalAstraGenerator worldId={worldId} title={app.title} />
+    </details>}
   </main>
 }
