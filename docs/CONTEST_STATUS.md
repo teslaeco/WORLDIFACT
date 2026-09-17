@@ -1,66 +1,57 @@
-# WORLDIFACT status — hosted Froge generator integration, 16 September 2026
+# WORLDIFACT status — 17 September 2026
 
-## Completed task
+## Current urgent task: remove the failed embedded Studio
 
-The owner identified **https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/** as the working generator and requested a complete Codex task plus execution of its integration into WORLDIFACT, before quality improvements.
+Owner Android screenshots `Screenshot_20260917-050429.png` and `Screenshot_20260917-050423.png` show the production Shop's embedded Froge UI asking the user to sign in again, unable to check its saved Oracle connection and displaying initial connection fields. Screenshots are user-supplied evidence; private browser session/response headers were not inspected.
 
-**PR #27 is merged and the external-generator integration is deployed.** Its earlier native prompt-only port was replaced, not promoted. No replacement generator, backend migration or quality improvement is claimed.
+The production source **already uses the exact original generator URL**:
 
-- PR: https://github.com/teslaeco/WORLDIFACT/pull/27
-- Reviewed head: `be9b00adc465c67fe5a02d2aa04b27fd392af2de`
-- Deployed application merge: `e2446816708783532a26c2c949c733e19ca84e96`
-- Production Shop: https://worldifact.xodobrox.workers.dev/shop
-- Complete implementation brief: [CODEX_TASK_FROGE_HOSTED_GENERATOR.md](CODEX_TASK_FROGE_HOSTED_GENERATOR.md)
+https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
 
-The implementation was executed directly through the connected GitHub tools. Writing the task file does not imply a separate Codex/Copilot cloud-agent run.
+This does not prove which hosted source revision that user received. A log-in error is not proof of an old deployment, erased connection or broken Oracle server. The literal old `forge-studio-public` brief-export site is not the active target.
 
-## Evidence matrix
+## Scoped repair
 
-| Item | Status | Evidence / boundary |
+PR: https://github.com/teslaeco/WORLDIFACT/pull/29
+
+Branch: `fix/shop-top-level-studio-20260917`, based only on production main `495a6524d7b597403eefd5b62bfbf8ee9fedc4e0`. The larger English/quality PR #28 is separate and has not been merged into this repair.
+
+| Item | Status | Evidence / limitation |
 |---|---|---|
-| Correct original generator | OWNER-IDENTIFIED / HTTP REACHABLE | Exact hosted Froge MPC 2 Studio URL above. Owner screenshots show prompt, multiple reference photos, Codex instructions, model viewer and export actions |
-| Hosted generation quality | UNREVIEWED / UNCHANGED | Owner screenshots also show working-result validation/quality failures. This integration does not improve or approve the models |
-| Source parity | UNKNOWN | `teslaeco/Froge-MPC-2-test` is a separate snapshot, not proof of parity with the current hosted Studio |
-| Revised Shop | DEPLOYED / HTTP-ASSET VERIFIED | Embeds the existing application; permanent full-generator and same-tab links appear above the frame |
-| Entry points | DEPLOYED / TESTED IN CODE | AI Shop remains `/shop`; `/chess/shop` redirects there; platform-centre originals and Game Lab original-Studio links use the canonical hosted URL |
-| Absolute placeholder overlay | REMOVED FROM ACTIVE SHOP | No generic `.webgl-fallback`, native replacement form, fake job status or native generation API call in ShopPage |
-| Public hosted HTTP access | VERIFIED HTTP 200 | Credential-free HEAD in PR CI at 21:44:34 UTC returned 200 with no frame-ancestors directive reported. No login redirect was followed and no generation was requested |
-| Authenticated Studio / actual iframe / Android | UNKNOWN | HTTP success and server-render tests do not prove cross-origin sign-in, iframe usability, upload or a fresh generation. Permanent direct-open alternatives remain visible independently of the frame |
-| PR verification | PASS | Run `35153954093`: 102/102 tests; lint, typecheck, HTTP smoke, production build, foundations and Worker dry-run passed. Nine existing lint warnings, zero errors |
-| Post-merge verification | PASS | Main run `35154269149` completed successfully for merge `e244681...` |
-| Cloudflare production deployment | PASS | Run `35154269208`, job `104989846163`; deploy completed and public HTML/assets/DEMO API smoke passed at 21:48:13 UTC |
-| Paid-pilot re-arm | NOT EXECUTED | Shop pilot run `35154374131` skipped all arming/deployment steps after the marker gate. P0 pilot run `35154374091` also skipped its paid execution step |
-| Cost and existing Studio data | NO GENERATION REQUESTED BY THIS TASK | No new paid job, quota increase, model download, job deletion or private archive migration. The original Studio's API account, stored work and limits are independent and unchanged by this integration |
-| Contest publication | NOT ASSESSED / NOT SUBMITTED | Final-launch gates remain unresolved. Official pages were not rechecked in this scoped integration task; no eligibility or no-login claim is inferred from linking the Studio |
+| Embedded authentication failure | OWNER SCREENSHOT VERIFIED | Re-login message and unavailable saved connection inside the Shop iframe |
+| Exact active destination | SOURCE VERIFIED | `REFERENCE_LINKS.modelGenerator` uses the exact original Studio identified by the owner |
+| Cause at cookie/server level | UNKNOWN | Cross-site session restrictions are plausible, but no cookie/header/device capture proves the precise cause |
+| Removal of iframe | SOURCE IMPLEMENTED | ShopPage renders no iframe, object, embed or replacement prompt form; obsolete frame CSS removed |
+| Original-app opening | SOURCE IMPLEMENTED | Top-level `/shop` navigates once to the exact original Studio using `location.replace`; Back does not revisit a launcher entry added by the Shop navigation |
+| Fallback / nested WORLDIFACT | SOURCE IMPLEMENTED | Permanent top-level and new-tab anchors. When WORLDIFACT is itself embedded, automatic ancestor navigation is not attempted. Denied navigation leaves links usable without a retry loop |
+| Regression tests | CI PENDING | Actual Shop source/server-render plus captured effect tests: fixed destination, no forwarded query/token/hash, replay once, nested-frame guard, denied-navigation fallback, English navigation and no native paid or storage actions |
+| Live Studio source/quality | UNCHANGED | No older snapshot, model asset, new UI language, Oracle installer or quality patch is published to the original app |
+| New paid operations | NONE | No generation job, API/GPU budget change, token/cookie copy, secret change, account migration or archive deletion |
+| PR #29 deployment | NOT YET DEPLOYED | See PR checks and subsequent release evidence; do not infer publication from a source commit |
+| Final competition publication | NOT ASSESSED / NOT SUBMITTED | This is a scoped entry repair, not a newly verified competition decision |
 
-## What is deployed
+The integration now deliberately chooses a full original Studio document instead of trying to use its authenticated UI inside a cross-origin frame. The user may still need to sign in to the existing account in that original document. The repair does not automatically pair Oracle or bypass any authorization check.
 
-The active path is `WORLDIFACT -> /shop -> existing hosted Froge MPC 2 Studio`. WORLDIFACT provides navigation and an embedded view with direct-open alternatives. The original application continues to own prompt/photo input, Codex/Blender execution, previews, exports, sessions and storage. No private code or asset was copied from the hosted app.
+MDN background on the hypothesis, not device evidence: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value . SameSite cookie rules distinguish top-level navigation from cross-site iframe requests.
 
-The former `forge-studio-public` page remains a named legacy reference, not the active generator. Other WORLDIFACT worlds and separate GAME/MAKE tools remain in place.
+## Release checks
 
-The frame has a scoped normal-flow container. The direct-open links precede it in rendered markup. No iframe onLoad health claim, timed redirect, automatic reload, secret in a URL, native paid POST or JSON brief download was introduced.
+Run the full existing `npm run verify`, foundation assembly and `npm run deploy:check` for the exact reviewed PR head. The existing read-only hosted probe is HTTP evidence only, not a logged-in session or model-generation test. Respect recorded browser blocks; do not reproduce a denied preview through another browser/CI renderer.
 
-## Verification sources
+Publish only this scoped entry repair under the applicable approval, preserving all other production apps and native paid-generation gates. Do not use it to merge the larger PR #28, extend a pilot, submit to Product Hunt or overwrite the live Froge source. After any publication, record the exact merge SHA and final deploy/smoke result. Actual authenticated Android generation remains a separate check.
 
-- Final PR CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35153954093
-- Main CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35154269149
-- Production release: https://github.com/teslaeco/WORLDIFACT/actions/runs/35154269208
-- No-op Shop pilot gate: https://github.com/teslaeco/WORLDIFACT/actions/runs/35154374131
-- No-op P0 pilot gate: https://github.com/teslaeco/WORLDIFACT/actions/runs/35154374091
+The iframe-first instructions in `docs/CODEX_TASK_FROGE_HOSTED_GENERATOR.md` are historical PR #27 instructions and are **superseded for Shop entry by this repair**. Keep the exact original app; do not reintroduce its failing automatic embedded view.
 
-Tests render the actual Shop component on the server and check canonical destinations, fallback-link order, five-world navigation, absence of legacy UI and absence of native generation side effects. HTTP probe tests reject credentials, paid POSTs and authentication-redirect following. These are not browser/device or external-generation tests.
+## Historical deployed evidence retained
 
-## Remaining checks
+Full previous ledger:
+https://github.com/teslaeco/WORLDIFACT/blob/495a6524d7b597403eefd5b62bfbf8ee9fedc4e0/docs/CONTEST_STATUS.md
 
-Confirm the deployed Shop on Android/desktop and follow its full-generator link to the original Studio. Existing sign-in requirements may apply. Verify embedded usability separately; use the full Studio when the frame is blank or requires authentication. No new paid generation is required merely to test navigation.
-
-Model likeness, anatomy, textures and export-quality improvements remain deferred by the owner. Manufacturing validation and final contest scheduling are separate tasks.
-
-## Historical evidence retained
-
-Previous P0 records reported successful Astra text/image blueprint output and a controlled Oracle job producing a structurally checked GLB. They are historical results, not new tests of this integration. PR #26 passed build/public HTTP smoke but failed subsequent owner Android UI QA. The previous cumulative WORLDIFACT pilot ceiling was 6; it was not extended or re-armed here. This normal release uses the reviewed disabled-cost native configuration, without changing the hosted Froge generator's independent settings. Earlier ledger revisions retain the original job/hash records.
+- PR #27 merged `e2446816708783532a26c2c949c733e19ca84e96` and deployed in run `35154269208`; public HTML/assets/DEMO smoke passed. That did not prove authenticated iframe usability, and the new owner screenshots reveal the failure.
+- PR #27 final tests passed 102/102, plus main CI. Its no-cost HTTP HEAD returned 200. Those tests are historical, not the validation of this changed navigation behavior.
+- The old paid pilot workflows skipped their paid/re-arm steps. This fix never changes their markers or limits.
+- Review-only English/model work remains documented on PR #28's branch. Source parity between the live Studio and the separate Froge GitHub snapshot remains UNKNOWN; neither this ledger nor an HTTP success claims a newer hosted generator revision.
 
 ## Truth boundary
 
-Use EXTERNAL TOOL / OWNER-REPORTED WORKING for the hosted generator until stronger evidence exists. Never call linking/framing a migration of accounts/backend, a new native generator, a verified fresh AI result, manufacturing approval, an official OpenAI character, or satisfaction of contest requirements. Deployment success is verified; complete external generation and device usability are not inferred.
+Distinguish source saved, CI passed, deployed, authenticated session and actual generation. Removing a failing iframe is not reinstalling a new generator, translating the external UI, restoring an account, raising quality or proving manufacture readiness. Preserve the original generator and all saved user work.
