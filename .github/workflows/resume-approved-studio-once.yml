@@ -23,7 +23,11 @@ jobs:
         id: gate
         shell: bash
         run: |
-          if git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/STUDIO_RESUME_ORIGINAL_SIX_20260917'; then
+          git fetch --no-tags --depth=1 origin main
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]; then
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            echo 'Newer main exists; no stale source or allowance deployment.'
+          elif git diff --name-only HEAD^1 HEAD | grep -qx 'ops/STUDIO_RESUME_ORIGINAL_SIX_20260917'; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
@@ -46,12 +50,24 @@ jobs:
       - name: Dry run the same reviewed source and original ceiling
         if: steps.allowance.outputs.eligible == 'true'
         run: npx wrangler deploy --dry-run --config .studio-approved.wrangler.json --outdir .wrangler/studio-approved
-      - name: Resume only unused original reservations
+      - name: Confirm source is still current
+        id: current
         if: steps.allowance.outputs.eligible == 'true'
+        shell: bash
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)" ]; then
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'deploy=false' >> "$GITHUB_OUTPUT"
+            echo 'Main advanced while checking. No stale deployment.'
+          fi
+      - name: Resume only unused original reservations
+        if: steps.current.outputs.deploy == 'true'
         run: npx wrangler deploy --config .studio-approved.wrangler.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Verify readiness without requesting a model
-        if: steps.allowance.outputs.eligible == 'true'
+        if: steps.current.outputs.deploy == 'true'
         run: node scripts/resume-approved-studio.mjs verify
