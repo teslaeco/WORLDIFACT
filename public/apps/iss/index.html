@@ -7,6 +7,7 @@
   <title>Fix ISS · Astronaut on repair duty</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23101b27'/%3E%3Ccircle cx='32' cy='31' r='19' fill='%23ece7dc'/%3E%3Crect x='18' y='22' width='28' height='17' rx='8' fill='%23e19b53'/%3E%3Cpath d='M23 52h18' stroke='%23ece7dc' stroke-width='6'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./hotfix.css">
   <script type="importmap">{"imports":{"three":"./vendor/build/three.module.js"}}</script>
 </head>
 <body>
@@ -26,7 +27,7 @@
   <div class="quick-goals"><button id="quick-bag" title="Navigate to the tool bag">Tool bag</button><button id="quick-suit" title="Navigate to the suit">Suit</button><button id="quick-earth" title="Navigate to the Terra computer">Terra</button><button id="quick-airlock" title="Navigate to the airlock">Airlock</button></div>
  </aside>
  <aside class="telemetry panel" aria-label="Astronaut equipment"><div class="eyebrow">ASTRONAUT / 01</div><span id="suit-status">CABIN CLOTHING</span><div class="oxygen-line"><span>O₂ <small>in-game supply</small></span><strong id="oxygen">—</strong></div></aside>
- <div class="view-controls"><button id="view-toggle">View: character</button><button id="map" aria-pressed="false">Map <kbd>M</kbd></button></div>
+ <div class="view-controls"><button id="view-toggle">View: character</button><button id="map" aria-pressed="false">Map <kbd>M</kbd></button><button id="reset-view" title="Return astronaut and camera to a safe view">Reset view</button><button id="eva-guide" title="Guide me to the next EVA requirement">EVA route</button></div>
  <div class="world-note"><span id="map-loading">ISS model…</span><button id="retry" hidden>Retry download</button><span id="safety-note">Simplified interior layout inspired by the ISS.</span></div>
  <section class="interaction panel" aria-label="Current action">
   <div class="interaction-copy"><strong id="interaction-title">Approach the tool bag</strong><p id="interaction-detail">WASD · move / drag · camera</p></div>
@@ -46,10 +47,10 @@
  </div>
  <dialog id="missions-dialog"><div class="dialog-top"><div><span class="eyebrow">EXPEDITION LOG</span><h1>Eight repairs.<br>One shared station.</h1></div><button data-close class="icon-button" aria-label="Close">×</button></div><p>Select a task to set your target. Fly to the workstation, choose a tool and follow the indicated steps.</p><div id="missions-list"></div><p class="muted">The tasks and parts belong to an original FORGE training scenario. They do not represent a list of current ISS failures.</p></dialog>
  <dialog id="help-dialog"><div class="dialog-top"><div><span class="eyebrow">FORGE / LEARNING TO REPAIR</span><h1>Small actions.<br>Great responsibility.</h1></div><button data-close class="icon-button" aria-label="Close">×</button></div>
-  <p><strong>Getting started:</strong> fly to the orange tool bag, collect it with ACT or <kbd>E</kbd>, then open the task log. The suit is in the last room, beyond two hatches opened with <kbd>E</kbd>.</p>
-  <div class="help-grid"><div><strong>Moving in 3D</strong><p>On a phone, use the large joystick on the left. A small movement gives a slower speed. UP and DOWN change altitude. On a computer: WASD, Space and Ctrl/Q. Shift increases EVA speed.</p></div><div><strong>Camera</strong><p>Drag the scene with your right thumb while moving the character with your left. Pinch or use the wheel to zoom. The camera shows the whole character; obstructing walls become transparent. V changes the view and M opens the map.</p></div><div><strong>Tools</strong><p>Open Tool bag, select a tool and press ACT within range of the workstation. For bolts, hold the button and release in the green zone. Keyboard controls also include 0–8 and E.</p></div><div><strong>Progress and parts</strong><p>Repairs consume parts from the bag. Refill supplies where you collected it. Save downloads a progress file; Load restores it at a safe position inside the station.</p></div></div>
+  <p><strong>Getting started:</strong> collect the orange tool bag and put on the EVA suit near the airlock. EVA route selects the next required stop. At the airlock press ACT/E to begin the exterior transition.</p>
+  <div class="help-grid"><div><strong>Moving in 3D</strong><p>On a phone, use the large joystick on the left. A small movement gives a slower speed. UP and DOWN change altitude. On a computer: WASD, Space and Ctrl/Q. Shift increases EVA speed.</p></div><div><strong>Camera</strong><p>Drag the scene with your right thumb while moving the character with your left. Pinch or use the wheel to zoom. In EVA the camera is clamped to a safe orbit around the astronaut. Reset view returns to a safe entry view without erasing repair progress.</p></div><div><strong>Tools</strong><p>Open Tool bag, select a tool and press ACT within range of the workstation. For bolts, hold the button and release in the green zone. Keyboard controls also include 0–8 and E.</p></div><div><strong>Progress and parts</strong><p>Repairs consume parts from the bag. Refill supplies where you collected it. Save downloads a progress file; Load restores it at a safe position inside the station.</p></div></div>
   <h2>Model and exercises</h2><p>The exterior map uses the <a href="https://science.nasa.gov/resource/international-space-station-3d-model/" target="_blank" rel="noopener">NASA / Visualization Technology Applications and Development ISS model</a>. This historical configuration includes Pirs but does not include Nauka, Prichal or iROSA.</p>
-  <p>The interior, astronaut, tools and orange workstations are original models. The left glove grips the bag handle with four fingers and a thumb; the right hand operates the tool. The interior is simplified. The F-A training switchboard, leak-test exercises, tightening indicator, oxygen and airlock cycle support learning through play; they are not ISS operating procedures. The tether illustrates a connection to the airlock without simulating its tension.</p>
+  <p>The interior, astronaut, tools and orange workstations are original models. The tether illustrates a connection to the airlock without simulating its tension. EVA drifting shown by the character is visual/game motion, not a real orbital dynamics simulator.</p>
   <p><strong>Project idea:</strong> explore station maintenance and discuss protecting its heritage. Game results do not determine whether preserving the entire ISS in orbit is technically feasible.</p>
   <div class="asset-links"><a href="./assets/astronaut-forge.glb" download>3D astronaut (.glb)</a><a href="./assets/interior-training.glb" download>3D training interior (.glb)</a></div>
  </dialog>
@@ -58,6 +59,7 @@
   <p class="earth-mission">Find the Nile in Egypt (around 26° N, 32° E). Select available satellite imagery, compare acquisition dates and describe visible changes in the river and surrounding land. Record the source, date and cloud cover; a simulated scene is not observation evidence.</p>
   <iframe id="earth-frame" title="Terra Earth observation — Nile mission" allow="fullscreen" allowfullscreen></iframe>
  </dialog>
+ <script type="module" src="./eva-hotfix.js"></script>
  <script type="module" src="./game.js"></script>
 </body>
 </html>
