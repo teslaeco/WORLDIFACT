@@ -1,0 +1,23 @@
+.portal-astra { margin: 18px 0 28px; padding: clamp(16px, 3vw, 26px); border: 1px solid #416273; border-radius: 16px; background: #0d2029; }
+.portal-astra-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.portal-astra-head h2 { margin: 6px 0 0; }
+.portal-astra .pill { border: 1px solid #6b8794; border-radius: 999px; padding: 6px 10px; font-size: .75rem; }
+.portal-astra .pill.live { border-color: #86d7b8; color: #baf1d9; }
+.portal-astra-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, .7fr); gap: 18px; align-items: start; margin-top: 16px; }
+.portal-astra-preview { min-width: 0; min-height: 420px; }
+.portal-astra-preview .starting-world-shell { min-height: 420px; }
+.portal-astra-preview .starting-world { min-height: 420px; }
+.portal-astra-controls { display: grid; gap: 12px; }
+.portal-astra-controls label { display: grid; gap: 7px; font-weight: 650; }
+.portal-astra-controls :is(textarea,input) { box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid #557481; border-radius: 8px; background: #132a34; color: #f3f7f8; padding: 10px; font: inherit; }
+.portal-astra-controls textarea { min-height: 130px; resize: vertical; }
+.portal-astra-buttons { display: grid; gap: 8px; }
+.portal-astra-buttons button, .portal-astra-reference button { min-height: 44px; border: 1px solid #678692; border-radius: 8px; background: #1d3b47; color: #eef6f8; font: inherit; padding: 10px 14px; }
+.portal-astra-buttons .primary { background: #b7eed4; color: #15372e; font-weight: 800; }
+.portal-astra-buttons button:disabled { opacity: .52; cursor: not-allowed; }
+.portal-astra-reference { display: grid; gap: 8px; }
+.portal-astra-reference img { width: 100%; max-height: 190px; object-fit: contain; background: #071118; border-radius: 8px; }
+.portal-astra-result { display: grid; gap: 5px; padding: 12px; border: 1px solid #466674; border-radius: 10px; background: #132a34; }
+.portal-astra-result small { color: #bfd0d8; }
+.portal-astra .error { border-left: 4px solid #ef9f8e; background: #442b31; padding: 10px; }
+@media (max-width: 880px) { .portal-astra-layout { grid-template-columns: 1fr; } .portal-astra-preview, .portal-astra-preview .starting-world-shell, .portal-astra-preview .starting-world { min-height: 360px; } }
