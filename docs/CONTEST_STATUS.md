@@ -2,23 +2,35 @@
 
 ## Current review scope: English UI and 3D quality
 
-The owner requested five bounded continuations to finish the existing Froge integration, improve model/texture quality and move all five worlds toward English UI. Work remains in **draft PR #28**, branch `work/five-hour-quality-english-20260917`; it is **not merged or deployed**. Coordination is in [QUALITY_EN_SHIFT.md](QUALITY_EN_SHIFT.md), and the source-by-source language ledger is [LANGUAGE_AUDIT.md](LANGUAGE_AUDIT.md).
+The owner requested five bounded continuations to preserve the existing hosted Froge integration, improve model/texture quality and move all five worlds toward English UI. Work remains in **draft PR #28**, branch `work/five-hour-quality-english-20260917`; it is **not merged or deployed**. Coordination is in [QUALITY_EN_SHIFT.md](QUALITY_EN_SHIFT.md), and source-by-source language evidence is in [LANGUAGE_AUDIT.md](LANGUAGE_AUDIT.md).
 
 | Item | Status | Evidence / remaining work |
 |---|---|---|
 | Existing hosted Froge integration | DEPLOYED / UNCHANGED | PR #27, application merge `e2446816708783532a26c2c949c733e19ca84e96`; production `/shop` embeds/links the original Studio |
-| Continuation 1 WORLDIFACT code | VERIFIED | Code head `f2d7f9000e9194ae93c973967a3f597a8a1ba02a`; PR CI run `35163081507` passed 108/108 tests, lint, TypeScript, HTTP smoke, build, foundation assembly and Worker dry-run |
-| ISS English | SOURCE IMPLEMENTED / TESTED | Static UI, eight repair tasks/tools/state messages, dynamic HUD/actions/errors, canvas signs and Model Context tool copy are English; IDs/save schema/mechanics preserved |
-| Five-world English coverage | AUDIT IN PROGRESS | Native shell/workbench inspected English. Pinned Chess and Terra build successfully; exact-source deep scans remain. 8 Planets and hosted Froge are external and are not considered translated merely because their wrappers are English |
-| WORLDIFACT model preview reliability | SOURCE IMPLEMENTED / TESTED | Person metadata no longer causes a second GLB load; model lifetime is source-bound; late stale models are rejected/released; shared PBR resources dispose once |
-| Froge texture truth/evidence patch | DRAFT SOURCE PR | Froge PR #16 against `codex/v27-mcp-startup-audit` reports actual source/export max edge, requested-edge reach, texture/downsample counts, preserves no-upscale policy and adds tests. It is not deployed to Oracle or the private Site |
-| Hosted Studio source parity | UNKNOWN / EDIT ACCESS BLOCKED | Project checkpoint records a newer private Site source than the GitHub snapshot and previous Git source errors. Do not replace the live Studio with the older repository branch |
-| Visual likeness / anatomy | NOT PROVEN | Hair, face/neck/jaw/shoulder proportions, hands, clothing intersections and controlled visual comparison still need canonical-source/runtime work; structural tests are not a likeness pass |
-| Texture quality | BETTER EVIDENCE, NOT NEW DETAIL | PR #16 can distinguish an 8192 request from a 1122×1402 actual source. No upscaling is counted as recovered detail; real UV/PBR appearance still needs export/render review |
+| Continuations completed | 2 OF 5 | Continuation 1 translated/guarded ISS and fixed model-preview lifetime. Continuation 2 added exact-source English enforcement for native WORLDIFACT plus compiled pinned Chess/Terra outputs |
+| ISS English | SOURCE IMPLEMENTED / TESTED | Static UI, eight repairs/tools/state messages, dynamic HUD/actions/errors, canvas signs and Model Context tool copy are English; IDs/save schema/mechanics preserved |
+| Native WORLDIFACT / AI Game Lab English | SOURCE GUARDED | `index.html`, Home, Portal, Shop, Workbench, Control, `P0GameLab` and portal definitions are checked against explicit English document language and curated high-signal Polish UI phrases |
+| Pinned Chess English | EXACT SOURCE + BUILD GUARD | Exact commit `e134964e9c8b7edc43c26b508973f6fb658af90d` is the signed mixed-language cleanup; exact guest/auth source is English. Foundation assembly now checks the actual compiled HTML/JS before copying it |
+| Pinned Terra English | EXACT SOURCE + BUILD GUARD | Exact commit `ae90f7367587e0973782c470cde3f5103c0540fc` has English document metadata/UI evidence. Compiled HTML/JS is now guarded; scientific/data-contract keys are deliberately preserved |
+| 8 Planets English | WRAPPER ENGLISH / SOURCE BLOCKED | Records identify recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5`, but no editable GitHub source for that revision is exposed through the connected search. Cross-origin UI is not falsely labeled translated |
+| Hosted Froge English | WRAPPER ENGLISH / CANONICAL SOURCE BLOCKED | Live Studio remains preserved. Reviewable GitHub `ModelStudio.tsx` still contains Polish product UI, but that snapshot is not proven identical to the newer hosted Site and is not deployed over it |
+| WORLDIFACT model preview reliability | SOURCE IMPLEMENTED / TESTED IN CONTINUATION 1 | Person metadata no longer causes a second GLB load; model lifetime is source-bound; stale models are rejected/released and shared PBR resources dispose once |
+| Froge texture truth/evidence patch | DRAFT SOURCE PR / CI PASS | Froge PR #16 head `9cfc57f7f57b67a6ceb468e4025c32b53d8fa881`; run `35163335466` passed the no-paid Oracle/Codex/Blender workflow. Requested 4K/8K is not treated as actual detail unless exported pixels reach it |
+| Existing Froge structural quality checks | SOURCE INSPECTED | Current reviewable source checks garment containment, free-hand garment crossings, grip contacts, fan apertures, packed GLB textures, UV retention, anatomy metadata and GLB reimport; it explicitly leaves likeness and print readiness unassessed |
+| Visual likeness / anatomy | NOT PROVEN | Hair/root continuity, face/neck/jaw/shoulder proportions, hands and controlled visual comparison still need canonical-source/runtime evidence; structural tests are not a likeness pass |
+| UV/PBR/FBX preservation | PARTIAL | GLB packed textures/UV and some material contracts are checked. Stronger material-survival evidence across GLB/FBX reimport remains a priority |
 | New costs | NONE | No paid generation, GPU/API job, quota increase, secret change, Oracle install, order or private archive bypass |
-| Final contest release | NO-GO | Full source language coverage, hosted/device generation, controlled visual quality and final submission/media checks remain incomplete |
+| Final contest release | NO-GO | Canonical hosted source/device generation, controlled visual quality, remaining external localization and final submission/media checks are incomplete |
 
-Current code verification logs contain nine lint warnings and zero errors. Do not call the draft warning-free. CI assembled the exact pinned Chess commit `e134964e9c8b7edc43c26b508973f6fb658af90d` and Terra commit `ae90f7367587e0973782c470cde3f5103c0540fc` successfully. The credential-free hosted Studio probe again returned HTTP 200; this is reachability evidence only, not authenticated iframe, upload, Android or generation evidence.
+## Continuation 2 implementation
+
+WORLDIFACT now contains a bounded localization guard in `scripts/lib/english-ui.mjs` with unit coverage in `tests/english-ui.test.mjs`. It does **not** attempt language detection over arbitrary data. It only protects authored UI against known high-signal Polish phrases and verifies English document language where applicable.
+
+`scripts/build-foundations.mjs` applies that guard to the actual compiled output of the pinned Chess and Terra revisions before those assets are copied into the release. Native WORLDIFACT and AI Game Lab source receive equivalent regression coverage. This makes localization a release-time property rather than a one-off manual observation.
+
+Material commits for this package are recorded in `QUALITY_EN_SHIFT.md`; the latest material code head is `9761b8293accb3343834cea8d078b1268fcb54be`.
+
+A new PR CI run was started for these changes. At the continuation checkpoint, run `35167247789` had begun successfully but had not yet completed all foundation/deploy-check steps. **Do not call continuation 2 verified until that run or a later current-head run completes green.**
 
 ## Correct generator boundary
 
@@ -28,27 +40,21 @@ The active generator remains:
 
 WORLDIFACT `/shop` provides English navigation and permanent direct-open fallbacks. The hosted Studio owns prompts/photos, Codex/Blender execution, previews, exports, accounts and stored work. The old `forge-studio-public` page is not the active generator. PR #28 does not copy private assets or migrate the Studio backend.
 
-The newer reviewable GitHub source branch is `teslaeco/Froge-MPC-2-test:codex/v27-mcp-startup-audit` at `735058af6e53a2e44f417b5dcf864f62bd334bb2` as checked during continuation 1. It contains the previously merged v35 acceptance/runtime work and saved-model-history corrections, but project records explicitly say that GitHub source is not proven identical to the newer private Site. Source-only patches must therefore stay review-only until ported to the canonical runtime.
+The reviewable GitHub source branch `teslaeco/Froge-MPC-2-test:codex/v27-mcp-startup-audit` is useful for source-only improvements but is not proven identical to the newer private Site. Source-only patches therefore remain review-only until deliberately ported to the canonical runtime.
 
-## Continuation 1 evidence
+## Verification boundaries
 
-WORLDIFACT PR: https://github.com/teslaeco/WORLDIFACT/pull/28
+Froge PR #16 passed workflow run `35163335466` (`Oracle Codex MCP (no paid API)`). That workflow uses Python 3.9/3.12 regression suites, fixture model responses, a real Codex/Code Mode MCP round trip, official Blender 4.3 build/render/FBX checks and packaging. It did not call a paid model API. This verifies source/runtime contracts, not photographic likeness.
 
-Verified code CI: https://github.com/teslaeco/WORLDIFACT/actions/runs/35163081507
-
-Froge source-only texture PR: https://github.com/teslaeco/Froge-MPC-2-test/pull/16
-
-The ISS regression now checks static/runtime English, canvas labels, DOM hooks, eight fixed repair IDs/order, six consumed replacement parts and version-2 save restoration. Model-slot regressions cover late previous-session results and one-time resource disposal. These checks do not substitute for physical Android/WebGL or visual-likeness QA.
-
-Froge PR #16 changes only source evidence/reporting: requested 4K/8K is not treated as actual resolution unless exported pixels reach it. Its new tests explicitly include a requested 8192 px case whose source is only 1122×1402 and an 8192→4096 downsample. It does not generate a new character, improve facial geometry automatically, or alter the hosted Site.
+Earlier WORLDIFACT run `35163081507` remains valid for continuation-1 code only: 108/108 tests, lint with nine warnings/zero errors, TypeScript, HTTP smoke, production build, foundation assembly and Worker dry-run. It must not be used as verification of continuation-2 material code.
 
 ## Remaining work
 
-1. Complete exact-source English scans for native WORLDIFACT, pinned Chess/Terra and locate the real editable source for 8 Planets.
-2. Keep hosted Froge internal UI localization BLOCKED rather than faking a translation in the parent iframe.
-3. Continue model-quality work only against preserved originals: hair/root continuity, face/neck/jaw/shoulders, hands, garment intersections, UV/PBR evidence and GLB/FBX reimport/material preservation.
-4. Check CI for every changed head and keep the draft unmerged/unpublished until the reviewed scope receives explicit release approval.
-5. On the fifth continuation provide the consolidated Polish GO/NO-GO report; no contest submission is authorized here.
+1. Confirm the current continuation-2 WORLDIFACT CI result and repair any localization/build regression without weakening the guard.
+2. Strengthen preserved-original UV/PBR and GLB/FBX reimport/material evidence in the reviewable Froge source, then keep that PR source-only until canonical runtime access exists.
+3. Continue anatomy/garment quality only where real Blender validation is available: hair/root continuity, face/neck/jaw/shoulders, hands and intersections.
+4. Translate reviewable Froge source separately where useful, but do not claim it changes the live Studio. Translate 8 Planets only when its real editable source is accessible.
+5. Keep PR #28 and Froge PR #16 unmerged/unpublished until explicit release approval. On continuation 5 provide the consolidated Polish GO/NO-GO report.
 
 ## Historical production evidence retained
 
