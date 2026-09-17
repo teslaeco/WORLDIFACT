@@ -1,81 +1,61 @@
-# WORLDIFACT status — five-pass English and 3D quality review complete
+# WORLDIFACT status — 17 September 2026
 
-Date: 17 September 2026.
+## Current correction: Studio ON the WORLDIFACT page
 
-## Final review state
+The owner rejected PR #29's top-level redirect because it removes the visible way back to WORLDIFACT. The corrected requirement is **the original Studio inside WORLDIFACT, with a persistent return link**, not another redirect and not a new generator.
 
-The requested five bounded continuations are complete on draft WORLDIFACT PR #28, branch `work/five-hour-quality-english-20260917`. Nothing in this five-pass quality/localization work is merged or production-deployed.
+**PR #30 is implemented and its first complete CI passed. It is not merged or deployed.** The last documentation-only update needs the final-head CI check before release.
 
-Production `main` remains `495a6524d7b597403eefd5b62bfbf8ee9fedc4e0`. The deployed generator baseline remains PR #27 / merge `e2446816708783532a26c2c949c733e19ca84e96`, pointing to the exact owner-selected original Studio:
+- PR: https://github.com/teslaeco/WORLDIFACT/pull/30
+- Branch: `fix/shop-stay-in-worldifact-20260917`
+- Verified source head: `fbd02d9e6691ffb3f02d1b2117dae529cfe69727`
+- Full verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35182183652
+- Job: `105076523433`, every step SUCCESS: locked install, full verify, foundations, Worker dry-run and read-only hosted probe step.
+- Production remains PR #29 merge `3f22fe5a8b4844d1415a35a622c061a9c19d48d2`, documentation main `b71b89db53343930e990369b70eebefb07cdc87c`.
+- Exact Studio: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
+- WORLDIFACT entry: https://worldifact.xodobrox.workers.dev/shop
 
-**https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/**
+## Implemented behavior
 
-Do not substitute `forge-studio-public` or the review repository for that live app.
+1. No `location.replace`, navigation effect, `_top` or same-tab external links. Opening Shop does not navigate the WORLDIFACT document away.
+2. A sticky parent toolbar keeps a real `Back to WORLDIFACT` link (`/`), Studio title, all five world links and session controls outside the embedded app.
+3. The exact Studio appears in a bounded normal-flow iframe. Its cross-origin sandbox permits reviewed app capabilities but grants **no top-navigation permission**. No proxy, credentialless mode, script injection or cookie/token copying.
+4. Sign-in/full Studio access is an ordinary `_blank` anchor with `noopener noreferrer`; WORLDIFACT stays open. No authentication claim or automatic reload on focus, load, login or tab return.
+5. Only explicit `Reload Studio view` may recreate the iframe, after a warning about unsent text/photos. Cancelling preserves the frame. A wrapper reload neither cancels a server job nor submits another generation.
+6. English help says separate-tab sign-in might not share a session with the embedded view. The separate Studio tab remains available without replacing WORLDIFACT.
 
-## Five-pass deliverables
+This corrects navigation/return behavior. The earlier failing authenticated iframe is **not** claimed repaired merely by restoring embedding. The live generator's source, accounts, saved models, original quality and backend remain unchanged.
 
-| Area | Final status | Evidence / limitation |
+## Evidence matrix
+
+| Check | Status | Boundary |
 |---|---|---|
-| WORLDIFACT PR #28 | DRAFT / CI PASS / NOT DEPLOYED | Runtime head `aa366400ee51875a9b1cf0ff3f85cccdfd7ce909`; run `35178690232` passes 129/129 tests, lint 9 warnings/0 errors, TypeScript, HTTP smoke, production build, reviewed foundations, Worker dry-run and read-only Studio probe |
-| Shop integration | SOURCE FIX / TESTED | PR #28 now incorporates the same safe product decision as review-ready PR #29: no authenticated Froge iframe. A top-level Shop opens the exact original Studio with `location.replace`; `_top` and new-tab manual links remain; no query/hash/token forwarding, auto-login, cookie copying, Oracle reconnect or paid request |
-| Owner Android failure | OBSERVED / ROOT CAUSE PARTIAL | Screenshots proved the embedded session asked for sign-in and did not see its saved Oracle connection. They do not prove an old generator deployment or broken Oracle server. The failing iframe path is removed in source; logged-in production Android retest remains pending |
-| ISS English | SOURCE IMPLEMENTED / TESTED | Static UI/help/accessibility, all eight repairs/tools/state, runtime HUD/actions/errors, in-world signs and Model Context copy are English. Task IDs, mechanics and version-2 saves preserved |
-| Chess English | DRAFT UPSTREAM / TESTED | Chess PR #143 head `705d7b0fe5fff03a5d7975fe094804af1eef44ea`, run `35167870190` PASS. WORLDIFACT `/chess` uses the reviewed copied build; direct `Gracz online` fallback becomes `Online player`; optional locale catalogs preserved |
-| Native 8 Planets English | SOURCE VERIFIED / TESTED | Default `/planets` is native WORLDIFACT source with English headings, all eight stages and Mini test. Full campaign remains PLANNED |
-| External FORGE World Builder English | BLOCKED | Canonical editable source unavailable. It remains a separate prototype link; no wrapper-based fake translation claim |
-| Terra English | PARTIAL UPSTREAM / TESTED | Terra PR #271 head `4a34ce18fe552f19aaa2e604b50260ecba5b40c8` translates gallery/404/multi-angle source. Runs `35169328621`, `35169328579`, `35169328498`, `35169328503` PASS. Many standalone pages still Polish; WORLDIFACT does not broad-repin newer Terra main |
-| AI Game Lab English | SOURCE GUARDED | Native Home/Portal/Shop/Workbench/Control/P0GameLab/portal definitions are English-regression guarded |
-| Correct model for jobId | REVIEW-SOURCE FIX / FULL CI PASS | Froge PR #16 head `d3f61b842dcfeda2ed794210caafc391919a75be` prevents old status/model reads from winning after a newer generation starts; reconnect events cannot restart the old job while the new POST is pending; POST is not automatically repeated |
-| Archive/original preservation | PRESERVED | Five-pass work does not delete/overwrite saved user models, prompts, account data or private archives; no auth bypass was attempted |
-| Texture truth | MEASURED PARTIAL EVIDENCE | Requested 4K/8K is separated from actual source/export pixels; no-upscale policy preserved; source/export maxima, counts and downsampling recorded in Froge review source |
-| GLB/FBX/UV/materials | STRUCTURAL TESTED | Real Blender FBX reopen checks finite geometry, authored material names and UV presence when expected; GLB texture/UV/material and atlas/nested-material regressions pass. Full visual shader equivalence remains unproven |
-| Hair/scalp | STRUCTURAL MEASURED | `hair_lock()` first root ring is measured against evaluated scalp; positive control passes and same mesh translated 0.6 scene units fails with larger gap. `likeness_assessed=false`; separate hair builders not all covered |
-| WORLDIFACT GLB review camera | SOURCE TESTED | Scale/aspect-aware eight-corner fitting, front/left/right/back plus approximate face/clothes/shoes views, resize handling and manual orbit preservation. This improves inspection, not the generated mesh itself |
-| Face/neck/hands/identity | NOT PROVEN | No controlled photographic likeness pass for face, neck, jaw, shoulders, hands, natural hairline or full reference fidelity |
-| Paid operations | NONE | No paid API/GPU generation, budget/quota increase, secret change, Oracle install, private archive bypass, order or supplier message |
-| Contest submission | NOT SUBMITTED | No form, launch, media post or contest entry sent in this work |
+| Explicit in-page requirement | VERIFIED | Latest owner feedback supersedes the redirect-only entry decision |
+| Actual Shop source/handler tests | PASS | Eight updated regressions using rendered TSX and its real reload handler with test adapters |
+| Exact Studio and permanent return | SOURCE / TEST PASS | Return anchor precedes/is outside frame; no parent navigation effect; scoped sticky toolbar |
+| New-tab-only authentication fallback | SOURCE / TEST PASS | Only external anchor uses `_blank` + `noopener noreferrer`; no `_top`, `_self` or `_parent` |
+| Sandbox navigation boundary | STATIC CONTRACT PASS | Top navigation not granted; normal reviewed capabilities retained; no claim of a real browser sandbox run |
+| Unsaved-work preservation | HANDLER TEST PASS | Cancelled reload keeps key; confirmed reload changes only frame key; rerenders do not reload |
+| Full code/build/package verification | PASS | Run `35182183652` on source head above |
+| Authenticated embedded generation | UNKNOWN / PREVIOUS OWNER ERROR | Existing re-login screenshot is still failure evidence; no fresh model job or authenticated device test |
+| Android visual behavior | NOT TESTED | CSS/source/SSR evidence, not a physical-device screenshot or WebGL test |
+| Production release | NOT PERFORMED | Merge/deploy is a separate gated step; current production still has PR #29's redirect |
+| New paid operations | NONE | No new model/GPU request, quota, secret, Oracle installation or private archive migration |
+| Wider PR #28 | NOT INCLUDED | Comment `5708560274` records the newest contract and warns against restoring #29's redirect when reconciling |
 
-## Fresh upstream review state
+The eight Shop regressions cover embedded target/parent return, separate-tab fallback, frame permissions, stable rerender/no auth claim, cancelled reload, confirmed frame-only reload, five-world links and absence of paid/storage/navigation side effects. Old redirect assertions were replaced because the user rejected that behavior, not to hide a failing build.
 
-### Froge MPC 2 review source
+## Browser documentation, not device proof
 
-PR: https://github.com/teslaeco/Froge-MPC-2-test/pull/16
+- https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe — nested documents, sandbox permissions and load/error limitations.
+- https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies — embedded authentication depends on cookie/storage policy.
 
-Head `d3f61b842dcfeda2ed794210caafc391919a75be` remains open/draft/mergeable. Exact no-paid workflow `35175731409` and saved model history `35175731405` pass. Frontend full regression, Python 3.12, Python 3.9 + official Blender 4.3 build/render/FBX/hair/anatomy/material/board/package checks are green.
+Signing in in a separate tab does not guarantee cookie access in a cross-site frame. No security restriction is bypassed. A complete integrated login solution still requires the actual hosted source and session contract. HTTP/source checks do not prove generation.
 
-Canonical live-Studio source parity remains **BLOCKED/UNKNOWN**. Do not represent this as a live deployment or publish the snapshot over the current Site.
+## Release and continuity
 
-### Chess
+Keep all paid-pilot markers/configuration unchanged. Release only this four-file correction under the applicable merge/production authorization, not #28 or upstream source changes. Record the actual merge SHA, deployed version and public smoke only after success. Model quality, complete English localization, private Site updates and contest submission remain outside this fix.
 
-PR #143 remains open/draft/mergeable at `705d7b0fe5fff03a5d7975fe094804af1eef44ea`; run `35167870190` passes.
+Historical iframe-first and redirect-only instructions are superseded for this UI by the current **in-page Studio + persistent WORLDIFACT return + separate-tab sign-in/fallback + confirmed manual reload** contract.
 
-### Terra
-
-PR #271 remains open/draft/mergeable at `4a34ce18fe552f19aaa2e604b50260ecba5b40c8`; four review workflows pass. It is based on newer Terra main than WORLDIFACT's reviewed pin, so a wholesale repin remains a deliberate-review task, not an automatic continuation action.
-
-### Shop entry repair
-
-PR #29 remains open, review-ready and unmerged at `5080dd450eca746e93610b3ef133c927e06be38b`; run `35177396129` passes. PR #28 now carries the same no-iframe Shop behavior so the larger quality/localization branch cannot reintroduce the bad embedded path. If one branch is merged later, the other must be rebased/reconciled before any subsequent merge; do not merge both blindly.
-
-## GO / NO-GO
-
-**GO — review/source quality:** the five-pass source work is coherent and CI-green at runtime head `aa366400...`. The no-iframe Shop decision is reconciled, English defaults are improved where editable source exists, and structural 3D reliability evidence is materially stronger.
-
-**GO — scoped Shop repair candidate:** PR #29 is the smallest isolated production repair candidate if separately approved for merge/deploy. This five-pass run does **not** perform that release.
-
-**NO-GO — claim “all five worlds and every subpage are fully English”:** canonical hosted Froge internals and external FORGE builder source remain inaccessible; Terra standalone pages remain partly Polish.
-
-**NO-GO — claim “model quality is finished / sale-ready”:** identity likeness, natural hairline, face/neck/jaw/shoulders/hands, full cross-format PBR appearance and manufacturing readiness remain unproven.
-
-**NO-GO — final contest submission/release based solely on this work:** authenticated production-device validation, remaining localization gaps, visual quality proof and final contest/media gates still require separate checks and approvals.
-
-## Release order recommendation
-
-1. If the immediate Android Shop problem is the priority, review and release only PR #29 first.
-2. Rebase/reconcile PR #28 after any #29 merge, re-run full CI, then review the broader English/quality changes separately.
-3. Keep Chess #143, Froge #16 and Terra #271 review-only until each source/release decision is explicit.
-4. Do not enable paid generation merely to validate navigation or localization.
-
-## Truth boundary
-
-Keep `SOURCE IMPLEMENTED`, `TESTED`, `DEPLOYED`, `OWNER-OBSERVED`, `BLOCKED` and `UNKNOWN` separate. HTTP 200 is not sign-in or generation proof; CPU projection tests are not physical Android QA; a structural FBX reopen is not full PBR visual equivalence; an 8K request is not 8K detail without real source pixels; root/scalp distance is not photographic likeness.
+PR #29 did deploy successfully in run `35180772180`, version `3904adb7-9354-4d3b-87d1-a07c24cc54d8`, with 105 tests and static smoke. That did not prove accepted navigation or authentication. Previous production ledger is preserved at https://github.com/teslaeco/WORLDIFACT/blob/b71b89db53343930e990369b70eebefb07cdc87c/docs/CONTEST_STATUS.md.
