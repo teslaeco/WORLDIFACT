@@ -11,6 +11,7 @@ import * as protocol from '../src/lib/studioProtocol.ts'
 import * as client from '../src/lib/studioClient.ts'
 import * as photos from '../src/lib/studioPhotos.ts'
 import * as archive from '../src/lib/studioArchive.ts'
+import * as view from '../src/lib/studioView.ts'
 import * as glb from '../src/lib/glb.ts'
 
 export async function loadShopComponent() {
@@ -21,9 +22,9 @@ export async function loadShopComponent() {
     module, exports: module.exports,
     require(id) {
       const modules = { '../config/portals': portals, '../config/references': references,
-        '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive, '../lib/glb': glb }
+        '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive, '../lib/studioView': view, '../lib/glb': glb }
       if (id in modules) return modules[id]
-      if (id === '../components/OracleModelPreview') return { default: () => React.createElement('span', null, 'WebGL renderer is tested separately, not by this server render') }
+      if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
       if (id.endsWith('.css')) return {}
       if (['react', 'react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
       throw new Error(`Unexpected Shop dependency: ${id}`)
