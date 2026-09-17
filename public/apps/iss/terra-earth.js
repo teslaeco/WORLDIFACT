@@ -37,6 +37,16 @@ export function makeTerraObservationEarth(){
   new T.MeshBasicMaterial({color:0x63bfff,transparent:true,opacity:.09,side:T.BackSide,depthWrite:false})
  );
  atmosphere.name='Terra_Earth_atmosphere';group.add(atmosphere);
+ group.userData.source={
+  project:'Terra Observation',url:TERRA_EARTH_SOURCE_URL,commit:TERRA_EARTH_SOURCE_COMMIT,
+  imagery:'NASA GIBS',observationEvidence:false,
+  note:'EVA visual backdrop reused from Terra Observation imagery logic. Verify source/date in Terra for scientific observation.'
+ };
+ if(typeof document==='undefined'||typeof Image==='undefined'){
+  material.color.setHex(0x245a85);
+  group.userData.imagery={status:'BLOCKED / NON-BROWSER TEST ENVIRONMENT',layer:null,date:null};
+  return group;
+ }
  const day=completeUtcDay();
  const fallback=()=>texture(gibsMapUrl(NASA_BLUE_MARBLE),tex=>{
   material.map=tex;material.needsUpdate=true;
@@ -49,10 +59,5 @@ export function makeTerraObservationEarth(){
   material.map=tex;material.needsUpdate=true;
   group.userData.imagery={status:'REAL / DATED NASA GIBS VISUAL',layer:NASA_VIIRS_TRUE_COLOR,date:day};
  },fallback);
- group.userData.source={
-  project:'Terra Observation',url:TERRA_EARTH_SOURCE_URL,commit:TERRA_EARTH_SOURCE_COMMIT,
-  imagery:'NASA GIBS',observationEvidence:false,
-  note:'EVA visual backdrop reused from Terra Observation imagery logic. Verify source/date in Terra for scientific observation.'
- };
  return group;
 }
