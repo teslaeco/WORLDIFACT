@@ -1,0 +1,24 @@
+.shop-make { margin: 4px 0 30px; border: 1px solid #496974; border-radius: 16px; padding: clamp(16px, 3vw, 28px); background: linear-gradient(145deg, #102630, #132129); }
+.shop-make-heading { display: flex; gap: 18px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.shop-make-heading h2 { margin: 8px 0 4px; font-size: clamp(1.45rem, 3vw, 2rem); }
+.shop-make-status { border: 1px solid #e3bb78; color: #f3d59e; border-radius: 999px; padding: 7px 10px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; }
+.shop-make-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.shop-make-controls label { display: grid; gap: 8px; }
+.shop-promoted-offer { border: 1px solid #78bcae; border-radius: 12px; padding: 16px; background: #18322f; margin: 16px 0; }
+.shop-promoted-offer > strong { display: block; font-size: clamp(1.8rem, 5vw, 2.8rem); margin: 8px 0; color: #c7f3df; }
+.shop-price-table { overflow-x: auto; margin: 20px 0; }
+.shop-price-table h3 { margin-bottom: 10px; }
+.shop-price-table table { width: 100%; min-width: 620px; border-collapse: collapse; }
+.shop-price-table th, .shop-price-table td { padding: 10px; text-align: left; border-bottom: 1px solid #3c5965; vertical-align: top; }
+.shop-price-table th { color: #b9ded2; }
+.iss-make-card { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 20px; align-items: center; border-top: 1px solid #3d5f69; padding-top: 22px; }
+.iss-make-card h3 { margin: 8px 0 12px; }
+.iss-mark { position: relative; height: 150px; border-radius: 12px; background: #07131b; overflow: hidden; border: 1px solid #38515e; }
+.iss-mark::before, .iss-mark::after { content: ''; position: absolute; top: 30px; bottom: 30px; width: 42px; border: 3px solid #78a7b2; background: repeating-linear-gradient(90deg, #183e50 0 8px, #0f2936 8px 12px); }
+.iss-mark::before { left: 12px; }
+.iss-mark::after { right: 12px; }
+.iss-mark span { position: absolute; left: 42px; right: 42px; top: 72px; height: 6px; background: #aebcc2; }
+.iss-mark i { position: absolute; left: 50%; top: 51px; width: 38px; height: 42px; transform: translateX(-50%); background: #d8e1e4; border-radius: 8px; box-shadow: 0 0 0 6px #50636b; }
+.iss-mark b { position: absolute; left: calc(50% - 4px); top: 23px; width: 8px; height: 104px; background: #8b9ba2; }
+@media (max-width: 900px) { .shop-make-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .shop-make-controls { grid-template-columns: 1fr; } .iss-make-card { grid-template-columns: 1fr; } .iss-mark { height: 125px; } }
