@@ -7,11 +7,11 @@ Date: 17 September 2026 (Europe/Amsterdam). Owner: Sebastian.
 - Branch: `work/five-hour-quality-english-20260917`.
 - Draft WORLDIFACT PR: https://github.com/teslaeco/WORLDIFACT/pull/28
 - Base: `495a6524d7b597403eefd5b62bfbf8ee9fedc4e0`.
-- Editor: **IDLE — continuation 3 complete. A later continuation may claim this marker before editing.**
+- Editor: **ACTIVE — continuation 4 is working on measurable Froge/Blender quality evidence plus another bounded English-source batch. Do not edit this branch concurrently.**
 - Scheduled continuations completed: **3 of 5**.
 - Latest verified WORLDIFACT code head remains `8b53331195d22de1d2b1dd770fa92b698592ea76` because continuation 3 changed only upstream Terra source plus review documentation.
 - WORLDIFACT verification retained: run `35168300680` completed successfully.
-- Next task: prioritize measurable Froge/Blender structural quality (hair-root continuity, anatomy/garment intersections, material evidence) and another bounded English-source batch. Keep the live Froge Site untouched.
+- Current task: add measurable source/Blender structural quality evidence without claiming photographic likeness, and advance a real editable English source surface. Keep the live Froge Site untouched.
 
 ## Non-negotiable continuity
 
