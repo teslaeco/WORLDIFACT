@@ -1,4 +1,5 @@
 import type { SavedStudioJob } from './studioClient.ts'
+import { archiveWriteDecision } from './studioView.ts'
 
 export type StudioArchiveEntry = { id: string; prompt: string; savedAt: string; byteLength: number; sha256: string; review: 'UNREVIEWED' }
 function openArchive(): Promise<IDBDatabase> {
@@ -18,16 +19,31 @@ export async function saveStudioModel(saved: SavedStudioJob, blob: Blob): Promis
   const entry: StudioArchiveEntry = { id: saved.receipt.id, prompt: saved.prompt, savedAt: new Date().toISOString(), byteLength: blob.size,
     sha256: Array.from(new Uint8Array(hash), v => v.toString(16).padStart(2, '0')).join(''), review: 'UNREVIEWED' }
   const db = await openArchive()
+  let stored = entry
   try {
     await new Promise<void>((resolve, reject) => {
+      // Read/compare/write within one transaction: another tab cannot replace
+      // original bytes between the comparison and commit.
       const tx = db.transaction(['metadata', 'models'], 'readwrite')
-      tx.objectStore('metadata').put(entry)
-      tx.objectStore('models').put(blob, entry.id)
+      const metadata = tx.objectStore('metadata')
+      const lookup = metadata.get(entry.id)
+      let failure: Error | null = null
+      lookup.onsuccess = () => {
+        try {
+          const existing = lookup.result as StudioArchiveEntry | undefined
+          if (archiveWriteDecision(existing, entry) === 'retain') { stored = existing!; return }
+          metadata.add(entry)
+          tx.objectStore('models').add(blob, entry.id)
+        } catch (error) {
+          failure = error instanceof Error ? error : new Error('Archive conflict. The original was not overwritten.')
+          tx.abort()
+        }
+      }
       tx.oncomplete = () => resolve()
-      tx.onabort = tx.onerror = () => reject(new Error('The model could not be saved on this device. Download the GLB; no older models were deleted.'))
+      tx.onabort = tx.onerror = () => reject(failure || new Error('The model could not be saved on this device. Download the GLB; no older models were deleted.'))
     })
   } finally { db.close() }
-  return entry
+  return stored
 }
 export async function listStudioModels(): Promise<StudioArchiveEntry[]> {
   const db = await openArchive()
