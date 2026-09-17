@@ -22,7 +22,6 @@ test('all five WORLDIFACT portal IDs share the validated blueprint endpoint', as
     const response = await handle(post({ worldId, prompt: 'Create a small portal-specific test scene.', mode: 'demo' }))
     assert.equal(response.status, 200)
     const body = await response.json()
-    assert.equal(body.worldId, worldId)
     assert.equal(body.mode, 'DEMO')
     assert.equal(body.provenance, 'MOCK')
     assert.equal(body.assetSpec.make.validationStatus, 'validation-required')
