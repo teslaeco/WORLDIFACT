@@ -6,31 +6,22 @@ The owner requested five bounded continuations to preserve the existing hosted F
 
 | Item | Status | Evidence / remaining work |
 |---|---|---|
-| Existing hosted Froge integration | DEPLOYED / UNCHANGED | PR #27, application merge `e2446816708783532a26c2c949c733e19ca84e96`; production `/shop` embeds/links the original Studio |
-| Continuations completed | 2 OF 5 | Continuation 1 translated/guarded ISS and fixed model-preview lifetime. Continuation 2 added exact-source English enforcement for native WORLDIFACT plus compiled pinned Chess/Terra outputs |
+| Existing hosted Froge integration | DEPLOYED / UNCHANGED | PR #27, application merge `e2446816708783532a26c2c949c733e19ca84e96`; production `/shop` still embeds/links the exact original Studio |
+| Continuations completed | 2 OF 5 | Continuation 1 translated ISS and fixed preview lifetime. Continuation 2 added source-aware English enforcement, fixed one real Chess runtime literal and strengthened Blender export evidence |
 | ISS English | SOURCE IMPLEMENTED / TESTED | Static UI, eight repairs/tools/state messages, dynamic HUD/actions/errors, canvas signs and Model Context tool copy are English; IDs/save schema/mechanics preserved |
-| Native WORLDIFACT / AI Game Lab English | SOURCE GUARDED | `index.html`, Home, Portal, Shop, Workbench, Control, `P0GameLab` and portal definitions are checked against explicit English document language and curated high-signal Polish UI phrases |
-| Pinned Chess English | EXACT SOURCE + BUILD GUARD | Exact commit `e134964e9c8b7edc43c26b508973f6fb658af90d` is the signed mixed-language cleanup; exact guest/auth source is English. Foundation assembly now checks the actual compiled HTML/JS before copying it |
-| Pinned Terra English | EXACT SOURCE + BUILD GUARD | Exact commit `ae90f7367587e0973782c470cde3f5103c0540fc` has English document metadata/UI evidence. Compiled HTML/JS is now guarded; scientific/data-contract keys are deliberately preserved |
-| 8 Planets English | WRAPPER ENGLISH / SOURCE BLOCKED | Records identify recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5`, but no editable GitHub source for that revision is exposed through the connected search. Cross-origin UI is not falsely labeled translated |
-| Hosted Froge English | WRAPPER ENGLISH / CANONICAL SOURCE BLOCKED | Live Studio remains preserved. Reviewable GitHub `ModelStudio.tsx` still contains Polish product UI, but that snapshot is not proven identical to the newer hosted Site and is not deployed over it |
-| WORLDIFACT model preview reliability | SOURCE IMPLEMENTED / TESTED IN CONTINUATION 1 | Person metadata no longer causes a second GLB load; model lifetime is source-bound; stale models are rejected/released and shared PBR resources dispose once |
-| Froge texture truth/evidence patch | DRAFT SOURCE PR / CI PASS | Froge PR #16 head `9cfc57f7f57b67a6ceb468e4025c32b53d8fa881`; run `35163335466` passed the no-paid Oracle/Codex/Blender workflow. Requested 4K/8K is not treated as actual detail unless exported pixels reach it |
-| Existing Froge structural quality checks | SOURCE INSPECTED | Current reviewable source checks garment containment, free-hand garment crossings, grip contacts, fan apertures, packed GLB textures, UV retention, anatomy metadata and GLB reimport; it explicitly leaves likeness and print readiness unassessed |
+| Native WORLDIFACT / AI Game Lab English | SOURCE GUARDED | `index.html`, Home, Portal, Shop, Workbench, Control, `P0GameLab` and portal definitions have English regression coverage |
+| Chess English | SOURCE FIX PREPARED / TESTED | Draft Chess PR #143, revision `705d7b0fe5fff03a5d7975fe094804af1eef44ea`, changes the remaining direct `Gracz online` fallback to `Online player`. Optional translated catalogs remain supported. Chess run `35167870190` passed typecheck/tests/build/smoke |
+| Terra main English presentation | VERIFIED MECHANISM / STATIC BACKLOG | Pin `ae90f7367587e0973782c470cde3f5103c0540fc`; main document is English and `contest-runtime.js` maps reviewed legacy UI phrases to English. Standalone pages such as `eclipse-live/gallery.html` remain genuinely Polish and must be translated upstream in later batches |
+| Foundation source pins | SINGLE SOURCE OF TRUTH | Composite foundation action now reads validated Chess/Terra SHAs from `config/foundation-sources.json`, fixing the duplicate hardcoded-pin failure exposed during this continuation |
+| 8 Planets English | WRAPPER ENGLISH / SOURCE BLOCKED | Records identify recovered revision `6f5f239239f05e72b029cc1014e982a587a2ece5`, but no editable GitHub source for it is exposed here. Cross-origin UI is not falsely labelled translated |
+| Hosted Froge English | WRAPPER ENGLISH / CANONICAL SOURCE BLOCKED | Live Studio remains preserved. Reviewable GitHub source contains Polish product UI but is not proven identical to the hosted Site and is not deployed over it |
+| WORLDIFACT model preview reliability | SOURCE IMPLEMENTED / TESTED | Stale/late GLBs cannot replace the current model and shared PBR resources dispose once |
+| Froge texture/FBX evidence | DRAFT SOURCE PR / CI PASS | Froge PR #16 head `ab5b6523c45dfc45cddeffe35d979290a38d9d72`; run `35167461563` passed the no-paid Python/Codex/MCP/Blender workflow. Requested 4K/8K is separated from actual pixels and FBX is rejected if Blender cannot reopen it with finite geometry/material names/UV presence |
 | Visual likeness / anatomy | NOT PROVEN | Hair/root continuity, face/neck/jaw/shoulder proportions, hands and controlled visual comparison still need canonical-source/runtime evidence; structural tests are not a likeness pass |
-| UV/PBR/FBX preservation | PARTIAL | GLB packed textures/UV and some material contracts are checked. Stronger material-survival evidence across GLB/FBX reimport remains a priority |
+| UV/PBR preservation | PARTIAL | GLB texture/UV checks plus real Blender FBX reimport now exist. FBX shader equivalence remains explicitly unverified |
+| Continuation-2 WORLDIFACT CI | PASS | Code head `8b53331195d22de1d2b1dd770fa92b698592ea76`, run `35168300680`: 114/114 tests, lint 9 warnings/0 errors, TS, HTTP smoke, build, reviewed foundation assembly, Worker dry-run and read-only hosted-Studio check all passed |
 | New costs | NONE | No paid generation, GPU/API job, quota increase, secret change, Oracle install, order or private archive bypass |
-| Final contest release | NO-GO | Canonical hosted source/device generation, controlled visual quality, remaining external localization and final submission/media checks are incomplete |
-
-## Continuation 2 implementation
-
-WORLDIFACT now contains a bounded localization guard in `scripts/lib/english-ui.mjs` with unit coverage in `tests/english-ui.test.mjs`. It does **not** attempt language detection over arbitrary data. It only protects authored UI against known high-signal Polish phrases and verifies English document language where applicable.
-
-`scripts/build-foundations.mjs` applies that guard to the actual compiled output of the pinned Chess and Terra revisions before those assets are copied into the release. Native WORLDIFACT and AI Game Lab source receive equivalent regression coverage. This makes localization a release-time property rather than a one-off manual observation.
-
-Material commits for this package are recorded in `QUALITY_EN_SHIFT.md`; the latest material code head is `9761b8293accb3343834cea8d078b1268fcb54be`.
-
-A new PR CI run was started for these changes. At the continuation checkpoint, run `35167247789` had begun successfully but had not yet completed all foundation/deploy-check steps. **Do not call continuation 2 verified until that run or a later current-head run completes green.**
+| Final contest release | NO-GO | Canonical hosted source/device generation, controlled visual quality, Terra/static + 8 Planets + live Froge localization and final submission/media checks remain incomplete |
 
 ## Correct generator boundary
 
@@ -40,21 +31,28 @@ The active generator remains:
 
 WORLDIFACT `/shop` provides English navigation and permanent direct-open fallbacks. The hosted Studio owns prompts/photos, Codex/Blender execution, previews, exports, accounts and stored work. The old `forge-studio-public` page is not the active generator. PR #28 does not copy private assets or migrate the Studio backend.
 
-The reviewable GitHub source branch `teslaeco/Froge-MPC-2-test:codex/v27-mcp-startup-audit` is useful for source-only improvements but is not proven identical to the newer private Site. Source-only patches therefore remain review-only until deliberately ported to the canonical runtime.
+The reviewable GitHub source branch for Froge remains useful for source-only improvements but is not proven identical to the newer private Site. Source patches remain review-only until deliberately ported to the canonical runtime.
 
-## Verification boundaries
+## Continuation-2 verification notes
 
-Froge PR #16 passed workflow run `35163335466` (`Oracle Codex MCP (no paid API)`). That workflow uses Python 3.9/3.12 regression suites, fixture model responses, a real Codex/Code Mode MCP round trip, official Blender 4.3 build/render/FBX checks and packaging. It did not call a paid model API. This verifies source/runtime contracts, not photographic likeness.
+The final green WORLDIFACT run is:
+https://github.com/teslaeco/WORLDIFACT/actions/runs/35168300680
 
-Earlier WORLDIFACT run `35163081507` remains valid for continuation-1 code only: 108/108 tests, lint with nine warnings/zero errors, TypeScript, HTTP smoke, production build, foundation assembly and Worker dry-run. It must not be used as verification of continuation-2 material code.
+It verified the reviewed Chess revision `705d7b0...` and Terra revision `ae90f73...` through the foundation checkout/build path. Earlier red runs were not ignored: one exposed an over-broad localization scan that confused optional locale data with default UI, another exposed duplicate hardcoded foundation pins, and another exposed genuinely Polish standalone Terra HTML. The final implementation distinguishes these cases instead of weakening them into a false all-English claim.
+
+Froge PR #16 no-paid verification:
+https://github.com/teslaeco/Froge-MPC-2-test/actions/runs/35167461563
+
+This verifies source/runtime/export contracts using Python regression suites and real Blender 4.3 paths; it does not prove identity likeness or manufacturing readiness.
 
 ## Remaining work
 
-1. Confirm the current continuation-2 WORLDIFACT CI result and repair any localization/build regression without weakening the guard.
-2. Strengthen preserved-original UV/PBR and GLB/FBX reimport/material evidence in the reviewable Froge source, then keep that PR source-only until canonical runtime access exists.
-3. Continue anatomy/garment quality only where real Blender validation is available: hair/root continuity, face/neck/jaw/shoulders, hands and intersections.
-4. Translate reviewable Froge source separately where useful, but do not claim it changes the live Studio. Translate 8 Planets only when its real editable source is accessible.
-5. Keep PR #28 and Froge PR #16 unmerged/unpublished until explicit release approval. On continuation 5 provide the consolidated Polish GO/NO-GO report.
+1. Translate Terra standalone/static pages upstream in bounded batches; `web/public/eclipse-live/gallery.html` is a confirmed Polish example.
+2. Continue reviewable Froge English separately without claiming it changes the live hosted Site.
+3. Continue anatomy/garment quality only where real Blender validation exists: hair/root continuity, face/neck/jaw/shoulders, hands and intersections.
+4. Strengthen PBR/material evidence beyond structural FBX reimport without inventing shader equivalence.
+5. Translate 8 Planets only when real editable source access is restored.
+6. Keep WORLDIFACT PR #28, Chess PR #143 and Froge PR #16 unmerged/unpublished until explicit release approval. Continuation 5 will provide the consolidated Polish GO/NO-GO report.
 
 ## Historical production evidence retained
 
@@ -70,4 +68,4 @@ Earlier native Astra/Oracle generated-artifact evidence remains historical and i
 
 ## Truth boundary
 
-Distinguish DEPLOYED, SOURCE IMPLEMENTED, TESTED, OWNER-REPORTED and UNKNOWN/BLOCKED. Never call a linked Studio a migrated backend, preview cleanup a proven likeness improvement, pixel-size metadata new texture detail, test fixtures real generated models, HTTP success a device pass, or an unreviewed MAKE candidate manufacturing-ready.
+Distinguish DEPLOYED, SOURCE IMPLEMENTED, TESTED, OWNER-REPORTED and UNKNOWN/BLOCKED. Never call a linked Studio a migrated backend, preview cleanup a proven likeness improvement, pixel-size metadata new texture detail, a Blender reimport check visual/PBR equivalence, test fixtures real generated models, HTTP success a device pass, or an unreviewed MAKE candidate manufacturing-ready.
