@@ -31,6 +31,11 @@ jobs:
         run: python3 tools/fast_preview/apply.py .upstream/fast-froge/oracle_connector .fast-review/worker
       - name: Compile all patched Python
         run: python3 -m compileall -q .fast-review/worker
+      - name: Check exact owner v33 source, staging safety and runtime regressions
+        env:
+          FROGE_SOURCE_ROOT: ${{ github.workspace }}/.upstream/fast-froge/oracle_connector
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 tools/fast_preview/test_installed_v33.py -v
       - name: FAST profile, actual HTTP and supervisor completion regressions
         env:
           FROGE_PATCH_ROOT: ${{ github.workspace }}/.fast-review/worker
