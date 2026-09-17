@@ -8,4 +8,5 @@ Disabled: legacy public Oracle jobs and procedural world-blueprint spending.
 Automatic paid test: none. The user explicitly presses Generate in the page.
 If all 6 attempts have already been reserved, stop without increasing the ceiling or enabling more spending.
 
-Operational retry: the first post-PR31 run 35188573555 was cancelled before any job was created by the shared legacy pilot queue. Its jobs list was empty; GitHub rejected retrying failed jobs. This marker permits a fresh read/check after isolating that queue. It grants no new attempt, no larger ceiling and no automatic generation.
+Operational retry 1: run 35188573555 was cancelled before any job was created by the legacy pilot queue. No counter read, reservation or activation occurred.
+Operational retry 2: run 35189108573 reached the gate, but depth-one fetching removed HEAD's parent and the gate incorrectly skipped. No allowance check or activation occurred. The corrected gate uses read-only ls-remote, is tested against actual local shallow Git repositories, and surfaces missing history as an error. This marker permits only the same previously unexecuted check; it grants no new attempt or larger budget.

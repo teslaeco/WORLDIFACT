@@ -5,9 +5,6 @@ on:
     types: [completed]
 permissions:
   contents: read
-# Legacy P0 continuations share worldifact-production and can cancel pending
-# peers before a job exists. Keep this continuation independently serialized;
-# both source guards below still prevent deploying an obsolete main revision.
 concurrency:
   group: worldifact-native-studio-resume
   cancel-in-progress: false
@@ -26,15 +23,8 @@ jobs:
         id: gate
         shell: bash
         run: |
-          git fetch --no-tags --depth=1 origin main
-          if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]; then
-            echo 'run=false' >> "$GITHUB_OUTPUT"
-            echo 'Newer main exists; no stale source or allowance deployment.'
-          elif git diff --name-only HEAD^1 HEAD | grep -qx 'ops/STUDIO_RESUME_ORIGINAL_SIX_20260917'; then
-            echo 'run=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run=false' >> "$GITHUB_OUTPUT"
-          fi
+          eligible=$(bash scripts/studio-release-gate.sh)
+          echo "run=$eligible" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         if: steps.gate.outputs.run == 'true'
         with:
@@ -58,13 +48,8 @@ jobs:
         if: steps.allowance.outputs.eligible == 'true'
         shell: bash
         run: |
-          git fetch --no-tags --depth=1 origin main
-          if [ "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)" ]; then
-            echo 'deploy=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'deploy=false' >> "$GITHUB_OUTPUT"
-            echo 'Main advanced while checking. No stale deployment.'
-          fi
+          eligible=$(bash scripts/studio-release-gate.sh current)
+          echo "deploy=$eligible" >> "$GITHUB_OUTPUT"
       - name: Resume only unused original reservations
         if: steps.current.outputs.deploy == 'true'
         run: npx wrangler deploy --config .studio-approved.wrangler.json
