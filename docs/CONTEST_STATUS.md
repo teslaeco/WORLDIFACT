@@ -1,62 +1,80 @@
-# WORLDIFACT status — browser fetch hotfix, 17 September 2026
+# WORLDIFACT status — browser fetch hotfix deployed, 17 September 2026
 
-## Current incident
+## Completed scoped repair
 
-The owner supplied an Android screenshot at 09:51 showing **Connector ready / remaining 1 / reserved 5**, then:
+**PR #34 is merged and deployed.** The Android `Failed to execute 'fetch' on 'Window': Illegal invocation` defect was traced to the coordinator passing itself as the receiver of native browser fetch. The constructor now binds fetch to `globalThis` before storing it. No generator/provider, form layout, prompt, photo, receipt or archive redesign was made.
 
-`Failed to execute 'fetch' on 'Window': Illegal invocation`
+- PR: https://github.com/teslaeco/WORLDIFACT/pull/34
+- Reviewed head: `2ef055b9aa337eae7ac01b384721d7ee9b4c3141`
+- Merge/deployed source: `4313e9c83f0dbdecd25eac3bbb1bd978d249b30b`
+- Final Cloudflare version: `df44e99c-d296-4b98-a2e7-7956a754b1fc`
+- Public Shop: https://worldifact.xodobrox.workers.dev/shop
+- Original hosted Studio remains unchanged: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
 
-This is a client-side invocation error, not evidence of an invalid prompt, exhausted API credits, Oracle outage, authentication failure or new-model quality. The previous release's green Node/API/SSR checks did not prove browser interaction; that gap is now explicitly covered with receiver-sensitive transport regressions.
+This is the narrow continuation of the owner's authorized Shop repair. No separate Codex/Copilot cloud-agent run is claimed; changes were made through connected GitHub tools.
 
-## Confirmed cause and source correction
+## Cause and consequences
 
-PR https://github.com/teslaeco/WORLDIFACT/pull/34 uses branch `fix/studio-fetch-receiver-20260917`, based on main `3c7307ac594f2e37df55e6bf0ed5434b4e132ad8`.
+The previous constructor stored `this.fetcher = fetcher`; calls such as `this.fetcher('/api/studio/prepare', ...)` supplied the coordinator, not the Window/global receiver. The browser rejected that method invocation before network dispatch. The standalone readiness check did not use that receiver, which explains the screenshot showing Connector ready while Generate failed before a receipt appeared.
 
-`StudioCoordinator` stored the browser function as `this.fetcher = fetcher`, then invoked `this.fetcher(...)`. That supplies the coordinator as `this`, which the browser Window fetch rejects. The standalone connection check does not use that receiver, explaining the green readiness panel and failed Generate action.
-
-The runtime change is limited to binding once in the constructor:
+The corrected line is:
 
 ```ts
 this.fetcher = fetcher.bind(globalThis)
 ```
 
-This covers free receipt preparation, the single submission, status recovery and artifact reads. It does not change prompts, model/provider, Oracle configuration, input schemas, receipts, archive data or retry semantics. The failure at the first preparation call occurs before server dispatch or paid reservation for that call; it is not a new full-account usage audit.
+It applies consistently to preparation, the single submission, status recovery and explicit artifact retrieval. The failure at the initial preparation call did not itself reserve a paid attempt. This is an analysis of that specific error path, not a full account/billing audit.
 
-Reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Errors/Called_on_incompatible_type documents Illegal invocation from an incompatible `this`. The actual faulty call and constructor were read in the current repository, not inferred from that documentation alone.
+Reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Errors/Called_on_incompatible_type . The actual faulty constructor and call were also read in the repository.
 
-## Regression coverage
+## Verified release and tests
 
-`tests/studio-fetch-receiver.test.ts`:
+| Check | Result | Evidence |
+|---|---|---|
+| Final-head CI | PASS | Run `35197443263`: verify, foundations, Worker dry-run and existing read-only probes |
+| Normal production publish | PASS | Run `35197625660`, job `105124503630`; public HTML/assets/DEMO smoke passed |
+| Preserve existing Studio window | PASS / EXECUTED | Run `35197712616`, job `105124782866`; all steps completed, including real counter read, conditional deployment and final readiness verification |
+| Complete final-source tests | **155/155 PASS** | Final continuation log at 08:04:53 UTC; zero failed/skipped/cancelled tests; lint 9 warnings / 0 errors; TypeScript, HTTP, build and reviewed foundations passed |
+| Fresh paid model request | **NOT REQUESTED** | Tests use controlled responses; final status log records `paidGenerationRequested: false` |
 
-- Reproduces the old raw-property call and proves the receiver check throws before transport activity.
-- Uses the real coordinator's default fetch path with a receiver-sensitive function for prepare, one submit, poll, GLB and PBR retrieval.
-- Verifies injected fetch, lost acceptance and restored same-job recovery without a second submission.
+Three new receiver-sensitive regressions demonstrate the old error before transport, exercise the real default constructor through prepare/one submit/poll/GLB/PBR, and check injected fetch plus lost-response/reload recovery without another submission. The old Node fetch and arrow-function mocks did not enforce this browser API requirement. The new tests explicitly model it; they are not a physical Android or real browser session.
 
-These use deterministic controlled responses; they are not real browser/WebGL or live AI-generation tests. Existing tests remain in place. Full final-head verify, foundation assembly and Worker dry-run are required before release.
+A further regression proves hotfix publication cannot extend the original deadline or enable an expired window. Existing tests were retained.
 
-## Preserve the existing allowance during this repair
+Direct evidence:
 
-The previous verified activation in run `35189566878` used five cumulative attempts, left one, and had deadline **2026-09-17T09:23:37.535Z** (11:23:37 Poland/Netherlands).
+- https://github.com/teslaeco/WORLDIFACT/actions/runs/35197443263
+- https://github.com/teslaeco/WORLDIFACT/actions/runs/35197625660
+- https://github.com/teslaeco/WORLDIFACT/actions/runs/35197712616
 
-An ordinary main deployment uses the disabled-cost base. The hotfix therefore updates the existing one-time resume marker, with the same read-only usage/readiness guards, but **pins the deadline to the already activated timestamp** rather than opening another three hours. Tests verify no added attempts, no reset, no deadline extension and refusal after expiry.
+## Actual allowance after publication
 
-Maximum remains **six attempts cumulatively**, not six new requests. The actual remaining count must be re-read after publication; a screenshot is not an indefinitely current counter. Unknown counter/readiness, used >= 6 or the original deadline passing means no activation. Legacy public Oracle and procedural-blueprint spending remain disabled. No paid generation is requested by this repair.
+The final public read-only verification at **2026-09-17T08:05:30.720Z** (10:05 Poland/Netherlands) returned:
 
-## Production baseline and pending hotfix
+```json
+{
+  "ready": true,
+  "used": 5,
+  "remaining": 1,
+  "expiresAt": "2026-09-17T09:23:37.535Z",
+  "paidGenerationRequested": false
+}
+```
 
-Before PR #34, deployed source is `69fb684914450508d48433b49e7581801acac81b`, version `612d5a88-be90-4bdd-994c-e4f958b96e06`.
+The hotfix preserved **one unused attempt within the original absolute cumulative ceiling of six**. It did not reset/refund the counter, add credits or start another three-hour window. The deadline remains **09:23:37 UTC / 11:23:37 Poland and Netherlands, 17 September 2026**, or generation stops earlier if that last attempt is reserved. This is the timestamped result, not an indefinitely current balance.
 
-PRs #31–33 delivered the in-page Shop and passed 151 tests plus release/public smoke, but the owner's screenshot is evidence of a browser action failure in that release. Do not describe it as a proven working generation flow. The current hotfix is not deployed until actual release evidence is recorded below.
+An ordinary deployment temporarily uses the disabled-cost base. The existing guarded continuation restored only the still-unused capacity and pinned the already activated deadline. It rejects unknown counter/readiness, used >= 6, and expiry. Signed Studio jobs remain separate from disabled legacy public Oracle and procedural world-blueprint spending. No new key, provider configuration, Oracle installation or private-data migration occurred.
 
-- Shop entry: https://worldifact.xodobrox.workers.dev/shop
-- Original Froge preserved: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
-- Earlier complete release ledger: https://github.com/teslaeco/WORLDIFACT/blob/3c7307ac594f2e37df55e6bf0ed5434b4e132ad8/docs/CONTEST_STATUS.md
-- Original execution brief remains `docs/CODEX_TASK_SHOP31_FINISH.md`.
+This documentation-only `[skip ci]` update must not redeploy and close the window. Future source releases must recheck remaining capacity and the original expiry, not automatically extend them.
 
-## Release and truth boundaries
+## User-facing recovery
 
-This narrow defect correction continues the owner's authorized Shop repair; no new application design, provider, external Studio replacement, account/secret change or competition submission is involved. Do not edit the user's reference images or private archive. No paid test or new spending approval is implied.
+Existing open browser tabs may still contain the previous JavaScript. Preserve unsent text before reloading the Shop to obtain the new bundle; do not clear browser storage, since that can remove receipts and the local archive. Submit a new job only through an explicit Generate click. Once a receipt exists, use Recover this job / reload result instead of creating another generation because of a network error.
 
-Keep code verification, deployment, current connector/allowance readiness and fresh successful generation as separate outcomes. Native 4K/8K detail, visual likeness, complete hosted-source localization, public product catalog and manufacturing readiness remain unproven. MAKE remains validation-required. No physical Android or prohibited browser test is claimed.
+## Unchanged product boundaries
 
-Record final-head CI, merge/deploy SHA and the independently observed unchanged-window outcome after publication. The final documentation-only update must not redeploy and disable that window.
+The native Shop stays within WORLDIFACT with a return link and all five worlds. The half-skull character is an existing example, not a generated replacement result. Original Froge remains an optional separate tab; its private account/archive and hosted source were not changed.
+
+Actual fresh AI generation, physical Android/WebGL interaction, visual likeness, native 4K/8K detail and complete export-material equivalence are **not tested by this hotfix**. Connector readiness, source tests and deployment are separate from successful generated output. Device archive is not a public product catalog. MAKE stays validation-required. No contest decision or submission is performed.
+
+Earlier full release ledger, including PRs #28–33 and their evidence: https://github.com/teslaeco/WORLDIFACT/blob/3c7307ac594f2e37df55e6bf0ed5434b4e132ad8/docs/CONTEST_STATUS.md . The original implementation brief remains `docs/CODEX_TASK_SHOP31_FINISH.md`.
