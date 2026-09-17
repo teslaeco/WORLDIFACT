@@ -1,99 +1,53 @@
-# WORLDIFACT status — FAST installed and website published
+# WORLDIFACT status — Shop draft editing repair
 
-Date: 17 September 2026. Completed scoped maintenance and website release; fresh paid speed benchmark not run.
+Date: 17 September 2026. Active scoped repair: PR #37, `fix/shop-edit-after-result-20260917`.
 
-## Completed release
+## Owner report and verified cause
 
-- PR #36: https://github.com/teslaeco/WORLDIFACT/pull/36 — **MERGED**.
-- Reviewed head: `9efe873a71e53997056e8b6a7f442b8cd59a16ab`.
-- Deployed merge: `8b95f95c6b015bd645020cded76e174fb78a83fc`.
-- Cloudflare version: `9cfc1b17-2c6f-4af5-9464-49cb5cc4ed3a`.
-- Public Shop: https://worldifact.xodobrox.workers.dev/shop
-- Production workflow: https://github.com/teslaeco/WORLDIFACT/actions/runs/35236567410 — all steps SUCCESS.
-- Post-merge main verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35236567421 — SUCCESS.
-- Full executed task: [CODEX_TASK_FAST_PREVIEW.md](CODEX_TASK_FAST_PREVIEW.md).
+The owner's 17:08 Android screenshot shows the successfully generated knight, its saved receipt and archive, but the prompt/mode/purpose controls are disabled. Production code used `disabled={busy || !!saved}` and equivalent expressions. Any selected receipt therefore kept the form locked indefinitely, even after success, despite the help text saying drafts remain editable.
 
-The owner had authorized this website release after successful exact-v33 installation, restart and local verification. That condition was satisfied by the owner-side installer screenshot. No repeated consent or new paid-test authorization was inferred.
+This is a frontend lifecycle defect, distinct from the expired/disabled paid window. A functioning FAST connector does not make a form editable if it has an explicit disabled attribute. No Oracle reinstall, model regeneration, browser-data clearing or secret change is needed for this defect.
 
-## Oracle installation evidence
+Official control semantics checked: https://react.dev/reference/react-dom/components/textarea and https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/disabled.
 
-The completed Cloud Shell output supplied by the owner (phone at 16:43) reported `INSTALLED_AND_LOCALLY_VERIFIED`, source package `a1dfc7b847043d6f0f9f682ddd9db6137c5e5d9b`, `worker_service=active`, `tunnel_service=active`, and `paid_generation_requested=false`. At that moment `site_deployed=false` correctly indicated that the later website release was still separate; it is now superseded by the successful Cloudflare evidence above.
+## Implemented in PR #37
 
-The preserved rollback workspace is `/home/opc/.local/state/worldifact-fast/20260917T143508Z-16dbbba6`. Do not delete it or run the installer again merely to enable a model test. The installer's genuine local Codex/MCP/Blender verification used fixture model responses and did not consume a paid generation. The tunnel was not restarted.
+- The description, generation mode, purpose and STANDARD reference controls now edit a next-model draft independently of the selected result and available paid allowance. Inputs only lock for the submission/preparation operation that owns them, not forever because a receipt exists.
+- A running job remains immutable. The user may draft the next request while it runs, but no second job can start until the selected receipt's own terminal status is confirmed.
+- The prior preview, submitted description, downloads and archive stay unchanged during editing, switching mode and clearing the draft. A visible `Clear next-model draft` action affects only draft description/photos, with confirmation, and never removes the receipt or archived model.
+- Only an explicit Generate action can replace a completed selection. The coordinator verifies its own latest confirmed terminal state, snapshots inputs before waiting, and preserves the old receipt in same-origin device history before storing the new one.
+- Free preparation failure, unavailable allowance and storage failure do not discard the previous model or send a paid POST. Failed acceptance recovers only the newly prepared receipt by GET. Existing double-click protection, fetch binding, exact-input signature, server limits and archive-original preservation remain.
+- FAST retains its capability check and v1 restrictions: text-only, no reference photos/terrain, up-to-2K map ceiling. Choosing STANDARD restores the applicable photo/texture controls. Draft mode does not change the original result's generation profile or export identity.
+- No CSS, generator/Oracle source, cloud infrastructure, secrets, provider model, request ceiling or pilot/expiry marker was changed.
 
-This was owner-side execution through their authenticated Cloud Shell/SSH session. The assistant did not obtain an administrative Oracle session. Website source/review/publication was executed through the connected GitHub tools; no separate unobserved Codex/Copilot cloud-agent run is claimed.
+## Tests and evidence boundary
 
-## Public, independent post-release check
+New tests exercise the actual checked-in Shop component, its effect lifecycle and real input/submit handlers with deterministic storage/timer/HTTP adapters. They restore a completed result with zero allowance, edit the prompt, switch STANDARD/FAST, select/clear new references, preserve the old preview/receipt/archive, reject active-job replacement and verify one submission only after an explicit Generate action with a simulated available allowance.
 
-At **2026-09-17T14:54:27.517Z** (**16:54 Poland/Netherlands**), the existing authorized release probe made credential-free read-only GET requests and returned:
+Additional real-client tests cover terminal identity, unknown restored state, unchanged old receipt after failed free preparation, storage failure, lost next-job response and snapshot stability if a draft object changes while preparation is waiting.
 
-```json
-{
-  "path": "/api/studio/status",
-  "http": 200,
-  "generation": "NOT_REQUESTED",
-  "ready": false,
-  "photoReady": true,
-  "fastReady": true,
-  "oracle": "CONNECTOR_READY",
-  "reason": "DISABLED_OR_EXPIRED",
-  "allowance": { "used": 6, "limit": 0, "remaining": 0 }
-}
-```
+Initial run `35239946404` passed 175/176 tests, including all ten new behavioral cases; the only failure was the pre-existing native-fetch fixture's explicit dependency bundle not yet including the new `studioDraft.ts` helper. It was fixed by including that exact module, preserving the unknown-import assertion. The existing standalone Chromium API test now also exercises explicit next-job receipt preservation. It still uses inert data URLs only and is NOT a website preview or Android/WebGL test.
 
-The five-world Oracle status endpoint separately returned HTTP 200, `CONNECTOR_READY`, connectorVersion 33 and characterStandard 20. Blueprint `/api/health` remains DEMO with `generationReady=false`.
+Complete final-head verification is required before publication. Test fixtures are not a paid AI result, and successful source checks do not prove physical-device behavior. Recorded browser-preview security restrictions remain respected; no blocked page preview is retried indirectly.
 
-**FAST capability is installed and visible through the deployed website proxy. New paid generation is deliberately disabled.** These facts are not contradictory: `fastReady` reports installed profile support; `ready` also requires the approved spending gate. The recorded public counter still contains six previously reserved attempts. The normal release has the reviewed zero-limit/empty-expiry configuration; it does not reset the counter or grant new capacity. This read describes the observation time, not an indefinitely current balance.
+## Scope and approval
 
-No new model request, seventh attempt, refund/reset, deadline extension or new cloud resource was performed. The previous pilot expired at `2026-09-17T09:23:37.535Z`. A fresh bounded paid test needs explicit approval; do not tell the owner to reinstall or repeatedly press Generate to resolve that spending gate.
+The user requested that these broken fields be fixed on the existing site, continuing the already authorized scoped repair/publication workflow. This branch contains only the edit/next-job lifecycle repair and its tests/docs. Release only the reviewed expected head after full CI and public asset verification.
 
-The existing allowance-resume workflow `35236726753` completed its marker check and **skipped every activation/deployment step**. No pilot marker was edited by PR #36. This documentation update uses `[skip ci]` and changes no runtime source or production setting.
+The previous conversation includes approval of **one FAST test up to USD 5**. That approval is acknowledged; it is not missing and should not be requested again. It is also not proof of actual server activation, a successful request or an enforced monetary cap. This UI repair does not enable or execute that test and must not be reported as doing so. No seventh request, paid benchmark, budget reset/refund or expiry extension has occurred in this repair.
 
-## Verification performed
+Editing must work even when the paid window is disabled. The Generate button must accurately remain disabled when the server cannot accept a paid request. Do not promise that simply selecting FAST or editing a prompt reopens paid capacity.
 
-| Check | Actual result |
-|---|---|
-| Final reviewed-head WORLDIFACT | PASS, run `35236251527` |
-| Final FAST worker and real-Blender fixture | PASS, run `35236251415` |
-| Exact-v33 installation safety | PASS, run `35236251430` |
-| Cloud Shell launcher safety | PASS, run `35236251675` |
-| Production full test suite | **166/166 PASS**, no failed/skipped/cancelled tests |
-| Production lint / TypeScript / build | PASS; lint nine warnings, zero errors |
-| Reviewed application assembly | PASS, existing pinned Chess/Terra and ISS sources |
-| Worker dry-run and real deployment | PASS |
-| Public release smoke | PASS: 13 HTML routes, 23 matching hub assets, 102 original app entries/assets, API 404, deterministic DEMO and origin rejection |
-| Installed FAST via public proxy | VERIFIED `fastReady=true` and Oracle ready in the final no-cost probe |
-| New paid FAST model / 120-second end-to-end performance | **NOT TESTED** |
+## Preserved installation and production baseline
 
-The release probe gained one allowlisted Boolean (`fastReady`) and runs after publication. Two regressions confirm that it does not change readiness, spend capacity, follow authentication redirects, or expose keys, receipts, private URLs or prompts. A successful diagnostic does not invent an AI-generation result.
+Prior release ledger, including the complete Oracle installation/verification/rollback evidence and public FAST capability: https://github.com/teslaeco/WORLDIFACT/blob/19f9cd57573b3966d258c227813a105ca2aed611/docs/CONTEST_STATUS.md.
 
-Existing Chromium coverage exercises the native fetch/client fixture regression only. CPU/SSR/API fixtures and public asset checks do not establish physical Android use of the FAST selector or a complete new generation on the owner's phone. No blocked preview was retried through an alternative browser or path.
+- FAST installed by the owner on the exact reviewed Oracle v33, locally verified and restarted. Worker and tunnel were active; no paid model request by the installer.
+- PR #36 merged as `8b95f95c6b015bd645020cded76e174fb78a83fc`; preceding Cloudflare version `9cfc1b17-2c6f-4af5-9464-49cb5cc4ed3a`.
+- Prior public probe at 14:54:27 UTC showed `fastReady=true`, `photoReady=true`, Oracle `CONNECTOR_READY`, paid `ready=false`, `DISABLED_OR_EXPIRED`, six reserved attempts and zero remaining. These are timestamped observations, not an indefinitely current counter.
+- Original hosted Studio remains https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/ . WORLDIFACT entry remains https://worldifact.xodobrox.workers.dev/shop . No authenticated iframe, top-level redirect or brief-export substitute is restored.
+- The owner's successful knight and approximately 16-minute duration remain the real baseline. No new 1–2-minute end-to-end performance, improved likeness, native 4K/8K, manufacturing approval, public store catalog/order or contest readiness is claimed.
 
-## What the user now gets
+## Handoff
 
-The Shop includes `Generation mode`: STANDARD remains the default; FAST DRAFT is an explicit choice when the connected worker confirms the exact profile. Choosing FAST does not itself submit a job. If an old model receipt is selected, the existing separate-model action must be used to start a different intent; do not clear site data, which contains the private device archive.
-
-FAST v1 targets a compact text-described single object. It uses one Blender build with bounded AI requests/output and a 110-second orchestration guard, up-to-2K maps, core GLB/materials and an editable Blender checkpoint first. Optional rendered review and full interchange exports are deferred. Reference photos, terrain and larger-texture workflows remain STANDARD. A short work deadline is not a guaranteed 1–2-minute result.
-
-Required file/geometry/current-checkpoint checks remain. FAST output is GENERATED/UNREVIEWED, not visually accepted or manufacturing approved. The proxy checks capability before preparation and again before reservation, so unsupported workers cannot silently run STANDARD for a FAST request. Old STANDARD canonical bytes/digests, native fetch binding, receipt-before-POST, GET-only recovery and exact result identity are preserved.
-
-The page stays on WORLDIFACT, with its return link and all five worlds. No authenticated iframe, automatic external redirect, stock-model replacement or brief-export generation flow is restored. Existing original models, the successful knight, private archives, account settings and other worlds were not migrated or deleted.
-
-Original hosted Studio, unchanged: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
-
-## Performance and next release boundary
-
-The owner's successful knight and approximately 16-minute wait remain the real baseline. Earlier fixed-scene Blender comparisons (about 41–44 seconds with optional review versus 0.615 seconds without it for identical GLB bytes) exclude AI, queue/startup, transfer and browser display. They are not evidence that a new live FAST job finishes in two minutes.
-
-**Completed:** exact-v33 installation/restart/local verification, authorized PR merge, production publication, public FAST capability confirmation.
-
-**Pending:** explicit bounded budget for a new FAST test, enabling only that approved test capacity, and measuring one real click-to-visible result with its artifact identity and quality review. Do not claim speed, likeness, native 4K/8K, manufacturing suitability, public sale/catalog or competition readiness from the completed infrastructure checks.
-
-## Historical details retained
-
-- Exact v33/source match: https://github.com/teslaeco/WORLDIFACT/blob/a02d74529a6b9b754f7e46765867e71404b5a48c/docs/CONTEST_STATUS.md
-- Tested installer/rollback: https://github.com/teslaeco/WORLDIFACT/blob/a1dfc7b847043d6f0f9f682ddd9db6137c5e5d9b/docs/CONTEST_STATUS.md
-- Approved pinned Cloud Shell launcher: https://github.com/teslaeco/WORLDIFACT/blob/cd0ff1ddded5f5590cea4ac8163bbb530e41a02c/docs/CONTEST_STATUS.md
-- Pre-release owner-side installation evidence: https://github.com/teslaeco/WORLDIFACT/blob/9efe873a71e53997056e8b6a7f442b8cd59a16ab/docs/CONTEST_STATUS.md
-
-Contest submission and final eligibility remain separate and were not executed or re-decided in this maintenance release.
+GO for this UI repair only after final exact-head checks. Record merge SHA, publication outcome and public probe in the PR and this ledger after success. Keep actual field editing, paid capacity and fresh model performance as three separate claims. Do not tell the user to clear browser storage or install the Oracle patch again.
