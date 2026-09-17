@@ -1,89 +1,69 @@
-# WORLDIFACT status — FAST recovery and source completion, 17 September 2026
+# WORLDIFACT status — Oracle v33 identified, 17 September 2026
 
-## Recovery of the interrupted response
+## New owner-side evidence
 
-The owner asked to resume after the chat displayed a failed-thinking message. The exact reason for that chat-side interruption is UNKNOWN; it is not evidence that the generator, source or CI failed.
+The owner ran the read-only SSH inventory from OCI Cloud Shell. The latest screenshot (13:56 local display) shows host `froge-blender-vcn`, user `opc`, architecture `aarch64`, and `worker_found: true`. The command reached the generator VM, not the temporary Cloud Shell filesystem. This is owner-provided output, not a direct administrative session held by the assistant.
 
-At recovery, PR #36 still contained head `805d40ed33910cc1fbc0f9f72d33303e805a2124`. Both associated checks had succeeded: `35207836071` (WORLDIFACT) and `35207836053` (FAST worker). Artifact `10490781508` was recovered through the authorized GitHub action. Its ZIP SHA-256 matched `b9b9f92ac01fb42b734fc5366bf30c4ce9e6411bd0d603271ac70b170bedadea`, and all 37 inner-manifest files were independently checked after extraction. No source or artifact had to be regenerated merely because chat delivery failed.
+| Source file | Owner-reported Git blob SHA | Comparison |
+|---|---|---|
+| `server.py` | `4e40ac5e30b1dadd3c2b97c18d746a630122ccf3` | Exact public v33 blob recovered and reviewed |
+| `codex_runner.py` | `55a4442f411a7e2c6060cca298a056004d30d9d4` | Matches the reviewed FAST base |
+| `blender_mcp.py` | `1fe58476bd1366c8c8106dc76439db1974fa51a4` | Matches the reviewed FAST base |
+| `runtime/run.py` | `48e4e456084b5bbd7e6b399f4210992d41bfdfe7` | Matches the reviewed FAST base |
 
-## Current reviewed change
+The public installed server blob was successfully read through the GitHub connector. Three differences from the reviewed v35 server were identified: the connector version number; two advertised reference-acceptance/release fields; and the choice of raw agent acceptance versus the newer host review-evidence result. A local reconstruction of these exact differences reproduces the installed blob SHA, so this is not a guess based on the version label.
 
-- PR: https://github.com/teslaeco/WORLDIFACT/pull/36
+The existing FAST updater for v35 must NOT be applied directly to v33, and changing its expected checksum to ignore differences would not be sufficient review. The new narrow v33 adapter preserves the installed release identity and its existing STANDARD acceptance behavior; FAST still returns an explicitly unreviewed result.
+
+## Implemented and tested in the existing PR
+
+- PR #36: https://github.com/teslaeco/WORLDIFACT/pull/36
 - Branch: `perf/fast-preview-profile-20260917`
-- Complete Codex task: [CODEX_TASK_FAST_PREVIEW.md](CODEX_TASK_FAST_PREVIEW.md)
-- Patch and installation boundaries: [../tools/fast_preview/README.md](../tools/fast_preview/README.md)
-- Detailed pre-resume ledger: https://github.com/teslaeco/WORLDIFACT/blob/805d40ed33910cc1fbc0f9f72d33303e805a2124/docs/CONTEST_STATUS.md
-- Earlier native Shop/fetch release ledger: https://github.com/teslaeco/WORLDIFACT/blob/538b94b9700e3927772c6cd31ee7bbc5e897c160/docs/CONTEST_STATUS.md
+- Full task: [CODEX_TASK_FAST_PREVIEW.md](CODEX_TASK_FAST_PREVIEW.md)
+- General patch boundaries: [../tools/fast_preview/README.md](../tools/fast_preview/README.md)
+- New adapter: `tools/fast_preview/installed_v33.py`
+- New regression suite: `tools/fast_preview/test_installed_v33.py`
+- Read-only Cloud Shell helper: `tools/fast_preview/oracle_preflight.py`
 
-The resume review identified and corrected three concrete implementation issues in the proposed FAST runner:
+The v33 adapter verifies all four exact source hashes, applies only reviewed FAST changes, compiles each output and saves five patched source files plus four original copies in a NEW separate staging directory. It does not install them. It rejects changed source, a pre-existing FAST helper, symlinks, an existing destination, or output inside the live worker. It never copies private `state`, jobs, credentials, runtime tools or verification receipts.
 
-1. Its per-turn developer guidance still described the STANDARD budget and encouraged optional rendered review/full finalization. FAST now receives consistent one-build guidance, its real remaining six-request ceiling, no optional review/finalization request and the existing exact-error correction guidance. STANDARD guidance is untouched.
-2. The trusted gateway used low reasoning for FAST, but the CLI still requested high. Both now agree; STANDARD remains high. This does not change the provider, model identifier, service tier or spending approval.
-3. Returning early after a checked FAST result skipped ordinary stdout-reader cleanup. The FAST termination path now drains the reader before its log is closed.
+Code head `784d26a577b73765b8bf552564a1ad23d07615a3` passed:
 
-These changes are assembled by `tools/fast_preview/completion.py` inside the existing hash-checked patcher. The installed worker is NOT monkey-patched or modified by this source operation.
+- WORLDIFACT full verification: https://github.com/teslaeco/WORLDIFACT/actions/runs/35219496836
+- Worker review: https://github.com/teslaeco/WORLDIFACT/actions/runs/35219496917
 
-## Verification of the resume fixes
+The worker run includes the new exact-v33 staging tests and runs the existing FAST policy/local-HTTP/supervisor regressions with the v33 server variant. Original source preservation, no copying of private sentinels, mismatched-source refusal and preservation of STANDARD behavior are checked. Existing compilation/standard tests and the real Blender fixture still pass. This is source/fixture evidence, not an installation on the owner's ARM VM.
 
-Code head `33bfdd07db6828620afadd3c8df2759d1e66b173` passed both checks:
+The subsequent Cloud Shell helper is read-only. It resolves the existing running `froge-blender` instance in `eu-amsterdam-1`, uses the existing SSH key with strict host checking, rechecks source identity, reads service states and only the count of unfinished jobs, and checks the existing binary/Blender verification receipt. It neither prints keys nor reads the OpenAI provider configuration. It will import only the reviewed installer helper with exact SHA `ee6e3471d947a69196d1d554a6f22acf080b53e9` for read-only binary verification. A mismatched helper remains UNKNOWN, not executed blindly.
 
-- https://github.com/teslaeco/WORLDIFACT/actions/runs/35211376317 — complete WORLDIFACT verification, foundations and Worker dry-run.
-- https://github.com/teslaeco/WORLDIFACT/actions/runs/35211376443 — exact-source worker assembly, compilation, FAST and existing STANDARD regressions, real Blender fixture comparison and artifact creation.
+The helper was syntax-checked locally, including its remote program, and tested with mocked OCI/SSH calls for exact VM resolution and strict host verification. Those local tests did not connect to Oracle. The user-facing copy is `WORLDIFACT_FAST_ORACLE_CHECK.py`.
 
-The new tests exercise the actual CLI argument builder and Gateway continuation text for both profiles. The real supervisor fixture retains a checked GLB and terminates an inert child instead of waiting for its 30-second sleep; background-reader errors are checked. All provider responses are fixtures. No new paid generation or API credit use is claimed.
+## Next operational boundary
 
-This ledger update changes documentation only; the final exact-head verification and artifact identifiers are recorded in the PR handoff. Do not treat a successful source check as an Oracle deployment.
+**Four primary source identities: confirmed against owner output and public source. Complete installed runtime/dependency verification: still pending. FAST activation: not performed.**
 
-## Implemented FAST behavior
+Changing Codex/MCP source invalidates its current verification receipt. Do not fabricate that receipt or deploy files before checking the supported verifier and ensuring no active job will be interrupted. The next user-side helper reports Python version, installer/runtime-check source identities, existing verified binary/source status, worker/tunnel states and unfinished-job count, without installing or restarting anything.
 
-The working STANDARD Shop is preserved. FAST v1 is a separate, explicit, opt-in profile for a compact text-described object, not a silent quality reduction or another generator.
+The old ZIP remains a review artifact. No instruction to unzip it into `$HOME/froge-connector` is given. A later installation must retain rollback copies, preserve all model/job/state data, run genuine verification and obtain the applicable production approval. Neither this source-stage adapter nor a GitHub merge installs Oracle services by itself.
 
-- Same existing Astra/Codex/Blender worker and same-origin WORLDIFACT interface.
-- Versioned `fast-draft-v1` capability required before receipt preparation and again before any paid reservation. Unsupported workers cannot silently run STANDARD for a FAST request.
-- One Blender build, six provider-request ceiling, 12,000 output-token ceiling and 110-second orchestration guard. This is not a guaranteed 120-second click-to-visible result.
-- Core GLB/materials and editable Blender checkpoint first; optional rendered review and full interchange packaging deferred.
-- Finite geometry, file/resource bounds, sandbox policy, current-execution identity, hashes and existing structural checks retained. Invalid, partial, stale, cancelled or late candidates are not returned as successful FAST results.
-- Explicit GENERATED/UNREVIEWED draft with `accepted=false` and `assessment_completed=false`; no forged `finish_model` receipt or manufactured likeness/print approval.
-- Requested map ceiling up to 2K; no source upscaling. Initial FAST does not accept reference images, people/portraits or terrain; use STANDARD explicitly for those cases.
-- Old STANDARD canonical input bytes and receipt digests remain compatible. Profile choice survives recovery and new archive records. One paid POST, native fetch binding, same-job GET recovery and separate current/archive/example identities remain.
-- The UI selector defaults to STANDARD. It does not offer an operational FAST choice until the connected worker advertises support. Deferred PBR/FBX exports are not presented as available FAST outputs.
+## Preserved FAST task and performance truth
 
-## Measured evidence, with its limits
+The owner previously showed a working generated chess knight in WORLDIFACT with its local archive and reported about 16 minutes. Its file and STANDARD pipeline are untouched. FAST is a separate capability-gated profile, not a replacement generator or a shorter timeout presented as measured output.
 
-The owner supplied a successful chess-knight screenshot showing an actual loaded GLB, explicit download controls and a device-archive entry, and reported approximately 16 minutes. That establishes owner-observed end-to-end success. Per-stage timing and the original knight's artifact hash have not been independently obtained.
+FAST v1 targets one compact text-only object: one Blender build, at most six provider requests/12,000 output tokens and a 110-second orchestration guard, followed by a checked GLB draft. Optional image review and full interchange packaging are deferred. Profile selection is explicit; old workers cannot silently accept it as STANDARD. Old STANDARD canonical input/receipt digests and archive entries remain compatible.
 
-Recovered exact-head `805d40ed` benchmark: official checksum-verified Blender 4.3.0, GitHub Ubuntu runner, four host CPUs, two Blender threads; one fixed rocket scene, STANDARD first and FAST second, one sample per profile in that run.
+Earlier exact-head `88ead6b` renderer fixture measured STANDARD 41.560 s versus FAST 0.615 s for the same fixed rocket GLB, with identical 397,056-byte output, 1,948 triangles, three materials and one 512x512 image. That comparison excludes real AI, Codex, Oracle queue/startup, transfer and browser rendering. It does not establish a new AI model within two minutes. Physical ARM/Android and fresh AI timing remain unverified.
 
-| Measured renderer path | Wall time | GLB evidence |
-|---|---:|---|
-| STANDARD preview, including five review PNGs | 41.820 s | 1,948 triangles, three materials, one 512x512 image |
-| FAST core export, with optional review deferred | 0.615 s | Same 397,056-byte GLB |
+Earlier detailed evidence, source fixes and artifacts are preserved at:
+https://github.com/teslaeco/WORLDIFACT/blob/88ead6b1619bdc4ac18b5c7113ef25360af827a7/docs/CONTEST_STATUS.md
 
-Both GLBs were byte-identical with SHA-256 `ede10636cb32daee34183f5fc39cb4e0d14f62a9dfad3085c207c4da982b9f9b`. Later required CI runs retain their own measurements; do not pool them as controlled cold-start trials or claim a percentile.
+## Production, costs and publication
 
-The comparison EXCLUDES real AI planning, Codex orchestration, the owner's Oracle queue/container startup, network transfer and browser decode/render. It is a useful Blender-path improvement, not proof that a new AI knight takes less than two minutes. The application target of 60–120 seconds remains UNVERIFIED until an authorized live test.
+PR #36 is not merged and FAST is not installed or enabled. This task did not restart the worker/tunnel, modify the production site, overwrite source, change secrets or alter the original model archive. Preparation was performed through GitHub and local offline/source tests, not a claimed separate cloud-agent run.
 
-## Production and spending boundary
+The last owner generation screenshot showed all six previously approved reservations used. The earlier deadline was `2026-09-17T09:23:37.535Z`. No new paid model request, refund/reset, higher ceiling, expiry extension or cloud resource was authorized or executed here. A paid speed test needs a separate bounded approval after the real FAST worker is ready.
 
-**Source review: GO after the final recorded checks. Production FAST activation / claim of 1–2 minutes: NO-GO pending installed-source verification and a live benchmark.**
-
-The previous working production runtime remains the PR #34 fetch fix, `4313e9c83f0dbdecd25eac3bbb1bd978d249b30b`. No merge, website publication, Oracle update, credential change, quota reset/refund or new generation occurred during this resume.
-
-Public Shop: https://worldifact.xodobrox.workers.dev/shop
+Public existing Shop: https://worldifact.xodobrox.workers.dev/shop
 Original hosted Studio, unchanged: https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/
 
-The patch base is `teslaeco/Froge-MPC-2-test@d3f61b842dcfeda2ed794210caafc391919a75be`. Previous installed-connector evidence reports v33; the reviewed source has later changes. Four source hashes are checked by the patcher, and in-place installation on unknown source is rejected. This is deliberate protection for the already working generator, not a substitute for completing its deployment.
-
-The connected GitHub tools support repository work and existing website workflows. Searches did not find an available administrative Oracle/SSH connector. Repository evidence points to the owner's existing SSH session and `$HOME/froge-connector`; no authenticated administrative session is available to this task. A `/v1/jobs` credential is not permission or an endpoint for updating the host. Do not use model-generated code, a sandbox escape, private key extraction, or another provider to bypass that boundary.
-
-Next installation prerequisite: inspect only the installed worker source revision/hashes through the existing authorized SSH session, reconcile this narrow patch to that exact code, preserve rollback copies and drain jobs. Re-run genuine Codex/MCP/Blender verification after source changes; do not fabricate its receipt. Then approve and publish the scoped release and verify the advertised profile before testing.
-
-The successful user screenshot shows six reservations and zero remaining. The earlier absolute pilot deadline was `2026-09-17T09:23:37.535Z`. These are recorded observations, not a current billing/account balance. A new paid benchmark needs an explicit bounded allowance; do not reset the original counter or extend the window automatically. No paid test was run here.
-
-## Source checks and wider project
-
-Official model guidance was reopened during this resume and confirms `gpt-6-astra` and low reasoning support: https://developers.openai.com/api/docs/guides/latest-model . Official latency guidance supports reducing sequential work and time to useful output, not an unmeasured latency promise: https://developers.openai.com/api/docs/guides/latency-optimization . WORLDIFACT FAST DRAFT is not the provider's service-tier Fast mode.
-
-No browser-security workaround was attempted. A direct public status read in this resume was blocked by the browsing tool and was not retried through an alternate route. Existing authorized CI checks and their logs remain separate evidence.
-
-The original knight, original hosted app, archives and STANDARD quality path remain untouched. No exact likeness, native 4K/8K detail, manufacturing approval, public product catalog, supplier order or competition submission is established by this performance patch. Earlier contest requirements remain a separate decision; no contest decision is made here.
+No new model-identity, native 4K/8K, manufacturing, public product-catalog or contest-readiness claim is made. No competition decision/submission is part of this source-identification step. Previously recorded browser restrictions remain respected.
