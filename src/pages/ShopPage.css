@@ -12,6 +12,7 @@
 .native-shop form, .native-shop-form label { display: grid; gap: 10px; }
 .native-shop label { font-weight: 650; }
 .native-shop input, .native-shop select, .native-shop textarea { width: 100%; box-sizing: border-box; background: #14252e; border: 1px solid #54707c; border-radius: 7px; color: #f1f5f7; font: inherit; min-height: 44px; padding: 10px; }
+.native-shop input[type="checkbox"] { width: 20px; min-height: 20px; height: 20px; padding: 0; }
 .native-shop textarea { resize: vertical; min-height: 145px; }
 .native-shop p { line-height: 1.6; }
 .native-shop small { display: block; font-size: 0.78rem; font-weight: 400; line-height: 1.5; color: #b6c7d0; margin: 6px 0 12px; }
@@ -24,7 +25,7 @@
 .native-shop-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .native-shop-photos img { width: 100%; height: 140px; object-fit: contain; background: #09141b; }
 .native-shop-photos button { width: 100%; font-size: 0.8rem; }
-.native-shop-connection { border: 1px solid #536876; background: #122631; border-radius: 10px; padding: 14px; margin: 16px 0; }
+.native-shop-connection, .shop-customer-status { border: 1px solid #536876; background: #122631; border-radius: 10px; padding: 14px; margin: 16px 0; }
 .native-shop-error { border-left: 4px solid #f0a08d; padding: 12px; background: #452c32; overflow-wrap: anywhere; }
 .native-shop-views, .native-shop-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .native-shop-views button[aria-pressed="true"] { background: #e0eee8; color: #172c26; }
@@ -38,17 +39,24 @@
 .shop-make .pill { border: 1px solid #6f8d98; border-radius: 999px; padding: 6px 10px; font-size: .75rem; }
 .shop-make-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
 .shop-make-controls label { display: grid; gap: 8px; }
-.shop-promoted-offer, .shop-iss-card { border: 1px solid #4e6e79; border-radius: 12px; padding: 16px; background: #142b34; margin: 16px 0; }
-.shop-promoted-offer { box-shadow: inset 4px 0 0 #b7eed4; }
-.shop-price { font-size: clamp(1.35rem, 4vw, 2rem); font-weight: 800; margin: 6px 0; }
-.table-wrap { width: 100%; overflow-x: auto; }
-.shop-price-grid { width: 100%; border-collapse: collapse; min-width: 460px; }
-.shop-price-grid th, .shop-price-grid td { text-align: left; padding: 10px; border-bottom: 1px solid #38545f; }
-.shop-iss-card button { font-weight: 750; }
+.shop-dimensions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.shop-dimensions label { display: grid; gap: 8px; }
+.shop-dimension-note, .shop-preview-dimensions { padding: 10px 12px; border-radius: 8px; background: #142b34; }
+.shop-customer-price, .shop-cart { border: 1px solid #4e6e79; border-radius: 12px; padding: 16px; background: #142b34; margin: 16px 0; }
+.shop-customer-price h3 { font-size: clamp(1.25rem, 3vw, 1.8rem); }
+.shop-add-cart, .shop-checkout { width: 100%; font-weight: 800; }
+.shop-add-cart { background: #b7eed4 !important; color: #16342c !important; }
+.shop-cart-line { display: grid; gap: 8px; padding: 14px; margin: 12px 0; border: 1px solid #476470; border-radius: 10px; }
+.shop-cart-line button { justify-self: start; }
+.shop-consent { display: grid !important; grid-template-columns: 24px 1fr; align-items: start; gap: 10px; margin: 14px 0; font-weight: 500 !important; line-height: 1.45; }
+.shop-checkout { margin-top: 10px; }
+.shop-beta-note { border-left: 4px solid #e9bc73; padding: 10px 12px; background: #2b2a20; }
+.shop-internal-only { display: none !important; }
 .native-shop-archive { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; margin-top: 16px; }
 .native-shop-archive article { border: 1px solid #476470; border-radius: 9px; padding: 12px; overflow-wrap: anywhere; }
 .native-shop-archive strong { display: block; max-height: 5em; overflow: auto; }
 .native-shop footer { margin-top: 24px; }
+.shop-customer-footer { padding-top: 18px; border-top: 1px solid #38545f; }
 .native-shop :is(a, button, input, select, textarea):focus-visible { outline: 3px solid #e9bc73; outline-offset: 3px; }
 @media (max-width: 900px) { .shop-make-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
@@ -60,5 +68,5 @@
  .native-shop-nav nav { margin-left: 0; }
  .native-shop-sample { min-height: 260px; height: 420px; max-height: 60dvh; }
  .native-shop .oracle-model-canvas { height: 380px; }
- .shop-make-controls { grid-template-columns: 1fr; }
+ .shop-make-controls, .shop-dimensions { grid-template-columns: 1fr; }
 }
