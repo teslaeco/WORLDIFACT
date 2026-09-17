@@ -1,3 +1,19 @@
+# WORLDIFACT status — PR #45 generator availability hotfix
+
+Date: 18 September 2026.
+
+- PR #45: https://github.com/teslaeco/WORLDIFACT/pull/45 — **OPEN / CI REQUIRED / NOT MERGED**.
+- Base: `main@51b263085241b0dfc85c990e357a69efff59ea1b`.
+- Goal: keep every contest-facing Astra blueprint generator usable without turning a disabled paid gate into a dead UI.
+- Portal generator and AI Game Lab primary actions now choose the reviewed LIVE path only when `/api/health` reports generation ready; otherwise they run an explicit local `DEMO · MOCK` fallback with no API cost.
+- Portal generator drawers are expanded by default for immediate reviewer access.
+- No OpenAI/Oracle/Cloudflare secret, quota, allowance, paid-generation flag or Oracle job setting changed.
+- Detailed Shop 3D model generation is still a separate Oracle/Blender cost gate and remains unavailable when its allowance is zero.
+- Merge/deploy: **BLOCKED pending green exact-head CI and owner approval for merge**.
+- Paid LIVE Astra / Oracle activation: **BLOCKED pending a new explicit owner cost cap**.
+
+---
+
 # WORLDIFACT status — contest mobile/EVA/avatar hotfix released
 
 Date: 18 September 2026 (production deployment completed 17 Sep 22:28 UTC).
