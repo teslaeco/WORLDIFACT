@@ -15,7 +15,7 @@ concurrency:
 jobs:
   worker:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -35,6 +35,14 @@ jobs:
       - name: Preserve existing STANDARD control-plane behavior
         working-directory: .fast-review/worker
         run: python3 -m unittest test_blender_mcp test_agent_execution test_agent_lifecycle test_connector test_mcp_snapshot test_validation_preflight -v
+      - name: Install official checksum-verified Blender for the deterministic fixture
+        shell: bash
+        run: |
+          curl --fail --location --retry 2 https://download.blender.org/release/Blender4.3/blender-4.3.0-linux-x64.tar.xz --output /tmp/blender-4.3.0-linux-x64.tar.xz
+          curl --fail --location --retry 2 https://download.blender.org/release/Blender4.3/blender-4.3.0.sha256 --output /tmp/blender-4.3.0.sha256
+          (cd /tmp && sha256sum --check --ignore-missing blender-4.3.0.sha256 && tar -xf blender-4.3.0-linux-x64.tar.xz)
+      - name: Real Blender matched-scene benchmark, not a live AI timing claim
+        run: python3 tools/fast_preview/benchmark_blender.py /tmp/blender-4.3.0-linux-x64/blender .fast-review/worker .fast-review/fixture-benchmark
       - name: Source package manifest only, not an Oracle installation
         run: |
           cp .upstream/fast-froge/LICENSE .fast-review/FROGE_LICENSE
@@ -52,9 +60,17 @@ jobs:
               output.writestr('SHA256.json',json.dumps(manifest,indent=2))
           print('Review source package built; no production install, no provider request.')
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: worldifact-fast-draft-review-${{ github.event.pull_request.head.sha }}
           path: WORLDIFACT-fast-draft-review.zip
           if-no-files-found: error
           retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: fast-renderer-failure-${{ github.event.pull_request.head.sha }}
+          path: .fast-review/fixture-benchmark/**/blender.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
