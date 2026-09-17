@@ -50,11 +50,14 @@ export function assertEnglishLocaleSource(text, label = 'locale source') {
   inspectEnglishUiText(englishBlock[1], `${label} English catalog`)
 }
 
+function regexEscape(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function assertRuntimeTranslationPairs(text, pairs, label = 'runtime translation source') {
   for (const [source, target] of pairs) {
-    const single = `[\'${source.replaceAll("'", "\\'")}\', \'${target.replaceAll("'", "\\'")}\']`
-    const double = `[\"${source.replaceAll('"', '\\"')}\", \"${target.replaceAll('"', '\\"')}\"]`
-    if (!text.includes(single) && !text.includes(double)) {
+    const pair = new RegExp(`\\[\\s*(['"])${regexEscape(source)}\\1\\s*,\\s*(['"])${regexEscape(target)}\\2\\s*\\]`)
+    if (!pair.test(text)) {
       throw new Error(`${label} is missing the reviewed translation: ${source} -> ${target}`)
     }
   }
