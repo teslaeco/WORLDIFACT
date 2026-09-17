@@ -1,6 +1,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { assertEnglishDocument, inspectEnglishUiText } from '../scripts/lib/english-ui.mjs'
+
+const FIRST_PARTY_UI = [
+  '../src/pages/HomePage.tsx',
+  '../src/pages/PortalPage.tsx',
+  '../src/pages/ShopPage.tsx',
+  '../src/pages/WorkbenchPage.tsx',
+  '../src/pages/ControlPage.tsx',
+  '../src/components/P0GameLab.tsx',
+  '../src/config/portals.ts',
+]
 
 test('English UI guard accepts explicit English documents and neutral technical data', () => {
   assert.doesNotThrow(() => assertEnglishDocument('<!doctype html><html lang="en"><body>Save model</body></html>', 'fixture'))
@@ -15,5 +26,14 @@ test('English UI guard rejects missing language declarations', () => {
 test('English UI guard rejects high-signal Polish interface strings', () => {
   for (const phrase of ['Zaloguj', 'Załóż konto', 'Zagraj jako gość', 'Wczytaj', 'Ustawienia', 'Błąd']) {
     assert.throws(() => inspectEnglishUiText(`prefix ${phrase} suffix`, 'fixture'), new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  }
+})
+
+test('native WORLDIFACT shell and AI Game Lab stay English at source', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8')
+  assertEnglishDocument(html, 'WORLDIFACT index.html')
+  for (const relative of FIRST_PARTY_UI) {
+    const url = new URL(relative, import.meta.url)
+    inspectEnglishUiText(await readFile(url, 'utf8'), relative)
   }
 })
