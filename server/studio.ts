@@ -1,6 +1,6 @@
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { budgetSettings, type BudgetEnv, type BudgetNamespace } from './budget.ts'
-import { inputDigest, oracleStudioPayload, validateStudioInput, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
+import { inputDigest, oracleStudioPayload, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
@@ -81,14 +81,16 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
   if (!response.ok) { await response.body?.cancel(); throw new StudioError('The existing worker did not confirm readiness.', 503) }
   const state = await limitedJson(response, 16_384)
   const compatible = state.ready === true && state.provider === 'openai' && state.model === 'gpt-6-astra' && Number.isSafeInteger(state.connectorVersion) && Number(state.connectorVersion) >= 33
-  return { ready: compatible, photoReady: compatible && state.photoInput === true, promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
+  return { ready: compatible, photoReady: compatible && state.photoInput === true, fastReady: compatible && supportsFastDraft(state), promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
 }
 async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch, input: StudioInput) {
-  // This distinct gate never makes legacy Oracle artifacts publicly accessible.
   if (env.ENABLE_STUDIO_JOBS !== 'true' || !budgetSettings(env)) throw new StudioError('Model generation is disabled or its allowance has expired.', 503)
   if (env.PUBLIC_PILOT !== 'true' && !await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) throw new StudioError('This generation window requires owner access.', 401)
   const current = await health(env, fetcher)
   if (!current.ready) throw new StudioError('The existing Astra/Blender worker is not ready.', 503)
+  // Never send an unknown field to an old worker that could silently run the
+  // slow default. Check before receipt preparation and again before reservation.
+  if (input.generationProfile === FAST_DRAFT_PROFILE && !current.fastReady) throw new StudioError('The worker has not confirmed FAST DRAFT v1. No paid job was submitted; STANDARD remains available.', 409)
   if (input.photos.length && !current.photoReady) throw new StudioError('This worker has not confirmed photo input. Nothing was submitted.', 409)
   if (oracleStudioPayload('', input).prompt.length > current.promptMaxLength) throw new StudioError(`Shorten the description: the worker accepts ${current.promptMaxLength} characters including export instructions.`)
   return current
@@ -142,7 +144,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const enabled = env.ENABLE_STUDIO_JOBS === 'true' && !!budgetSettings(env)
       const authorized = env.PUBLIC_PILOT === 'true' || (secretReady(env) && await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
       const reason = !enabled ? 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : !pool.remaining ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
-      return json({ ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY', photoReady: state?.photoReady === true, promptMaxLength: Math.max(3, (state?.promptMaxLength ?? 2000) - 600), allowance: pool })
+      return json({ ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY', photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, promptMaxLength: Math.max(3, (state?.promptMaxLength ?? 2000) - 600), allowance: pool })
     }
     if (!secretReady(env)) throw new StudioError('The job receipt service is not configured.', 503)
     if (url.pathname === '/api/studio/prepare' && request.method === 'POST') {
@@ -175,8 +177,6 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
     if (match && request.method === 'GET') {
       const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', match[1])
       await limit(request, env, match[2] ? 'artifact' : `poll:${auth.id}`)
-      // Await here: returning a rejected Promise directly bypasses this catch
-      // and produces an unhandled Worker error instead of a safe JSON response.
       if (match[2]) return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
       const response = await oracle(env, `/v1/jobs/${auth.id}`, fetcher)
       if (response.status === 404) { await response.body?.cancel(); const state = Date.now() - auth.issued < 180_000 ? 'pending' : 'failed'; return json({ job: { id: auth.id, state, detail: JOB_DETAILS[state] } }) }
