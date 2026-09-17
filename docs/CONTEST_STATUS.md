@@ -1,3 +1,29 @@
+# WORLDIFACT status — Shop MAKE options and ISS print-prep draft
+
+Date: 17 September 2026. Branch milestone only; **not merged and not deployed**.
+
+## Current branch milestone
+
+Branch: `feat/shop-make-offers-iss`.
+
+Implemented for review:
+
+- Shop reference input is limited in the client UI to **maximum 3 images**.
+- 8K remains visible but disabled as **coming soon**; 2K and 4K stay selectable where the current worker allows them.
+- Reuses existing manufacturing evidence without exposing contractor names in the new client offer panel.
+- Adds client material choices **Plastic / Metal / Wood / Stone** and machine choices **3D printer / Laser / CNC**.
+- Adds size choices from **5 cm through 20 cm** and plain/full-color selection.
+- Shows a promoted manufacturing route for the current selection. Only stored benchmark combinations get a numeric screening estimate; unsupported combinations say **Quote required** rather than inventing a price.
+- The 5–20 cm plastic table derives screening values from the already stored 100 mm calculator observations using explicit solid-volume scaling. These are labelled estimates, not live or binding supplier quotes.
+- Adds the uploaded ISS source facts: nominal STL bounds `370 × 227.3 × 194.1 mm`, `469,984` triangles, and the existing thin-wall warning around solar-array / fragile structural areas.
+- Adds a no-cost **Prepare ISS print-repair draft** action. It only fills the STANDARD prompt with print-prep requirements: geometry cleanup, solar-array/thin-wall reinforcement, sensible modular splits, joints/clearance, color + paintable paths, explicit units and change reporting.
+- The UI deliberately does **not** claim that Astra has already repaired the ISS. Until a real revision exists and is checked, status remains `PRINT-PREP PASS REQUIRED / VALIDATION REQUIRED`. A future verified revision may be labelled `Original source + Astra-assisted print-prep revision · VALIDATION REQUIRED`.
+- No paid generation, contractor order, merge, production deployment or Product Hunt action was started by this milestone.
+
+Tests added: `tests/shop-manufacturing.test.ts` for size coverage, preserved 100 mm benchmarks, quote-required routes and ISS validation status. Full CI must pass before GO/NO-GO.
+
+---
+
 # WORLDIFACT status — Shop draft fields repaired and published
 
 Date: 17 September 2026. Scoped UI repair completed; the separately approved paid FAST test has not been activated or executed.
