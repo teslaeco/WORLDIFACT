@@ -1,0 +1,9 @@
+Scope: complete the owner's in-page Shop/Oracle integration and unblock generation within the existing approval.
+Cumulative ceiling: exactly 6, unchanged from the earlier explicit approval.
+Counter: worldifact-generation-budget-v1 / reserved-attempts; never reset or refunded.
+Activation: only after successful production publication, confirmed Oracle photo readiness and a read-only counter showing fewer than 6 reserved attempts.
+Duration: at most the previously approved 180 minutes from activation.
+Enabled: signed-receipt native Studio jobs only.
+Disabled: legacy public Oracle jobs and procedural world-blueprint spending.
+Automatic paid test: none. The user explicitly presses Generate in the page.
+If all 6 attempts have already been reserved, stop without increasing the ceiling or enabling more spending.
