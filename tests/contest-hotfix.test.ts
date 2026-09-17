@@ -1,57 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { avatarApi, NEPTUNE_QUEEN_JOB_ID, RAPPER_ARCHIVE_URL } from '../server/avatar.ts';
+import { gunzipSync } from 'node:zlib';
 
-function minimalGlb() {
-  const bytes = new Uint8Array(20);
-  bytes.set([0x67, 0x6c, 0x54, 0x46], 0);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(4, 2, true);
-  view.setUint32(8, bytes.byteLength, true);
-  return bytes;
-}
-
-test('exact current Neptune Queen is proxied read-only from the saved Oracle job', async () => {
-  let calls = 0;
-  const response = await avatarApi(
-    new Request('https://worldifact.test/api/avatar/neptune-queen'),
-    { ORACLE_ENDPOINT: 'https://current-queen.trycloudflare.com', ORACLE_API_TOKEN: 'server-secret' },
-    (async (input, init) => {
-      calls++;
-      assert.equal(String(input), `https://current-queen.trycloudflare.com/v1/jobs/${NEPTUNE_QUEEN_JOB_ID}/model`);
-      assert.equal(init?.method, 'GET');
-      assert.match(String((init?.headers as Record<string,string>).Authorization), /^Bearer /);
-      return new Response(minimalGlb(), { status: 200, headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': '20' } });
-    }) as typeof fetch,
-  );
-  assert.ok(response);
-  assert.equal(calls, 1);
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get('X-WORLDIFACT-Source-Job'), '99397623-e45c-48dc-95ec-6f84446a54d5');
-});
-
-test('avatar endpoint fails closed and never invents an old queen asset', async () => {
-  const response = await avatarApi(new Request('https://worldifact.test/api/avatar/neptune-queen'), {}, (() => { throw new Error('network must not run'); }) as typeof fetch);
-  assert.ok(response);
-  assert.equal(response.status, 503);
-  const source = await readFile(new URL('../src/lib/playerAvatar.ts', import.meta.url), 'utf8');
-  assert.match(source, /99397623-e45c-48dc-95ec-6f84446a54d5/);
-  assert.doesNotMatch(source, /queen\.glb|E19/i);
-});
-
-
-test('shared world avatar picker offers the exact current Queen and archived rapper without old queen assets', async () => {
+test('shared world uses only the newly uploaded user avatar asset', async () => {
   const player = await readFile(new URL('../src/lib/playerAvatar.ts', import.meta.url), 'utf8');
   const world = await readFile(new URL('../src/components/StartingWorld.tsx', import.meta.url), 'utf8');
-  const css = await readFile(new URL('../src/mobile-hotfix.css', import.meta.url), 'utf8');
-  assert.match(player, /99397623-e45c-48dc-95ec-6f84446a54d5/);
-  assert.match(player, /\/api\/avatar\/rapper-la/);
-  assert.match(world, /Neptune Queen · current MPC2 preview/);
-  assert.match(world, /Rapper · MPC2 archive/);
-  assert.match(css, /avatar-picker/);
-  assert.equal(RAPPER_ARCHIVE_URL, 'https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/models/rapper-v10.glb');
-  assert.doesNotMatch(player, /queen\.glb|E19/i);
+  const parts = await Promise.all(Array.from({ length: 6 }, (_, index) =>
+    readFile(new URL(`../public/avatar/upload-main-gz.b64.part${index}`, import.meta.url), 'utf8')));
+  const glb = gunzipSync(Buffer.from(parts.join(''), 'base64'));
+  assert.equal(glb.subarray(0, 4).toString('ascii'), 'glTF');
+  assert.ok(glb.byteLength > 20_000);
+  assert.match(player, /user-upload:model-mm-1-derived-mobile/);
+  assert.match(player, /upload-main-gz\.b64\.part/);
+  assert.doesNotMatch(player, /neptune|rapper|queen\.glb|99397623/i);
+  assert.doesNotMatch(world, /avatarChoice|avatar-picker|Rapper|Neptune Queen/);
 });
 
 test('Game Lab and portal reference uploads are raised to six MB and include phone scan entry points', async () => {
@@ -64,6 +27,14 @@ test('Game Lab and portal reference uploads are raised to six MB and include pho
   const worker = await readFile(new URL('../server/worker.ts', import.meta.url), 'utf8');
   assert.match(worker, /MAX_IMAGE_BYTES = 6 \* 1024 \* 1024/);
   assert.match(worker, /maxReferenceImageMb: 6/);
+});
+
+test('AI Shop reference selection automatically leaves FAST instead of disabling uploads', async () => {
+  const source = await readFile(new URL('../src/pages/ShopPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /const referenceLimit: TextureLimit = fast \? 4096 : textureLimit/);
+  assert.match(source, /if \(fast\) \{ setProfile\('standard'\); setTextureLimit\(referenceLimit\) \}/);
+  assert.doesNotMatch(source, /disabled=\{busy \|\| photoBusy \|\| fast \|\| photos\.length >= 3\}/);
+  assert.match(source, /Originals up to 12 MB are prepared locally before upload/);
 });
 
 test('EVA hotfix preserves NASA station visibility, float presentation and safe camera clamp', async () => {
@@ -79,12 +50,27 @@ test('EVA hotfix preserves NASA station visibility, float presentation and safe 
   assert.match(html, /hotfix\.css/);
 });
 
-test('mobile hotfix hides non-critical meadow controls and docks navigation outside gameplay center', async () => {
+test('mobile hotfix gives portal gameplay the viewport and compacts the ISS HUD', async () => {
   const css = await readFile(new URL('../src/mobile-hotfix.css', import.meta.url), 'utf8');
-  assert.match(css, /\.world-actions \{ display:none !important; \}/);
-  assert.match(css, /position:fixed/);
-  assert.match(css, /bottom:0/);
-  assert.match(css, /foundation-frame/);
+  assert.match(css, /\.foundation-page > \.foundation-heading/);
+  assert.match(css, /height:calc\(100dvh - var\(--mobile-dock\)/);
+  assert.match(css, /\.foundation-loading \{ display:none !important; \}/);
+  const issCss = await readFile(new URL('../public/apps/iss/hotfix.css', import.meta.url), 'utf8');
+  assert.match(issCss, /width:132px !important/);
+  assert.match(issCss, /\.quick-goals \{ display:none !important; \}/);
   const portal = await readFile(new URL('../src/pages/PortalPage.tsx', import.meta.url), 'utf8');
-  assert.match(portal, /world-primary-frame[\s\S]*portal-generator-drawer/, 'primary world must render before Astra drawer');
+  assert.match(portal, /window\.location\.replace\('\/apps\/chess\/guest\.html'\)/);
+  assert.doesNotMatch(portal, /foundation-loading/);
+});
+
+test('contest release configuration enables public Astra and Studio with a persistent high ceiling', async () => {
+  const config = JSON.parse(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
+  assert.equal(config.vars.OPENAI_MODEL, 'gpt-6-astra');
+  assert.equal(config.vars.ENABLE_PAID_GENERATION, 'true');
+  assert.equal(config.vars.PUBLIC_PILOT, 'true');
+  assert.equal(config.vars.ENABLE_STUDIO_JOBS, 'true');
+  assert.equal(config.vars.ENABLE_ORACLE_JOBS, 'true');
+  assert.equal(config.vars.GENERATION_REQUEST_LIMIT, '10000');
+  assert.equal(config.vars.ENABLE_APPROVED_FAST_TEST, 'false');
+  assert.ok(Date.parse(config.vars.GENERATION_EXPIRES_AT) > Date.parse('2026-09-18T00:00:00Z'));
 });
