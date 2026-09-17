@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import OracleModelPreview from '../components/OracleModelPreview'
+import ShopManufacturingOptions from '../components/ShopManufacturingOptions'
 import { PORTALS } from '../config/portals'
 import { REFERENCE_LINKS } from '../config/references'
 import { StudioCoordinator, checkStudio, type SavedStudioJob } from '../lib/studioClient'
@@ -170,8 +171,6 @@ export default function ShopPage() {
       const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt, purpose, textureMaxSize: textureLimit, photos, ...(fast ? { generationProfile: FAST_DRAFT_PROFILE } : {}) })
       const value = await client.start(input, record => {
         if (mounted.current) {
-          // Do not discard the prior preview or receipt just because a draft
-          // changed, or because free preparation failed on an allowance check.
           clearPreview(); setSaved(record)
           setJob({ id: record.receipt.id, state: 'pending', detail: JOB_DETAILS.pending })
         }
@@ -183,10 +182,10 @@ export default function ShopPage() {
   const addPhotos = async (files: FileList | null) => {
     const flags = operations.current
     if (!files || flags.photos || flags.submit || fast) return
-    if (photos.length + files.length > 4) { setError('Use at most four views of the same object.'); return }
+    if (photos.length + files.length > 3) { setError('Use at most three views of the same object.'); return }
     flags.photos = true; setPhotoBusy(true); setError('')
     try {
-      const additions: StudioPhoto[] = [], views = ['front', 'side', 'back', 'detail'] as const
+      const additions: StudioPhoto[] = [], views = ['front', 'side', 'back'] as const
       for (const file of Array.from(files)) additions.push(await prepareStudioPhoto(file, textureLimit, views[photos.length + additions.length]))
       if (mounted.current) setPhotos(previous => [...previous, ...additions])
     } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'Photo preparation failed.') }
@@ -196,6 +195,16 @@ export default function ShopPage() {
     if (operations.current.submit || operations.current.photos) return
     if ((prompt || photos.length) && !window.confirm('Clear only the new description and reference images? The displayed model, archive and recovery receipt stay unchanged.')) return
     setPrompt(''); setPhotos([]); setError('')
+    promptInput.current?.focus()
+  }
+  const prepareIssDraft = (nextPrompt: string) => {
+    if (operations.current.submit || operations.current.photos) return
+    setPrompt(nextPrompt)
+    setPurpose('object')
+    setProfile('standard')
+    setTextureLimit(4096)
+    setError('')
+    setNotice('ISS print-repair instructions loaded into the draft. Nothing was generated or ordered.')
     promptInput.current?.focus()
   }
   const exportFile = async (format: 'pbr' | 'fbx' | 'blend') => {
@@ -251,8 +260,8 @@ export default function ShopPage() {
           <small>{fast ? 'FAST target: 1–2 minutes, not a guarantee. One compact build, up to 2K maps. Visual review and optional formats are deferred; no automatic paid fallback.' : 'STANDARD is unchanged. FAST becomes selectable only when the connected worker confirms its verified profile. A shorter timeout is not proof of a faster model.'}</small>
           <label htmlFor="studio-prompt">Describe your next model</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic skull study with ivory bone materials, a stable base and clearly defined teeth." required />
           <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
-          <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192}>Up to 8K</option></select><small>This is a requested ceiling, not guaranteed detail. References are never upscaled. Actual texture quality depends on the worker and source images.</small>
-          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require STANDARD mode' : photoBusy ? 'Preparing reference images…' : 'Add reference images · JPG / PNG / WebP'}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Up to 4 views of the same object. Maximum 12 MB per original and 6 MB combined after preparation.</small>
+          <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select><small>8K is shown as coming soon and cannot be selected for a new draft. References are never upscaled. Actual texture quality depends on the worker and source images.</small>
+          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require STANDARD mode' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Up to 3 views of the same object. Maximum 12 MB per original and 6 MB combined after preparation.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Submitting this model…' : fast ? 'Generate FAST draft + materials' : 'Generate 3D model + materials'}</button><small>Only this button submits a new paid job. Editing, switching mode and clearing the draft do not generate anything or change your saved models.</small>
         </form>
@@ -262,6 +271,7 @@ export default function ShopPage() {
         <p><strong>MAKE: validation required.</strong> A finished GLB is not manufacturing approval. Review geometry, dimensions, materials and licensing before sale.</p>
       </div>
     </section>
+    <ShopManufacturingOptions onPrepareIssDraft={prepareIssDraft} />
     <section aria-labelledby="studio-archive-title"><h2 id="studio-archive-title">Your models · device archive</h2><p>Completed originals are saved on this device, not automatically published to a store. Clearing browser storage removes this archive; keep explicit file backups.</p><label>Find a saved model<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions" /></label><div className="native-shop-archive">{archive.filter(item => item.prompt.toLowerCase().includes(search.toLowerCase())).map(item => <article key={item.id}><strong>{item.prompt}</strong><small>{(item.byteLength / 1048576).toFixed(1)} MB · UNREVIEWED</small><button type="button" disabled={busy || (!!saved && !terminal(job?.state)) || artifactBusy} onClick={() => void openArchived(item)}>Open saved model</button></article>)}</div>{archive.length === 0 && <p>No models saved on this device yet. Existing private Froge archives have not been copied or deleted.</p>}</section>
     <footer><Link to="/lab">AI Game Lab</Link> · <Link to="/make">Manufacturing review</Link> · <Link to="/control">Platform connections</Link> · <a href={REFERENCE_LINKS.modelGenerator} target="_blank" rel="noopener noreferrer">Original Froge Studio ↗</a><p>Same-origin WORLDIFACT interface connected to the existing worker. The original hosted Studio is unchanged; there is no embedded login or automatic redirect.</p></footer>
   </main>
