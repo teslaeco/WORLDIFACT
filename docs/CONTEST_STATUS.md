@@ -1,3 +1,52 @@
+# WORLDIFACT status — contest mobile/EVA/avatar hotfix released
+
+Date: 18 September 2026 (production deployment completed 17 Sep 22:28 UTC).
+
+## Released hotfix
+
+- PR #43: https://github.com/teslaeco/WORLDIFACT/pull/43 — **MERGED**.
+- Squash merge on `main`: `13920ffa4b8efb4364a5f486bc23d15bacaf73ae`.
+- Final pre-merge workflow: `35281920942` — **SUCCESS**.
+- Post-merge verification: `35282057435` — **SUCCESS**, **197/197 tests PASS**, zero failures.
+- Production workflow: `35282057350` — **SUCCESS**.
+- Cloudflare version: `6822bf81-cc94-4a95-9251-e80647d34272`.
+- Public URL: https://worldifact.xodobrox.workers.dev
+- Release smoke: **PASS** — 13 HTML routes, 23 matching hub assets, 105 original app entries/assets, API 404 behavior, DEMO generation and origin rejection. No paid API call.
+
+## Published behavior
+
+- Fix ISS EVA receives a separate safety hotfix layer with a clamped external camera, visual zero-gravity drift, reset-to-safe-view control and EVA route helper while keeping the reviewed NASA historical ISS exterior visible.
+- Android/mobile presentation moves non-critical navigation to a bottom dock and removes large non-critical meadow overlays from the gameplay center.
+- Portal pages render the selected world's primary experience before the collapsible Astra generator drawer.
+- Game Lab and portal reference uploads accept up to **6 MB** per supported reference flow, with a phone-camera **Scan · BETA** entry.
+- The shared meadow defaults to the exact current MPC2 Neptune Queen Oracle job `99397623-e45c-48dc-95ec-6f84446a54d5`; it does not use the old public queen asset.
+- A compact player selector also exposes the previously verified Froge MPC2 `rapper-v10.glb` archive model as **Rapper · MPC2 archive**.
+- If the exact current Queen artifact is unavailable, the runtime uses a lightweight queen-shaped procedural fallback rather than silently substituting an older Queen file.
+- Reading avatar GLBs is read-only and does not reserve generation budget.
+
+## Current generation boundary
+
+The production deployment deliberately keeps the existing cost gate unchanged. Latest read-only post-deploy diagnostic at `2026-09-17T22:28:10.695Z`:
+
+```json
+{
+  "health": { "generationReady": false, "mode": "DEMO" },
+  "oracleWorlds": { "oracle": "CONNECTOR_READY", "connectorVersion": 33, "characterStandard": 20 },
+  "studio": {
+    "ready": false,
+    "photoReady": true,
+    "fastReady": true,
+    "oracle": "CONNECTOR_READY",
+    "reason": "APPROVED_TEST_PENDING_ACTIVATION",
+    "allowance": { "used": 7, "limit": 0, "remaining": 0 }
+  }
+}
+```
+
+This release does **not** claim a new paid Astra generation, a refreshed allowance, ISS manufacturing approval, or a new supplier order.
+
+---
+
 # WORLDIFACT contest status — current canonical state
 
 Date: 17 September 2026.
