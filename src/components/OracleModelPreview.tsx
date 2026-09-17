@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ACESFilmicToneMapping, Box3, Color, DirectionalLight, PerspectiveCamera,
-  PMREMGenerator, Scene, WebGLRenderer, type Group,
+  PMREMGenerator, Scene, Vector3, WebGLRenderer, type Group,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
@@ -10,18 +10,18 @@ import { disposeObject } from '../lib/worldGeometry'
 import { createModelSlot } from '../lib/modelSlot'
 import { frameModel, type ModelBounds, type ModelView } from '../lib/modelFraming'
 
-type Props = { url: string; label?: string }
+type Props = { url: string; label?: string; targetDimensionsMm?: [number, number, number]; customerMode?: boolean }
 
 /** WORLDIFACT viewer; the externally hosted Froge generator is not modified. */
-export default function OracleModelPreview({ url, label = 'Generated 3D model' }: Props) {
-  return <ModelPreviewSession key={JSON.stringify([url, label])} url={url} label={label} />
+export default function OracleModelPreview({ url, label = 'Generated 3D model', targetDimensionsMm, customerMode = false }: Props) {
+  return <ModelPreviewSession key={JSON.stringify([url, label, targetDimensionsMm, customerMode])} url={url} label={label} targetDimensionsMm={targetDimensionsMm} customerMode={customerMode} />
 }
 
-function ModelPreviewSession({ url, label }: { url: string; label: string }) {
+function ModelPreviewSession({ url, label, targetDimensionsMm, customerMode }: { url: string; label: string; targetDimensionsMm?: [number, number, number]; customerMode: boolean }) {
   const host = useRef<HTMLDivElement>(null)
   const fitView = useRef<((view?: ModelView) => void) | null>(null)
   const [error, setError] = useState('')
-  const [status, setStatus] = useState('Loading generated GLB…')
+  const [status, setStatus] = useState(customerMode ? 'Loading your preview…' : 'Loading generated GLB…')
   const [person, setPerson] = useState(false)
   const [ready, setReady] = useState(false)
 
@@ -39,7 +39,7 @@ function ModelPreviewSession({ url, label }: { url: string; label: string }) {
     try {
       renderer = new WebGLRenderer({ antialias: true, alpha: false })
     } catch {
-      setError('WebGL is unavailable on this device. The GLB can still be downloaded explicitly.')
+      setError(customerMode ? '3D preview is unavailable on this device.' : 'WebGL is unavailable on this device. The GLB can still be downloaded explicitly.')
       return
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
@@ -77,7 +77,6 @@ function ModelPreviewSession({ url, label }: { url: string; label: string }) {
     const fit = (view: ModelView) => {
       if (!model || !bounds) return
       const frame = frameModel(bounds, camera.aspect, camera.getEffectiveFOV(), view, isPerson)
-      // Finish old damping before applying a preset so residual drag cannot move it.
       const damping = controls.enableDamping
       controls.enableDamping = false
       controls.update()
@@ -103,8 +102,6 @@ function ModelPreviewSession({ url, label }: { url: string; label: string }) {
       renderer.setSize(width, height, false)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
-      // Refit the selected preset on orientation/layout changes, but do not
-      // discard a manually chosen orbit/zoom because a phone keyboard resized UI.
       if (model && (!framed || !preserveUserOrbit)) fit(preset)
     }
     const observer = new ResizeObserver(resize)
@@ -116,16 +113,23 @@ function ModelPreviewSession({ url, label }: { url: string; label: string }) {
       if (!slot.replace(gltf.scene)) return
       model = gltf.scene
       model.traverse(object => { if (object.userData.froge_kind === 'person') isPerson = true })
-      const box = new Box3().setFromObject(model)
+      let box = new Box3().setFromObject(model)
+      if (targetDimensionsMm && targetDimensionsMm.every(n => Number.isFinite(n) && n > 0)) {
+        const source = box.getSize(new Vector3())
+        if (source.x > 0 && source.y > 0 && source.z > 0) {
+          model.scale.set(targetDimensionsMm[0] / source.x, targetDimensionsMm[1] / source.y, targetDimensionsMm[2] / source.z)
+          model.updateMatrixWorld(true)
+          box = new Box3().setFromObject(model)
+        }
+      }
       bounds = { min: box.min.toArray(), max: box.max.toArray() }
       try {
-        // Validate before rendering; input geometry/materials are never rescaled.
         frameModel(bounds, camera.aspect, camera.getEffectiveFOV())
       } catch {
         slot.dispose()
         model = null
         bounds = null
-        setError('The GLB has empty or invalid bounds. The source artifact was not modified.')
+        setError(customerMode ? 'This model cannot be shown safely in the preview.' : 'The GLB has empty or invalid bounds. The source artifact was not modified.')
         return
       }
       setPerson(isPerson)
@@ -133,9 +137,9 @@ function ModelPreviewSession({ url, label }: { url: string; label: string }) {
       framed = false
       resize()
       setReady(true)
-      setStatus('GENERATED-UNREVIEWED GLB loaded in the browser; visual review is still required.')
+      setStatus(customerMode ? 'Preview ready.' : 'GENERATED-UNREVIEWED GLB loaded in the browser; visual review is still required.')
     }, undefined, () => {
-      if (!disposed) setError('The generated GLB could not be rendered. The artifact remains available for explicit download.')
+      if (!disposed) setError(customerMode ? 'Your 3D preview could not be rendered.' : 'The generated GLB could not be rendered. The artifact remains available for explicit download.')
     })
     renderer.setAnimationLoop(() => {
       controls.update()
@@ -154,7 +158,7 @@ function ModelPreviewSession({ url, label }: { url: string; label: string }) {
       renderer.domElement.remove()
       fitView.current = null
     }
-  }, [url, label])
+  }, [url, label, targetDimensionsMm, customerMode])
 
   return <div className="oracle-model-preview">
     <div ref={host} className="oracle-model-canvas" />
@@ -172,6 +176,6 @@ function ModelPreviewSession({ url, label }: { url: string; label: string }) {
       </> : null}
       <span className="result-note">Drag to rotate · pinch to zoom</span>
     </div>
-    <small className="result-note">Views use the model’s authored +Y up / +Z front axes. Character detail regions are approximate. Switching views does not regenerate or alter the model.</small>
+    {!customerMode && <small className="result-note">Views use the model’s authored +Y up / +Z front axes. Character detail regions are approximate. Switching views does not regenerate or alter the model.</small>}
   </div>
 }
