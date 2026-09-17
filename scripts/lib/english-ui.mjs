@@ -63,20 +63,28 @@ export function assertRuntimeTranslationPairs(text, pairs, label = 'runtime tran
   }
 }
 
-export async function assertEnglishFoundationOutput(root, entryNames = ['index.html'], { scanJavaScript = true } = {}) {
+export async function assertEnglishFoundationOutput(
+  root,
+  entryNames = ['index.html'],
+  { scanJavaScript = true, scanNestedHtml = true } = {},
+) {
+  const entries = new Set(entryNames.map(entry => join(root, entry)))
   for (const entry of entryNames) {
-    const html = await readFile(join(root, entry), 'utf8')
-    assertEnglishDocument(html, `${root}/${entry}`)
+    const path = join(root, entry)
+    const html = await readFile(path, 'utf8')
+    assertEnglishDocument(html, path)
   }
 
   async function scan(directory) {
     for (const item of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, item.name)
       if (item.isDirectory()) await scan(path)
-      else if (/\.html$/i.test(item.name) || (scanJavaScript && /\.js$/i.test(item.name))) {
+      else if (scanNestedHtml && /\.html$/i.test(item.name) && !entries.has(path)) {
+        inspectEnglishUiText(await readFile(path, 'utf8'), path)
+      } else if (scanJavaScript && /\.js$/i.test(item.name)) {
         inspectEnglishUiText(await readFile(path, 'utf8'), path)
       }
     }
   }
-  await scan(root)
+  if (scanNestedHtml || scanJavaScript) await scan(root)
 }
