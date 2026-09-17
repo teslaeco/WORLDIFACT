@@ -1,12 +1,14 @@
-Scope: complete the owner's in-page Shop/Oracle integration and unblock generation within the existing approval.
+Scope: complete the owner's in-page Shop/Oracle repair; this revision publishes the browser fetch-receiver correction.
 Cumulative ceiling: exactly 6, unchanged from the earlier explicit approval.
 Counter: worldifact-generation-budget-v1 / reserved-attempts; never reset or refunded.
-Activation: only after successful production publication, confirmed Oracle photo readiness and a read-only counter showing fewer than 6 reserved attempts.
-Duration: at most the previously approved 180 minutes from activation.
+Activation: only after successful production publication, confirmed Oracle photo readiness and a real read showing fewer than 6 reserved attempts.
+Fixed deadline: 2026-09-17T09:23:37.535Z, the original deadline activated in run 35189566878. This hotfix does not start a new 180-minute window.
 Enabled: signed-receipt native Studio jobs only.
 Disabled: legacy public Oracle jobs and procedural world-blueprint spending.
 Automatic paid test: none. The user explicitly presses Generate in the page.
-If all 6 attempts have already been reserved, stop without increasing the ceiling or enabling more spending.
+If the six attempts have been reserved, the original deadline has passed, or readiness/counter is unknown, stop without adding capacity.
 
-Operational retry 1: run 35188573555 was cancelled before any job was created by the legacy pilot queue. No counter read, reservation or activation occurred.
-Operational retry 2: run 35189108573 reached the gate, but depth-one fetching removed HEAD's parent and the gate incorrectly skipped. No allowance check or activation occurred. The corrected gate uses read-only ls-remote, is tested against actual local shallow Git repositories, and surfaces missing history as an error. This marker permits only the same previously unexecuted check; it grants no new attempt or larger budget.
+The owner's Android screenshot at 09:51 shows Connector ready and Illegal invocation before receipt creation. The code stored native fetch unbound on StudioCoordinator, so its method call supplied the wrong receiver. This hotfix binds fetch to globalThis; no input, provider, retry policy or receipt changes.
+The ordinary deployment temporarily uses the disabled base. This marker restores only the still-unspent portion before the SAME fixed deadline, after the existing current-main/readiness guards. No counter reset, refund, new credit, time extension or model request is permitted.
+
+History: first continuation 35188573555 was cancelled before jobs; 35189108573 skipped due to shallow-parent lookup. Run 35189566878 finally activated the original window and verified used=5/remaining=1 at 2026-09-17T06:23:45.992Z. Those are historical readings; read fresh usage before this hotfix activation.
