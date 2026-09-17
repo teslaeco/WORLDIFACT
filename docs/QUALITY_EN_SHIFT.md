@@ -7,7 +7,7 @@ Date: 17 September 2026 (Europe/Amsterdam). Owner: Sebastian.
 - Branch: `work/five-hour-quality-english-20260917`.
 - Draft PR: https://github.com/teslaeco/WORLDIFACT/pull/28
 - Base: `495a6524d7b597403eefd5b62bfbf8ee9fedc4e0`.
-- Editor: **IDLE — continuation 1 complete. A later continuation may claim this marker before editing.**
+- Editor: **ACTIVE — continuation 2 is editing this branch. Do not edit concurrently.**
 - Scheduled continuations completed: **1 of 5**.
 - Next task: complete the exact-source English inventory for native WORLDIFACT, pinned Chess/Terra and the real 8 Planets source where accessible; then continue source-level model/texture validation without touching the live Froge Site.
 
