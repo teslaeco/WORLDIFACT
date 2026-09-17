@@ -25,14 +25,16 @@ test('exact current Neptune Queen is proxied read-only from the saved Oracle job
       return new Response(minimalGlb(), { status: 200, headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': '20' } });
     }) as typeof fetch,
   );
+  assert.ok(response);
   assert.equal(calls, 1);
-  assert.equal(response?.status, 200);
-  assert.equal(response?.headers.get('X-WORLDIFACT-Source-Job'), '99397623-e45c-48dc-95ec-6f84446a54d5');
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('X-WORLDIFACT-Source-Job'), '99397623-e45c-48dc-95ec-6f84446a54d5');
 });
 
 test('avatar endpoint fails closed and never invents an old queen asset', async () => {
   const response = await avatarApi(new Request('https://worldifact.test/api/avatar/neptune-queen'), {}, (() => { throw new Error('network must not run'); }) as typeof fetch);
-  assert.equal(response?.status, 503);
+  assert.ok(response);
+  assert.equal(response.status, 503);
   const source = await readFile(new URL('../src/lib/playerAvatar.ts', import.meta.url), 'utf8');
   assert.match(source, /99397623-e45c-48dc-95ec-6f84446a54d5/);
   assert.doesNotMatch(source, /queen\.glb|E19/i);
@@ -70,5 +72,5 @@ test('mobile hotfix hides non-critical meadow controls and docks navigation outs
   assert.match(css, /bottom:0/);
   assert.match(css, /foundation-frame/);
   const portal = await readFile(new URL('../src/pages/PortalPage.tsx', import.meta.url), 'utf8');
-  assert.ok(portal.indexOf('world-primary-frame') < portal.indexOf('portal-generator-drawer'), 'primary world must render before Astra drawer');
+  assert.match(portal, /world-primary-frame[\s\S]*portal-generator-drawer/, 'primary world must render before Astra drawer');
 });
