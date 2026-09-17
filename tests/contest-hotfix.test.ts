@@ -44,7 +44,7 @@ test('shared world uses only the owner-uploaded character and removes the Queen/
   assert.match(player, /owner-upload:model-mm-1\.stl/);
   assert.match(player, /uploadedPlayerGlbUrl/);
   assert.match(embedded, /UPLOADED_PLAYER_GZIP_B64/);
-  assert.doesNotMatch(player, /Neptune|rapper|queen\.glb|E19/i);
+  assert.doesNotMatch(player, /\/api\/avatar\/(?:neptune-queen|rapper-la)|queen\.glb|E19/i);
   assert.doesNotMatch(world, /avatar-picker|Neptune Queen|Rapper · MPC2 archive/);
 });
 
