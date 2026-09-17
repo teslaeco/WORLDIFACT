@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import PlanetsWorld from '../components/PlanetsWorld'
 import PortalAstraGenerator from '../components/PortalAstraGenerator'
@@ -7,13 +7,21 @@ import '../components/WorldTabs.css'
 import { PORTALS, getPortalById } from '../config/portals'
 import { foundationForPath } from '../config/foundations'
 
+function ChessDirect() {
+  useEffect(() => { window.location.replace('/apps/chess/guest.html') }, [])
+  return <main className="portal-page foundation-page chess-launch">
+    <p role="status">Opening Chess Cube 512 AI…</p>
+    <a className="button-link" href="/apps/chess/guest.html">Open Chess Cube now →</a>
+  </main>
+}
+
 export default function PortalPage() {
   const { portalId } = useParams()
   const { pathname } = useLocation()
-  const [loadedFrame, setLoadedFrame] = useState('')
   const legacy = portalId ? getPortalById(portalId) : undefined
   if (legacy) return <Navigate to={legacy.route} replace />
   if (pathname === '/chess/shop') return <Navigate to="/shop" replace />
+  if (pathname === '/chess') return <ChessDirect />
   const app = foundationForPath(pathname)
   if (!app) return <Navigate to="/" replace />
 
@@ -41,11 +49,6 @@ export default function PortalPage() {
       <a href={app.original} target="_blank" rel="noopener noreferrer" className="button-link">Open original ↗</a>
     </div>
     <nav className="foundation-actions" aria-label="Application tools">
-      {app.route === '/chess' && <>
-        <Link to="/chess" aria-current="page">Play chess</Link>
-        <Link to="/chess/shop">Shop boards and pieces</Link>
-        <Link to="/make">Check production requirements</Link>
-      </>}
       {app.route === '/iss' && <Link to="/terra">Open Earth observation →</Link>}
       {app.route === '/terra' && <Link to="/iss">← Return to the ISS station</Link>}
     </nav>
@@ -55,10 +58,8 @@ export default function PortalPage() {
     </p>}
 
     {planets ? <PlanetsWorld /> : <div className="foundation-frame-shell world-primary-frame">
-      {loadedFrame !== app.frame && <p className="foundation-loading" role="status">Opening {app.title}…</p>}
       <iframe key={app.frame} src={app.frame} title={app.title} className="foundation-frame"
-        allow="fullscreen; clipboard-write" allowFullScreen
-        onLoad={() => setLoadedFrame(app.frame)} />
+        allow="fullscreen; clipboard-write" allowFullScreen />
     </div>}
 
     {app.route === '/iss' && <section className="foundation-note" aria-label="ISS preservation mission">
