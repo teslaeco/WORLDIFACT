@@ -1,0 +1,33 @@
+name: Review FAST Cloud Shell launcher
+on:
+  pull_request:
+    paths:
+      - 'tools/fast_preview/**'
+      - 'docs/CONTEST_STATUS.md'
+      - '.github/workflows/fast-launch-review.yml'
+permissions:
+  contents: read
+concurrency:
+  group: fast-launch-review-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  launcher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Parse local and remote launcher as Python 3.9
+        run: |
+          python3 -B - <<'PY'
+          import ast, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools/fast_preview')
+          import oracle_launch
+          ast.parse(Path('tools/fast_preview/oracle_launch.py').read_text(), feature_version=(3,9))
+          ast.parse(oracle_launch.REMOTE, feature_version=(3,9))
+          print('Both programs parse as Python 3.9. This is not VM execution.')
+          PY
+      - name: Duplicate launch, disconnect, source hash and status regressions
+        run: python3 -B tools/fast_preview/test_oracle_launch.py -v
+      - name: Default invocation must not connect or change services
+        run: python3 -B tools/fast_preview/oracle_launch.py

@@ -1,0 +1,90 @@
+name: Review FAST draft worker (no paid API)
+on:
+  pull_request:
+    paths:
+      - 'tools/fast_preview/**'
+      - 'docs/CODEX_TASK_FAST_PREVIEW.md'
+      - 'docs/CONTEST_STATUS.md'
+      - '.github/workflows/fast-preview-review.yml'
+      - 'src/lib/studio*.ts'
+      - 'src/pages/ShopPage.tsx'
+      - 'server/studio.ts'
+      - 'tests/generation-profile*'
+permissions:
+  contents: read
+concurrency:
+  group: fast-draft-review-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .upstream/fast-froge
+          persist-credentials: false
+      - name: Assemble a new output from hash-verified sources
+        run: python3 tools/fast_preview/apply.py .upstream/fast-froge/oracle_connector .fast-review/worker
+      - name: Compile all patched Python
+        run: python3 -m compileall -q .fast-review/worker
+      - name: Check exact owner v33 source, staging safety and runtime regressions
+        env:
+          FROGE_SOURCE_ROOT: ${{ github.workspace }}/.upstream/fast-froge/oracle_connector
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 tools/fast_preview/test_installed_v33.py -v
+      - name: FAST profile, actual HTTP and supervisor completion regressions
+        env:
+          FROGE_PATCH_ROOT: ${{ github.workspace }}/.fast-review/worker
+        run: |
+          python3 tools/fast_preview/test_fast_preview.py -v
+          python3 tools/fast_preview/test_fast_runner.py -v
+      - name: Preserve existing STANDARD control-plane behavior
+        working-directory: .fast-review/worker
+        run: python3 -m unittest test_blender_mcp test_agent_execution test_agent_lifecycle test_connector test_mcp_snapshot test_validation_preflight -v
+      - name: Install official checksum-verified Blender for the deterministic fixture
+        shell: bash
+        run: |
+          curl --fail --location --retry 2 https://download.blender.org/release/Blender4.3/blender-4.3.0-linux-x64.tar.xz --output /tmp/blender-4.3.0-linux-x64.tar.xz
+          curl --fail --location --retry 2 https://download.blender.org/release/Blender4.3/blender-4.3.0.sha256 --output /tmp/blender-4.3.0.sha256
+          (cd /tmp && sha256sum --check --ignore-missing blender-4.3.0.sha256 && tar -xf blender-4.3.0-linux-x64.tar.xz)
+      - name: Real Blender matched-scene benchmark, not a live AI timing claim
+        run: python3 tools/fast_preview/benchmark_blender.py /tmp/blender-4.3.0-linux-x64/blender .fast-review/worker .fast-review/fixture-benchmark
+      - name: Package the narrow reviewed patch and measured fixture evidence
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+          root=Path('.fast-review');manifest={}
+          patch=json.loads((root/'worker/FAST_PATCH_MANIFEST.json').read_text())
+          files=[(root/'worker'/name,'worker/'+name) for name in patch['patched_sha256']]
+          files += [(root/'worker/FAST_PATCH_MANIFEST.json','FAST_PATCH_MANIFEST.json'),
+                    (Path('.upstream/fast-froge/LICENSE'),'FROGE_LICENSE'),
+                    (Path('tools/fast_preview/README.md'),'README.md'),
+                    (Path('docs/CODEX_TASK_FAST_PREVIEW.md'),'CODEX_TASK_FAST_PREVIEW.md')]
+          files += [(p,'patch-tools/'+p.name) for p in Path('tools/fast_preview').glob('*.py')]
+          files += [(p,'fixture-benchmark/'+p.relative_to(root/'fixture-benchmark').as_posix())
+                    for p in (root/'fixture-benchmark').rglob('*') if p.is_file() and p.suffix in ('.json','.glb','.blend','.png','.log')]
+          with zipfile.ZipFile('WORLDIFACT-fast-draft-review.zip','w',zipfile.ZIP_DEFLATED) as output:
+              for path,name in files:
+                  data=path.read_bytes();output.writestr(name,data);manifest[name]=hashlib.sha256(data).hexdigest()
+              output.writestr('SHA256.json',json.dumps(manifest,indent=2))
+          print('Narrow review patch + deterministic benchmark packaged. No private state, installed runtime, provider call or production deployment.')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: worldifact-fast-draft-review-${{ github.event.pull_request.head.sha }}
+          path: WORLDIFACT-fast-draft-review.zip
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: fast-renderer-failure-${{ github.event.pull_request.head.sha }}
+          path: .fast-review/fixture-benchmark/**/blender.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7

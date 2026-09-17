@@ -8,7 +8,7 @@ import { prepareStudioPhoto } from '../lib/studioPhotos'
 import { listStudioModels, readStudioModel, saveStudioModel, type StudioArchiveEntry } from '../lib/studioArchive'
 import { mayExportCurrentJob, previewFileName, type StudioPreviewIdentity } from '../lib/studioView'
 import { inspectGLB } from '../lib/glb'
-import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, validateStudioInput, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
+import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, validateStudioInput, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
 import './ShopPage.css'
 
 const EXAMPLE_ORIGIN = 'https://forge-studio-public.terraformingplanet.chatgpt.site'
@@ -37,6 +37,7 @@ export default function ShopPage() {
   const [prompt, setPrompt] = useState('')
   const [purpose, setPurpose] = useState<StudioInput['purpose']>('figurine')
   const [textureLimit, setTextureLimit] = useState<TextureLimit>(4096)
+  const [profile, setProfile] = useState<GenerationProfile>('standard')
   const [photos, setPhotos] = useState<StudioPhoto[]>([])
   const [owner, setOwner] = useState('')
   const [status, setStatus] = useState<StudioStatus | null>(null)
@@ -55,6 +56,7 @@ export default function ShopPage() {
   const [search, setSearch] = useState('')
   const [sampleView, setSampleView] = useState('front')
   const [sampleMissing, setSampleMissing] = useState(false)
+  const fast = profile === FAST_DRAFT_PROFILE
 
   const clearPreview = () => {
     epoch.current++
@@ -89,9 +91,13 @@ export default function ShopPage() {
       const client = new StudioCoordinator(window.localStorage)
       const restored = client.restore()
       coordinator.current = client
-      if (restored) { setSaved(restored); setPrompt(restored.prompt); setJob({ id: restored.receipt.id, state: 'pending', detail: JOB_DETAILS.pending }) }
+      if (restored) {
+        setSaved(restored); setPrompt(restored.prompt)
+        setProfile(restored.generationProfile || 'standard')
+        if (restored.generationProfile === FAST_DRAFT_PROFILE) setTextureLimit(2048)
+        setJob({ id: restored.receipt.id, state: 'pending', detail: JOB_DETAILS.pending })
+      }
     } catch (e) {
-      // A damaged receipt is not permission to start a replacement paid job.
       coordinator.current = null
       setError(e instanceof Error ? e.message : 'Recovery storage is unavailable. Generation is paused.')
     }
@@ -126,8 +132,6 @@ export default function ShopPage() {
     let stopped = false, timer: ReturnType<typeof setTimeout> | undefined, failures = 0
     const poll = async () => {
       if (stopped) return
-      // Wait for the single submission to settle. Never race its response with
-      // a premature status read and never submit anything from this loop.
       if (operations.current.submit) { timer = setTimeout(poll, 1500); return }
       try {
         const value = await client.poll(selected)
@@ -157,10 +161,10 @@ export default function ShopPage() {
   const generate = async (event: React.FormEvent) => {
     event.preventDefault()
     const flags = operations.current, client = coordinator.current
-    if (flags.submit || flags.photos || flags.artifact || saved || !status?.ready || !client) return
+    if (flags.submit || flags.photos || flags.artifact || saved || !status?.ready || !client || (fast && !status.fastReady)) return
     flags.submit = true; setBusy(true); setError(''); setNotice(''); clearPreview()
     try {
-      const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt, purpose, textureMaxSize: textureLimit, photos })
+      const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt, purpose, textureMaxSize: textureLimit, photos, ...(fast ? { generationProfile: FAST_DRAFT_PROFILE } : {}) })
       const value = await client.start(input, record => { if (mounted.current) { setSaved(record); setJob({ id: record.receipt.id, state: 'pending', detail: JOB_DETAILS.pending }) } }, owner)
       if (mounted.current) setJob(value)
     } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'Could not prepare the job. Inputs are preserved.') }
@@ -168,7 +172,7 @@ export default function ShopPage() {
   }
   const addPhotos = async (files: FileList | null) => {
     const flags = operations.current
-    if (!files || saved || flags.photos || flags.submit) return
+    if (!files || saved || flags.photos || flags.submit || fast) return
     if (photos.length + files.length > 4) { setError('Use at most four views of the same object.'); return }
     flags.photos = true; setPhotoBusy(true); setError('')
     try {
@@ -186,6 +190,7 @@ export default function ShopPage() {
   const exportFile = async (format: 'pbr' | 'fbx' | 'blend') => {
     const flags = operations.current
     if (flags.artifact || !saved || !mayExportCurrentJob(saved.receipt.id, job?.state, preview) || !coordinator.current) return
+    if (saved.generationProfile === FAST_DRAFT_PROFILE && format !== 'blend') return
     flags.artifact = true; setArtifactBusy(true)
     try { const blob = await coordinator.current.artifact(format, saved); download(blob, `WORLDIFACT-${saved.receipt.id}.${format === 'pbr' ? 'textures.zip' : format}`) }
     catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'This export is not available on the connected worker.') }
@@ -200,14 +205,14 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = !!coordinator.current && !!status?.ready && (!photos.length || status.photoReady) && !busy && !photoBusy && !artifactBusy && !saved && prompt.trim().length >= 3
+  const canGenerate = !!coordinator.current && !!status?.ready && (!fast || status.fastReady === true) && (!photos.length || status.photoReady) && !busy && !photoBusy && !artifactBusy && !saved && prompt.trim().length >= 3
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview)
 
   return <main className="portal-page native-shop">
     <header className="native-shop-nav"><Link to="/" className="native-shop-back">← Back to WORLDIFACT</Link><strong>AI Shop · 3D Studio</strong><nav aria-label="World portals">{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></header>
     <section className="native-shop-workspace" aria-label="Create and review a 3D model">
       <div className="native-shop-preview">
-        <span className="eyebrow">{preview?.origin === 'archive' ? 'ARCHIVED MODEL · UNREVIEWED' : saved || preview ? 'YOUR MODEL JOB · REVIEW REQUIRED' : 'EXISTING FORGE CHARACTER · EXAMPLE ONLY'}</span>
+        <span className="eyebrow">{preview?.origin === 'archive' ? 'ARCHIVED MODEL · UNREVIEWED' : saved || preview ? saved?.generationProfile === FAST_DRAFT_PROFILE ? 'FAST DRAFT · NOT VISUALLY REVIEWED' : 'YOUR MODEL JOB · REVIEW REQUIRED' : 'EXISTING FORGE CHARACTER · EXAMPLE ONLY'}</span>
         {preview ? <>
           {preview.url ? <OracleModelPreview url={preview.url} label={preview.label} /> : <p role="status">{preview.warning} The original GLB is preserved for explicit download.</p>}
           <small>Model ID: {preview.id}</small>
@@ -217,18 +222,26 @@ export default function ShopPage() {
           <div className="native-shop-views">{['front', 'left', 'back', 'face'].map(view => <button key={view} type="button" aria-pressed={sampleView === view} onClick={() => { setSampleView(view); setSampleMissing(false) }}>{view === 'left' ? 'Left side' : view[0].toUpperCase() + view.slice(1)}</button>)}</div>
           <small>The earlier half-skull character is kept as a reference display. Your new result replaces this example only after its own job succeeds.</small>
         </>}
-        {saved && <div className="native-shop-actions"><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
+        {saved && <div className="native-shop-actions"><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
       </div>
       <div className="native-shop-form">
         <span className="eyebrow">CREATE SOMETHING OF YOUR OWN</span><h1>From your idea<br />to a 3D model.</h1>
         <p>Describe an object or add its reference views. The existing Oracle / Astra / Blender worker builds the model; WORLDIFACT shows its result here.</p>
         <form onSubmit={generate}>
+          <label htmlFor="studio-mode">Generation mode</label>
+          <select id="studio-mode" value={profile} disabled={busy || !!saved || photoBusy} onChange={e => {
+            const next = generationProfile(e.target.value)
+            if (next === FAST_DRAFT_PROFILE && (!status?.fastReady || photos.length || purpose === 'terrain')) return
+            setProfile(next)
+            if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
+          }}><option value="standard">STANDARD · current quality workflow</option><option value={FAST_DRAFT_PROFILE} disabled={!status?.fastReady || !!photos.length || purpose === 'terrain'}>FAST DRAFT · simple text-only object</option></select>
+          <small>{fast ? 'FAST target: 1–2 minutes, not a guarantee. One compact build, up to 2K maps. Visual review and optional formats are deferred; no automatic paid fallback.' : 'STANDARD is unchanged. FAST becomes selectable only when the connected worker confirms its verified profile. A shorter timeout is not proof of a faster model.'}</small>
           <label htmlFor="studio-prompt">Describe your model</label><textarea id="studio-prompt" value={prompt} maxLength={4000} rows={6} disabled={busy || !!saved} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic skull study with ivory bone materials, a stable base and clearly defined teeth." required />
-          <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy || !!saved} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain">Terrain or relief</option><option value="object">Custom object</option></select>
-          <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!saved || !!photos.length || photoBusy} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192}>Up to 8K</option></select><small>This is a requested ceiling, not guaranteed detail. References are never upscaled. Actual texture quality depends on the worker and source images.</small>
-          <label className="native-shop-upload" htmlFor="studio-photos">{photoBusy ? 'Preparing reference images…' : 'Add reference images · JPG / PNG / WebP'}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || !!saved || photoBusy} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Up to 4 views of the same object. Maximum 12 MB per original and 6 MB combined after preparation.</small>
+          <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy || !!saved} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
+          <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!saved || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192}>Up to 8K</option></select><small>This is a requested ceiling, not guaranteed detail. References are never upscaled. Actual texture quality depends on the worker and source images.</small>
+          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require STANDARD mode' : photoBusy ? 'Preparing reference images…' : 'Add reference images · JPG / PNG / WebP'}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || !!saved || photoBusy || fast} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Up to 4 views of the same object. Maximum 12 MB per original and 6 MB combined after preparation.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || !!saved} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || !!saved} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
-          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Submitting this model…' : 'Generate 3D model + materials'}</button><small>Starts one model job using the existing API account and approved allowance. It does not download a brief. Downloads and catalog publication are separate actions.</small>
+          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Submitting this model…' : fast ? 'Generate FAST draft + materials' : 'Generate 3D model + materials'}</button><small>Starts one model job using the existing API account and approved allowance. It does not download a brief. Downloads and catalog publication are separate actions.</small>
         </form>
         <div className="native-shop-connection" role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}{photos.length > 0 && status && !status.photoReady && <p>Photo input has not been confirmed on this worker. The images will not be silently ignored.</p>}<button type="button" disabled={checking} onClick={() => void refresh()}>Check connection · no generation</button></div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /><small>Held only in this page's memory. Then check the connection again.</small></label>}

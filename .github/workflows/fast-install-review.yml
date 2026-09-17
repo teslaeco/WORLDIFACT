@@ -1,0 +1,40 @@
+name: Review FAST v33 installation safety
+on:
+  pull_request:
+    paths:
+      - 'tools/fast_preview/**'
+      - 'docs/CONTEST_STATUS.md'
+      - '.github/workflows/fast-install-review.yml'
+permissions:
+  contents: read
+concurrency:
+  group: fast-install-review-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .upstream/fast-froge
+          persist-credentials: false
+      - name: Review syntax compatible with the owner Python 3.9
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for path in Path('tools/fast_preview').glob('*.py'):
+              ast.parse(path.read_text(), filename=str(path), feature_version=(3,9))
+          print('Python 3.9 syntax accepted; actual VM execution is a separate check.')
+          PY
+      - name: Actual files, rollback failures and SQLite admission guard
+        env:
+          FROGE_SOURCE_ROOT: ${{ github.workspace }}/.upstream/fast-froge/oracle_connector
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B tools/fast_preview/test_install_v33.py -v
+      - name: Default invocation cannot change production
+        run: python3 -B tools/fast_preview/install_v33.py

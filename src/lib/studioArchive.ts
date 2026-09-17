@@ -1,7 +1,8 @@
 import type { SavedStudioJob } from './studioClient.ts'
 import { archiveWriteDecision } from './studioView.ts'
+import { FAST_DRAFT_PROFILE } from './studioProtocol.ts'
 
-export type StudioArchiveEntry = { id: string; prompt: string; savedAt: string; byteLength: number; sha256: string; review: 'UNREVIEWED' }
+export type StudioArchiveEntry = { id: string; prompt: string; savedAt: string; byteLength: number; sha256: string; review: 'UNREVIEWED'; generationProfile?: typeof FAST_DRAFT_PROFILE }
 function openArchive(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('worldifact-studio-models', 1)
@@ -17,13 +18,14 @@ function openArchive(): Promise<IDBDatabase> {
 export async function saveStudioModel(saved: SavedStudioJob, blob: Blob): Promise<StudioArchiveEntry> {
   const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
   const entry: StudioArchiveEntry = { id: saved.receipt.id, prompt: saved.prompt, savedAt: new Date().toISOString(), byteLength: blob.size,
-    sha256: Array.from(new Uint8Array(hash), v => v.toString(16).padStart(2, '0')).join(''), review: 'UNREVIEWED' }
+    sha256: Array.from(new Uint8Array(hash), v => v.toString(16).padStart(2, '0')).join(''), review: 'UNREVIEWED',
+    ...(saved.generationProfile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
   const db = await openArchive()
   let stored = entry
   try {
     await new Promise<void>((resolve, reject) => {
-      // Read/compare/write within one transaction: another tab cannot replace
-      // original bytes between the comparison and commit.
+      // Read/compare/write within one transaction. Existing originals, including
+      // older STANDARD entries without a profile field, are retained verbatim.
       const tx = db.transaction(['metadata', 'models'], 'readwrite')
       const metadata = tx.objectStore('metadata')
       const lookup = metadata.get(entry.id)
