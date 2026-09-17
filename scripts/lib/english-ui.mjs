@@ -39,7 +39,18 @@ export function assertEnglishDocument(html, label = 'HTML') {
   inspectEnglishUiText(html, label)
 }
 
-export async function assertEnglishFoundationOutput(root, entryNames = ['index.html']) {
+export function assertEnglishLocaleSource(text, label = 'locale source') {
+  if (!/export\s+const\s+ENGLISH_CATALOG\b/.test(text)) throw new Error(`${label} is missing the English catalog`)
+  if (!/if\s*\(resolved\s*===\s*["']en["']\)\s*return\s+ENGLISH_CATALOG/.test(text)) {
+    throw new Error(`${label} does not route the English locale to the English catalog`)
+  }
+  if (!/return\s+["']en["']\s*;/.test(text)) throw new Error(`${label} is missing an English fallback`)
+  const englishBlock = text.match(/export\s+const\s+ENGLISH_CATALOG\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\);/)
+  if (!englishBlock) throw new Error(`${label} English catalog could not be bounded`)
+  inspectEnglishUiText(englishBlock[1], `${label} English catalog`)
+}
+
+export async function assertEnglishFoundationOutput(root, entryNames = ['index.html'], { scanJavaScript = true } = {}) {
   for (const entry of entryNames) {
     const html = await readFile(join(root, entry), 'utf8')
     assertEnglishDocument(html, `${root}/${entry}`)
@@ -49,7 +60,9 @@ export async function assertEnglishFoundationOutput(root, entryNames = ['index.h
     for (const item of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, item.name)
       if (item.isDirectory()) await scan(path)
-      else if (/\.(?:html|js)$/i.test(item.name)) inspectEnglishUiText(await readFile(path, 'utf8'), path)
+      else if (/\.html$/i.test(item.name) || (scanJavaScript && /\.js$/i.test(item.name))) {
+        inspectEnglishUiText(await readFile(path, 'utf8'), path)
+      }
     }
   }
   await scan(root)
