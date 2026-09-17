@@ -9,6 +9,7 @@ import {
   largestDimensionMm,
   sanitizeDimensions,
 } from '../src/lib/shopManufacturing.ts'
+import { FAST_DRAFT_PROFILE, oracleStudioPayload, type StudioInput } from '../src/lib/studioProtocol.ts'
 
 test('client manufacturing sizes still cover 5–20 cm and custom XYZ are bounded', () => {
   assert.deepEqual(CLIENT_SIZES_MM, [50, 75, 100, 125, 150, 175, 200])
@@ -42,11 +43,26 @@ test('customer pricing never invents or scales a supplier price', () => {
   assert.equal(differentSize.amountUsd, null)
 })
 
-test('ISS and every MAKE generation retain hard manufacturing validation rules', () => {
+test('ISS source retains hard manufacturing validation rules', () => {
   assert.equal(ISS_SOURCE.nominalMm[0], 370)
   assert.equal(ISS_SOURCE.triangles, 469_984)
   assert.match(ISS_SOURCE.warning, /thin walls/i)
   assert.equal(ISS_SOURCE.validationStatus, 'VALIDATION REQUIRED')
   assert.match(MANUFACTURING_HARD_RULES, /non-manifold/i)
   assert.match(MANUFACTURING_HARD_RULES, /B2B manufacturing partner accepts that exact revision/i)
+})
+
+test('STANDARD and FAST Studio payloads both receive the manufacturing hard rules', () => {
+  const standard: StudioInput = {
+    worldId: 'enchanted-ai-shop', prompt: 'Create a printable chess knight', purpose: 'figurine', textureMaxSize: 4096, photos: [],
+  }
+  const fast: StudioInput = {
+    worldId: 'enchanted-ai-shop', prompt: 'Create a compact chess knight', purpose: 'figurine', textureMaxSize: 2048, photos: [], generationProfile: FAST_DRAFT_PROFILE,
+  }
+  for (const input of [standard, fast]) {
+    const payload = oracleStudioPayload('12345678-1234-4234-8234-123456789abc', input)
+    assert.match(payload.prompt, /non-manifold/i)
+    assert.match(payload.prompt, /zero-thickness/i)
+    assert.match(payload.prompt, /B2B manufacturing partner accepts that exact revision/i)
+  }
 })
