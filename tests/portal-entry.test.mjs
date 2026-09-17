@@ -39,8 +39,10 @@ async function renderPortal(path) {
         if (id === '../lib/planetCampaign') return campaign
         // The source is an ES module with a default export. Without this marker,
         // transpiled __importDefault wraps the adapter again and React sees an
-        // object, not the actual component. This is a harness fix, not a stub.
+        // object, not the actual component. This is a harness adapter, not a
+        // replacement for the dedicated PortalAstraGenerator tests.
         if (id === './ShopPage') return { __esModule: true, default: Shop }
+        if (id === '../components/PortalAstraGenerator') return { __esModule: true, default: ({ worldId }) => React.createElement('section', { 'data-testid': 'astra-portal', 'data-world': worldId }, 'Astra portal generator') }
         if (id === '../components/PlanetsWorld') return load('planets')
         if (id === './PlanetsDemo') return { __esModule: true, default: () => React.createElement('span', null, 'Mini test not exercised by this server render') }
         if (['react', 'react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
@@ -56,14 +58,16 @@ async function renderPortal(path) {
 test('Chess visitors get the reviewed copied guest build rather than an unpinned redirect', async () => {
   const html = await renderPortal('/chess')
   assert.match(html, /<iframe[^>]+src="\/apps\/chess\/guest\.html"/)
+  assert.match(html, /data-world="chess-cube-512-ai"/)
   assert.match(html, /Shop boards and pieces/)
   assert.match(html, /Open original/)
   const source = await readFile(files.portal, 'utf8')
   assert.doesNotMatch(source, /window\.location|location\.replace|location\.assign|Opening the original Chess Cube website/)
 })
 
-test('direct PortalPage Shop renders the real native generation form and WORLDIFACT return', async () => {
+test('direct PortalPage Shop renders the real native generation form, Astra surface and WORLDIFACT return', async () => {
   const html = await renderPortal('/shop')
+  assert.match(html, /data-world="enchanted-ai-shop"/)
   assert.match(html, /Back to WORLDIFACT/)
   assert.match(html, /id="studio-prompt"/)
   assert.match(html, /Generate 3D model \+ materials/)
@@ -73,6 +77,7 @@ test('direct PortalPage Shop renders the real native generation form and WORLDIF
 
 test('native Planets entry renders all eight English stages and labels its separate external prototype', async () => {
   const html = await renderPortal('/planets')
+  assert.match(html, /data-world="8-planets-in-8-days"/)
   assert.match(html, /Eight worlds\. Eight days\. One expedition\./)
   assert.match(html, /Mini test/)
   assert.match(html, /FULL CAMPAIGN PLANNED/)
@@ -82,7 +87,9 @@ test('native Planets entry renders all eight English stages and labels its separ
 })
 
 test('ISS and Terra still embed their separate reviewed applications after the routing repair', async () => {
-  assert.match(await renderPortal('/iss'), /<iframe[^>]+src="\/apps\/iss\/index\.html"/)
+  const iss = await renderPortal('/iss')
+  assert.match(iss, /data-world="terra-fix-iss"/)
+  assert.match(iss, /<iframe[^>]+src="\/apps\/iss\/index\.html"/)
   const terra = await renderPortal('/terra')
   assert.match(terra, /<iframe[^>]+src="\/apps\/terra\/index\.html"/)
   assert.match(terra, /EARTH OBSERVATION/)
