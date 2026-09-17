@@ -50,6 +50,16 @@ export function assertEnglishLocaleSource(text, label = 'locale source') {
   inspectEnglishUiText(englishBlock[1], `${label} English catalog`)
 }
 
+export function assertRuntimeTranslationPairs(text, pairs, label = 'runtime translation source') {
+  for (const [source, target] of pairs) {
+    const single = `[\'${source.replaceAll("'", "\\'")}\', \'${target.replaceAll("'", "\\'")}\']`
+    const double = `[\"${source.replaceAll('"', '\\"')}\", \"${target.replaceAll('"', '\\"')}\"]`
+    if (!text.includes(single) && !text.includes(double)) {
+      throw new Error(`${label} is missing the reviewed translation: ${source} -> ${target}`)
+    }
+  }
+}
+
 export async function assertEnglishFoundationOutput(root, entryNames = ['index.html'], { scanJavaScript = true } = {}) {
   for (const entry of entryNames) {
     const html = await readFile(join(root, entry), 'utf8')
