@@ -15,9 +15,22 @@ Date: 18 September 2026.
 - Chess Cube 512 no longer starts as a nested heavyweight 3D iframe on the portal route. The route gives an immediate full-screen same-origin guest launch plus the original public build link, reducing mobile WebGL/memory stalls.
 - World audio now uses audible locally synthesized 30-second loops with distinct themes for the meadow, Chess, Fix ISS, 8 Planets, Shop and Game Lab. No remote audio asset or generation API is used.
 
-## BLOCKED / OWNER GATE
-- Restoring additional **real paid** Astra/Studio generation after the persistent ceiling is exhausted requires a new explicit cumulative request ceiling/cost authorization.
-- Merge and production deployment remain pending green CI and owner approval.
+## RELEASED — PR #50
+- PR #50: https://github.com/teslaeco/WORLDIFACT/pull/50 — **MERGED**.
+- Squash merge on `main`: `bd5dee5b9adff2f53d90150ad8d4c3e7e30e77c7`.
+- Exact-head PR verification `35334247265`: **SUCCESS**.
+- Post-merge main verification `35343128366`: **SUCCESS**.
+- Production workflow `35343128317`: **SUCCESS**.
+- Cloudflare version: `4fde199c-c92a-416d-ad18-d18558794f8c`.
+- Public URL: https://worldifact.xodobrox.workers.dev
+- Public release smoke: **PASS** — LIVE release, 13 HTML routes, 23 matching hub assets, 105 original app entries/assets, API 404 behavior, explicit DEMO generation path and origin rejection. No paid API call was made by the release smoke.
+- Production `/api/health`: `generationReady: true`, `mode: READY`, model `gpt-6-astra`.
+- Oracle bridge: `CONNECTOR_READY`.
+- Production Studio read-only diagnostic: `ready: false`, `photoReady: true`, `fastReady: true`, reason `ALLOWANCE_EXHAUSTED`, allowance `used: 15 / limit: 15 / remaining: 0`.
+
+## CURRENT BOUNDARY
+- The no-cost launch resilience hotfix is live: Astra/Shop fall back to explicit `DEMO · MOCK`, Chess uses the mobile-safe full-screen guest launcher with watchdog, and each world has a distinct 30-second local audio loop.
+- Restoring additional **real paid** Astra/Studio generation after the persistent ceiling is exhausted still requires a new explicit cumulative request ceiling/cost authorization.
 
 ---
 
