@@ -1,3 +1,30 @@
+# WORLDIFACT — restore LIVE generation after launch allowance exhaustion
+
+Date: 18 September 2026.
+
+## VERIFIED — current incident
+- Production release from PR #50 is healthy, but the persistent shared generation allowance is exhausted: `used 15 / limit 15 / remaining 0`.
+- Customer Android screenshots at launch time show AI Game Lab still labelled "Astra blueprint ready" while a LIVE request returns `Preview generation allowance has ended`, and AI Shop shows a restored failed job with an old multi-hour elapsed timer.
+- Root cause #1: `/api/health` previously reported configuration readiness without reading the Durable Object's real remaining allowance.
+- Root cause #2: the Shop correctly restored an old receipt, but its failed-state card still rendered the historical elapsed duration and looked like an active hung generation.
+- OpenAI Model Guide rechecked 18 Sep 2026: production model remains `gpt-6-astra` through the Responses API: https://developers.openai.com/api/docs/guides/latest-model
+
+## IMPLEMENTED — hotfix branch
+- Branch: `hotfix/restore-live-generation-20260918`.
+- The cumulative contest ceiling is raised from **15 to 50**. The persistent counter is **not reset**; the 15 already-reserved attempts remain counted, so this change restores at most **35 additional reservations**.
+- The fixed contest expiry remains **2026-09-19T07:00:00Z** and the existing per-IP limiter remains active.
+- `/api/health` now reads the real shared allowance and advertises `READY` only while `remaining > 0`. When exhausted, it truthfully switches to DEMO instead of showing a misleading Astra-ready state.
+- AI Game Lab immediately stops advertising LIVE after a 429/503 response.
+- AI Shop no longer shows a failed/cancelled restored job as an endlessly running timer. It exposes a visible **Start a new model** action that safely archives the old receipt before clearing the selection.
+- No secret, OpenAI key, Oracle endpoint/token or provider model identifier is changed.
+- MAKE remains **VALIDATION REQUIRED**.
+
+## AUTHORIZATION
+- The owner previously explicitly authorized API spending through the available API funds and explicitly authorized merge/deploy for the launch recovery. This hotfix uses that authorization while retaining the hard cumulative ceiling, expiry and rate limiter above.
+- Merge/deploy only after exact-head CI is green.
+
+---
+
 # WORLDIFACT — Product Hunt live stability hotfix
 
 Date: 18 September 2026.

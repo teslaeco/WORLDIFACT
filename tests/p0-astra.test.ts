@@ -13,7 +13,9 @@ const liveEnv = {
   GENERATION_EXPIRES_AT: new Date(Date.now() + 60_000).toISOString(),
   GENERATION_BUDGET: {
     idFromName: (name: string) => name,
-    get: () => ({ fetch: async () => Response.json({ allowed: true, remaining: 0 }) }),
+    get: () => ({ fetch: async (request: Request) => new URL(request.url).pathname === '/status'
+      ? Response.json({ used: 0, limit: 1, remaining: 1, enabled: true, expiresAt: new Date(Date.now() + 60_000).toISOString() })
+      : Response.json({ allowed: true, remaining: 0 }) }),
   },
   GENERATION_LIMITER: { limit: async () => ({ success: true }) },
 }
@@ -75,7 +77,12 @@ test('public pilot removes login/access-code friction but keeps limiter and glob
     GENERATION_LIMITER: { limit: async () => { limiterCalls++; return { success: true } } },
     GENERATION_BUDGET: {
       idFromName: (name: string) => name,
-      get: () => ({ fetch: async () => { budgetCalls++; return Response.json({ allowed: true, remaining: 0 }) } }),
+      get: () => ({ fetch: async (request: Request) => {
+        budgetCalls++
+        return new URL(request.url).pathname === '/status'
+          ? Response.json({ used: 0, limit: 1, remaining: 1, enabled: true, expiresAt: new Date(Date.now() + 60_000).toISOString() })
+          : Response.json({ allowed: true, remaining: 0 })
+      } }),
     },
   }
   const health = await (await handle(new Request('https://worldifact.test/api/health'), env)).json() as { generationReady: boolean; accessRequired: boolean; publicPilot: boolean }
@@ -88,6 +95,6 @@ test('public pilot removes login/access-code friction but keeps limiter and glob
   }), env, combinedProvider())
   assert.equal(response.status, 200)
   assert.equal(limiterCalls, 1)
-  assert.equal(budgetCalls, 1)
+  assert.equal(budgetCalls, 2)
   assert.equal(validateGenerationResult(await response.json()).mode, 'LIVE')
 })

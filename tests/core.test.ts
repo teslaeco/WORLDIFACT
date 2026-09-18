@@ -45,7 +45,9 @@ const live = {
   GENERATION_EXPIRES_AT: new Date(Date.now() + 60_000).toISOString(),
   GENERATION_BUDGET: {
     idFromName: (name: string) => name,
-    get: () => ({ fetch: async () => Response.json({ allowed: true, remaining: 1 }) }),
+    get: () => ({ fetch: async (request: Request) => new URL(request.url).pathname === '/status'
+      ? Response.json({ used: 0, limit: 2, remaining: 2, enabled: true, expiresAt: new Date(Date.now() + 60_000).toISOString() })
+      : Response.json({ allowed: true, remaining: 1 }) }),
   },
   GENERATION_LIMITER: {
     async limit() {

@@ -17,14 +17,14 @@ const base = {
 
 test('contest LIVE config is derived only from the disabled reviewed base and keeps a fixed cumulative ceiling', () => {
   const config = buildContestLiveConfig(base, Date.parse('2026-09-18T00:00:00Z'))
-  assert.equal(CONTEST_LIVE_CEILING, 15)
+  assert.equal(CONTEST_LIVE_CEILING, 50)
   assert.equal(config.vars.OPENAI_MODEL, 'gpt-6-astra')
   assert.equal(config.vars.ENABLE_PAID_GENERATION, 'true')
   assert.equal(config.vars.PUBLIC_PILOT, 'true')
   assert.equal(config.vars.ENABLE_ORACLE_JOBS, 'true')
   assert.equal(config.vars.ENABLE_STUDIO_JOBS, 'true')
   assert.equal(config.vars.ENABLE_APPROVED_FAST_TEST, 'false')
-  assert.equal(config.vars.GENERATION_REQUEST_LIMIT, '15')
+  assert.equal(config.vars.GENERATION_REQUEST_LIMIT, '50')
   assert.equal(config.vars.GENERATION_EXPIRES_AT, CONTEST_LIVE_EXPIRES_AT)
   assert.equal(base.vars.ENABLE_PAID_GENERATION, 'false')
 })

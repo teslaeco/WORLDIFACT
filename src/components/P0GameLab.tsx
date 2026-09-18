@@ -76,7 +76,10 @@ function WorldBlueprintLab() {
       }
       const response = await fetch('/api/blueprint', { method: 'POST', headers, signal: controller.signal, body: JSON.stringify({ worldId: 'ai-game-lab', prompt, image, mode: 'live' }) })
       const body = await response.json()
-      if (!response.ok) throw new Error(body.error || 'Astra generation failed; the previous scene is unchanged.')
+      if (!response.ok) {
+        if (response.status === 429 || response.status === 503) setHealth(value => ({ ...value, generationReady: false, model: null }))
+        throw new Error(body.error || 'Astra generation failed; the previous scene is unchanged.')
+      }
       const validated = validateGenerationResult(body)
       if (validated.mode !== 'LIVE' || validated.provenance !== 'GENERATED') throw new Error('The server did not return verified LIVE evidence.')
       setBlueprint(validated.blueprint); setResult(validated)

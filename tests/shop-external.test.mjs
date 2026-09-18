@@ -63,3 +63,11 @@ test('mobile layout keeps creation controls first and internal archive out of si
   assert.match(html, /Digital 3D file:/)
   assert.match(html, /successful payment confirmation/)
 })
+
+test('finished or failed restored jobs no longer look like an endlessly running generation', async () => {
+  const source = await readFile(new URL('../src/pages/ShopPage.tsx', import.meta.url), 'utf8')
+  assert.match(source, /Previous model did not finish/)
+  assert.match(source, /Start a new model/)
+  assert.match(source, /!terminal\(job\?\.state\) && <p>Elapsed:/)
+  assert.match(source, /client\.clearSelection\(\)/)
+})
