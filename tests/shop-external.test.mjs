@@ -33,6 +33,8 @@ test('unavailable generation is customer-friendly and does not expose quota diag
   const html = await renderShopMarkup()
   assert.match(html, /type="submit" disabled=""/)
   assert.match(html, /Generation temporarily unavailable/)
+  assert.match(html, /Preview DEMO · no API cost/)
+  assert.match(html, /local DEMO preview/)
   assert.match(html, /No payment is taken when you create a model/)
   assert.match(html, /Experimental beta/)
   assert.doesNotMatch(html, /blocked by the exhausted pilot quota/)
