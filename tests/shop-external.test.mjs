@@ -64,10 +64,13 @@ test('mobile layout keeps creation controls first and internal archive out of si
   assert.match(html, /successful payment confirmation/)
 })
 
-test('finished or failed restored jobs no longer look like an endlessly running generation', async () => {
+test('finished or failed restored jobs recover automatically and unverified FAST falls back to STANDARD', async () => {
   const source = await readFile(new URL('../src/pages/ShopPage.tsx', import.meta.url), 'utf8')
   assert.match(source, /Previous model did not finish/)
   assert.match(source, /Start a new model/)
   assert.match(source, /!terminal\(job\?\.state\) && <p>Elapsed:/)
+  assert.match(source, /previous failed\/cancelled job was archived automatically/i)
+  assert.match(source, /fastBudgetReady/)
+  assert.match(source, /switched this draft to the STANDARD generation path/)
   assert.match(source, /client\.clearSelection\(\)/)
 })

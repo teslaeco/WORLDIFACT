@@ -5,7 +5,8 @@ import { studioApi, type StudioEnv } from '../server/studio.ts'
 
 const oldInput = { worldId: 'enchanted-ai-shop', prompt: 'Create a chess knight', purpose: 'figurine', textureMaxSize: 2048, photos: [] }
 const health = { ready: true, provider: 'openai', model: 'gpt-6-astra', connectorVersion: 35, photoInput: true, promptMaxLength: 5000,
-  generationProfiles: ['standard', FAST_DRAFT_PROFILE], generationProfileRevision: 1 }
+  generationProfiles: ['standard', FAST_DRAFT_PROFILE], generationProfileRevision: 1,
+  fastBudgetRevision: 'fast-usd4-v1', fastBudgetMaxUsd: 4 }
 
 test('absent or explicit STANDARD retains exact existing canonical input and receipt digest', async () => {
   const standard = validateStudioInput(oldInput)
@@ -68,6 +69,38 @@ test('actual proxy rejects unsupported FAST before preparing or reserving a paid
   assert.equal(standard.status, 200, 'old worker STANDARD must remain usable')
   const status = await (await f.request('/api/studio/status')).json() as { fastReady: boolean }
   assert.equal(status.fastReady, false)
+})
+
+test('FAST profile support without the reviewed budget guard still fails closed before reservation', async () => {
+  let reservations = 0, posts = 0
+  const env: StudioEnv = {
+    OWNER_ACCESS_TOKEN: 'fixture-secret-that-is-not-production-12345',
+    ORACLE_ENDPOINT: 'https://review-worker.trycloudflare.com',
+    ORACLE_API_TOKEN: 'fixture-oracle-token',
+    PUBLIC_PILOT: 'true',
+    ENABLE_STUDIO_JOBS: 'true',
+    GENERATION_REQUEST_LIMIT: '7',
+    GENERATION_EXPIRES_AT: new Date(Date.now() + 600_000).toISOString(),
+    GENERATION_LIMITER: { async limit() { return { success: true } } },
+    GENERATION_BUDGET: { idFromName: name => name, get: () => ({ async fetch(request: Request) {
+      if (request.method === 'POST') { reservations++; return Response.json({ allowed: true }) }
+      return Response.json({ used: 1, limit: 7, remaining: 6, enabled: true, expiresAt: new Date(Date.now() + 600_000).toISOString() })
+    } }) },
+  }
+  const fetcher = (async (_url: string | URL | Request, init?: RequestInit) => {
+    if (init?.method === 'POST') { posts++; return Response.json({ id: crypto.randomUUID(), state: 'building' }) }
+    const { fastBudgetRevision: _revision, fastBudgetMaxUsd: _max, ...withoutGuard } = health
+    return Response.json(withoutGuard)
+  }) as typeof fetch
+  const fast = { ...oldInput, generationProfile: FAST_DRAFT_PROFILE }
+  const response = await studioApi(new Request('https://worldifact.test/api/studio/prepare', {
+    method: 'POST',
+    headers: { Origin: 'https://worldifact.test', 'Content-Type': 'application/json' },
+    body: JSON.stringify(fast),
+  }), env, fetcher)
+  assert.equal(response.status, 409)
+  assert.equal(reservations, 0)
+  assert.equal(posts, 0)
 })
 
 test('capability is rechecked before reservation and the receipt cannot switch between profiles', async () => {
