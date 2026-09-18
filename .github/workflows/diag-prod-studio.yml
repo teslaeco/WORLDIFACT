@@ -1,4 +1,4 @@
-name: Diagnose production Studio without generation
+name: Diagnose production Studio end to end
 
 on:
   push:
@@ -10,43 +10,77 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
-      - name: Read production health and prepare one no-cost receipt
+      - name: Run one explicit production FAST Studio job
         shell: bash
         run: |
           set -euo pipefail
           node --input-type=module - <<'JS'
           const base = 'https://worldifact.xodobrox.workers.dev'
-          async function read(path) {
-            const r = await fetch(base + path, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
-            const text = await r.text()
-            console.log(path, 'HTTP', r.status, text.slice(0, 3000))
-            if (!r.ok) process.exitCode = 1
-            return { r, text }
-          }
-          await read('/api/health')
-          await read('/api/studio/status')
-          await read('/api/oracle/jobs/status')
-
           const input = {
             worldId: 'enchanted-ai-shop',
-            prompt: 'Diagnostic no-cost prepare for a simple cartoon flower character.',
-            purpose: 'object',
+            prompt: 'Create one simple cartoon flower character with a stable base, clean silhouette, friendly face and basic PBR materials. Experimental game preview only; MAKE remains validation-required.',
+            purpose: 'figurine',
             textureMaxSize: 2048,
             photos: [],
             generationProfile: 'fast-draft-v1',
           }
-          const r = await fetch(base + '/api/studio/prepare', {
+
+          async function json(response, label) {
+            const body = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(label + ': HTTP ' + response.status + ' ' + (body.error || ''))
+            return body
+          }
+
+          const status = await json(await fetch(base + '/api/studio/status', { cache: 'no-store', signal: AbortSignal.timeout(20000) }), 'status')
+          console.log('status', JSON.stringify({ ready: status.ready, reason: status.reason, allowance: status.allowance, oracle: status.oracle, fastReady: status.fastReady }))
+          if (!status.ready || !status.fastReady || !(status.allowance?.remaining > 0)) throw new Error('Studio not ready')
+
+          const prepared = await json(await fetch(base + '/api/studio/prepare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Origin: base },
             body: JSON.stringify(input),
             signal: AbortSignal.timeout(30000),
+          }), 'prepare')
+          console.log('prepare PASS', JSON.stringify({ id: prepared.id, ticketPresent: typeof prepared.ticket === 'string' && prepared.ticket.length > 20 }))
+
+          const submitted = await json(await fetch(base + '/api/studio/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Origin: base, 'X-WORLDIFACT-Job': prepared.ticket },
+            body: JSON.stringify(input),
+            signal: AbortSignal.timeout(45000),
+          }), 'submit')
+          console.log('submit PASS', JSON.stringify(submitted.job))
+
+          let job = submitted.job
+          const deadline = Date.now() + 8 * 60_000
+          while (!['succeeded','failed','cancelled'].includes(job.state) && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 15000))
+            const r = await fetch(base + '/api/studio/jobs/' + prepared.id, {
+              headers: { 'X-WORLDIFACT-Job': prepared.ticket },
+              cache: 'no-store',
+              signal: AbortSignal.timeout(30000),
+            })
+            if (r.status === 429) continue
+            const body = await json(r, 'poll')
+            job = body.job
+            console.log('poll', job.state)
+          }
+          if (job.state !== 'succeeded') throw new Error('job ended: ' + job.state + ' ' + (job.detail || ''))
+
+          const model = await fetch(base + '/api/studio/jobs/' + prepared.id + '/model', {
+            headers: { 'X-WORLDIFACT-Job': prepared.ticket },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(180000),
           })
-          const body = await r.json().catch(() => ({}))
-          const safe = r.ok
-            ? { id: body.id, createdAt: body.createdAt, ticketPresent: typeof body.ticket === 'string' && body.ticket.length > 20 }
-            : { error: body.error }
-          console.log('/api/studio/prepare', 'HTTP', r.status, JSON.stringify(safe))
-          if (!r.ok) process.exitCode = 1
+          if (!model.ok) throw new Error('model HTTP ' + model.status)
+          const bytes = new Uint8Array(await model.arrayBuffer())
+          if (bytes.length < 20) throw new Error('model too small')
+          const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+          if (view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2 || view.getUint32(8, true) !== bytes.length) throw new Error('invalid GLB')
+          console.log('E2E PASS', JSON.stringify({ id: prepared.id, state: job.state, modelBytes: bytes.length }))
+
+          const after = await json(await fetch(base + '/api/studio/status', { cache: 'no-store', signal: AbortSignal.timeout(20000) }), 'status-after')
+          console.log('status-after', JSON.stringify({ ready: after.ready, allowance: after.allowance }))
           JS
