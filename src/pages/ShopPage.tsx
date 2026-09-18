@@ -73,6 +73,23 @@ export default function ShopPage() {
     setPreview(null)
     return epoch.current
   }
+  const dismissFinishedJob = () => {
+    const client = coordinator.current
+    if (!client || !saved || !terminal(job?.state) || operations.current.submit || operations.current.artifact) return
+    try {
+      client.clearSelection()
+      clearPreview()
+      setSaved(null)
+      setJob(null)
+      setSeconds(0)
+      setError('')
+      setNotice('The previous finished/failed job receipt was archived. Your description is still here and you can generate a new model now.')
+      promptInput.current?.focus()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The previous job could not be cleared safely.')
+    }
+  }
+
   const showBlob = async (blob: Blob, identity: StudioPreviewIdentity, token: number) => {
     let warning = ''
     try { inspectGLB(await blob.arrayBuffer()) }
@@ -146,7 +163,7 @@ export default function ShopPage() {
         if (stopped) return
         failures = 0; setJob(value); setError('')
         if (value.state === 'succeeded') { void loadResult(selected); return }
-        if (terminal(value.state)) return
+        if (terminal(value.state)) { setSeconds(0); return }
       } catch (e) {
         if (stopped) return
         failures++; setError(e instanceof Error ? e.message : 'Status temporarily unavailable. Recover the same job.')
@@ -261,7 +278,14 @@ export default function ShopPage() {
           {preview.url ? <OracleModelPreview url={preview.url} label="Your 3D product preview" targetDimensionsMm={[dimensions.xMm, dimensions.yMm, dimensions.zMm]} customerMode /> : <p role="status">This preview could not be displayed. Your generation result is preserved.</p>}
           <small hidden data-testid="result-description">Submitted description: {preview.label}</small>
           <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>
-        </> : saved ? <div className="native-shop-progress" role="status"><h2>{job?.state === 'failed' ? 'We could not finish this model' : 'Preparing your model…'}</h2><p>{job?.state === 'failed' ? 'Your description is still saved. You can retry without creating a different order.' : 'Please keep this page open. Your preview will appear here when it is ready.'}</p><p>Elapsed: {Math.floor(seconds / 60)}m {seconds % 60}s</p></div> : <>
+        </> : saved ? <div className="native-shop-progress" role="status">
+          <h2>{job?.state === 'failed' ? 'Previous model did not finish' : job?.state === 'cancelled' ? 'Previous model was cancelled' : 'Preparing your model…'}</h2>
+          <p>{terminal(job?.state)
+            ? 'That job is finished. Your description is preserved; start a new model below instead of waiting on this old receipt.'
+            : 'Please keep this page open. Your preview will appear here when it is ready.'}</p>
+          {!terminal(job?.state) && <p>Elapsed: {Math.floor(seconds / 60)}m {seconds % 60}s</p>}
+          {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={dismissFinishedJob}>Start a new model</button>}
+        </div> : <>
           {!sampleMissing ? <img className="native-shop-sample" src={`${EXAMPLE_ORIGIN}/assets/model-${sampleView}.webp`} alt="Example 3D product preview" referrerPolicy="no-referrer" onError={() => setSampleMissing(true)} /> : <p>The example preview is temporarily unavailable. You can still create your own model.</p>}
           <div className="native-shop-views">{['front', 'left', 'back', 'face'].map(view => <button key={view} type="button" aria-pressed={sampleView === view} onClick={() => { setSampleView(view); setSampleMissing(false) }}>{view === 'left' ? 'Left side' : view[0].toUpperCase() + view.slice(1)}</button>)}</div>
           <small>Example only. Your own generated preview replaces it after generation succeeds.</small>
