@@ -64,6 +64,7 @@ export default function ShopPage() {
   const [dimensions, setDimensions] = useState<ClientDimensions>(DEFAULT_DIMENSIONS_MM)
   const [demoPrompt, setDemoPrompt] = useState('')
   const fast = profile === FAST_DRAFT_PROFILE
+  const fastAvailable = status?.fastReady === true && status?.fastBudgetReady === true
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
 
   const clearPreview = () => {
@@ -100,11 +101,22 @@ export default function ShopPage() {
     objectUrl.current = url
     setPreview({ ...identity, blob, url, warning })
   }
+  const applyStatus = (value: StudioStatus) => {
+    setStatus(value)
+    setProfile(current => {
+      if (current === FAST_DRAFT_PROFILE && !(value.fastReady === true && value.fastBudgetReady === true)) {
+        setTextureLimit(4096)
+        setNotice('FAST DRAFT is not fully verified on the production worker, so WORLDIFACT switched this draft to the STANDARD generation path.')
+        return 'standard'
+      }
+      return current
+    })
+  }
   const refresh = async () => {
     const flags = operations.current
     if (flags.status) return
     flags.status = true; setChecking(true)
-    try { const value = await checkStudio(fetch, owner); if (mounted.current) { setStatus(value); setError('') } }
+    try { const value = await checkStudio(fetch, owner); if (mounted.current) { applyStatus(value); setError('') } }
     catch (e) { if (mounted.current) { setStatus(null); setError(e instanceof Error ? e.message : 'Connection check failed.') } }
     finally { flags.status = false; if (mounted.current) setChecking(false) }
   }
@@ -127,7 +139,7 @@ export default function ShopPage() {
       setError(e instanceof Error ? e.message : 'Recovery storage is unavailable. Generation is paused.')
     }
     flags.status = true; setChecking(true)
-    checkStudio().then(value => { if (!closed) setStatus(value) })
+    checkStudio().then(value => { if (!closed) applyStatus(value) })
       .catch(() => { if (!closed) setError('The server status is unavailable. You can still prepare your description and images.') })
       .finally(() => { if (!closed) { flags.status = false; setChecking(false) } })
     listStudioModels().then(value => { if (!closed) setArchive(value) }).catch(() => {})
@@ -163,7 +175,18 @@ export default function ShopPage() {
         if (stopped) return
         failures = 0; setJob(value); setError('')
         if (value.state === 'succeeded') { void loadResult(selected); return }
-        if (terminal(value.state)) { setSeconds(0); return }
+        if (value.state === 'failed' || value.state === 'cancelled') {
+          setSeconds(0)
+          try {
+            client.clearSelection()
+            setSaved(null)
+            setJob(null)
+            setNotice('The previous failed/cancelled job was archived automatically. Your description is preserved and a new model can be started now.')
+          } catch {
+            setJob(value)
+          }
+          return
+        }
       } catch (e) {
         if (stopped) return
         failures++; setError(e instanceof Error ? e.message : 'Status temporarily unavailable. Recover the same job.')
@@ -186,7 +209,7 @@ export default function ShopPage() {
   const generate = async (event: React.FormEvent) => {
     event.preventDefault()
     const flags = operations.current, client = coordinator.current
-    if (flags.submit || flags.photos || flags.artifact || !previousFinished || !status?.ready || !client || (fast && !status.fastReady)) return
+    if (flags.submit || flags.photos || flags.artifact || !previousFinished || !status?.ready || !client || (fast && !fastAvailable)) return
     flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt('')
     try {
       const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt, purpose, textureMaxSize: textureLimit, photos, ...(fast ? { generationProfile: FAST_DRAFT_PROFILE } : {}) })
@@ -262,7 +285,7 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = !!coordinator.current && !!status?.ready && (!fast || status.fastReady === true) && (!photos.length || status.photoReady) && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3
+  const canGenerate = !!coordinator.current && !!status?.ready && (!fast || fastAvailable) && (!photos.length || status.photoReady) && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview)
 
   return <main className="portal-page native-shop">
@@ -303,10 +326,10 @@ export default function ShopPage() {
             <label htmlFor="studio-mode">Generation mode</label>
             <select id="studio-mode" value={profile} disabled={busy || photoBusy} onChange={e => {
               const next = generationProfile(e.target.value)
-              if (next === FAST_DRAFT_PROFILE && (!status?.fastReady || photos.length || purpose === 'terrain')) return
+              if (next === FAST_DRAFT_PROFILE && (!fastAvailable || photos.length || purpose === 'terrain')) return
               setProfile(next)
               if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
-            }}><option value="standard">STANDARD · current quality workflow</option><option value={FAST_DRAFT_PROFILE} disabled={!status?.fastReady || !!photos.length || purpose === 'terrain'}>FAST DRAFT · simple text-only object</option></select>
+            }}><option value="standard">STANDARD · current quality workflow</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>FAST DRAFT · unavailable until fully verified</option></select>
             <small>STANDARD is unchanged. FAST becomes selectable only when the connected worker confirms its verified profile. A shorter timeout is not proof of a faster model.</small>
             <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
             <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
