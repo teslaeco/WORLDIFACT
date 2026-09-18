@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 
-export const CONTEST_LIVE_CEILING = 15
+export const CONTEST_LIVE_CEILING = 50
 export const CONTEST_LIVE_EXPIRES_AT = '2026-09-19T07:00:00.000Z'
 
 type WranglerConfig = { name?: string; vars?: Record<string, string>; [key: string]: unknown }
