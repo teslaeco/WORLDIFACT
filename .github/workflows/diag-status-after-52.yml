@@ -1,0 +1,22 @@
+name: Read production Studio status after PR52
+on:
+  push:
+    branches: [diag/status-after-52]
+permissions:
+  contents: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Read public status only
+        run: |
+          node --input-type=module - <<'JS'
+          const base = 'https://worldifact.xodobrox.workers.dev'
+          for (const path of ['/api/health','/api/studio/status']) {
+            const r = await fetch(base + path, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
+            const body = await r.json()
+            console.log(path, 'HTTP', r.status, JSON.stringify(body))
+            if (!r.ok) process.exitCode = 1
+          }
+          JS
