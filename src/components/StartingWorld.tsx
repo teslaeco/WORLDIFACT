@@ -9,7 +9,7 @@ import type { MoveAxes } from "../lib/gameControls";
 import { enteredPortal, nearestPortal, PORTAL_RADIUS } from "../lib/portalNavigation";
 import { createLakeEnvironment } from "../lib/lakeEnvironment";
 import { createPlayerAvatar, type AvatarChoice } from "../lib/playerAvatar";
-import { createWorldAudio } from "../lib/worldAudio";
+import { createWorldAudio, worldAudioTheme } from "../lib/worldAudio";
 import TouchJoystick from "./TouchJoystick";
 import {
   createDecorativeTerrain,
@@ -56,7 +56,7 @@ export default function StartingWorld({
   useEffect(() => () => { audio.current?.dispose(); audio.current = null; }, []);
   const toggleMusic = async () => {
     try {
-      audio.current ??= createWorldAudio();
+      audio.current ??= createWorldAudio(worldAudioTheme(activePortalId));
       const next = !audioEnabled.current;
       await audio.current.setPlaying(next);
       audioEnabled.current = next; setMusic(next);

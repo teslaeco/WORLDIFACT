@@ -1,3 +1,26 @@
+# WORLDIFACT — Product Hunt live stability hotfix
+
+Date: 18 September 2026.
+
+## VERIFIED — incident cause
+- Customer screenshots show AI Game Lab returning `Preview generation allowance has ended. DEMO is still available.` and AI Shop changing from available earlier in the day to unavailable after a long failed job.
+- The production safety design uses one persistent Durable Object counter for Astra blueprints, Studio and Oracle submissions. Reservations are cumulative and are intentionally not reset or refunded by deploys or failed requests.
+- The authorized contest release ceiling remains 15 total reservations. This hotfix does **not** raise that paid ceiling and does not reset the counter.
+- Exact current reserved-attempt count has not been freshly read from production in this branch; no extra paid request is used for diagnosis.
+
+## IMPLEMENTED — no-cost launch resilience
+- Branch: `hotfix/producthunt-live-stability-20260918`.
+- Astra portal generation falls back immediately to explicit `DEMO · MOCK` when LIVE returns 429/503, without making a second provider request.
+- AI Shop exposes an explicit local procedural 3D `DEMO · MOCK` preview while LIVE Studio generation is unavailable. It is never treated as a generated production mesh or MAKE-approved asset.
+- Chess Cube 512 no longer starts as a nested heavyweight 3D iframe on the portal route. The route gives an immediate full-screen same-origin guest launch plus the original public build link, reducing mobile WebGL/memory stalls.
+- World audio now uses audible locally synthesized 30-second loops with distinct themes for the meadow, Chess, Fix ISS, 8 Planets, Shop and Game Lab. No remote audio asset or generation API is used.
+
+## BLOCKED / OWNER GATE
+- Restoring additional **real paid** Astra/Studio generation after the persistent ceiling is exhausted requires a new explicit cumulative request ceiling/cost authorization.
+- Merge and production deployment remain pending green CI and owner approval.
+
+---
+
 # WORLDIFACT — FINAL CONTEST LIVE RELEASE STATUS
 
 Date: 18 September 2026.

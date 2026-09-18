@@ -54,6 +54,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
+      if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt }) => React.createElement('span', { 'data-demo-prompt': prompt }, 'DEMO local 3D preview') }
       if (id.endsWith('.css')) return {}
       if (id === 'react') return react
       if (['react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)

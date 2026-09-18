@@ -55,14 +55,15 @@ async function renderPortal(path) {
   return renderToStaticMarkup(React.createElement(MemoryRouter, { initialEntries: [path] }, React.createElement(load('portal').default)))
 }
 
-test('Chess visitors get the reviewed copied guest build rather than an unpinned redirect', async () => {
+test('Chess visitors get a mobile-safe full-screen guest launch instead of a nested 3D iframe', async () => {
   const html = await renderPortal('/chess')
-  assert.match(html, /<iframe[^>]+src="\/apps\/chess\/guest\.html"/)
+  assert.match(html, /href="\/apps\/chess\/guest\.html\?guest=1"/)
+  assert.match(html, /MOBILE-SAFE LAUNCH/)
+  assert.match(html, /Launch Chess Cube 512 AI/)
   assert.match(html, /data-world="chess-cube-512-ai"/)
   assert.match(html, /Shop boards and pieces/)
   assert.match(html, /Open original/)
-  const source = await readFile(files.portal, 'utf8')
-  assert.doesNotMatch(source, /window\.location|location\.replace|location\.assign|Opening the original Chess Cube website/)
+  assert.doesNotMatch(html, /<iframe[^>]+src="\/apps\/chess\//)
 })
 
 test('direct PortalPage Shop renders the real native generation form, Astra surface and WORLDIFACT return', async () => {

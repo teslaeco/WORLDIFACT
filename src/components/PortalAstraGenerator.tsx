@@ -64,14 +64,15 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
     reader.readAsDataURL(file)
   }
 
-  function generateDemo() {
-    if (busy || prompt.trim().length < 3) return
-    const demo = localSceneResult(
-      demoBlueprint(`${title}: ${prompt}`),
-      'DEMO / MOCK local scene. No GPT-6 Astra request was made; MAKE remains validation-required.',
-    )
+  function applyDemo(note = 'DEMO / MOCK local scene. No GPT-6 Astra request was made; MAKE remains validation-required.') {
+    const demo = localSceneResult(demoBlueprint(`${title}: ${prompt}`), note)
     setBlueprint(demo.blueprint)
     setResult(demo)
+  }
+
+  function generateDemo() {
+    if (busy || prompt.trim().length < 3) return
+    applyDemo()
     setError('')
   }
 
@@ -96,7 +97,15 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
         body: JSON.stringify({ worldId, prompt, image, mode: 'live' }),
       })
       const body = await response.json()
-      if (!response.ok) throw new Error(body.error || 'Astra generation failed; the previous scene is unchanged.')
+      if (!response.ok) {
+        if (response.status === 429 || response.status === 503) {
+          setHealth(value => ({ ...value, generationReady: false }))
+          applyDemo('DEMO / MOCK fallback after LIVE became unavailable. No second GPT-6 Astra request was made; MAKE remains validation-required.')
+          setError('LIVE generation is temporarily unavailable, so WORLDIFACT switched to a labelled DEMO preview.')
+          return
+        }
+        throw new Error(body.error || 'Astra generation failed; the previous scene is unchanged.')
+      }
       const validated = validateGenerationResult(body)
       if (validated.mode !== 'LIVE' || validated.provenance !== 'GENERATED') throw new Error('The server did not return verified LIVE evidence.')
       setBlueprint(validated.blueprint)

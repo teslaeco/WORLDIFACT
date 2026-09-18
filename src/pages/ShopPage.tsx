@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import OracleModelPreview from '../components/OracleModelPreview'
+import DemoShopPreview from '../components/DemoShopPreview'
 import ShopManufacturingOptions from '../components/ShopManufacturingOptions'
 import { PORTALS } from '../config/portals'
 import { REFERENCE_LINKS } from '../config/references'
@@ -61,6 +62,7 @@ export default function ShopPage() {
   const [sampleView, setSampleView] = useState('front')
   const [sampleMissing, setSampleMissing] = useState(false)
   const [dimensions, setDimensions] = useState<ClientDimensions>(DEFAULT_DIMENSIONS_MM)
+  const [demoPrompt, setDemoPrompt] = useState('')
   const fast = profile === FAST_DRAFT_PROFILE
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
 
@@ -168,7 +170,7 @@ export default function ShopPage() {
     event.preventDefault()
     const flags = operations.current, client = coordinator.current
     if (flags.submit || flags.photos || flags.artifact || !previousFinished || !status?.ready || !client || (fast && !status.fastReady)) return
-    flags.submit = true; setBusy(true); setError(''); setNotice('')
+    flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt('')
     try {
       const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt, purpose, textureMaxSize: textureLimit, photos, ...(fast ? { generationProfile: FAST_DRAFT_PROFILE } : {}) })
       const value = await client.start(input, record => {
@@ -178,8 +180,24 @@ export default function ShopPage() {
         }
       }, owner, true)
       if (mounted.current) setJob(value)
-    } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'Could not prepare the job. Inputs and the previous result are preserved.') }
+    } catch (e) {
+      if (mounted.current) {
+        const message = e instanceof Error ? e.message : 'Could not prepare the job. Inputs and the previous result are preserved.'
+        setError(message)
+        if (/allowance|exhausted|unavailable/i.test(message) && prompt.trim().length >= 3) {
+          setDemoPrompt(prompt.trim())
+          setNotice('LIVE 3D generation is unavailable, so a clearly labelled local DEMO preview is shown instead. No second paid request was made.')
+        }
+      }
+    }
     finally { flags.submit = false; if (mounted.current) setBusy(false) }
+  }
+  const previewDemo = () => {
+    const value = prompt.trim()
+    if (busy || photoBusy || value.length < 3) return
+    setDemoPrompt(value)
+    setError('')
+    setNotice('DEMO · MOCK local procedural preview. No GPT-6 Astra, Oracle or paid generation request was made.')
   }
   const addPhotos = async (files: FileList | null) => {
     const flags = operations.current
@@ -235,7 +253,11 @@ export default function ShopPage() {
     <section className="native-shop-workspace" aria-label="Create and preview a 3D product">
       <div className="native-shop-preview">
         <span className="eyebrow">3D PREVIEW</span>
-        {preview ? <>
+        {demoPrompt ? <>
+          <DemoShopPreview prompt={demoPrompt} />
+          <p className="shop-preview-dimensions">Preview size target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>
+          <small>This DEMO preview is not a generated production mesh and is not manufacturing-ready.</small>
+        </> : preview ? <>
           {preview.url ? <OracleModelPreview url={preview.url} label="Your 3D product preview" targetDimensionsMm={[dimensions.xMm, dimensions.yMm, dimensions.zMm]} customerMode /> : <p role="status">This preview could not be displayed. Your generation result is preserved.</p>}
           <small hidden data-testid="result-description">Submitted description: {preview.label}</small>
           <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>
@@ -270,7 +292,7 @@ export default function ShopPage() {
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D model + materials · free' : 'Generate 3D model + materials · free'}</button><small>No customer payment is taken at generation. Manufacturing and delivery are a separate purchase step.</small>
         </form>
-        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : status?.ready ? 'Free generation available' : 'Generation temporarily unavailable'}</strong><p>{status?.ready ? 'You can create a model now.' : 'You can still prepare your description and photos. Try again shortly.'}</p><button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
+        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : status?.ready ? 'Free generation available' : 'Generation temporarily unavailable'}</strong><p>{status?.ready ? 'You can create a model now.' : 'You can still test the Shop with the local DEMO preview while LIVE generation is unavailable.'}</p>{!status?.ready && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}
         {error && <p className="native-shop-error" role="alert">We could not complete that step. Please try again.</p>}{notice && <p role="status">{notice}</p>}

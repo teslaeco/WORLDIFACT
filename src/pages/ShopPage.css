@@ -70,3 +70,13 @@
  .native-shop .oracle-model-canvas { height: 380px; }
  .shop-make-controls, .shop-dimensions { grid-template-columns: 1fr; }
 }
+
+.demo-shop-preview { margin-top: 12px; }
+.demo-shop-canvas { width: 100%; height: 510px; max-height: 65dvh; min-height: 280px; overflow: hidden; border-radius: 10px; background: #07111a; }
+.demo-shop-canvas canvas { width: 100%; height: 100%; display: block; }
+.demo-shop-label { margin: 10px 0 0; padding: 10px 12px; border-left: 4px solid #e9bc73; background: #2b2a20; }
+.native-shop-demo-button { width: 100%; margin: 8px 0; background: #d7c38a !important; color: #20302b !important; font-weight: 800 !important; }
+.chess-launch { min-height: 340px; display: grid; place-items: center; padding: clamp(20px, 5vw, 54px); text-align: center; }
+.chess-launch > div { max-width: 720px; }
+.chess-launch .foundation-actions { justify-content: center; }
+@media (max-width: 760px) { .demo-shop-canvas { height: 380px; } .chess-launch { min-height: 260px; padding: 18px; } }
