@@ -1,4 +1,4 @@
-name: Diagnose failed Oracle Studio job read-only
+name: Diagnose production STANDARD Studio end to end
 
 on:
   push:
@@ -9,59 +9,76 @@ permissions:
 
 jobs:
   diagnose:
-    environment: production
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
-      - name: Read failed job directly from Oracle
+      - name: Run one explicit production STANDARD Studio job
         shell: bash
-        env:
-          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
-          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
         run: |
           set -euo pipefail
           node --input-type=module - <<'JS'
-          const endpoint = (process.env.ORACLE_ENDPOINT || '').replace(/\/$/, '')
-          const token = process.env.ORACLE_API_TOKEN || ''
-          const id = '4adfab52-df7a-4ec2-b502-4c9ec2e0d8f1'
-          if (!/^https:\/\//.test(endpoint) || token.length < 8) throw new Error('Oracle production connection unavailable')
-
-          async function read(path) {
-            const r = await fetch(endpoint + path, {
-              headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
-              redirect: 'manual',
-              signal: AbortSignal.timeout(25000),
-            })
-            const body = await r.json().catch(() => ({}))
-            if (!r.ok) throw new Error(path + ': HTTP ' + r.status)
+          const base = 'https://worldifact.xodobrox.workers.dev'
+          const input = {
+            worldId: 'enchanted-ai-shop',
+            prompt: 'Create one simple cartoon flower character with a stable base, clean silhouette, friendly face and basic PBR materials. Experimental game preview only; MAKE remains validation-required.',
+            purpose: 'figurine',
+            textureMaxSize: 4096,
+            photos: [],
+          }
+          async function json(response, label) {
+            const body = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(label + ': HTTP ' + response.status + ' ' + (body.error || ''))
             return body
           }
 
-          const health = await read('/v1/health')
-          console.log('health', JSON.stringify({
-            ready: health.ready,
-            provider: health.provider,
-            model: health.model,
-            connectorVersion: health.connectorVersion,
-            generationProfiles: health.generationProfiles,
-            generationProfileRevision: health.generationProfileRevision,
-            fastBudgetRevision: health.fastBudgetRevision,
-            fastBudgetMaxUsd: health.fastBudgetMaxUsd,
-          }))
+          const status = await json(await fetch(base + '/api/studio/status', { cache: 'no-store', signal: AbortSignal.timeout(20000) }), 'status')
+          console.log('status', JSON.stringify({ ready: status.ready, reason: status.reason, allowance: status.allowance, oracle: status.oracle }))
+          if (!status.ready || !(status.allowance?.remaining > 0)) throw new Error('Studio not ready')
 
-          const job = await read('/v1/jobs/' + id)
-          const safe = {
-            id: job.id,
-            state: job.state,
-            detail: typeof job.detail === 'string' ? job.detail.slice(0, 1000) : null,
-            stage: job.stage ?? null,
-            phase: job.phase ?? null,
-            generationProfile: job.generationProfile ?? null,
-            errorCode: job.errorCode ?? job.error_code ?? job.code ?? null,
-            attempts: job.attempts ?? job.attempt ?? null,
-            updatedAt: job.updatedAt ?? job.updated_at ?? null,
-            timing: job.timing ?? null,
+          const prepared = await json(await fetch(base + '/api/studio/prepare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Origin: base },
+            body: JSON.stringify(input),
+            signal: AbortSignal.timeout(30000),
+          }), 'prepare')
+          console.log('prepare PASS', JSON.stringify({ id: prepared.id, ticketPresent: typeof prepared.ticket === 'string' && prepared.ticket.length > 20 }))
+
+          const submitted = await json(await fetch(base + '/api/studio/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Origin: base, 'X-WORLDIFACT-Job': prepared.ticket },
+            body: JSON.stringify(input),
+            signal: AbortSignal.timeout(45000),
+          }), 'submit')
+          console.log('submit PASS', JSON.stringify(submitted.job))
+
+          let job = submitted.job
+          const deadline = Date.now() + 15 * 60_000
+          while (!['succeeded','failed','cancelled'].includes(job.state) && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 20000))
+            const r = await fetch(base + '/api/studio/jobs/' + prepared.id, {
+              headers: { 'X-WORLDIFACT-Job': prepared.ticket },
+              cache: 'no-store',
+              signal: AbortSignal.timeout(30000),
+            })
+            if (r.status === 429) continue
+            const body = await json(r, 'poll')
+            job = body.job
+            console.log('poll', job.state)
           }
-          console.log('job', JSON.stringify(safe))
-          console.log('job-keys', Object.keys(job).sort().join(','))
+          if (job.state !== 'succeeded') throw new Error('job ended: ' + job.state + ' ' + (job.detail || ''))
+
+          const model = await fetch(base + '/api/studio/jobs/' + prepared.id + '/model', {
+            headers: { 'X-WORLDIFACT-Job': prepared.ticket },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(180000),
+          })
+          if (!model.ok) throw new Error('model HTTP ' + model.status)
+          const bytes = new Uint8Array(await model.arrayBuffer())
+          if (bytes.length < 20) throw new Error('model too small')
+          const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+          if (view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2 || view.getUint32(8, true) !== bytes.length) throw new Error('invalid GLB')
+          console.log('STANDARD E2E PASS', JSON.stringify({ id: prepared.id, state: job.state, modelBytes: bytes.length }))
+
+          const after = await json(await fetch(base + '/api/studio/status', { cache: 'no-store', signal: AbortSignal.timeout(20000) }), 'status-after')
+          console.log('status-after', JSON.stringify({ ready: after.ready, allowance: after.allowance }))
           JS
