@@ -1,3 +1,69 @@
+# WORLDIFACT — AI Shop generation root-cause fix
+
+Date: 18 September 2026.
+
+## RELEASED — PR #52
+
+- PR #52: https://github.com/teslaeco/WORLDIFACT/pull/52 — **MERGED**.
+- Squash merge on `main`: `955eee944dedbe01433dad68e1853bb1fd1a4272`.
+- Exact-head verification: **SUCCESS — 206/206 tests PASS**, zero failures.
+- Production workflow `35389099460`: **SUCCESS**.
+- Cloudflare version: `80a77d03-a19a-4ce9-8cec-aa570b59eeeb`.
+- Public URL: https://worldifact.xodobrox.workers.dev
+
+## VERIFIED — root cause
+
+A real public FAST Studio job was accepted as `queued` and then failed on the Oracle worker with the exact worker detail:
+
+`No valid current FAST draft exists.`
+
+The failure was not caused by the browser, depleted allowance or missing Oracle connection. Production at diagnosis still had remaining shared allowance and `/api/studio/prepare` returned a valid signed receipt.
+
+Direct Oracle health advertises the FAST profile/revision, but the reviewed FAST monetary/production guard is not present in production health. WORLDIFACT had therefore been exposing FAST as customer-usable before the complete FAST path was verified.
+
+## VERIFIED — STANDARD production E2E
+
+- Real STANDARD job: `9bd056d7-826a-4508-9330-2db93022091c`.
+- State progression: `queued → building → succeeded`.
+- Retrieved and validated GLB: **923,624 bytes**.
+- Production STANDARD E2E test: **PASS**.
+- This consumed one real shared reservation; it is genuine production evidence, not a mock.
+
+## FIX
+
+- FAST submissions now fail closed **before paid reservation** unless both the exact FAST capability and reviewed FAST budget guard are confirmed.
+- AI Shop automatically switches a restored FAST draft to STANDARD when FAST is not fully verified.
+- Failed/cancelled restored jobs are archived and cleared automatically after status recovery; the user's description is preserved.
+- STANDARD remains the active verified customer 3D generation path.
+- No secret, model identifier or Oracle credential changed.
+- MAKE remains **VALIDATION REQUIRED**.
+
+## POST-DEPLOY READ-ONLY STATUS
+
+At `2026-09-18T20:02:44Z`:
+
+```json
+{
+  "health": {
+    "generationReady": true,
+    "allowance": { "used": 23, "limit": 50, "remaining": 27 }
+  },
+  "studio": {
+    "ready": true,
+    "reason": "READY",
+    "oracle": "CONNECTOR_READY",
+    "photoReady": true,
+    "fastReady": true,
+    "fastBudgetReady": false,
+    "allowance": { "used": 23, "limit": 50, "remaining": 27 }
+  }
+}
+```
+
+The Shop uses both FAST readiness signals, so `fastBudgetReady:false` forces the customer flow to STANDARD instead of the broken FAST path.
+
+---
+
 # WORLDIFACT — LIVE generation restored after Product Hunt allowance exhaustion
 
 Date: 18 September 2026.
