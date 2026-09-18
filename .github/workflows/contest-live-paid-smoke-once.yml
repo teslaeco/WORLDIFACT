@@ -1,0 +1,51 @@
+name: Verify contest LIVE generation once
+
+on:
+  workflow_run:
+    workflows: ["Publish WORLDIFACT and verify OpenAI setup"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worldifact-contest-live-paid-smoke
+  cancel-in-progress: false
+
+jobs:
+  live-smoke:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    environment:
+      name: production
+      url: https://worldifact.xodobrox.workers.dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact deployed commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - name: Gate paid smoke to the exact contest activation commit
+        id: gate
+        shell: bash
+        run: |
+          if git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/CONTEST_LIVE_20260918'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            echo 'Contest LIVE activation marker added in this deployment commit.'
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            echo 'Marker was not added by this deployment commit; no paid smoke will run.'
+          fi
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        if: steps.gate.outputs.run == 'true'
+      - name: Execute one LIVE Astra blueprint and one LIVE Studio 3D job
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/contest-live-paid-smoke.mjs
+        env:
+          WORLDIFACT_URL: https://worldifact.xodobrox.workers.dev
