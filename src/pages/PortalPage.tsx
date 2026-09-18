@@ -54,7 +54,18 @@ export default function PortalPage() {
       <strong>EARTH OBSERVATION</strong> · Check each image’s source and acquisition date. The ISS repair game is a separate simulation.
     </p>}
 
-    {planets ? <PlanetsWorld /> : <div className="foundation-frame-shell world-primary-frame">
+    {planets ? <PlanetsWorld /> : app.route === '/chess' ? <section className="foundation-frame-shell world-primary-frame chess-launch" aria-label="Chess Cube launcher">
+      <div>
+        <span className="eyebrow">MOBILE-SAFE LAUNCH</span>
+        <h2>Play Chess Cube 512 AI</h2>
+        <p>The copied guest build now opens full-screen instead of inside a second 3D iframe. This releases the WORLDIFACT scene first and avoids the mobile loading stall.</p>
+        <div className="foundation-actions">
+          <a className="button-link" href={`${app.frame}?guest=1`}>Launch Chess Cube 512 AI →</a>
+          <a href={app.original} target="_blank" rel="noopener noreferrer">Open original public build ↗</a>
+        </div>
+        <small>The full-screen guest build includes a WORLDIFACT return control. No account is required.</small>
+      </div>
+    </section> : <div className="foundation-frame-shell world-primary-frame">
       {loadedFrame !== app.frame && <p className="foundation-loading" role="status">Opening {app.title}…</p>}
       <iframe key={app.frame} src={app.frame} title={app.title} className="foundation-frame"
         allow="fullscreen; clipboard-write" allowFullScreen
