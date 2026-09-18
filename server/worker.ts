@@ -83,8 +83,31 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   const configuredModel = env.OPENAI_MODEL || "gpt-6-astra";
   const publicPilot = env.PUBLIC_PILOT === "true";
   const accessConfigured = publicPilot || ((env.GENERATION_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.GENERATION_ACCESS_TOKEN?.length ?? 0) <= 256);
-  const generationReady = configured && !!env.GENERATION_LIMITER && !!env.GENERATION_BUDGET && !!budgetSettings(env) && accessConfigured && configuredModel === "gpt-6-astra";
-  if (url.pathname === "/api/health" && request.method === "GET") return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady && !publicPilot, publicPilot: generationReady && publicPilot, model: generationReady ? configuredModel : null, maxReferenceImageMb: 6 });
+  const generationConfigured = configured && !!env.GENERATION_LIMITER && !!env.GENERATION_BUDGET && !!budgetSettings(env) && accessConfigured && configuredModel === "gpt-6-astra";
+  if (url.pathname === "/api/health" && request.method === "GET") {
+    let allowance: { used: number; limit: number; remaining: number; enabled: boolean; expiresAt: string | null } | null = null;
+    if (generationConfigured) {
+      try {
+        const budget = env.GENERATION_BUDGET!.get(env.GENERATION_BUDGET!.idFromName("worldifact-generation-budget-v1"));
+        const response = await budget.fetch(new Request("https://budget.internal/status", { signal: AbortSignal.timeout(5000) }));
+        const value = await response.json() as Record<string, unknown>;
+        if (response.ok && [value.used, value.limit, value.remaining].every((n) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0) &&
+            typeof value.enabled === "boolean") {
+          allowance = {
+            used: value.used as number,
+            limit: value.limit as number,
+            remaining: value.remaining as number,
+            enabled: value.enabled,
+            expiresAt: typeof value.expiresAt === "string" ? value.expiresAt : null,
+          };
+        }
+      } catch { /* Health fails closed when the shared allowance cannot be read. */ }
+    }
+    const generationReady = generationConfigured && allowance?.enabled === true && allowance.remaining > 0;
+    return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady && !publicPilot,
+      publicPilot: generationReady && publicPilot, model: generationReady ? configuredModel : null, maxReferenceImageMb: 6,
+      allowance });
+  }
   if (url.pathname !== "/api/blueprint") return url.pathname.startsWith("/api/") ? json({ error: "Not found" }, 404) : (env.ASSETS?.fetch(request) ?? new Response("Not found", { status: 404 }));
   if (request.method !== "POST") return json({ error: "Use POST" }, 405);
   if (request.headers.get("origin") && request.headers.get("origin") !== url.origin) return json({ error: "Cross-origin request rejected" }, 403);
@@ -105,7 +128,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     return json({ mode: "DEMO", provenance: "MOCK", blueprint, assetSpec: assetSpecForBlueprint(blueprint), requestId, model: null,
       limitation: "Local rule-based scene. Reference images are not analyzed. GAME uses procedural meshes; MAKE remains validation-required." });
   }
-  if (!generationReady) return json({ error: "Generation is not enabled safely yet.", requestId }, 503);
+  if (!generationConfigured) return json({ error: "Generation is not enabled safely yet.", requestId }, 503);
   if (!publicPilot && !(await validAccess(request, env.GENERATION_ACCESS_TOKEN!))) return json({ error: "A valid preview access code is required.", requestId }, 401);
   try { const { success } = await env.GENERATION_LIMITER!.limit({ key: request.headers.get("CF-Connecting-IP") || "unknown-client" }); if (!success) return json({ error: "Generation limit reached. Please try again later.", requestId }, 429); }
   catch { return json({ error: "Generation limit service unavailable.", requestId }, 503); }
