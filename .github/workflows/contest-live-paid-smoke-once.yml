@@ -30,12 +30,26 @@ jobs:
         id: gate
         shell: bash
         run: |
-          if git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/CONTEST_LIVE_20260918'; then
+          changed=$(git diff-tree --no-commit-id --name-only -m -r HEAD)
+          if printf '%s\n' "$changed" | grep -Eq '^ops/(CONTEST_LIVE_20260918|CONTEST_LIVE_SMOKE_RETRY_20260918)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        if: steps.gate.outputs.run == 'true'
+      - name: Execute one LIVE Astra blueprint and one LIVE Studio 3D job
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/contest-live-paid-smoke.mjs
+        env:
+          WORLDIFACT_URL: https://worldifact.xodobrox.workers.dev
+; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
-            echo 'Contest LIVE activation marker added in this deployment commit.'
+            echo 'Explicit one-time contest LIVE paid-smoke marker added in this deployment commit.'
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
-            echo 'Marker was not added by this deployment commit; no paid smoke will run.'
+            echo 'No one-time paid-smoke marker added by this deployment commit; no paid smoke will run.'
           fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         if: steps.gate.outputs.run == 'true'
