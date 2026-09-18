@@ -177,12 +177,15 @@ test("release smoke rejects a lazy asset silently replaced by HTML or stale Java
   }
 });
 
-test("release smoke refuses a READY health response before making a generation request", async (t) => {
+test("release smoke accepts authorized READY health while still exercising only explicit DEMO generation", async (t) => {
   const f = await fixture(t);
   const fetcher = async (url: URL, init: RequestInit) => url.pathname === "/api/health"
-    ? Response.json({ mode: "READY", generationReady: true, model: "gpt-6-astra" }) : f.fetcher(url, init);
-  await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /requires DEMO/);
-  assert.equal(f.requests.length, 0);
+    ? Response.json({ mode: "READY", generationReady: true, publicPilot: true, model: "gpt-6-astra" }) : f.fetcher(url, init);
+  const result = await checkPublishedRelease({ origin, versionId }, { ...f, fetcher });
+  assert.equal(result.mode, "LIVE");
+  const posts = f.requests.filter((request) => request.method === "POST");
+  assert.equal(posts.length, 2);
+  for (const request of posts) assert.equal((await request.json() as { mode: string }).mode, "demo");
   assert.equal(f.providerCalls(), 0);
 });
 
