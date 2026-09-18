@@ -95,10 +95,24 @@ test("provider failures still consume the global ceiling; no automatic retries",
 
 test("health distinguishes readiness from evidence of a successful generation", async () => {
   const response = await handle(new Request("https://worldifact.test/api/health"), configured());
-  const health = await response.json() as { mode: string; generationReady: boolean; accessRequired: boolean };
+  const health = await response.json() as { mode: string; generationReady: boolean; accessRequired: boolean; allowance: { remaining: number } };
   assert.equal(health.mode, "READY");
   assert.equal(health.generationReady, true);
   assert.equal(health.accessRequired, true);
+  assert.equal(health.allowance.remaining, 2);
+});
+
+test("health stops advertising LIVE when the persistent allowance is exhausted", async () => {
+  const env = configured();
+  const budget = env.GENERATION_BUDGET.get();
+  assert.equal((await budget.fetch(reserve())).status, 200);
+  assert.equal((await budget.fetch(reserve())).status, 200);
+  const response = await handle(new Request("https://worldifact.test/api/health"), env);
+  const health = await response.json() as { mode: string; generationReady: boolean; model: string | null; allowance: { used: number; limit: number; remaining: number } };
+  assert.equal(health.mode, "DEMO");
+  assert.equal(health.generationReady, false);
+  assert.equal(health.model, null);
+  assert.deepEqual(health.allowance, { used: 2, limit: 2, remaining: 0, enabled: true, expiresAt: env.GENERATION_EXPIRES_AT });
 });
 
 test("generation details identify exact content and usage without persisting access secrets", async () => {
