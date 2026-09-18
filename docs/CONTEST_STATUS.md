@@ -1,3 +1,35 @@
+# WORLDIFACT status — contest LIVE activation release
+
+Date: 18 September 2026.
+
+## VERIFIED
+- PR #45 is merged on `main` at `81a4ac2493a9d102d816079b494bd18f255c91da`.
+- Post-merge CI and Cloudflare deployment for PR #45 succeeded.
+- Official OpenAI Model Guide rechecked on 18 Sep 2026: production model ID remains `gpt-6-astra` via the Responses API: https://developers.openai.com/api/docs/guides/latest-model
+- Production secrets for OpenAI, Cloudflare and Oracle are synchronized by the existing release workflow without exposing them to the frontend.
+- The contest LIVE release keeps the committed `wrangler.jsonc` disabled by default and derives an ephemeral production config only when `ops/CONTEST_LIVE_20260918` exists.
+
+## AUTHORIZED / BOUNDED LIVE RELEASE
+- Owner explicitly approved merge, production deployment and API spending on 18 Sep 2026.
+- Global cumulative generation ceiling: **15 reservations total**. Existing Durable Object usage remains counted and is never reset.
+- Fixed expiry: **2026-09-19T07:00:00Z** (end of the full Sep 18 Product Hunt launch day in Pacific time).
+- LIVE deployment enables:
+  - GPT-6 Astra structured `/api/blueprint` for all five WORLDIFACT portal IDs;
+  - public pilot access through existing same-origin/rate-limit protections;
+  - Oracle bridge jobs;
+  - native Studio/Blender 3D jobs;
+  - existing per-IP limiter and global Durable Object ceiling.
+- Legacy one-off FAST approval override is disabled in the contest config so it cannot reduce or replace the new explicit cumulative ceiling.
+- MAKE remains **VALIDATION REQUIRED**. No generated artifact becomes manufacturing-approved automatically.
+
+## FINAL RELEASE GATE
+- Branch: `release/contest-live-20260918`.
+- Required before merge: exact-head CI green, production dry-run green, then merge is pre-authorized by the owner.
+- After merge, the normal production workflow deploys the bounded LIVE config automatically.
+- A one-time post-deploy workflow is allowed to spend exactly enough for one real Astra blueprint smoke and one real Studio 3D smoke; it does not repeat on later documentation commits.
+
+---
+
 # WORLDIFACT status — PR #45 generator availability hotfix
 
 Date: 18 September 2026.
