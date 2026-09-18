@@ -99,7 +99,7 @@ async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch
   const current = await health(env, fetcher)
   if (!current.ready) throw new StudioError('The existing Astra/Blender worker is not ready.', 503)
   if (trial && !current.fastBudgetReady) throw new StudioError('The approved cost guard is not confirmed. No paid request was sent.', 503)
-  if (input.generationProfile === FAST_DRAFT_PROFILE && !current.fastReady) throw new StudioError('The worker has not confirmed FAST DRAFT v1. No paid job was submitted; STANDARD remains available.', 409)
+  if (input.generationProfile === FAST_DRAFT_PROFILE && (!current.fastReady || !current.fastBudgetReady)) throw new StudioError('FAST DRAFT is not fully verified on the worker. No paid job was submitted; STANDARD remains available.', 409)
   if (input.photos.length && !current.photoReady) throw new StudioError('This worker has not confirmed photo input. Nothing was submitted.', 409)
   if (oracleStudioPayload('', input).prompt.length > current.promptMaxLength) throw new StudioError(`Shorten the description: the worker accepts ${current.promptMaxLength} characters including export instructions.`)
   return { ...current, trial }
