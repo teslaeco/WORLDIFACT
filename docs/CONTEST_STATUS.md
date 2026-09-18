@@ -1,3 +1,53 @@
+# WORLDIFACT — LIVE generation restored after Product Hunt allowance exhaustion
+
+Date: 18 September 2026.
+
+## RELEASED — PR #51
+
+- PR #51: https://github.com/teslaeco/WORLDIFACT/pull/51 — **MERGED**.
+- Squash merge on `main`: `02e04e9a2194a01b124cb67ed16a7f48fef6aaa0`.
+- Exact-head verification `35372652498`: **SUCCESS** — **205/205 tests PASS**, zero failures.
+- Post-merge verification `35372838941`: **SUCCESS**.
+- Production workflow `35372839006`: **SUCCESS**.
+- Cloudflare version: `c05df2e0-6487-4d28-b317-e7946f9009e4`.
+- Public URL: https://worldifact.xodobrox.workers.dev
+- Public release smoke: **PASS** — LIVE release, 13 HTML routes, 23 matching hub assets, 105 original app entries/assets, API 404 contract, explicit no-cost DEMO path and origin rejection.
+
+## VERIFIED — generation restored
+
+Production read-only diagnostic after deployment:
+
+```json
+{
+  "health": {
+    "generationReady": true,
+    "mode": "READY",
+    "allowance": { "used": 15, "limit": 50, "remaining": 35 }
+  },
+  "oracleWorlds": {
+    "oracle": "CONNECTOR_READY"
+  },
+  "studio": {
+    "ready": true,
+    "photoReady": true,
+    "fastReady": true,
+    "oracle": "CONNECTOR_READY",
+    "reason": "READY",
+    "allowance": { "used": 15, "limit": 50, "remaining": 35 }
+  }
+}
+```
+
+- The Durable Object counter was **not reset**. The 15 historical reservations remain counted.
+- The new cumulative ceiling is **50**, leaving **35** reservations at this verification point.
+- Fixed contest expiry remains **2026-09-19T07:00:00Z** and the existing per-IP rate limiter remains active.
+- `/api/health` now reads the real persistent allowance and stops advertising LIVE when the allowance is exhausted.
+- AI Game Lab stops showing Astra as available after a 429/503 response.
+- AI Shop no longer presents a failed/cancelled restored job as an endlessly running multi-hour generation; it provides **Start a new model**, safely archives the old receipt and preserves the draft.
+- No secret, OpenAI key, Oracle credential or model ID changed. MAKE remains **VALIDATION REQUIRED**.
+
+---
+
 # WORLDIFACT — restore LIVE generation after launch allowance exhaustion
 
 Date: 18 September 2026.
