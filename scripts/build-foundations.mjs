@@ -74,7 +74,10 @@ for (const [app, source] of Object.entries(sources)) {
     let html = await readFile(path, 'utf8');
     // Keep the same return controls when a user opens a copied app directly.
     const nav = `<nav class="worldifact-return" aria-label="WORLDIFACT"><a href="/" target="_top">← WORLDIFACT</a>${app === 'chess' ? '<a href="/chess/shop" target="_top">Shop boards &amp; pieces</a>' : '<a href="/iss" target="_top">Return to ISS</a>'}</nav>`;
-    html = html.replace('</head>', '<style>.worldifact-return{position:fixed;left:10px;bottom:10px;display:flex;gap:8px;z-index:20000;font:600 12px system-ui}.worldifact-return a{display:block;padding:10px 12px;border-radius:8px;background:#123341;color:#eaf9f1;text-decoration:none;border:1px solid #83bdae}html[data-worldifact-framed] .worldifact-return{display:none}</style><script>if(window.parent!==window)document.documentElement.dataset.worldifactFramed="true"</script></head>')
+    const chessWatchdog = app === 'chess' && entry === 'guest.html'
+      ? `<script>setTimeout(function(){if(document.documentElement.dataset.directGuestReady==="true")return;var box=document.getElementById("forgemcp-guest-loading");if(!box)return;box.innerHTML='<div style="max-width:520px;padding:22px;text-align:center"><strong style="display:block;font-size:20px;margin-bottom:10px">Chess preview is taking too long</strong><p style="font-weight:400">Your browser may be short on WebGL memory. You can retry this full-screen build or return to WORLDIFACT without waiting on an endless loader.</p><p><a href="/apps/chess/guest.html?guest=1" style="color:#9fe8ff">Retry Chess</a> · <a href="/" style="color:#9fe8ff">Back to WORLDIFACT</a></p></div>';},12000);</script>`
+      : '';
+    html = html.replace('</head>', '<style>.worldifact-return{position:fixed;left:10px;bottom:10px;display:flex;gap:8px;z-index:20000;font:600 12px system-ui}.worldifact-return a{display:block;padding:10px 12px;border-radius:8px;background:#123341;color:#eaf9f1;text-decoration:none;border:1px solid #83bdae}html[data-worldifact-framed] .worldifact-return{display:none}</style><script>if(window.parent!==window)document.documentElement.dataset.worldifactFramed="true"</script>' + chessWatchdog + '</head>')
       .replace('</body>', nav + '</body>');
     await writeFile(path, html);
   }
