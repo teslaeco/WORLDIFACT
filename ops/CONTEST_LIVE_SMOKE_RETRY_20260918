@@ -1,0 +1,2 @@
+WORLDIFACT contest LIVE paid smoke retry marker
+Reason: first LIVE Cloudflare deployment succeeded, but legacy release smoke rejected READY health after deploy. Run the one-time Astra + Studio paid smoke only after the corrected release verifier succeeds.
