@@ -86,22 +86,28 @@ const model = await fetch(`${base}/api/studio/jobs/${prepared.id}/model`, {
   signal: AbortSignal.timeout(180_000),
 })
 assert(model.ok, `studio-model: HTTP ${model.status}`)
-const length = Number(model.headers.get('content-length'))
-assert(Number.isSafeInteger(length) && length >= 20, 'studio-model: invalid content length')
 const reader = model.body?.getReader()
 assert(reader, 'studio-model: missing body')
-let first = new Uint8Array(0)
-while (first.length < 12) {
+const chunks = []
+let length = 0
+const maxModelBytes = 512 * 1024 * 1024
+for (;;) {
   const next = await reader.read()
-  assert(!next.done, 'studio-model: incomplete GLB')
-  const merged = new Uint8Array(first.length + next.value.length)
-  merged.set(first); merged.set(next.value, first.length); first = merged
+  if (next.done) break
+  length += next.value.byteLength
+  assert(length <= maxModelBytes, 'studio-model: response exceeds client verification ceiling')
+  chunks.push(next.value)
 }
-await reader.cancel()
-const header = new DataView(first.buffer, first.byteOffset, first.byteLength)
+assert(length >= 20, 'studio-model: incomplete GLB')
+const bytes = new Uint8Array(length)
+let offset = 0
+for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
 assert(header.getUint32(0, true) === 0x46546c67, 'studio-model: invalid GLB magic')
 assert(header.getUint32(4, true) === 2, 'studio-model: unsupported GLB version')
 assert(header.getUint32(8, true) === length, 'studio-model: GLB length mismatch')
+const declaredHeader = Number(model.headers.get('content-length') || 0)
+if (declaredHeader) assert(declaredHeader === length, 'studio-model: HTTP content length mismatch')
 console.log(`PASS Studio LIVE 3D: job=${prepared.id} modelBytes=${length}`)
 
 const finalStatus = await json(await fetch(`${base}/api/studio/status`, { cache: 'no-store', signal: AbortSignal.timeout(30_000) }), 'studio-final-status')
