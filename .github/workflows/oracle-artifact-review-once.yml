@@ -10,7 +10,7 @@ permissions:
 
 env:
   WORLDIFACT_URL: https://worldifact.xodobrox.workers.dev
-  ORACLE_JOB_ID: 4a1db549-cc82-4b2e-bf15-7877e06fc968
+  ORACLE_JOB_ID: 3fb599e9-c07b-44d9-ac29-af62f04eede9
 
 jobs:
   artifact-review:
@@ -31,12 +31,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if test -f ops/ORACLE_ARTIFACT_REVIEW_ARM_20260916 && grep -q 'No new Astra generation or Blender generation is authorized' ops/ORACLE_ARTIFACT_REVIEW_ARM_20260916; then
+          changed="$(git diff-tree --no-commit-id --name-only -m -r HEAD)"
+          if printf '%s\n' "$changed" | grep -qx 'ops/CONTEST_LIVE_ARTIFACT_VERIFY_20260918'; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
-            echo 'Approved read-only Oracle artifact review marker found.'
+            echo 'Contest LIVE artifact verification marker added in this deployment commit.'
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
-            echo 'No valid artifact-review marker in this deployed commit; exiting without Oracle artifact access.'
+            echo 'No contest LIVE artifact verification marker added by this deployment commit; exiting without artifact access.'
           fi
 
       - name: Set up Node
@@ -77,7 +78,7 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: worldifact-p0-review-${{ github.event.workflow_run.head_sha }}
+          name: worldifact-contest-live-artifact-${{ github.event.workflow_run.head_sha }}
           path: |
             .evidence/oracle-artifact/
             .evidence/http/
