@@ -1,3 +1,51 @@
+# WORLDIFACT — FINAL CONTEST LIVE RELEASE STATUS
+
+Date: 18 September 2026.
+
+## VERIFIED — production LIVE
+
+- Public URL: https://worldifact.xodobrox.workers.dev
+- Current documented main release: `ef0ea61d2a378ed4d564b5f175f0780dd3d61fdb` (PR #49).
+- PR #47: bounded contest LIVE Astra + Studio generation — **MERGED**.
+- PR #48: LIVE-safe no-cost release smoke — **MERGED**.
+- PR #49: read-only verification of the succeeded contest Studio GLB — **MERGED**.
+- Main CI run `35290764716`: **SUCCESS** — **201/201 tests PASS**, 0 failures, lint 10 warnings / 0 errors, typecheck/build/HTTP smoke/foundation assembly/Wrangler dry-run PASS.
+- Production run `35290764801`: **SUCCESS**.
+- Cloudflare version: `a707acf7-f67b-4ee3-870b-d6c9cdaf3ba2`.
+- Public release smoke: **PASS** — LIVE release, 13 HTML routes, 23 matching hub assets, 105 pinned original app entries/assets, API 404 contract, explicit no-cost DEMO path and origin rejection.
+- Production `/api/health`: `generationReady: true`, `mode: READY`, model `gpt-6-astra`.
+- Oracle bridge: `CONNECTOR_READY`.
+- Studio: `ready: true`, `photoReady: true`, `fastReady: true`, reason `READY`.
+
+## VERIFIED — real paid generation evidence
+
+### GPT-6 Astra
+- Real LIVE request: `7c73e32a-9ea5-4446-8cfa-88869ef6ce08`.
+- OpenAI provider response: `resp_045e51c5890735c7016aac829307e887d2a354469365e377f6`.
+- Result: **LIVE · GENERATED**, 3 validated scene objects.
+- This proves the production server-side Responses API path returned a real validated Astra result. It does not claim an arbitrary finished 3D production mesh.
+
+### Studio / Oracle / Blender 3D
+- Real Studio job: `3fb599e9-c07b-44d9-ac29-af62f04eede9`.
+- Job reached: **succeeded**.
+- Read-only artifact verification run `35290860092`: **SUCCESS**.
+- Retrieved GLB: **30,344 bytes**.
+- SHA-256: `dd42f8c5d5853873de21390c11c1261d3ff86a2af52259bd16231ae850c816c2`.
+- Structural report: **10 meshes, 39 nodes, 4 materials, 0 animations, 452 declared vertices**.
+- Artifact provenance remains **GENERATED-UNREVIEWED**. Binary/container integrity is verified; visual quality and manufacturing suitability require separate review.
+
+## LIVE safety boundary
+
+- Global generation budget is cumulative and never resets.
+- Current production allowance after the verified LIVE calls: **used 9 / limit 15 / remaining 6**.
+- Fixed LIVE expiry: **2026-09-19T07:00:00Z**.
+- Existing per-IP rate limiting remains active.
+- The committed base `wrangler.jsonc` remains disabled-by-default; the authorized contest LIVE deployment is derived at release time from the explicit marker.
+- MAKE remains **VALIDATION REQUIRED**. No generated GLB is automatically a manufacturing-approved file, supplier approval, quote or order.
+- No Product Hunt submission is claimed by this release record.
+
+---
+
 # WORLDIFACT status — contest LIVE activation release
 
 Date: 18 September 2026.
