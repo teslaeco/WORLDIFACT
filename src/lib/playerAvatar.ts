@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createAvatarEquipment, hideEmbeddedFanNodes, type OutfitPreset } from './playerEquipment';
 
 export const NEPTUNE_QUEEN_AVATAR_JOB = '99397623-e45c-48dc-95ec-6f84446a54d5';
 export type AvatarChoice = 'queen' | 'rapper';
@@ -16,7 +17,6 @@ function proceduralQueenFallback() {
   const dark = new THREE.MeshStandardMaterial({ color: '#071525', roughness: .58, metalness: .18 });
   const teal = new THREE.MeshStandardMaterial({ color: '#078c89', roughness: .38, metalness: .42 });
   const emerald = new THREE.MeshStandardMaterial({ color: '#087547', roughness: .42, metalness: .28 });
-  const chrome = new THREE.MeshStandardMaterial({ color: '#b6d1d5', roughness: .2, metalness: .9 });
   const skin = new THREE.MeshStandardMaterial({ color: '#b98568', roughness: .72 });
   const hair = new THREE.MeshStandardMaterial({ color: '#111216', roughness: .62 });
   const part = (parent: THREE.Group, radius: number, length: number, y: number, mat = dark) => {
@@ -41,12 +41,6 @@ function proceduralQueenFallback() {
     part(shoulder,.058,.2,-.14,dark);
     const fore = new THREE.Group(); fore.position.y=-.29; shoulder.add(fore); part(fore,.047,.2,-.14,skin);
   }
-  const fan = new THREE.Group(); fan.position.set(-.26,1.2,-.02); fan.rotation.z=-.35; root.add(fan);
-  for(let i=0;i<6;i++){
-    const blade=new THREE.Mesh(new THREE.ConeGeometry(.075,.48,3),i%2?teal:emerald);
-    blade.position.y=.24; blade.rotation.z=(i-2.5)*.22; blade.position.x=(i-2.5)*.055; fan.add(blade);
-  }
-  fan.add(new THREE.Mesh(new THREE.SphereGeometry(.065,12,8),chrome));
   root.userData.avatarSource = 'procedural-fallback-current-queen-target';
   return { root, legs, knees, arms };
 }
@@ -103,6 +97,7 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen') {
   const root = new THREE.Group(); root.name = choice === 'rapper' ? 'rapper-player' : 'neptune-queen-player'; root.userData.avatarSource = choice === 'rapper' ? 'froge-archive:rapper-v10.glb' : `oracle-job:${NEPTUNE_QUEEN_AVATAR_JOB}`;
   const avatarUrl = AVATAR_URLS[choice];
   root.add(fallback.root);
+  const equipment = createAvatarEquipment(root);
   let loaded: THREE.Object3D | null = null, rig: Rig = {}, mixer: THREE.AnimationMixer | null = null, last = 0;
   let loadedBaseY = 0;
 
@@ -117,6 +112,7 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen') {
       model.position.x -= center.x; model.position.z -= center.z; model.position.y -= scaled.min.y;
       loadedBaseY = model.position.y;
       model.name = choice === 'rapper' ? 'Rapper_archive_v10' : 'Neptune_Queen_current_99397623';
+      if (choice === 'queen') root.userData.hiddenEmbeddedFans = hideEmbeddedFanNodes(model);
       model.traverse(part => { if (part instanceof THREE.Mesh) { part.castShadow = true; part.receiveShadow = true; } });
       fallback.root.visible = false; loaded = model; root.add(model); rig = findRig(model);
       if (gltf.animations.length) {
@@ -128,23 +124,29 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen') {
     }, undefined, () => { root.userData.avatarLoaded = false; });
   }
 
-  return { root, update(time: number, speed: number, seated = false, reaching = 0) {
-    const delta = last ? Math.min(.05, Math.max(0,time-last)) : 0; last=time; mixer?.update(delta);
-    const gait = Math.sin(time * 8) * Math.min(speed,1);
-    fallback.legs.forEach((leg,i)=>{leg.rotation.x=seated?-1.35:gait*(i?-.48:.48);});
-    fallback.knees.forEach((knee,i)=>{knee.rotation.x=seated?1.35:Math.max(0,gait*(i?-1:1))*.65;});
-    fallback.arms.forEach((arm,i)=>{arm.rotation.x=seated?-.95:-gait*(i?-.38:.38);});
-    fallback.arms[0].rotation.z=-reaching*.72;
-    if (loaded && !mixer) {
-      if (rig.leftLeg) rig.leftLeg.rotation.x = seated ? -1.15 : gait*.42;
-      if (rig.rightLeg) rig.rightLeg.rotation.x = seated ? -1.15 : -gait*.42;
-      if (rig.leftArm) rig.leftArm.rotation.x = seated ? -.75 : -gait*.34;
-      if (rig.rightArm) rig.rightArm.rotation.x = seated ? -.75 : gait*.34;
-      if (rig.leftArm) rig.leftArm.rotation.z = -reaching*.55;
-      if (rig.head) rig.head.rotation.y = Math.sin(time*.8)*.025;
+  return {
+    root,
+    setOutfit(next: OutfitPreset) { equipment.setOutfit(next); },
+    setFlightFans(active: boolean) { equipment.setFlightFans(active); },
+    update(time: number, speed: number, seated = false, reaching = 0, swimming = false) {
+      const delta = last ? Math.min(.05, Math.max(0,time-last)) : 0; last=time; mixer?.update(delta);
+      const gait = Math.sin(time * (swimming ? 5.4 : 8)) * Math.min(speed,1);
+      fallback.legs.forEach((leg,i)=>{leg.rotation.x=swimming ? gait*(i?-.25:.25)-.3 : seated?-1.35:gait*(i?-.48:.48);});
+      fallback.knees.forEach((knee,i)=>{knee.rotation.x=swimming ? .35 + Math.max(0,gait*(i?-1:1))*.25 : seated?1.35:Math.max(0,gait*(i?-1:1))*.65;});
+      fallback.arms.forEach((arm,i)=>{arm.rotation.x=swimming ? Math.sin(time*5.4 + i*Math.PI)*.85 : seated?-.95:-gait*(i?-.38:.38);});
+      fallback.arms[0].rotation.z=-reaching*.72;
+      if (loaded && !mixer) {
+        if (rig.leftLeg) rig.leftLeg.rotation.x = swimming ? gait*.24-.25 : seated ? -1.15 : gait*.42;
+        if (rig.rightLeg) rig.rightLeg.rotation.x = swimming ? -gait*.24-.25 : seated ? -1.15 : -gait*.42;
+        if (rig.leftArm) rig.leftArm.rotation.x = swimming ? Math.sin(time*5.4)*.72 : seated ? -.75 : -gait*.34;
+        if (rig.rightArm) rig.rightArm.rotation.x = swimming ? Math.sin(time*5.4+Math.PI)*.72 : seated ? -.75 : gait*.34;
+        if (rig.leftArm) rig.leftArm.rotation.z = -reaching*.55;
+        if (rig.head) rig.head.rotation.y = Math.sin(time*.8)*.025;
+      }
+      const visual = loaded ?? fallback.root;
+      visual.position.y = (loaded ? loadedBaseY : 0) + Math.sin(time*(swimming?2.8:1.7))*(swimming?.015:.003);
+      visual.rotation.z = swimming ? Math.sin(time*2.1)*.035 : Math.sin(time*.75)*.004;
+      equipment.update(time);
     }
-    const visual = loaded ?? fallback.root;
-    visual.position.y = (loaded ? loadedBaseY : 0) + Math.sin(time*1.7)*.003;
-    visual.rotation.z = Math.sin(time*.75)*.004;
-  } };
+  };
 }
