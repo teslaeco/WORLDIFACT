@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as THREE from 'three'
+import { readFile } from 'node:fs/promises'
 import { createAvatarEquipment, hideEmbeddedFanNodes, nextEquipmentMode } from '../src/lib/playerEquipment.ts'
 import { inRiver, nextWaterMode, riverHalfWidth, SWIM_SPEED, FLIGHT_SPEED } from '../src/lib/waterPhysics.ts'
 
@@ -56,4 +57,17 @@ test('separately named embedded fan nodes can be hidden without hiding the chara
   assert.equal(root.visible, true)
   assert.equal(body.visible, true)
   assert.equal(fan.visible, false)
+})
+
+
+test('shared world integrates splash, swimming, drone, shoulder flight and swimmer portal flow', async () => {
+  const source = await readFile(new URL('../src/components/StartingWorld.tsx', import.meta.url), 'utf8')
+  assert.match(source, /splashAt\(player\.x, player\.z/)
+  assert.match(source, /nextWaterMode\(waterMode, player, PORTALS, PORTAL_RADIUS, equipmentMode\)/)
+  assert.match(source, /enteredPortal\(old, player, PORTALS, activePortalId\)/)
+  assert.match(source, /createFanDrone\(\)/)
+  assert.match(source, /equipmentMode === "drone"/)
+  assert.match(source, /equipmentMode === "flight"/)
+  assert.match(source, /Fan 1 · Throw \/ drone/)
+  assert.match(source, /Fan 2 · Mount both \/ fly/)
 })
