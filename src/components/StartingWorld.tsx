@@ -736,19 +736,26 @@ export default function StartingWorld({
       }
       if (now - hud > 200) {
         hud = now;
+        const travelMode = controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
         setLocation(
-          `${sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)}`,
+          `${sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
         );
         setHint(
           nearPortal
-            ? `Walk onto the light to enter ${nearPortal.shortTitle}`
-            : ride
-              ? "Joystick: drive & steer · drag to look"
-              : near
-                ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
-                : mobile ? "Left thumb: move · right thumb: look" : "WASD move · drag to look · walk onto a water portal",
+            ? `${waterMode === "swimming" || waterMode === "falling" ? "Swim" : "Move"} onto the light to enter ${nearPortal.shortTitle}`
+            : controllingDrone
+              ? "Fan 1 drone · joystick / WASD fly · Equipment to recall"
+              : equipmentMode === "flight"
+                ? "Shoulder fans active · joystick / WASD fly · Equipment to land"
+                : waterMode === "swimming" || waterMode === "falling"
+                  ? "Swimming · joystick / WASD · you can enter portals directly from the water"
+                  : ride
+                    ? "Joystick: drive & steer · drag to look"
+                    : near
+                      ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
+                      : mobile ? "Left thumb: move · right thumb: look · Equipment opens fans" : "WASD move · F fan drone · G shoulder flight · I equipment",
         );
-        setInteraction(boarding ? "Entering / leaving vehicle…" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
+        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
       }
       renderer.render(scene, camera);
       if (!contextLost) frame = requestAnimationFrame(animate);
