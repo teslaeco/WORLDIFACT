@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createAvatarEquipment, hideEmbeddedFanNodes, type OutfitPreset } from './playerEquipment.js';
+import { createAvatarEquipment, hideEmbeddedFanNodes, type OutfitPreset } from './playerEquipment.ts';
 
 export const NEPTUNE_QUEEN_AVATAR_JOB = '99397623-e45c-48dc-95ec-6f84446a54d5';
 export type AvatarChoice = 'queen' | 'rapper';
