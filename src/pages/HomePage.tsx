@@ -54,6 +54,34 @@ export default function HomePage() {
         <p>
           Read the launch conversation and share feedback on what WORLDIFACT should improve next.
         </p>
+        <div className="product-hunt-badges" aria-label="WORLDIFACT on Product Hunt">
+          <a
+            href="https://www.producthunt.com/products/worldifact?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-worldifact"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              alt="WORLDIFACT - Create AI worlds. Play them. Make them real. | Product Hunt"
+              width="250"
+              height="54"
+              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1254175&theme=light&t=1789797236605"
+              loading="lazy"
+            />
+          </a>
+          <a
+            href="https://www.producthunt.com/products/worldifact/reviews/new?utm_source=badge-product_review&utm_medium=badge&utm_campaign=badge-worldifact"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              alt="Review WORLDIFACT on Product Hunt"
+              width="250"
+              height="54"
+              src="https://api.producthunt.com/widgets/embed-image/v1/product_review.svg?product_id=1321124&theme=light"
+              loading="lazy"
+            />
+          </a>
+        </div>
         <div className="product-hunt-embed">
           <iframe
             title="WORLDIFACT comments on Product Hunt"
