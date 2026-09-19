@@ -23,7 +23,7 @@ const REASONS: Record<string, string> = {
   ALLOWANCE_EXHAUSTED: 'The approved cumulative generation allowance is exhausted. Existing models can still be recovered and new drafts remain editable. More paid capacity requires separate activation.',
   ORACLE_NOT_READY: 'The existing Oracle/Blender worker is not confirming readiness. You can still prepare a draft without submitting a model request.',
   OWNER_ACCESS_REQUIRED: 'This window requires the existing owner access code for generation. This is not your OpenAI API key or a ChatGPT login.',
-  READY: 'The existing Oracle/Blender connector and remaining allowance are ready for an explicit generation request. Model quality is not yet verified.',
+  READY: 'The existing Oracle/Blender connector is ready for an explicit generation request. Model quality is not yet verified.',
 }
 const terminal = (state?: string) => ['succeeded', 'failed', 'cancelled'].includes(state || '')
 function download(blob: Blob, name: string) {
