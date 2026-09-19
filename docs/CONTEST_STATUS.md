@@ -1,3 +1,37 @@
+# WORLDIFACT — AI Shop LIVE recovery / FAST + SLOW staging
+
+Date: 19 September 2026.
+
+## VERIFIED — root cause
+
+- The production contest LIVE configuration is time-bounded and its fixed generation expiry is **2026-09-19T07:00:00Z**. The current time is after that boundary, so the Shop correctly falls back to **Generation temporarily unavailable / DEMO** instead of sending an unauthorized paid request.
+- The committed base `wrangler.jsonc` remains disabled-by-default.
+- The AI Shop already contains the reviewed `fast-draft-v1` worker profile plus the existing STANDARD detailed profile, but the customer mode selector was hidden.
+- Current official OpenAI Model Guide was rechecked on 19 Sep 2026: the production model ID remains `gpt-6-astra` through the Responses API. FAST/SLOW in this change are WORLDIFACT 3D worker profiles; they do not invent or swap to a different OpenAI model.
+- Existing operational guards remain mandatory: per-IP limiter, request/image size validation, same-origin checks, signed Studio receipts, idempotent submissions, timeouts, safe errors, explicit DEMO fallback and the verified FAST worker monetary guard.
+
+## IMPLEMENTED — branch only, NOT production
+
+- Branch: `fix/shop-live-fast-slow-20260919`.
+- Added visible Shop choices:
+  - **SLOW · QUALITY** -> existing `standard` profile, default, supports reference images and the detailed quality path.
+  - **FAST · DRAFT** -> existing `fast-draft-v1`, 2K/text-only/non-terrain v1, selectable only when the worker confirms `fastReady && fastBudgetReady`.
+- Added an explicit ongoing generation budget mode using `GENERATION_REQUEST_LIMIT=unlimited` and no launch-date expiry. In that mode the Durable Object keeps usage/idempotency telemetry but does not block on a cumulative attempt count.
+- **Rate limiting is NOT removed.** “No limits” here means no application-level cumulative customer-attempt quota / contest expiry; abuse and safety controls still apply.
+- Added `scripts/build-live-generation-config.ts`; the disabled base config remains unchanged.
+- Cloudflare release selection now uses `ops/LIVE_GENERATION_ONGOING_20260919`; the expired contest marker is retired on this branch.
+- Added/updated tests for unlimited budget semantics, LIVE health readiness, Studio idempotency, release config and visible FAST/SLOW Shop controls.
+- Codex execution brief: `docs/CODEX_TASK_SHOP_LIVE_FAST_SLOW_20260919.md`.
+
+## BLOCKED — cost / merge / production gate
+
+- **NO-GO for merge/deploy until CI is green and the owner explicitly approves the ongoing production spend exposure.**
+- This branch intentionally removes WORLDIFACT's global cumulative request ceiling. Provider/account limits and retained rate/safety guards still exist, but application-level cumulative spend is no longer capped.
+- No paid Astra/Oracle generation call is part of CI or release smoke.
+- MAKE remains **VALIDATION REQUIRED** and generated GLBs remain **GENERATED-UNREVIEWED**.
+
+---
+
 # WORLDIFACT — Product Hunt embeds released
 
 Date: 19 September 2026.
