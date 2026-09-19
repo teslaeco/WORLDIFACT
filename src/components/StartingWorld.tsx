@@ -858,10 +858,33 @@ export default function StartingWorld({
       </div>
       <label className="avatar-note avatar-picker">Character
         <select value={avatarChoice} onChange={e => setAvatarChoice(e.target.value as AvatarChoice)} aria-label="Choose player character">
-          <option value="queen">Neptune Queen · current MPC2 preview</option>
+          <option value="queen">Fan Queen · 8 Planets / MPC2</option>
           <option value="rapper">Rapper · MPC2 archive</option>
         </select>
       </label>
+      <button type="button" className="equipment-toggle" aria-expanded={inventoryOpen} onClick={() => setInventoryOpen(value => !value)}>
+        Equipment
+      </button>
+      {inventoryOpen && <div className="equipment-panel" role="group" aria-label="Player equipment">
+        <strong>Equipment</strong>
+        <small>Starts fan-free. Outfit overlays are GAME preview equipment.</small>
+        <label>Outfit
+          <select value={outfit} onChange={e => setOutfit(e.target.value as OutfitPreset)} aria-label="Choose outfit">
+            <option value="original">Original</option>
+            <option value="tracksuit">Tracksuit</option>
+            <option value="dress">Dress</option>
+            <option value="casual">Casual</option>
+          </select>
+        </label>
+        <button type="button" disabled={!ready || failed || driving} onClick={() => { action.current = "fan-drone"; }}>
+          {equipmentStatus === "drone" ? "Fan 1 · Recall drone" : "Fan 1 · Throw / drone"}
+        </button>
+        <button type="button" disabled={!ready || failed || driving} onClick={() => { action.current = "fan-flight"; }}>
+          {equipmentStatus === "flight" ? "Fan 2 · Land + stow" : "Fan 2 · Mount both / fly"}
+        </button>
+        <button type="button" disabled={equipmentStatus === "stowed"} onClick={() => { action.current = "fan-stow"; }}>Stow fans</button>
+        <small>Keyboard: F drone · G flight · I equipment.</small>
+      </div>}
       {captureNotice && <div className="capture-notice" role="status">{captureNotice}</div>}
       <div className="world-hint" role="status">
         {hint}
@@ -873,9 +896,9 @@ export default function StartingWorld({
           <button
             type="button"
             disabled={!ready || failed || interaction === "Interact"}
-            onClick={() => { action.current = "interact"; }}
+            onClick={() => { action.current = equipmentStatus === "drone" ? "fan-drone" : equipmentStatus === "flight" ? "fan-flight" : "interact"; }}
           >
-            {interaction}<span className="keyboard-shortcut" aria-hidden="true">E</span>
+            {interaction}{equipmentStatus === "stowed" && <span className="keyboard-shortcut" aria-hidden="true">E</span>}
           </button>
         </div>
       </div>
