@@ -53,6 +53,18 @@ test("global reservations are capped under concurrent clients and survive instan
   assert.equal((await new GenerationBudget(saved, env).fetch(reserve())).status, 429);
 });
 
+test("ongoing LIVE mode has no cumulative quota but keeps persistent usage telemetry", async () => {
+  const saved = state();
+  const env = { GENERATION_REQUEST_LIMIT: "unlimited", GENERATION_EXPIRES_AT: "" };
+  const budget = new GenerationBudget(saved, env);
+  const responses = await Promise.all(Array.from({ length: 25 }, () => budget.fetch(reserve())));
+  assert.equal(responses.filter((r) => r.status === 200).length, 25);
+  const status = await (await budget.fetch(new Request("https://budget.internal/status"))).json() as {
+    used: number; limit: null; remaining: null; enabled: boolean; unlimited: boolean; expiresAt: null
+  };
+  assert.deepEqual(status, { used: 25, limit: null, remaining: null, enabled: true, expiresAt: null, unlimited: true, fastOnly: false });
+});
+
 test("quota rejects expired or invalid configuration and storage failures", async () => {
   for (const settings of [
     { GENERATION_REQUEST_LIMIT: "0", GENERATION_EXPIRES_AT: future() },
