@@ -6,7 +6,7 @@ test('installed FAST with no allowance is reported without changing readiness or
   const calls = []
   const result = await inspectWorldifactServices(async (url, options) => {
     calls.push({ url, options })
-    return Response.json({ ready: false, fastReady: true, photoReady: true, oracle: 'CONNECTOR_READY', reason: 'DISABLED_OR_EXPIRED',
+    return Response.json({ ready: false, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', reason: 'DISABLED_OR_EXPIRED',
       allowance: { used: 6, limit: 0, remaining: 0, privateToken: 'not-for-logs' },
       token: 'not-for-logs', endpoint: 'https://private.invalid', ticket: 'not-for-logs', prompt: 'not-for-logs' })
   })
@@ -22,6 +22,7 @@ test('installed FAST with no allowance is reported without changing readiness or
   }
   const status = result.find(row => row.path === '/api/studio/status')
   assert.equal(status.fastReady, true)
+  assert.equal(status.fastBudgetReady, false)
   assert.equal(status.ready, false)
   assert.equal(status.generation, 'NOT_REQUESTED')
   assert.deepEqual(status.allowance, { used: 6, limit: 0, remaining: 0 })
