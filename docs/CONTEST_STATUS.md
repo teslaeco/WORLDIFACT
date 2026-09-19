@@ -6,8 +6,9 @@ Date: 19 September 2026.
 
 - Branch: `feat/product-hunt-comments-embed`.
 - Added the exact Product Hunt comments card supplied by the owner: `https://cards.producthunt.com/cards/comments/5874571?v=1`.
-- The embed is labelled as community feedback, is responsive on mobile, lazy-loads, and links to the WORLDIFACT Product Hunt launch.
-- This is a Product Hunt **comments card**, not a claim that the launch badge/upvote counter was embedded.
+- Added the official Product Hunt featured badge supplied by the owner (`post_id=1254175`) and the official product-review badge (`product_id=1321124`).
+- The Product Hunt area is labelled as community feedback, is responsive on mobile, lazy-loads remote Product Hunt assets, and links to the WORLDIFACT Product Hunt product/review surfaces.
+- No copy asks for an upvote; the page asks for feedback and reviews.
 - No paid API generation, OpenAI/Oracle secret, allowance, model ID or MAKE status changed.
 - Merge and production deployment require explicit owner approval after CI is green.
 
