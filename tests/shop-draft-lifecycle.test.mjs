@@ -9,6 +9,17 @@ import { FAST_DRAFT_PROFILE } from '../src/lib/studioProtocol.ts'
 const oldId = '12345678-1234-4234-8234-123456789abc'
 const newId = '87654321-1234-4234-8234-123456789abc'
 const makeReceipt = id => ({ id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` })
+const fastGeneration = {
+  mode: 'LIVE', provenance: 'GENERATED', requestId: 'req_fast_fixture', model: 'gpt-6-astra',
+  limitation: 'Astra generated a validated specification; visible geometry is a procedural draft.',
+  blueprint: { version: 1, title: 'Fast rook draft', biome: 'valley', objects: [
+    { id: 'fast-rook', name: 'Fast rook', kind: 'sculpture', x: 0, z: 0, scale: 1, rotation: 0, color: '#557799' },
+  ] },
+  assetSpec: { version: 1, name: 'Fast rook', summary: 'Compact procedural FAST draft.', game: {
+    geometry: 'procedural-spec', materialPlan: 'Use a matte blue material.', animationPlan: 'Static draft.', gameplayRole: 'Preview object.',
+  }, make: { validationStatus: 'validation-required', dimensionsMm: { x: 100, y: 100, z: 100 }, materialCandidate: 'Unknown until review',
+    processCandidate: 'unknown', constraints: ['Validate geometry'] } },
+}
 function modelBlob() {
   const spec = { asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0 }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0 }, material: 0 }] }], materials: [{ pbrMetallicRoughness: { baseColorFactor: [0.6, 0.3, 0.1, 1] } }],
@@ -40,17 +51,19 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', fastBudgetReady = true } = {}) {
+async function harness({ ready = false, state = 'succeeded', astraReady = ready } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map([[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
-  const status = { ready, fastReady: true, fastBudgetReady, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
+  const status = { ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
     reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000 }
   const fetcher = async (url, init = {}) => {
     const path = String(url), method = init.method || 'GET'
     calls.push({ path, method, body: init.body })
     if (path === '/api/studio/status') return Response.json(status)
+    if (path === '/api/health') return Response.json({ generationReady: astraReady })
+    if (path === '/api/blueprint' && method === 'POST') return Response.json(fastGeneration)
     if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
@@ -75,7 +88,7 @@ async function harness({ ready = false, state = 'succeeded', fastBudgetReady = t
   }
   const timeout = callback => { const id = ++serial; timers.set(id, callback); return id }
   const interval = () => ++serial
-  const globals = { fetch: fetcher, URL, Blob, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
+  const globals = { fetch: fetcher, URL, Blob, AbortSignal, AbortController, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
     window: { localStorage: storage, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: () => {} } }
   const Component = await loadShopComponent({ react: hookReact, globals, adapters: {
     '../lib/studioClient': { ...clientModule, StudioCoordinator: class extends clientModule.StudioCoordinator { constructor(store) { super(store, fetcher) } }, checkStudio: () => clientModule.checkStudio(fetcher) },
@@ -99,13 +112,14 @@ async function harness({ ready = false, state = 'succeeded', fastBudgetReady = t
     button: label => node(n => n.type === 'button' && text(n).includes(label)),
     all: () => elements(tree),
     description: () => text(node(n => n.props['data-testid'] === 'result-description')),
+    fastDescription: () => text(node(n => n.props['data-testid'] === 'fast-result-description')),
     form: () => node(n => n.type === 'form'),
     async poll() { const first = timers.entries().next().value; assert.ok(first, 'Recovery should have scheduled a GET'); timers.delete(first[0]); await first[1](); await settle() },
     close() { for (const slot of slots) slot?.cleanup?.(); timers.clear() },
   }
 }
 
-test('restored completed knight leaves prompt, mode, purpose and STANDARD texture fields editable with zero allowance', async () => {
+test('restored completed knight stays editable and unavailable FAST cannot bypass the live Astra gate', async () => {
   const h = await harness()
   try {
     await h.poll()
@@ -115,16 +129,12 @@ test('restored completed knight leaves prompt, mode, purpose and STANDARD textur
     h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } })
     await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, 'Create a blue rook now')
-    assert.equal(h.byId('studio-mode').props.value, FAST_DRAFT_PROFILE)
-    assert.equal(h.byId('studio-texture').props.value, 2048)
-    assert.equal(h.button('Generate FAST').props.disabled, true, 'editing must not bypass the paid gate')
+    assert.equal(h.byId('studio-mode').props.value, 'standard')
+    assert.equal(h.byId('studio-texture').props.value, 4096)
     assert.equal(h.description(), originalDescription)
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), before)
     assert.equal(h.archive.get(oldId).sha256, 'original')
-    assert.equal(h.calls.length, beforeCalls, 'editing and changing mode must not perform network work')
-    h.byId('studio-mode').props.onChange({ target: { value: 'standard' } }); await h.settle()
-    assert.equal(h.byId('studio-texture').props.disabled, false)
-    assert.equal(h.byId('studio-photos').props.disabled, false)
+    assert.equal(h.calls.length, beforeCalls, 'editing and a rejected FAST selection must not perform network work')
   } finally { h.close() }
 })
 
@@ -143,31 +153,31 @@ test('an active job can have a next draft, but cannot be replaced or resubmitted
   } finally { h.close() }
 })
 
-test('only an explicit Generate after completion creates one new intent and retains the original model', async () => {
+test('explicit FAST after completion sends one Astra blueprint POST and never submits an Oracle Studio job', async () => {
   const h = await harness({ ready: true })
   try {
     await h.poll()
+    const storedBefore = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
     h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook in FAST' } })
     h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
     assert.equal(h.button('Generate FAST').props.disabled, false)
     const first = h.form().props.onSubmit({ preventDefault() {} })
     const duplicate = h.form().props.onSubmit({ preventDefault() {} })
     await Promise.all([first, duplicate]); await h.settle()
-    const posts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
-    assert.equal(posts.length, 1)
-    assert.equal(JSON.parse(posts[0].body).prompt, 'A blue rook in FAST')
-    assert.equal(JSON.parse(posts[0].body).generationProfile, FAST_DRAFT_PROFILE)
-    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_HISTORY_PREFIX + oldId)).receipt.id, oldId)
-    await h.poll()
-    assert.match(h.description(), /A blue rook in FAST/)
-    assert.equal(h.archive.get(oldId).prompt, h.selected.prompt)
+    const astraPosts = h.calls.filter(c => c.path === '/api/blueprint' && c.method === 'POST')
+    const studioPosts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
+    assert.equal(astraPosts.length, 1)
+    assert.equal(studioPosts.length, 0)
+    assert.deepEqual(JSON.parse(astraPosts[0].body), { worldId: 'enchanted-ai-shop', prompt: 'A blue rook in FAST', mode: 'live' })
+    assert.match(h.fastDescription(), /Compact procedural FAST draft/)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), storedBefore)
     assert.equal(h.archive.get(oldId).sha256, 'original')
-    assert.equal(h.archive.size, 2)
+    assert.equal(h.archive.size, 1)
   } finally { h.close() }
 })
 
 test('new reference selection and draft clearing preserve the displayed old model without submitting anything', async () => {
-  const h = await harness()
+  const h = await harness({ ready: true })
   try {
     await h.poll()
     const before = h.description()

@@ -12,6 +12,7 @@ import { mayExportCurrentJob, type StudioPreviewIdentity } from '../lib/studioVi
 import { canSubmitNewDraft } from '../lib/studioDraft'
 import { inspectGLB } from '../lib/glb'
 import { DEFAULT_DIMENSIONS_MM, type ClientDimensions } from '../lib/shopManufacturing'
+import { validateGenerationResult, type GenerationResult } from '../lib/blueprint'
 import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, validateStudioInput, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
 import './ShopPage.css'
 
@@ -32,6 +33,12 @@ function download(blob: Blob, name: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 type Preview = StudioPreviewIdentity & { blob: Blob; url: string; warning: string }
+async function checkAstraReady(fetcher: typeof fetch = fetch) {
+  const response = await fetcher('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
+  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return false
+  const value = await response.json() as { generationReady?: unknown }
+  return value.generationReady === true
+}
 
 /** Draft inputs are separate from the immutable submitted job and its result. */
 export default function ShopPage() {
@@ -63,8 +70,11 @@ export default function ShopPage() {
   const [sampleMissing, setSampleMissing] = useState(false)
   const [dimensions, setDimensions] = useState<ClientDimensions>(DEFAULT_DIMENSIONS_MM)
   const [demoPrompt, setDemoPrompt] = useState('')
+  const [fastPrompt, setFastPrompt] = useState('')
+  const [fastResult, setFastResult] = useState<GenerationResult | null>(null)
+  const [astraReady, setAstraReady] = useState(false)
   const fast = profile === FAST_DRAFT_PROFILE
-  const fastAvailable = status?.fastReady === true && status?.fastBudgetReady === true
+  const fastAvailable = astraReady
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
 
   const clearPreview = () => {
@@ -103,22 +113,21 @@ export default function ShopPage() {
   }
   const applyStatus = (value: StudioStatus) => {
     setStatus(value)
-    setProfile(current => {
-      if (current === FAST_DRAFT_PROFILE && !(value.fastReady === true && value.fastBudgetReady === true)) {
-        setTextureLimit(4096)
-        setNotice('FAST DRAFT is not fully verified on the production worker, so WORLDIFACT switched this draft to the STANDARD generation path.')
-        return 'standard'
-      }
-      return current
-    })
   }
   const refresh = async () => {
     const flags = operations.current
     if (flags.status) return
     flags.status = true; setChecking(true)
-    try { const value = await checkStudio(fetch, owner); if (mounted.current) { applyStatus(value); setError('') } }
-    catch (e) { if (mounted.current) { setStatus(null); setError(e instanceof Error ? e.message : 'Connection check failed.') } }
-    finally { flags.status = false; if (mounted.current) setChecking(false) }
+    const [studioCheck, astraCheck] = await Promise.allSettled([checkStudio(fetch, owner), checkAstraReady(fetch)])
+    if (mounted.current) {
+      if (studioCheck.status === 'fulfilled') applyStatus(studioCheck.value)
+      else setStatus(null)
+      setAstraReady(astraCheck.status === 'fulfilled' && astraCheck.value)
+      if (studioCheck.status === 'fulfilled' || (astraCheck.status === 'fulfilled' && astraCheck.value)) setError('')
+      else setError('Generation services are temporarily unavailable. Your draft is preserved.')
+    }
+    flags.status = false
+    if (mounted.current) setChecking(false)
   }
   useEffect(() => {
     mounted.current = true
@@ -139,9 +148,14 @@ export default function ShopPage() {
       setError(e instanceof Error ? e.message : 'Recovery storage is unavailable. Generation is paused.')
     }
     flags.status = true; setChecking(true)
-    checkStudio().then(value => { if (!closed) applyStatus(value) })
-      .catch(() => { if (!closed) setError('The server status is unavailable. You can still prepare your description and images.') })
-      .finally(() => { if (!closed) { flags.status = false; setChecking(false) } })
+    Promise.allSettled([checkStudio(), checkAstraReady()]).then(([studioCheck, astraCheck]) => {
+      if (closed) return
+      if (studioCheck.status === 'fulfilled') applyStatus(studioCheck.value)
+      else setStatus(null)
+      setAstraReady(astraCheck.status === 'fulfilled' && astraCheck.value)
+      if (studioCheck.status === 'rejected' && !(astraCheck.status === 'fulfilled' && astraCheck.value))
+        setError('The generation services are unavailable. You can still prepare your description and use the local DEMO preview.')
+    }).finally(() => { if (!closed) { flags.status = false; setChecking(false) } })
     listStudioModels().then(value => { if (!closed) setArchive(value) }).catch(() => {})
     return () => { closed = true; mounted.current = false; version.current++; if (urls.current) URL.revokeObjectURL(urls.current) }
   }, [])
@@ -209,10 +223,47 @@ export default function ShopPage() {
   const generate = async (event: React.FormEvent) => {
     event.preventDefault()
     const flags = operations.current, client = coordinator.current
-    if (flags.submit || flags.photos || flags.artifact || !previousFinished || !status?.ready || !client || (fast && !fastAvailable)) return
-    flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt('')
+    if (flags.submit || flags.photos || flags.artifact || !previousFinished) return
+
+    if (fast) {
+      if (!fastAvailable || photos.length || purpose === 'terrain' || prompt.trim().length < 3 || prompt.length > 2000) return
+      flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt('')
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 40_000)
+      try {
+        const response = await fetch('/api/blueprint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({ worldId: 'enchanted-ai-shop', prompt: prompt.trim(), mode: 'live' }),
+        })
+        const body = await response.json()
+        if (!response.ok) {
+          if ([429, 503].includes(response.status)) setAstraReady(false)
+          throw new Error(body?.error || 'FAST Astra draft could not be generated.')
+        }
+        const result = validateGenerationResult(body)
+        if (result.mode !== 'LIVE' || result.provenance !== 'GENERATED') throw new Error('FAST did not return verified LIVE Astra evidence.')
+        clearPreview()
+        if (mounted.current) {
+          setFastPrompt(prompt.trim())
+          setFastResult(result)
+          setNotice('FAST · LIVE Astra specification ready. The visible 3D is a lightweight procedural draft, not an Oracle production mesh; use SLOW · QUALITY for the detailed model workflow.')
+        }
+      } catch (e) {
+        if (mounted.current) setError(e instanceof Error && e.name === 'AbortError' ? 'FAST generation timed out. Your previous preview is unchanged.' : e instanceof Error ? e.message : 'FAST generation failed.')
+      } finally {
+        window.clearTimeout(timeout)
+        flags.submit = false
+        if (mounted.current) setBusy(false)
+      }
+      return
+    }
+
+    if (!status?.ready || !client || (photos.length && !status.photoReady)) return
+    flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt(''); setFastResult(null); setFastPrompt('')
     try {
-      const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt, purpose, textureMaxSize: textureLimit, photos, ...(fast ? { generationProfile: FAST_DRAFT_PROFILE } : {}) })
+      const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt, purpose, textureMaxSize: textureLimit, photos })
       const value = await client.start(input, record => {
         if (mounted.current) {
           clearPreview(); setSaved(record)
@@ -226,7 +277,7 @@ export default function ShopPage() {
         setError(message)
         if (/allowance|exhausted|unavailable/i.test(message) && prompt.trim().length >= 3) {
           setDemoPrompt(prompt.trim())
-          setNotice('LIVE 3D generation is unavailable, so a clearly labelled local DEMO preview is shown instead. No second paid request was made.')
+          setNotice('LIVE detailed 3D generation is unavailable, so a clearly labelled local DEMO preview is shown instead. No second paid request was made.')
         }
       }
     }
@@ -235,6 +286,8 @@ export default function ShopPage() {
   const previewDemo = () => {
     const value = prompt.trim()
     if (busy || photoBusy || value.length < 3) return
+    setFastResult(null)
+    setFastPrompt('')
     setDemoPrompt(value)
     setError('')
     setNotice('DEMO · MOCK local procedural preview. No GPT-6 Astra, Oracle or paid generation request was made.')
@@ -285,15 +338,23 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = !!coordinator.current && !!status?.ready && (!fast || fastAvailable) && (!photos.length || status.photoReady) && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3
+  const canGenerate = !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 &&
+    (fast ? fastAvailable && !photos.length && purpose !== 'terrain' && prompt.length <= 2000
+      : !!coordinator.current && !!status?.ready && (!photos.length || status.photoReady))
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview)
+  const activeReady = fast ? fastAvailable : status?.ready === true
 
   return <main className="portal-page native-shop">
     <header className="native-shop-nav"><Link to="/" className="native-shop-back">← Back to WORLDIFACT</Link><strong>AI Shop</strong><nav aria-label="World portals">{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></header>
     <section className="native-shop-workspace" aria-label="Create and preview a 3D product">
       <div className="native-shop-preview">
         <span className="eyebrow">3D PREVIEW</span>
-        {demoPrompt ? <>
+        {fastResult ? <>
+          <DemoShopPreview prompt={fastPrompt} mode="live-fast" />
+          <small hidden data-testid="fast-result-description">{fastResult.assetSpec?.summary ?? fastResult.blueprint.title}</small>
+          <p className="shop-preview-dimensions">FAST draft target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>
+          <small>FAST uses a generated Astra specification plus local procedural geometry. For a detailed Oracle/Blender GLB with reference images, use SLOW · QUALITY.</small>
+        </> : demoPrompt ? <>
           <DemoShopPreview prompt={demoPrompt} />
           <p className="shop-preview-dimensions">Preview size target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>
           <small>This DEMO preview is not a generated production mesh and is not manufacturing-ready.</small>
@@ -331,10 +392,10 @@ export default function ShopPage() {
               </button>
               <button type="button" className="shop-generation-mode" aria-pressed={fast} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'} onClick={() => { setProfile(FAST_DRAFT_PROFILE); setTextureLimit(2048) }}>
                 <strong>FAST · DRAFT</strong>
-                <span>Quick text-only draft · 2K · lighter export path</span>
+                <span>GPT-6 Astra procedural draft · text-only · usually seconds</span>
               </button>
             </div>
-            <small>{!fastAvailable ? 'FAST is waiting for the production worker to confirm its verified fast profile. SLOW · QUALITY remains available when LIVE generation is ready.' : photos.length ? 'FAST is text-only in this version. Your reference images are kept, so SLOW · QUALITY is selected.' : fast ? 'FAST makes a lighter draft for quick iteration. Use SLOW · QUALITY when you need references or more detail.' : 'SLOW · QUALITY uses the existing detailed workflow. Switch to FAST for a lighter text-only draft.'}</small>
+            <small>{!fastAvailable ? 'FAST is waiting for the public GPT-6 Astra LIVE service. SLOW · QUALITY can still use the Oracle/Blender workflow when it is ready.' : photos.length ? 'FAST is text-only in this version. Your reference images are kept for SLOW · QUALITY.' : purpose === 'terrain' ? 'FAST does not support terrain in this Shop revision. Use SLOW · QUALITY.' : fast && prompt.length > 2000 ? 'Shorten FAST text to 2000 characters or switch to SLOW · QUALITY.' : fast ? 'FAST sends one server-side GPT-6 Astra request and builds a lightweight procedural 3D draft from the validated result. Use SLOW · QUALITY for detailed Oracle/Blender output.' : 'SLOW · QUALITY uses the detailed Oracle/Blender workflow. FAST is the lighter Astra procedural draft.'}</small>
           </fieldset>
           <div className="shop-internal-only" hidden>
             <label htmlFor="studio-mode">Generation mode</label>
@@ -343,17 +404,17 @@ export default function ShopPage() {
               if (next === FAST_DRAFT_PROFILE && (!fastAvailable || photos.length || purpose === 'terrain')) return
               setProfile(next)
               if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
-            }}><option value="standard">STANDARD · current quality workflow</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>FAST DRAFT · unavailable until fully verified</option></select>
-            <small>STANDARD is unchanged. FAST becomes selectable only when the connected worker confirms its verified profile. A shorter timeout is not proof of a faster model.</small>
+            }}><option value="standard">STANDARD · current quality workflow</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>FAST DRAFT · Astra procedural</option></select>
+            <small>STANDARD remains the detailed Oracle/Blender path. FAST uses the public server-side Astra blueprint path and a local procedural preview; it does not claim an Oracle mesh.</small>
             <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
             <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
           </div>
-          <label htmlFor="studio-prompt">Describe your model</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic chess knight with a stable base, smooth material and clean details." required />
+          <label htmlFor="studio-prompt">Describe your model</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={fast ? 2000 : 4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic chess knight with a stable base, smooth material and clean details." required />
           <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
-          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D draft + materials · free' : 'Generate 3D model + materials · free'}</button><small>No customer payment is taken at generation. Manufacturing and delivery are a separate purchase step.</small>
+          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D draft · Astra · free' : 'Generate 3D model + materials · free'}</button><small>No customer payment is taken at generation. Manufacturing and delivery are a separate purchase step.</small>
         </form>
-        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : status?.ready ? 'Free generation available' : 'Generation temporarily unavailable'}</strong><p>{status?.ready ? 'You can create a model now.' : 'You can still test the Shop with the local DEMO preview while LIVE generation is unavailable.'}</p>{!status?.ready && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
+        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : activeReady ? fast ? 'FAST Astra generation available' : 'SLOW quality generation available' : 'Generation temporarily unavailable'}</strong><p>{activeReady ? fast ? 'FAST creates a generated Astra specification and lightweight procedural 3D draft.' : 'SLOW creates the detailed model through the Oracle/Blender workflow.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}
         {error && <p className="native-shop-error" role="alert">We could not complete that step. Please try again.</p>}{notice && <p role="status">{notice}</p>}

@@ -15,6 +15,7 @@ import * as view from '../src/lib/studioView.ts'
 import * as draft from '../src/lib/studioDraft.ts'
 import * as glb from '../src/lib/glb.ts'
 import * as shopManufacturing from '../src/lib/shopManufacturing.ts'
+import * as blueprint from '../src/lib/blueprint.ts'
 
 async function loadShopManufacturingOptions(react) {
   const url = new URL('../src/components/ShopManufacturingOptions.tsx', import.meta.url)
@@ -50,11 +51,12 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
     require(id) {
       const modules = { '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
-        '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing }
+        '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
+        '../lib/blueprint': blueprint }
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
-      if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt }) => React.createElement('span', { 'data-demo-prompt': prompt }, 'DEMO local 3D preview') }
+      if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt, mode }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': mode || 'demo' }, mode === 'live-fast' ? 'LIVE Astra procedural 3D draft' : 'DEMO local 3D preview') }
       if (id.endsWith('.css')) return {}
       if (id === 'react') return react
       if (['react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
