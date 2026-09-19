@@ -9,6 +9,8 @@ import type { MoveAxes } from "../lib/gameControls";
 import { enteredPortal, nearestPortal, PORTAL_RADIUS } from "../lib/portalNavigation";
 import { createLakeEnvironment } from "../lib/lakeEnvironment";
 import { createPlayerAvatar, type AvatarChoice } from "../lib/playerAvatar";
+import { createFanDrone, nextEquipmentMode, type EquipmentMode, type OutfitPreset } from "../lib/playerEquipment";
+import { fallingBodyY, FLIGHT_BODY_Y, FLIGHT_SPEED, inRiver, nextWaterMode, SWIM_SPEED, swimBodyY, WATER_LEVEL, type WaterMode } from "../lib/waterPhysics";
 import { createWorldAudio, worldAudioTheme } from "../lib/worldAudio";
 import TouchJoystick from "./TouchJoystick";
 import {
@@ -43,16 +45,22 @@ export default function StartingWorld({
   const overview = useRef(false);
   const [music, setMusic] = useState(false);
   const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("queen");
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [outfit, setOutfit] = useState<OutfitPreset>("original");
+  const outfitRef = useRef<OutfitPreset>("original");
+  const [equipmentStatus, setEquipmentStatus] = useState<EquipmentMode>("stowed");
   const [transition, setTransition] = useState(false);
   const [captureNotice, setCaptureNotice] = useState("");
   const [wide, setWide] = useState(false);
   const [zoomValue, setZoomValue] = useState(6);
   const capture = useRef<(() => void) | null>(null);
+  const avatarRuntime = useRef<ReturnType<typeof createPlayerAvatar> | null>(null);
   useEffect(() => {
     if (!captureNotice) return;
     const timer = setTimeout(() => setCaptureNotice(""), 3000);
     return () => clearTimeout(timer);
   }, [captureNotice]);
+  useEffect(() => { outfitRef.current = outfit; avatarRuntime.current?.setOutfit(outfit); }, [outfit]);
   useEffect(() => () => { audio.current?.dispose(); audio.current = null; }, []);
   const toggleMusic = async () => {
     try {
@@ -243,7 +251,57 @@ export default function StartingWorld({
       return { g, face, ripple, i, id: p.id };
     });
     const avatar = createPlayerAvatar(avatarChoice);
+    avatarRuntime.current = avatar;
+    avatar.setOutfit(outfitRef.current);
+    avatar.setFlightFans(false);
+    queueMicrotask(() => setEquipmentStatus("stowed"));
     scene.add(avatar.root);
+    const fanDrone = createFanDrone();
+    scene.add(fanDrone.root);
+    let equipmentMode: EquipmentMode = "stowed";
+    let waterMode: WaterMode = "land";
+    let waterEnteredAt = 0;
+    type Splash = { ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>; drops: { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; velocity: THREE.Vector3 }[]; age: number };
+    const splashes: Splash[] = [];
+    const splashAt = (x: number, z: number, strength = 1) => {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(.24, .34, 24),
+        new THREE.MeshBasicMaterial({ color: "#d8fbff", transparent: true, opacity: .82, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(x, WATER_LEVEL + .035, z);
+      scene.add(ring);
+      const drops: Splash["drops"] = [];
+      for (let i = 0; i < 12; i++) {
+        const angle = i / 12 * Math.PI * 2;
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(.035 + (i % 3) * .009, 6, 5),
+          new THREE.MeshBasicMaterial({ color: "#d8fbff", transparent: true, opacity: .9 }),
+        );
+        mesh.position.set(x, WATER_LEVEL + .08, z);
+        scene.add(mesh);
+        drops.push({ mesh, velocity: new THREE.Vector3(Math.cos(angle) * (1.1 + i % 4 * .16) * strength, (2.4 + i % 3 * .28) * strength, Math.sin(angle) * (1.1 + i % 4 * .16) * strength) });
+      }
+      splashes.push({ ring, drops, age: 0 });
+    };
+    const updateSplashes = (dt: number) => {
+      for (let i = splashes.length - 1; i >= 0; i--) {
+        const splash = splashes[i];
+        splash.age += dt;
+        splash.ring.scale.setScalar(1 + splash.age * 3.8);
+        splash.ring.material.opacity = Math.max(0, .82 * (1 - splash.age / .75));
+        for (const drop of splash.drops) {
+          drop.velocity.y -= 7.8 * dt;
+          drop.mesh.position.addScaledVector(drop.velocity, dt);
+          drop.mesh.material.opacity = Math.max(0, .9 * (1 - splash.age / .8));
+        }
+        if (splash.age > .82) {
+          scene.remove(splash.ring); splash.ring.geometry.dispose(); splash.ring.material.dispose();
+          for (const drop of splash.drops) { scene.remove(drop.mesh); drop.mesh.geometry.dispose(); drop.mesh.material.dispose(); }
+          splashes.splice(i, 1);
+        }
+      }
+    };
     let boarding: { car: RuntimeObject; from: THREE.Vector3; outside: THREE.Vector3; seat: THREE.Vector3; time: number; exiting: boolean } | null = null;
     const player = new THREE.Vector3(0, 2.3, 17),
       forward = new THREE.Vector3(),
@@ -316,13 +374,19 @@ export default function StartingWorld({
           "arrowleft",
           "arrowright",
           "e",
+          "f",
+          "g",
+          "i",
         ].includes(k)
       ) {
         e.preventDefault();
         input.current[k] = true;
       }
       if (k === "e" && !e.repeat) action.current = "interact";
-      if (k === "escape") action.current = "exit";
+      if (k === "f" && !e.repeat) action.current = "fan-drone";
+      if (k === "g" && !e.repeat) action.current = "fan-flight";
+      if (k === "i" && !e.repeat) setInventoryOpen(value => !value);
+      if (k === "escape") action.current = equipmentMode === "drone" || equipmentMode === "flight" ? "fan-stow" : "exit";
     };
     const up = (e: KeyboardEvent) => {
       input.current[e.key.toLowerCase()] = false;
@@ -416,35 +480,108 @@ export default function StartingWorld({
       const axes = movementAxes(input.current, stick.current);
       const move = boarding || overview.current ? 0 : axes.forward;
       const side = boarding || overview.current ? 0 : axes.side;
+      const controllingDrone = equipmentMode === "drone";
       if (ride) yaw -= side * dt * 1.25;
       forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
       right.set(Math.cos(yaw), 0, -Math.sin(yaw));
       const old = player.clone();
-      player.addScaledVector(forward, move * dt * (ride ? 16 : 7));
-      if (!ride) player.addScaledVector(right, side * dt * 7);
-      player.x = THREE.MathUtils.clamp(player.x, -42, 42);
-      player.z = THREE.MathUtils.clamp(player.z, -42, 42);
       const habitats = objects.filter((o) => specOf(o).kind === "habitat")
         .map((o) => ({ spec: specOf(o), doorOpen: o.doorOpen }));
-      let moved = movePlayer(old, player, habitats, ride ? 3 * specOf(ride).scale : 0);
-      if (!ride && !boarding) moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
-      player.x = moved.x;
-      player.z = moved.z;
-      const crossed = enteredPortal(old, player, PORTALS, activePortalId);
-      if (crossed && !boarding) { enter(crossed.id); return; }
-      const near = objects
+
+      if (controllingDrone) {
+        fanDrone.root.position.addScaledVector(forward, move * dt * 9.5);
+        fanDrone.root.position.addScaledVector(right, side * dt * 9.5);
+        fanDrone.root.position.x = THREE.MathUtils.clamp(fanDrone.root.position.x, -46, 46);
+        fanDrone.root.position.z = THREE.MathUtils.clamp(fanDrone.root.position.z, -46, 46);
+        fanDrone.root.position.y = THREE.MathUtils.damp(fanDrone.root.position.y, 2.7 + Math.sin(elapsed * 1.8) * .18, 5, dt);
+      } else {
+        const movementSpeed = ride ? 16 : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? 7 : SWIM_SPEED;
+        player.addScaledVector(forward, move * dt * movementSpeed);
+        if (!ride) player.addScaledVector(right, side * dt * movementSpeed);
+        player.x = THREE.MathUtils.clamp(player.x, -42, 42);
+        player.z = THREE.MathUtils.clamp(player.z, -42, 42);
+
+        let moved = equipmentMode === "flight"
+          ? { x: player.x, z: player.z }
+          : movePlayer(old, player, habitats, ride ? 3 * specOf(ride).scale : 0);
+        if (!ride && !boarding && equipmentMode !== "flight") moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
+        player.x = moved.x;
+        player.z = moved.z;
+
+        const crossed = enteredPortal(old, player, PORTALS, activePortalId);
+        if (crossed && !boarding) { enter(crossed.id); return; }
+
+        if (!ride && !boarding) {
+          const beforeWater = waterMode;
+          const proposed = nextWaterMode(waterMode, player, PORTALS, PORTAL_RADIUS, equipmentMode);
+          if (beforeWater === "land" && proposed === "falling") {
+            waterMode = "falling";
+            waterEnteredAt = elapsed;
+            splashAt(player.x, player.z, 1);
+            setCaptureNotice("Splash! Swim with the joystick — water portals still work.");
+          } else if (beforeWater !== "land" && proposed === "land") {
+            waterMode = "land";
+            splashAt(player.x, player.z, .62);
+            setCaptureNotice("Back on the river bank.");
+          } else waterMode = proposed;
+          if (waterMode === "falling" && elapsed - waterEnteredAt >= .38) waterMode = "swimming";
+        } else waterMode = "land";
+      }
+
+      const near = controllingDrone ? undefined : objects
         .filter((o) => (specOf(o).kind === "rover" && o.group.position.distanceTo(player) < 6) || (specOf(o).kind === "habitat" && o.group.position.distanceTo(player) < 7))
         .sort(
           (a, b) =>
             a.group.position.distanceTo(player) -
             b.group.position.distanceTo(player),
         )[0];
-      const nearPortal = nearestPortal(player, PORTALS, activePortalId);
+      const nearPortal = controllingDrone ? undefined : nearestPortal(player, PORTALS, activePortalId);
       if (boarding) action.current = "";
       if (action.current && !boarding) {
         const a = action.current;
         action.current = "";
-        if (a === "interact" && nearPortal) {
+        if (a === "fan-drone") {
+          if (ride) setCaptureNotice("Exit the rover before deploying the fan drone.");
+          else {
+            const next = nextEquipmentMode(equipmentMode, "toggle-drone");
+            equipmentMode = next;
+            avatar.setFlightFans(false);
+            if (next === "drone") {
+              fanDrone.root.visible = true;
+              fanDrone.root.position.set(player.x, Math.max(2.5, avatar.root.position.y + 1.7), player.z).addScaledVector(forward, 1.8);
+              setEquipmentStatus("drone");
+              setCaptureNotice("Fan 1 deployed as a drone — joystick / WASD now flies it.");
+            } else {
+              fanDrone.root.visible = false;
+              setEquipmentStatus("stowed");
+              setCaptureNotice("Fan drone recalled.");
+            }
+          }
+        } else if (a === "fan-flight") {
+          if (ride) setCaptureNotice("Exit the rover before using shoulder flight.");
+          else {
+            const next = nextEquipmentMode(equipmentMode, "toggle-flight");
+            equipmentMode = next;
+            fanDrone.root.visible = false;
+            avatar.setFlightFans(next === "flight");
+            setEquipmentStatus(next);
+            if (next === "flight") {
+              if (inRiver(player)) splashAt(player.x, player.z, .8);
+              waterMode = "land";
+              setCaptureNotice("Fan 2 engaged — both fans mounted horizontally at the shoulders. Joystick / WASD controls flight.");
+            } else {
+              waterMode = inRiver(player) ? "swimming" : "land";
+              if (waterMode === "swimming") splashAt(player.x, player.z, .65);
+              setCaptureNotice(waterMode === "swimming" ? "Fans stowed — swimming." : "Fans stowed — back on foot.");
+            }
+          }
+        } else if (a === "fan-stow") {
+          equipmentMode = "stowed";
+          fanDrone.root.visible = false;
+          avatar.setFlightFans(false);
+          setEquipmentStatus("stowed");
+          waterMode = inRiver(player) ? "swimming" : "land";
+        } else if (a === "interact" && nearPortal) {
           enter(nearPortal.id);
           return;
         } else if (a === "reset") {
@@ -455,6 +592,11 @@ export default function StartingWorld({
           pitch = -0.16;
           ride = null;
           setDriving(false);
+          equipmentMode = "stowed";
+          fanDrone.root.visible = false;
+          avatar.setFlightFans(false);
+          setEquipmentStatus("stowed");
+          waterMode = "land";
         } else if (
           a === "exit" ||
           (ride && (a === "drive" || a === "interact"))
@@ -512,12 +654,14 @@ export default function StartingWorld({
       let seated = !!ride;
       let gait = Math.min(1, Math.hypot(player.x - old.x, player.z - old.z) / Math.max(dt * 4, .001));
       let reaching = 0;
+      let swimming = waterMode !== "land";
       if (boarding) {
         boarding.time += dt;
         const b = boarding, t = b.time;
         const smooth = (v: number) => THREE.MathUtils.smoothstep(v, 0, 1);
         b.car.doorOpen = t > (b.exiting ? 0 : .9) && t < 2.65;
         reaching = t > .9 && t < 1.45 ? 1 : 0;
+        swimming = false;
         if (b.exiting) {
           avatar.root.position.lerpVectors(b.seat, b.outside, smooth((t - .6) / 1.35));
           seated = t < .7; gait = t > .7 && t < 2.0 ? .5 : 0;
@@ -536,14 +680,28 @@ export default function StartingWorld({
           b.car.doorOpen = false; boarding = null;
         }
       } else if (ride) {
+        swimming = false;
         avatar.root.position.set(-.55, .26, .1).multiplyScalar(specOf(ride).scale).applyAxisAngle(new THREE.Vector3(0,1,0), yaw).add(new THREE.Vector3(player.x, 0, player.z));
         avatar.root.rotation.y = yaw;
+      } else if (equipmentMode === "flight") {
+        swimming = false;
+        avatar.root.position.set(player.x, FLIGHT_BODY_Y + Math.sin(elapsed * 2.1) * .08, player.z);
+        if (gait > .02) avatar.root.rotation.y = Math.atan2(-(player.x - old.x), -(player.z - old.z));
       } else {
-        avatar.root.position.set(player.x, 0, player.z);
+        const bodyY = waterMode === "falling" ? fallingBodyY(elapsed - waterEnteredAt) : waterMode === "swimming" ? swimBodyY(elapsed) : 0;
+        avatar.root.position.set(player.x, bodyY, player.z);
         if (gait > .02) avatar.root.rotation.y = Math.atan2(-(player.x - old.x), -(player.z - old.z));
       }
-      avatar.update(elapsed, gait, seated, reaching);
-      if (ride && !boarding) {
+      avatar.update(elapsed, gait, seated, reaching, swimming);
+      fanDrone.update(elapsed, Math.min(1, Math.hypot(axes.forward, axes.side)));
+      updateSplashes(dt);
+
+      if (controllingDrone) {
+        camera.position.copy(fanDrone.root.position).addScaledVector(forward, -Math.max(4, zoom.current * .75));
+        camera.position.y = fanDrone.root.position.y + 2.1;
+        target.copy(fanDrone.root.position).addScaledVector(forward, 1.4);
+        camera.lookAt(target);
+      } else if (ride && !boarding) {
         ride.group.position.set(player.x, 0, player.z);
         ride.group.rotation.y = yaw;
         camera.position
@@ -555,11 +713,17 @@ export default function StartingWorld({
         camera.lookAt(target);
         for (const w of ride.group.children)
           if (w.name === "wheel") w.rotation.x -= move * dt * 14;
-      } else {
-        player.y = 2.3;
+      } else if (equipmentMode === "flight") {
+        player.y = FLIGHT_BODY_Y + 2.2;
         camera.position.copy(player).addScaledVector(forward, -zoom.current);
-        camera.position.y = Math.max(1.5, 2.4 - Math.sin(pitch) * zoom.current);
-        target.set(player.x, 1.3, player.z).addScaledVector(forward, 1.2);
+        camera.position.y = FLIGHT_BODY_Y + Math.max(2.4, zoom.current * .22);
+        target.set(player.x, FLIGHT_BODY_Y + .9, player.z).addScaledVector(forward, 1.8);
+        camera.lookAt(target);
+      } else {
+        player.y = swimming ? 1.15 : 2.3;
+        camera.position.copy(player).addScaledVector(forward, -zoom.current);
+        camera.position.y = swimming ? Math.max(1.05, 1.35 - Math.sin(pitch) * zoom.current * .4) : Math.max(1.5, 2.4 - Math.sin(pitch) * zoom.current);
+        target.set(player.x, swimming ? .62 : 1.3, player.z).addScaledVector(forward, 1.2);
         camera.lookAt(target);
       }
       if (overview.current) {
@@ -574,19 +738,26 @@ export default function StartingWorld({
       }
       if (now - hud > 200) {
         hud = now;
+        const travelMode = controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
         setLocation(
-          `${sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)}`,
+          `${sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
         );
         setHint(
           nearPortal
-            ? `Walk onto the light to enter ${nearPortal.shortTitle}`
-            : ride
-              ? "Joystick: drive & steer · drag to look"
-              : near
-                ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
-                : mobile ? "Left thumb: move · right thumb: look" : "WASD move · drag to look · walk onto a water portal",
+            ? `${waterMode === "swimming" || waterMode === "falling" ? "Swim" : "Move"} onto the light to enter ${nearPortal.shortTitle}`
+            : controllingDrone
+              ? "Fan 1 drone · joystick / WASD fly · Equipment to recall"
+              : equipmentMode === "flight"
+                ? "Shoulder fans active · joystick / WASD fly · Equipment to land"
+                : waterMode === "swimming" || waterMode === "falling"
+                  ? "Swimming · joystick / WASD · you can enter portals directly from the water"
+                  : ride
+                    ? "Joystick: drive & steer · drag to look"
+                    : near
+                      ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
+                      : mobile ? "Left thumb: move · right thumb: look · Equipment opens fans" : "WASD move · F fan drone · G shoulder flight · I equipment",
         );
-        setInteraction(boarding ? "Entering / leaving vehicle…" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
+        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
       }
       renderer.render(scene, camera);
       if (!contextLost) frame = requestAnimationFrame(animate);
@@ -616,6 +787,7 @@ export default function StartingWorld({
       renderer.domElement.removeEventListener("webglcontextlost", lost);
       renderer.domElement.removeEventListener("webglcontextrestored", restored);
       clear();
+      if (avatarRuntime.current === avatar) avatarRuntime.current = null;
       runtimeObjects.current = [];
       environment?.dispose();
       disposeObject(scene);
@@ -687,10 +859,33 @@ export default function StartingWorld({
       </div>
       <label className="avatar-note avatar-picker">Character
         <select value={avatarChoice} onChange={e => setAvatarChoice(e.target.value as AvatarChoice)} aria-label="Choose player character">
-          <option value="queen">Neptune Queen · current MPC2 preview</option>
+          <option value="queen">Fan Queen · 8 Planets / MPC2</option>
           <option value="rapper">Rapper · MPC2 archive</option>
         </select>
       </label>
+      <button type="button" className="equipment-toggle" aria-expanded={inventoryOpen} onClick={() => setInventoryOpen(value => !value)}>
+        Equipment
+      </button>
+      {inventoryOpen && <div className="equipment-panel" role="group" aria-label="Player equipment">
+        <strong>Equipment</strong>
+        <small>Starts fan-free. Outfit overlays are GAME preview equipment.</small>
+        <label>Outfit
+          <select value={outfit} onChange={e => setOutfit(e.target.value as OutfitPreset)} aria-label="Choose outfit">
+            <option value="original">Original</option>
+            <option value="tracksuit">Tracksuit</option>
+            <option value="dress">Dress</option>
+            <option value="casual">Casual</option>
+          </select>
+        </label>
+        <button type="button" disabled={!ready || failed || driving} onClick={() => { action.current = "fan-drone"; }}>
+          {equipmentStatus === "drone" ? "Fan 1 · Recall drone" : "Fan 1 · Throw / drone"}
+        </button>
+        <button type="button" disabled={!ready || failed || driving} onClick={() => { action.current = "fan-flight"; }}>
+          {equipmentStatus === "flight" ? "Fan 2 · Land + stow" : "Fan 2 · Mount both / fly"}
+        </button>
+        <button type="button" disabled={equipmentStatus === "stowed"} onClick={() => { action.current = "fan-stow"; }}>Stow fans</button>
+        <small>Keyboard: F drone · G flight · I equipment.</small>
+      </div>}
       {captureNotice && <div className="capture-notice" role="status">{captureNotice}</div>}
       <div className="world-hint" role="status">
         {hint}
@@ -702,9 +897,9 @@ export default function StartingWorld({
           <button
             type="button"
             disabled={!ready || failed || interaction === "Interact"}
-            onClick={() => { action.current = "interact"; }}
+            onClick={() => { action.current = equipmentStatus === "drone" ? "fan-drone" : equipmentStatus === "flight" ? "fan-flight" : "interact"; }}
           >
-            {interaction}<span className="keyboard-shortcut" aria-hidden="true">E</span>
+            {interaction}{equipmentStatus === "stowed" && <span className="keyboard-shortcut" aria-hidden="true">E</span>}
           </button>
         </div>
       </div>

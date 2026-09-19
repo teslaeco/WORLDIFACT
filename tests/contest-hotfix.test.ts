@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { avatarApi, NEPTUNE_QUEEN_JOB_ID, RAPPER_ARCHIVE_URL } from '../server/avatar.ts';
+import { avatarApi, MAX_AVATAR_GLB_BYTES, NEPTUNE_QUEEN_JOB_ID, RAPPER_ARCHIVE_URL } from '../server/avatar.ts';
 
 function minimalGlb() {
   const bytes = new Uint8Array(20);
@@ -29,6 +29,7 @@ test('exact current Neptune Queen is proxied read-only from the saved Oracle job
   assert.equal(calls, 1);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('X-WORLDIFACT-Source-Job'), '99397623-e45c-48dc-95ec-6f84446a54d5');
+  assert.equal(MAX_AVATAR_GLB_BYTES, 48 * 1024 * 1024, 'the current FORGE Queen must fit the bounded 48 MB avatar proxy');
 });
 
 test('avatar endpoint fails closed and never invents an old queen asset', async () => {
@@ -47,7 +48,12 @@ test('shared world avatar picker offers the exact current Queen and archived rap
   const css = await readFile(new URL('../src/mobile-hotfix.css', import.meta.url), 'utf8');
   assert.match(player, /99397623-e45c-48dc-95ec-6f84446a54d5/);
   assert.match(player, /\/api\/avatar\/rapper-la/);
-  assert.match(world, /Neptune Queen · current MPC2 preview/);
+  assert.match(world, /Fan Queen · 8 Planets \/ MPC2/);
+  assert.match(world, /Fan 1 · Throw \/ drone/);
+  assert.match(world, /Fan 2 · Mount both \/ fly/);
+  assert.match(world, /Tracksuit/);
+  assert.match(world, /Dress/);
+  assert.match(world, /Casual/);
   assert.match(world, /Rapper · MPC2 archive/);
   assert.match(css, /avatar-picker/);
   assert.equal(RAPPER_ARCHIVE_URL, 'https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/models/rapper-v10.glb');
