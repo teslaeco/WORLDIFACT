@@ -1,5 +1,12 @@
 # WORLDIFACT — AI Shop LIVE recovery / FAST + SLOW staging
 
+## VERIFIED — Shop recovery CI milestone
+
+- Exact code head `5eb656541da4e9ed3dd0fadc7fdb6ad9a5422cbf` passed **Verify WORLDIFACT**: `npm run verify`, pinned foundations, `npm run deploy:check`, and the no-generation hosted Studio inspection all succeeded.
+- **Review approved FAST cost guard**, **Review FAST Cloud Shell launcher**, and **Review FAST draft worker (no paid API)** also succeeded on that exact code head.
+- PR #54 is mergeable and remains a draft. Production is still **NO-GO** until the owner explicitly approves ongoing paid generation without WORLDIFACT's former global cumulative cap, plus merge and production deployment.
+- The remaining per-IP rate limiter and all validation / receipt / idempotency / timeout guards stay enabled.
+
 Date: 19 September 2026.
 
 ## VERIFIED — root cause
