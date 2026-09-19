@@ -1,5 +1,5 @@
-import type { PointXZ } from './movement'
-import type { EquipmentMode } from './playerEquipment'
+import type { PointXZ } from './movement.js'
+import type { EquipmentMode } from './playerEquipment.js'
 
 export const WATER_LEVEL = 0.045
 export const SWIM_BODY_Y = -0.78
