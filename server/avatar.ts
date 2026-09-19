@@ -3,7 +3,8 @@ import type { PlatformEnv } from './platform.ts';
 
 export const NEPTUNE_QUEEN_JOB_ID = '99397623-e45c-48dc-95ec-6f84446a54d5';
 export const RAPPER_ARCHIVE_URL = 'https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/models/rapper-v10.glb';
-const MAX_GLB_BYTES = 12 * 1024 * 1024;
+export const MAX_AVATAR_GLB_BYTES = 48 * 1024 * 1024;
+const MAX_GLB_BYTES = MAX_AVATAR_GLB_BYTES;
 
 async function readGlb(response: Response) {
   if (!response.ok) {
