@@ -250,7 +250,56 @@ export default function StartingWorld({
       return { g, face, ripple, i, id: p.id };
     });
     const avatar = createPlayerAvatar(avatarChoice);
+    avatarRuntime.current = avatar;
+    avatar.setOutfit(outfit);
+    avatar.setFlightFans(false);
     scene.add(avatar.root);
+    const fanDrone = createFanDrone();
+    scene.add(fanDrone.root);
+    let equipmentMode: EquipmentMode = "stowed";
+    let waterMode: WaterMode = "land";
+    let waterEnteredAt = 0;
+    type Splash = { ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>; drops: { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; velocity: THREE.Vector3 }[]; age: number };
+    const splashes: Splash[] = [];
+    const splashAt = (x: number, z: number, strength = 1) => {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(.24, .34, 24),
+        new THREE.MeshBasicMaterial({ color: "#d8fbff", transparent: true, opacity: .82, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(x, WATER_LEVEL + .035, z);
+      scene.add(ring);
+      const drops: Splash["drops"] = [];
+      for (let i = 0; i < 12; i++) {
+        const angle = i / 12 * Math.PI * 2;
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(.035 + (i % 3) * .009, 6, 5),
+          new THREE.MeshBasicMaterial({ color: "#d8fbff", transparent: true, opacity: .9 }),
+        );
+        mesh.position.set(x, WATER_LEVEL + .08, z);
+        scene.add(mesh);
+        drops.push({ mesh, velocity: new THREE.Vector3(Math.cos(angle) * (1.1 + i % 4 * .16) * strength, (2.4 + i % 3 * .28) * strength, Math.sin(angle) * (1.1 + i % 4 * .16) * strength) });
+      }
+      splashes.push({ ring, drops, age: 0 });
+    };
+    const updateSplashes = (dt: number) => {
+      for (let i = splashes.length - 1; i >= 0; i--) {
+        const splash = splashes[i];
+        splash.age += dt;
+        splash.ring.scale.setScalar(1 + splash.age * 3.8);
+        splash.ring.material.opacity = Math.max(0, .82 * (1 - splash.age / .75));
+        for (const drop of splash.drops) {
+          drop.velocity.y -= 7.8 * dt;
+          drop.mesh.position.addScaledVector(drop.velocity, dt);
+          drop.mesh.material.opacity = Math.max(0, .9 * (1 - splash.age / .8));
+        }
+        if (splash.age > .82) {
+          scene.remove(splash.ring); splash.ring.geometry.dispose(); splash.ring.material.dispose();
+          for (const drop of splash.drops) { scene.remove(drop.mesh); drop.mesh.geometry.dispose(); drop.mesh.material.dispose(); }
+          splashes.splice(i, 1);
+        }
+      }
+    };
     let boarding: { car: RuntimeObject; from: THREE.Vector3; outside: THREE.Vector3; seat: THREE.Vector3; time: number; exiting: boolean } | null = null;
     const player = new THREE.Vector3(0, 2.3, 17),
       forward = new THREE.Vector3(),
