@@ -478,30 +478,63 @@ export default function StartingWorld({
       const axes = movementAxes(input.current, stick.current);
       const move = boarding || overview.current ? 0 : axes.forward;
       const side = boarding || overview.current ? 0 : axes.side;
+      const controllingDrone = equipmentMode === "drone";
       if (ride) yaw -= side * dt * 1.25;
       forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
       right.set(Math.cos(yaw), 0, -Math.sin(yaw));
       const old = player.clone();
-      player.addScaledVector(forward, move * dt * (ride ? 16 : 7));
-      if (!ride) player.addScaledVector(right, side * dt * 7);
-      player.x = THREE.MathUtils.clamp(player.x, -42, 42);
-      player.z = THREE.MathUtils.clamp(player.z, -42, 42);
       const habitats = objects.filter((o) => specOf(o).kind === "habitat")
         .map((o) => ({ spec: specOf(o), doorOpen: o.doorOpen }));
-      let moved = movePlayer(old, player, habitats, ride ? 3 * specOf(ride).scale : 0);
-      if (!ride && !boarding) moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
-      player.x = moved.x;
-      player.z = moved.z;
-      const crossed = enteredPortal(old, player, PORTALS, activePortalId);
-      if (crossed && !boarding) { enter(crossed.id); return; }
-      const near = objects
+
+      if (controllingDrone) {
+        fanDrone.root.addScaledVector?.(forward, 0);
+        fanDrone.root.position.addScaledVector(forward, move * dt * 9.5);
+        fanDrone.root.position.addScaledVector(right, side * dt * 9.5);
+        fanDrone.root.position.x = THREE.MathUtils.clamp(fanDrone.root.position.x, -46, 46);
+        fanDrone.root.position.z = THREE.MathUtils.clamp(fanDrone.root.position.z, -46, 46);
+        fanDrone.root.position.y = THREE.MathUtils.damp(fanDrone.root.position.y, 2.7 + Math.sin(elapsed * 1.8) * .18, 5, dt);
+      } else {
+        const movementSpeed = ride ? 16 : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? 7 : SWIM_SPEED;
+        player.addScaledVector(forward, move * dt * movementSpeed);
+        if (!ride) player.addScaledVector(right, side * dt * movementSpeed);
+        player.x = THREE.MathUtils.clamp(player.x, -42, 42);
+        player.z = THREE.MathUtils.clamp(player.z, -42, 42);
+
+        let moved = equipmentMode === "flight"
+          ? { x: player.x, z: player.z }
+          : movePlayer(old, player, habitats, ride ? 3 * specOf(ride).scale : 0);
+        if (!ride && !boarding && equipmentMode !== "flight") moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
+        player.x = moved.x;
+        player.z = moved.z;
+
+        const crossed = enteredPortal(old, player, PORTALS, activePortalId);
+        if (crossed && !boarding) { enter(crossed.id); return; }
+
+        if (!ride && !boarding) {
+          const beforeWater = waterMode;
+          const proposed = nextWaterMode(waterMode, player, PORTALS, PORTAL_RADIUS, equipmentMode);
+          if (beforeWater === "land" && proposed === "falling") {
+            waterMode = "falling";
+            waterEnteredAt = elapsed;
+            splashAt(player.x, player.z, 1);
+            setCaptureNotice("Splash! Swim with the joystick — water portals still work.");
+          } else if (beforeWater !== "land" && proposed === "land") {
+            waterMode = "land";
+            splashAt(player.x, player.z, .62);
+            setCaptureNotice("Back on the river bank.");
+          } else waterMode = proposed;
+          if (waterMode === "falling" && elapsed - waterEnteredAt >= .38) waterMode = "swimming";
+        } else waterMode = "land";
+      }
+
+      const near = controllingDrone ? undefined : objects
         .filter((o) => (specOf(o).kind === "rover" && o.group.position.distanceTo(player) < 6) || (specOf(o).kind === "habitat" && o.group.position.distanceTo(player) < 7))
         .sort(
           (a, b) =>
             a.group.position.distanceTo(player) -
             b.group.position.distanceTo(player),
         )[0];
-      const nearPortal = nearestPortal(player, PORTALS, activePortalId);
+      const nearPortal = controllingDrone ? undefined : nearestPortal(player, PORTALS, activePortalId);
       if (boarding) action.current = "";
       if (action.current && !boarding) {
         const a = action.current;
