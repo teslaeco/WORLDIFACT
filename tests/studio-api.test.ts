@@ -58,6 +58,20 @@ test('status and preparation consume no attempt; a signed job consumes one origi
   assert.equal(recovered.job.state, 'succeeded'); assert.doesNotMatch(JSON.stringify(recovered), /PRIVATE/)
 })
 
+test('ongoing LIVE Studio ignores cumulative count but keeps receipt idempotency', async () => {
+  const f = fixture(500)
+  f.env.GENERATION_REQUEST_LIMIT = 'unlimited'
+  f.env.GENERATION_EXPIRES_AT = ''
+  const status = await (await f.call('/api/studio/status')).json() as { ready: boolean; reason: string; allowance: { used: number; remaining: null; limit: null; unlimited: boolean } }
+  assert.equal(status.ready, true); assert.equal(status.reason, 'READY')
+  assert.equal(status.allowance.used, 500); assert.equal(status.allowance.remaining, null); assert.equal(status.allowance.limit, null); assert.equal(status.allowance.unlimited, true)
+  const prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  assert.equal((await f.call('/api/studio/jobs', 'POST', input, prepared.ticket)).status, 202)
+  assert.equal((await f.call('/api/studio/jobs', 'POST', input, prepared.ticket)).status, 202)
+  assert.equal(posts(f).length, 1)
+  assert.equal(f.values.get('reserved-attempts'), 501)
+})
+
 test('lost acceptance and concurrent repeat submissions cannot issue a second paid POST', async () => {
   const f = fixture(); f.loseResponse()
   const prepared = await data(f.call('/api/studio/prepare', 'POST', input))

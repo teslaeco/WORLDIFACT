@@ -23,7 +23,7 @@ const REASONS: Record<string, string> = {
   ALLOWANCE_EXHAUSTED: 'The approved cumulative generation allowance is exhausted. Existing models can still be recovered and new drafts remain editable. More paid capacity requires separate activation.',
   ORACLE_NOT_READY: 'The existing Oracle/Blender worker is not confirming readiness. You can still prepare a draft without submitting a model request.',
   OWNER_ACCESS_REQUIRED: 'This window requires the existing owner access code for generation. This is not your OpenAI API key or a ChatGPT login.',
-  READY: 'The existing Oracle/Blender connector and remaining allowance are ready for an explicit generation request. Model quality is not yet verified.',
+  READY: 'The existing Oracle/Blender connector is ready for an explicit generation request. Model quality is not yet verified.',
 }
 const terminal = (state?: string) => ['succeeded', 'failed', 'cancelled'].includes(state || '')
 function download(blob: Blob, name: string) {
@@ -322,6 +322,20 @@ export default function ShopPage() {
         <button type="button" data-testid="clear-studio-draft" disabled={busy || photoBusy} onClick={clearDraft}>Clear description</button>
         <button type="button" className="shop-internal-only" hidden disabled={busy || photoBusy} onClick={clearDraft}>Clear next-model draft</button>
         <form onSubmit={generate} aria-describedby="studio-draft-help">
+          <fieldset className="shop-generation-modes" disabled={busy || photoBusy}>
+            <legend>Choose generation mode</legend>
+            <div className="shop-generation-mode-grid">
+              <button type="button" className="shop-generation-mode" aria-pressed={!fast} onClick={() => { setProfile('standard'); if (textureLimit === 2048) setTextureLimit(4096) }}>
+                <strong>SLOW · QUALITY</strong>
+                <span>Full quality workflow · reference images · up to 4K</span>
+              </button>
+              <button type="button" className="shop-generation-mode" aria-pressed={fast} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'} onClick={() => { setProfile(FAST_DRAFT_PROFILE); setTextureLimit(2048) }}>
+                <strong>FAST · DRAFT</strong>
+                <span>Quick text-only draft · 2K · lighter export path</span>
+              </button>
+            </div>
+            <small>{!fastAvailable ? 'FAST is waiting for the production worker to confirm its verified fast profile. SLOW · QUALITY remains available when LIVE generation is ready.' : photos.length ? 'FAST is text-only in this version. Your reference images are kept, so SLOW · QUALITY is selected.' : fast ? 'FAST makes a lighter draft for quick iteration. Use SLOW · QUALITY when you need references or more detail.' : 'SLOW · QUALITY uses the existing detailed workflow. Switch to FAST for a lighter text-only draft.'}</small>
+          </fieldset>
           <div className="shop-internal-only" hidden>
             <label htmlFor="studio-mode">Generation mode</label>
             <select id="studio-mode" value={profile} disabled={busy || photoBusy} onChange={e => {
@@ -337,7 +351,7 @@ export default function ShopPage() {
           <label htmlFor="studio-prompt">Describe your model</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic chess knight with a stable base, smooth material and clean details." required />
           <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
-          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D model + materials · free' : 'Generate 3D model + materials · free'}</button><small>No customer payment is taken at generation. Manufacturing and delivery are a separate purchase step.</small>
+          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D draft + materials · free' : 'Generate 3D model + materials · free'}</button><small>No customer payment is taken at generation. Manufacturing and delivery are a separate purchase step.</small>
         </form>
         <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : status?.ready ? 'Free generation available' : 'Generation temporarily unavailable'}</strong><p>{status?.ready ? 'You can create a model now.' : 'You can still test the Shop with the local DEMO preview while LIVE generation is unavailable.'}</p>{!status?.ready && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>

@@ -85,25 +85,28 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   const accessConfigured = publicPilot || ((env.GENERATION_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.GENERATION_ACCESS_TOKEN?.length ?? 0) <= 256);
   const generationConfigured = configured && !!env.GENERATION_LIMITER && !!env.GENERATION_BUDGET && !!budgetSettings(env) && accessConfigured && configuredModel === "gpt-6-astra";
   if (url.pathname === "/api/health" && request.method === "GET") {
-    let allowance: { used: number; limit: number; remaining: number; enabled: boolean; expiresAt: string | null } | null = null;
+    let allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: true } | null = null;
     if (generationConfigured) {
       try {
         const budget = env.GENERATION_BUDGET!.get(env.GENERATION_BUDGET!.idFromName("worldifact-generation-budget-v1"));
         const response = await budget.fetch(new Request("https://budget.internal/status", { signal: AbortSignal.timeout(5000) }));
         const value = await response.json() as Record<string, unknown>;
-        if (response.ok && [value.used, value.limit, value.remaining].every((n) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0) &&
-            typeof value.enabled === "boolean") {
+        const unlimited = value.unlimited === true;
+        const finiteAllowance = !unlimited && [value.limit, value.remaining].every((n) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0);
+        if (response.ok && typeof value.used === "number" && Number.isSafeInteger(value.used) && value.used >= 0 &&
+            typeof value.enabled === "boolean" && (finiteAllowance || (unlimited && value.limit === null && value.remaining === null))) {
           allowance = {
             used: value.used as number,
-            limit: value.limit as number,
-            remaining: value.remaining as number,
+            limit: unlimited ? null : value.limit as number,
+            remaining: unlimited ? null : value.remaining as number,
             enabled: value.enabled,
             expiresAt: typeof value.expiresAt === "string" ? value.expiresAt : null,
+            ...(unlimited ? { unlimited: true as const } : {}),
           };
         }
       } catch { /* Health fails closed when the shared allowance cannot be read. */ }
     }
-    const generationReady = generationConfigured && allowance?.enabled === true && allowance.remaining > 0;
+    const generationReady = generationConfigured && allowance?.enabled === true && (allowance.unlimited === true || (allowance.remaining ?? 0) > 0);
     return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady && !publicPilot,
       publicPilot: generationReady && publicPilot, model: generationReady ? configuredModel : null, maxReferenceImageMb: 6,
       allowance });

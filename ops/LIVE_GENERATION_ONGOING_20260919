@@ -1,0 +1,6 @@
+WORLDIFACT ongoing LIVE generation marker
+Prepared: 2026-09-19.
+Purpose: enable GPT-6 Astra blueprint, Oracle bridge and Studio/Blender generation without an application-level cumulative attempt quota or launch-date expiry.
+Safety controls retained: Cloudflare per-IP rate limiting, input/body limits, same-origin checks, signed Studio receipts, idempotency, timeouts, safe errors, explicit DEMO fallback, and the verified FAST worker budget guard.
+Deployment boundary: this branch/PR MUST NOT be merged until the owner explicitly approves the production spend exposure and deployment.
+MAKE remains VALIDATION REQUIRED.

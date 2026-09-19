@@ -17,7 +17,7 @@ export default function InfoPage({ kind }: { kind: "privacy" | "terms" }) {
         <p>The server requests that Responses are not stored as application history. This does not mean OpenAI or the hosting provider retains no operational or safety data. Their policies and the operator’s account settings also apply.</p>
         <p>Preview access codes stay in page memory and are sent only to this site’s generation endpoint. Saved results may include a response identifier, timestamp, scene fingerprint and token counts; they exclude the access code and reference image.</p>
         <h2>Service operation</h2>
-        <p>The hosting service processes network information, including IP addresses used for rate limiting. A global counter stores how many generation attempts have been reserved, without prompts, images or IP addresses. WORLDIFACT includes no advertising or analytics SDK.</p>
+        <p>The hosting service processes network information, including IP addresses used for rate limiting. A server-side counter records how many generation attempts have been reserved for operational telemetry and duplicate-submit protection, without prompts, images or IP addresses. In ongoing LIVE mode this counter is not a cumulative customer quota. WORLDIFACT includes no advertising or analytics SDK.</p>
         <p><a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">OpenAI privacy policy ↗</a></p>
         <h2>Contact</h2>
         <p>The project is maintained by Terraforming Planet. Use the <a href="https://github.com/teslaeco/WORLDIFACT/issues" target="_blank" rel="noreferrer">project issue tracker</a> for non-sensitive support. Do not post private files or personal information in public issues. A private operator contact must be confirmed before public LIVE activation.</p>
@@ -29,7 +29,7 @@ export default function InfoPage({ kind }: { kind: "privacy" | "terms" }) {
         <h2>Content and licences</h2>
         <p>Use only references and models you are entitled to use. The repository’s MIT licence covers its source and procedural code. It does not grant rights to imported photographs, characters, trademarks or third-party assets. Linked projects retain their own terms.</p>
         <h2>Availability and access</h2>
-        <p>LIVE preview generation is limited by access code, an expiry and a total request allowance. A failed or cancelled request may still consume an attempt. Keep exported copies of important work. DEMO remains available when live generation is unavailable.</p>
+        <p>LIVE preview generation is subject to operational rate limits, input limits, provider availability and abuse protection. Ongoing LIVE mode has no application-level cumulative customer-attempt quota or launch-window expiry. Keep exported copies of important work. DEMO remains available when live generation is unavailable.</p>
         <p>These preview notes do not establish a manufacturing contract or promise production approval, fidelity, uptime or physical safety.</p>
       </>}
     </main>

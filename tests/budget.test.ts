@@ -53,6 +53,18 @@ test("global reservations are capped under concurrent clients and survive instan
   assert.equal((await new GenerationBudget(saved, env).fetch(reserve())).status, 429);
 });
 
+test("ongoing LIVE mode has no cumulative quota but keeps persistent usage telemetry", async () => {
+  const saved = state();
+  const env = { GENERATION_REQUEST_LIMIT: "unlimited", GENERATION_EXPIRES_AT: "" };
+  const budget = new GenerationBudget(saved, env);
+  const responses = await Promise.all(Array.from({ length: 25 }, () => budget.fetch(reserve())));
+  assert.equal(responses.filter((r) => r.status === 200).length, 25);
+  const status = await (await budget.fetch(new Request("https://budget.internal/status"))).json() as {
+    used: number; limit: null; remaining: null; enabled: boolean; unlimited: boolean; expiresAt: null
+  };
+  assert.deepEqual(status, { used: 25, limit: null, remaining: null, enabled: true, expiresAt: null, unlimited: true, fastOnly: false });
+});
+
 test("quota rejects expired or invalid configuration and storage failures", async () => {
   for (const settings of [
     { GENERATION_REQUEST_LIMIT: "0", GENERATION_EXPIRES_AT: future() },
@@ -100,6 +112,26 @@ test("health distinguishes readiness from evidence of a successful generation", 
   assert.equal(health.generationReady, true);
   assert.equal(health.accessRequired, true);
   assert.equal(health.allowance.remaining, 2);
+});
+
+test("health advertises LIVE with null remaining in ongoing unlimited mode", async () => {
+  const env = {
+    OPENAI_API_KEY: "test-only-provider-key",
+    ENABLE_PAID_GENERATION: "true",
+    PUBLIC_PILOT: "true",
+    GENERATION_REQUEST_LIMIT: "unlimited",
+    GENERATION_EXPIRES_AT: "",
+    GENERATION_LIMITER: { async limit() { return { success: true }; } },
+  };
+  const budget = new GenerationBudget(state(), env);
+  const configuredEnv = { ...env, GENERATION_BUDGET: { idFromName: (name: string) => name, get: () => budget } };
+  const response = await handle(new Request("https://worldifact.test/api/health"), configuredEnv);
+  const health = await response.json() as { mode: string; generationReady: boolean; model: string | null; allowance: { remaining: null; unlimited: boolean } };
+  assert.equal(health.mode, "READY");
+  assert.equal(health.generationReady, true);
+  assert.equal(health.model, "gpt-6-astra");
+  assert.equal(health.allowance.remaining, null);
+  assert.equal(health.allowance.unlimited, true);
 });
 
 test("health stops advertising LIVE when the persistent allowance is exhausted", async () => {

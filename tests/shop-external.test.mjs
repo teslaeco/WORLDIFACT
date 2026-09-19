@@ -11,6 +11,8 @@ test('native Shop presents a customer creation flow with cart and no visible eng
   for (const portal of PORTALS) assert.ok(html.includes(`href="${portal.route}"`))
   assert.match(html, /id="studio-prompt"/)
   assert.match(html, /id="studio-photos"/)
+  assert.match(html, /SLOW · QUALITY/)
+  assert.match(html, /FAST · DRAFT/)
   assert.match(html, /Generate 3D model \+ materials · free/)
   assert.match(html, /CUSTOMIZE &amp; ORDER/)
   assert.match(html, /Cart/)

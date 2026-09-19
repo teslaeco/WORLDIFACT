@@ -19,6 +19,13 @@
 .native-shop button, .native-shop-upload { min-height: 44px; border: 1px solid #6c8895; border-radius: 7px; padding: 10px 14px; font: inherit; background: #223c48; color: #ecf4f8; cursor: pointer; }
 .native-shop button:disabled { cursor: not-allowed; opacity: 0.52; }
 .native-shop .native-shop-generate { width: 100%; background: #b7eed4; color: #16342c; font-weight: 800; margin-top: 10px; }
+.shop-generation-modes { border: 1px solid #536876; border-radius: 10px; padding: 14px; margin: 12px 0 16px; min-width: 0; }
+.shop-generation-modes legend { padding: 0 6px; font-weight: 800; }
+.shop-generation-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.native-shop .shop-generation-mode { display: grid; gap: 5px; text-align: left; min-height: 82px; background: #14252e; }
+.native-shop .shop-generation-mode[aria-pressed="true"] { background: #dcebe4; color: #17312a; border-color: #b7eed4; }
+.shop-generation-mode strong, .shop-generation-mode span { display: block; }
+.shop-generation-mode span { font-size: .78rem; line-height: 1.35; }
 .native-shop-upload { text-align: center; font-weight: 650; }
 .native-shop .native-shop-file { width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; opacity: 0; overflow: hidden; }
 .native-shop-file:focus-visible { opacity: 1; width: 100%; height: auto; min-height: 44px; }
@@ -68,7 +75,7 @@
  .native-shop-nav nav { margin-left: 0; }
  .native-shop-sample { min-height: 260px; height: 420px; max-height: 60dvh; }
  .native-shop .oracle-model-canvas { height: 380px; }
- .shop-make-controls, .shop-dimensions { grid-template-columns: 1fr; }
+ .shop-make-controls, .shop-dimensions, .shop-generation-mode-grid { grid-template-columns: 1fr; }
 }
 
 .demo-shop-preview { margin-top: 12px; }

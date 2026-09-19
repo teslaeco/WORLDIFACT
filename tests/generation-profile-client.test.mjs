@@ -42,13 +42,14 @@ test('existing STANDARD receipts remain readable and unknown saved modes fail cl
   assert.ok(store.getItem(STUDIO_RECEIPT_KEY), 'invalid data is not silently deleted')
 })
 
-test('actual Shop initial render preserves STANDARD and refuses an unconfirmed FAST choice', async () => {
+test('actual Shop initial render exposes SLOW quality and refuses an unconfirmed FAST choice', async () => {
   const html = await renderShopMarkup()
-  assert.match(html, /<select[^>]+id="studio-mode"/)
-  assert.match(html, /<option[^>]+value="standard"[^>]+selected=""/)
-  assert.match(html, /<option[^>]+value="fast-draft-v1"[^>]+disabled=""/)
-  assert.match(html, /STANDARD is unchanged/)
-  assert.match(html, /shorter timeout is not proof of a faster model/)
+  assert.match(html, /Choose generation mode/)
+  assert.match(html, /SLOW · QUALITY/)
+  assert.match(html, /FAST · DRAFT/)
+  assert.match(html, /aria-pressed="true"[^>]*><strong>SLOW · QUALITY/s)
+  assert.match(html, /aria-pressed="false"[^>]*disabled=""[^>]*><strong>FAST · DRAFT/s)
+  assert.match(html, /FAST is waiting for the production worker/)
   assert.match(html, /Generate 3D model \+ materials/)
   assert.match(html, /Back to WORLDIFACT/)
   assert.doesNotMatch(html, /<iframe|target="_top"|FAST guaranteed/)
