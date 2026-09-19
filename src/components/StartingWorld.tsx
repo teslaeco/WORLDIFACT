@@ -47,6 +47,7 @@ export default function StartingWorld({
   const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("queen");
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [outfit, setOutfit] = useState<OutfitPreset>("original");
+  const outfitRef = useRef<OutfitPreset>("original");
   const [equipmentStatus, setEquipmentStatus] = useState<EquipmentMode>("stowed");
   const [transition, setTransition] = useState(false);
   const [captureNotice, setCaptureNotice] = useState("");
@@ -59,7 +60,7 @@ export default function StartingWorld({
     const timer = setTimeout(() => setCaptureNotice(""), 3000);
     return () => clearTimeout(timer);
   }, [captureNotice]);
-  useEffect(() => { avatarRuntime.current?.setOutfit(outfit); }, [outfit]);
+  useEffect(() => { outfitRef.current = outfit; avatarRuntime.current?.setOutfit(outfit); }, [outfit]);
   useEffect(() => () => { audio.current?.dispose(); audio.current = null; }, []);
   const toggleMusic = async () => {
     try {
@@ -251,7 +252,7 @@ export default function StartingWorld({
     });
     const avatar = createPlayerAvatar(avatarChoice);
     avatarRuntime.current = avatar;
-    avatar.setOutfit(outfit);
+    avatar.setOutfit(outfitRef.current);
     avatar.setFlightFans(false);
     queueMicrotask(() => setEquipmentStatus("stowed"));
     scene.add(avatar.root);
