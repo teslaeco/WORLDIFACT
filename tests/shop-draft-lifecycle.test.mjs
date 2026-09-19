@@ -88,7 +88,7 @@ async function harness({ ready = false, state = 'succeeded', astraReady = ready 
   }
   const timeout = callback => { const id = ++serial; timers.set(id, callback); return id }
   const interval = () => ++serial
-  const globals = { fetch: fetcher, URL, Blob, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
+  const globals = { fetch: fetcher, URL, Blob, AbortSignal, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
     window: { localStorage: storage, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: () => {} } }
   const Component = await loadShopComponent({ react: hookReact, globals, adapters: {
     '../lib/studioClient': { ...clientModule, StudioCoordinator: class extends clientModule.StudioCoordinator { constructor(store) { super(store, fetcher) } }, checkStudio: () => clientModule.checkStudio(fetcher) },
