@@ -487,7 +487,6 @@ export default function StartingWorld({
         .map((o) => ({ spec: specOf(o), doorOpen: o.doorOpen }));
 
       if (controllingDrone) {
-        fanDrone.root.addScaledVector?.(forward, 0);
         fanDrone.root.position.addScaledVector(forward, move * dt * 9.5);
         fanDrone.root.position.addScaledVector(right, side * dt * 9.5);
         fanDrone.root.position.x = THREE.MathUtils.clamp(fanDrone.root.position.x, -46, 46);
@@ -539,7 +538,48 @@ export default function StartingWorld({
       if (action.current && !boarding) {
         const a = action.current;
         action.current = "";
-        if (a === "interact" && nearPortal) {
+        if (a === "fan-drone") {
+          if (ride) setCaptureNotice("Exit the rover before deploying the fan drone.");
+          else {
+            const next = nextEquipmentMode(equipmentMode, "toggle-drone");
+            equipmentMode = next;
+            avatar.setFlightFans(false);
+            if (next === "drone") {
+              fanDrone.root.visible = true;
+              fanDrone.root.position.set(player.x, Math.max(2.5, avatar.root.position.y + 1.7), player.z).addScaledVector(forward, 1.8);
+              setEquipmentStatus("drone");
+              setCaptureNotice("Fan 1 deployed as a drone — joystick / WASD now flies it.");
+            } else {
+              fanDrone.root.visible = false;
+              setEquipmentStatus("stowed");
+              setCaptureNotice("Fan drone recalled.");
+            }
+          }
+        } else if (a === "fan-flight") {
+          if (ride) setCaptureNotice("Exit the rover before using shoulder flight.");
+          else {
+            const next = nextEquipmentMode(equipmentMode, "toggle-flight");
+            equipmentMode = next;
+            fanDrone.root.visible = false;
+            avatar.setFlightFans(next === "flight");
+            setEquipmentStatus(next);
+            if (next === "flight") {
+              if (inRiver(player)) splashAt(player.x, player.z, .8);
+              waterMode = "land";
+              setCaptureNotice("Fan 2 engaged — both fans mounted horizontally at the shoulders. Joystick / WASD controls flight.");
+            } else {
+              waterMode = inRiver(player) ? "swimming" : "land";
+              if (waterMode === "swimming") splashAt(player.x, player.z, .65);
+              setCaptureNotice(waterMode === "swimming" ? "Fans stowed — swimming." : "Fans stowed — back on foot.");
+            }
+          }
+        } else if (a === "fan-stow") {
+          equipmentMode = "stowed";
+          fanDrone.root.visible = false;
+          avatar.setFlightFans(false);
+          setEquipmentStatus("stowed");
+          waterMode = inRiver(player) ? "swimming" : "land";
+        } else if (a === "interact" && nearPortal) {
           enter(nearPortal.id);
           return;
         } else if (a === "reset") {
@@ -550,6 +590,11 @@ export default function StartingWorld({
           pitch = -0.16;
           ride = null;
           setDriving(false);
+          equipmentMode = "stowed";
+          fanDrone.root.visible = false;
+          avatar.setFlightFans(false);
+          setEquipmentStatus("stowed");
+          waterMode = "land";
         } else if (
           a === "exit" ||
           (ride && (a === "drive" || a === "interact"))
