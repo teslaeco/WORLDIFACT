@@ -42,15 +42,16 @@ test('existing STANDARD receipts remain readable and unknown saved modes fail cl
   assert.ok(store.getItem(STUDIO_RECEIPT_KEY), 'invalid data is not silently deleted')
 })
 
-test('actual Shop initial render exposes SLOW quality and refuses an unconfirmed FAST choice', async () => {
+test('actual Shop initial render exposes SLOW quality and keeps FAST gated until Astra LIVE health is confirmed', async () => {
   const html = await renderShopMarkup()
   assert.match(html, /Choose generation mode/)
   assert.match(html, /SLOW · QUALITY/)
   assert.match(html, /FAST · DRAFT/)
   assert.match(html, /aria-pressed="true"[^>]*><strong>SLOW · QUALITY/s)
   assert.match(html, /aria-pressed="false"[^>]*disabled=""[^>]*><strong>FAST · DRAFT/s)
-  assert.match(html, /FAST is waiting for the production worker/)
+  assert.match(html, /FAST is waiting for the public GPT-6 Astra LIVE service/)
   assert.match(html, /Generate 3D model \+ materials/)
   assert.match(html, /Back to WORLDIFACT/)
+  assert.match(html, /GPT-6 Astra procedural draft/)
   assert.doesNotMatch(html, /<iframe|target="_top"|FAST guaranteed/)
 })
