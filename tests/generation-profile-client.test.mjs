@@ -50,7 +50,7 @@ test('actual Shop initial render exposes SLOW quality and refuses an unconfirmed
   assert.match(html, /aria-pressed="true"[^>]*><strong>SLOW · QUALITY/s)
   assert.match(html, /aria-pressed="false"[^>]*disabled=""[^>]*><strong>FAST · DRAFT/s)
   assert.match(html, /FAST is waiting for the production worker/)
-  assert.match(html, /Generate SLOW quality 3D model \+ materials/)
+  assert.match(html, /Generate 3D model \\+ materials/)
   assert.match(html, /Back to WORLDIFACT/)
   assert.doesNotMatch(html, /<iframe|target="_top"|FAST guaranteed/)
 })
