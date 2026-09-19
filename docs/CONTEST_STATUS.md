@@ -1,3 +1,47 @@
+# WORLDIFACT — Fan Queen / swimming / equipment RELEASED
+
+Date: 19 September 2026.
+
+## VERIFIED — PR #56 merged and production deployed
+
+- PR #56: https://github.com/teslaeco/WORLDIFACT/pull/56 — **MERGED**.
+- Exact reviewed PR head: `521e4eb4676826fba1ef483cfb13ebf826445275`.
+- Exact-head checks: **4/4 SUCCESS**:
+  - Verify WORLDIFACT `35471636236`
+  - Review FAST draft worker (no paid API) `35471636226`
+  - Review FAST Cloud Shell launcher `35471636233`
+  - Review FAST v33 installation safety `35471636232`
+- Squash merge on `main`: `7e48d076fd71913b14d2271d4e331a0aeeca6e3e`.
+- Post-merge main verification `35471761244`: **SUCCESS**.
+- Production workflow `35471761219`: **SUCCESS**.
+- Verification suite: **220 tests PASS**.
+- Production URL: https://worldifact.xodobrox.workers.dev
+- Cloudflare version: `c582224b-91c8-444c-9911-5d6333dafe76`.
+- Release smoke: **PASS** — LIVE release, 13 HTML routes, 23 matching hub assets, 105 original app entries/assets, API 404 contract, explicit DEMO path and origin rejection. **No paid API call was made by release smoke.**
+- Production GPT-6 Astra health remains `generationReady: true`, `mode: READY`.
+- Production Oracle bridge remains `CONNECTOR_READY`, connector version **33**.
+- Production Studio remains `ready: true`, `photoReady: true`, reason `READY`.
+
+## LIVE gameplay shipped
+
+- Default shared-world avatar points to the exact current MPC2 / 8 Planets Queen source job `99397623-e45c-48dc-95ec-6f84446a54d5`.
+- The bounded avatar proxy now accepts up to **48 MB**, allowing the current ~29.5 MB FORGE Queen source while retaining GLB type/header/length validation and read-only source-job provenance.
+- The Queen starts without a fan; separately named embedded fan/wachlarz nodes are hidden when exposed by the source GLB.
+- Equipment includes Original / Tracksuit / Dress / Casual GAME-preview overlays.
+- Fan 1 can be deployed/recalled as a joystick/WASD-controlled drone with follow camera.
+- Fan 2 mounts both fan devices horizontally at the shoulders and toggles player flight.
+- Missing a portal and entering the river now causes a visible splash, water entry, reduced-speed swimming and swim presentation instead of walking on the water plane.
+- Swimmers can still cross/enter portal disks. Exiting the river returns to land. Flight bypasses swimming.
+- Rover, doors, audio, portal navigation, mobile joystick, DEMO fallback and WebGL fallback remain covered by the regression suite.
+- MAKE remains **VALIDATION REQUIRED**. Outfits, fan drone, swimming and flight are GAME mechanics only.
+
+## Remaining visual QA boundary
+
+- CI and release smoke verify code, route and production deployment behavior; they do not substitute for a physical Android/WebGL visual acceptance pass of the exact Queen GLB, splash appearance, fan alignment or mobile camera framing.
+- No new character model was generated and no Oracle/OpenAI generation charge was made for this release.
+
+---
+
 # WORLDIFACT — Fan Queen / river / equipment staging
 
 Date: 19 September 2026.
