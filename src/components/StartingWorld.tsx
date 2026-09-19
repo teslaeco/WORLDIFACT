@@ -9,6 +9,8 @@ import type { MoveAxes } from "../lib/gameControls";
 import { enteredPortal, nearestPortal, PORTAL_RADIUS } from "../lib/portalNavigation";
 import { createLakeEnvironment } from "../lib/lakeEnvironment";
 import { createPlayerAvatar, type AvatarChoice } from "../lib/playerAvatar";
+import { createFanDrone, nextEquipmentMode, type EquipmentMode, type OutfitPreset } from "../lib/playerEquipment";
+import { fallingBodyY, FLIGHT_BODY_Y, FLIGHT_SPEED, inRiver, nextWaterMode, SWIM_SPEED, swimBodyY, type WaterMode } from "../lib/waterPhysics";
 import { createWorldAudio, worldAudioTheme } from "../lib/worldAudio";
 import TouchJoystick from "./TouchJoystick";
 import {
@@ -43,16 +45,21 @@ export default function StartingWorld({
   const overview = useRef(false);
   const [music, setMusic] = useState(false);
   const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("queen");
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [outfit, setOutfit] = useState<OutfitPreset>("original");
+  const [equipmentStatus, setEquipmentStatus] = useState<EquipmentMode>("stowed");
   const [transition, setTransition] = useState(false);
   const [captureNotice, setCaptureNotice] = useState("");
   const [wide, setWide] = useState(false);
   const [zoomValue, setZoomValue] = useState(6);
   const capture = useRef<(() => void) | null>(null);
+  const avatarRuntime = useRef<ReturnType<typeof createPlayerAvatar> | null>(null);
   useEffect(() => {
     if (!captureNotice) return;
     const timer = setTimeout(() => setCaptureNotice(""), 3000);
     return () => clearTimeout(timer);
   }, [captureNotice]);
+  useEffect(() => { avatarRuntime.current?.setOutfit(outfit); }, [outfit]);
   useEffect(() => () => { audio.current?.dispose(); audio.current = null; }, []);
   const toggleMusic = async () => {
     try {
