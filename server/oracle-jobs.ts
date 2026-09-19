@@ -166,17 +166,23 @@ export async function oracleJobApi(request: Request, env: OracleJobEnv, fetcher:
   const enabled = env.ENABLE_ORACLE_JOBS === 'true';
   const publicPilot = enabled && env.PUBLIC_PILOT === 'true';
   if (url.pathname === '/api/oracle/jobs/status' && request.method === 'GET') {
+    const settings = budgetSettings(env);
+    const unlimited = settings?.unlimited === true;
     return reply({
       mode: publicPilot ? 'PUBLIC_PILOT' : enabled ? 'OWNER_ONLY' : 'BLOCKED',
       prompt: 'SUPPORTED',
       image: 'BLOCKED_UNVERIFIED',
       artifactRead: publicPilot ? 'PUBLIC_PILOT' : 'OWNER_ONLY',
       requiredConnectorVersion: 33,
-      budget: enabled && budgetSettings(env) && env.GENERATION_BUDGET ? 'SHARED_HARD_CAP' : 'BLOCKED',
+      budget: enabled && settings && env.GENERATION_BUDGET ? unlimited ? 'NO_CUMULATIVE_CAP' : 'SHARED_HARD_CAP' : 'BLOCKED',
       note: publicPilot
-        ? 'A short hard-capped public Oracle/Blender prompt pilot is armed. Every submission reserves the shared cumulative generation budget; no browser receives the Oracle endpoint or bearer token.'
+        ? unlimited
+          ? 'Public Oracle/Blender prompt generation is armed without an application-level cumulative quota. Per-IP rate limiting, validation, idempotency and upstream safety guards remain active; no browser receives the Oracle endpoint or bearer token.'
+          : 'A hard-capped public Oracle/Blender prompt pilot is armed. Every submission reserves the shared cumulative generation budget; no browser receives the Oracle endpoint or bearer token.'
         : enabled
-          ? 'Owner-only Oracle prompt jobs require the same absolute pilot budget as WORLDIFACT Astra calls. Existing succeeded GLB artifacts are read-only and do not consume that budget.'
+          ? unlimited
+            ? 'Owner-only Oracle prompt jobs have no application-level cumulative quota; operational safety guards remain active. Existing succeeded GLB artifacts are read-only.'
+            : 'Owner-only Oracle prompt jobs require the same absolute pilot budget as WORLDIFACT Astra calls. Existing succeeded GLB artifacts are read-only and do not consume that budget.'
           : 'Oracle writes are disabled. Owner-only read access to an existing job/model remains available; read-only health remains available for all five worlds.',
     });
   }
@@ -288,9 +294,9 @@ export async function oracleJobApi(request: Request, env: OracleJobEnv, fetcher:
       error: code === 'ORACLE_NOT_READY'
         ? 'Oracle is not ready for the reviewed Astra job contract.'
         : code === 'BUDGET_EXHAUSTED'
-          ? 'The shared Astra pilot request ceiling is exhausted.'
+          ? 'The shared Astra generation request ceiling is exhausted.'
           : code === 'BUDGET_DISABLED'
-            ? 'The shared Astra pilot budget is not enabled or has expired.'
+            ? 'Shared Astra generation is not enabled.'
             : 'Oracle job submission failed safely.',
     }, code.startsWith('BUDGET_') ? (code === 'BUDGET_EXHAUSTED' ? 429 : 503) : 502);
   }
