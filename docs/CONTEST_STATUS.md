@@ -1,3 +1,33 @@
+# WORLDIFACT — AI Shop LIVE recovery RELEASED
+
+Date: 19 September 2026.
+
+## VERIFIED — PR #54 merged and production deployed
+
+- PR #54 **MERGED** by explicit owner approval.
+- Squash merge on `main`: `7ebb01966db292a67a67ab15c9e576098f926199`.
+- Exact PR head `0825fe3e514e0d1e3fea0bad7caf89b8371e245d`: all 5 required checks **SUCCESS**.
+- Post-merge main **Verify WORLDIFACT** run `35459875244`: **SUCCESS**.
+- Production workflow `35459875295`: **SUCCESS**.
+- Cloudflare production URL: https://worldifact.xodobrox.workers.dev
+- Cloudflare version: `1ba15fa0-a86e-4c65-bf4f-7f3acb3814e5`.
+- Release smoke: **SUCCESS** and made no paid generation request.
+- Production deployment mode: **LIVE**.
+- Production `/api/health`: `generationReady: true`, `mode: READY`.
+- Production Oracle bridge: `CONNECTOR_READY`, connector version **33**.
+- Production Studio: `ready: true`, `photoReady: true`, `fastReady: true`, Oracle `CONNECTOR_READY`, reason `READY`.
+- Production secret sync steps for OpenAI and Oracle both completed successfully without exposing secret values.
+
+## LIVE behavior
+
+- **SLOW · QUALITY** uses the existing detailed STANDARD Studio path and supports reference images.
+- **FAST · DRAFT** uses the reviewed `fast-draft-v1` path and is exposed only when the worker confirms its FAST capability and monetary guard.
+- The old contest launch expiry and application-level cumulative customer-attempt ceiling are removed for ongoing LIVE mode.
+- Cloudflare per-IP rate limiting, request/image limits, same-origin checks, signed Studio receipts, duplicate-submit protection, timeouts, safe errors and explicit DEMO fallback remain active.
+- No generated asset is automatically manufacturing-approved: GLBs remain **GENERATED-UNREVIEWED** and MAKE remains **VALIDATION REQUIRED**.
+
+---
+
 # WORLDIFACT — AI Shop LIVE recovery / FAST + SLOW staging
 
 ## VERIFIED — Shop recovery CI milestone
