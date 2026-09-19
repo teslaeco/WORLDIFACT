@@ -39,15 +39,15 @@ jobs:
         id: mode
         shell: bash
         run: |
-          if test -f ops/CONTEST_LIVE_20260918; then
-            node scripts/build-contest-live-config.ts
-            echo 'config=.contest-live.wrangler.json' >> "$GITHUB_OUTPUT"
+          if test -f ops/LIVE_GENERATION_ONGOING_20260919; then
+            node scripts/build-live-generation-config.ts
+            echo 'config=.live-generation.wrangler.json' >> "$GITHUB_OUTPUT"
             echo 'mode=LIVE' >> "$GITHUB_OUTPUT"
-            echo 'Contest LIVE marker present: deploying fixed-expiry cumulative-budget configuration.'
+            echo 'Ongoing LIVE marker present: deploying public generation without an application-level cumulative quota.'
           else
             echo 'config=wrangler.jsonc' >> "$GITHUB_OUTPUT"
             echo 'mode=DEMO' >> "$GITHUB_OUTPUT"
-            echo 'No contest LIVE marker: deploying reviewed disabled-cost base configuration.'
+            echo 'No ongoing LIVE marker: deploying reviewed disabled-cost base configuration.'
           fi
       - name: Dry-run selected deployment configuration
         run: npx wrangler deploy --dry-run --config "${{ steps.mode.outputs.config }}" --outdir .wrangler/preview
