@@ -12,20 +12,29 @@ export interface BudgetNamespace {
   idFromName(name: string): unknown;
   get(id: unknown): { fetch(request: Request): Promise<Response> };
 }
+export type BudgetSettings =
+  | { unlimited: true; limit: null; expiresAt: null }
+  | { unlimited: false; limit: number; expiresAt: number };
+
 export const APPROVED_FAST_TEST = 'fast-test-20260917-usd5';
 export const FAST_TEST_END = Date.parse('2026-09-18T07:00:00Z');
 const TRIAL_KEY = 'approved-fast-test-20260917-expires';
-export function budgetSettings(env: BudgetEnv, now = Date.now()) {
+
+export function budgetSettings(env: BudgetEnv, now = Date.now()): BudgetSettings | null {
+  if (env.GENERATION_REQUEST_LIMIT === 'unlimited' && (env.GENERATION_EXPIRES_AT ?? '') === '') {
+    return { unlimited: true, limit: null, expiresAt: null };
+  }
   const limit = Number(env.GENERATION_REQUEST_LIMIT);
   const expiresAt = Date.parse(env.GENERATION_EXPIRES_AT || '');
   return Number.isSafeInteger(limit) && limit > 0 && limit <= 10_000 && Number.isFinite(expiresAt) && expiresAt > now
-    ? { limit, expiresAt } : null;
+    ? { unlimited: false, limit, expiresAt } : null;
 }
 export function approvedFastSettings(env: BudgetEnv, until: unknown, now = Date.now()) {
   return env.ENABLE_APPROVED_FAST_TEST === 'true' && typeof until === 'number' && Number.isSafeInteger(until) && until > now && until <= FAST_TEST_END
-    ? { limit: 7, expiresAt: until } : null;
+    ? { unlimited: false as const, limit: 7, expiresAt: until } : null;
 }
 // Original counter and submitted IDs survive all releases. No reset or refund.
+// In ongoing LIVE mode the counter is telemetry/idempotency evidence, not a cumulative customer quota.
 export class GenerationBudget {
   private storage: BudgetStorage;
   private env: BudgetEnv;
@@ -39,10 +48,13 @@ export class GenerationBudget {
         if (!Number.isSafeInteger(used) || used < 0) throw new Error('Invalid allowance state');
         const trial = approvedFastSettings(this.env, await this.storage.get<number>(TRIAL_KEY));
         const settings = trial || budgetSettings(this.env);
+        if (settings?.unlimited) {
+          return reply({ used, limit: null, remaining: null, enabled: true, expiresAt: null, unlimited: true, fastOnly: false });
+        }
         const configured = Number(this.env.GENERATION_REQUEST_LIMIT);
         const limit = trial ? 7 : Number.isSafeInteger(configured) && configured >= 0 && configured <= 10_000 ? configured : 0;
         return reply({ used, limit, remaining: settings ? Math.max(0, settings.limit - used) : 0,
-          enabled: !!settings, expiresAt: settings ? new Date(settings.expiresAt).toISOString() : null, fastOnly: !!trial });
+          enabled: !!settings, expiresAt: settings ? new Date(settings.expiresAt).toISOString() : null, unlimited: false, fastOnly: !!trial });
       } catch { return reply({ error: 'Allowance unavailable' }, 503); }
     }
     // This is an INTERNAL Durable Object route. The public Worker separately
@@ -84,10 +96,10 @@ export class GenerationBudget {
         if (!settings) return { allowed: false, reason: 'disabled' };
         const used = (await storage.get<number>('reserved-attempts')) ?? 0;
         if (!Number.isSafeInteger(used) || used < 0) throw new Error('Invalid allowance state');
-        if (used >= settings.limit) return { allowed: false, reason: 'exhausted' };
+        if (!settings.unlimited && used >= settings.limit) return { allowed: false, reason: 'exhausted' };
         await storage.put('reserved-attempts', used + 1);
         if (jobId) await storage.put(`studio-submitted:${jobId}`, 1);
-        return { allowed: true, remaining: settings.limit - used - 1 };
+        return { allowed: true, remaining: settings.unlimited ? null : settings.limit - used - 1, unlimited: settings.unlimited };
       });
       return reply(result, result.allowed ? 200 : result.reason === 'already-submitted' ? 409 : 429);
     } catch { return reply({ allowed: false }, 503); }
