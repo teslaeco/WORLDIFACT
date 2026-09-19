@@ -67,9 +67,12 @@ async function allowance(env: StudioEnv) {
   const response = await budget(env).fetch(new Request('https://budget.internal/status', { signal: AbortSignal.timeout(5000) }))
   if (!response.ok) throw new StudioError('The shared allowance could not be read.', 503)
   const state = await limitedJson(response, 2000)
-  if (![state.used, state.limit, state.remaining].every(n => Number.isSafeInteger(n) && Number(n) >= 0) || typeof state.enabled !== 'boolean') throw new StudioError('Invalid allowance response.', 503)
-  return { used: Number(state.used), limit: Number(state.limit), remaining: Number(state.remaining), enabled: state.enabled,
-    expiresAt: typeof state.expiresAt === 'string' ? state.expiresAt : null, fastOnly: state.fastOnly === true }
+  const unlimited = state.unlimited === true
+  if (!Number.isSafeInteger(state.used) || Number(state.used) < 0 || typeof state.enabled !== 'boolean' ||
+      (unlimited ? state.limit !== null || state.remaining !== null : ![state.limit, state.remaining].every(n => Number.isSafeInteger(n) && Number(n) >= 0)))
+    throw new StudioError('Invalid allowance response.', 503)
+  return { used: Number(state.used), limit: unlimited ? null : Number(state.limit), remaining: unlimited ? null : Number(state.remaining), enabled: state.enabled,
+    expiresAt: typeof state.expiresAt === 'string' ? state.expiresAt : null, unlimited, fastOnly: state.fastOnly === true }
 }
 async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init: RequestInit = {}) {
   const origin = oracleOrigin(env.ORACLE_ENDPOINT)
@@ -164,7 +167,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const trial = pool?.fastOnly === true && env.ENABLE_APPROVED_FAST_TEST === 'true'
       const enabled = trial || (env.ENABLE_STUDIO_JOBS === 'true' && !!budgetSettings(env))
       const authorized = trial || env.PUBLIC_PILOT === 'true' || (secretReady(env) && await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
-      const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : !pool.remaining ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
+      const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : (!pool.unlimited && pool.remaining === 0) ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
       return json({ ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
         photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, fastBudgetReady: state?.fastBudgetReady === true,
         fastOnly: trial, promptMaxLength: Math.max(3, (state?.promptMaxLength ?? 2000) - 600), allowance: pool })
@@ -174,7 +177,8 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       await limit(request, env, 'prepare')
       const input = await inputFrom(request)
       await preflight(request, env, fetcher, input)
-      if (!(await allowance(env)).remaining) throw new StudioError('The cumulative allowance is exhausted. No job was started.', 429)
+      const pool = await allowance(env)
+      if (!pool.unlimited && pool.remaining === 0) throw new StudioError('The cumulative allowance is exhausted. No job was started.', 429)
       return json(await receipt(env, crypto.randomUUID(), await inputDigest(input)))
     }
     if (url.pathname === '/api/studio/jobs' && request.method === 'POST') {
