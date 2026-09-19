@@ -1,3 +1,36 @@
+# WORLDIFACT — FAST Shop production repair staging
+
+Date: 19 September 2026.
+
+## VERIFIED — root cause
+
+- Production SLOW / Oracle generation is healthy and the public Studio reports `ready: true`, `photoReady: true`, `fastReady: true`.
+- The old Oracle FAST monetary guard in `tools/fast_preview/fast_spend.py` has a fixed `VALID_UNTIL` of **2026-09-18T07:00:00Z**. After that deadline the worker no longer advertises the old `fastBudgetRevision`, so `/api/studio/status` reports `fastBudgetReady: false`.
+- That is why the customer FAST button stayed disabled while SLOW continued to work. The failure is not the current OpenAI key, Cloudflare LIVE mode or Oracle connector readiness.
+- The current GitHub/Cloudflare release path can deploy WORLDIFACT automatically, but this session does not have the Oracle VM's Cloud Shell SSH key as a GitHub secret. Do not weaken or bypass the expired worker-side spend guard.
+
+## IMPLEMENTED — safe automatic repair path
+
+- Branch: `fix/shop-fast-astra-procedural-20260919`.
+- Customer **SLOW · QUALITY** remains unchanged: detailed Oracle/Blender Studio model generation with reference-image support.
+- Customer **FAST · DRAFT** is moved off the expired Oracle FAST-spend guard and onto the already deployed server-side GPT-6 Astra `/api/blueprint` path.
+- FAST makes exactly one LIVE Astra request, validates the returned `WorldBlueprint + AssetSpec`, and shows a lightweight local procedural 3D draft.
+- FAST is explicitly labelled **LIVE · GENERATED SPEC / PROCEDURAL DRAFT**. It does **not** claim an Oracle mesh, production GLB, 2K/4K texture package or manufacturing readiness.
+- FAST remains text-only and does not accept reference images; SLOW is the path for image-guided detailed geometry.
+- Added an interior procedural preview so prompts for living rooms / dining rooms / bungalow interiors produce a room-like scene instead of a generic tower.
+- Duplicate FAST submit is blocked client-side by the existing single-operation guard.
+- Existing Oracle FAST worker profile remains internal/legacy and is not silently bypassed.
+- Diagnostic output now records `fastBudgetReady` separately from `fastReady`.
+
+## RELEASE GATE
+
+- Merge/deploy is authorized by the owner's current instruction to complete the FAST repair automatically.
+- Required before merge: exact-head CI green; no paid generation in CI.
+- After merge: main verification and Cloudflare deployment must pass, then production read-only diagnostics must show `generationReady: true` for Astra and SLOW Studio `READY`.
+- MAKE remains **VALIDATION REQUIRED**.
+
+---
+
 # WORLDIFACT — AI Shop LIVE recovery RELEASED
 
 Date: 19 September 2026.
