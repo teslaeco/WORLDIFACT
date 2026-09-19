@@ -54,7 +54,7 @@ export class GenerationBudget {
         const configured = Number(this.env.GENERATION_REQUEST_LIMIT);
         const limit = trial ? 7 : Number.isSafeInteger(configured) && configured >= 0 && configured <= 10_000 ? configured : 0;
         return reply({ used, limit, remaining: settings ? Math.max(0, settings.limit - used) : 0,
-          enabled: !!settings, expiresAt: settings ? new Date(settings.expiresAt).toISOString() : null, unlimited: false, fastOnly: !!trial });
+          enabled: !!settings, expiresAt: settings ? new Date(settings.expiresAt).toISOString() : null, fastOnly: !!trial });
       } catch { return reply({ error: 'Allowance unavailable' }, 503); }
     }
     // This is an INTERNAL Durable Object route. The public Worker separately
