@@ -1,20 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { shopPreviewKind, type ShopPreviewKind } from '../lib/shopPreviewKind'
 
-export type DemoShopKind = 'interior' | 'tower' | 'character' | 'vehicle' | 'object'
 export type DemoShopPreviewMode = 'demo' | 'live-fast'
 
-export function demoShopKind(prompt: string): DemoShopKind {
-  const value = prompt.toLowerCase()
-  if (/(interior|room|living|dining|kitchen|bedroom|wnętrz|pokój|salon|jadaln|kuchn|sypial)/.test(value)) return 'interior'
-  if (/(tower|building|house|skyscraper|wież|budyn|dom)/.test(value)) return 'tower'
-  if (/(character|person|figur|human|posta|astronaut|queen)/.test(value)) return 'character'
-  if (/(car|vehicle|rover|truck|auto|pojazd|samoch)/.test(value)) return 'vehicle'
-  return 'object'
-}
-
-function buildDemo(kind: DemoShopKind) {
+function buildDemo(kind: ShopPreviewKind) {
   const group = new THREE.Group()
   const main = new THREE.MeshStandardMaterial({ color: '#75b7c9', roughness: 0.45, metalness: 0.18 })
   const accent = new THREE.MeshStandardMaterial({ color: '#d6bf82', roughness: 0.38, metalness: 0.22 })
@@ -95,7 +86,7 @@ function buildDemo(kind: DemoShopKind) {
 export default function DemoShopPreview({ prompt, mode = 'demo' }: { prompt: string; mode?: DemoShopPreviewMode }) {
   const host = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState(false)
-  const kind = demoShopKind(prompt)
+  const kind = shopPreviewKind(prompt)
 
   useEffect(() => {
     const element = host.current
