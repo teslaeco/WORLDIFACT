@@ -1,3 +1,37 @@
+# WORLDIFACT — Fan Queen / river / equipment staging
+
+Date: 19 September 2026.
+
+## VERIFIED — implementation milestone
+
+- Branch: `feat/fan-queen-water-flight-20260919`.
+- PR #56: https://github.com/teslaeco/WORLDIFACT/pull/56.
+- The shared-world default remains the exact current MPC2 / 8 Planets Queen Oracle source job `99397623-e45c-48dc-95ec-6f84446a54d5`.
+- The avatar proxy ceiling is raised from 12 MB to **48 MB**, matching the FORGE builder archive ceiling and allowing the current ~29.5 MB Queen source to pass the bounded avatar route while preserving GLB type/header/length validation and read-only provenance headers.
+- The Queen now starts fan-free; separately named embedded fan/wachlarz nodes are hidden when the source GLB exposes them.
+- Added GAME-preview equipment:
+  - Original / Tracksuit / Dress / Casual overlays;
+  - Fan 1 throw/recall drone controlled by the normal joystick / WASD with follow camera;
+  - Fan 2 mounts both fan devices horizontally at the shoulders and toggles player flight.
+- Added river physics:
+  - missed portals cause a splash and water entry instead of walking on the water plane;
+  - falling transitions to swimming with reduced speed and swim animation;
+  - leaving the river returns to land;
+  - portal sweep/near-portal logic remains active for the swimmer;
+  - flight bypasses swimming.
+- Rover, doors, portal navigation, audio, DEMO fallback and mobile joystick behavior are preserved.
+- Task brief: `docs/CODEX_TASK_FAN_QUEEN_WATER_FLIGHT_20260919.md`.
+- Exact implementation head `0567a1449506e603124b67691e4f0f8f3714f1ad` passed **Verify WORLDIFACT** including `npm run verify`, foundations, `deploy:check` and hosted Studio no-generation inspection.
+- No paid generation request was made by CI.
+
+## GO / NO-GO
+
+- **GO for merge/deploy after this documentation-only milestone re-verifies.**
+- Owner explicitly authorized implementation, merge and production deployment in the current conversation.
+- MAKE remains **VALIDATION REQUIRED**. Outfit overlays, fans, swimming, drone and flight are GAME mechanics and are not manufacturing claims.
+
+---
+
 # WORLDIFACT — FAST Shop repair RELEASED
 
 Date: 19 September 2026.
