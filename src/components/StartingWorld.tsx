@@ -372,13 +372,19 @@ export default function StartingWorld({
           "arrowleft",
           "arrowright",
           "e",
+          "f",
+          "g",
+          "i",
         ].includes(k)
       ) {
         e.preventDefault();
         input.current[k] = true;
       }
       if (k === "e" && !e.repeat) action.current = "interact";
-      if (k === "escape") action.current = "exit";
+      if (k === "f" && !e.repeat) action.current = "fan-drone";
+      if (k === "g" && !e.repeat) action.current = "fan-flight";
+      if (k === "i" && !e.repeat) setInventoryOpen(value => !value);
+      if (k === "escape") action.current = equipmentMode === "drone" || equipmentMode === "flight" ? "fan-stow" : "exit";
     };
     const up = (e: KeyboardEvent) => {
       input.current[e.key.toLowerCase()] = false;
