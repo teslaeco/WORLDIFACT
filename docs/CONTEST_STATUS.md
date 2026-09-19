@@ -1,3 +1,44 @@
+# WORLDIFACT — FAST Shop repair RELEASED
+
+Date: 19 September 2026.
+
+## VERIFIED — PR #55 merged and production deployed
+
+- PR #55: https://github.com/teslaeco/WORLDIFACT/pull/55 — **MERGED**.
+- Exact reviewed PR head: `bd41fc6038f1233a572f90237fa98d0ea3e69c22`.
+- Exact-head checks: **4/4 SUCCESS**:
+  - Verify WORLDIFACT `35463297621`
+  - Review FAST draft worker (no paid API) `35463297674`
+  - Review FAST Cloud Shell launcher `35463297680`
+  - Review FAST v33 installation safety `35463297695`
+- Squash merge on `main`: `24849fe6d5938079bc7bb84022419e9b4815c6d3`.
+- Post-merge main verification `35463416210`: **SUCCESS**.
+- Production workflow `35463416201`: **SUCCESS**.
+- Production URL: https://worldifact.xodobrox.workers.dev
+- Cloudflare version: `e23d3486-15ed-4df8-ac10-87d3c4bc8dfd`.
+- Release smoke: **PASS** — LIVE release, 13 HTML routes, 23 matching hub assets, 105 original app entries/assets, API 404 contract, explicit DEMO path and origin rejection. **No paid API call was made by release smoke.**
+- Verification suite: **214 tests PASS**.
+
+## VERIFIED — production capability after release
+
+- GPT-6 Astra health: `generationReady: true`, `mode: READY`.
+- Oracle bridge: `CONNECTOR_READY`, connector version **33**.
+- SLOW Studio: `ready: true`, `photoReady: true`, Oracle `CONNECTOR_READY`, reason `READY`.
+- Legacy Oracle FAST profile remains present: `fastReady: true`.
+- Legacy worker monetary guard is expired/unconfirmed: `fastBudgetReady: false`. Customer FAST no longer depends on that expired guard.
+- Customer **FAST · DRAFT** now uses the server-side GPT-6 Astra blueprint path and renders a labelled local procedural 3D draft.
+- Customer **SLOW · QUALITY** remains the detailed Oracle/Blender path with reference-image support.
+- FAST output is explicitly **LIVE · GENERATED SPEC / PROCEDURAL DRAFT**; it is not represented as an Oracle production mesh, 2K/4K texture deliverable, manufacturing-ready file, quote or order.
+- Interior FAST prompts have a dedicated procedural room preview with floor/walls, sofa, dining table/chairs, TV and pendant-lamp structure.
+- Rate limiting, validation, timeouts, origin checks, SLOW signed receipts/idempotency, DEMO fallback and MAKE **VALIDATION REQUIRED** boundaries remain active.
+
+## Production test boundary
+
+- Deployment/readiness and static release behavior are verified without spending on an extra production FAST generation.
+- A real user FAST click will make one paid GPT-6 Astra request under the already authorized ongoing LIVE generation configuration.
+
+---
+
 # WORLDIFACT — FAST Shop production repair staging
 
 Date: 19 September 2026.
