@@ -1,3 +1,59 @@
+# WORLDIFACT — Product Hunt embeds released
+
+Date: 19 September 2026.
+
+## RELEASED — PR #53
+
+- PR #53: https://github.com/teslaeco/WORLDIFACT/pull/53 — **MERGED**.
+- Squash merge on `main`: `2df5ffebf865951889ed44685875767965882dd1`.
+- Exact-head PR verification: **SUCCESS**.
+- Post-merge main verification run `35425274653`: **SUCCESS** — **207/207 tests PASS**, zero failures; foundation assembly and Wrangler dry-run passed.
+- Production workflow `35425274680`: **SUCCESS**.
+- Cloudflare version: `2dda43d4-702b-4948-8d0f-4af912242683`.
+- Public URL: https://worldifact.xodobrox.workers.dev
+- Public release smoke: **PASS** — LIVE release, 13 HTML routes, 23 matching hub assets, 105 original app entries/assets, API 404 contract, explicit no-cost DEMO generation path and origin rejection.
+
+## PRODUCT HUNT SURFACES NOW PUBLISHED
+
+- Official featured badge supplied by the owner: `post_id=1254175`.
+- Official product-review badge supplied by the owner: `product_id=1321124`.
+- Product Hunt comments card supplied by the owner: `https://cards.producthunt.com/cards/comments/5874571?v=1`.
+- The section asks for feedback/reviews and does not ask for upvotes.
+- Responsive mobile layout and lazy loading are enabled.
+
+## READ-ONLY PRODUCTION STATUS AFTER DEPLOY
+
+At `2026-09-19T05:57:55Z`:
+
+```json
+{
+  "health": {
+    "generationReady": true,
+    "mode": "READY",
+    "allowance": { "used": 23, "limit": 50, "remaining": 27 }
+  },
+  "oracleWorlds": {
+    "oracle": "CONNECTOR_READY",
+    "connectorVersion": 33,
+    "characterStandard": 20
+  },
+  "studio": {
+    "ready": true,
+    "photoReady": true,
+    "fastReady": true,
+    "oracle": "CONNECTOR_READY",
+    "reason": "READY",
+    "allowance": { "used": 23, "limit": 50, "remaining": 27 }
+  }
+}
+```
+
+- No paid model request was made by the deployment smoke or read-only diagnostic.
+- Existing LIVE expiry remains `2026-09-19T07:00:00Z`.
+- MAKE remains **VALIDATION REQUIRED**.
+
+---
+
 # WORLDIFACT — Product Hunt comments embed prepared
 
 Date: 19 September 2026.
