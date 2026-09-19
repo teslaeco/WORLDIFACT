@@ -652,12 +652,14 @@ export default function StartingWorld({
       let seated = !!ride;
       let gait = Math.min(1, Math.hypot(player.x - old.x, player.z - old.z) / Math.max(dt * 4, .001));
       let reaching = 0;
+      let swimming = waterMode !== "land";
       if (boarding) {
         boarding.time += dt;
         const b = boarding, t = b.time;
         const smooth = (v: number) => THREE.MathUtils.smoothstep(v, 0, 1);
         b.car.doorOpen = t > (b.exiting ? 0 : .9) && t < 2.65;
         reaching = t > .9 && t < 1.45 ? 1 : 0;
+        swimming = false;
         if (b.exiting) {
           avatar.root.position.lerpVectors(b.seat, b.outside, smooth((t - .6) / 1.35));
           seated = t < .7; gait = t > .7 && t < 2.0 ? .5 : 0;
@@ -676,14 +678,28 @@ export default function StartingWorld({
           b.car.doorOpen = false; boarding = null;
         }
       } else if (ride) {
+        swimming = false;
         avatar.root.position.set(-.55, .26, .1).multiplyScalar(specOf(ride).scale).applyAxisAngle(new THREE.Vector3(0,1,0), yaw).add(new THREE.Vector3(player.x, 0, player.z));
         avatar.root.rotation.y = yaw;
+      } else if (equipmentMode === "flight") {
+        swimming = false;
+        avatar.root.position.set(player.x, FLIGHT_BODY_Y + Math.sin(elapsed * 2.1) * .08, player.z);
+        if (gait > .02) avatar.root.rotation.y = Math.atan2(-(player.x - old.x), -(player.z - old.z));
       } else {
-        avatar.root.position.set(player.x, 0, player.z);
+        const bodyY = waterMode === "falling" ? fallingBodyY(elapsed - waterEnteredAt) : waterMode === "swimming" ? swimBodyY(elapsed) : 0;
+        avatar.root.position.set(player.x, bodyY, player.z);
         if (gait > .02) avatar.root.rotation.y = Math.atan2(-(player.x - old.x), -(player.z - old.z));
       }
-      avatar.update(elapsed, gait, seated, reaching);
-      if (ride && !boarding) {
+      avatar.update(elapsed, gait, seated, reaching, swimming);
+      fanDrone.update(elapsed, Math.min(1, Math.hypot(axes.forward, axes.side)));
+      updateSplashes(dt);
+
+      if (controllingDrone) {
+        camera.position.copy(fanDrone.root.position).addScaledVector(forward, -Math.max(4, zoom.current * .75));
+        camera.position.y = fanDrone.root.position.y + 2.1;
+        target.copy(fanDrone.root.position).addScaledVector(forward, 1.4);
+        camera.lookAt(target);
+      } else if (ride && !boarding) {
         ride.group.position.set(player.x, 0, player.z);
         ride.group.rotation.y = yaw;
         camera.position
@@ -695,11 +711,17 @@ export default function StartingWorld({
         camera.lookAt(target);
         for (const w of ride.group.children)
           if (w.name === "wheel") w.rotation.x -= move * dt * 14;
-      } else {
-        player.y = 2.3;
+      } else if (equipmentMode === "flight") {
+        player.y = FLIGHT_BODY_Y + 2.2;
         camera.position.copy(player).addScaledVector(forward, -zoom.current);
-        camera.position.y = Math.max(1.5, 2.4 - Math.sin(pitch) * zoom.current);
-        target.set(player.x, 1.3, player.z).addScaledVector(forward, 1.2);
+        camera.position.y = FLIGHT_BODY_Y + Math.max(2.4, zoom.current * .22);
+        target.set(player.x, FLIGHT_BODY_Y + .9, player.z).addScaledVector(forward, 1.8);
+        camera.lookAt(target);
+      } else {
+        player.y = swimming ? 1.15 : 2.3;
+        camera.position.copy(player).addScaledVector(forward, -zoom.current);
+        camera.position.y = swimming ? Math.max(1.05, 1.35 - Math.sin(pitch) * zoom.current * .4) : Math.max(1.5, 2.4 - Math.sin(pitch) * zoom.current);
+        target.set(player.x, swimming ? .62 : 1.3, player.z).addScaledVector(forward, 1.2);
         camera.lookAt(target);
       }
       if (overview.current) {
