@@ -253,6 +253,7 @@ export default function StartingWorld({
     avatarRuntime.current = avatar;
     avatar.setOutfit(outfit);
     avatar.setFlightFans(false);
+    queueMicrotask(() => setEquipmentStatus("stowed"));
     scene.add(avatar.root);
     const fanDrone = createFanDrone();
     scene.add(fanDrone.root);
@@ -785,6 +786,7 @@ export default function StartingWorld({
       renderer.domElement.removeEventListener("webglcontextlost", lost);
       renderer.domElement.removeEventListener("webglcontextrestored", restored);
       clear();
+      if (avatarRuntime.current === avatar) avatarRuntime.current = null;
       runtimeObjects.current = [];
       environment?.dispose();
       disposeObject(scene);
