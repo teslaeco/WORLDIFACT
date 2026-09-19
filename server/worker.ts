@@ -85,7 +85,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   const accessConfigured = publicPilot || ((env.GENERATION_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.GENERATION_ACCESS_TOKEN?.length ?? 0) <= 256);
   const generationConfigured = configured && !!env.GENERATION_LIMITER && !!env.GENERATION_BUDGET && !!budgetSettings(env) && accessConfigured && configuredModel === "gpt-6-astra";
   if (url.pathname === "/api/health" && request.method === "GET") {
-    let allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited: boolean } | null = null;
+    let allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: true } | null = null;
     if (generationConfigured) {
       try {
         const budget = env.GENERATION_BUDGET!.get(env.GENERATION_BUDGET!.idFromName("worldifact-generation-budget-v1"));
@@ -101,12 +101,12 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
             remaining: unlimited ? null : value.remaining as number,
             enabled: value.enabled,
             expiresAt: typeof value.expiresAt === "string" ? value.expiresAt : null,
-            unlimited,
+            ...(unlimited ? { unlimited: true as const } : {}),
           };
         }
       } catch { /* Health fails closed when the shared allowance cannot be read. */ }
     }
-    const generationReady = generationConfigured && allowance?.enabled === true && (allowance.unlimited || (allowance.remaining ?? 0) > 0);
+    const generationReady = generationConfigured && allowance?.enabled === true && (allowance.unlimited === true || (allowance.remaining ?? 0) > 0);
     return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady && !publicPilot,
       publicPilot: generationReady && publicPilot, model: generationReady ? configuredModel : null, maxReferenceImageMb: 6,
       allowance });
