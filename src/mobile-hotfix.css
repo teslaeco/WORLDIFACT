@@ -20,6 +20,37 @@ body { overflow-x: hidden; }
   font-size:.72rem;
 }
 .avatar-picker select { min-height:34px; padding:.3rem .4rem; font-size:.72rem; background:#102a35; }
+
+.equipment-toggle {
+  position:absolute;
+  top:4.55rem;
+  right:.75rem;
+  z-index:19;
+  min-height:36px;
+  padding:.35rem .55rem;
+  border:1px solid #55727b;
+  background:#0a2230e8;
+  font-size:.72rem;
+}
+.equipment-panel {
+  position:absolute;
+  top:7.35rem;
+  right:.75rem;
+  z-index:20;
+  width:min(290px,42%);
+  display:grid;
+  gap:.45rem;
+  padding:.65rem;
+  border:1px solid #55727b;
+  border-radius:10px;
+  background:#071b27f2;
+  box-shadow:0 12px 30px #0008;
+}
+.equipment-panel label { font-size:.72rem; }
+.equipment-panel select,
+.equipment-panel button { min-height:36px; font-size:.72rem; padding:.35rem .5rem; }
+.equipment-panel small { font-size:.66rem; line-height:1.35; }
+
 .portal-generator-drawer { margin: 1rem 0 calc(1rem + env(safe-area-inset-bottom, 0px)); border: 1px solid #3b5961; border-radius: 12px; background:#10232b; }
 .portal-generator-drawer > summary { cursor:pointer; padding: .9rem 1rem; font-weight: 800; color:#e9c27f; }
 .portal-generator-drawer[open] > summary { border-bottom:1px solid #3b5961; }
@@ -88,6 +119,9 @@ body { overflow-x: hidden; }
     background:#082434d9;
   }
   .avatar-picker select { min-height:30px; padding:.2rem .25rem; font-size:.6rem; }
+  .equipment-toggle { top:4.05rem; right:.55rem; min-height:32px; padding:.28rem .42rem; font-size:.62rem; }
+  .equipment-panel { top:6.75rem; right:.55rem; width:min(260px,68%); max-height:58%; overflow:auto; padding:.5rem; }
+  .equipment-panel select,.equipment-panel button { min-height:34px; font-size:.68rem; }
   .world-top {
     top:.55rem; left:.55rem;
     max-width:62%;
