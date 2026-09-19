@@ -1025,3 +1025,49 @@ input[type="file"] {
   .starting-world-shell .avatar-note { top:.6rem; right:.5rem; font-size:.75rem; }
   .worldifact-logo { width:72px; height:60px; }
 }
+
+
+/* Product Hunt launch conversation embed. */
+.product-hunt-panel {
+  margin: 0 2rem 1.7rem;
+  padding: 1.25rem;
+  border: 1px solid #3d535c;
+  border-radius: 12px;
+  background: #172a31;
+}
+.product-hunt-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+.product-hunt-heading h2 {
+  margin: 0.25rem 0 0;
+}
+.product-hunt-panel > p {
+  max-width: 720px;
+  color: #afc3c8;
+}
+.product-hunt-embed {
+  width: 100%;
+  overflow: hidden;
+}
+.product-hunt-embed iframe {
+  display: block;
+  width: min(100%, 500px);
+  height: auto;
+  aspect-ratio: 500 / 405;
+  border: 0;
+  background: #ffffff;
+}
+@media (max-width: 640px) {
+  .product-hunt-panel {
+    margin: 0 1rem 1rem;
+    padding: 1rem;
+  }
+  .product-hunt-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
