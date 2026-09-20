@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import OracleModelPreview from '../components/OracleModelPreview'
 import DemoShopPreview from '../components/DemoShopPreview'
 import ShopManufacturingOptions from '../components/ShopManufacturingOptions'
 import ProjectAttachmentPicker from '../components/ProjectAttachmentPicker'
+import type { ProjectAttachment } from '../lib/projectAttachments.ts'
+import { analyzeStudioDocument, combinedVisualReferences, composeReferenceSheet, prepareStudioAttachments, studioReferencePrompt } from '../lib/studioAttachments.ts'
 import { PORTALS } from '../config/portals'
 import { REFERENCE_LINKS } from '../config/references'
 import { StudioCoordinator, checkStudio, type SavedStudioJob } from '../lib/studioClient'
@@ -46,12 +48,15 @@ export default function ShopPage() {
   const coordinator = useRef<StudioCoordinator | null>(null)
   const mounted = useRef(false), epoch = useRef(0), objectUrl = useRef('')
   const promptInput = useRef<HTMLTextAreaElement>(null)
-  const operations = useRef({ submit: false, artifact: false, photos: false, status: false })
+  const operations = useRef({ submit: false, artifact: false, photos: false, attachments: false, status: false })
   const [prompt, setPrompt] = useState('')
   const [purpose, setPurpose] = useState<StudioInput['purpose']>('figurine')
   const [textureLimit, setTextureLimit] = useState<TextureLimit>(4096)
   const [profile, setProfile] = useState<GenerationProfile>('standard')
   const [photos, setPhotos] = useState<StudioPhoto[]>([])
+  const [projectFiles, setProjectFiles] = useState<ProjectAttachment[]>([])
+  const [attachmentBusy, setAttachmentBusy] = useState(false)
+  const referenceBriefs = useRef(new Map<string, string>())
   const [owner, setOwner] = useState('')
   const [status, setStatus] = useState<StudioStatus | null>(null)
   const [checking, setChecking] = useState(false)
@@ -77,6 +82,7 @@ export default function ShopPage() {
   const fast = profile === FAST_DRAFT_PROFILE
   const fastAvailable = astraReady
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
+  const handleProjectFiles = useCallback((items: readonly ProjectAttachment[]) => setProjectFiles([...items]), [])
 
   const clearPreview = () => {
     epoch.current++
@@ -221,22 +227,53 @@ export default function ShopPage() {
     return () => window.clearInterval(timer)
   }, [saved, job?.state])
 
+  const resolveProjectReferences = async (maxPromptLength: number, includeBasePhotos: boolean) => {
+    if (!projectFiles.length) return { prompt: prompt.trim(), photos: includeBasePhotos ? photos : [], image: null as string | null, used: 0 }
+    operations.current.attachments = true
+    setAttachmentBusy(true)
+    try {
+      const prepared = await prepareStudioAttachments(projectFiles.map(item => item.file), fast ? 2048 : textureLimit)
+      const briefs: string[] = []
+      for (const attachment of prepared) {
+        if (attachment.localBrief) {
+          briefs.push(attachment.localBrief)
+          continue
+        }
+        if (attachment.needsServerAnalysis) {
+          const cached = referenceBriefs.current.get(attachment.key)
+          const brief = cached || await analyzeStudioDocument(attachment.file)
+          referenceBriefs.current.set(attachment.key, brief)
+          briefs.push(brief)
+        }
+      }
+      const nextPrompt = studioReferencePrompt(prompt.trim(), briefs, maxPromptLength)
+      const derivedPhotos = prepared.flatMap(item => item.previewPhoto ? [item.previewPhoto] : [])
+      const nextPhotos = includeBasePhotos ? combinedVisualReferences(photos, prepared) : derivedPhotos
+      const image = await composeReferenceSheet(derivedPhotos.map(photo => photo.dataUrl))
+      return { prompt: nextPrompt, photos: nextPhotos, image, used: prepared.length }
+    } finally {
+      operations.current.attachments = false
+      if (mounted.current) setAttachmentBusy(false)
+    }
+  }
+
   const generate = async (event: React.FormEvent) => {
     event.preventDefault()
     const flags = operations.current, client = coordinator.current
-    if (flags.submit || flags.photos || flags.artifact || !previousFinished) return
+    if (flags.submit || flags.photos || flags.attachments || flags.artifact || !previousFinished) return
 
     if (fast) {
       if (!fastAvailable || photos.length || purpose === 'terrain' || prompt.trim().length < 3 || prompt.length > 2000) return
       flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt('')
       const controller = new AbortController()
-      const timeout = window.setTimeout(() => controller.abort(), 40_000)
+      const timeout = window.setTimeout(() => controller.abort(), 110_000)
       try {
+        const reference = await resolveProjectReferences(2000, false)
         const response = await fetch('/api/blueprint', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
-          body: JSON.stringify({ worldId: 'enchanted-ai-shop', prompt: prompt.trim(), mode: 'live' }),
+          body: JSON.stringify({ worldId: 'enchanted-ai-shop', prompt: reference.prompt, image: reference.image, mode: 'live' }),
         })
         const body = await response.json()
         if (!response.ok) {
@@ -249,7 +286,9 @@ export default function ShopPage() {
         if (mounted.current) {
           setFastPrompt(prompt.trim())
           setFastResult(result)
-          setNotice('FAST · LIVE Astra specification ready. The visible 3D is a lightweight procedural draft, not an Oracle production mesh; use SLOW · QUALITY for the detailed model workflow.')
+          setNotice(reference.used
+            ? `FAST · LIVE Astra used ${reference.used} attached project reference${reference.used === 1 ? '' : 's'} to shape the generated specification. The visible 3D remains a lightweight procedural draft.`
+            : 'FAST · LIVE Astra specification ready. The visible 3D is a lightweight procedural draft, not an Oracle production mesh; use SLOW · QUALITY for the detailed model workflow.')
         }
       } catch (e) {
         if (mounted.current) setError(e instanceof Error && e.name === 'AbortError' ? 'FAST generation timed out. Your previous preview is unchanged.' : e instanceof Error ? e.message : 'FAST generation failed.')
@@ -261,14 +300,17 @@ export default function ShopPage() {
       return
     }
 
-    if (!status?.ready || !client || (photos.length && !status.photoReady)) return
+    if (!status?.ready || !client) return
     flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt(''); setFastResult(null); setFastPrompt('')
     try {
-      const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt, purpose, textureMaxSize: textureLimit, photos })
+      const reference = await resolveProjectReferences(4000, true)
+      if (reference.photos.length && !status.photoReady) throw new Error('The connected detailed worker has not confirmed visual reference input.')
+      const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt: reference.prompt, purpose, textureMaxSize: textureLimit, photos: reference.photos })
       const value = await client.start(input, record => {
         if (mounted.current) {
           clearPreview(); setSaved(record)
           setJob({ id: record.receipt.id, state: 'pending', detail: JOB_DETAILS.pending })
+          if (reference.used) setNotice(`SLOW · QUALITY submitted with ${reference.used} attached project reference${reference.used === 1 ? '' : 's'} converted into design constraints and/or visual views.`)
         }
       }, owner, true)
       if (mounted.current) setJob(value)
@@ -286,7 +328,7 @@ export default function ShopPage() {
   }
   const previewDemo = () => {
     const value = prompt.trim()
-    if (busy || photoBusy || value.length < 3) return
+    if (busy || photoBusy || attachmentBusy || value.length < 3) return
     setFastResult(null)
     setFastPrompt('')
     setDemoPrompt(value)
@@ -295,7 +337,7 @@ export default function ShopPage() {
   }
   const addPhotos = async (files: FileList | null) => {
     const flags = operations.current
-    if (!files || flags.photos || flags.submit || fast) return
+    if (!files || flags.photos || flags.attachments || flags.submit || fast) return
     if (photos.length + files.length > 3) { setError('Use at most three views of the same object.'); return }
     flags.photos = true; setPhotoBusy(true); setError('')
     try {
@@ -306,9 +348,9 @@ export default function ShopPage() {
     finally { flags.photos = false; if (mounted.current) setPhotoBusy(false) }
   }
   const clearDraft = () => {
-    if (operations.current.submit || operations.current.photos) return
-    if ((prompt || photos.length) && !window.confirm('Clear only the new description and reference images? The displayed model, archive and recovery receipt stay unchanged.')) return
-    setPrompt(''); setPhotos([]); setError('')
+    if (operations.current.submit || operations.current.photos || operations.current.attachments) return
+    if ((prompt || photos.length || projectFiles.length) && !window.confirm('Clear only the new description and reference inputs? The displayed model, archive and recovery receipt stay unchanged.')) return
+    setPrompt(''); setPhotos([]); referenceBriefs.current.clear(); setError('')
     promptInput.current?.focus()
   }
   const prepareIssDraft = (nextPrompt: string) => {
@@ -339,7 +381,7 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 &&
+  const canGenerate = !busy && !photoBusy && !attachmentBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 &&
     (fast ? fastAvailable && !photos.length && purpose !== 'terrain' && prompt.length <= 2000
       : !!coordinator.current && !!status?.ready && (!photos.length || status.photoReady))
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview)
@@ -413,7 +455,8 @@ export default function ShopPage() {
           <label htmlFor="studio-prompt">Describe your model</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={fast ? 2000 : 4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic chess knight with a stable base, smooth material and clean details." required />
           <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
-          <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy} />
+          <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy || attachmentBusy} onChange={handleProjectFiles} />
+          <small>When you generate, compatible PDF/Word/Office files are converted by GPT-6 Astra into a bounded design brief; supported images, video frames and common 3D files become visual references. Stored originals are never executed and MAKE remains validation-required.</small>
           <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D draft · Astra · free' : 'Generate 3D model + materials · free'}</button><small>No customer payment is taken at generation. Manufacturing and delivery are a separate purchase step.</small>
         </form>
         <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : activeReady ? fast ? 'FAST Astra generation available' : 'SLOW quality generation available' : 'Generation temporarily unavailable'}</strong><p>{activeReady ? fast ? 'FAST creates a generated Astra specification and lightweight procedural 3D draft.' : 'SLOW creates the detailed model through the Oracle/Blender workflow.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
