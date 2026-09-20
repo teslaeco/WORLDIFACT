@@ -1,4 +1,3 @@
-/// <reference lib="dom" />
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { referenceApi } from '../server/reference.ts'
@@ -23,8 +22,8 @@ function env() {
 }
 
 test('document reference uses user_data upload, one Astra analysis and deletes the temporary OpenAI file', async () => {
-  const calls: { url: string; method: string; body?: BodyInit | null }[] = []
-  const fetcher = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const calls: { url: string; method: string; body?: unknown }[] = []
+  const fetcher = (async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = String(input), method = init.method || 'GET'
     calls.push({ url, method, body: init.body })
     if (url.endsWith('/v1/files') && method === 'POST') {
@@ -106,7 +105,7 @@ test('reference analysis rejects cross-origin, unsupported video and oversized d
 
 test('temporary uploaded file is deleted even when Astra analysis fails', async () => {
   const calls: string[] = []
-  const fetcher = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const fetcher = (async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = String(input); calls.push(`${init.method || 'GET'} ${url}`)
     if (url.endsWith('/v1/files') && init.method === 'POST') return Response.json({ id: 'file-cleanup123' })
     if (url.endsWith('/v1/responses')) return new Response('busy', { status: 429 })
