@@ -234,3 +234,71 @@ export function combinedVisualReferences(base: StudioPhoto[], attachments: Studi
   if (base.length + derived.length > 4) throw new Error('Use at most four visual views total across reference images, video frames and 3D-file previews.')
   return [...base, ...derived]
 }
+
+
+async function loadDataImage(dataUrl: string) {
+  return await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('A prepared visual reference could not be loaded.'))
+    image.src = dataUrl
+  })
+}
+
+export async function composeReferenceSheet(dataUrls: string[]) {
+  const unique = dataUrls.filter(Boolean).slice(0, 4)
+  if (!unique.length) return null
+  if (unique.length === 1) return unique[0]
+  const images = await Promise.all(unique.map(loadDataImage))
+  const canvas = document.createElement('canvas')
+  const size = 1536
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('This browser cannot prepare the combined visual reference.')
+  ctx.fillStyle = '#eef2f3'
+  ctx.fillRect(0, 0, size, size)
+  const cells = unique.length <= 2
+    ? [{ x: 0, y: 0, w: size / unique.length, h: size }].flatMap((cell, index, array) =>
+        array.length === 1 ? Array.from({ length: unique.length }, (_, i) => ({ x: i * size / unique.length, y: 0, w: size / unique.length, h: size })) : [cell])
+    : [
+        { x: 0, y: 0, w: size / 2, h: size / 2 },
+        { x: size / 2, y: 0, w: size / 2, h: size / 2 },
+        { x: 0, y: size / 2, w: size / 2, h: size / 2 },
+        { x: size / 2, y: size / 2, w: size / 2, h: size / 2 },
+      ]
+  const actualCells = unique.length <= 2
+    ? Array.from({ length: unique.length }, (_, i) => ({ x: i * size / unique.length, y: 0, w: size / unique.length, h: size }))
+    : cells
+  images.forEach((image, index) => {
+    const cell = actualCells[index]
+    const scale = Math.min(cell.w / image.naturalWidth, cell.h / image.naturalHeight)
+    const width = image.naturalWidth * scale
+    const height = image.naturalHeight * scale
+    ctx.drawImage(image, cell.x + (cell.w - width) / 2, cell.y + (cell.h - height) / 2, width, height)
+  })
+  return canvasJpeg(canvas)
+}
+
+export async function prepareStudioAttachments(files: readonly File[], textureMaxSize: TextureLimit) {
+  if (files.length > MAX_EXTRA_REFERENCES) throw new Error('Attach at most two extra reference files.')
+  const prepared: StudioAttachment[] = []
+  for (const file of files) prepared.push(await prepareStudioAttachment(file, textureMaxSize))
+  return prepared
+}
+
+export async function resolveAttachmentBriefs(attachments: StudioAttachment[], fetcher: typeof fetch = fetch) {
+  const briefs: string[] = []
+  for (const attachment of attachments) {
+    if (attachment.localBrief) {
+      briefs.push(attachment.localBrief)
+      continue
+    }
+    if (attachment.needsServerAnalysis) {
+      const brief = attachment.analysisBrief || await analyzeStudioDocument(attachment.file, fetcher)
+      attachment.analysisBrief = brief
+      briefs.push(brief)
+    }
+  }
+  return briefs
+}
