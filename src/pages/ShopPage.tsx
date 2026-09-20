@@ -257,7 +257,13 @@ export default function ShopPage() {
         if (attachments.some(item => item.name === file.name && item.bytes === file.size) || prepared.some(item => item.name === file.name && item.bytes === file.size)) continue
         prepared.push(await prepareStudioAttachment(file, textureLimit))
       }
-      if (mounted.current) setAttachments(previous => [...previous, ...prepared].slice(0, MAX_EXTRA_REFERENCES))
+      if (mounted.current) {
+        setAttachments(previous => [...previous, ...prepared].slice(0, MAX_EXTRA_REFERENCES))
+        if (prepared.some(item => !!item.previewPhoto) && profile === FAST_DRAFT_PROFILE) {
+          setProfile('standard')
+          setNotice('Visual/video/3D references use SLOW · QUALITY. Your prepared reference was kept and FAST was switched off.')
+        }
+      }
     } catch (e) {
       if (mounted.current) setError(e instanceof Error ? e.message : 'The extra reference file could not be prepared.')
     } finally {
