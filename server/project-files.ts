@@ -203,9 +203,12 @@ export async function projectFileApi(request: Request, env: ProjectFileEnv, fetc
 
     if (request.method !== 'PUT') return json({ error: 'Use GET, PUT or DELETE.' }, 405)
     await rateLimit(request, env, `upload:${auth.projectId}`)
+    const clientSize = Number(request.headers.get('X-WORLDIFACT-File-Size') || '0')
     const declared = Number(request.headers.get('Content-Length') || '0')
-    if (!Number.isSafeInteger(declared) || declared <= 0 || declared > PROJECT_ATTACHMENT_MAX_BYTES || !request.body)
+    if (!Number.isSafeInteger(clientSize) || clientSize <= 0 || clientSize > PROJECT_ATTACHMENT_MAX_BYTES || !request.body)
       throw new ProjectFileError('Each project file must have a known size from 1 byte to 100 MB.', 413)
+    if (declared && (!Number.isSafeInteger(declared) || declared !== clientSize))
+      throw new ProjectFileError('Project file size metadata does not match the request body.', 400)
     const name = safeFileName(request)
     const category = safeCategory(request.headers.get('X-WORLDIFACT-Category'))
     if (attachmentCategory({ name, type: request.headers.get('Content-Type') }) !== category)
@@ -220,7 +223,7 @@ export async function projectFileApi(request: Request, env: ProjectFileEnv, fetc
         Authorization: `Bearer ${env.ORACLE_API_TOKEN}`,
         Accept: 'application/json',
         'Content-Type': contentType,
-        'Content-Length': String(declared),
+        'X-WORLDIFACT-File-Size': String(clientSize),
         'X-WORLDIFACT-File-Name': encodeURIComponent(name),
         'X-WORLDIFACT-Category': category,
       },
