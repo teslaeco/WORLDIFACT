@@ -74,6 +74,7 @@ test('signed upload streams one allowed file to the matching Oracle slot and pre
       'X-WORLDIFACT-File-Name': encodeURIComponent('concept.docx'),
       'X-WORLDIFACT-Category': 'document',
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'X-WORLDIFACT-File-Size': '4',
       'Content-Length': '4',
     },
     body: new Uint8Array([1, 2, 3, 4]),
@@ -87,7 +88,7 @@ test('signed upload streams one allowed file to the matching Oracle slot and pre
     assert.equal(headers.get('Authorization'), 'Bearer oracle-secret')
     assert.equal(headers.get('X-WORLDIFACT-Category'), 'document')
     assert.equal(decodeURIComponent(headers.get('X-WORLDIFACT-File-Name')!), 'concept.docx')
-    assert.equal(headers.get('Content-Length'), '4')
+    assert.equal(headers.get('X-WORLDIFACT-File-Size'), '4')
     return Response.json({ stored: true, file: { slot: 0, name: 'concept.docx', bytes: 4 } }, { status: 201 })
   })
   assert.equal(response?.status, 201)
@@ -113,6 +114,7 @@ test('project-file proxy rejects wrong origin, unsupported files, oversize and m
       'X-WORLDIFACT-File-Name': encodeURIComponent('run.exe'),
       'X-WORLDIFACT-Category': 'document',
       'Content-Type': 'application/x-msdownload',
+      'X-WORLDIFACT-File-Size': '4',
       'Content-Length': '4',
     },
     body: new Uint8Array([1, 2, 3, 4]),
@@ -126,7 +128,8 @@ test('project-file proxy rejects wrong origin, unsupported files, oversize and m
       'X-WORLDIFACT-File-Name': encodeURIComponent('movie.mp4'),
       'X-WORLDIFACT-Category': 'video',
       'Content-Type': 'video/mp4',
-      'Content-Length': String(PROJECT_ATTACHMENT_MAX_BYTES + 1),
+      'X-WORLDIFACT-File-Size': String(PROJECT_ATTACHMENT_MAX_BYTES + 1),
+      'Content-Length': '1',
     },
     body: new Uint8Array([1]),
   }), env, async () => { throw new Error('network must not run') })
