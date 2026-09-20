@@ -4,6 +4,7 @@ import { oracleJobApi } from "./oracle-jobs.ts";
 import { studioApi } from "./studio.ts";
 import { avatarApi } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
+import { referenceApi } from "./reference.ts";
 import {
   astraGenerationSchema,
   assetSpecForBlueprint,
@@ -79,6 +80,8 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (avatar) return avatar;
   const projectFiles = await projectFileApi(request, env, fetcher);
   if (projectFiles) return projectFiles;
+  const reference = await referenceApi(request, env, fetcher);
+  if (reference) return reference;
   if (url.pathname === "/api/studio" || url.pathname.startsWith("/api/studio/")) return studioApi(request, env, fetcher);
   if (url.pathname.startsWith("/api/oracle/jobs")) return oracleJobApi(request, env, fetcher);
   if (url.pathname === "/api/platform" || url.pathname.startsWith("/api/platform/")) return platformApi(request, env, fetcher);
