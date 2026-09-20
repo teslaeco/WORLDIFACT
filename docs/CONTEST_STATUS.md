@@ -1,3 +1,33 @@
+# WORLDIFACT — local project attachments staging
+
+Date: 20 September 2026.
+
+## VERIFIED — implementation scope
+
+- Branch: `feat/project-attachments-100mb-20260920`.
+- Added one shared attachment surface to **AI Shop** and **AI Game Lab**.
+- Each surface accepts at most **2 project files**, with a hard **100 MB per-file** client validation ceiling.
+- Supported local project references:
+  - documents: PDF, DOC/DOCX, ODT, RTF, TXT, Markdown, CSV, JSON;
+  - 3D: GLB/GLTF, FBX, OBJ, STL, PLY, USD/USDZ, BLEND, MTL/BIN;
+  - textures/images: PNG/JPG/WebP/TIFF/BMP/EXR/HDR;
+  - video: MP4/WebM/MOV/M4V;
+  - ZIP packages.
+- Executable / script / HTML content is not accepted by the shared picker.
+- Texture/image and video attachments receive local browser previews; document/3D/archive attachments remain local project references.
+- The attachment picker uses a best-effort IndexedDB device archive. If browser quota/storage fails, files remain usable in the current session and the UI says persistence failed.
+- **Truth boundary:** arbitrary 100 MB PDF/Word/3D/video files are **not** automatically uploaded to GPT-6 Astra, Oracle, suppliers or manufacturing. The existing reviewed image-reference controls remain the only binary reference inputs actually sent into generation. This avoids falsely claiming that unsupported file content affected a model.
+- Task brief: `docs/CODEX_TASK_PROJECT_ATTACHMENTS_20260920.md`.
+- No paid generation request is required by this change.
+
+## RELEASE GATE
+
+- Exact-head CI must be green before merge.
+- Merge and production deployment require explicit owner approval after CI.
+- MAKE remains **VALIDATION REQUIRED**.
+
+---
+
 # WORLDIFACT — Fan Queen / swimming / equipment RELEASED
 
 Date: 19 September 2026.

@@ -10,6 +10,7 @@ import { routeForPortal } from '../lib/portalRouting'
 import { createWorldObject, disposeObject } from '../lib/worldGeometry'
 import { DEMO_EXAMPLES } from '../lib/demoExamples'
 import { REFERENCE_LINKS } from '../config/references'
+import ProjectAttachmentPicker from './ProjectAttachmentPicker'
 
 const MAX_REFERENCE_BYTES = 6 * 1024 * 1024
 function download(data: Blob, name: string) {
@@ -130,6 +131,7 @@ function WorldBlueprintLab() {
         <label className="scan-input">Scan with phone camera · BETA<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
         {image && <><img className="reference-preview" src={image} alt="Selected reference" /><button disabled={busy} onClick={() => setImage(null)}>Remove reference</button></>}
         {!health.generationReady && image && <small>The no-cost scene demo uses text only. LIVE image analysis starts only when the reviewed Astra generation gate is enabled.</small>}
+        <ProjectAttachmentPicker scope="game-lab" disabled={busy} />
         {health.accessRequired && <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /></label>}
         <button className="primary" disabled={busy || prompt.trim().length < 3} onClick={generatePrimary}>{busy ? `Astra working · ${seconds}s` : health.generationReady ? 'Generate world blueprint · Astra' : 'Generate DEMO world · no API cost'}</button>
         <button disabled={busy} onClick={() => generateDemo()}>Refresh DEMO locally</button>
