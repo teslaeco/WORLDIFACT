@@ -9,6 +9,7 @@ import {
   type ProjectAttachment,
   type ProjectAttachmentScope,
 } from '../lib/projectAttachments.ts'
+import { checkProjectFileRemote, syncProjectAttachments, type ProjectFileSyncState } from '../lib/projectFileRemote.ts'
 import './ProjectAttachmentPicker.css'
 
 function Preview({ attachment }: { attachment: ProjectAttachment }) {
@@ -36,7 +37,19 @@ export default function ProjectAttachmentPicker({
   const [attachments, setAttachments] = useState<ProjectAttachment[]>([])
   const [message, setMessage] = useState('')
   const [restoreDone, setRestoreDone] = useState(false)
+  const [remote, setRemote] = useState<ProjectFileSyncState>({ mode: 'checking', message: 'Checking Oracle project-file storage…' })
   const label = scope === 'shop' ? 'Model project files' : 'Game project files'
+
+  useEffect(() => {
+    let closed = false
+    checkProjectFileRemote().then(status => {
+      if (closed) return
+      setRemote(status.ready
+        ? { mode: 'oracle', projectId: '', message: 'Oracle project-file storage is ready. Selected files will sync through the authenticated server bridge.' }
+        : { mode: 'local', message: 'Oracle project-file storage is not ready on the connected worker. Local attachment mode remains available.' })
+    })
+    return () => { closed = true }
+  }, [])
 
   useEffect(() => {
     let closed = false
@@ -58,11 +71,22 @@ export default function ProjectAttachmentPicker({
   const persist = async (next: ProjectAttachment[]) => {
     setAttachments(next)
     onChange?.(next)
+    let localMessage = ''
     try {
       await saveProjectAttachments(scope, next)
-      setMessage(next.length ? 'Saved locally on this device.' : 'Local project files cleared.')
+      localMessage = next.length ? 'Saved locally on this device.' : 'Local project files cleared.'
     } catch {
-      setMessage('Files are attached for this browser session, but this device could not persist them locally.')
+      localMessage = 'Files are attached for this browser session, but this device could not persist them locally.'
+    }
+    setMessage(localMessage)
+    try {
+      setRemote({ mode: 'checking', message: 'Syncing project files to Oracle…' })
+      const state = await syncProjectAttachments(scope, next)
+      setRemote(state)
+      setMessage(`${localMessage} ${state.message}`)
+    } catch (error) {
+      setRemote({ mode: 'local', message: 'Oracle sync failed safely; local files are unchanged.' })
+      setMessage(`${localMessage} ${error instanceof Error ? error.message : 'Oracle sync failed safely.'}`)
     }
   }
 
@@ -79,7 +103,7 @@ export default function ProjectAttachmentPicker({
 
   return <section className="project-attachments" aria-label={label}>
     <div className="project-attachments-head">
-      <div><strong>{label}</strong><small>LOCAL REFERENCE · max {PROJECT_ATTACHMENT_LIMIT} files · 100 MB each</small></div>
+      <div><strong>{label}</strong><small>{remote.mode === 'oracle' ? 'ORACLE + LOCAL REFERENCE' : remote.mode === 'checking' ? 'CHECKING ORACLE' : 'LOCAL REFERENCE'} · max {PROJECT_ATTACHMENT_LIMIT} files · 100 MB each</small></div>
       <span>{attachments.length}/{PROJECT_ATTACHMENT_LIMIT}</span>
     </div>
     <label className="project-attachment-input">
@@ -93,7 +117,7 @@ export default function ProjectAttachmentPicker({
       />
     </label>
     <small className="project-attachment-types">Documents: PDF, DOC/DOCX, ODT, RTF, TXT/MD/CSV/JSON · 3D: GLB/GLTF, FBX, OBJ, STL, PLY, USD/USDZ, BLEND, MTL/BIN · textures: PNG/JPG/WebP/TIFF/BMP/EXR/HDR · video: MP4/WebM/MOV/M4V · ZIP.</small>
-    <small className="project-attachment-boundary">These attachments stay local to this browser/device in this release. They are not uploaded to GPT-6 Astra, Oracle, a supplier or manufacturing automatically. Existing image-reference controls remain the only binary reference inputs sent to generation.</small>
+    <small className="project-attachment-boundary">{remote.message} Even when Oracle sync is active, these files are stored as project references only: they are not automatically passed into GPT-6 Astra/model generation, a supplier or manufacturing. Existing dedicated image-reference controls remain the binary inputs actually sent into generation.</small>
     {attachments.length > 0 && <div className="project-attachment-list">
       {attachments.map(attachment => <article key={attachment.id} className="project-attachment-card">
         <div className="project-attachment-meta">
