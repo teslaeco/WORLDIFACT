@@ -38,6 +38,7 @@ test('Shop and Game Lab both expose the shared local project-file picker and its
   assert.match(shop, /ProjectAttachmentPicker scope="shop"/)
   assert.match(lab, /ProjectAttachmentPicker scope="game-lab"/)
   assert.match(picker, /max {PROJECT_ATTACHMENT_LIMIT} files · 100 MB each/)
-  assert.match(picker, /not uploaded to GPT-6 Astra, Oracle, a supplier or manufacturing automatically/)
+  assert.match(picker, /not automatically passed into GPT-6 Astra\/model generation, a supplier or manufacturing/)
+  assert.match(picker, /ORACLE \+ LOCAL REFERENCE/)
   assert.match(picker, /PDF \/ Word \/ 3D \/ texture \/ video \/ ZIP/)
 })

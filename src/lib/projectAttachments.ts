@@ -1,8 +1,21 @@
-export const PROJECT_ATTACHMENT_LIMIT = 2
-export const PROJECT_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024
+import {
+  PROJECT_ATTACHMENT_ACCEPT,
+  PROJECT_ATTACHMENT_LIMIT,
+  PROJECT_ATTACHMENT_MAX_BYTES,
+  attachmentCategory,
+  validateAttachmentMetadata,
+  type ProjectAttachmentCategory,
+  type ProjectAttachmentScope,
+} from './projectAttachmentPolicy.ts'
 
-export type ProjectAttachmentScope = 'shop' | 'game-lab'
-export type ProjectAttachmentCategory = 'document' | 'model-3d' | 'texture' | 'video' | 'archive'
+export {
+  PROJECT_ATTACHMENT_ACCEPT,
+  PROJECT_ATTACHMENT_LIMIT,
+  PROJECT_ATTACHMENT_MAX_BYTES,
+  attachmentCategory,
+  type ProjectAttachmentCategory,
+  type ProjectAttachmentScope,
+}
 
 export type ProjectAttachment = {
   id: string
@@ -18,50 +31,8 @@ export type ProjectAttachment = {
 type FileLike = Pick<File, 'name' | 'type' | 'size' | 'lastModified'>
 type StoredAttachment = Omit<ProjectAttachment, 'file'> & { blob: Blob; key: string }
 
-const CATEGORY_EXTENSIONS: Record<ProjectAttachmentCategory, readonly string[]> = {
-  document: ['pdf', 'doc', 'docx', 'odt', 'rtf', 'txt', 'md', 'csv', 'json'],
-  'model-3d': ['glb', 'gltf', 'fbx', 'obj', 'stl', 'ply', 'usd', 'usdz', 'blend', 'mtl', 'bin'],
-  texture: ['png', 'jpg', 'jpeg', 'webp', 'tif', 'tiff', 'bmp', 'exr', 'hdr'],
-  video: ['mp4', 'webm', 'mov', 'm4v'],
-  archive: ['zip'],
-}
-
-export const PROJECT_ATTACHMENT_ACCEPT = Object.values(CATEGORY_EXTENSIONS)
-  .flat()
-  .map(extension => `.${extension}`)
-  .join(',')
-
-const DANGEROUS_TYPES = new Set([
-  'application/x-msdownload',
-  'application/x-dosexec',
-  'application/x-sh',
-  'application/javascript',
-  'text/javascript',
-  'text/html',
-])
-
-export function attachmentExtension(name: string) {
-  const normalized = name.trim().toLowerCase()
-  const dot = normalized.lastIndexOf('.')
-  return dot > -1 && dot < normalized.length - 1 ? normalized.slice(dot + 1) : ''
-}
-
-export function attachmentCategory(file: Pick<FileLike, 'name' | 'type'>): ProjectAttachmentCategory | null {
-  if (file.type && DANGEROUS_TYPES.has(file.type.toLowerCase())) return null
-  const extension = attachmentExtension(file.name)
-  for (const [category, extensions] of Object.entries(CATEGORY_EXTENSIONS) as [ProjectAttachmentCategory, readonly string[]][]) {
-    if (extensions.includes(extension)) return category
-  }
-  return null
-}
-
 export function validateProjectAttachment(file: FileLike) {
-  const category = attachmentCategory(file)
-  if (!category) throw new Error('Unsupported project file. Use PDF/Word/text, common 3D model, texture, video or ZIP formats.')
-  if (!Number.isFinite(file.size) || file.size <= 0) throw new Error('The selected project file is empty.')
-  if (file.size > PROJECT_ATTACHMENT_MAX_BYTES) throw new Error('Each project file must be 100 MB or smaller.')
-  if (!file.name.trim() || file.name.length > 180) throw new Error('Use a project file name between 1 and 180 characters.')
-  return category
+  return validateAttachmentMetadata(file)
 }
 
 export function appendProjectAttachments(current: readonly ProjectAttachment[], incoming: readonly File[], scope: ProjectAttachmentScope) {

@@ -1,0 +1,57 @@
+name: Review Oracle project-file patch
+on:
+  pull_request:
+    paths:
+      - 'server/project-files.ts'
+      - 'src/lib/projectAttachmentPolicy.ts'
+      - 'src/lib/projectFileRemote.ts'
+      - 'src/lib/projectAttachments.ts'
+      - 'src/components/ProjectAttachmentPicker.tsx'
+      - 'tools/project_files/**'
+      - 'tests/project-files-api.test.ts'
+      - '.github/workflows/project-files-review.yml'
+      - 'docs/CONTEST_STATUS.md'
+permissions:
+  contents: read
+concurrency:
+  group: project-files-review-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .upstream/project-files-froge
+          persist-credentials: false
+      - name: Review Python 3.9 syntax
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for path in Path('tools/project_files').glob('*.py'):
+              ast.parse(path.read_text(), filename=str(path), feature_version=(3,9))
+          print('Project-file maintenance sources parse as Python 3.9.')
+          PY
+      - name: Reconstruct exact FAST v33 and review narrow project-file patch
+        env:
+          FROGE_SOURCE_ROOT: ${{ github.workspace }}/.upstream/project-files-froge/oracle_connector
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B tools/project_files/test_project_files.py -v
+      - name: Compile project-file maintenance helpers
+        run: python3 -m py_compile tools/project_files/patch_server.py tools/project_files/install_project_files.py
+      - name: Review rollback-safe installer against temp fixtures
+        env:
+          FROGE_SOURCE_ROOT: ${{ github.workspace }}/.upstream/project-files-froge/oracle_connector
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B tools/project_files/test_install_project_files.py -v
+      - name: Default installer invocation must stay plan-only
+        run: python3 -B tools/project_files/install_project_files.py
+      - name: Confirm no maintenance is executed by review
+        run: |
+          test ! -e tools/project_files/INSTALL_STATUS.json
+          echo 'PASS: source review only; no Oracle connection, restart, upload or AI request.'
