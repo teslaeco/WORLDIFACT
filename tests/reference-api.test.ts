@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { referenceApi } from '../server/reference.ts'
