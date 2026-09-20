@@ -42,8 +42,15 @@ jobs:
           FROGE_SOURCE_ROOT: ${{ github.workspace }}/.upstream/project-files-froge/oracle_connector
           PYTHONDONTWRITEBYTECODE: '1'
         run: python3 -B tools/project_files/test_project_files.py -v
-      - name: Compile patch helper
-        run: python3 -m py_compile tools/project_files/patch_server.py
+      - name: Compile project-file maintenance helpers
+        run: python3 -m py_compile tools/project_files/patch_server.py tools/project_files/install_project_files.py
+      - name: Review rollback-safe installer against temp fixtures
+        env:
+          FROGE_SOURCE_ROOT: ${{ github.workspace }}/.upstream/project-files-froge/oracle_connector
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B tools/project_files/test_install_project_files.py -v
+      - name: Default installer invocation must stay plan-only
+        run: python3 -B tools/project_files/install_project_files.py
       - name: Confirm no maintenance is executed by review
         run: |
           test ! -e tools/project_files/INSTALL_STATUS.json
