@@ -1,3 +1,72 @@
+# WORLDIFACT — project attachments + Oracle bridge release
+
+Date: 20 September 2026.
+
+## VERIFIED — local attachment release (#57)
+
+- PR #57 **MERGED**: https://github.com/teslaeco/WORLDIFACT/pull/57
+- Merge: `8be766130ad56da761ef20bbb2155cfa54a4db36`.
+- Production deploy `35504155102`: **SUCCESS**.
+- Verify `35504155105`: **SUCCESS**.
+- Cloudflare version: `7dbab147-8e17-4edb-935b-ccfb03ff79be`.
+- **223 tests PASS**.
+- Shop + Game Lab accept max **2 local project references**, max **100 MB each**, across document, 3D, texture, video and ZIP allow-lists.
+
+## VERIFIED — Oracle-backed web bridge release (#59)
+
+- PR #59 **MERGED**: https://github.com/teslaeco/WORLDIFACT/pull/59
+- Exact reviewed head `c2fc06bac8743d65279ede9395ea64540b3ee8d4`: **Verify WORLDIFACT SUCCESS** and **Review Oracle project-file patch SUCCESS**.
+- Merge: `7efd491926c96cbca61b9eb9fde22696b0d2dbc7`.
+- Post-merge Verify `35504945660`: **SUCCESS**.
+- Production deploy `35504945607`: **SUCCESS**.
+- Cloudflare version: `50c4689e-240e-4716-855c-d5786c904502`.
+- **227 tests PASS**.
+- Release smoke: **PASS**; no paid AI request.
+- Existing production generation remains **LIVE / READY**.
+- Existing Oracle bridge remains **CONNECTOR_READY**, connector version **33**.
+- Browser now has a fail-closed same-origin project-file client:
+  - signed 24-hour project session;
+  - slot 0/1 only;
+  - 100 MB/file;
+  - same-origin and rate-limit checks;
+  - raw streaming proxy; Oracle bearer token remains server-side;
+  - automatic local fallback when Oracle storage capability is absent.
+
+## VERIFIED — reviewed Oracle v33 patch package
+
+- Reviewed exact current FAST v33 `server.py` SHA-256:
+  `1f09db9835e9ee22361e468d051da7e847dbff36fe7e52a2f2c9c6f6337402b9`.
+- Reviewed project-file patched `server.py` SHA-256:
+  `6795c356d67c72f4aed545505772182f907c9a242ad0cf0076689720a386bb14`.
+- `tools/project_files/patch_server.py` adds private `state/project-files` storage with two slots, 100 MB/file, SHA-256 metadata, a 4 GB free-disk floor, seven-day retention, list/delete and health capability advertisement.
+- `tools/project_files/install_project_files.py` is rollback-safe:
+  - exact source hash required;
+  - refuses active model jobs;
+  - backs up `server.py`;
+  - changes only `server.py`;
+  - restarts only `froge-worker.service`;
+  - performs authenticated local health verification;
+  - rolls back automatically on verification failure;
+  - makes **no AI/model request**.
+- CI reconstructed the exact current v33 worker from the pinned public source, compiled the patch and installer and passed success/rollback/active-job/source-mismatch tests.
+
+## BLOCKED — Oracle VM runtime installation
+
+- The website has the Oracle project-file bridge deployed, but **Oracle project-file storage is not yet VERIFIED LIVE**.
+- The current ChatGPT GitHub connection can merge/deploy WORLDIFACT and the production workflow can sync the existing `ORACLE_ENDPOINT` / `ORACLE_API_TOKEN` into Cloudflare, but the available toolset does **not** expose the Oracle Cloud Shell / SSH private-key execution channel required to replace `~/froge-connector/server.py` and restart the VM service.
+- The existing Oracle HTTP v33 API has health/jobs/artifact functions; it has no reviewed self-update endpoint. Do not bypass that boundary through model execution.
+- Therefore do **not** claim Oracle-backed file persistence until authenticated `/v1/health` reports:
+  - `projectFilesRevision: 1`
+  - `projectFileMaxBytes: 104857600`
+  - `projectFileMaxCount: 2`
+- Until then, the deployed UI remains safely in **LOCAL REFERENCE** mode; ordinary Astra/Oracle model generation remains unchanged.
+
+## Truth boundary
+
+Project files stored locally—or later in the Oracle project-file vault—are references only. PDF/Word/3D/video/ZIP content is not claimed to have influenced GPT-6 Astra or Blender until a separately reviewed parser/import pipeline actually feeds that content to generation. MAKE remains **VALIDATION REQUIRED**.
+
+---
+
 # WORLDIFACT — local project attachments staging
 
 Date: 20 September 2026.
