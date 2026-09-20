@@ -1,3 +1,52 @@
+# WORLDIFACT — AI Shop extra reference files staging
+
+Date: 20 September 2026.
+
+## VERIFIED — API capability and boundary
+
+- Official GPT-6 Astra model page: https://developers.openai.com/api/docs/models/gpt-6-astra
+  - text + image input are supported;
+  - **video input is not supported** by GPT-6 Astra.
+- Official OpenAI file-input guide: https://developers.openai.com/api/docs/guides/file-inputs
+  - Responses API accepts PDF, Word/ODT/RTF, PowerPoint, spreadsheets and common text/code files as `input_file`;
+  - file inputs are limited to **<50 MB per file and 50 MB total per request**.
+- Official Files API: https://developers.openai.com/api/reference/typescript/resources/files/methods/create
+  - uploads use `purpose=user_data` for model input;
+  - uploaded files are explicitly deleted after WORLDIFACT reference analysis.
+- Because Astra does not accept video directly, WORLDIFACT does **not** claim video-model understanding. Video references are processed locally in the browser into a representative JPEG frame; the original video is not uploaded to OpenAI or Oracle.
+
+## IMPLEMENTED — branch only, NOT production
+
+- Branch: `feat/shop-reference-files-video-20260920`.
+- AI Shop accepts **maximum 2 extra reference files** in addition to the existing reference-photo flow.
+- Supported extra references:
+  - documents: PDF, DOC/DOCX, ODT/RTF, PPT/PPTX, XLS/XLSX, TXT/MD/JSON/CSV/TSV/XML/HTML;
+  - 3D references: GLB/GLTF, OBJ, STL, FBX, 3MF;
+  - images/textures: JPG/JPEG, PNG, WebP;
+  - video: MP4, WebM, MOV, M4V.
+- Size guards:
+  - document: max **20 MB each**;
+  - 3D reference: max **48 MB each**;
+  - image reference: max **12 MB each**;
+  - video reference: max **100 MB each**.
+- Video and supported 3D files are converted **locally** into visual reference previews; their original bytes are not sent to the Oracle Studio job.
+- Plain text/code-like references are read locally.
+- PDF/Word/Office documents use a separate bounded server-side Astra reference-analysis endpoint. The temporary OpenAI file is uploaded as `user_data`, converted to a concise 3D-design brief, then deleted.
+- SLOW · QUALITY can combine normal reference photos with prepared video/3D/image previews, with the existing total visual-reference and Studio body limits still enforced.
+- FAST · DRAFT accepts document/text briefs only; visual/video/3D references automatically use SLOW · QUALITY.
+- No arbitrary executable/archive format is accepted. No uploaded file is executed.
+- No raw document is persisted in WORLDIFACT.
+- MAKE remains **VALIDATION REQUIRED**.
+
+## COST / RELEASE GATE
+
+- Document analysis introduces an additional paid GPT-6 Astra request when a PDF/Word/Office document must be interpreted.
+- Video-frame extraction, 3D preview extraction and plain-text reading are local and do not use the API.
+- CI tests use mocked OpenAI responses and make **no paid provider calls**.
+- **NO-GO for merge/production deployment until exact-head CI is green and the owner explicitly approves the extra paid Astra document-analysis call plus merge/deploy.**
+
+---
+
 # WORLDIFACT — Fan Queen / swimming / equipment RELEASED
 
 Date: 19 September 2026.

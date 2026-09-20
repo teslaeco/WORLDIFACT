@@ -32,6 +32,13 @@
 .native-shop-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .native-shop-photos img { width: 100%; height: 140px; object-fit: contain; background: #09141b; }
 .native-shop-photos button { width: 100%; font-size: 0.8rem; }
+.native-shop-extra-upload { margin-top: 4px; background: #1b3440; border-style: dashed; }
+.native-shop-attachments { display: grid; gap: 10px; margin: 8px 0 14px; }
+.native-shop-attachments article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px; border: 1px solid #476470; border-radius: 9px; background: #122832; overflow-wrap: anywhere; }
+.native-shop-attachments article > div { min-width: 0; }
+.native-shop-attachments strong { display: block; font-size: .88rem; }
+.native-shop-attachments img { grid-column: 1 / -1; width: 100%; max-height: 180px; object-fit: contain; border-radius: 7px; background: #09141b; }
+.native-shop-attachments button { min-height: 36px; padding: 7px 10px; font-size: .75rem; }
 .native-shop-connection, .shop-customer-status { border: 1px solid #536876; background: #122631; border-radius: 10px; padding: 14px; margin: 16px 0; }
 .native-shop-error { border-left: 4px solid #f0a08d; padding: 12px; background: #452c32; overflow-wrap: anywhere; }
 .native-shop-views, .native-shop-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
@@ -76,6 +83,8 @@
  .native-shop-sample { min-height: 260px; height: 420px; max-height: 60dvh; }
  .native-shop .oracle-model-canvas { height: 380px; }
  .shop-make-controls, .shop-dimensions, .shop-generation-mode-grid { grid-template-columns: 1fr; }
+ .native-shop-attachments article { grid-template-columns: 1fr; }
+ .native-shop-attachments button { width: 100%; }
 }
 
 .demo-shop-preview { margin-top: 12px; }

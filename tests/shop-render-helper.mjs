@@ -15,6 +15,7 @@ import * as view from '../src/lib/studioView.ts'
 import * as draft from '../src/lib/studioDraft.ts'
 import * as glb from '../src/lib/glb.ts'
 import * as shopManufacturing from '../src/lib/shopManufacturing.ts'
+import * as studioAttachments from '../src/lib/studioAttachments.ts'
 import * as blueprint from '../src/lib/blueprint.ts'
 
 async function loadShopManufacturingOptions(react) {
@@ -52,7 +53,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       const modules = { '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
-        '../lib/blueprint': blueprint }
+        '../lib/blueprint': blueprint, '../lib/studioAttachments': studioAttachments }
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
