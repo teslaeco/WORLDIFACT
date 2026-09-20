@@ -117,7 +117,7 @@ export default function ProjectAttachmentPicker({
       />
     </label>
     <small className="project-attachment-types">Documents: PDF, DOC/DOCX, ODT, RTF, TXT/MD/CSV/JSON · 3D: GLB/GLTF, FBX, OBJ, STL, PLY, USD/USDZ, BLEND, MTL/BIN · textures: PNG/JPG/WebP/TIFF/BMP/EXR/HDR · video: MP4/WebM/MOV/M4V · ZIP.</small>
-    <small className="project-attachment-boundary">{remote.message} Even when Oracle sync is active, these files are stored as project references only: they are not automatically passed into GPT-6 Astra/model generation, a supplier or manufacturing. Existing dedicated image-reference controls remain the binary inputs actually sent into generation.</small>
+    <small className="project-attachment-boundary">{remote.message} When you press Generate, compatible PDF/Word/Office files can be summarized by the bounded GPT-6 Astra reference analyzer, while supported images, video frames and common 3D files are converted locally into visual references. Oracle sync is storage only. Originals are never executed, and no file is sent to a supplier or manufacturing automatically.</small>
     {attachments.length > 0 && <div className="project-attachment-list">
       {attachments.map(attachment => <article key={attachment.id} className="project-attachment-card">
         <div className="project-attachment-meta">
