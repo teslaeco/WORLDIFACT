@@ -1,0 +1,99 @@
+.project-attachments {
+  display:grid;
+  gap:.6rem;
+  padding:.75rem;
+  border:1px solid #46616a;
+  border-radius:10px;
+  background:#102630;
+}
+.project-attachments-head {
+  display:flex;
+  justify-content:space-between;
+  gap:.75rem;
+  align-items:flex-start;
+}
+.project-attachments-head > div { min-width:0; }
+.project-attachments-head > span {
+  flex:0 0 auto;
+  padding:.2rem .45rem;
+  border-radius:999px;
+  background:#203d47;
+  font-size:.75rem;
+  font-weight:800;
+}
+.project-attachment-input {
+  display:grid;
+  gap:.35rem;
+  padding:.55rem;
+  border:1px dashed #6a8790;
+  border-radius:8px;
+  background:#142d37;
+  font-size:.82rem;
+  font-weight:700;
+}
+.project-attachment-input input { width:100%; font-size:.76rem; }
+.project-attachment-types,
+.project-attachment-boundary { line-height:1.4; }
+.project-attachment-boundary {
+  padding-left:.55rem;
+  border-left:3px solid #dfb66c;
+  color:#c9d6d2;
+}
+.project-attachment-list {
+  display:grid;
+  gap:.55rem;
+}
+.project-attachment-card {
+  display:grid;
+  gap:.45rem;
+  padding:.6rem;
+  border:1px solid #3c5861;
+  border-radius:8px;
+  background:#0d2029;
+  min-width:0;
+}
+.project-attachment-meta {
+  display:grid;
+  gap:.15rem;
+  min-width:0;
+}
+.project-attachment-meta strong {
+  overflow-wrap:anywhere;
+  font-size:.82rem;
+}
+.project-attachment-meta span {
+  color:#a9bfc3;
+  font-size:.72rem;
+  text-transform:capitalize;
+}
+.project-attachment-image,
+.project-attachment-video {
+  display:block;
+  max-width:100%;
+  max-height:180px;
+  border-radius:7px;
+  background:#061419;
+  object-fit:contain;
+}
+.project-attachment-video { width:100%; }
+.project-attachment-actions {
+  display:flex;
+  justify-content:flex-end;
+}
+.project-attachment-actions button {
+  min-height:34px;
+  padding:.35rem .6rem;
+  font-size:.72rem;
+}
+.project-attachment-message {
+  margin:0;
+  padding:.45rem .55rem;
+  border-radius:7px;
+  background:#203943;
+  font-size:.76rem;
+}
+@media (max-width:760px) {
+  .project-attachments { padding:.6rem; }
+  .project-attachment-image,
+  .project-attachment-video { max-height:150px; }
+}
