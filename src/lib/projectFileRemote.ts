@@ -106,7 +106,7 @@ async function uploadSlot(session: ProjectSession, attachment: ProjectAttachment
       'X-WORLDIFACT-File-Name': encodeURIComponent(attachment.name),
       'X-WORLDIFACT-Category': attachment.category,
       'Content-Type': attachment.type || 'application/octet-stream',
-      'Content-Length': String(attachment.size),
+      'X-WORLDIFACT-File-Size': String(attachment.size),
     },
     body: attachment.file,
     signal: AbortSignal.timeout(300_000),
