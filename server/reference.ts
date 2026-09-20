@@ -142,7 +142,7 @@ export async function referenceApi(request: Request, env: ReferenceEnv, fetcher:
     upload.set('purpose', 'user_data')
     const fileBuffer = new ArrayBuffer(bytes.byteLength)
     new Uint8Array(fileBuffer).set(bytes)
-    upload.set('file', new File([fileBuffer], filename, { type: mime === 'application/octet-stream' ? 'application/octet-stream' : mime }))
+    upload.set('file', new File([new DataView(fileBuffer)], filename, { type: mime === 'application/octet-stream' ? 'application/octet-stream' : mime }))
     const uploaded = await fetcher('https://api.openai.com/v1/files', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
