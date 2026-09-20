@@ -17,6 +17,7 @@ export type StudioAttachment = {
   bytes: number
   category: StudioAttachmentCategory
   localBrief?: string
+  analysisBrief?: string
   previewPhoto?: StudioPhoto
   needsServerAnalysis: boolean
 }
