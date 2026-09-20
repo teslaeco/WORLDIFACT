@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Group } from 'three'
 import StartingWorld from './StartingWorld'
@@ -11,6 +11,8 @@ import { createWorldObject, disposeObject } from '../lib/worldGeometry'
 import { DEMO_EXAMPLES } from '../lib/demoExamples'
 import { REFERENCE_LINKS } from '../config/references'
 import ProjectAttachmentPicker from './ProjectAttachmentPicker'
+import type { ProjectAttachment } from '../lib/projectAttachments.ts'
+import { analyzeStudioDocument, composeReferenceSheet, prepareStudioAttachments, studioReferencePrompt } from '../lib/studioAttachments.ts'
 
 const MAX_REFERENCE_BYTES = 6 * 1024 * 1024
 function download(data: Blob, name: string) {
@@ -29,11 +31,15 @@ function WorldBlueprintLab() {
   const [health, setHealth] = useState<Health>({})
   const [prompt, setPrompt] = useState('Design a solar exploration workshop with a rover beside a restored forest.')
   const [image, setImage] = useState<string | null>(null)
+  const [projectFiles, setProjectFiles] = useState<ProjectAttachment[]>([])
+  const [referenceBusy, setReferenceBusy] = useState(false)
+  const referenceBriefs = useRef(new Map<string, string>())
   const [accessCode, setAccessCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState('')
   const abort = useRef<AbortController | null>(null)
+  const handleProjectFiles = useCallback((items: readonly ProjectAttachment[]) => setProjectFiles([...items]), [])
   useEffect(() => {
     const controller = new AbortController()
     fetch('/api/health', { cache: 'no-store', signal: controller.signal })
@@ -62,20 +68,48 @@ function WorldBlueprintLab() {
     const demo = localSceneResult(demoBlueprint(input), 'DEMO / MOCK local scene. No GPT-6 Astra request was made; MAKE remains validation-required.')
     setPrompt(input); setBlueprint(demo.blueprint); setResult(demo)
   }
+  async function resolveProjectReferences() {
+    if (!projectFiles.length) return { prompt: prompt.trim(), image, used: 0 }
+    setReferenceBusy(true)
+    try {
+      const prepared = await prepareStudioAttachments(projectFiles.map(item => item.file), 2048)
+      const briefs: string[] = []
+      for (const attachment of prepared) {
+        if (attachment.localBrief) {
+          briefs.push(attachment.localBrief)
+          continue
+        }
+        if (attachment.needsServerAnalysis) {
+          const cached = referenceBriefs.current.get(attachment.key)
+          const brief = cached || await analyzeStudioDocument(attachment.file)
+          referenceBriefs.current.set(attachment.key, brief)
+          briefs.push(brief)
+        }
+      }
+      const nextPrompt = studioReferencePrompt(prompt.trim(), briefs, 2000)
+      const visuals = prepared.flatMap(item => item.previewPhoto ? [item.previewPhoto.dataUrl] : [])
+      const combinedImage = await composeReferenceSheet([...(image ? [image] : []), ...visuals])
+      return { prompt: nextPrompt, image: combinedImage, used: prepared.length }
+    } finally {
+      setReferenceBusy(false)
+    }
+  }
+
   async function generateLive() {
     if (busy) return
     setBusy(true); setSeconds(0); setError('')
     const controller = new AbortController(); abort.current = controller
-    const timeout = window.setTimeout(() => controller.abort(), 40_000)
+    const timeout = window.setTimeout(() => controller.abort(), 120_000)
     try {
       if (!health.generationReady) throw new Error('World blueprint generation is not enabled. The no-cost scene demo is still available.')
       if (prompt.trim().length < 3 || prompt.length > 2000) throw new Error('Use a prompt between 3 and 2000 characters.')
+      const reference = await resolveProjectReferences()
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (health.accessRequired) {
         if (accessCode.trim().length < 32) throw new Error('Enter the preview access code.')
         headers['X-WORLDIFACT-Access'] = accessCode.trim()
       }
-      const response = await fetch('/api/blueprint', { method: 'POST', headers, signal: controller.signal, body: JSON.stringify({ worldId: 'ai-game-lab', prompt, image, mode: 'live' }) })
+      const response = await fetch('/api/blueprint', { method: 'POST', headers, signal: controller.signal, body: JSON.stringify({ worldId: 'ai-game-lab', prompt: reference.prompt, image: reference.image, mode: 'live' }) })
       const body = await response.json()
       if (!response.ok) {
         if (response.status === 429 || response.status === 503) setHealth(value => ({ ...value, generationReady: false, model: null }))
@@ -84,6 +118,7 @@ function WorldBlueprintLab() {
       const validated = validateGenerationResult(body)
       if (validated.mode !== 'LIVE' || validated.provenance !== 'GENERATED') throw new Error('The server did not return verified LIVE evidence.')
       setBlueprint(validated.blueprint); setResult(validated)
+      if (reference.used) setError('')
       try { saveArchive(validated) } catch { /* Explicit portable exports remain available. */ }
     } catch (e) { setError(e instanceof Error && e.name === 'AbortError' ? 'Generation timed out; the previous scene is unchanged.' : e instanceof Error ? e.message : 'Generation failed.') }
     finally { window.clearTimeout(timeout); abort.current = null; setBusy(false) }
@@ -131,9 +166,10 @@ function WorldBlueprintLab() {
         <label className="scan-input">Scan with phone camera · BETA<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
         {image && <><img className="reference-preview" src={image} alt="Selected reference" /><button disabled={busy} onClick={() => setImage(null)}>Remove reference</button></>}
         {!health.generationReady && image && <small>The no-cost scene demo uses text only. LIVE image analysis starts only when the reviewed Astra generation gate is enabled.</small>}
-        <ProjectAttachmentPicker scope="game-lab" disabled={busy} />
+        <ProjectAttachmentPicker scope="game-lab" disabled={busy || referenceBusy} onChange={handleProjectFiles} />
+        <small>On LIVE generation, compatible documents are summarized into 3D/world constraints and supported image/video/3D files are converted into one visual reference sheet for GPT-6 Astra. Unsupported stored formats remain project references only.</small>
         {health.accessRequired && <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /></label>}
-        <button className="primary" disabled={busy || prompt.trim().length < 3} onClick={generatePrimary}>{busy ? `Astra working · ${seconds}s` : health.generationReady ? 'Generate world blueprint · Astra' : 'Generate DEMO world · no API cost'}</button>
+        <button className="primary" disabled={busy || referenceBusy || prompt.trim().length < 3} onClick={generatePrimary}>{busy ? referenceBusy ? 'Preparing attached references…' : `Astra working · ${seconds}s` : health.generationReady ? 'Generate world blueprint · Astra' : 'Generate DEMO world · no API cost'}</button>
         <button disabled={busy} onClick={() => generateDemo()}>Refresh DEMO locally</button>
         <Link to="/shop" className="button-link">Create a 3D model + textures →</Link>
         {busy && <button onClick={() => abort.current?.abort()}>Stop waiting in this browser</button>}
