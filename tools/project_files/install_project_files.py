@@ -22,7 +22,7 @@ import urllib.request
 from patch_server import patch_server
 
 EXPECTED_SERVER_SHA256 = '1f09db9835e9ee22361e468d051da7e847dbff36fe7e52a2f2c9c6f6337402b9'
-PATCHED_SERVER_SHA256 = '6231d234e5ae5ddb390758586c466e6addf6b82d376dec6b160496612c61d4c8'
+PATCHED_SERVER_SHA256 = '6795c356d67c72f4aed545505772182f907c9a242ad0cf0076689720a386bb14'
 WORKER = 'froge-worker.service'
 TUNNEL = 'froge-tunnel.service'
 
