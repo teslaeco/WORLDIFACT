@@ -1,3 +1,40 @@
+# WORLDIFACT — shared accounts and cosmic login (review branch)
+
+Date: 21 September 2026. Branch: `feat/shared-accounts-cosmic-login`.
+Base main: `360b9e0a9d86cfcf9f395a448d636c1073fc75b4`.
+
+## VERIFIED — implemented and checked locally
+
+- Existing Chess Supabase project `oiezgikconcyjvdeshdh` is reused; live read-only settings check returned HTTP 200, signup enabled, email/Google configured. No second password database, account creation or email send occurred during testing.
+- Secure HttpOnly cookie login/register/session/logout; existing account UUID verified upstream for authorization; rate limits, origin checks and guarded PKCE password recovery.
+- Same-origin copied Chess identity uses the existing AuthGate via a pinned-source adapter. Guest play remains available. External original Chess/FORGE sessions are separate, and copied Chess legacy social-data features and Google OAuth are not claimed migrated.
+- `/login`, `/account`, `/account/credits`, `/account/reset`, visible Sign in navigation and authenticated Chess launch.
+- Original FORGE sculpture verified by actual public GET: **9,807,116 bytes**, SHA-256 `c0b756d4c92744189a4161f19bbf5b3c7629de30a1196a09f05c1ed94276749a`. 48 meshes / 2,976 triangles retained. Five-second XYZ animation, cyan/green LEDs, five portal colors, NASA Earth background, success-only 2.8-second sun/paint effect, reduced-motion and WebGL fallback.
+- Atomic per-account ledger: 2 free FAST / rolling 24h, 1 free SLOW / UTC day; credit-funded generation 50 points; subscription grant 1,500 points = 30 generations; confirmed-failure refunds and idempotent settlement.
+- Studio receipts bind the account UUID in their HMAC, and blueprint idempotency IDs have a separate cryptographic namespace. Legacy Oracle routes cannot bypass account enforcement.
+- Free SLOW GLB/PBR/FBX/BLEND bytes are denied server-side. Previously generated owned results unlock when subscription is active. Uncertain submissions retain their reservation and expose a status-review state rather than automatic resubmission/refund.
+- Stripe integration is implemented but **BLOCKED / NOT ENABLED** until prices, period, pack size, secrets and reviewed webhook configuration exist. Checkout return URLs never grant credits. Tests cover paid invoice reconciliation, replayed/out-of-order events, duplicate subscriptions, refunds, customer binding and forged signatures.
+
+## Verification
+
+- **272/272 non-browser tests PASS**, no failures/skips in that subset. All new account/credit/security tests use stubs and are not live payment or live generation proof.
+- TypeScript, production build, real local HTTP DEMO/origin smoke, Worker dry-run and diff whitespace check: **PASS**. Lint: zero errors; existing and hook/HMR warnings remain.
+- `npm run verify` was executed; its browser-specific existing Chromium test cannot run here because Chromium is absent. The recorded browser approval block is respected; no alternate browser or renderer used. Browser/Android visual acceptance remains **BLOCKED / NOT VERIFIED**.
+- Complete pinned Chess/Terra foundation assembly remains a required CI gate; the pinned Chess auth source hash and adapter behavior were checked locally.
+- No paid AI generation, purchase, production deployment or merge was performed.
+
+## NO-GO — full requested commercial release
+
+1. The current Oracle API has no reviewed protected raster-preview endpoint. Free SLOW jobs complete without exposing their full model; UI truthfully reports that the image preview is unavailable. Implement/deploy that backend capability before claiming the complete requested experience.
+2. Owner must supply subscription price, currency and billing period, plus top-up credit quantity and price. Configure/test Stripe and webhooks before enabling payment buttons.
+3. Allowlist the exact Supabase recovery callback before setting `SUPABASE_RECOVERY_REDIRECT_READY=true`. Existing email/password sign-in and signup use the already configured Chess provider. Validate email-confirmation UX with an authorized real test account.
+4. Account enforcement intentionally rejects old anonymous signed receipts. Existing local downloaded originals are preserved. An owner-authorized legacy receipt migration/recovery process is needed before promising old server jobs are available in the new account.
+5. Exact PR CI, physical/mobile visual acceptance and owner permission are required before merge/production deployment. This branch is a reviewable implementation, not a claim that the new feature is live.
+
+Task executed: `docs/CODEX_TASK_SHARED_ACCOUNTS_20260921.md`. Auth evidence: `docs/SHARED_ACCOUNT_AUDIT.md`. Billing setup: `docs/ACCOUNT_BILLING_SETUP.md`.
+
+---
+
 # WORLDIFACT — project attachments + Oracle bridge release
 
 Date: 20 September 2026.

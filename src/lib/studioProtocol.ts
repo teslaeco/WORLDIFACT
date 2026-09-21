@@ -14,8 +14,8 @@ export type TextureLimit = 2048 | 4096 | 8192
 export type StudioPhoto = { name: string; view: PhotoView; dataUrl: string; subject?: string; textureMaxSize: TextureLimit }
 export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string }
-export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string }
-export type StudioStatus = { ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
+export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
+export type StudioStatus = { accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const keys = (value: Record<string, unknown>, names: string[]) => Object.keys(value).every(name => names.includes(name))
 
@@ -101,3 +101,5 @@ export const JOB_DETAILS: Record<StudioJob['state'], string> = {
   failed: 'The worker could not finish this job. Your inputs are retained; no automatic paid retry.',
   cancelled: 'This job was cancelled. No replacement generation is started.',
 }
+
+export const STUDIO_RECONCILIATION_DETAIL = 'The worker has not confirmed this job. Your allowance or credits remain reserved while its status is reviewed. Recover this same job; do not generate a duplicate.'

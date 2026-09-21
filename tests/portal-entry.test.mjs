@@ -17,7 +17,7 @@ const files = {
   portal: new URL('../src/pages/PortalPage.tsx', import.meta.url),
   planets: new URL('../src/components/PlanetsWorld.tsx', import.meta.url),
 }
-async function renderPortal(path) {
+async function renderPortal(path, user = null) {
   const Shop = await loadShopComponent()
   assert.equal(typeof Shop, 'function', 'The real checked-in Shop component must be loaded')
   const sources = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([key, url]) => [key, await readFile(url, 'utf8')])))
@@ -37,6 +37,7 @@ async function renderPortal(path) {
         if (id === '../config/foundations') return foundations
         if (id === '../config/references') return references
         if (id === '../lib/planetCampaign') return campaign
+        if (id === '../lib/account') return { useAccount: () => ({ user }) }
         // The source is an ES module with a default export. Without this marker,
         // transpiled __importDefault wraps the adapter again and React sees an
         // object, not the actual component. This is a harness adapter, not a
@@ -58,7 +59,7 @@ async function renderPortal(path) {
 test('Chess visitors get a mobile-safe full-screen guest launch instead of a nested 3D iframe', async () => {
   const html = await renderPortal('/chess')
   assert.match(html, /href="\/apps\/chess\/guest\.html\?guest=1"/)
-  assert.match(html, /MOBILE-SAFE LAUNCH/)
+  assert.match(html, /CHESS CUBE 512 AI/)
   assert.match(html, /Launch Chess Cube 512 AI/)
   assert.match(html, /data-world="chess-cube-512-ai"/)
   assert.match(html, /Shop boards and pieces/)
@@ -71,7 +72,7 @@ test('direct PortalPage Shop renders the real native generation form, Astra surf
   assert.match(html, /data-world="enchanted-ai-shop"/)
   assert.match(html, /Back to WORLDIFACT/)
   assert.match(html, /id="studio-prompt"/)
-  assert.match(html, /Generate 3D model \+ materials/)
+  assert.match(html, /Generate SLOW model/)
   assert.match(html, /target="_blank"/)
   assert.doesNotMatch(html, /<iframe|target="_(top|self|parent)"|3D result appears here|FORGE-projekt/)
 })
@@ -95,4 +96,11 @@ test('ISS and Terra still embed their separate reviewed applications after the r
   assert.match(terra, /<iframe[^>]+src="\/apps\/terra\/index\.html"/)
   assert.match(terra, /EARTH OBSERVATION/)
   assert.match(terra, /separate simulation/)
+})
+
+
+test('signed-in Chess players launch the shared-account build without guest override', async () => {
+  const html = await renderPortal('/chess', { id: 'account', displayName: 'Explorer' })
+  assert.match(html, /href="\/apps\/chess\/index\.html"/)
+  assert.doesNotMatch(html, /href="\/apps\/chess\/guest\.html\?guest=1"/)
 })

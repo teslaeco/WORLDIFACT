@@ -83,9 +83,11 @@ function buildDemo(kind: ShopPreviewKind) {
   return group
 }
 
-export default function DemoShopPreview({ prompt, mode = 'demo' }: { prompt: string; mode?: DemoShopPreviewMode }) {
+export default function DemoShopPreview({ prompt, mode = 'demo', allowDownload = false }: { prompt: string; mode?: DemoShopPreviewMode; allowDownload?: boolean }) {
   const host = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
   const kind = shopPreviewKind(prompt)
 
   useEffect(() => {
@@ -143,12 +145,38 @@ export default function DemoShopPreview({ prompt, mode = 'demo' }: { prompt: str
     }
   }, [kind])
 
+  const exportDraft = async () => {
+    if (exporting || !allowDownload || mode !== 'live-fast') return
+    setExporting(true); setExportError('')
+    const model = buildDemo(kind)
+    try {
+      const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js')
+      const result = await new GLTFExporter().parseAsync(model, { binary: true })
+      if (!(result instanceof ArrayBuffer)) throw new Error('The draft export did not produce a GLB.')
+      const url = URL.createObjectURL(new Blob([result], { type: 'model/gltf-binary' }))
+      const link = document.createElement('a')
+      link.href = url; link.download = 'WORLDIFACT-FAST-procedural-draft.glb'; link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    } catch (error) { setExportError(error instanceof Error ? error.message : 'Draft export is unavailable.') }
+    finally {
+      model.traverse(object => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose()
+          const materials = Array.isArray(object.material) ? object.material : [object.material]
+          materials.forEach(material => material.dispose())
+        }
+      })
+      setExporting(false)
+    }
+  }
   const live = mode === 'live-fast'
   return <div className="demo-shop-preview">
     <div ref={host} className="demo-shop-canvas" aria-label={live ? 'LIVE Astra procedural 3D draft preview' : 'DEMO local procedural 3D preview'} />
     <p className="demo-shop-label">{live
       ? <><strong>LIVE · GENERATED SPEC / PROCEDURAL DRAFT</strong> GPT-6 Astra generated the validated concept specification; WORLDIFACT built this lightweight {kind} preview locally for FAST mode. It is not an Oracle production mesh or manufacturing-ready file.</>
       : <><strong>DEMO · MOCK</strong> Local procedural {kind} preview. No GPT-6 Astra, Oracle or paid generation request was made.</>}</p>
+    {live && allowDownload && <><button type="button" disabled={exporting} onClick={() => void exportDraft()}>{exporting ? 'Exporting draft…' : 'Download FAST procedural draft · GLB'}</button><small>Includes the visible local geometry and PBR color materials. No image texture maps or detailed Oracle mesh are claimed.</small></>}
+    {exportError && <p role="alert">{exportError}</p>}
     {failed && <p role="alert">3D preview is unavailable on this device.</p>}
   </div>
 }

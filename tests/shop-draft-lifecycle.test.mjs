@@ -51,7 +51,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', astraReady = ready } = {}) {
+async function harness({ ready = false, state = 'succeeded', astraReady = ready, downloadAllowed, reconciliationRequired = false } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map([[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
@@ -67,7 +67,7 @@ async function harness({ ready = false, state = 'succeeded', astraReady = ready 
     if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
-    return Response.json({ job: { id: path.endsWith(oldId) ? oldId : newId, state } })
+    return Response.json({ job: { id: path.endsWith(oldId) ? oldId : newId, state, reconciliationRequired, ...(downloadAllowed === undefined ? {} : { downloadAllowed, previewOnly: !downloadAllowed, previewAvailable: downloadAllowed }) } })
   }
   const slots = [], effects = [], timers = new Map()
   let cursor = 0, dirty = true, tree, serial = 0
@@ -144,7 +144,7 @@ test('an active job can have a next draft, but cannot be replaced or resubmitted
     await h.poll()
     assert.equal(h.byId('studio-prompt').props.disabled, false)
     h.byId('studio-prompt').props.onChange({ target: { value: 'Next model draft' } }); await h.settle()
-    assert.equal(h.button('Generate 3D').props.disabled, true)
+    assert.equal(h.button('Generate SLOW').props.disabled, true)
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     h.button('Clear next-model draft').props.onClick(); await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, '')
@@ -191,5 +191,28 @@ test('new reference selection and draft clearing preserve the displayed old mode
     assert.equal(h.description(), before)
     assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
     assert.equal(h.archive.size, 1)
+  } finally { h.close() }
+})
+
+test('completed free SLOW displays its subscription lock and never fetches the downloadable GLB for a preview', async () => {
+  const h = await harness({ ready: true, downloadAllowed: false })
+  try {
+    await h.poll()
+    assert.equal(h.calls.filter(call => call.path.endsWith('/model')).length, 0)
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Your SLOW model is ready'))
+    assert.ok(h.all().some(node => node.props.to === '/account/credits' && text(node).includes('View subscription')))
+    assert.equal(h.all().some(node => node.type === 'button' && text(node).includes('Download model')), false)
+    assert.ok(h.all().some(node => text(node).includes('protected image preview is not available')))
+  } finally { h.close() }
+})
+
+test('unconfirmed old jobs display review state instead of an endless generation spinner', async () => {
+  const h = await harness({ ready: true, state: 'pending', reconciliationRequired: true })
+  try {
+    await h.poll()
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Model needs a status review'))
+    assert.equal(h.all().some(node => node.type === 'p' && text(node).startsWith('Elapsed:')), false)
+    assert.equal(h.button('Generate SLOW').props.disabled, true, 'Uncertain jobs must not be silently duplicated')
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
   } finally { h.close() }
 })

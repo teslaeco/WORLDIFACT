@@ -4,11 +4,12 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
 import './mobile-hotfix.css'
+import { AccountProvider } from './lib/account'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <AccountProvider><App /></AccountProvider>
     </BrowserRouter>
   </StrictMode>,
 )

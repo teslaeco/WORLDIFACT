@@ -12,6 +12,7 @@ import { createPlayerAvatar, type AvatarChoice } from "../lib/playerAvatar";
 import { createFanDrone, nextEquipmentMode, type EquipmentMode, type OutfitPreset } from "../lib/playerEquipment";
 import { fallingBodyY, FLIGHT_BODY_Y, FLIGHT_SPEED, inRiver, nextWaterMode, SWIM_SPEED, swimBodyY, WATER_LEVEL, type WaterMode } from "../lib/waterPhysics";
 import { createWorldAudio, worldAudioTheme } from "../lib/worldAudio";
+import { clonePortalSculpture, loadPortalSculpture, rotatePortalSculpture } from "../lib/portalSculpture";
 import TouchJoystick from "./TouchJoystick";
 import {
   createDecorativeTerrain,
@@ -81,6 +82,7 @@ export default function StartingWorld({
     [ready, setReady] = useState(false),
     [driving, setDriving] = useState(false);
   const [textureFailed, setTextureFailed] = useState(false);
+  const [sculptureFailed, setSculptureFailed] = useState(false);
   const [interaction, setInteraction] = useState("Interact");
   const [hint, setHint] = useState(
       "Walk onto a glowing water portal to enter.",
@@ -109,6 +111,7 @@ export default function StartingWorld({
       setReady(false);
       setDriving(false);
       setTextureFailed(false);
+      setSculptureFailed(false);
     });
     renderer.setSize(host.clientWidth, host.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -248,8 +251,22 @@ export default function StartingWorld({
       label.position.y = 2.4;
       g.add(label);
       scene.add(g);
-      return { g, face, ripple, i, id: p.id };
+      return { g, face, ripple, i, id: p.id, sculpture: undefined as THREE.Group | undefined };
     });
+    let sculptureDisposed = false;
+    // All five beacons reuse the owner's exact open-frame Forge geometry.
+    void loadPortalSculpture([PORTALS[0].color, "#53baff"], 1.8).then(original => {
+      if (sculptureDisposed) { disposeObject(original); return; }
+      for (const [index, portal] of portals.entries()) {
+        const color = PORTALS[index].color;
+        const accent = `#${new THREE.Color(color).offsetHSL(.04, .22, -.07).getHexString()}`;
+        const sculpture = index === 0 ? original : clonePortalSculpture(original, [color, accent]);
+        sculpture.position.y = 4.25;
+        rotatePortalSculpture(sculpture, 0, index * .35);
+        portal.sculpture = sculpture;
+        portal.g.add(sculpture);
+      }
+    }).catch(() => { if (!sculptureDisposed) setSculptureFailed(true); });
     const avatar = createPlayerAvatar(avatarChoice);
     avatarRuntime.current = avatar;
     avatar.setOutfit(outfitRef.current);
@@ -735,6 +752,10 @@ export default function StartingWorld({
         const focused = p.id === nearPortal?.id;
         p.face.material.opacity = p.id === activePortalId ? 0.07 : focused ? 0.58 : 0.26;
         p.ripple.scale.setScalar(reduced ? 1 : 1 + Math.sin(elapsed * 1.4 + p.i) * 0.06);
+        if (p.sculpture) {
+          rotatePortalSculpture(p.sculpture, reduced ? 0 : elapsed, p.i * .35);
+          p.sculpture.position.y = 4.25 + (reduced ? 0 : Math.sin(elapsed * Math.PI * 2 / 5 + p.i) * .12);
+        }
       }
       if (now - hud > 200) {
         hud = now;
@@ -768,6 +789,7 @@ export default function StartingWorld({
       animate(now);
     });
     return () => {
+      sculptureDisposed = true;
       contextLost = true;
       cancelAnimationFrame(frame);
       clearTimeout(navigationTimer);
@@ -827,6 +849,7 @@ export default function StartingWorld({
         <strong>{blueprint.title}</strong>
         <span>{location}</span>
         {textureFailed ? <span role="status">Scenery image unavailable. Movement remains available.</span> : null}
+        {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
       </div>
       <div className="world-actions">
         <button

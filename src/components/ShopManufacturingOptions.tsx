@@ -58,7 +58,7 @@ export default function ShopManufacturingOptions({ dimensions, hasGeneratedModel
       <div><span className="eyebrow">CUSTOMIZE & ORDER</span><h2 id="shop-make-title">Choose how your model should be made</h2></div>
       <span className="pill">EXPERIMENTAL BETA</span>
     </div>
-    <p>Model generation is free during the test phase. Manufacturing is priced only after a real production partner checks the exact file, dimensions, material and finish. WORLDIFACT does not show guessed prices.</p>
+    <p>Generation follows your account allowance and credit plan. Manufacturing is priced only after a real production partner checks the exact file, dimensions, material and finish. WORLDIFACT does not show guessed prices.</p>
 
     <div className="shop-make-controls">
       <label>Material<select value={material} onChange={e => setMaterial(e.target.value as ClientMaterial)}>{CLIENT_MATERIALS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
@@ -90,7 +90,7 @@ export default function ShopManufacturingOptions({ dimensions, hasGeneratedModel
       <label className="shop-consent"><input type="checkbox" checked={deliveryAccepted} onChange={e => setDeliveryAccepted(e.target.checked)} /> I understand production and delivery may take longer if the manufacturing partner requests additional validation or geometry changes.</label>
       <button type="button" className="shop-checkout" disabled={!checkoutReady}>Proceed to payment</button>
       <small>Payment is not connected yet. The secure checkout will be activated only after a payment provider is integrated and the final manufacturing price, delivery and file revision are verified.</small>
-      <p><strong>Digital 3D file:</strong> the customer download is intended to unlock only after successful payment confirmation. Until the payment/entitlement backend is connected, no customer purchase is marked paid.</p>
+      <p><strong>Digital 3D file:</strong> FAST draft downloads are included. SLOW model downloads require an active subscription. Manufacturing checkout is a separate purchase and never grants an unverified production approval.</p>
     </section>
 
     <button className="shop-internal-only" hidden type="button" onClick={() => onPrepareIssDraft(ISS_PRINT_PREP_PROMPT)}>Prepare internal ISS manufacturing repair draft</button>

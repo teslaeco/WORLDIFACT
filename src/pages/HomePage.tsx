@@ -4,8 +4,10 @@ import LoadingFallback from "../components/LoadingFallback";
 import PortalCardsNav from "../components/PortalCardsNav";
 import WorldifactLogo from "../components/WorldifactLogo";
 import { getPortalById } from "../config/portals";
+import { useAccount } from "../lib/account";
 const StartingWorld = lazy(() => import("../components/StartingWorld"));
 export default function HomePage() {
+  const { user } = useAccount();
   const navigate = useNavigate(),
     open = useCallback((id: string) => navigate(getPortalById(id)?.route ?? "/"), [navigate]);
   return (
@@ -14,7 +16,7 @@ export default function HomePage() {
         <Link to="/" className="brand">
           <WorldifactLogo /><span className="brand-name">WORLDIFACT<span>AI Worlds Made Real</span></span>
         </Link>
-        <Link className="button-link" to="/control">Manage worlds</Link>
+        <Link className="button-link" to={user ? "/account/credits" : "/login"}>{user ? "My account" : "Sign in"}</Link>
         <Link className="button-link" to="/lab">
           Open Game Lab →
         </Link>
