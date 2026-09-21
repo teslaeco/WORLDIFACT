@@ -6,6 +6,12 @@ WORLDIFACT is a browser 3D prototype connecting an explorable valley, a procedur
 
 The first successful public release passed [GitHub deployment and public HTTP verification](https://github.com/teslaeco/WORLDIFACT/actions/runs/34956564451) on 15 September 2026. HTTP checks are not evidence of browser gameplay, physical Android quality or real Astra generation. See [release automation and evidence](docs/AUTOMATION_STATUS.md) for the exact baseline and remaining gates.
 
+## Field notes: Astra-assisted WORLDIFACT vs Meshy
+
+[Read the photovoltaic rim case study](docs/ASTRA_VS_MESHY_RIM_CASE_STUDY.md) — 21 September 2026.
+
+Our supplied previews look more orderly in several structural details, while Meshy's strongest supplied untextured result also preserves clear openings. This is a qualitative review of owner-supplied screenshots, not an independent benchmark or proof of exact geometry, speed, cost or print readiness. The article explains the Astra/Oracle/Blender attribution boundary and what still needs mesh-level validation.
+
 ## What is implemented
 
 - A Three.js mirror-water world with five walk-in portals, an AI-generated alpine panorama, planar reflections, rover driving, workshop doors, and an analogue phone joystick with independent drag-to-look controls.

@@ -1,0 +1,22 @@
+{
+  "review_date": "2026-09-21",
+  "evidence_type": "owner-supplied screenshots",
+  "independent_benchmark": false,
+  "raw_meshes_reviewed": false,
+  "screenshot_count": 10,
+  "run_count": null,
+  "screenshots_published": false,
+  "note": "Hashes identify the privately supplied original screenshot bytes, not generated models. Multiple captures can depict one asset. Filenames are not verified capture timestamps. Screenshots contain browser/account UI and are not included in the public repository. No paid model generation was requested for this review.",
+  "items": [
+    {"id":"A01","filename":"Screenshot_20260921-063625.png","view":"WORLDIFACT front close-up","width":674,"height":1536,"bytes":156770,"sha256":"79d848b2cac65bb19a1e48444640cc979786dc1a7bf51790977677d509a31ec2"},
+    {"id":"A02","filename":"Screenshot_20260921-063430.png","view":"WORLDIFACT front oblique","width":674,"height":1536,"bytes":180425,"sha256":"c598dd8354e88c1538d4df4faac2f774c64d41518f32ee95485c4f719d184255"},
+    {"id":"A03","filename":"Screenshot_20260921-063424.png","view":"WORLDIFACT opposite-side oblique","width":674,"height":1536,"bytes":181719,"sha256":"9cbfd2445a6452cc9de314d64f5dd0a626d604536e3838e332b0f1c0e289cceb"},
+    {"id":"A04","filename":"Screenshot_20260921-063453.png","view":"WORLDIFACT full Shop interface","width":674,"height":1536,"bytes":225101,"sha256":"36f22df6b6231038ce559e803c11d0b14fcfeb82785b5d078d9ddbe231448d10"},
+    {"id":"A05","filename":"Screenshot_20260921-063413.png","view":"WORLDIFACT side oblique","width":674,"height":1536,"bytes":182514,"sha256":"fcf29fd7b5ced9a7067b33a83a65282a480da9eb6ae8b2796037c7a8ec1a6798"},
+    {"id":"F01","filename":"Screenshot_20260920-182545.png","view":"Earlier FORGE interface","width":674,"height":1536,"bytes":155647,"sha256":"b258b5e83a63ed83dc9e63ca4acfd89a3357f4092a0126b321d8f5415edcbfc1"},
+    {"id":"M01","filename":"Screenshot_20260921-071349.png","view":"Meshy textured blue result","width":674,"height":1536,"bytes":165863,"sha256":"3b6abbca01e905af8b976e1e4bafe1f9c0ef51b2fc1e3e54d7badd70adf98bdb"},
+    {"id":"M02","filename":"Screenshot_20260921-071315.png","view":"Meshy separated rim-like parts","width":674,"height":1536,"bytes":124867,"sha256":"931d9637ce391ccf3aee30e28dac1f89a91cfe1ecb75c51daffe5653fce894c3"},
+    {"id":"M03","filename":"Screenshot_20260921-071246.png","view":"Meshy open untextured result","width":674,"height":1536,"bytes":145782,"sha256":"35e1bc021ca9aa1fb5ab93c2269d1defe5c1e47799de3831493c175fe715637c"},
+    {"id":"M04","filename":"Screenshot_20260921-071210.png","view":"Meshy dense irregular result","width":674,"height":1536,"bytes":130168,"sha256":"4b078b9d4905706f6d1483f6ea3b7bef6470f86b79b2feb592e1d2bd4e612495"}
+  ]
+}
