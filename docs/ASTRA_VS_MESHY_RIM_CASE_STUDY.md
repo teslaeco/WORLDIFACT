@@ -6,11 +6,51 @@
 
 The useful question is not simply which wheel looks more impressive. It is whether a generator preserves the intended structure, including the spaces where there must be no material.
 
+## Screenshot gallery
+
+**Ten real screenshot crops, not AI-redrawn comparison posters.** Click any image to open its repository file. These are five WORLDIFACT captures, one earlier FORGE capture and four Meshy captures, not ten independent generation trials. The original model pixels were not retouched: the only transforms are viewport cropping, resizing and WebP compression.
+
+The two columns group the workflows for inspection; rows are not matched-camera, matched-scale or before/after pairs. The strongest supplied Meshy openwork example is included alongside the other supplied results. Neither gallery position nor image size is a quality score.
+
+<table>
+<tr><th>WORLDIFACT / Astra-assisted workflow</th><th>Meshy</th></tr>
+<tr>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/worldifact-front.webp"><img src="evidence/rim-review-2026-09-21/worldifact-front.webp" alt="A01: Front view" width="320"></a><br><strong>A01 — Front view</strong><br>Radial members and polygonal supports. Bright broad faces still need inspection.</td>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/meshy-open.webp"><img src="evidence/rim-review-2026-09-21/meshy-open.webp" alt="M03: Open untextured result" width="280"></a><br><strong>M03 — Open untextured result</strong><br>A stronger Meshy example with visible open regions; not a verified through-opening pass.</td>
+</tr>
+<tr>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/worldifact-opposite-oblique.webp"><img src="evidence/rim-review-2026-09-21/worldifact-opposite-oblique.webp" alt="A03: Opposite-side oblique view" width="280"></a><br><strong>A03 — Opposite-side oblique view</strong><br>The assembled depth and the opposite side of the hub are visible.</td>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/meshy-textured.webp"><img src="evidence/rim-review-2026-09-21/meshy-textured.webp" alt="M01: Blue textured result" width="182"></a><br><strong>M01 — Blue textured result</strong><br>Materials and broad panel-like regions. The original viewport already clips the right-hand edge.</td>
+</tr>
+<tr>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/worldifact-front-oblique.webp"><img src="evidence/rim-review-2026-09-21/worldifact-front-oblique.webp" alt="A02: Front oblique view" width="320"></a><br><strong>A02 — Front oblique view</strong><br>Another angle of the WORLDIFACT preview, not evidence of a separate successful generation.</td>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/meshy-separated-parts.webp"><img src="evidence/rim-review-2026-09-21/meshy-separated-parts.webp" alt="M02: Separated rim-like parts" width="284"></a><br><strong>M02 — Separated rim-like parts</strong><br>The supplied viewport shows two separated parts; the reason for separation is unknown.</td>
+</tr>
+<tr>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/worldifact-side-oblique.webp"><img src="evidence/rim-review-2026-09-21/worldifact-side-oblique.webp" alt="A05: Side and barrel view" width="320"></a><br><strong>A05 — Side and barrel view</strong><br>Depth, connecting members and panel placement; exact geometry remains unverified.</td>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/meshy-irregular.webp"><img src="evidence/rim-review-2026-09-21/meshy-irregular.webp" alt="M04: Irregular result" width="285"></a><br><strong>M04 — Irregular result</strong><br>A less orderly supplied preview with thin protruding details; cause and failure rate are unknown.</td>
+</tr>
+</table>
+
+### Additional context — not additional independent trials
+
+<table>
+<tr><th>Current WORLDIFACT interface</th><th>Earlier FORGE view</th></tr>
+<tr>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/worldifact-shop-context.webp"><img src="evidence/rim-review-2026-09-21/worldifact-shop-context.webp" alt="A04: WORLDIFACT Shop context" width="320"></a><br><strong>A04 — WORLDIFACT Shop context</strong><br>Preview and visible mode controls. Current controls alone do not prove the displayed artifact's generation settings.</td>
+<td valign="top"><a href="evidence/rim-review-2026-09-21/forge-earlier-detail.webp"><img src="evidence/rim-review-2026-09-21/forge-earlier-detail.webp" alt="F01: Earlier FORGE detail" width="320"></a><br><strong>F01 — Earlier FORGE detail</strong><br>Historical close-up, not Meshy and not an additional current WORLDIFACT generation. The source viewport clips the model.</td>
+</tr>
+</table>
+
+Phone/browser bars, account controls and unrelated reference thumbnails have been excluded from the published crops. The uncropped screenshots and underlying design documents remain unpublished. Source identifiers map to the [original screenshot manifest](evidence/RIM_REVIEW_2026-09-21.json); published image dimensions, source hashes and Git blob identifiers are in the [public crop manifest](evidence/rim-review-2026-09-21/manifest.json). Three existing blog crops are reused byte-for-byte as A03, M01 and M03; the other seven crops extend the GitHub gallery. The earlier crop-reproduction metadata was not recovered for all seven additional files; the manifest records that limitation. The generated promotional posters from the conversation are not used as evidence.
+
+**Evidence boundary:** these are real captures of generated 3D previews, not real-world photographs of a manufactured rim. Raw meshes, complete job traces, matched inputs and fabrication validation remain unavailable in this review.
+
 ## What we reviewed
 
 The inventor supplied ten screenshots: five current WORLDIFACT Shop views, one earlier FORGE view, and four Meshy views. Their identifiers, filenames and SHA-256 hashes are recorded in the [evidence manifest](evidence/RIM_REVIEW_2026-09-21.json). References such as A01 and M03 below refer to that manifest.
 
-This is an owner-supplied, qualitative case study written from the WORLDIFACT project perspective, not an independent benchmark. Several captures may show the same asset. We do not know the number of generation attempts, which outputs were omitted, or whether the two systems received identical inputs. We reviewed screenshots, not the corresponding GLB/STL files, UV maps or generation logs. The original screenshots are not republished here because they include browser/account interface details; hashes alone do not make this review independently reproducible.
+This is an owner-supplied, qualitative case study written from the WORLDIFACT project perspective, not an independent benchmark. Several captures may show the same asset. We do not know the number of generation attempts, which outputs were omitted, or whether the two systems received identical inputs. We reviewed screenshots, not the corresponding GLB/STL files, UV maps or generation logs. The uncropped originals remain private because they include browser/account interface details. All ten captures now have public viewport crops in the gallery above; this supports visual inspection but does not make the generation experiment independently reproducible.
 
 The project source was inspected at commit [`cdfb2870da1a34f324235d2435c3e44b3db1bb30`](https://github.com/teslaeco/WORLDIFACT/commit/cdfb2870da1a34f324235d2435c3e44b3db1bb30). No paid generation was initiated for this review.
 
@@ -60,7 +100,7 @@ The Meshy screenshots display a Meshy 7.1 label. Meshy's official API documentat
 
 ## Important limits in this comparison
 
-**Input equivalence is unknown.** A04 shows three reference images, including drawing sheets and a rendered view, with view selectors set to “other.” Meshy's captures also show multiple references, but neither image-byte identity nor the exact submitted settings are available. The visible WORLDIFACT instructions are extensive; we do not have an equivalent complete Meshy submission record.
+**Input equivalence is unknown.** The original uncropped A04 shows three reference images, including drawing sheets and a rendered view, with view selectors set to “other.” Meshy's captures also show multiple references, but neither image-byte identity nor the exact submitted settings are available. The visible WORLDIFACT instructions are extensive; we do not have an equivalent complete Meshy submission record.
 
 **Drawing sheets are a possible confounder.** Meshy's guidance expects views of the same object from different angles.[2][3] A whole sheet containing several figures, labels or an exploded view is not equivalent to a clean single-object view. Such inputs could contribute to ambiguity, but we have not established that they caused any particular result. A future comparison should separate a realistic “drawing sheets as supplied” task from a normalized-view task rather than quietly changing the test after seeing an unfavorable output.
 
@@ -92,4 +132,4 @@ We welcome technical feedback on the geometry and evaluation method, including c
 2. [Meshy — Multi-Image to 3D API](https://docs.meshy.ai/en/api/multi-image-to-3d), accessed 21 September 2026. Used for input-view guidance and the distinction between geometry and texture parameters, not as evidence of our test outcomes.
 3. [Meshy — How to Use Multi-View](https://help.meshy.ai/en/articles/12634481-how-to-use-multi-view), accessed 21 September 2026. Workflow guidance, not a benchmark result.
 4. [Pinned WORLDIFACT Shop implementation](https://github.com/teslaeco/WORLDIFACT/blob/cdfb2870da1a34f324235d2435c3e44b3db1bb30/src/pages/ShopPage.tsx) and [contemporaneous project ledger](https://github.com/teslaeco/WORLDIFACT/blob/cdfb2870da1a34f324235d2435c3e44b3db1bb30/docs/CONTEST_STATUS.md). Source-level architecture and historical records do not substitute for a per-rim generation trace.
-5. [Owner-supplied screenshot manifest](evidence/RIM_REVIEW_2026-09-21.json). Visual observations in this article derive from those private captures. Raw model files and a public image appendix were not available for this publication.
+5. [Owner-supplied screenshot manifest](evidence/RIM_REVIEW_2026-09-21.json). Visual observations in this article derive from those owner-supplied captures. The [public screenshot gallery](#screenshot-gallery) and [crop manifest](evidence/rim-review-2026-09-21/manifest.json) now provide the image appendix. Uncropped originals, raw model files and complete generation records remain unpublished or unavailable.

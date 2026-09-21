@@ -2,6 +2,17 @@
 
 Latest documentation milestone: 21 September 2026.
 
+## VERIFIED — GitHub rim gallery assets and article links
+
+- Owner clarified that the comparison images must be embedded in the GitHub article, not replaced with generated posters or a production-site update.
+- Recovered ten existing screenshot-crop blobs and attached them at `docs/evidence/rim-review-2026-09-21/` in image commit `eb3da73189c618aede70dd7f4e72421ae59d5d2b`.
+- Read all ten image paths back through the GitHub Contents API; their returned Git blob identifiers and WebP headers match the publication manifest. Header-derived dimensions and byte lengths are recorded. This is file/header verification, not a new full bitmap-decoding or browser-rendering pass.
+- The article now contains ten inline, clickable images: five WORLDIFACT captures, four Meshy captures and one separately labeled earlier FORGE capture. The strongest supplied Meshy openwork result is retained. Multiple views are not presented as independent trials.
+- Parsed the prepared HTML gallery locally: ten unique image paths, ten matching click targets, nonempty alt text and exact correspondence with the remotely checked file identifiers. The checked article blob is `416a2a313d1b88026186bac3bb6d3d0ae3756562`.
+- Added [the public crop manifest](evidence/rim-review-2026-09-21/manifest.json). Original screenshot SHA-256 values were checked against the supplied local source files again. No AI-generated comparison poster is included.
+- No application code, workflow, paid generation, secret, production deployment or main-branch merge was requested or performed for this gallery update. The current PR records branch publication and any CI result.
+- Browser rendering remains BLOCKED in this environment: the direct raw-image read returned a cache miss and the shell cannot resolve GitHub DNS. No physical Android or complete application-suite pass is claimed. Seven files' earlier exact crop-reproduction settings were not recovered; this limitation is disclosed in the manifest.
+
 ## Earlier milestones — preserved unchanged
 
 The complete preceding ledger is retained verbatim in [CONTEST_STATUS_2026-09-20.md](CONTEST_STATUS_2026-09-20.md), using the original Git blob `ce73ca1780c7a608025c48548b4f4d0b5d019e07` from main commit `cdfb2870da1a34f324235d2435c3e44b3db1bb30`. No previous evidence or release record has been deleted. This index change does not reset any runtime configuration or acceptance gate.
@@ -22,7 +33,7 @@ The latest preceding record documents the project-attachment release and Oracle 
 ## UNKNOWN / BLOCKED — limits of this review
 
 - UNKNOWN: per-rim provider/model traces, raw exported meshes, actual texture dimensions, input equivalence, complete attempt history, latency, cost and fabrication readiness.
-- Original screenshots are not included in the public repository because they contain browser/account UI; the manifest alone is not a reproducible public benchmark.
+- Uncropped original screenshots remain unpublished because they contain browser/account UI. The gallery above supersedes the earlier absence of public crops, but it is not a reproducible generation benchmark.
 - A public Shop page read failed in the browsing tool. This is not evidence that the site itself was down; no live browser or device pass is claimed.
 - Local Git clone was blocked by DNS resolution. Repository inspection and publication use the connected GitHub API; no local full application test run is claimed.
 - CI status must be read from the resulting PR checks. Preparation of these files is not evidence that CI passed.
