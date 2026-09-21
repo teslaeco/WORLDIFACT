@@ -1,0 +1,36 @@
+{
+  "date": "2026-09-21",
+  "basis": "Creator-supplied screenshots; one design; no controlled benchmark or mesh audit.",
+  "transforms": "Viewport crops, LANCZOS resizing, WebP compression quality 68. No retouching or model regeneration.",
+  "sourceDimensions": [674, 1536],
+  "sourceFilesPublished": false,
+  "images": [
+    {
+      "file": "astra-depth.webp",
+      "source": "Screenshot_20260921-063424.png",
+      "crop": [8, 290, 455, 740],
+      "width": 280,
+      "height": 282,
+      "sha256": "87b3073f3a3b3a5aaeb4ee76caa67d8950d1bca3f22c2f76554971ae601c0f90",
+      "sourceSha256": "9cbfd2445a6452cc9de314d64f5dd0a626d604536e3838e332b0f1c0e289cceb"
+    },
+    {
+      "file": "meshy-open.webp",
+      "source": "Screenshot_20260921-071246.png",
+      "crop": [250, 665, 530, 965],
+      "width": 280,
+      "height": 300,
+      "sha256": "4d7b2c814b388ffa2613e7683f869271f5083ab9aff4386aca6c22b5fa0cdbb9",
+      "sourceSha256": "35e1bc021ca9aa1fb5ab93c2269d1defe5c1e47799de3831493c175fe715637c"
+    },
+    {
+      "file": "meshy-textured.webp",
+      "source": "Screenshot_20260921-071349.png",
+      "crop": [250, 585, 537, 1065],
+      "width": 182,
+      "height": 305,
+      "sha256": "214ad36b73a011fdeafd5ffdc232edaa8e3120cf741330348e0f6062445a7f8d",
+      "sourceSha256": "3b6abbca01e905af8b976e1e4bafe1f9c0ef51b2fc1e3e54d7badd70adf98bdb"
+    }
+  ]
+}

@@ -27,6 +27,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <nav className="legal-nav" aria-label="Project information">
+        <a href="/blog/astra-vs-meshy-rim/">Astra vs Meshy: rim case study</a>
         <Link to="/control">Platform connections</Link>
         <Link to="/privacy">Privacy and data</Link>
         <Link to="/terms">Preview terms</Link>
