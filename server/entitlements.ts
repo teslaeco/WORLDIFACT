@@ -4,6 +4,7 @@ import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
   ENFORCE_ACCOUNT_ENTITLEMENTS?: string
+  ACCOUNT_LEDGER_MODE?: string
 }
 export interface EntitlementStorage {
   get<T>(key: string): Promise<T | undefined>
@@ -18,6 +19,7 @@ export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number;
 export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; state?: Job['state'] }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; url?: string; expiresAt?: number; sessionId?: string }
+type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
 export interface EntitlementStatus {
   credits: number
   generationCost: 50
@@ -31,6 +33,8 @@ export const ACCOUNT_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f
 const JOB_ID = ACCOUNT_ID
 const DAY = 86_400_000
 const stripeId = /^(?:cus|sub|evt|in|cs|pi|ch)_[A-Za-z0-9_]{1,180}$/
+const paypalId = /^[A-Z0-9]{10,40}$/
+const grantId = (value: unknown): value is string => typeof value === 'string' && (stripeId.test(value) || /^pp_[A-Z0-9]{10,40}$/.test(value))
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
 const active = (subscription: Subscription | undefined, now: number) => !!subscription?.active && subscription.until > now
 const validInteger = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value)
@@ -51,13 +55,13 @@ async function usage(storage: EntitlementStorage, now: number) {
   }
 }
 async function status(storage: EntitlementStorage, now: number): Promise<EntitlementStatus> {
-  const [credits, free, subscription] = await Promise.all([balance(storage), usage(storage, now), storage.get<Subscription>('subscription')])
+  const [credits, free, subscription, billingHold] = await Promise.all([balance(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
   return {
     credits, generationCost: 50, subscriptionGrant: 1500,
     subscription: { active: active(subscription, now), expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
     free: { fastRemaining: Math.max(0, 2 - free.fast.length), fastResetAt: free.fast.length ? new Date(Math.min(...free.fast.map(item => item.at)) + DAY).toISOString() : null,
       slowRemaining: Math.max(0, 1 - free.slow.length), slowResetAt: new Date((Math.floor(now / DAY) + 1) * DAY).toISOString() },
-    slowDownloadRequiresSubscription: true, billingReview: credits < 0,
+    slowDownloadRequiresSubscription: true, billingReview: credits < 0 || billingHold === true,
   }
 }
 
@@ -85,7 +89,7 @@ export class AccountEntitlements {
             ? { allowed: false, reason: 'JOB_PROFILE_MISMATCH' }
             : { allowed: existing.state !== 'failed', repeated: true, cost: existing.cost, kind: existing.kind, ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
           const credits = await balance(storage), subscription = await storage.get<Subscription>('subscription')
-          if (credits < 0) return { allowed: false, reason: 'BILLING_REVIEW_REQUIRED' }
+          if (credits < 0 || await storage.get<boolean>('billingHold') === true) return { allowed: false, reason: 'BILLING_REVIEW_REQUIRED' }
           const paid = active(subscription, now) || credits > 0
           if (paid && credits < 50) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
           const free = await usage(storage, now)
@@ -105,7 +109,7 @@ export class AccountEntitlements {
           const job = await this.storage.get<Job>(`job:${id}`)
           if (!job) return json({ owned: false, downloadAllowed: false, previewOnly: false })
           const subscription = await this.storage.get<Subscription>('subscription')
-          const allowed = job.state === 'completed' && (job.profile === 'fast' || active(subscription, now)) && await balance(this.storage) >= 0
+          const allowed = job.state === 'completed' && (job.profile === 'fast' || active(subscription, now)) && await balance(this.storage) >= 0 && await this.storage.get<boolean>('billingHold') !== true
           return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, state: job.state })
         }
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
@@ -133,24 +137,25 @@ export class AccountEntitlements {
         }))
       }
       if (path === '/grant') {
-        if (typeof input.id !== 'string' || !stripeId.test(input.id) || !validInteger(input.credits) || (input.credits as number) < 1 || (input.credits as number) > 1_000_000) return json({ error: 'Invalid grant' }, 400)
+        if (!grantId(input.id) || !validInteger(input.credits) || (input.credits as number) < 1 || (input.credits as number) > 1_000_000) return json({ error: 'Invalid grant' }, 400)
         const id = input.id, credits = input.credits as number
         return json(await this.storage.transaction(async storage => {
           const prior = await storage.get<Grant>(`grant:${id}`)
           // A reversal received before its original grant is a tombstone, never a new credit grant.
-          if (prior) return { granted: false, repeated: true }
+          if (prior) return { granted: false, repeated: true, revoked: prior.revoked > 0 }
           const next = await balance(storage) + credits
           if (!Number.isSafeInteger(next)) throw new Error('Invalid balance')
           await storage.put('balance', next)
           await storage.put(`grant:${id}`, { credits, revoked: 0, ...(typeof input.subscriptionId === 'string' ? { subscriptionId: input.subscriptionId } : {}) })
-          return { granted: true, repeated: false }
+          return { granted: true, repeated: false, revoked: false }
         }))
       }
       if (path === '/revoke') {
-        if (typeof input.id !== 'string' || !stripeId.test(input.id) || !validInteger(input.credits) || (input.credits as number) < 1 || (input.credits as number) > 1_000_000) return json({ error: 'Invalid reversal' }, 400)
+        if (!grantId(input.id) || !validInteger(input.credits) || (input.credits as number) < 1 || (input.credits as number) > 1_000_000) return json({ error: 'Invalid reversal' }, 400)
         const id = input.id, credits = input.credits as number
         return json(await this.storage.transaction(async storage => {
           const grant = await storage.get<Grant>(`grant:${id}`)
+          if (input.review === true) await storage.put('billingHold', true)
           if (!grant) { await storage.put(`grant:${id}`, { credits: 0, revoked: credits }); return { revoked: true, repeated: false } }
           const target = Math.min(grant.credits, credits), difference = Math.max(0, target - grant.revoked)
           if (!difference) return { revoked: false, repeated: true }
@@ -177,6 +182,45 @@ export class AccountEntitlements {
           // only a terminal cancellation (or a separately revoked grant) blocks activation.
           if (previous && (previous.revision > next.revision || (previous.id === next.id && previous.terminal && !next.terminal))) return { updated: false }
           await storage.put('subscription', next); return { updated: true }
+        }))
+      }
+      if (path === '/paypal-reserve') {
+        return json(await this.storage.transaction(async storage => {
+          const previous = await storage.get<PayPalCheckout | null>('paypal:checkout')
+          // Do not rotate an uncertain create/capture attempt just because time passed.
+          // PayPal's idempotency window is shorter than our ownership record lifetime.
+          if (previous) return { ...previous, repeated: true }
+          const value: PayPalCheckout = { id: crypto.randomUUID(), created: now }
+          await storage.put('paypal:checkout', value)
+          return { ...value, repeated: false }
+        }))
+      }
+      if (path === '/paypal-order') {
+        if (typeof input.id !== 'string' || !ACCOUNT_ID.test(input.id) || typeof input.orderId !== 'string' || !paypalId.test(input.orderId) || typeof input.url !== 'string') return json({ error: 'Invalid PayPal order' }, 400)
+        const url = new URL(input.url)
+        if (url.protocol !== 'https:' || !['www.paypal.com', 'www.sandbox.paypal.com'].includes(url.hostname) || url.port || url.username || url.password || url.pathname !== '/checkoutnow' || url.searchParams.get('token') !== input.orderId) return json({ error: 'Invalid PayPal checkout address' }, 400)
+        return json(await this.storage.transaction(async storage => {
+          const previous = await storage.get<PayPalCheckout | null>('paypal:checkout')
+          if (!previous || previous.id !== input.id || (previous.orderId && previous.orderId !== input.orderId)) return { saved: false }
+          const historical = await storage.get<{ id: string }>(`paypal:order:${input.orderId}`)
+          if (historical && historical.id !== input.id) return { saved: false }
+          await storage.put(`paypal:order:${input.orderId}`, { id: input.id })
+          await storage.put('paypal:checkout', { ...previous, orderId: input.orderId, url: input.url })
+          return { saved: true }
+        }))
+      }
+      if (path === '/paypal-get') {
+        if (typeof input.orderId !== 'string' || !paypalId.test(input.orderId)) return json({ error: 'Invalid PayPal order' }, 400)
+        const owned = await this.storage.get<{ id: string }>(`paypal:order:${input.orderId}`)
+        return json(owned ? { owned: true, id: owned.id } : { owned: false })
+      }
+      if (path === '/paypal-clear') {
+        if (typeof input.id !== 'string' || !ACCOUNT_ID.test(input.id)) return json({ error: 'Invalid PayPal checkout' }, 400)
+        return json(await this.storage.transaction(async storage => {
+          const previous = await storage.get<PayPalCheckout | null>('paypal:checkout')
+          if (!previous || previous.id !== input.id) return { cleared: false }
+          await storage.put('paypal:checkout', null)
+          return { cleared: true }
         }))
       }
       if (path === '/checkout-reserve') {
@@ -215,7 +259,11 @@ export class AccountEntitlements {
 export async function entitlementCall<T>(env: EntitlementEnv, userId: string, path: string, body?: unknown): Promise<T> {
   if (!ACCOUNT_ID.test(userId)) throw new EntitlementError('A verified account is required.', 401)
   if (!env.ACCOUNT_ENTITLEMENTS) throw new EntitlementError('Account allowances are not configured.')
-  const object = env.ACCOUNT_ENTITLEMENTS.get(env.ACCOUNT_ENTITLEMENTS.idFromName(`account:v1:${userId.toLowerCase()}`))
+  if (env.ACCOUNT_LEDGER_MODE !== undefined && !['sandbox', 'live'].includes(env.ACCOUNT_LEDGER_MODE)) throw new EntitlementError('Account ledger mode is invalid.')
+  // Sandbox balances, customers, captures and subscriptions can never become live
+  // simply by switching provider API credentials. Preserve existing live IDs.
+  const prefix = env.ACCOUNT_LEDGER_MODE === 'sandbox' ? 'account:sandbox:v1' : 'account:v1'
+  const object = env.ACCOUNT_ENTITLEMENTS.get(env.ACCOUNT_ENTITLEMENTS.idFromName(`${prefix}:${userId.toLowerCase()}`))
   let response: Response
   try { response = await object.fetch(new Request(`https://entitlements.internal${path}`, { method: body === undefined ? 'GET' : 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000) })) }
   catch { throw new EntitlementError('Account allowances are temporarily unavailable.') }

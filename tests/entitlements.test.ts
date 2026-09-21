@@ -142,22 +142,27 @@ async function signedEvent(type: string, object: Record<string, unknown>, create
 function billingFixture() {
   const f = fixture()
   f.setNow(Date.now())
-  const env: BillingEnv = { ...f.env, ENABLE_BILLING: 'true', STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_fixture', STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET, STRIPE_SUBSCRIPTION_PRICE_ID: 'price_Subscription', STRIPE_TOPUP_PRICE_ID: 'price_Topup', STRIPE_TOPUP_CREDITS: '500', BILLING_PUBLIC_ORIGIN: 'https://worldifact.test', ACCOUNT_LIMITER: { async limit() { return { success: true } } } }
-  const subscription = { id: 'sub_fixture', customer: 'cus_fixture', metadata: { worldifact_uid: USER }, status: 'active', current_period_end: Math.floor(f.now() / 1000) + 31 * 86400, latest_invoice: 'in_fixture', items: { data: [{ price: { id: 'price_Subscription' } }] } }
-  const invoice = { id: 'in_fixture', subscription: 'sub_fixture', customer: 'cus_fixture', paid: true, status: 'paid', amount_paid: 1000, billing_reason: 'subscription_create', lines: { data: [{ price: { id: 'price_Subscription' }, quantity: 1 }] } }
-  const session = { id: 'cs_fixture', customer: 'cus_fixture', payment_intent: 'pi_fixture', status: 'complete', payment_status: 'paid', mode: 'payment', metadata: { worldifact_uid: USER, worldifact_kind: 'topup', worldifact_credits: '500' } }
+  const env: BillingEnv = { ...f.env, ENABLE_BILLING: 'true', ACCOUNT_LEDGER_MODE: 'sandbox', STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_fixture', STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET, STRIPE_SUBSCRIPTION_PRICE_ID: 'price_Subscription', STRIPE_SUBSCRIPTION_INTERVAL: 'month', STRIPE_TOPUP_PRICE_ID: 'price_Topup', STRIPE_TOPUP_CREDITS: '1500', BILLING_PUBLIC_ORIGIN: 'https://worldifact.test', ACCOUNT_LIMITER: { async limit() { return { success: true } } } }
+  const subscription = { livemode: false, id: 'sub_fixture', customer: 'cus_fixture', metadata: { worldifact_uid: USER }, status: 'active', current_period_end: Math.floor(f.now() / 1000) + 31 * 86400, latest_invoice: 'in_fixture', items: { data: [{ price: { id: 'price_Subscription' }, quantity: 1 }] } }
+  const invoice = { livemode: false, id: 'in_fixture', subscription: 'sub_fixture', customer: 'cus_fixture', paid: true, status: 'paid', amount_paid: 3000, total: 3000, currency: 'usd', billing_reason: 'subscription_create', lines: { data: [{ price: { id: 'price_Subscription' }, quantity: 1, amount: 3000, currency: 'usd' }] } }
+  const session = { livemode: false, id: 'cs_fixture', amount_total: 3000, currency: 'usd', client_reference_id: USER, customer: 'cus_fixture', payment_intent: 'pi_fixture', status: 'complete', payment_status: 'paid', mode: 'payment', metadata: { worldifact_uid: USER, worldifact_kind: 'topup', worldifact_credits: '1500' } }
+  const price = { livemode: false, id: 'price_Topup', active: true, unit_amount: 3000, currency: 'usd', type: 'one_time', billing_scheme: 'per_unit' }
+  const subscriptionPrice = { ...price, id: 'price_Subscription', type: 'recurring', recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' } }
+  const lineItems = { data: [{ price: { id: 'price_Topup' }, quantity: 1, amount_total: 3000, currency: 'usd' }] }
   const seen: string[] = []
   const fetcher = (async (input: Parameters<typeof fetch>[0]) => {
     const url = String(input); seen.push(url)
     if (url.endsWith('/auth/v1/user')) return Response.json({ id: USER, email: 'player@example.test' })
+    if (url.endsWith('/prices/price_Topup')) return Response.json(price)
+    if (url.endsWith('/prices/price_Subscription')) return Response.json(subscriptionPrice)
     if (url.endsWith('/subscriptions/sub_fixture')) return Response.json(subscription)
     if (url.endsWith('/invoices/in_fixture')) return Response.json(invoice)
     if (url.endsWith('/checkout/sessions/cs_fixture')) return Response.json(session)
-    if (url.includes('/checkout/sessions/cs_fixture/line_items')) return Response.json({ data: [{ price: { id: 'price_Topup' }, quantity: 1 }] })
-    if (url.endsWith('/charges/ch_fixture')) return Response.json({ id: 'ch_fixture', customer: 'cus_fixture', invoice: 'in_fixture', amount_refunded: 1000 })
+    if (url.includes('/checkout/sessions/cs_fixture/line_items')) return Response.json(lineItems)
+    if (url.endsWith('/charges/ch_fixture')) return Response.json({ livemode: false, id: 'ch_fixture', customer: 'cus_fixture', invoice: 'in_fixture', amount_refunded: 3000 })
     throw new Error(`Unexpected test request: ${url}`)
   }) as typeof fetch
-  return { ...f, env, subscription, invoice, session, fetcher, seen }
+  return { ...f, env, subscription, invoice, session, price, subscriptionPrice, lineItems, fetcher, seen }
 }
 test('Unconfigured checkout never calls a payment provider and unsigned webhook cannot grant credits', async () => {
   let calls = 0
@@ -203,7 +208,7 @@ test('A paid top-up creates one grant across completed and asynchronous-success 
   const f = billingFixture()
   await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
   for (const event of ['checkout.session.completed', 'checkout.session.async_payment_succeeded']) assert.equal((await billingApi(await signedEvent(event, { id: 'cs_fixture' }), f.env, f.fetcher))?.status, 200)
-  assert.equal((await entitlementStatus(f.env, USER)).credits, 500)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 1500)
   assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
 })
 test('A cancellation is read from Stripe and disables subscription downloads; webhook does not trust payload status', async () => {
@@ -229,7 +234,6 @@ test('Subscription checkout refuses an existing past-due Stripe subscription eve
   let created = 0
   const fetcher = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const url = String(input)
-    if (url.includes('/prices/')) return Response.json({ id: 'price_Subscription', active: true, unit_amount: 1000, currency: 'eur', type: 'recurring', billing_scheme: 'per_unit', recurring: { interval: 'month' } })
     if (url.includes('/subscriptions?')) return Response.json({ data: [{ id: 'sub_previous', status: 'past_due' }] })
     if (url.endsWith('/checkout/sessions') && init?.method === 'POST') { created++; throw new Error('Duplicate subscription forbidden') }
     return f.fetcher(input, init)
@@ -243,11 +247,10 @@ test('Concurrent checkout clicks reuse one idempotency key; verified paid top-up
   const keys = new Set<string>(); let checkoutId = ''
   const fetcher = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const url = String(input)
-    if (url.includes('/prices/')) return Response.json({ id: 'price_Topup', active: true, unit_amount: 1000, currency: 'eur', type: 'one_time', billing_scheme: 'per_unit' })
     if (url.endsWith('/checkout/sessions') && init?.method === 'POST') {
       const headers = new Headers(init.headers); keys.add(headers.get('Idempotency-Key')!)
       checkoutId = new URLSearchParams(String(init.body)).get('metadata[worldifact_checkout_id]')!
-      return Response.json({ id: 'cs_fixture', url: 'https://checkout.stripe.com/c/pay/test_fixture', expires_at: Math.floor(f.now() / 1000) + 86400 })
+      return Response.json({ ...f.session, metadata: { ...f.session.metadata, worldifact_checkout_id: checkoutId }, url: 'https://checkout.stripe.com/c/pay/test_fixture', expires_at: Math.floor(f.now() / 1000) + 86400 })
     }
     return f.fetcher(input, init)
   }) as typeof fetch
@@ -258,4 +261,217 @@ test('Concurrent checkout clicks reuse one idempotency key; verified paid top-up
   await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, fetcher)
   assert.equal((await billingApi(checkoutRequest('topup'), f.env, fetcher))?.status, 200)
   assert.equal(keys.size, 2)
+})
+
+test('One-time pack readiness does not require a recurring price or unapproved interval', async () => {
+  const f = billingFixture()
+  delete f.env.STRIPE_SUBSCRIPTION_INTERVAL
+  delete f.env.STRIPE_SUBSCRIPTION_PRICE_ID
+  f.env.STRIPE_TOPUP_CREDITS = '1000000'
+  const response = await billingApi(new Request('https://worldifact.test/api/billing/status'), f.env, f.fetcher)
+  const status = await response!.json() as Record<string, unknown>
+  assert.deepEqual(status.price, { amount: 3000, currency: 'USD', credits: 1500, kind: 'one_time' })
+  assert.equal(status.status, 'CONFIGURED')
+  assert.equal(status.topupReady, true)
+  assert.equal(status.cardReady, true)
+  assert.equal(status.googlePay, 'eligible_devices')
+  assert.equal(status.checkoutReady, false)
+  assert.equal(status.subscriptionInterval, null)
+  assert.equal(status.topupCredits, 1500)
+  assert.equal(f.seen.length, 0)
+  assert.equal((await billingApi(checkoutRequest('subscription'), f.env, f.fetcher))?.status, 503)
+  assert.equal(f.seen.some(url => url.startsWith('https://api.stripe.com/')), false)
+})
+
+test('Stripe test payments cannot reach the live account ledger and live mode rejects sandbox storage', async () => {
+  for (const [mode, ledger] of [['test', undefined], ['test', 'live'], ['live', 'sandbox']] as const) {
+    const f = billingFixture()
+    f.env.STRIPE_MODE = mode; f.env.STRIPE_SECRET_KEY = `sk_${mode}_fixture`; f.env.ACCOUNT_LEDGER_MODE = ledger
+    const status = await (await billingApi(new Request('https://worldifact.test/api/billing/status'), f.env, f.fetcher))!.json() as Record<string, unknown>
+    assert.equal(status.topupReady, false)
+    assert.equal(status.checkoutReady, false)
+    assert.equal((await billingApi(checkoutRequest('topup'), f.env, f.fetcher))?.status, 503)
+    assert.equal((await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, f.fetcher))?.status, 503)
+    assert.equal(f.seen.length, 0)
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+  }
+})
+
+test('A signed-in free account can buy one fixed card pack with eligible Google Pay wallets', async () => {
+  const f = billingFixture()
+  delete f.env.STRIPE_SUBSCRIPTION_PRICE_ID; delete f.env.STRIPE_SUBSCRIPTION_INTERVAL
+  await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+  let params: URLSearchParams | undefined
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    if (String(input).endsWith('/checkout/sessions') && init?.method === 'POST') {
+      params = new URLSearchParams(String(init.body))
+      return Response.json({ ...f.session, status: 'open', payment_status: 'unpaid', metadata: { ...f.session.metadata, worldifact_checkout_id: params.get('metadata[worldifact_checkout_id]') }, url: 'https://checkout.stripe.com/c/pay/test_fixture', expires_at: Math.floor(f.now() / 1000) + 86400 })
+    }
+    return f.fetcher(input, init)
+  }) as typeof fetch
+  assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
+  assert.equal((await billingApi(checkoutRequest('topup'), f.env, fetcher))?.status, 200)
+  assert.equal(params!.get('mode'), 'payment')
+  assert.equal(params!.get('payment_method_types[0]'), 'card')
+  assert.equal(params!.get('line_items[0][price]'), 'price_Topup')
+  assert.equal(params!.get('line_items[0][quantity]'), '1')
+  assert.equal(params!.get('metadata[worldifact_credits]'), '1500')
+  assert.equal(params!.get('allow_promotion_codes'), 'false')
+  assert.equal(params!.get('success_url'), 'https://worldifact.test/account/credits?billing=processing')
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+})
+
+test('Browser price, credit and identity injection is rejected before any Stripe call', async () => {
+  for (const extra of [{ credits: 1000000 }, { amount: 1 }, { currency: 'eur' }, { uid: OTHER }, { price: 'price_Cheap' }]) {
+    const f = billingFixture()
+    const request = checkoutRequest('topup')
+    const forged = new Request(request.url, { method: request.method, headers: request.headers, body: JSON.stringify({ kind: 'topup', ...extra }) })
+    assert.equal((await billingApi(forged, f.env, f.fetcher))?.status, 400)
+    assert.equal(f.seen.some(url => url.startsWith('https://api.stripe.com/')), false)
+  }
+})
+
+test('Checkout rejects a wrong catalog amount, currency or provider mode before creating a session', async () => {
+  for (const variant of ['amount', 'currency', 'mode', 'missingMode', 'quantityTransform']) {
+    const f = billingFixture()
+    if (variant === 'amount') f.price.unit_amount = 2999
+    if (variant === 'currency') f.price.currency = 'eur'
+    if (variant === 'mode') f.price.livemode = true
+    if (variant === 'missingMode') Reflect.deleteProperty(f.price, 'livemode')
+    if (variant === 'quantityTransform') Object.assign(f.price, { transform_quantity: { divide_by: 2, round: 'up' } })
+    assert.equal((await billingApi(checkoutRequest('topup'), f.env, f.fetcher))?.status, 503, variant)
+    assert.equal(f.seen.some(url => url.endsWith('/checkout/sessions')), false)
+  }
+})
+
+test('Checkout creation rechecks the returned total, currency and account before exposing a payment link', async () => {
+  for (const changed of [{ amount_total: 2999 }, { currency: 'eur' }, { customer: 'cus_other' }, { client_reference_id: OTHER }, { livemode: true }]) {
+    const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      if (String(input).endsWith('/checkout/sessions') && init?.method === 'POST') {
+        const params = new URLSearchParams(String(init.body))
+        return Response.json({ ...f.session, metadata: { ...f.session.metadata, worldifact_checkout_id: params.get('metadata[worldifact_checkout_id]') }, url: 'https://checkout.stripe.com/c/pay/test_fixture', expires_at: Math.floor(f.now() / 1000) + 86400, ...changed })
+      }
+      return f.fetcher(input, init)
+    }) as typeof fetch
+    const response = await billingApi(checkoutRequest('topup'), f.env, fetcher)
+    assert.equal(response?.status, 503)
+    assert.equal((await response!.json() as Record<string, unknown>).url, undefined)
+  }
+})
+
+test('Paid top-ups reject wrong amount, currency, quantity, metadata credits and account binding', async () => {
+  for (const variant of ['amount', 'currency', 'quantity', 'lineAmount', 'lineCurrency', 'credits', 'customer', 'reference', 'mode', 'unpaid', 'catalog']) {
+    const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+    if (variant === 'amount') f.session.amount_total = 2999
+    if (variant === 'currency') f.session.currency = 'eur'
+    if (variant === 'quantity') f.lineItems.data[0].quantity = 2
+    if (variant === 'lineAmount') f.lineItems.data[0].amount_total = 1000
+    if (variant === 'lineCurrency') f.lineItems.data[0].currency = 'eur'
+    if (variant === 'credits') f.session.metadata.worldifact_credits = '1000000'
+    if (variant === 'customer') f.session.customer = 'cus_other'
+    if (variant === 'reference') f.session.client_reference_id = OTHER
+    if (variant === 'mode') f.session.livemode = true
+    if (variant === 'unpaid') f.session.payment_status = 'unpaid'
+    if (variant === 'catalog') f.price.unit_amount = 100
+    await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, f.fetcher)
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0, variant)
+    assert.equal((await entitlementStatus(f.env, OTHER)).credits, 0, variant)
+  }
+})
+
+test('Recurring grants require explicit interval, exact USD 30 invoice and one licensed interval', async () => {
+  for (const variant of ['intervalUnset', 'wrongInterval', 'intervalCount', 'metered', 'amount', 'total', 'currency', 'lineAmount', 'quantity', 'extraLine']) {
+    const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+    if (variant === 'intervalUnset') delete f.env.STRIPE_SUBSCRIPTION_INTERVAL
+    if (variant === 'wrongInterval') f.subscriptionPrice.recurring.interval = 'year'
+    if (variant === 'intervalCount') f.subscriptionPrice.recurring.interval_count = 2
+    if (variant === 'metered') f.subscriptionPrice.recurring.usage_type = 'metered'
+    if (variant === 'amount') f.invoice.amount_paid = 2999
+    if (variant === 'total') f.invoice.total = 2999
+    if (variant === 'currency') f.invoice.currency = 'eur'
+    if (variant === 'lineAmount') f.invoice.lines.data[0].amount = 2999
+    if (variant === 'quantity') f.invoice.lines.data[0].quantity = 2
+    if (variant === 'extraLine') f.invoice.lines.data.push({ ...f.invoice.lines.data[0], amount: 0 })
+    await billingApi(await signedEvent('invoice.paid', { id: 'in_fixture' }), f.env, f.fetcher)
+    await billingApi(await signedEvent('customer.subscription.updated', { id: 'sub_fixture' }), f.env, f.fetcher)
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0, variant)
+    assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false, variant)
+  }
+})
+
+test('Top-up refund before payment creates a tombstone and archived product refunds remain idempotent', async () => {
+  for (const refundFirst of [true, false]) {
+    const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const url = String(input)
+      if (url.endsWith('/charges/ch_fixture')) return Response.json({ livemode: false, id: 'ch_fixture', customer: 'cus_fixture', payment_intent: 'pi_fixture', amount_refunded: 1 })
+      if (url.includes('/checkout/sessions?payment_intent=')) return Response.json({ data: [f.session] })
+      return f.fetcher(input, init)
+    }) as typeof fetch
+    if (!refundFirst) await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, fetcher)
+    f.price.active = false
+    for (let repeat = 0; repeat < 2; repeat++) assert.equal((await billingApi(await signedEvent('charge.refunded', { id: 'ch_fixture' }), f.env, fetcher))?.status, 200)
+    f.price.active = true
+    await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, fetcher)
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+  }
+})
+
+test('Archiving a price blocks new purchases but preserves fulfillment of an already paid pack', async () => {
+  const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+  f.price.active = false
+  assert.equal((await billingApi(checkoutRequest('topup'), f.env, f.fetcher))?.status, 503)
+  assert.equal((await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, f.fetcher))?.status, 200)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 1500)
+})
+
+test('An explicitly allowlisted historical pack price supports settlement and refunds after price rotation', async () => {
+  const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+  f.env.STRIPE_TOPUP_PRICE_ID = 'price_NewTopup'
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const url = String(input)
+    if (url.endsWith('/charges/ch_fixture')) return Response.json({ livemode: false, id: 'ch_fixture', customer: 'cus_fixture', payment_intent: 'pi_fixture', amount_refunded: 3000 })
+    if (url.includes('/checkout/sessions?payment_intent=')) return Response.json({ data: [f.session] })
+    return f.fetcher(input, init)
+  }) as typeof fetch
+  assert.equal((await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, fetcher))?.status, 400)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+  f.env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS = 'price_Topup'
+  f.price.active = false
+  for (let i = 0; i < 2; i++) assert.equal((await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, fetcher))?.status, 200)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 1500)
+  delete f.env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS
+  assert.equal((await billingApi(await signedEvent('charge.refunded', { id: 'ch_fixture' }), f.env, fetcher))?.status, 400)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 1500)
+  f.env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS = 'price_Topup'
+  for (let i = 0; i < 2; i++) assert.equal((await billingApi(await signedEvent('charge.refunded', { id: 'ch_fixture' }), f.env, fetcher))?.status, 200)
+  await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, fetcher)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+})
+
+test('Historical pack allowlist rejects invalid or excessive IDs and cannot authorize a cheaper pack', async () => {
+  for (const value of ['price_Topup,', 'price_Topup,price_Topup', 'price_Topup,../../prices', Array.from({ length: 11 }, (_, i) => `price_Old${i}`).join(',')]) {
+    const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+    f.env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS = value
+    assert.equal((await billingApi(checkoutRequest('topup'), f.env, f.fetcher))?.status, 503)
+    assert.equal((await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, f.fetcher))?.status, 400)
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+  }
+  const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+  f.env.STRIPE_TOPUP_PRICE_ID = 'price_NewTopup'
+  f.env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS = 'price_Topup'
+  f.price.unit_amount = 1000
+  assert.equal((await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, f.fetcher))?.status, 503)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+})
+
+test('One-time pack grants do not unlock subscription-only SLOW downloads', async () => {
+  const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+  await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, f.fetcher)
+  const job = id()
+  assert.equal((await reserveUserGeneration(f.env, USER, job, 'slow')).cost, 50)
+  await settleUserGeneration(f.env, USER, job, 'completed')
+  assert.equal((await userJobAccess(f.env, USER, job)).downloadAllowed, false)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 1450)
 })

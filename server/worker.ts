@@ -7,6 +7,7 @@ import { projectFileApi } from "./project-files.ts";
 import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
 import { entitlementApi, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
 import { billingApi, type BillingEnv } from './billing.ts';
+import { paypalApi, type PayPalEnv } from './paypal.ts';
 import { decorApi } from './decor.ts';
 export { AccountEntitlements } from './entitlements.ts';
 import {
@@ -19,7 +20,7 @@ import {
 import { budgetSettings } from "./budget.ts";
 import type { BudgetEnv, BudgetNamespace } from "./budget.ts";
 export { GenerationBudget } from "./budget.ts";
-export interface Env extends BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv {
+export interface Env extends BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   ENABLE_PAID_GENERATION?: string;
@@ -86,6 +87,8 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (entitlements) return entitlements;
   const accounts = await accountApi(request, env, fetcher);
   if (accounts) return accounts;
+  const paypal = await paypalApi(request, env, fetcher);
+  if (paypal) return paypal;
   const billing = await billingApi(request, env, fetcher);
   if (billing) return billing;
   // All customer mesh jobs use the owned Studio receipt/ledger path. The old

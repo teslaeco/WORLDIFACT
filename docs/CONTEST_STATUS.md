@@ -1,3 +1,34 @@
+# WORLDIFACT — USD 30 credit packs and payment methods (review branch)
+
+Date: 22 September 2026. PR: https://github.com/teslaeco/WORLDIFACT/pull/63 .
+
+## VERIFIED — code and local checks
+
+- Owner-approved one-time pack: **USD 30.00 / 1,500 credits / 30 generations at 50 credits each**. Repeat purchases are supported. No competitor parity claim or recurring period was invented.
+- Cards and eligible Google Pay wallets use Stripe-hosted Checkout. PayPal uses server-created Orders v2; the supplied reusable HostedButtons ID is retained as an inactive reference because verified per-account binding was not established for that snippet.
+- Payment UI shows price, one-time nature, provider availability, test mode, return/cancel/pending states, and explicit notice that packs alone do not activate membership or unlock SLOW downloads.
+- Provider amount, currency, quantity, merchant/customer/account ownership, environment and settlement are checked server-side. Return URLs never grant credits. PayPal approved-order webhooks can complete an owned approved payment even if the browser does not return.
+- Transactional grant IDs prevent duplicates across capture/webhook paths; refund tombstones prevent late fulfillment from restoring reversed funds. PayPal disputes can hold generation/download access pending review.
+- Sandbox/test wallets, customers and orders have a separate Durable Object namespace. Provider/ledger mode mismatch fails closed.
+- Stripe historical one-time Price allowlist supports fixed-price settlement/refunds after rotation. Recurring Price/interval changes still require a separate migration.
+- No bank account numbers/screenshots were copied into repository files, bundles or payment code. Payout details remain an operator-dashboard task. No claim of encrypting the user's original chat attachments is made.
+- **307/307 non-browser tests PASS**, zero failures/skips. Provider tests use stubs; they are not real PayPal/Stripe acceptance evidence.
+- TypeScript/build, local HTTP DEMO/origin smoke, lint (warnings only), Worker dry-run and diff check passed. `npm run verify` was attempted; the existing native Chromium regression is unavailable locally because Chromium is absent. Recorded browser restrictions are preserved; no Android/visual pass is claimed.
+- Implementation review corrected test/live wallet mixing, interrupted PayPal browser-return recovery, historical Stripe price fulfillment and repeated-capture UI state.
+
+## BLOCKED — activation, payouts and full commercial release
+
+1. Configure Stripe merchant credentials, exact Price and signed webhook; enable Google Pay and validate eligible-device checkout.
+2. Configure PayPal REST app credentials, merchant ID and verified webhook. The public HostedButtons SDK snippet is not sufficient for automatic account credits.
+3. Choose and verify the Revolut payout destination in the payment provider's dashboard. No bank account was added or changed, and no payout destination is claimed connected.
+4. Select a recurring period before offering subscriptions. Current one-time packs do not unlock subscription-only SLOW downloads; commercial launch needs that product decision.
+5. Complete provider sandbox create/approve/capture/credit/refund acceptance and browser/mobile review. Existing protected free-SLOW image preview and account migration limitations remain from the earlier milestone.
+6. Exact-head PR checks, owner approval for merge/production deployment and accepted merchant setup are required before release. **Production unchanged; payments not enabled; no real charge or paid AI generation performed.**
+
+Executed task: `docs/CODEX_TASK_PAYMENTS_20260922.md`. Configuration and primary provider sources: `docs/ACCOUNT_BILLING_SETUP.md`. Remote CI results are recorded in PR #63; the earlier shared-account CI below is historical evidence, not evidence for this new payment revision.
+
+---
+
 # WORLDIFACT — shared accounts and cosmic login (review branch)
 
 Date: 21 September 2026. Branch: `feat/shared-accounts-cosmic-login`.
@@ -13,7 +44,7 @@ Base main: `360b9e0a9d86cfcf9f395a448d636c1073fc75b4`.
 - Atomic per-account ledger: 2 free FAST / rolling 24h, 1 free SLOW / UTC day; credit-funded generation 50 points; subscription grant 1,500 points = 30 generations; confirmed-failure refunds and idempotent settlement.
 - Studio receipts bind the account UUID in their HMAC, and blueprint idempotency IDs have a separate cryptographic namespace. Legacy Oracle routes cannot bypass account enforcement.
 - Free SLOW GLB/PBR/FBX/BLEND bytes are denied server-side. Previously generated owned results unlock when subscription is active. Uncertain submissions retain their reservation and expose a status-review state rather than automatic resubmission/refund.
-- Stripe integration is implemented but **BLOCKED / NOT ENABLED** until prices, period, pack size, secrets and reviewed webhook configuration exist. Checkout return URLs never grant credits. Tests cover paid invoice reconciliation, replayed/out-of-order events, duplicate subscriptions, refunds, customer binding and forged signatures.
+- Stripe integration is implemented but **BLOCKED / NOT ENABLED** until merchant secrets and verified webhook configuration exist; the owner subsequently approved USD 30 / 1,500 credits (see the payment milestone above). The recurring interval remains unknown. Checkout return URLs never grant credits. Tests cover paid invoice reconciliation, replayed/out-of-order events, duplicate subscriptions, refunds, customer binding and forged signatures.
 
 ## Verification
 
@@ -26,7 +57,7 @@ Base main: `360b9e0a9d86cfcf9f395a448d636c1073fc75b4`.
 ## NO-GO — full requested commercial release
 
 1. The current Oracle API has no reviewed protected raster-preview endpoint. Free SLOW jobs complete without exposing their full model; UI truthfully reports that the image preview is unavailable. Implement/deploy that backend capability before claiming the complete requested experience.
-2. Owner must supply subscription price, currency and billing period, plus top-up credit quantity and price. Configure/test Stripe and webhooks before enabling payment buttons.
+2. The owner supplied USD 30 / 1,500 credits. Choose the recurring period and configure/test payment providers and webhooks before enabling payment buttons. See the payment milestone above.
 3. Allowlist the exact Supabase recovery callback before setting `SUPABASE_RECOVERY_REDIRECT_READY=true`. Existing email/password sign-in and signup use the already configured Chess provider. Validate email-confirmation UX with an authorized real test account.
 4. Account enforcement intentionally rejects old anonymous signed receipts. Existing local downloaded originals are preserved. An owner-authorized legacy receipt migration/recovery process is needed before promising old server jobs are available in the new account.
 5. Exact PR CI, physical/mobile visual acceptance and owner permission are required before merge/production deployment. This branch is a reviewable implementation, not a claim that the new feature is live.
