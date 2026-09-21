@@ -51,20 +51,20 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', astraReady = ready } = {}) {
+async function harness({ ready = false, state = 'succeeded', astraReady = ready, promptMaxLength = 5000, prepareError = null } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map([[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
   const status = { ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
-    reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000 }
+    reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength }
   const fetcher = async (url, init = {}) => {
     const path = String(url), method = init.method || 'GET'
     calls.push({ path, method, body: init.body })
     if (path === '/api/studio/status') return Response.json(status)
     if (path === '/api/health') return Response.json({ generationReady: astraReady })
     if (path === '/api/blueprint' && method === 'POST') return Response.json(fastGeneration)
-    if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
+    if (path === '/api/studio/prepare') return prepareError ? Response.json({ error: prepareError }, { status: 400 }) : Response.json(makeReceipt(newId))
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
     return Response.json({ job: { id: path.endsWith(oldId) ? oldId : newId, state } })
@@ -191,5 +191,77 @@ test('new reference selection and draft clearing preserve the displayed old mode
     assert.equal(h.description(), before)
     assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
     assert.equal(h.archive.size, 1)
+  } finally { h.close() }
+})
+
+test('actual SLOW form explains payload overage before any request and preserves the old preview', async () => {
+  const h = await harness({ ready: true })
+  try {
+    await h.poll()
+    const previous = h.description(), receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), callCount = h.calls.length
+    h.byId('studio-prompt').props.onChange({ target: { value: 'x'.repeat(3751) } }); await h.settle()
+    assert.match(text(h.byId('studio-prompt-budget')), /3751 \/ 3445/)
+    assert.match(text(h.byId('studio-prompt-budget')), /Remove at least 306/)
+    assert.equal(h.byId('studio-prompt').props['aria-invalid'], true)
+    assert.equal(h.button('Generate 3D').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.length, callCount, 'Local validation must not even prepare a new receipt')
+    assert.equal(h.description(), previous)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.equal(h.byId('studio-prompt').props.value.length, 3751, 'Do not silently truncate a design')
+  } finally { h.close() }
+})
+
+test('correcting a SLOW draft to the exact limit permits one explicit new job despite a double click', async () => {
+  const h = await harness({ ready: true })
+  try {
+    await h.poll()
+    h.byId('studio-prompt').props.onChange({ target: { value: 'x'.repeat(3751) } }); await h.settle()
+    assert.equal(h.button('Generate 3D').props.disabled, true)
+    h.byId('studio-prompt').props.onChange({ target: { value: 'x'.repeat(3445) } }); await h.settle()
+    assert.equal(h.button('Generate 3D').props.disabled, false)
+    const first = h.form().props.onSubmit({ preventDefault() {} })
+    const duplicate = h.form().props.onSubmit({ preventDefault() {} })
+    await Promise.all([first, duplicate]); await h.settle()
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/prepare' && c.method === 'POST').length, 1)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 1)
+    assert.equal(h.calls.filter(c => c.path === '/api/blueprint').length, 0)
+    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, newId)
+    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_HISTORY_PREFIX + oldId)).receipt.id, oldId)
+    assert.equal(h.archive.get(oldId).sha256, 'original')
+  } finally { h.close() }
+})
+
+test('a server limit rejection stays actionable next to Generate and cannot start a paid job', async () => {
+  const h = await harness({ ready: true, prepareError: 'Shorten the description: the worker accepts 5000 characters including export instructions.' })
+  try {
+    await h.poll()
+    const previous = h.description(), receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const alerts = elements(h.form()).filter(n => n.props.role === 'alert').map(text).join(' ')
+    assert.match(alerts, /5000-character limit/)
+    assert.match(alerts, /counter above/)
+    assert.match(alerts, /submit once/)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 0)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.equal(h.description(), previous)
+  } finally { h.close() }
+})
+
+test('visible recovery reloads only the existing model while unknown capacity blocks new generation', async () => {
+  const h = await harness({ ready: true, promptMaxLength: null })
+  try {
+    await h.poll()
+    const previous = h.description(), receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), callCount = h.calls.length
+    assert.equal(h.button('Generate 3D').props.disabled, true)
+    assert.match(text(h.byId('studio-prompt-budget')), /Refresh availability/)
+    const recovery = h.button('no new generation')
+    assert.notEqual(recovery.props.hidden, true)
+    await recovery.props.onClick(); await h.settle()
+    const newCalls = h.calls.slice(callCount)
+    assert.ok(newCalls.some(c => c.path === `/api/studio/jobs/${oldId}/model`))
+    assert.ok(newCalls.every(c => c.method === 'GET'))
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.equal(h.description(), previous)
   } finally { h.close() }
 })
