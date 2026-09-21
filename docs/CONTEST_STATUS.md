@@ -3,7 +3,7 @@
 Date: 21 September 2026. Branch: `feat/shared-accounts-cosmic-login`.
 Base main: `360b9e0a9d86cfcf9f395a448d636c1073fc75b4`.
 
-## VERIFIED — implemented and checked locally
+## VERIFIED — implemented, checked locally and in PR CI
 
 - Existing Chess Supabase project `oiezgikconcyjvdeshdh` is reused; live read-only settings check returned HTTP 200, signup enabled, email/Google configured. No second password database, account creation or email send occurred during testing.
 - Secure HttpOnly cookie login/register/session/logout; existing account UUID verified upstream for authorization; rate limits, origin checks and guarded PKCE password recovery.
@@ -20,7 +20,7 @@ Base main: `360b9e0a9d86cfcf9f395a448d636c1073fc75b4`.
 - **272/272 non-browser tests PASS**, no failures/skips in that subset. All new account/credit/security tests use stubs and are not live payment or live generation proof.
 - TypeScript, production build, real local HTTP DEMO/origin smoke, Worker dry-run and diff whitespace check: **PASS**. Lint: zero errors; existing and hook/HMR warnings remain.
 - `npm run verify` was executed; its browser-specific existing Chromium test cannot run here because Chromium is absent. The recorded browser approval block is respected; no alternate browser or renderer used. Browser/Android visual acceptance remains **BLOCKED / NOT VERIFIED**.
-- Complete pinned Chess/Terra foundation assembly remains a required CI gate; the pinned Chess auth source hash and adapter behavior were checked locally.
+- [PR #63](https://github.com/teslaeco/WORLDIFACT/pull/63), source head `784b7e30ac85600e7a3d573e973690dc49ff9614`, tree `c4f90bca2a56d0d3258a5b40536c4fd7c209dcf7`: all six GitHub checks **PASS**. [Verify WORLDIFACT run 35660547707](https://github.com/teslaeco/WORLDIFACT/actions/runs/35660547707) passed the complete `npm run verify`, pinned Chess/Terra foundation assembly and Worker dry-run. This CI result does not establish visual or physical-device acceptance.
 - No paid AI generation, purchase, production deployment or merge was performed.
 
 ## NO-GO — full requested commercial release
