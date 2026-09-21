@@ -48,7 +48,10 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
   const shopOptions = await loadShopManufacturingOptions(react)
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, {
-    ...globals, module, exports: module.exports,
+    // Imported client modules and this component share one Error constructor in
+    // the browser bundle. Preserve that identity across this test-only VM so
+    // instanceof Error does not erase a real client's error message.
+    ...globals, Error, module, exports: module.exports,
     require(id) {
       const modules = { '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
