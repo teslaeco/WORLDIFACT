@@ -1,6 +1,6 @@
 # Account allowances and billing
 
-Status: the owner approved **USD 30.00 / 1,500 credits**. One-time credit packs, cards/eligible Google Pay via Stripe and PayPal Orders are implemented; live payments remain BLOCKED until merchant configuration and end-to-end sandbox acceptance. The recurring period is still UNKNOWN. No real payment, provider-account mutation or payout configuration was performed during implementation.
+Status: the owner approved **USD 30.00 / 1,500 credits**. One-time credit packs, cards/eligible Google Pay via Stripe and PayPal Orders are implemented; live payments remain BLOCKED until merchant configuration and end-to-end sandbox acceptance. The owner subsequently approved the separate subscription at **USD 29.99 per month / 1,500 credits**. The existing one-time pack remains USD 30.00. No real payment, provider-account mutation or payout configuration was performed during implementation.
 
 ## Identity and quotas
 
@@ -45,15 +45,15 @@ Checkout responses contain only a validated hosted Stripe URL and test/live mode
 | `STRIPE_MODE` | `test` first; `live` only for an approved production offer |
 | `STRIPE_SECRET_KEY` | Server secret matching the selected mode; never a frontend/VITE variable |
 | `STRIPE_WEBHOOK_SECRET` | Server `whsec_...` secret from the exact endpoint |
-| `STRIPE_SUBSCRIPTION_PRICE_ID` | Recurring USD 30.00 per-unit price; quantity one; keep unset until period is agreed |
-| `STRIPE_SUBSCRIPTION_INTERVAL` | Explicit `month` or `year`, matched to Price interval count one; unset blocks recurring checkout |
+| `STRIPE_SUBSCRIPTION_PRICE_ID` | Recurring USD 29.99 monthly per-unit Price; quantity one |
+| `STRIPE_SUBSCRIPTION_INTERVAL` | `month`, matched to Price interval count one; other values block recurring checkout |
 | `STRIPE_TOPUP_PRICE_ID` | One-time per-unit Price, exactly USD 30.00, quantity one |
 | `STRIPE_PREVIOUS_TOPUP_PRICE_IDS` | Optional comma-separated allowlist of at most 10 previous Price IDs for historical settlement/refunds; never used for new checkout |
 | `STRIPE_TOPUP_CREDITS` | Legacy ignored setting; server always grants exactly `1500` |
 | `BILLING_PUBLIC_ORIGIN` | Exact public HTTPS origin, without a trailing slash or path |
 | `ACCOUNT_LIMITER` | Account/billing request limiter; existing `GENERATION_LIMITER` is an allowed fallback |
 
-The Stripe Price is fetched and validated before Checkout. The approved pack is USD 30.00 / 1,500 credits. No recurring interval was invented; subscription checkout remains separately gated until the owner chooses it. Current implementation supports one fixed subscription product, not prorated upgrades, quantity changes or free trials. Configure the Stripe customer portal accordingly.
+The Stripe Price is fetched and validated before Checkout. The approved pack is USD 30.00 / 1,500 credits. The owner approved a USD 29.99 monthly membership with 1,500 credits each paid period; subscription checkout still requires complete provider configuration. Current implementation supports one fixed subscription product, not prorated upgrades, quantity changes or free trials. Configure the Stripe customer portal accordingly.
 
 When rotating the one-time Price, retain its old ID in `STRIPE_PREVIOUS_TOPUP_PRICE_IDS` for as long as historical events/refunds may arrive. Settlement re-fetches that exact allowlisted Price and verifies the same fixed pack; archived Prices remain valid for already-issued payments but cannot create new checkout. Do not rotate the recurring Price or subscription interval without a separately reviewed migration; historical recurring subscriptions currently depend on that configuration.
 
@@ -112,6 +112,6 @@ Refund/reversal handling is conservative: revoke the entire associated grant, in
 
 For deployment, register the implemented event set listed in `server/paypal.ts`, including order approval, completed/pending/denied/refunded/reversed captures and customer dispute events. Configure the webhook at `/api/billing/paypal/webhook`. The provider's webhook verification API, not a browser return parameter or screenshot, establishes event authenticity.
 
-Remaining acceptance: merchant credentials and payout verification, complete sandbox create/approve/capture → balance flow, duplicate delivery/refund checks using provider test events, real browser/mobile wallet visibility, and chosen recurring period. Local mocked tests are not live-payment evidence.
+Remaining acceptance: merchant credentials and payout verification, complete sandbox create/approve/capture → balance flow, duplicate delivery/refund checks using provider test events, real browser/mobile wallet visibility, and resolution of the merchant capability tasks shown in Stripe. Local mocked tests are not live-payment evidence.
 
 Sources checked: [PayPal integration choices](https://docs.paypal.ai/payments/choose-integration-option), [Payment Links schema](https://developer.paypal.com/api/payment-links-buttons/v1/payment-resources-post), [Orders v2](https://developer.paypal.com/docs/api/orders/v2/), [Webhook verification](https://developer.paypal.com/api/rest/webhooks/rest/).

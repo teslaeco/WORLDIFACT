@@ -26,9 +26,9 @@ STRIPE_WEBHOOK_SECRET=
 STRIPE_TOPUP_PRICE_ID=
 STRIPE_PREVIOUS_TOPUP_PRICE_IDS=
 STRIPE_TOPUP_CREDITS=1500
-# Recurring billing remains disabled until the owner chooses a period.
+# Approved membership: USD 29.99 per month for 1,500 credits. Activation remains separate.
 STRIPE_SUBSCRIPTION_PRICE_ID=
-STRIPE_SUBSCRIPTION_INTERVAL=
+STRIPE_SUBSCRIPTION_INTERVAL=month
 ENABLE_PAYPAL_BILLING=false
 PAYPAL_MODE=sandbox
 # REST app credentials; the supplied HostedButtons SDK client ID is not a REST secret.

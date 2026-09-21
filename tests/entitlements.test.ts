@@ -144,10 +144,10 @@ function billingFixture() {
   f.setNow(Date.now())
   const env: BillingEnv = { ...f.env, ENABLE_BILLING: 'true', ACCOUNT_LEDGER_MODE: 'sandbox', STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_fixture', STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET, STRIPE_SUBSCRIPTION_PRICE_ID: 'price_Subscription', STRIPE_SUBSCRIPTION_INTERVAL: 'month', STRIPE_TOPUP_PRICE_ID: 'price_Topup', STRIPE_TOPUP_CREDITS: '1500', BILLING_PUBLIC_ORIGIN: 'https://worldifact.test', ACCOUNT_LIMITER: { async limit() { return { success: true } } } }
   const subscription = { livemode: false, id: 'sub_fixture', customer: 'cus_fixture', metadata: { worldifact_uid: USER }, status: 'active', current_period_end: Math.floor(f.now() / 1000) + 31 * 86400, latest_invoice: 'in_fixture', items: { data: [{ price: { id: 'price_Subscription' }, quantity: 1 }] } }
-  const invoice = { livemode: false, id: 'in_fixture', subscription: 'sub_fixture', customer: 'cus_fixture', paid: true, status: 'paid', amount_paid: 3000, total: 3000, currency: 'usd', billing_reason: 'subscription_create', lines: { data: [{ price: { id: 'price_Subscription' }, quantity: 1, amount: 3000, currency: 'usd' }] } }
+  const invoice = { livemode: false, id: 'in_fixture', subscription: 'sub_fixture', customer: 'cus_fixture', paid: true, status: 'paid', amount_paid: 2999, total: 2999, currency: 'usd', billing_reason: 'subscription_create', lines: { data: [{ price: { id: 'price_Subscription' }, quantity: 1, amount: 2999, currency: 'usd' }] } }
   const session = { livemode: false, id: 'cs_fixture', amount_total: 3000, currency: 'usd', client_reference_id: USER, customer: 'cus_fixture', payment_intent: 'pi_fixture', status: 'complete', payment_status: 'paid', mode: 'payment', metadata: { worldifact_uid: USER, worldifact_kind: 'topup', worldifact_credits: '1500' } }
   const price = { livemode: false, id: 'price_Topup', active: true, unit_amount: 3000, currency: 'usd', type: 'one_time', billing_scheme: 'per_unit' }
-  const subscriptionPrice = { ...price, id: 'price_Subscription', type: 'recurring', recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' } }
+  const subscriptionPrice = { ...price, id: 'price_Subscription', unit_amount: 2999, type: 'recurring', recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' } }
   const lineItems = { data: [{ price: { id: 'price_Topup' }, quantity: 1, amount_total: 3000, currency: 'usd' }] }
   const seen: string[] = []
   const fetcher = (async (input: Parameters<typeof fetch>[0]) => {
@@ -271,6 +271,7 @@ test('One-time pack readiness does not require a recurring price or unapproved i
   const response = await billingApi(new Request('https://worldifact.test/api/billing/status'), f.env, f.fetcher)
   const status = await response!.json() as Record<string, unknown>
   assert.deepEqual(status.price, { amount: 3000, currency: 'USD', credits: 1500, kind: 'one_time' })
+  assert.deepEqual(status.subscriptionPrice, { amount: 2999, currency: 'USD', credits: 1500, kind: 'subscription', interval: 'month' })
   assert.equal(status.status, 'CONFIGURED')
   assert.equal(status.topupReady, true)
   assert.equal(status.cardReady, true)
@@ -331,6 +332,28 @@ test('Browser price, credit and identity injection is rejected before any Stripe
   }
 })
 
+test('Monthly membership checkout accepts USD 29.99 and rejects the USD 30 top-up amount', async () => {
+  for (const amount of [2999, 3000]) {
+    const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+    let params: URLSearchParams | undefined
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const url = String(input)
+      if (url.includes('/subscriptions?')) return Response.json({ data: [], has_more: false })
+      if (url.endsWith('/checkout/sessions') && init?.method === 'POST') {
+        params = new URLSearchParams(String(init.body))
+        return Response.json({ ...f.session, mode: 'subscription', amount_total: amount, status: 'open', payment_status: 'unpaid', metadata: { ...f.session.metadata, worldifact_kind: 'subscription', worldifact_checkout_id: params.get('metadata[worldifact_checkout_id]') }, url: 'https://checkout.stripe.com/c/pay/test_fixture', expires_at: Math.floor(f.now() / 1000) + 86400 })
+      }
+      return f.fetcher(input, init)
+    }) as typeof fetch
+    const response = await billingApi(checkoutRequest('subscription'), f.env, fetcher)
+    assert.equal(response?.status, amount === 2999 ? 200 : 503)
+    assert.equal(params!.get('mode'), 'subscription')
+    assert.equal(params!.get('line_items[0][price]'), 'price_Subscription')
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+    assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
+  }
+})
+
 test('Checkout rejects a wrong catalog amount, currency or provider mode before creating a session', async () => {
   for (const variant of ['amount', 'currency', 'mode', 'missingMode', 'quantityTransform']) {
     const f = billingFixture()
@@ -380,19 +403,22 @@ test('Paid top-ups reject wrong amount, currency, quantity, metadata credits and
   }
 })
 
-test('Recurring grants require explicit interval, exact USD 30 invoice and one licensed interval', async () => {
-  for (const variant of ['intervalUnset', 'wrongInterval', 'intervalCount', 'metered', 'amount', 'total', 'currency', 'lineAmount', 'quantity', 'extraLine']) {
+test('Recurring grants require the monthly interval, exact USD 29.99 invoice and one licensed interval', async () => {
+  for (const variant of ['intervalUnset', 'unapprovedYear', 'wrongInterval', 'intervalCount', 'metered', 'amount', 'total', 'currency', 'lineAmount', 'quantity', 'extraLine', 'catalog', 'oldPrice']) {
     const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
     if (variant === 'intervalUnset') delete f.env.STRIPE_SUBSCRIPTION_INTERVAL
+    if (variant === 'unapprovedYear') { f.env.STRIPE_SUBSCRIPTION_INTERVAL = 'year'; f.subscriptionPrice.recurring.interval = 'year' }
     if (variant === 'wrongInterval') f.subscriptionPrice.recurring.interval = 'year'
     if (variant === 'intervalCount') f.subscriptionPrice.recurring.interval_count = 2
     if (variant === 'metered') f.subscriptionPrice.recurring.usage_type = 'metered'
-    if (variant === 'amount') f.invoice.amount_paid = 2999
-    if (variant === 'total') f.invoice.total = 2999
+    if (variant === 'amount') f.invoice.amount_paid = 3000
+    if (variant === 'total') f.invoice.total = 3000
     if (variant === 'currency') f.invoice.currency = 'eur'
-    if (variant === 'lineAmount') f.invoice.lines.data[0].amount = 2999
+    if (variant === 'lineAmount') f.invoice.lines.data[0].amount = 3000
     if (variant === 'quantity') f.invoice.lines.data[0].quantity = 2
     if (variant === 'extraLine') f.invoice.lines.data.push({ ...f.invoice.lines.data[0], amount: 0 })
+    if (variant === 'catalog') f.subscriptionPrice.unit_amount = 3000
+    if (variant === 'oldPrice') { f.invoice.amount_paid = 3000; f.invoice.total = 3000; f.invoice.lines.data[0].amount = 3000 }
     await billingApi(await signedEvent('invoice.paid', { id: 'in_fixture' }), f.env, f.fetcher)
     await billingApi(await signedEvent('customer.subscription.updated', { id: 'sub_fixture' }), f.env, f.fetcher)
     assert.equal((await entitlementStatus(f.env, USER)).credits, 0, variant)

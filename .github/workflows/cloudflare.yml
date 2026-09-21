@@ -67,6 +67,20 @@ jobs:
           OWNER_ACCESS_TOKEN: ${{ secrets.OWNER_ACCESS_TOKEN }}
           ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
           ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - name: Sync optional payment credentials without activating checkout
+        run: node scripts/connect-billing.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_SUBSCRIPTION_PRICE_ID: ${{ secrets.STRIPE_SUBSCRIPTION_PRICE_ID }}
+          STRIPE_TOPUP_PRICE_ID: ${{ secrets.STRIPE_TOPUP_PRICE_ID }}
+          STRIPE_PREVIOUS_TOPUP_PRICE_IDS: ${{ secrets.STRIPE_PREVIOUS_TOPUP_PRICE_IDS }}
+          PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_CLIENT_ID }}
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+          PAYPAL_WEBHOOK_ID: ${{ secrets.PAYPAL_WEBHOOK_ID }}
+          PAYPAL_MERCHANT_ID: ${{ secrets.PAYPAL_MERCHANT_ID }}
       - name: Deploy reviewed WORLDIFACT release
         run: npx wrangler deploy --config "${{ steps.mode.outputs.config }}"
         env:

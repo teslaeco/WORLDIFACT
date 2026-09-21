@@ -23,9 +23,9 @@ Add a USD 30 offer for 1,500 credits (50 credits per generation, 30 generations)
 - The static button remains disabled. The implemented automatic-credit flow uses the merchant's REST app and verified server-side Orders instead. No unsupported `custom_id` override for HostedButtons is invented.
 - The screenshot has shipping-address collection enabled. Digital credit Orders request no shipping; the old dashboard button has not been modified.
 
-## Unresolved commercial choices
+## Commercial decisions and remaining acceptance
 
-- The owner has not selected a recurring billing interval. Monthly or annual auto-renewal is not silently enabled.
+- Follow-up owner decision: recurring membership is USD 29.99 per month for 1,500 credits; the one-time USD 30.00 pack remains separate. Real billing activation is not performed by this change.
 - Buying a credit pack alone does not activate subscription-only SLOW downloads. The page states this before payment; this restriction remains from the owner's original account rules.
 - No competitor-price parity claim is made: USD 30 is the owner's chosen price, not a market-research conclusion.
 

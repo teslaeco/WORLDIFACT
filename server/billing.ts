@@ -18,6 +18,7 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
 // Pin both API calls and the configured webhook endpoint to this documented version.
 export const STRIPE_API_VERSION = '2024-06-20'
 export const CREDIT_PACK = Object.freeze({ amount: 3000, currency: 'USD', credits: 1500, kind: 'one_time' as const })
+export const MONTHLY_MEMBERSHIP = Object.freeze({ amount: 2999, currency: 'USD', credits: 1500, kind: 'subscription' as const, interval: 'month' as const })
 type Json = Record<string, unknown>
 const object = (value: unknown): Json => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Json : {}
 const array = (value: unknown): Json[] => Array.isArray(value) ? value.map(object) : []
@@ -36,7 +37,7 @@ function billingConfig(env: BillingEnv) {
   try { const url = new URL(env.BILLING_PUBLIC_ORIGIN ?? ''); if (url.protocol === 'https:' && url.origin === env.BILLING_PUBLIC_ORIGIN && !url.username && !url.password) origin = url.origin } catch { /* Fail closed. */ }
   const mode = env.STRIPE_MODE, modeValid = mode === 'test' || mode === 'live'
   const ledgerModeMatches = mode === 'test' ? env.ACCOUNT_LEDGER_MODE === 'sandbox' : env.ACCOUNT_LEDGER_MODE === undefined || env.ACCOUNT_LEDGER_MODE === 'live'
-  const interval = ['month', 'year'].includes(env.STRIPE_SUBSCRIPTION_INTERVAL ?? '') ? env.STRIPE_SUBSCRIPTION_INTERVAL as 'month' | 'year' : null
+  const interval = env.STRIPE_SUBSCRIPTION_INTERVAL === MONTHLY_MEMBERSHIP.interval ? MONTHLY_MEMBERSHIP.interval : null
   const ready = env.ENABLE_BILLING === 'true' && env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true' && !!env.ACCOUNT_ENTITLEMENTS && !!origin && modeValid && ledgerModeMatches && !!env.STRIPE_SECRET_KEY?.startsWith(`sk_${mode}_`) && !!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')
   return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: ready && priceId(env.STRIPE_SUBSCRIPTION_PRICE_ID) && !!interval, interval, mode: modeValid ? mode : null }
 }
@@ -78,7 +79,8 @@ async function verifiedPrice(env: BillingEnv, kind: 'subscription' | 'topup', fe
   const id = settlementPriceId ?? (kind === 'subscription' ? env.STRIPE_SUBSCRIPTION_PRICE_ID : env.STRIPE_TOPUP_PRICE_ID)
   if (!priceId(id)) throw new EntitlementError('This payment option is not configured.')
   const price = await stripe(env, `/prices/${id}`, fetcher)
-  if (price.id !== id || (!allowArchived && price.active !== true) || price.unit_amount !== CREDIT_PACK.amount || price.currency !== 'usd' || (kind === 'subscription' ? price.type !== 'recurring' : price.type !== 'one_time')) throw new EntitlementError('The configured price must be exactly USD 30.00 for 1500 credits.')
+  const amount = kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount
+  if (price.id !== id || (!allowArchived && price.active !== true) || price.unit_amount !== amount || price.currency !== 'usd' || (kind === 'subscription' ? price.type !== 'recurring' : price.type !== 'one_time')) throw new EntitlementError(kind === 'subscription' ? 'The configured membership price must be exactly USD 29.99 per month for 1500 credits.' : 'The configured credit pack price must be exactly USD 30.00 for 1500 credits.')
   // Unknown periods, quantities and tiers are not silently turned into a different offer.
   if (price.billing_scheme !== 'per_unit' || price.transform_quantity != null || (kind === 'subscription' && (!billingConfig(env).interval || object(price.recurring).interval !== billingConfig(env).interval || object(price.recurring).interval_count !== 1 || object(price.recurring).usage_type !== 'licensed'))) throw new EntitlementError('The configured billing interval needs operator review.')
   return price
@@ -113,8 +115,8 @@ function matchingLines(invoice: Json, price: string | undefined) {
 }
 function exactInvoice(env: BillingEnv, invoice: Json) {
   const lines = matchingLines(invoice, env.STRIPE_SUBSCRIPTION_PRICE_ID)
-  return invoice.paid === true && invoice.status === 'paid' && invoice.amount_paid === CREDIT_PACK.amount && invoice.total === CREDIT_PACK.amount && invoice.currency === 'usd'
-    && array(object(invoice.lines).data).length === 1 && lines.length === 1 && lines[0].quantity === 1 && lines[0].amount === CREDIT_PACK.amount && lines[0].currency === 'usd'
+  return invoice.paid === true && invoice.status === 'paid' && invoice.amount_paid === MONTHLY_MEMBERSHIP.amount && invoice.total === MONTHLY_MEMBERSHIP.amount && invoice.currency === 'usd'
+    && array(object(invoice.lines).data).length === 1 && lines.length === 1 && lines[0].quantity === 1 && lines[0].amount === MONTHLY_MEMBERSHIP.amount && lines[0].currency === 'usd'
     && ['subscription_create', 'subscription_cycle'].includes(String(invoice.billing_reason))
 }
 async function checkCustomer(env: BillingEnv, uid: string, value: unknown) {
@@ -228,7 +230,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
   const url = new URL(request.url)
   if (!url.pathname.startsWith('/api/billing/')) return null
   const config = billingConfig(env)
-  if (url.pathname === '/api/billing/status' && request.method === 'GET') return json({ status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED', checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval, subscriptionCredits: CREDIT_PACK.credits, generationCost: 50, modelsPerSubscriptionGrant: 30, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, cardReady: config.topup || config.subscription, googlePay: config.topup || config.subscription ? 'eligible_devices' : 'unavailable', reason: config.topup || config.subscription ? 'Card checkout and eligible Google Pay wallets use Stripe. Credits are granted only after verified payment. Recurring billing requires a configured interval.' : 'Card checkout requires payment settings. Recurring billing also requires an explicitly configured month or year interval.' })
+  if (url.pathname === '/api/billing/status' && request.method === 'GET') return json({ status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED', checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval, subscriptionCredits: MONTHLY_MEMBERSHIP.credits, generationCost: 50, modelsPerSubscriptionGrant: 30, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, subscriptionPrice: MONTHLY_MEMBERSHIP, cardReady: config.topup || config.subscription, googlePay: config.topup || config.subscription ? 'eligible_devices' : 'unavailable', reason: config.topup || config.subscription ? 'Card checkout and eligible Google Pay wallets use Stripe. Credits are granted only after verified payment. Membership costs USD 29.99 per month and requires configured monthly billing.' : 'Card checkout requires payment settings. The USD 29.99 membership also requires an explicitly configured monthly interval.' })
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405)
   if (!config.ready) return json({ status: 'BLOCKED', error: 'Payments are not configured. No checkout or charge was created.' }, 503)
   try {
@@ -273,7 +275,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     if (kind === 'subscription') params.set('subscription_data[metadata][worldifact_uid]', user.id)
     else { params.set('metadata[worldifact_credits]', String(CREDIT_PACK.credits)); params.set('payment_intent_data[metadata][worldifact_uid]', user.id); params.set('payment_intent_data[metadata][worldifact_kind]', 'topup') }
     const session = await stripe(env, '/checkout/sessions', fetcher, params, `wf-checkout-${user.id}-${attempt.id}`)
-    if (typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/') || !resourceId(session.id, 'cs') || !Number.isSafeInteger(session.expires_at) || session.amount_total !== CREDIT_PACK.amount || session.currency !== 'usd' || session.mode !== (kind === 'subscription' ? 'subscription' : 'payment') || idOf(session.customer) !== customer || session.client_reference_id !== user.id || uidFor(session) !== user.id || object(session.metadata).worldifact_kind !== kind || object(session.metadata).worldifact_checkout_id !== attempt.id) throw new EntitlementError('Checkout price or account was not confirmed.')
+    if (typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/') || !resourceId(session.id, 'cs') || !Number.isSafeInteger(session.expires_at) || session.amount_total !== (kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount) || session.currency !== 'usd' || session.mode !== (kind === 'subscription' ? 'subscription' : 'payment') || idOf(session.customer) !== customer || session.client_reference_id !== user.id || uidFor(session) !== user.id || object(session.metadata).worldifact_kind !== kind || object(session.metadata).worldifact_checkout_id !== attempt.id) throw new EntitlementError('Checkout price or account was not confirmed.')
     await entitlementCall(env, user.id, '/checkout-finish', { kind, id: attempt.id, url: session.url, sessionId: session.id, expiresAt: Number(session.expires_at) * 1000 })
     return json({ url: session.url, mode: config.mode })
   } catch (error) { return json({ error: error instanceof EntitlementError ? error.message : 'Billing is temporarily unavailable. No account credit was inferred from this response.' }, error instanceof EntitlementError ? error.status : 503) }
