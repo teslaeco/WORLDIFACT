@@ -15,22 +15,30 @@ The complete preceding ledger, including the project-attachment release, Oracle 
 - Nine focused regression tests PASS locally; helper strict TypeScript check PASS; Shop TSX syntax check PASS.
 - Details and reproduction: [SHOP_PROMPT_AUDIT_20260921.md](SHOP_PROMPT_AUDIT_20260921.md).
 
-## CI integration follow-up — PR #62
+## VERIFIED — repair CI on code revision 9523417
 
-- [Initial run 35645529573](https://github.com/teslaeco/WORLDIFACT/actions/runs/35645529573), head `a140388de341882d3a635564181ee3d789b76357`: full lint and repository TypeScript PASS; tests 225/239 PASS, 14 FAIL. Foundations and deployment dry-run were not reached.
-- All 14 failures reported the same missing test-harness dependency mapping: `Unexpected Shop dependency: ../lib/studioPromptBudget`. The new nine budget tests passed. No failed test was disabled or removed.
-- Updated the actual-component render harness to import the real budget helper; validation is not mocked away.
-- Added four actual Shop lifecycle regression tests covering oversized drafts with no requests, exact-limit explicit submission and double clicks, actionable server rejection, and visible GET-only recovery with unknown generation capacity.
-- Updated the status fixture to advertise 5000 characters, matching the server's reviewed contract, with an explicit unknown-capacity test.
-- The next exact-head CI result is NOT inferred from these edits. Read [PR #62 checks and verification comments](https://github.com/teslaeco/WORLDIFACT/pull/62) for the result associated with the actual reviewed head before any merge.
+The reviewed code/test revision is `952341765de2cdb73c5e712eea52b9b1a1260ee9`. This ledger-only follow-up does not change the runtime or tests. Check the latest [PR #62 checks](https://github.com/teslaeco/WORLDIFACT/pull/62) again before merging; a previous passing revision does not certify unrelated later changes.
+
+- [Verify WORLDIFACT — run 35646273994](https://github.com/teslaeco/WORLDIFACT/actions/runs/35646273994): **SUCCESS**. Includes full lint, repository TypeScript, unit/integration tests, local HTTP smoke, build, pinned foundation assembly, Worker deployment dry-run and the existing hosted-Studio access check.
+- [FAST worker review — run 35646273993](https://github.com/teslaeco/WORLDIFACT/actions/runs/35646273993): worker job **SUCCESS**, including deterministic Blender fixtures, not a paid model request or a production performance claim.
+- [FAST installation review — run 35646274056](https://github.com/teslaeco/WORLDIFACT/actions/runs/35646274056): **SUCCESS**.
+- [FAST launcher review — run 35646274141](https://github.com/teslaeco/WORLDIFACT/actions/runs/35646274141): **SUCCESS**.
+- [Oracle project-file patch review — run 35646274015](https://github.com/teslaeco/WORLDIFACT/actions/runs/35646274015): **SUCCESS**, not evidence that the patch is installed on the live Oracle VM.
+- Four added actual Shop lifecycle tests cover oversized drafts without any request, exact-limit explicit submission and double clicks, actionable server rejection, and visible GET-only recovery while unknown capacity blocks new generation. These use the real component, budget helper and StudioCoordinator with deterministic transport/storage adapters.
+
+### Earlier CI failures and corrections
+
+- [Run 35645529573](https://github.com/teslaeco/WORLDIFACT/actions/runs/35645529573), head `a140388de341882d3a635564181ee3d789b76357`: full lint and repository TypeScript passed; tests 225/239 passed and 14 failed because the test harness did not map the new helper import. The real helper was added to the mapping, not replaced by a stub.
+- [Run 35646074933](https://github.com/teslaeco/WORLDIFACT/actions/runs/35646074933), head `855511f0ef37616110fca993cd6c0cb032914917`: tests 242/243 passed. The remaining new error-display test exposed the test VM's distinct Error constructor: imported client exceptions failed the component's instanceof check in the harness. Sharing the host Error constructor models the single browser realm and preserves the genuine error message. The specific-message assertion remains in place.
+- No failing test was removed, skipped or weakened. Existing render tests continue to cover all main portal entries.
 
 ## UNKNOWN / BLOCKED
 
 - The screenshot does not expose a request ID or response from the user's exact click. The length rejection is reproduced from source and the earlier supplied prompt, not a captured mobile network trace.
-- Direct public health/status reads failed in the web tool, and shell DNS also failed. Current Oracle/API health and credit balance remain UNKNOWN.
-- A complete local checkout/dependency install was unavailable. `npm run verify` stopped at the absent asset-preparation script; `npm run deploy:check` could not find Wrangler. These are local-environment blocks, not application test passes.
-- Full repository CI must be read from the exact repair PR head. Browser/Android and paid end-to-end generation remain NOT RUN.
+- Direct public health/status reads failed in the web tool, and shell DNS also failed. Current Oracle/API health and credit balance remain UNKNOWN; those access limitations do not establish an outage.
+- A complete local checkout/dependency install was unavailable. Local full verify/dry-run were blocked by missing files/dependencies. The GitHub CI results above supply the full-check evidence instead.
+- No physical Android test, production Shop visual pass or paid end-to-end generation was performed. Existing fixture tests are not evidence of a new live model.
 
 ## Release gate
 
-GO for review-branch publication. NO-GO for production until exact-head CI is green and the owner explicitly approves merge/deployment. No merge, deployment, quota increase, paid generation, supplier action or contest decision is performed by this milestone.
+GO for the reviewed repair subject to the latest exact-head checks and explicit owner merge/deployment approval. Production is unchanged. No merge, deployment, quota increase, paid generation, supplier action or contest decision was performed by this milestone.
