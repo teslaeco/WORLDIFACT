@@ -15,7 +15,7 @@ function fixture() {
     assert.equal(init?.redirect, 'manual');
     assert.ok(init?.signal instanceof AbortSignal);
     assert.equal(headers.get('Authorization'), `Bearer ${key}`);
-    assert.equal(headers.get('Stripe-Version'), '2024-06-20');
+    assert.equal(headers.get('Stripe-Version'), url.pathname === '/v1/checkout/sessions' ? '2025-03-31.basil' : '2024-06-20');
     const call = { path: url.pathname, method: init?.method ?? 'GET', params, idempotency: headers.get('Idempotency-Key') };
     calls.push(call);
     if (url.pathname === '/v1/prices') {
@@ -47,6 +47,7 @@ test('preflight opens an isolated unpaid session and immediately expires it with
   assert.equal(create.params.get('line_items[0][quantity]'), '1');
   assert.equal(create.params.get('payment_method_types[0]'), 'card');
   assert.equal(create.params.get('allow_promotion_codes'), 'false');
+  assert.equal(create.params.get('managed_payments[enabled]'), 'false');
   assert.match(create.params.get('metadata[worldifact_probe]')!, /^[0-9a-f-]{36}$/);
   for (const name of ['customer', 'customer_email', 'payment_method', 'metadata[worldifact_uid]', 'subscription_data[metadata][worldifact_uid]', 'expires_at']) assert.equal(create.params.has(name), false);
   assert.equal(expire.params.size, 0);

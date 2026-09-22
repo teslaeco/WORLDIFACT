@@ -1,3 +1,13 @@
+# WORLDIFAKT — Stripe account-default Checkout compatibility repair
+
+Date: 22 September 2026. PR #74 merged as `b71a1ce87a40d9ec6f5487c25369cf864045bdaf` after all five checks and 391/391 tests passed. Its deployment `35721114629` stopped before publication at the new no-charge preflight. Stripe returned HTTP400 `invalid_request_error`, identifying an unsupported parameter because Managed Payments is enabled by default on the merchant account. The official Managed Payments integration guide confirms that explicit `payment_method_types` is unsupported in that mode.
+
+The existing integration is standard fixed-USD Stripe Checkout. Both the application and preflight now explicitly set `managed_payments[enabled]=false` per session, retaining card/eligible Google Pay, USD29.99, exact settlement checks and the existing cancellation portal. This does not change the merchant's global account settings or enroll the application in Managed Payments' tax/currency/payment-method behavior. Standard Stripe payments retain the merchant's usual tax and transaction responsibilities. No card, charge, subscription activation, refund or payout is performed by this repair.
+
+Stripe documents this per-session setting in `https://docs.stripe.com/payments/managed-payments/set-up`; its guide targets newer API versions. Only Checkout creation is pinned to the documented minimum `2025-03-31.basil`; billing reads, portal calls, settlement and webhooks remain on `2024-06-20`. The live preflight must confirm provider acceptance before publication. The regression covers both monthly subscriptions and one-time credit purchases against an account-default Managed Payments rejection. Final live acceptance belongs in the repair PR; preparation alone is not reported as a completed repair.
+
+---
+
 # WORLDIFAKT — authenticated checkout failure investigation
 
 Date: 22 September 2026. The owner reported that a signed-in buyer could not open the subscription checkout after payment activation.

@@ -16,8 +16,10 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
   STRIPE_TOPUP_CREDITS?: string
   BILLING_PUBLIC_ORIGIN?: string
 }
-// Pin both API calls and the configured webhook endpoint to this documented version.
+// Pin billing reads and the configured webhook endpoint independently of Checkout creation.
 export const STRIPE_API_VERSION = '2024-06-20'
+// The explicit Managed Payments opt-out is documented from this Checkout API version.
+export const STRIPE_CHECKOUT_API_VERSION = '2025-03-31.basil'
 export const CREDIT_PACK = Object.freeze({ amount: 2999, currency: 'USD', credits: 1500, kind: 'one_time' as const })
 export const MONTHLY_MEMBERSHIP = Object.freeze({ amount: CREDIT_PACK.amount, currency: 'USD', credits: 1500, kind: 'subscription' as const, interval: 'month' as const })
 type Json = Record<string, unknown>
@@ -73,7 +75,7 @@ async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, para
     response = await fetcher(`https://api.stripe.com/v1${path}`, {
       // workerd supports manual/follow; reject redirects before credentials can leave Stripe.
       method: params ? 'POST' : 'GET', redirect: 'manual', signal,
-      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY?.trim()}`, 'Stripe-Version': STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
+      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY?.trim()}`, 'Stripe-Version': path === '/checkout/sessions' && params ? STRIPE_CHECKOUT_API_VERSION : STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
       ...(params ? { body: params.toString() } : {}),
     })
   } catch (error) {
@@ -306,6 +308,8 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
       'metadata[worldifact_checkout_id]': attempt.id,
       // Stripe-hosted card Checkout presents Google Pay only for eligible devices/accounts.
       'payment_method_types[0]': 'card', allow_promotion_codes: 'false',
+      // Keep this fixed-USD integration on standard Checkout even if the account defaults to Managed Payments.
+      'managed_payments[enabled]': 'false',
       success_url: `${config.origin}/account/credits?billing=processing`, cancel_url: `${config.origin}/account/credits?billing=cancelled`,
     })
     if (kind === 'subscription') params.set('subscription_data[metadata][worldifact_uid]', user.id)
