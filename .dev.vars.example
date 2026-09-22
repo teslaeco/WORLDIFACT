@@ -14,6 +14,12 @@ GENERATION_REQUEST_LIMIT=0
 # Explicit approved expiry as an ISO 8601 UTC timestamp.
 GENERATION_EXPIRES_AT=
 
+# Existing Chess Supabase identity; no second user database. Enable only after
+# its Auth redirect allowlist accepts this exact callback path plus state:
+# https://worldifact.xodobrox.workers.dev/api/account/oauth/callback?state=*
+# A 2026-09-22 owned-flow cancellation probe still returned the external Chess URL.
+SUPABASE_GOOGLE_REDIRECT_READY=false
+
 # Server-side payment configuration. Empty by default; never put private keys in VITE_*.
 ENFORCE_ACCOUNT_ENTITLEMENTS=true
 ACCOUNT_LEDGER_MODE=sandbox
@@ -22,7 +28,7 @@ BILLING_PUBLIC_ORIGIN=https://worldifact.xodobrox.workers.dev
 STRIPE_MODE=test
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-# One-time per-unit Price: exactly USD 30.00 for 1,500 credits.
+# One-time per-unit Price: exactly USD 29.99 for 1,500 credits.
 STRIPE_TOPUP_PRICE_ID=
 STRIPE_PREVIOUS_TOPUP_PRICE_IDS=
 STRIPE_TOPUP_CREDITS=1500
