@@ -469,6 +469,85 @@ test('standard card checkout works when the Stripe account defaults to Managed P
   }
 })
 
+test('legacy rejected checkout recovers both purchase kinds with one deterministic key and no entitlement grant', async () => {
+  for (const kind of ['subscription', 'topup'] as const) {
+    const f = freshCheckoutFixture(), requests: { key: string | null; version: string | null; params: URLSearchParams }[] = []
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (new URL(String(input)).pathname !== '/v1/checkout/sessions') return f.fetcher(input, init)
+      const headers = new Headers(init?.headers), params = new URLSearchParams(String(init?.body ?? ''))
+      requests.push({ key: headers.get('Idempotency-Key'), version: headers.get('Stripe-Version'), params })
+      if (requests.length === 1) return Response.json({ error: { type: 'idempotency_error', message: 'Private original request details' } }, { status: 400 })
+      if (requests.length === 2) return Response.json({ error: { type: 'invalid_request_error', message: 'Unsupported parameter: `payment_method_types`. Managed Payments, which is enabled by default on your account, handles this parameter for you.' } }, { status: 400 })
+      assert.equal(requests.length, 3)
+      return Response.json({ ...await (await f.fetcher(input, init)).json() as Record<string, unknown>, status: 'open', payment_status: 'unpaid' })
+    }) as typeof fetch
+    assert.equal((await billingApi(checkoutRequest(kind), f.env, fetcher))?.status, 200)
+    assert.equal(requests.length, 3)
+    const [current, original, recovered] = requests
+    assert.deepEqual(requests.map(value => value.version), ['2025-03-31.basil', '2024-06-20', '2025-03-31.basil'])
+    assert.equal(original.key, current.key)
+    assert.equal(recovered.key, `${current.key}-standard-v2`)
+    assert.equal(current.params.get('managed_payments[enabled]'), 'false')
+    const expectedOriginal = new URLSearchParams(current.params); expectedOriginal.delete('managed_payments[enabled]')
+    assert.equal(original.params.toString(), expectedOriginal.toString())
+    assert.equal(recovered.params.toString(), current.params.toString())
+    assert.equal((await billingApi(checkoutRequest(kind), f.env, fetcher))?.status, 200)
+    assert.equal(requests.length, 3, 'retry reuses the saved checkout without another provider create')
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+    assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
+  }
+})
+
+test('legacy successful checkout is reused only while unpaid, open and owned by the same account', async () => {
+  for (const scenario of ['open', 'complete', 'paid', 'foreign'] as const) {
+    const f = freshCheckoutFixture(), keys: (string | null)[] = []
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (new URL(String(input)).pathname !== '/v1/checkout/sessions') return f.fetcher(input, init)
+      keys.push(new Headers(init?.headers).get('Idempotency-Key'))
+      if (keys.length === 1) return Response.json({ error: { type: 'idempotency_error' } }, { status: 400 })
+      assert.equal(keys.length, 2, 'an existing session must never authorize a replacement key')
+      const body = await (await f.fetcher(input, init)).json() as Record<string, unknown>
+      return Response.json({ ...body, status: scenario === 'complete' ? 'complete' : 'open', payment_status: scenario === 'paid' ? 'paid' : 'unpaid', ...(scenario === 'foreign' ? { metadata: { ...body.metadata as Record<string, unknown>, worldifact_uid: OTHER } } : {}) })
+    }) as typeof fetch
+    const result = await billingApi(checkoutRequest('subscription'), f.env, fetcher)
+    assert.equal(result?.status, scenario === 'open' ? 200 : scenario === 'foreign' ? 503 : 409, scenario)
+    assert.equal(keys.length, 2)
+    assert.equal(keys[0], keys[1])
+    if (scenario === 'open') {
+      assert.equal((await billingApi(checkoutRequest('subscription'), f.env, fetcher))?.status, 200)
+      assert.equal(keys.length, 2)
+    }
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+    assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
+  }
+})
+
+test('legacy recovery fails closed on ambiguous errors and never rotates beyond the fixed recovery key', async () => {
+  for (const scenario of ['timeout', 'unknown', 'unrelated', 'idempotency', 'recovery_failure'] as const) {
+    const f = freshCheckoutFixture(), keys: (string | null)[] = [], privateValue = 'sk_live_private_original_request'
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (new URL(String(input)).pathname !== '/v1/checkout/sessions') return f.fetcher(input, init)
+      keys.push(new Headers(init?.headers).get('Idempotency-Key'))
+      if (keys.length === 1 || keys.length === 3) return Response.json({ error: { type: 'idempotency_error', message: privateValue } }, { status: 400 })
+      assert.equal(keys.length, 2)
+      if (scenario === 'timeout') throw new DOMException(privateValue, 'TimeoutError')
+      if (scenario === 'unknown') return Response.json({ error: { message: privateValue } }, { status: 400 })
+      if (scenario === 'idempotency') return Response.json({ error: { type: 'idempotency_error', message: privateValue } }, { status: 400 })
+      return Response.json({ error: { type: 'invalid_request_error', message: scenario === 'recovery_failure' ? `Unsupported parameter: payment_method_types. Managed Payments is enabled by default. ${privateValue}` : `A different parameter is invalid. ${privateValue}` } }, { status: 400 })
+    }) as typeof fetch
+    const result = await billingApi(checkoutRequest('subscription'), f.env, fetcher)
+    assert.equal(result?.status, scenario === 'timeout' ? 503 : 502, scenario)
+    assert.equal(keys.length, scenario === 'recovery_failure' ? 3 : 2)
+    assert.equal(keys[0], keys[1])
+    if (keys.length === 3) assert.equal(keys[2], `${keys[0]}-standard-v2`)
+    const responseText = await result!.text()
+    assert.ok(!responseText.includes(privateValue))
+    assert.ok(!responseText.includes('Managed Payments'))
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+    assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
+  }
+})
+
 test('Stripe HTTP diagnostics identify only fixed stages, status and allowlisted code or parameter labels', async () => {
   const privateValue = 'sk_live_private_customer_information'
   for (const [path, stage] of [['/v1/prices/price_Subscription', 'price_read'], ['/v1/customers', 'customer_create'], ['/v1/subscriptions', 'subscription_list'], ['/v1/checkout/sessions', 'checkout_create'], ['/v1/billing_portal/sessions', 'portal_create']] as const) {
