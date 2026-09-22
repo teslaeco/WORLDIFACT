@@ -39,11 +39,18 @@ function fixture() {
     if (method === 'GET') return Response.json({ object: 'list', data: portals, has_more: false });
     assert.equal(method, 'POST');
     assert.equal(headers.get('Content-Type'), 'application/x-www-form-urlencoded');
-    assert.equal(headers.get('Idempotency-Key'), 'worldifact-portal-v1-acct_Merchant');
+    assert.equal(headers.get('Idempotency-Key'), 'worldifact-portal-v1-acct_Merchant-create-v2');
+    // stripe-node v16.0.0 reflects API 2024-06-20: these CREATE objects have required
+    // nested fields even when disabled, unlike ConfigurationUpdateParams.
+    for (const [present, required] of [
+      ['features[subscription_update][enabled]', ['features[subscription_update][default_allowed_updates]', 'features[subscription_update][products]']],
+      ['features[subscription_cancel][cancellation_reason][enabled]', ['features[subscription_cancel][cancellation_reason][options]']],
+    ] as const) {
+      if (params.has(present)) for (const field of required) if (!params.has(field)) return Response.json({ error: { code: 'parameter_missing', param: field, message: `sensitive diagnostic ${key}` } }, { status: 400 });
+    }
     assert.equal(params.get('features[subscription_cancel][enabled]'), 'true');
     assert.equal(params.get('features[subscription_cancel][mode]'), 'at_period_end');
     assert.equal(params.get('features[subscription_cancel][proration_behavior]'), 'none');
-    assert.equal(params.get('features[subscription_update][enabled]'), 'false');
     assert.equal(params.get('features[payment_method_update][enabled]'), 'true');
     assert.equal(params.get('login_page[enabled]'), 'false');
     assert.equal(params.has('is_default'), false);
@@ -175,4 +182,48 @@ test('provider permission failures, redirects, malformed responses and transport
     assert.equal(f.uploads.length, 0);
   }
   assert.ok(!stripePortalErrorMessage(new Error(key)).includes(key));
+});
+
+test('pinned create schema rejects partial disabled objects while the corrected request relies on verified disabled defaults', async () => {
+  const f = fixture();
+  const result = await f.run();
+  assert.equal(result.configurationId, 'bpc_WorldifactV1');
+  const portal = f.portals[0], cancel = object(object(portal.features).subscription_cancel);
+  assert.equal(object(object(portal.features).subscription_update).enabled, false);
+  assert.equal(object(cancel.cancellation_reason).enabled, false);
+  const request = f.posts()[0];
+  for (const field of ['features[subscription_update][enabled]', 'features[subscription_cancel][cancellation_reason][enabled]']) {
+    const partial = new URLSearchParams(request.params);
+    partial.set(field, 'false');
+    const response = await f.dependencies.fetcher('https://api.stripe.com/v1/billing_portal/configurations', {
+      method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(1000),
+      headers: { Authorization: `Bearer ${key}`, 'Stripe-Version': '2024-06-20', 'Content-Type': 'application/x-www-form-urlencoded', 'Idempotency-Key': request.idempotency! },
+      body: partial.toString(),
+    });
+    assert.equal(response.status, 400);
+    assert.equal(object(object(await response.json()).error).code, 'parameter_missing');
+  }
+  assert.equal(f.portals.length, 1);
+});
+
+test('provider diagnostics expose only exact allowlisted codes and parameter names, never raw messages or arbitrary values', async () => {
+  for (const error of [
+    { code: 'parameter_missing', param: 'features[subscription_update][products]', message: key, extra: key },
+    { code: key, param: key, message: key },
+    { code: 'parameter_unknown', param: `features[${key}]`, message: key },
+    { code: `parameter_missing${key}`, param: `features[subscription_update][products]${key}`, message: key },
+  ]) {
+    const f = fixture();
+    const fetcher = (async () => Response.json({ error }, { status: 400 })) as typeof fetch;
+    await assert.rejects(prepareStripePortal(env, { ...f.dependencies, fetcher }), value => {
+      const message = stripePortalErrorMessage(value);
+      assert.match(message, /HTTP 400/);
+      assert.ok(!message.includes(key));
+      if (error.code === 'parameter_missing') assert.match(message, /parameter_missing; features\[subscription_update\]\[products\]/);
+      else if (error.code === 'parameter_unknown') assert.match(message, /\(parameter_unknown\)/);
+      else assert.ok(!message.includes('parameter_missing'));
+      return true;
+    });
+    assert.equal(f.uploads.length, 0);
+  }
 });
