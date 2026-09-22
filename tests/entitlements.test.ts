@@ -142,7 +142,7 @@ async function signedEvent(type: string, object: Record<string, unknown>, create
 function billingFixture() {
   const f = fixture()
   f.setNow(Date.now())
-  const env: BillingEnv = { ...f.env, ENABLE_BILLING: 'true', ACCOUNT_LEDGER_MODE: 'sandbox', STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_fixture', STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET, STRIPE_SUBSCRIPTION_PRICE_ID: 'price_Subscription', STRIPE_SUBSCRIPTION_INTERVAL: 'month', STRIPE_TOPUP_PRICE_ID: 'price_Topup', STRIPE_TOPUP_CREDITS: '1500', BILLING_PUBLIC_ORIGIN: 'https://worldifact.test', ACCOUNT_LIMITER: { async limit() { return { success: true } } } }
+  const env: BillingEnv = { ...f.env, ENABLE_BILLING: 'true', ACCOUNT_LEDGER_MODE: 'sandbox', STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_fixture', STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET, STRIPE_BILLING_PORTAL_CONFIGURATION_ID: 'bpc_Worldifact', STRIPE_SUBSCRIPTION_PRICE_ID: 'price_Subscription', STRIPE_SUBSCRIPTION_INTERVAL: 'month', STRIPE_TOPUP_PRICE_ID: 'price_Topup', STRIPE_TOPUP_CREDITS: '1500', BILLING_PUBLIC_ORIGIN: 'https://worldifact.test', ACCOUNT_LIMITER: { async limit() { return { success: true } } } }
   const subscription = { livemode: false, id: 'sub_fixture', customer: 'cus_fixture', metadata: { worldifact_uid: USER }, status: 'active', current_period_end: Math.floor(f.now() / 1000) + 31 * 86400, latest_invoice: 'in_fixture', items: { data: [{ price: { id: 'price_Subscription' }, quantity: 1 }] } }
   const invoice = { livemode: false, id: 'in_fixture', subscription: 'sub_fixture', customer: 'cus_fixture', paid: true, status: 'paid', amount_paid: 2999, total: 2999, currency: 'usd', billing_reason: 'subscription_create', lines: { data: [{ price: { id: 'price_Subscription' }, quantity: 1, amount: 2999, currency: 'usd' }] } }
   const session = { livemode: false, id: 'cs_fixture', amount_total: 2999, currency: 'usd', client_reference_id: USER, customer: 'cus_fixture', payment_intent: 'pi_fixture', status: 'complete', payment_status: 'paid', mode: 'payment', metadata: { worldifact_uid: USER, worldifact_kind: 'topup', worldifact_credits: '1500' } }
@@ -256,6 +256,34 @@ test('Subscription update can reconcile a paid invoice before its webhook; later
   assert.equal((await entitlementStatus(f.env, USER)).credits, 1500)
 })
 const checkoutRequest = (kind: string, origin = 'https://worldifact.test') => new Request('https://worldifact.test/api/billing/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin, Cookie: '__Host-worldifact-access=fixture_access_token' }, body: JSON.stringify({ kind }) })
+
+test('Monthly checkout requires cancellation configuration and portal sessions remain bound to the account', async () => {
+  const missing = billingFixture()
+  delete missing.env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID
+  const status = await (await billingApi(new Request('https://worldifact.test/api/billing/status'), missing.env, missing.fetcher))!.json() as Record<string, unknown>
+  assert.equal(status.checkoutReady, false)
+  assert.equal(status.topupReady, true)
+  assert.equal((await billingApi(checkoutRequest('subscription'), missing.env, missing.fetcher))?.status, 503)
+  assert.ok(!missing.seen.some(url => url.startsWith('https://api.stripe.com/')))
+  for (const mismatch of [null, 'customer', 'configuration'] as const) {
+    const f = billingFixture()
+    await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (String(input).endsWith('/billing_portal/sessions')) {
+        const params = new URLSearchParams(String(init?.body))
+        assert.equal(params.get('customer'), 'cus_fixture')
+        assert.equal(params.get('configuration'), 'bpc_Worldifact')
+        assert.equal(params.get('return_url'), 'https://worldifact.test/account/credits')
+        return Response.json({ livemode: false, customer: mismatch === 'customer' ? 'cus_foreign' : 'cus_fixture', configuration: mismatch === 'configuration' ? 'bpc_default' : 'bpc_Worldifact', url: 'https://billing.stripe.com/p/session/test' })
+      }
+      return f.fetcher(input, init)
+    }) as typeof fetch
+    const request = new Request('https://worldifact.test/api/billing/portal', { method: 'POST', headers: checkoutRequest('subscription').headers })
+    const response = await billingApi(request, f.env, fetcher)
+    assert.equal(response?.status, mismatch ? 503 : 200)
+    if (mismatch) assert.ok(!(await response!.text()).includes('https://billing.stripe.com'))
+  }
+})
 test('Subscription checkout refuses an existing past-due Stripe subscription even if local activation is absent', async () => {
   const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
   let created = 0

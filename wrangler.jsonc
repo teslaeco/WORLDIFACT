@@ -18,6 +18,7 @@
     "GENERATION_EXPIRES_AT": "",
     "ENABLE_APPROVED_FAST_TEST": "true",
     "ENFORCE_ACCOUNT_ENTITLEMENTS": "true",
+    "ENABLE_BILLING": "true",
     "SUPABASE_GOOGLE_REDIRECT_READY": "true"
   },
   "durable_objects": {

@@ -1,3 +1,18 @@
+# WORLDIFAKT — owner-authorized Stripe payment activation
+
+Date: 22 September 2026. Branch: `feat/enable-stripe-payments`.
+
+The owner confirmed successful setup and explicitly requested “włącz te płatności”. This instruction authorizes Stripe checkout activation and deployment; it supersedes the earlier hold on activation. It does not claim or authorize an assistant-made real charge.
+
+- `ENABLE_BILLING=true` enables the already configured live Stripe card/eligible Google Pay integration for signed-in users. Both offers remain USD29.99 / 1500credits, with explicit monthly renewal or a one-time purchase. Existing account/amount/currency/idempotency checks and verified webhook settlement remain required.
+- Before deployment, the release prepares a dedicated customer portal configuration with subscription cancellation at period end and no prorations or plan changes. Monthly checkout requires that configuration ID; portal sessions are explicitly bound to it and to the verified customer's ID. This avoids relying on an unverified Stripe default portal.
+- The release adds no-charge checks for live billing readiness, exact offers, unauthenticated/foreign-origin checkout rejection and unsigned webhook rejection. These prove configuration/guards, not completed payment settlement or actual device wallet visibility.
+- Existing generation settings remain unchanged. PayPal remains disabled pending its separate merchant credentials. No bank account number is stored or published and no payout destination is changed.
+
+Local verification: 373 tests pass; one existing Chromium-required regression remains BLOCKED by the missing binary (374 total). Lint, TypeScript, real HTTP DEMO/origin smoke, production build, Worker dry-run, workflow inline-script syntax and diff checks pass. Portal provisioning and actual activation publication remain pending this release; exact results will be recorded in its PR. Real paid settlement and a provider sandbox end-to-end purchase remain unverified; automated settlement/refund/duplicate tests use isolated fixtures.
+
+---
+
 # WORLDIFAKT — production Stripe key compatibility follow-up
 
 Date: 22 September 2026. Branch: `fix/stripe-restricted-key-setup`.
@@ -6,7 +21,7 @@ PR #67 merged as `3679060c4782a802a683c17e1a0460a24379e4e3` after all five check
 
 The previous implementation accepted only `sk_live_` and rejected surrounding whitespace. This follow-up supports Stripe's documented restricted server keys (`rk_live_`) throughout setup, synchronization and runtime, removes surrounding copy whitespace, and preserves live/test isolation, provider permissions and activation gates. Invalid key categories receive fixed diagnostics without exposing any submitted value. No access policy or permission is widened in Stripe.
 
-Local checks: 365 tests pass and the existing Chromium-required test is BLOCKED (366 total). Lint, TypeScript, HTTP DEMO/origin smoke, build, Worker dry-run and diff checks pass. Tests cover restricted-key permission denial, public/test/org key rejection, mode isolation and whitespace normalization. Setup now also checks that the target Cloudflare Worker exists before any Stripe operation, preventing Wrangler's missing-Worker draft fallback. Full CI and actual setup retry remain pending; no Stripe provisioning success is claimed yet.
+Local checks: 365 tests pass and the existing Chromium-required test is BLOCKED (366 total). Lint, TypeScript, HTTP DEMO/origin smoke, build, Worker dry-run and diff checks pass. Tests cover restricted-key permission denial, public/test/org key rejection, mode isolation and whitespace normalization. Setup now also checks that the target Cloudflare Worker exists before any Stripe operation, preventing Wrangler's missing-Worker draft fallback. PR #68 merged as `edfa90ae77d0a83390c0000d546f4b55bf666019` after all five checks and 366/366 tests passed. Deployment `35712356813` succeeded with version `578619f0-2294-4096-8f0c-91264ef60473` and complete release smoke. Setup `35712516177` succeeded at 09:49:25 UTC: both USD29.99 prices and the ten-event webhook were verified and all four Stripe values were written directly to Cloudflare. Charges and payouts were enabled on the Stripe account; application checkout activation remained off until the subsequent owner instruction.
 
 ---
 
@@ -19,7 +34,7 @@ Date: 22 September 2026. Branch: `feat/stripe-account-bootstrap`.
 - Normal releases explicitly support Cloudflare-managed Stripe settings, so the owner does not need to copy three more values into GitHub. Default complete-group validation and independent PayPal synchronization remain intact. Setup and deployment share production concurrency.
 - Checkout activation, live payment settlement, PayPal merchant credentials and payout destinations are separate unfinished items. This change makes no charge, payout change or AI generation request.
 
-Local verification: 360 tests pass and the one existing Chromium-required regression is BLOCKED by the missing binary (361 total). Lint, TypeScript, real local HTTP DEMO/origin smoke, production build, Worker dry-run and diff checks pass. Focused setup/synchronization tests pass 20/20, including partial-failure recovery, mismatched existing resources, exact amounts, redirect/body limits and secret redaction. GitHub production variable `STRIPE_CONFIG_SOURCE=cloudflare` was saved and confirmed. Actual Stripe API validity, resource creation and Cloudflare synchronization remain pending the authorized setup run; its outcome will be recorded in the integration PR.
+Local verification: 360 tests pass and the one existing Chromium-required regression is BLOCKED by the missing binary (361 total). Lint, TypeScript, real local HTTP DEMO/origin smoke, production build, Worker dry-run and diff checks pass. Focused setup/synchronization tests pass 20/20, including partial-failure recovery, mismatched existing resources, exact amounts, redirect/body limits and secret redaction. GitHub production variable `STRIPE_CONFIG_SOURCE=cloudflare` was saved and confirmed. The first setup run failed before any provider request because of the old key-format guard. The reviewed PR #68 retry succeeded; see the compatibility milestone above for the exact evidence.
 
 ---
 
