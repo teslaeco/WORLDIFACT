@@ -33,6 +33,17 @@ test('Stripe configuration uses the fixed live origin and monthly interval witho
   assert.ok(!Object.keys(payload).some(name => name.startsWith('ENABLE_') || name === 'ENFORCE_ACCOUNT_ENTITLEMENTS'));
 });
 
+test('live restricted keys are supported and surrounding copy whitespace is removed before upload', () => {
+  for (const prefix of ['sk_live_', 'rk_live_']) {
+    const key = prefix + 'r'.repeat(32);
+    const payload = readBillingSecrets({ ...stripe, STRIPE_SECRET_KEY: ` \n${key}\n ` })!;
+    assert.equal(payload.STRIPE_SECRET_KEY, key);
+  }
+  for (const prefix of ['rk_test_', 'pk_live_', 'sk_org_']) {
+    assert.throws(() => readBillingSecrets({ ...stripe, STRIPE_SECRET_KEY: prefix + 'r'.repeat(32) }), /STRIPE_SECRET_KEY/);
+  }
+});
+
 test('explicit Cloudflare source preserves Stripe secrets even when the bootstrap key is present', () => {
   const env = { STRIPE_CONFIG_SOURCE: 'cloudflare', STRIPE_SECRET_KEY: stripe.STRIPE_SECRET_KEY };
   assert.equal(readBillingSecrets(env), null);

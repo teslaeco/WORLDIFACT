@@ -4,7 +4,7 @@ Approved offer: **USD 29.99 monthly / 1,500 credits**, with subscription-only SL
 
 ## 1. Merchant account and server key
 
-Open [Stripe API keys](https://dashboard.stripe.com/apikeys) in the intended WORLDIFACT account and live mode. For the current server integration, use the account secret key (`sk_live_...`), named `WORLDIFACT production`; the displayed publishable `pk_live_...` key is not used by the server. Keep the full value in the secure destination below. Never put it in source files, chat, issue comments or screenshots. Restricted `rk_...` and organization keys are not currently accepted by the backend; do not substitute one silently.
+Open [Stripe API keys](https://dashboard.stripe.com/apikeys) in the intended WORLDIFACT account and live mode. For the current server integration, use an account-level live restricted key (`rk_live_...`) with the required integration permissions, or an existing standard secret key (`sk_live_...`), named `WORLDIFACT production`; the displayed publishable `pk_live_...` key is not used by the server. Keep the full value in the secure destination below. Never put it in source files, chat, issue comments or screenshots. Restricted keys retain their Stripe-enforced permissions and access policies. Setup stops on denied API access; it never changes permissions. Organization, publishable and test-mode keys are not accepted for production setup. Surrounding copy/paste whitespace is removed without printing the normalized value.
 
 The owner later reported completed identity verification and supplied a screenshot showing payments and payouts active. The setup script independently checks the live account through the API before creating resources; a saved key alone does not prove its permissions or account readiness.
 
@@ -26,7 +26,7 @@ If using the manual route, set `STRIPE_CONFIG_SOURCE` to `github` (the default).
 
 | GitHub secret Name | Secret/Value |
 | --- | --- |
-| `STRIPE_SECRET_KEY` | Full live account secret key starting `sk_live_` |
+| `STRIPE_SECRET_KEY` | Full live account server key starting `rk_live_` or `sk_live_` |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret starting `whsec_` for the exact live endpoint below |
 | `STRIPE_SUBSCRIPTION_PRICE_ID` | `price_...` for USD 29.99 recurring every month |
 | `STRIPE_TOPUP_PRICE_ID` | `price_...` for USD 29.99 one-time |

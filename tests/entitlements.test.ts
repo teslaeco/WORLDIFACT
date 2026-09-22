@@ -325,6 +325,35 @@ test('Stripe test payments cannot reach the live account ledger and live mode re
   }
 })
 
+test('Restricted Stripe keys retain mode isolation and provider permissions', async () => {
+  for (const mode of ['test', 'live'] as const) for (const prefix of ['sk', 'rk', 'pk']) for (const keyMode of ['test', 'live']) {
+    const f = billingFixture()
+    f.env.STRIPE_MODE = mode
+    f.env.ACCOUNT_LEDGER_MODE = mode === 'test' ? 'sandbox' : 'live'
+    f.env.STRIPE_SECRET_KEY = ` \n${prefix}_${keyMode}_fixture\n `
+    const status = await (await billingApi(new Request('https://worldifact.test/api/billing/status'), f.env, f.fetcher))!.json() as Record<string, unknown>
+    assert.equal(status.topupReady, prefix !== 'pk' && mode === keyMode)
+    assert.equal(f.seen.length, 0)
+  }
+  const f = billingFixture()
+  f.env.STRIPE_SECRET_KEY = ' \nrk_test_fixture\n '
+  await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+  let providerCalls = 0
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    if (String(input).startsWith('https://api.stripe.com/')) {
+      providerCalls++
+      assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer rk_test_fixture')
+      return Response.json({ error: { message: 'private permission details' } }, { status: 403 })
+    }
+    return f.fetcher(input, init)
+  }) as typeof fetch
+  const response = await billingApi(checkoutRequest('topup'), f.env, fetcher)
+  assert.equal(response?.status, 502)
+  assert.equal(providerCalls, 1)
+  assert.ok(!(await response!.text()).includes('private permission details'))
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+})
+
 test('A signed-in free account can buy one fixed card pack with eligible Google Pay wallets', async () => {
   const f = billingFixture()
   delete f.env.STRIPE_SUBSCRIPTION_PRICE_ID; delete f.env.STRIPE_SUBSCRIPTION_INTERVAL
