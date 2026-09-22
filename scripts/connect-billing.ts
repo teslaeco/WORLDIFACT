@@ -29,8 +29,9 @@ export function readBillingSecrets(env: NodeJS.ProcessEnv): BillingSecrets | nul
     for (const name of names) payload[name] = env[name]!;
   }
   if (payload.STRIPE_SECRET_KEY) {
+    payload.STRIPE_SECRET_KEY = payload.STRIPE_SECRET_KEY.trim();
     for (const [name, valid] of [
-      ['STRIPE_SECRET_KEY', /^sk_live_[A-Za-z0-9_]{16,256}$/.test(payload.STRIPE_SECRET_KEY)],
+      ['STRIPE_SECRET_KEY', /^(?:sk|rk)_live_[A-Za-z0-9_]{16,256}$/.test(payload.STRIPE_SECRET_KEY)],
       ['STRIPE_WEBHOOK_SECRET', /^whsec_[A-Za-z0-9_]{16,256}$/.test(payload.STRIPE_WEBHOOK_SECRET)],
       ['STRIPE_SUBSCRIPTION_PRICE_ID', priceId(payload.STRIPE_SUBSCRIPTION_PRICE_ID)],
       ['STRIPE_TOPUP_PRICE_ID', priceId(payload.STRIPE_TOPUP_PRICE_ID)],

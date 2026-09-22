@@ -1,3 +1,15 @@
+# WORLDIFAKT — production Stripe key compatibility follow-up
+
+Date: 22 September 2026. Branch: `fix/stripe-restricted-key-setup`.
+
+PR #67 merged as `3679060c4782a802a683c17e1a0460a24379e4e3` after all five checks and 361/361 CI tests passed. Deployment `35711447292` succeeded, version `9f1a84b4-aee7-4c41-8aec-52984e9fd2c8`, with the 16-route / 33-hub-asset / 105-foundation-asset smoke. Setup run `35711647849` then stopped at local credential-format validation, before any Stripe request or resource creation. The stored value was not read; its precise key type remains unknown.
+
+The previous implementation accepted only `sk_live_` and rejected surrounding whitespace. This follow-up supports Stripe's documented restricted server keys (`rk_live_`) throughout setup, synchronization and runtime, removes surrounding copy whitespace, and preserves live/test isolation, provider permissions and activation gates. Invalid key categories receive fixed diagnostics without exposing any submitted value. No access policy or permission is widened in Stripe.
+
+Local checks: 365 tests pass and the existing Chromium-required test is BLOCKED (366 total). Lint, TypeScript, HTTP DEMO/origin smoke, build, Worker dry-run and diff checks pass. Tests cover restricted-key permission denial, public/test/org key rejection, mode isolation and whitespace normalization. Setup now also checks that the target Cloudflare Worker exists before any Stripe operation, preventing Wrangler's missing-Worker draft fallback. Full CI and actual setup retry remain pending; no Stripe provisioning success is claimed yet.
+
+---
+
 # WORLDIFAKT — Stripe setup from the existing production key
 
 Date: 22 September 2026. Branch: `feat/stripe-account-bootstrap`.

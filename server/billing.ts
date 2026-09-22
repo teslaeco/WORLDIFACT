@@ -38,7 +38,8 @@ function billingConfig(env: BillingEnv) {
   const mode = env.STRIPE_MODE, modeValid = mode === 'test' || mode === 'live'
   const ledgerModeMatches = mode === 'test' ? env.ACCOUNT_LEDGER_MODE === 'sandbox' : env.ACCOUNT_LEDGER_MODE === undefined || env.ACCOUNT_LEDGER_MODE === 'live'
   const interval = env.STRIPE_SUBSCRIPTION_INTERVAL === MONTHLY_MEMBERSHIP.interval ? MONTHLY_MEMBERSHIP.interval : null
-  const ready = env.ENABLE_BILLING === 'true' && env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true' && !!env.ACCOUNT_ENTITLEMENTS && !!origin && modeValid && ledgerModeMatches && !!env.STRIPE_SECRET_KEY?.startsWith(`sk_${mode}_`) && !!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')
+  const keyMatchesMode = ['sk', 'rk'].some(prefix => env.STRIPE_SECRET_KEY?.trim().startsWith(`${prefix}_${mode}_`))
+  const ready = env.ENABLE_BILLING === 'true' && env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true' && !!env.ACCOUNT_ENTITLEMENTS && !!origin && modeValid && ledgerModeMatches && keyMatchesMode && !!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')
   return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: ready && priceId(env.STRIPE_SUBSCRIPTION_PRICE_ID) && !!interval, interval, mode: modeValid ? mode : null }
 }
 async function boundedText(value: Request | Response, maximum: number) {
@@ -58,7 +59,7 @@ async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, para
   const response = await fetcher(`https://api.stripe.com/v1${path}`, {
     // workerd supports manual/follow; reject redirects before credentials can leave Stripe.
     method: params ? 'POST' : 'GET', redirect: 'manual', signal: AbortSignal.timeout(12_000),
-    headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'Stripe-Version': STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
+    headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY?.trim()}`, 'Stripe-Version': STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
     ...(params ? { body: params.toString() } : {}),
   })
   if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new EntitlementError('Billing could not be confirmed. Please retry the same action later.', 502) }

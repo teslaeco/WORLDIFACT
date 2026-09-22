@@ -35,6 +35,19 @@ jobs:
       - run: npm ci
       - name: Verify setup and synchronization safeguards
         run: node --test tests/setup-stripe.test.ts tests/connect-billing.test.ts
+      - name: Confirm the existing Cloudflare Worker before creating Stripe resources
+        run: |
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          const result = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'secret', 'list', '--name', 'worldifact'], { encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'] });
+          if (result.error || result.status !== 0) {
+            console.error('Could not verify the existing Cloudflare Worker. No Stripe setup was attempted; provider output suppressed.');
+            process.exitCode = 1;
+          }
+          NODE
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Prepare live offers and save credentials directly to Cloudflare
         run: node scripts/setup-stripe.ts
         env:

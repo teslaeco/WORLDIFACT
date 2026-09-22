@@ -10,7 +10,7 @@ const webhookUrl = 'https://worldifact.xodobrox.workers.dev/api/billing/webhook'
 type Json = Record<string, unknown>;
 const asObject = (value: unknown) => value as Json;
 
-function fixture() {
+function fixture(expectedKey = key) {
   const state = { now: Date.UTC(2026, 8, 22, 12), failUpload: false, charges: true, payouts: true };
   const products = new Map<string, Json>();
   const prices = new Map<string, Json>();
@@ -24,7 +24,7 @@ function fixture() {
     assert.equal(url.origin, 'https://api.stripe.com');
     assert.equal(init?.redirect, 'manual');
     assert.ok(init?.signal instanceof AbortSignal);
-    assert.equal(headers.get('Authorization'), `Bearer ${key}`);
+    assert.equal(headers.get('Authorization'), `Bearer ${expectedKey}`);
     assert.equal(headers.get('Stripe-Version'), '2024-06-20');
     const method = init?.method ?? 'GET';
     const params = new URLSearchParams(String(init?.body ?? ''));
@@ -80,7 +80,7 @@ function fixture() {
   };
   const dependencies = { fetcher, upload, now: () => state.now };
   const posts = () => calls.filter(call => call.method === 'POST');
-  return { state, products, prices, endpoints, cached, calls, uploads, dependencies, posts, run: (extra: NodeJS.ProcessEnv = {}) => setupStripe({ ...env, ...extra }, dependencies) };
+  return { state, products, prices, endpoints, cached, calls, uploads, dependencies, posts, run: (extra: NodeJS.ProcessEnv = {}) => setupStripe({ ...env, STRIPE_SECRET_KEY: expectedKey, ...extra }, dependencies) };
 }
 
 test('Stripe preparation creates exactly two fixed offers and one account webhook, storing secrets only in the server payload', async () => {
@@ -209,7 +209,7 @@ test('live account and credential readiness are checked before any Stripe writes
   await assert.rejects(f.run(), /live account is not ready/);
   assert.equal(f.calls.length, 1);
   assert.equal(f.posts().length, 0);
-  for (const value of ['', 'sk_test_private', 'rk_live_private', key + '\n']) {
+  for (const value of ['', 'sk_test_private', 'rk_live_private', key.slice(0, 20) + '\n' + key.slice(20)]) {
     f.calls.length = 0;
     await assert.rejects(f.run({ STRIPE_SECRET_KEY: value }), /credentials/);
     assert.equal(f.calls.length, 0);
@@ -217,6 +217,64 @@ test('live account and credential readiness are checked before any Stripe writes
   f.state.charges = true;
   f.state.payouts = false;
   assert.equal((await f.run()).payoutsEnabled, false);
+});
+
+test('standard and restricted live keys accept surrounding copy whitespace and store only the normalized credential', async () => {
+  for (const value of [key, `rk_live_${'r'.repeat(32)}`]) {
+    const f = fixture(value);
+    const result = await f.run({ STRIPE_SECRET_KEY: ` \r\n\t${value}\n ` });
+    assert.equal(f.uploads[0].STRIPE_SECRET_KEY, value);
+    assert.equal(result.status, 'configured_without_checkout_activation');
+    assert.ok(!JSON.stringify(result).includes(value));
+  }
+});
+
+test('incorrect credential categories have fixed useful diagnostics without showing any submitted value', async () => {
+  const cases = [
+    ['', /missing or empty/],
+    [' \n\t ', /missing or empty/],
+    [`pk_live_${'p'.repeat(32)}`, /publishable client key/],
+    [`pk_test_${'p'.repeat(32)}`, /publishable client key/],
+    [`sk_test_${'t'.repeat(32)}`, /test-mode key/],
+    [`rk_test_${'t'.repeat(32)}`, /test-mode key/],
+    [`sk_org_${'o'.repeat(32)}`, /Organization keys/],
+    [webhookSecret, /webhook signing secret/],
+    ['WORLDIFACT production', /not a complete supported/],
+    [`"${key}"`, /not a complete supported/],
+    [key.slice(0, 20) + '\n' + key.slice(20), /not a complete supported/],
+  ] as const;
+  for (const [value, reason] of cases) {
+    const f = fixture();
+    await assert.rejects(f.run({ STRIPE_SECRET_KEY: value }), error => {
+      const message = stripeSetupErrorMessage(error);
+      assert.match(message, reason);
+      if (value.trim()) assert.ok(!message.includes(value.trim()));
+      assert.ok(!message.includes(key) && !message.includes(webhookSecret));
+      return true;
+    });
+    assert.equal(f.calls.length, 0);
+    assert.equal(f.uploads.length, 0);
+  }
+});
+
+test('a restricted key rejected by Stripe permissions stops without mutations or secret synchronization', async () => {
+  const restricted = `rk_live_${'r'.repeat(32)}`;
+  let calls = 0;
+  let uploads = 0;
+  const fetcher = (async (_input: string | URL | Request, init?: RequestInit) => {
+    calls++;
+    assert.equal(init?.method, 'GET');
+    assert.equal(new Headers(init?.headers).get('Authorization'), `Bearer ${restricted}`);
+    return Response.json({ error: { message: `Private permission detail ${restricted}` } }, { status: 403 });
+  }) as typeof fetch;
+  await assert.rejects(setupStripe({ ...env, STRIPE_SECRET_KEY: restricted }, { fetcher, upload: () => { uploads++; } }), error => {
+    const message = stripeSetupErrorMessage(error);
+    assert.match(message, /HTTP 403/);
+    assert.ok(!message.includes(restricted));
+    return true;
+  });
+  assert.equal(calls, 1);
+  assert.equal(uploads, 0);
 });
 
 test('transport errors, redirects, malformed JSON and oversized provider bodies never expose sensitive data', async () => {

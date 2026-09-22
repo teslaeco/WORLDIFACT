@@ -79,8 +79,13 @@ function validateWebhook(endpoint: Json, stage: Stage) {
 
 /** Uses an existing live credential inside the deployment environment; never returns credentials. */
 export async function setupStripe(env: NodeJS.ProcessEnv, dependencies: Dependencies = {}) {
-  const key = env.STRIPE_SECRET_KEY;
-  if (!key || !/^sk_live_[A-Za-z0-9_]{16,256}$/.test(key)) fail('credentials', 'Add the live STRIPE_SECRET_KEY production secret. Its value must not be printed.');
+  const key = env.STRIPE_SECRET_KEY?.trim();
+  if (!key) fail('credentials', 'The STRIPE_SECRET_KEY production secret is missing or empty.');
+  if (key.startsWith('pk_')) fail('credentials', 'The stored value is a publishable client key. Supply a live server API key in STRIPE_SECRET_KEY.');
+  if (/^(?:sk|rk)_test_/.test(key)) fail('credentials', 'The stored value is a test-mode key. Supply a live account key for this production setup.');
+  if (key.startsWith('sk_org_')) fail('credentials', 'Organization keys are not supported. Supply a live key for the intended Stripe account.');
+  if (key.startsWith('whsec_')) fail('credentials', 'The stored value is a webhook signing secret. STRIPE_SECRET_KEY requires a live server API key.');
+  if (!/^(?:sk|rk)_live_[A-Za-z0-9_]{16,256}$/.test(key)) fail('credentials', 'The stored value is not a complete supported live server API key. Check the secret value without printing it.');
   if (env.STRIPE_WEBHOOK_SECRET && !validSecret(env.STRIPE_WEBHOOK_SECRET)) fail('credentials', 'The supplied webhook signing secret has an invalid format.');
   const fetcher = dependencies.fetcher ?? fetch;
   const upload = dependencies.upload ?? (payload => uploadBillingSecrets(payload, undefined, env));
