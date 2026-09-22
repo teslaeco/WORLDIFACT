@@ -78,7 +78,7 @@ export default function ControlPage() {
   const oracleDisplay = oracleWorlds?.oracle || state?.oracle
   const lastChecked = oracleWorlds?.checkedAt || state?.checkedAt
   return <main className="control-page">
-    <Link to="/">← Back to WORLDIFACT</Link>
+    <Link to="/world">← Back to WORLDIFAKT</Link>
     <span className="eyebrow">PLATFORM CONTROL</span><h1>Five worlds. One starting point.</h1>
     <p>Open each world, access its existing editing tools and check the shared services.</p>
     <section className="control-services" aria-label="Connection status">

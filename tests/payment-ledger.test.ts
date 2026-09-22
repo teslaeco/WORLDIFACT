@@ -28,8 +28,17 @@ test('Worker routes independent payment status endpoints and never enables uncon
   const paypal = await handle(new Request('https://worldifact.test/api/billing/paypal/status'), {}, noFetch)
   assert.equal(stripe.status, 200)
   assert.equal(paypal.status, 200)
-  assert.equal((await stripe.json() as { topupReady: boolean }).topupReady, false)
-  const status = await paypal.json() as { ready: boolean; hostedButtonId: string; hostedButtonReady: boolean }
+  const stripeStatus = await stripe.json() as { topupReady: boolean; price: { amount: number; currency: string; credits: number }; subscriptionPrice: { amount: number; currency: string; credits: number } }
+  assert.equal(stripeStatus.topupReady, false)
+  for (const price of [stripeStatus.price, stripeStatus.subscriptionPrice]) {
+    assert.equal(price.amount, 2999)
+    assert.equal(price.currency, 'USD')
+    assert.equal(price.credits, 1500)
+  }
+  const status = await paypal.json() as { ready: boolean; amount: string; currency: string; credits: number; hostedButtonId: string; hostedButtonReady: boolean }
+  assert.equal(status.amount, '29.99')
+  assert.equal(status.currency, 'USD')
+  assert.equal(status.credits, 1500)
   assert.equal(status.ready, false)
   assert.equal(status.hostedButtonId, 'N4DCJJHHW747S')
   assert.equal(status.hostedButtonReady, false)

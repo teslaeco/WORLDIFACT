@@ -15,7 +15,8 @@ export default function App() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<AccountPage />} />
+        <Route path="/world" element={<HomePage />} />
         <Route path="/login" element={<AccountPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/account/credits" element={<CreditsPage />} />

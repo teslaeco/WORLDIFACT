@@ -1,21 +1,24 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-/** The owner's unmodified, open-frame Forge model. Never substitute a primitive. */
-export const PORTAL_SCULPTURE_URL = "/api/decor/polyhedron.glb";
+/** The exact public FORGE geometry, bundled with only its unused wood textures removed. */
+export const PORTAL_SCULPTURE_URL = "/world-assets/polyhedron-led.gltf";
+export const PORTAL_SCULPTURE_POSTER_URL = "/world-assets/polyhedron-led-poster.svg";
 export const SCULPTURE_CYCLE_SECONDS = 5;
 export type SculpturePalette = readonly [string, string];
 export const LOGIN_SCULPTURE_PALETTE: SculpturePalette = ["#56ffad", "#38bfff"];
 
 let modelBytes: Promise<ArrayBuffer> | undefined;
 function originalBytes() {
-  modelBytes ??= fetch(PORTAL_SCULPTURE_URL, { credentials: "same-origin" })
+  modelBytes ??= fetch(PORTAL_SCULPTURE_URL, { credentials: "same-origin", signal: AbortSignal.timeout(12_000) })
     .then(async response => {
       if (!response.ok) throw new Error("The original Forge model is unavailable.");
       const bytes = await response.arrayBuffer();
-      if (bytes.byteLength < 20 || bytes.byteLength > 16 * 1024 * 1024 || new DataView(bytes).getUint32(0, true) !== 0x46546c67) {
+      if (bytes.byteLength < 20 || bytes.byteLength > 512 * 1024) {
         throw new Error("The original Forge model could not be read.");
       }
+      const gltf = JSON.parse(new TextDecoder().decode(bytes));
+      if (gltf.asset?.version !== "2.0" || gltf.meshes?.length !== 48 || gltf.nodes?.length !== 49 || gltf.buffers?.length !== 1 || !gltf.buffers[0].uri?.startsWith("data:application/octet-stream;base64,") || gltf.images?.length) throw new Error("The original Forge model could not be verified.");
       return bytes;
     })
     .catch(error => { modelBytes = undefined; throw error; });
@@ -37,21 +40,10 @@ function ledMaterial(color: string) {
 /** Retain every original vertex, open face and source transform; only restyle surfaces. */
 export async function loadPortalSculpture(palette: SculpturePalette = LOGIN_SCULPTURE_PALETTE, size = 3.25) {
   const bytes = await originalBytes();
-  // The audited Forge GLB embeds all three textures and uses no Draco extensions.
+  // The bundled public-source revision retains all original accessor bytes and
+  // transforms; three unused 4K wood textures are removed at build preparation.
+  // No runtime dependency on the external FORGE proxy or image decoders remains.
   const loader = new GLTFLoader();
-  loader.register(parser => ({
-    name: "WORLDIFACT_LED_SURFACES",
-    beforeRoot: () => {
-      // LED surfaces do not use the source's three 4K wood textures. Skip their
-      // decoding to avoid a large transient image allocation on mobile devices.
-      // This affects material loading only: meshes, indices and transforms stay exact.
-      parser.json.materials = (parser.json.materials ?? []).map(() => ({
-        doubleSided: true,
-        pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: .55, roughnessFactor: .24 },
-      }));
-      return Promise.resolve();
-    },
-  }));
   const gltf = await loader.parseAsync(bytes.slice(0), "");
   const source = gltf.scene;
   const oldMaterials = new Set<THREE.Material>();

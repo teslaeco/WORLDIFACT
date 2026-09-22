@@ -30,3 +30,16 @@ test('Chess email registration uses the shared account contract and server error
     assert.equal(calls.every(call => call.path.startsWith('/api/account/')), true)
   } finally { globalThis.fetch = originalFetch }
 })
+test('Chess provider buttons use the shared login page and cannot forward an external return URL', () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window'), destinations = []
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: { assign(destination) { destinations.push(destination) } } } })
+  try {
+    const api = new AuthApi()
+    api.redirectToProvider('google', 'https://attacker.test/return')
+    api.redirectToProvider('https://attacker.test', '//attacker.test')
+    assert.deepEqual(destinations, ['/login?next=/world', '/login?next=/world'])
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow)
+    else delete globalThis.window
+  }
+})

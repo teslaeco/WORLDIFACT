@@ -10,7 +10,7 @@ const CAPTURE = '74L756601X447022Y'
 const MERCHANT = 'YXZY75W2GKDQE'
 const BASE = 'https://api-m.sandbox.paypal.com'
 type Json = Record<string, unknown>
-const money = () => ({ currency_code: 'USD', value: '30.00' })
+const money = () => ({ currency_code: 'USD', value: '29.99' })
 function request(action: string, body: unknown = {}, headers: Record<string, string> = {}) {
   return new Request('https://worldifact.test/api/billing/paypal/' + action, { method: 'POST', headers: { Origin: 'https://worldifact.test', Cookie: '__Host-worldifact-access=fixtureToken123', 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) })
 }
@@ -94,7 +94,7 @@ test('PayPal fails closed without credentials, webhook, account protection or pe
   assert.equal(f.seen.length, 0)
   const response = await paypalApi(new Request('https://worldifact.test/api/billing/paypal/status'), f.env, f.fetcher)
   const status = await response!.json() as Json
-  assert.equal(status.ready, true); assert.equal(status.amount, '30.00'); assert.equal(status.credits, 1500); assert.equal(status.recurring, false)
+  assert.equal(status.ready, true); assert.equal(status.amount, '29.99'); assert.equal(status.credits, 1500); assert.equal(status.recurring, false)
   assert.equal(status.hostedButtonId, 'N4DCJJHHW747S'); assert.equal(status.hostedButtonReady, false)
   const text = JSON.stringify(status)
   assert.equal(text.includes(f.env.PAYPAL_CLIENT_SECRET!), false); assert.equal(text.includes(f.env.PAYPAL_CLIENT_ID!), false)
@@ -106,7 +106,7 @@ test('PayPal rejects cross-origin, anonymous and browser-controlled pricing with
   assert.equal((await paypalApi(request('order', { amount: '0.01', credits: 999999 }), f.env, f.fetcher))?.status, 400)
   assert.equal(f.seen.filter(item => item.url.startsWith(BASE)).length, 0)
 })
-test('PayPal creates only the fixed USD30 pack with server identity and no shipping; persisted checkout survives restart', async () => {
+test('PayPal creates only the fixed USD 29.99 pack with server identity and no shipping; persisted checkout survives restart', async () => {
   const f = fixture()
   const result = await paypalApi(request('order'), f.env, f.fetcher)
   assert.equal(result?.status, 200)
@@ -138,7 +138,7 @@ test('Foreign or unbound PayPal orders are rejected before OAuth, order lookup o
 })
 test('PayPal checks amount, currency, merchant, account and invoice before any capture mutation', async () => {
   for (const mutation of [
-    (f: ReturnType<typeof fixture>) => { f.unit.amount.value = '0.30' },
+    (f: ReturnType<typeof fixture>) => { f.unit.amount.value = '30.00' },
     (f: ReturnType<typeof fixture>) => { f.unit.amount.currency_code = 'EUR' },
     (f: ReturnType<typeof fixture>) => { f.unit.payee.merchant_id = 'XXXXXXXXXXXXX' },
     (f: ReturnType<typeof fixture>) => { f.unit.custom_id = OTHER },
@@ -184,7 +184,7 @@ test('Pending fresh capture never gets credits even if capture POST and order cl
 test('Fresh capture merchant, amount, currency and order must independently match', async () => {
   for (const mutate of [
     (f: ReturnType<typeof fixture>) => { f.capture.payee.merchant_id = 'XXXXXXXXXXXXX' },
-    (f: ReturnType<typeof fixture>) => { f.capture.amount.value = '29.99' },
+    (f: ReturnType<typeof fixture>) => { f.capture.amount.value = '30.00' },
     (f: ReturnType<typeof fixture>) => { f.capture.amount.currency_code = 'EUR' },
     (f: ReturnType<typeof fixture>) => { f.capture.supplementary_data.related_ids.order_id = 'AAAAAAAAAAAAAAAAA' },
   ]) {

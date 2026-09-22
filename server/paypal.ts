@@ -12,7 +12,7 @@ export interface PayPalEnv extends AccountEnv, EntitlementEnv {
   BILLING_PUBLIC_ORIGIN?: string
 }
 export const PAYPAL_HOSTED_BUTTON_ID = 'N4DCJJHHW747S'
-const CREDIT_PACK = { credits: 1500, amount: '30.00', currency: 'USD' } as const
+const CREDIT_PACK = { credits: 1500, amount: '29.99', currency: 'USD' } as const
 type Json = Record<string, unknown>
 type Attempt = { id: string; created: number; orderId?: string; url?: string; repeated: boolean }
 type Owned = { owned: boolean; id?: string }
@@ -236,7 +236,7 @@ export async function paypalApi(request: Request, env: PayPalEnv, fetcher: typeo
   const url = new URL(request.url)
   if (!url.pathname.startsWith('/api/billing/paypal/')) return null
   const config = configuration(env), action = url.pathname.slice('/api/billing/paypal/'.length)
-  if (action === 'status' && request.method === 'GET') return json({ ready: config.ready, mode: config.mode, hostedButtonId: PAYPAL_HOSTED_BUTTON_ID, hostedButtonReady: false, credits: CREDIT_PACK.credits, amount: CREDIT_PACK.amount, currency: CREDIT_PACK.currency, recurring: false, reason: config.ready ? '1500 credits for USD 30.00. Credits require a verified completed PayPal payment.' : 'PayPal checkout needs merchant API credentials, a verified webhook and account protection. No payment is enabled.' })
+  if (action === 'status' && request.method === 'GET') return json({ ready: config.ready, mode: config.mode, hostedButtonId: PAYPAL_HOSTED_BUTTON_ID, hostedButtonReady: false, credits: CREDIT_PACK.credits, amount: CREDIT_PACK.amount, currency: CREDIT_PACK.currency, recurring: false, reason: config.ready ? '1500 credits for USD 29.99. Credits require a verified completed PayPal payment.' : 'PayPal checkout needs merchant API credentials, a verified webhook and account protection. No payment is enabled.' })
   if (!['order', 'capture', 'webhook'].includes(action)) return json({ error: 'PayPal route not found.' }, 404)
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405)
   if (!config.ready) return json({ status: 'BLOCKED', error: 'PayPal payments are not configured. No checkout or charge was created.' }, 503)

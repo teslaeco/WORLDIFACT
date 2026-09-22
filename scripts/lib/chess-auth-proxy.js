@@ -25,9 +25,9 @@ export class AuthApi {
     return user
   }
   redirectToProvider() {
-    // Provider-specific OAuth is not implemented in this adapter. The shared
-    // page explains that users should sign in with their existing account email.
-    window.location.assign('/login?notice=email-sign-in')
+    // The shared page offers email and, when configured, server-side Google
+    // PKCE. Never forward a caller-supplied provider URL or return address.
+    window.location.assign('/login?next=/world')
   }
   // AuthGate calls this before restoring a previous guest identity. Checking the
   // cookie here lets a newly signed-in WORLDIFACT player replace that guest.

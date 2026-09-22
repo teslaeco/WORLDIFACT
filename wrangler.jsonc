@@ -17,7 +17,8 @@
     "GENERATION_REQUEST_LIMIT": "0",
     "GENERATION_EXPIRES_AT": "",
     "ENABLE_APPROVED_FAST_TEST": "true",
-    "ENFORCE_ACCOUNT_ENTITLEMENTS": "true"
+    "ENFORCE_ACCOUNT_ENTITLEMENTS": "true",
+    "SUPABASE_GOOGLE_REDIRECT_READY": "true"
   },
   "durable_objects": {
     "bindings": [{"name": "GENERATION_BUDGET", "class_name": "GenerationBudget"}, {"name": "ACCOUNT_ENTITLEMENTS", "class_name": "AccountEntitlements"}]

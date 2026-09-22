@@ -17,8 +17,8 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
 }
 // Pin both API calls and the configured webhook endpoint to this documented version.
 export const STRIPE_API_VERSION = '2024-06-20'
-export const CREDIT_PACK = Object.freeze({ amount: 3000, currency: 'USD', credits: 1500, kind: 'one_time' as const })
-export const MONTHLY_MEMBERSHIP = Object.freeze({ amount: 2999, currency: 'USD', credits: 1500, kind: 'subscription' as const, interval: 'month' as const })
+export const CREDIT_PACK = Object.freeze({ amount: 2999, currency: 'USD', credits: 1500, kind: 'one_time' as const })
+export const MONTHLY_MEMBERSHIP = Object.freeze({ amount: CREDIT_PACK.amount, currency: 'USD', credits: 1500, kind: 'subscription' as const, interval: 'month' as const })
 type Json = Record<string, unknown>
 const object = (value: unknown): Json => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Json : {}
 const array = (value: unknown): Json[] => Array.isArray(value) ? value.map(object) : []
@@ -80,7 +80,7 @@ async function verifiedPrice(env: BillingEnv, kind: 'subscription' | 'topup', fe
   if (!priceId(id)) throw new EntitlementError('This payment option is not configured.')
   const price = await stripe(env, `/prices/${id}`, fetcher)
   const amount = kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount
-  if (price.id !== id || (!allowArchived && price.active !== true) || price.unit_amount !== amount || price.currency !== 'usd' || (kind === 'subscription' ? price.type !== 'recurring' : price.type !== 'one_time')) throw new EntitlementError(kind === 'subscription' ? 'The configured membership price must be exactly USD 29.99 per month for 1500 credits.' : 'The configured credit pack price must be exactly USD 30.00 for 1500 credits.')
+  if (price.id !== id || (!allowArchived && price.active !== true) || price.unit_amount !== amount || price.currency !== 'usd' || (kind === 'subscription' ? price.type !== 'recurring' : price.type !== 'one_time')) throw new EntitlementError(kind === 'subscription' ? 'The configured membership price must be exactly USD 29.99 per month for 1500 credits.' : 'The configured credit pack price must be exactly USD 29.99 for 1500 credits.')
   // Unknown periods, quantities and tiers are not silently turned into a different offer.
   if (price.billing_scheme !== 'per_unit' || price.transform_quantity != null || (kind === 'subscription' && (!billingConfig(env).interval || object(price.recurring).interval !== billingConfig(env).interval || object(price.recurring).interval_count !== 1 || object(price.recurring).usage_type !== 'licensed'))) throw new EntitlementError('The configured billing interval needs operator review.')
   return price
@@ -172,7 +172,7 @@ async function topupSession(env: BillingEnv, session: Json, fetcher: typeof fetc
   const previous = previousTopupPrices(env), actualPriceId = idOf(items[0]?.price)
   if (!previous || lines.has_more === true || items.length !== 1 || ![env.STRIPE_TOPUP_PRICE_ID, ...previous].includes(actualPriceId) || items[0].quantity !== 1 || items[0].amount_total !== CREDIT_PACK.amount || items[0].currency !== 'usd' || object(session.metadata).worldifact_credits !== String(CREDIT_PACK.credits)) throw new EntitlementError('Top-up product could not be verified.', 400)
   // New purchases use only the current price. Settlement and reversals can retain an explicitly
-  // allowlisted historical price, but still require its authoritative fixed USD 30 pack details.
+  // allowlisted historical price, but still require its authoritative fixed USD 29.99 pack details.
   await verifiedPrice(env, 'topup', fetcher, true, actualPriceId)
   await entitlementCall(env, uid, reverse ? '/revoke' : '/grant', { id: paymentId, credits: CREDIT_PACK.credits })
   await clearCheckout(env, uid, session)

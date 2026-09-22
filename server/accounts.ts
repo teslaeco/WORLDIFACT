@@ -1,9 +1,12 @@
+import { safeAccountDestination } from '../src/lib/accountDestination.ts'
+
 /** Shared Cube Chess Supabase identity. No WORLDIFACT password/user database. */
 export interface AccountRateLimiter { limit(options: { key: string }): Promise<{ success: boolean }> }
 export interface AccountEnv {
   SUPABASE_URL?: string
   SUPABASE_ANON_KEY?: string
   SUPABASE_RECOVERY_REDIRECT_READY?: string
+  SUPABASE_GOOGLE_REDIRECT_READY?: string
   ACCOUNT_LIMITER?: AccountRateLimiter
   GENERATION_LIMITER?: AccountRateLimiter
 }
@@ -16,6 +19,8 @@ const ACCESS_COOKIE = '__Host-worldifact-access'
 const REFRESH_COOKIE = '__Host-worldifact-refresh'
 const PKCE_COOKIE = '__Host-worldifact-recovery-verifier'
 const RECOVERY_COOKIE = '__Host-worldifact-recovery'
+const OAUTH_COOKIE = '__Host-worldifact-google-flow'
+const OAUTH_FLOW_SECONDS = 600
 const MAX_BODY = 4096
 const MAX_UPSTREAM_BODY = 32_768
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -61,7 +66,7 @@ function cookieValue(request: Request, name: string) {
 function cookie(name: string, value: string, age: number) {
   return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`
 }
-function clearCookies() { return [cookie(ACCESS_COOKIE, '', 0), cookie(REFRESH_COOKIE, '', 0), cookie(RECOVERY_COOKIE, '', 0), cookie(PKCE_COOKIE, '', 0)] }
+function clearCookies() { return [cookie(ACCESS_COOKIE, '', 0), cookie(REFRESH_COOKIE, '', 0), cookie(RECOVERY_COOKIE, '', 0), cookie(PKCE_COOKIE, '', 0), cookie(OAUTH_COOKIE, '', 0)] }
 function sessionCookies(session: ProviderSession) {
   return [cookie(ACCESS_COOKIE, session.access_token, session.expires_in), cookie(REFRESH_COOKIE, session.refresh_token, 30 * 86400)]
 }
@@ -163,6 +168,68 @@ function emailOf(value: unknown) {
   return value.trim()
 }
 function base64url(bytes: Uint8Array) { return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') }
+type OAuthFlow = { state: string; verifier: string; next: string; created: number }
+function googleReady(request: Request, env: AccountEnv) {
+  return env.SUPABASE_GOOGLE_REDIRECT_READY === 'true' && accountsConfigured(env) && !!(env.ACCOUNT_LIMITER ?? env.GENERATION_LIMITER) && new URL(request.url).protocol === 'https:'
+}
+function readOAuthFlow(request: Request): OAuthFlow | null {
+  const value = cookieValue(request, OAUTH_COOKIE)
+  if (!value || !/^[A-Za-z0-9_-]{1,3000}$/.test(value)) return null
+  try {
+    const bytes = Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), char => char.charCodeAt(0))
+    const flow = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as Partial<OAuthFlow>
+    if (typeof flow.state !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(flow.state) || typeof flow.verifier !== 'string' || !/^[A-Za-z0-9_-]{64}$/.test(flow.verifier) || typeof flow.next !== 'string' || flow.next !== safeAccountDestination(flow.next) || !Number.isSafeInteger(flow.created) || Date.now() < Number(flow.created) || Date.now() - Number(flow.created) > OAUTH_FLOW_SECONDS * 1000) return null
+    return flow as OAuthFlow
+  } catch { return null }
+}
+async function googleStart(request: Request, env: AccountEnv, input: Record<string, unknown>) {
+  if (!googleReady(request, env)) throw new AccountError('Google sign-in is awaiting approval of the WORLDIFACT callback in the shared account service.')
+  if (Object.keys(input).some(key => key !== 'next') || (input.next !== undefined && typeof input.next !== 'string')) throw new AccountError('Invalid Google sign-in request.', 400)
+  const flow: OAuthFlow = { state: base64url(crypto.getRandomValues(new Uint8Array(32))), verifier: base64url(crypto.getRandomValues(new Uint8Array(48))), next: safeAccountDestination(input.next), created: Date.now() }
+  const challenge = base64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(flow.verifier))))
+  const callback = new URL('/api/account/oauth/callback', request.url)
+  callback.searchParams.set('state', flow.state)
+  const authorization = new URL(config(env).base + '/auth/v1/authorize')
+  authorization.searchParams.set('provider', 'google')
+  authorization.searchParams.set('redirect_to', callback.href)
+  authorization.searchParams.set('code_challenge', challenge)
+  authorization.searchParams.set('code_challenge_method', 's256')
+  // Supabase owns its separate Google OAuth state. Our random callback state
+  // binds the same-origin initiation to an HttpOnly cookie and PKCE verifier.
+  const encoded = base64url(new TextEncoder().encode(JSON.stringify(flow)))
+  return json({ url: authorization.href }, 200, [cookie(OAUTH_COOKIE, encoded, OAUTH_FLOW_SECONDS)])
+}
+function googleRedirect(request: Request, result: 'success' | 'error', next: string, cookies: string[] = []) {
+  const destination = new URL('/login', request.url)
+  destination.searchParams.set('oauth', result)
+  destination.searchParams.set('next', safeAccountDestination(next))
+  // An explicit empty fragment prevents inheriting provider error/token
+  // fragments when a browser follows this redirect.
+  const headers = new Headers({ Location: destination.href + '#', 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff', Vary: 'Cookie' })
+  for (const value of cookies) headers.append('Set-Cookie', value)
+  return new Response(null, { status: 303, headers })
+}
+async function googleCallback(request: Request, env: AccountEnv, fetcher: typeof fetch) {
+  const flow = readOAuthFlow(request), url = new URL(request.url), states = url.searchParams.getAll('state'), codes = url.searchParams.getAll('code')
+  const matches = !!flow && states.length === 1 && states[0] === flow.state
+  if (!googleReady(request, env) || url.search.length > 2048 || !matches) return googleRedirect(request, 'error', '/world')
+  try {
+    await limit(request, env, 'oauth-callback')
+    if (url.searchParams.has('error') || url.searchParams.has('error_code') || codes.length !== 1 || !/^[A-Za-z0-9_-]{12,512}$/.test(codes[0])) throw new AccountError('Google sign-in was not completed.', 400)
+    const response = await upstream(env, fetcher, '/token?grant_type=pkce', 'POST', { auth_code: codes[0], code_verifier: flow.verifier })
+    if (!response.ok) { await response.body?.cancel(); throw new AccountError('Google sign-in could not be completed.', 400) }
+    const session = validateSession(await responseJson(response))
+    // Verify the returned token with the shared provider before installing the
+    // session. Never trust identity supplied through query or browser storage.
+    const user = await verifiedUser(env, fetcher, session.access_token)
+    if (!user || user.id !== session.user.id) throw new AccountError('Google account could not be verified.', 401)
+    return googleRedirect(request, 'success', flow.next, [cookie(OAUTH_COOKIE, '', 0), ...sessionCookies({ ...session, user })])
+  } catch {
+    // Leave any prior signed-in session intact; erase only this matched flow.
+    // Provider error descriptions, codes and tokens never enter the page URL.
+    return googleRedirect(request, 'error', flow.next, [cookie(OAUTH_COOKIE, '', 0)])
+  }
+}
 async function recoveryCallback(request: Request, env: AccountEnv, fetcher: typeof fetch) {
   const verifier = cookieValue(request, PKCE_COOKIE), url = new URL(request.url), code = url.searchParams.get('code')
   if (env.SUPABASE_RECOVERY_REDIRECT_READY !== 'true' || !verifier || !code || !/^[A-Za-z0-9_-]{12,512}$/.test(code))
@@ -180,7 +247,7 @@ export async function accountApi(request: Request, env: AccountEnv, fetcher: typ
   const { pathname, origin } = new URL(request.url)
   if (!pathname.startsWith('/api/account/')) return null
   const action = pathname.slice('/api/account/'.length)
-  if (!['config', 'session', 'login', 'register', 'recover', 'logout', 'password', 'recovery/callback'].includes(action)) return json({ error: 'Account route not found.' }, 404)
+  if (!['config', 'session', 'login', 'register', 'recover', 'logout', 'password', 'recovery/callback', 'oauth/google', 'oauth/callback'].includes(action)) return json({ error: 'Account route not found.' }, 404)
   try {
     // This external top-level navigation is bound to an HttpOnly PKCE verifier;
     // all other account endpoints remain strictly same-origin.
@@ -188,10 +255,17 @@ export async function accountApi(request: Request, env: AccountEnv, fetcher: typ
       if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
       return await recoveryCallback(request, env, fetcher)
     }
+    if (action === 'oauth/callback') {
+      if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
+      return await googleCallback(request, env, fetcher)
+    }
     checkOrigin(request)
     const expectedMethod = ['config', 'session'].includes(action) ? 'GET' : 'POST'
     if (request.method !== expectedMethod) return json({ error: `Use ${expectedMethod}.` }, 405)
-    if (action === 'config') return json({ configured: accountsConfigured(env), provider: 'Cube Chess account', methods: ['email'], sharedAccount: true, recoveryReady: env.SUPABASE_RECOVERY_REDIRECT_READY === 'true' })
+    if (action === 'config') {
+      const ready = googleReady(request, env)
+      return json({ configured: accountsConfigured(env), provider: 'Cube Chess account', methods: ready ? ['email', 'google'] : ['email'], sharedAccount: true, recoveryReady: env.SUPABASE_RECOVERY_REDIRECT_READY === 'true', googleReady: ready, googleReason: ready ? null : 'Google sign-in is awaiting confirmation of the WORLDIFACT callback in the shared account service.' })
+    }
     if (action === 'session') {
       if (!accountsConfigured(env)) return json({ configured: false, user: null })
       const access = cookieValue(request, ACCESS_COOKIE), renewal = cookieValue(request, REFRESH_COOKIE)
@@ -218,6 +292,7 @@ export async function accountApi(request: Request, env: AccountEnv, fetcher: typ
     if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
     await limit(request, env, action)
     const input = await boundedJson(request, MAX_BODY)
+    if (action === 'oauth/google') return await googleStart(request, env, input)
     if (action === 'password') {
       if (Object.keys(input).length !== 1 || typeof input.password !== 'string' || input.password.length < 12 || input.password.length > 128)
         throw new AccountError('Use a password between 12 and 128 characters.', 400)

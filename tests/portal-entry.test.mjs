@@ -70,7 +70,7 @@ test('Chess visitors get a mobile-safe full-screen guest launch instead of a nes
 test('direct PortalPage Shop renders the real native generation form, Astra surface and WORLDIFACT return', async () => {
   const html = await renderPortal('/shop')
   assert.match(html, /data-world="enchanted-ai-shop"/)
-  assert.match(html, /Back to WORLDIFACT/)
+  assert.match(html, /Back to WORLDIFAKT/)
   assert.match(html, /id="studio-prompt"/)
   assert.match(html, /Generate SLOW model/)
   assert.match(html, /target="_blank"/)

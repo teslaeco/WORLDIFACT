@@ -17,7 +17,9 @@ GENERATION_EXPIRES_AT=
 # Existing Chess Supabase identity; no second user database. Enable only after
 # its Auth redirect allowlist accepts this exact callback path plus state:
 # https://worldifact.xodobrox.workers.dev/api/account/oauth/callback?state=*
-# A 2026-09-22 owned-flow cancellation probe still returned the external Chess URL.
+# Production callback acceptance was verified by owned-flow cancellation on
+# 2026-09-22 after the owner updated the existing Supabase redirect allowlist.
+# Keep local readiness false until the local HTTPS callback is separately allowed.
 SUPABASE_GOOGLE_REDIRECT_READY=false
 
 # Server-side payment configuration. Empty by default; never put private keys in VITE_*.

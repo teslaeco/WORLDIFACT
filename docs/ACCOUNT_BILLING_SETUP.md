@@ -1,6 +1,6 @@
 # Account allowances and billing
 
-Status: the owner approved **USD 30.00 / 1,500 credits**. One-time credit packs, cards/eligible Google Pay via Stripe and PayPal Orders are implemented; live payments remain BLOCKED until merchant configuration and end-to-end sandbox acceptance. The owner subsequently approved the separate subscription at **USD 29.99 per month / 1,500 credits**. The existing one-time pack remains USD 30.00. No real payment, provider-account mutation or payout configuration was performed during implementation.
+Status: the owner corrected all paid offers to one price: **USD 29.99 / 1,500 credits**. One-time credit packs, cards/eligible Google Pay via Stripe and PayPal Orders are implemented; live payments remain BLOCKED until merchant configuration and end-to-end sandbox acceptance. Monthly membership and optional one-time top-ups now have the same USD 29.99 price, shown in one paid offer panel. No real payment, provider-account mutation or payout configuration was performed during implementation.
 
 ## Identity and quotas
 
@@ -13,7 +13,7 @@ The existing Cube Chess Supabase UUID is the identity key. `AccountEntitlements`
 | Subscription payment | 1,500 credits for each verified initial or renewal invoice for the configured subscription price |
 | Credit generation | 50 credits per reservation, for FAST or SLOW; 1,500 / 50 = 30 models |
 | Active subscription with no credits | Generation is blocked until more credits are purchased |
-| One-time credit pack / top-up | USD 30.00 for 1,500 credits; any signed-in account may buy; does not activate subscription-only SLOW downloads |
+| One-time credit pack / top-up | USD 29.99 for 1,500 credits; any signed-in account may buy; does not activate subscription-only SLOW downloads |
 | Remaining credits after subscription expiry | Credits remain usable; SLOW downloads remain locked until the subscription is active again |
 | Explicit failed generation | One idempotent refund of its credits or free quota |
 | Uncertain provider acceptance | Preserve the reservation and job ID; never refund or automatically start a second job |
@@ -47,13 +47,13 @@ Checkout responses contain only a validated hosted Stripe URL and test/live mode
 | `STRIPE_WEBHOOK_SECRET` | Server `whsec_...` secret from the exact endpoint |
 | `STRIPE_SUBSCRIPTION_PRICE_ID` | Recurring USD 29.99 monthly per-unit Price; quantity one |
 | `STRIPE_SUBSCRIPTION_INTERVAL` | `month`, matched to Price interval count one; other values block recurring checkout |
-| `STRIPE_TOPUP_PRICE_ID` | One-time per-unit Price, exactly USD 30.00, quantity one |
+| `STRIPE_TOPUP_PRICE_ID` | One-time per-unit Price, exactly USD 29.99, quantity one |
 | `STRIPE_PREVIOUS_TOPUP_PRICE_IDS` | Optional comma-separated allowlist of at most 10 previous Price IDs for historical settlement/refunds; never used for new checkout |
 | `STRIPE_TOPUP_CREDITS` | Legacy ignored setting; server always grants exactly `1500` |
 | `BILLING_PUBLIC_ORIGIN` | Exact public HTTPS origin, without a trailing slash or path |
 | `ACCOUNT_LIMITER` | Account/billing request limiter; existing `GENERATION_LIMITER` is an allowed fallback |
 
-The Stripe Price is fetched and validated before Checkout. The approved pack is USD 30.00 / 1,500 credits. The owner approved a USD 29.99 monthly membership with 1,500 credits each paid period; subscription checkout still requires complete provider configuration. Current implementation supports one fixed subscription product, not prorated upgrades, quantity changes or free trials. Configure the Stripe customer portal accordingly.
+The Stripe Price is fetched and validated before Checkout. The approved pack is USD 29.99 / 1,500 credits. The owner approved a USD 29.99 monthly membership with 1,500 credits each paid period; subscription checkout still requires complete provider configuration. Current implementation supports one fixed subscription product, not prorated upgrades, quantity changes or free trials. Configure the Stripe customer portal accordingly.
 
 When rotating the one-time Price, retain its old ID in `STRIPE_PREVIOUS_TOPUP_PRICE_IDS` for as long as historical events/refunds may arrive. Settlement re-fetches that exact allowlisted Price and verifies the same fixed pack; archived Prices remain valid for already-issued payments but cannot create new checkout. Do not rotate the recurring Price or subscription interval without a separately reviewed migration; historical recurring subscriptions currently depend on that configuration.
 
@@ -93,12 +93,12 @@ Sources checked: [Google Pay on Stripe Checkout](https://docs.stripe.com/google-
 
 ## PayPal automatic credit fulfillment
 
-The supplied reusable HostedButtons offer is USD 30.00 (`N4DCJJHHW747S`). It is preserved as an operator reference in `CODEX_TASK_PAYMENTS_20260922.md`, but is not rendered as an active purchase option: no documented secure account binding for that static snippet was verified. Its public SDK client ID is not a REST API secret. The implementation instead creates a per-account PayPal Order on the server.
+The original supplied reusable HostedButtons offer was USD 30.00 and does not match the corrected price (`N4DCJJHHW747S`). It is preserved as an operator reference in `CODEX_TASK_PAYMENTS_20260922.md`, but is not rendered as an active purchase option: no documented secure account binding for that static snippet was verified. Its public SDK client ID is not a REST API secret. The implementation instead creates a per-account PayPal Order on the server.
 
 | Route | Behavior |
 | --- | --- |
 | `GET /api/billing/paypal/status` | Public readiness/mode; static hosted button explicitly unavailable |
-| `POST /api/billing/paypal/order` | Verified account, same origin and rate limit; fixed USD 30.00 / 1,500-credit Order and approved PayPal redirect |
+| `POST /api/billing/paypal/order` | Verified account, same origin and rate limit; fixed USD 29.99 / 1,500-credit Order and approved PayPal redirect |
 | `POST /api/billing/paypal/capture` | Body `{ "orderId": "..." }`; checks ownership before provider access and verifies provider settlement before credit |
 | `POST /api/billing/paypal/webhook` | PayPal-verified webhook and reread order/capture; no browser assertion is payment evidence |
 

@@ -40,12 +40,15 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
   const dist = await mkdtemp(join(tmpdir(), "worldifact-release-"));
   t.after(() => rm(dist, { recursive: true, force: true }));
   await mkdir(join(dist, "assets"));
+  await mkdir(join(dist, "world-assets"));
   const files = new Map([
     ["/index.html", '<html><title>WORLDIFACT</title><div id="root"></div><script src="/assets/app.js"></script></html>'],
     ["/assets/app.js", "export const worldifact = true;"],
     ["/assets/app.css", "body { color: white; }"],
     ["/assets/lazy.js", "export const portal = true;"],
     ["/assets/lake.webp", "RIFF mock texture bytes"],
+    ["/world-assets/polyhedron-led.gltf", '{"asset":{"version":"2.0"},"fixture":"bundled original model bytes"}'],
+    ["/world-assets/polyhedron-led-poster.svg", '<svg xmlns="http://www.w3.org/2000/svg"><title>Exact model poster fixture</title></svg>'],
     ["/apps/chess/index.html", '<html>Existing chess app<script src="./game.js"></script></html>'],
     ["/apps/chess/guest.html", '<html>Existing guest app<script src="./game.js"></script></html>'],
     ["/apps/chess/game.js", "export const originalChess = true;"],
@@ -68,7 +71,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     }) as typeof fetch);
     const asset = files.get(url.pathname);
     return new Response(asset ?? files.get("/index.html"), { headers: {
-      "Content-Type": !asset || url.pathname.endsWith(".html") ? "text/html" : (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript"),
+      "Content-Type": !asset || url.pathname.endsWith(".html") ? "text/html" : (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".gltf") ? "model/gltf+json" : url.pathname.endsWith(".svg") ? "image/svg+xml" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript"),
     } });
   };
   return { dist, files, requests, fetcher, retryDelaysMs: [], providerCalls: () => providerCalls };
@@ -77,10 +80,13 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
 test("release smoke verifies deep links and lazy assets and only sends DEMO without secrets", async (t) => {
   const f = await fixture(t);
   const result = await checkPublishedRelease({ origin, versionId }, f);
-  assert.equal(result.htmlRoutes, 13);
-  assert.equal(result.verifiedAssets, 4);
+  assert.equal(result.htmlRoutes, 16);
+  assert.equal(result.verifiedAssets, 6);
   assert.equal(result.foundationAssets, 5);
   assert.equal(f.providerCalls(), 0);
+  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg"]) {
+    assert.ok(f.requests.some(request => new URL(request.url).pathname === path), `${path} must be checked`);
+  }
   const posts = f.requests.filter((request) => request.method === "POST");
   assert.equal(posts.length, 2);
   for (const request of posts) {
@@ -196,6 +202,22 @@ test("release smoke detects a missing panorama served as HTML or a stale image",
       ? new Response("incorrect asset", { headers: { "Content-Type": mime } }) : f.fetcher(url, init);
     await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), /lake\.webp/);
     assert.equal(f.providerCalls(), 0);
+  }
+});
+
+test("release requires both bundled sculpture files with exact build bytes and a valid content type", async (t) => {
+  for (const [path, mime] of [["/world-assets/polyhedron-led.gltf", "model/gltf+json"], ["/world-assets/polyhedron-led-poster.svg", "image/svg+xml"]]) {
+    for (const variant of ["html", "stale", "wrong-mime", "missing"]) {
+      const f = await fixture(t);
+      const fetcher = async (url: URL, init: RequestInit) => url.pathname === path
+        ? new Response(variant === "html" ? "<html>SPA fallback</html>" : variant === "stale" ? "previous model revision" : f.files.get(path), {
+          status: variant === "missing" ? 404 : 200,
+          headers: { "Content-Type": variant === "html" || variant === "wrong-mime" ? "text/html" : mime },
+        }) : f.fetcher(url, init);
+      await assert.rejects(checkPublishedRelease({ origin, versionId }, { ...f, fetcher }), error => error instanceof Error && error.message.includes(path));
+      assert.equal(f.providerCalls(), 0);
+      assert.equal(f.requests.some(request => new URL(request.url).pathname === "/api/decor/polyhedron.glb"), false);
+    }
   }
 });
 

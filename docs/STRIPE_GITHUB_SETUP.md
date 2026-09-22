@@ -1,6 +1,6 @@
 # WORLDIFACT — Stripe and GitHub configuration
 
-Approved offer: **USD 29.99 monthly / 1,500 credits**, with subscription-only SLOW downloads. The separate one-time top-up remains **USD 30.00 / 1,500 credits** and does not activate membership. Every generation costs 50 credits.
+Approved offer: **USD 29.99 monthly / 1,500 credits**, with subscription-only SLOW downloads. The optional one-time top-up uses the same **USD 29.99 / 1,500 credits** and does not activate membership. Every generation costs 50 credits.
 
 ## 1. Merchant account and server key
 
@@ -17,7 +17,7 @@ Open [WORLDIFACT environments](https://github.com/teslaeco/WORLDIFACT/settings/e
 | `STRIPE_SECRET_KEY` | Full live account secret key starting `sk_live_` |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret starting `whsec_` for the exact live endpoint below |
 | `STRIPE_SUBSCRIPTION_PRICE_ID` | `price_...` for USD 29.99 recurring every month |
-| `STRIPE_TOPUP_PRICE_ID` | `price_...` for USD 30.00 one-time |
+| `STRIPE_TOPUP_PRICE_ID` | `price_...` for USD 29.99 one-time |
 
 Price IDs are not private credentials but are stored alongside the deployment inputs for a simple consistent setup. Use Price IDs, not `prod_...` Product IDs. Keep all four resources in the same Stripe account and live environment. Test keys/prices belong to a separate sandbox deployment.
 
@@ -28,7 +28,7 @@ In [Stripe Product catalog](https://dashboard.stripe.com/products), create flat-
 | Field | Membership | Credit top-up |
 | --- | --- | --- |
 | Name | `WORLDIFACT Membership — 1500 credits` | `WORLDIFACT Top-up — 1500 credits` |
-| Amount | `29.99` | `30.00` |
+| Amount | `29.99` | `29.99` |
 | Currency | `USD` | `USD` |
 | Pricing type | `Recurring` | `One time` |
 | Billing period | `Monthly` / every 1 month | None |

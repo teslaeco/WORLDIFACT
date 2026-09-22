@@ -13,8 +13,8 @@ export default function HomePage() {
   return (
     <main className="home-world">
       <header className="home-header">
-        <Link to="/" className="brand">
-          <WorldifactLogo /><span className="brand-name">WORLDIFACT<span>AI Worlds Made Real</span></span>
+        <Link to="/world" className="brand">
+          <WorldifactLogo /><span className="brand-name">WORLDIFAKT<span>AI Worlds Made Real</span></span>
         </Link>
         <Link className="button-link" to={user ? "/account/credits" : "/login"}>{user ? "My account" : "Sign in"}</Link>
         <Link className="button-link" to="/lab">

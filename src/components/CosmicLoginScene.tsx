@@ -4,7 +4,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { loadPortalSculpture, rotatePortalSculpture, setSculpturePalette } from "../lib/portalSculpture";
+import { loadPortalSculpture, PORTAL_SCULPTURE_POSTER_URL, rotatePortalSculpture, setSculpturePalette } from "../lib/portalSculpture";
 import { disposeObject } from "../lib/worldGeometry";
 import "./CosmicLoginScene.css";
 
@@ -164,13 +164,19 @@ export default function CosmicLoginScene({ phase }: Props) {
       narrow = width <= 800;
       renderer.setSize(width, height); composer.setSize(width, height);
       camera.aspect = width / height; camera.updateProjectionMatrix();
-      // Auth form occupies the right half on desktop; the model owns the mobile header.
+      // Keep the compact mobile form above the fold: the original model occupies
+      // the header's right side, while desktop gives it the left hero region.
       const visibleHeight = 2 * 9 * Math.tan(THREE.MathUtils.degToRad(43) / 2);
       const visibleWidth = visibleHeight * camera.aspect;
-      const centerY = narrow ? 350 : Math.min(550, height * .54);
-      const modelPixels = narrow ? Math.min(230, width * .62) : Math.min(345, width * .28);
-      sculptureAnchor.position.set(narrow ? 0 : -visibleWidth * .23, visibleHeight * (.5 - centerY / height), 0);
+      const centerY = narrow ? 112 : Math.min(500, height * .55);
+      const centerX = narrow ? width * .80 : width * .27;
+      const modelPixels = narrow ? Math.min(118, width * .31) : Math.min(360, width * .29);
+      sculptureAnchor.position.set(visibleWidth * (centerX / width - .5), visibleHeight * (.5 - centerY / height), 0);
       sculptureAnchor.scale.setScalar(modelPixels / height * visibleHeight / 3.35);
+      const container = host.parentElement;
+      container?.style.setProperty("--sculpture-center-x", `${centerX}px`);
+      container?.style.setProperty("--sculpture-center-y", `${centerY}px`);
+      container?.style.setProperty("--sculpture-size", `${modelPixels}px`);
       forceRender = true;
     };
     const observer = new ResizeObserver(resize); observer.observe(host); resize();
@@ -248,9 +254,10 @@ export default function CosmicLoginScene({ phase }: Props) {
 
   return <div className={`cosmic-login-scene${failed ? " cosmic-login-scene--fallback" : ""}`}>
     <div className="cosmic-login-canvas" ref={mount} />
+    {(failed || modelState !== "ready") && <img className="cosmic-sculpture-poster" src={PORTAL_SCULPTURE_POSTER_URL} alt="Static preview of the original FORGE open-frame polyhedron" width="320" height="320" />}
     <div className="cosmic-login-vignette" aria-hidden="true" />
-    {failed && <p className="cosmic-scene-notice" role="status">3D preview unavailable. You can still sign in below.</p>}
-    {!failed && modelState !== "ready" && <p className="cosmic-scene-notice" role="status">{modelState === "loading" ? "Bringing your portal to life…" : "The original 3D model is temporarily unavailable."}</p>}
+    {failed && <p className="cosmic-scene-notice" role="status">Static model preview · 3D animation unavailable</p>}
+    {!failed && modelState !== "ready" && <p className="cosmic-scene-notice" role="status">{modelState === "loading" ? "Loading the original 3D model…" : "Static model preview · 3D animation unavailable"}</p>}
     <div className="cosmic-scene-tools">
       {!failed && <button type="button" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? "Resume animation" : "Pause animation"}</button>}
       {earthReady && <a href="https://earthdata.nasa.gov/centers/gibs" target="_blank" rel="noreferrer">Earth imagery · NASA GIBS</a>}
