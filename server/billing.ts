@@ -22,12 +22,13 @@ export const CREDIT_PACK = Object.freeze({ amount: 2999, currency: 'USD', credit
 export const MONTHLY_MEMBERSHIP = Object.freeze({ amount: CREDIT_PACK.amount, currency: 'USD', credits: 1500, kind: 'subscription' as const, interval: 'month' as const })
 type Json = Record<string, unknown>
 type BillingStage = 'price_read' | 'customer_create' | 'subscription_list' | 'checkout_create' | 'portal_create' | 'other_read'
-type BillingDiagnostic = { stage: BillingStage; category: 'provider_http' | 'provider_timeout' | 'provider_transport' | 'provider_response' | 'mode_mismatch' | 'checkout_validation'; httpStatus?: number; code?: string; parameter?: string; fields?: string[] }
+type BillingDiagnostic = { stage: BillingStage; category: 'provider_http' | 'provider_timeout' | 'provider_transport' | 'provider_response' | 'mode_mismatch' | 'checkout_validation'; httpStatus?: number; type?: string; code?: string; parameter?: string; fields?: string[] }
 class BillingDiagnosticError extends EntitlementError {
   diagnostic: BillingDiagnostic
   constructor(message: string, status: number, diagnostic: BillingDiagnostic) { super(message, status); this.diagnostic = diagnostic }
 }
 const diagnosticCodes = new Set(['parameter_missing', 'parameter_unknown', 'parameter_invalid_empty', 'parameter_invalid_integer', 'resource_missing', 'permission_denied', 'account_invalid', 'api_key_expired', 'idempotency_key_in_use'])
+const diagnosticTypes = new Set(['api_error', 'card_error', 'idempotency_error', 'invalid_request_error'])
 const diagnosticParameters = new Set(['email', 'customer', 'configuration', 'mode', 'currency', 'line_items', 'line_items[0][price]', 'line_items[0][quantity]', 'payment_method_types', 'payment_method_types[0]', 'allow_promotion_codes', 'success_url', 'cancel_url', 'return_url', 'client_reference_id', 'metadata', 'subscription_data', 'subscription_data[metadata]', 'payment_intent_data', 'payment_intent_data[metadata]', 'status', 'limit'])
 const object = (value: unknown): Json => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Json : {}
 const array = (value: unknown): Json[] => Array.isArray(value) ? value.map(object) : []
@@ -85,6 +86,7 @@ async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, para
       try {
         const error = object(object(JSON.parse(await boundedText(response, 256_000))).error)
         // Only exact public schema labels may leave the server. Never return raw messages or values.
+        if (typeof error.type === 'string' && diagnosticTypes.has(error.type)) diagnostic.type = error.type
         if (typeof error.code === 'string' && diagnosticCodes.has(error.code)) diagnostic.code = error.code
         if (typeof error.param === 'string' && diagnosticParameters.has(error.param)) diagnostic.parameter = error.param
       } catch { /* Keep only the safe stage and HTTP status for malformed or oversized errors. */ }

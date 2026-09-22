@@ -8,6 +8,8 @@ test('checkout errors provide fixed support references without rendering provide
   assert.equal(error.paymentReference, 'customer_create/provider_http/403/amount_total')
   assert.match(paymentErrorMessage(error), /customer_create\/provider_http\/403/)
   assert.ok(!paymentErrorMessage(error).includes(secret))
+  assert.equal(new AccountServiceError('', 502, { stage: 'checkout_create', category: 'provider_http', httpStatus: 400, type: 'idempotency_error' }).paymentReference, 'checkout_create/provider_http/400/idempotency_error')
+  assert.equal(new AccountServiceError('', 502, { stage: 'checkout_create', category: 'provider_http', httpStatus: 400, type: secret }).paymentReference, 'checkout_create/provider_http/400')
   for (const diagnostic of [{ stage: secret, category: 'provider_http' }, { stage: 'checkout_create', category: secret }, null]) {
     assert.ok(!paymentErrorMessage(new AccountServiceError(secret, 503, diagnostic)).includes(secret))
   }

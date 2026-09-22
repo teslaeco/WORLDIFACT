@@ -16,6 +16,7 @@ export class AccountServiceError extends Error {
     if (typeof value.stage !== 'string' || !stages.has(value.stage) || typeof value.category !== 'string' || !categories.has(value.category)) return
     const parts = [value.stage, value.category]
     if (Number.isInteger(value.httpStatus) && Number(value.httpStatus) >= 300 && Number(value.httpStatus) <= 599) parts.push(String(value.httpStatus))
+    if (typeof value.type === 'string' && ['api_error', 'card_error', 'idempotency_error', 'invalid_request_error'].includes(value.type)) parts.push(value.type)
     if (typeof value.code === 'string' && codes.has(value.code)) parts.push(value.code)
     if (typeof value.parameter === 'string' && parameters.has(value.parameter)) parts.push(value.parameter)
     if (Array.isArray(value.fields)) parts.push(...value.fields.filter((field): field is string => typeof field === 'string' && fields.has(field)).slice(0, 11))
