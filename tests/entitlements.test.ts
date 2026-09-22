@@ -416,6 +416,102 @@ test('Browser price, credit and identity injection is rejected before any Stripe
   }
 })
 
+function freshCheckoutFixture() {
+  const f = billingFixture(), calls: { path: string; params: URLSearchParams; idempotency: string | null }[] = []
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = new URL(String(input)), params = new URLSearchParams(String(init?.body ?? ''))
+    calls.push({ path: url.pathname, params, idempotency: new Headers(init?.headers).get('Idempotency-Key') })
+    if (url.pathname === '/v1/customers') return Response.json({ object: 'customer', livemode: false, id: 'cus_NewCustomer', email: params.get('email'), metadata: { worldifact_uid: params.get('metadata[worldifact_uid]') } })
+    if (url.pathname === '/v1/subscriptions') return Response.json({ object: 'list', data: [], has_more: false })
+    if (url.pathname === '/v1/checkout/sessions') return Response.json({ object: 'checkout.session', livemode: false, id: 'cs_test_NewSession', customer: params.get('customer'), mode: params.get('mode'), amount_total: 2999, currency: 'usd', expires_at: Math.floor(f.now() / 1000) + 86400, client_reference_id: params.get('client_reference_id'), metadata: { worldifact_uid: params.get('metadata[worldifact_uid]'), worldifact_kind: params.get('metadata[worldifact_kind]'), worldifact_checkout_id: params.get('metadata[worldifact_checkout_id]') }, url: 'https://checkout.stripe.com/c/pay/new_fixture' })
+    if (url.pathname === '/v1/billing_portal/sessions') return Response.json({ livemode: false, customer: params.get('customer'), configuration: params.get('configuration'), url: 'https://billing.stripe.com/p/session/new_fixture' })
+    return f.fetcher(input, init)
+  }) as typeof fetch
+  return { ...f, calls, fetcher }
+}
+
+test('first-time monthly checkout creates and binds the customer before returning a verified unpaid session', async () => {
+  const f = freshCheckoutFixture()
+  const response = await billingApi(checkoutRequest('subscription'), f.env, f.fetcher)
+  assert.equal(response?.status, 200)
+  assert.deepEqual(await response!.json(), { url: 'https://checkout.stripe.com/c/pay/new_fixture', mode: 'test' })
+  assert.deepEqual(await entitlementCall(f.env, USER, '/billing'), { customer: 'cus_NewCustomer' })
+  const customer = f.calls.find(call => call.path === '/v1/customers')!
+  assert.equal(customer.params.get('email'), 'player@example.test')
+  assert.equal(customer.params.get('metadata[worldifact_uid]'), USER)
+  assert.equal(customer.idempotency, `wf-customer-v1-${USER}`)
+  assert.equal(f.calls.find(call => call.path === '/v1/checkout/sessions')!.params.get('customer'), 'cus_NewCustomer')
+  assert.equal((await billingApi(checkoutRequest('subscription'), f.env, f.fetcher))?.status, 200)
+  assert.equal(f.calls.filter(call => call.path === '/v1/customers').length, 1)
+  assert.equal(f.calls.filter(call => call.path === '/v1/checkout/sessions').length, 1)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+  assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
+})
+
+test('Stripe HTTP diagnostics identify only fixed stages, status and allowlisted code or parameter labels', async () => {
+  const privateValue = 'sk_live_private_customer_information'
+  for (const [path, stage] of [['/v1/prices/price_Subscription', 'price_read'], ['/v1/customers', 'customer_create'], ['/v1/subscriptions', 'subscription_list'], ['/v1/checkout/sessions', 'checkout_create'], ['/v1/billing_portal/sessions', 'portal_create']] as const) {
+    for (const status of [400, 403]) {
+      const f = freshCheckoutFixture()
+      if (stage === 'portal_create') await entitlementCall(f.env, USER, '/customer', { customer: 'cus_NewCustomer' })
+      const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => new URL(String(input)).pathname === path
+        ? Response.json({ error: { code: status === 400 ? 'parameter_missing' : 'permission_denied', param: status === 400 ? 'line_items[0][price]' : privateValue, message: privateValue, request_log_url: privateValue } }, { status })
+        : f.fetcher(input, init)) as typeof fetch
+      const request = stage === 'portal_create' ? new Request('https://worldifact.test/api/billing/portal', { method: 'POST', headers: checkoutRequest('subscription').headers }) : checkoutRequest('subscription')
+      const response = await billingApi(request, f.env, fetcher)
+      assert.equal(response?.status, 502)
+      const body = await response!.json() as Record<string, unknown>
+      assert.deepEqual(body.diagnostic, { stage, category: 'provider_http', httpStatus: status, code: status === 400 ? 'parameter_missing' : 'permission_denied', ...(status === 400 ? { parameter: 'line_items[0][price]' } : {}) })
+      assert.ok(!JSON.stringify(body).includes(privateValue))
+      assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+    }
+  }
+  const f = freshCheckoutFixture()
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => String(input).includes('api.stripe.com') ? Response.json({ error: { code: privateValue, param: `customer${privateValue}`, message: privateValue } }, { status: 400 }) : f.fetcher(input, init)) as typeof fetch
+  const body = await (await billingApi(checkoutRequest('subscription'), f.env, fetcher))!.json() as Record<string, unknown>
+  assert.deepEqual(body.diagnostic, { stage: 'price_read', category: 'provider_http', httpStatus: 400 })
+  assert.ok(!JSON.stringify(body).includes(privateValue))
+})
+
+test('Stripe timeout, transport and invalid response diagnostics remain distinct and never expose exception text', async () => {
+  for (const category of ['provider_timeout', 'provider_transport', 'provider_response'] as const) {
+    const f = freshCheckoutFixture()
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (!String(input).includes('api.stripe.com')) return f.fetcher(input, init)
+      if (category === 'provider_response') return new Response('private malformed provider body')
+      const error = new Error('private transport and key details')
+      if (category === 'provider_timeout') error.name = 'TimeoutError'
+      throw error
+    }) as typeof fetch
+    const response = await billingApi(checkoutRequest('subscription'), f.env, fetcher)
+    assert.equal(response?.status, 503)
+    const body = await response!.json() as Record<string, unknown>
+    assert.deepEqual(body.diagnostic, { stage: 'price_read', category })
+    assert.ok(!JSON.stringify(body).includes('private'))
+  }
+})
+
+test('checkout validation reports fixed failing field names while hiding received amounts, identities and URLs', async () => {
+  for (const [changed, expected] of [
+    [{ amount_total: 3000 }, ['amount_total']], [{ currency: 'private_currency' }, ['currency']],
+    [{ customer: 'cus_Private', client_reference_id: 'private_user' }, ['customer', 'client_reference_id']],
+    [{ url: 'https://private.invalid/key', expires_at: 'private_expiry' }, ['url', 'expires_at']],
+    [{ metadata: { worldifact_uid: 'private_user', worldifact_kind: 'private_kind', worldifact_checkout_id: 'private_attempt' } }, ['metadata.worldifact_uid', 'metadata.worldifact_kind', 'metadata.worldifact_checkout_id']],
+  ] as const) {
+    const f = freshCheckoutFixture()
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const response = await f.fetcher(input, init)
+      return new URL(String(input)).pathname === '/v1/checkout/sessions' ? Response.json({ ...(await response.json() as Record<string, unknown>), ...changed }) : response
+    }) as typeof fetch
+    const response = await billingApi(checkoutRequest('subscription'), f.env, fetcher)
+    assert.equal(response?.status, 503)
+    const body = await response!.json() as Record<string, unknown>
+    assert.deepEqual(body.diagnostic, { stage: 'checkout_create', category: 'checkout_validation', fields: [...expected] })
+    assert.ok(!JSON.stringify(body).includes('private'))
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+  }
+})
+
 test('Monthly membership checkout accepts USD 29.99 and rejects the obsolete amount', async () => {
   for (const amount of [2999, 3000]) {
     const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })

@@ -21,6 +21,14 @@ export const STRIPE_API_VERSION = '2024-06-20'
 export const CREDIT_PACK = Object.freeze({ amount: 2999, currency: 'USD', credits: 1500, kind: 'one_time' as const })
 export const MONTHLY_MEMBERSHIP = Object.freeze({ amount: CREDIT_PACK.amount, currency: 'USD', credits: 1500, kind: 'subscription' as const, interval: 'month' as const })
 type Json = Record<string, unknown>
+type BillingStage = 'price_read' | 'customer_create' | 'subscription_list' | 'checkout_create' | 'portal_create' | 'other_read'
+type BillingDiagnostic = { stage: BillingStage; category: 'provider_http' | 'provider_timeout' | 'provider_transport' | 'provider_response' | 'mode_mismatch' | 'checkout_validation'; httpStatus?: number; code?: string; parameter?: string; fields?: string[] }
+class BillingDiagnosticError extends EntitlementError {
+  diagnostic: BillingDiagnostic
+  constructor(message: string, status: number, diagnostic: BillingDiagnostic) { super(message, status); this.diagnostic = diagnostic }
+}
+const diagnosticCodes = new Set(['parameter_missing', 'parameter_unknown', 'parameter_invalid_empty', 'parameter_invalid_integer', 'resource_missing', 'permission_denied', 'account_invalid', 'api_key_expired', 'idempotency_key_in_use'])
+const diagnosticParameters = new Set(['email', 'customer', 'configuration', 'mode', 'currency', 'line_items', 'line_items[0][price]', 'line_items[0][quantity]', 'payment_method_types', 'payment_method_types[0]', 'allow_promotion_codes', 'success_url', 'cancel_url', 'return_url', 'client_reference_id', 'metadata', 'subscription_data', 'subscription_data[metadata]', 'payment_intent_data', 'payment_intent_data[metadata]', 'status', 'limit'])
 const object = (value: unknown): Json => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Json : {}
 const array = (value: unknown): Json[] => Array.isArray(value) ? value.map(object) : []
 const idOf = (value: unknown) => typeof value === 'string' ? value : typeof object(value).id === 'string' ? object(value).id as string : ''
@@ -57,17 +65,37 @@ async function boundedText(value: Request | Response, maximum: number) {
   return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
 }
 async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, params?: URLSearchParams, key?: string): Promise<Json> {
-  const response = await fetcher(`https://api.stripe.com/v1${path}`, {
-    // workerd supports manual/follow; reject redirects before credentials can leave Stripe.
-    method: params ? 'POST' : 'GET', redirect: 'manual', signal: AbortSignal.timeout(12_000),
-    headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY?.trim()}`, 'Stripe-Version': STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
-    ...(params ? { body: params.toString() } : {}),
-  })
-  if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new EntitlementError('Billing could not be confirmed. Please retry the same action later.', 502) }
-  if (!response.ok) { await response.body?.cancel(); throw new EntitlementError('Billing could not be confirmed. Please retry the same action later.', 502) }
-  const body = object(JSON.parse(await boundedText(response, 256_000)))
+  const stage: BillingStage = params ? path === '/customers' ? 'customer_create' : path === '/checkout/sessions' ? 'checkout_create' : path === '/billing_portal/sessions' ? 'portal_create' : 'other_read' : path.startsWith('/prices/') ? 'price_read' : path.startsWith('/subscriptions?') ? 'subscription_list' : 'other_read'
+  const signal = AbortSignal.timeout(12_000)
+  let response: Response
+  try {
+    response = await fetcher(`https://api.stripe.com/v1${path}`, {
+      // workerd supports manual/follow; reject redirects before credentials can leave Stripe.
+      method: params ? 'POST' : 'GET', redirect: 'manual', signal,
+      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY?.trim()}`, 'Stripe-Version': STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
+      ...(params ? { body: params.toString() } : {}),
+    })
+  } catch (error) {
+    const category = signal.aborted || (error instanceof Error && error.name === 'TimeoutError') ? 'provider_timeout' : 'provider_transport'
+    throw new BillingDiagnosticError('Billing is temporarily unavailable. Please retry the same action later.', 503, { stage, category })
+  }
+  if (!response.ok) {
+    const diagnostic: BillingDiagnostic = { stage, category: 'provider_http', httpStatus: response.status }
+    if (response.status >= 400) {
+      try {
+        const error = object(object(JSON.parse(await boundedText(response, 256_000))).error)
+        // Only exact public schema labels may leave the server. Never return raw messages or values.
+        if (typeof error.code === 'string' && diagnosticCodes.has(error.code)) diagnostic.code = error.code
+        if (typeof error.param === 'string' && diagnosticParameters.has(error.param)) diagnostic.parameter = error.param
+      } catch { /* Keep only the safe stage and HTTP status for malformed or oversized errors. */ }
+    } else await response.body?.cancel()
+    throw new BillingDiagnosticError('Billing could not be confirmed. Please retry the same action later.', 502, diagnostic)
+  }
+  let body: Json
+  try { body = object(JSON.parse(await boundedText(response, 256_000))) }
+  catch (error) { throw new BillingDiagnosticError('Billing response could not be verified.', 503, { stage, category: signal.aborted || (error instanceof Error && error.name === 'TimeoutError') ? 'provider_timeout' : 'provider_response' }) }
   // List envelopes lack livemode; every resource response must explicitly match the selected mode.
-  if ((!Array.isArray(body.data) || body.livemode !== undefined) && body.livemode !== (env.STRIPE_MODE === 'live')) throw new EntitlementError('Billing mode mismatch.', 503)
+  if ((!Array.isArray(body.data) || body.livemode !== undefined) && body.livemode !== (env.STRIPE_MODE === 'live')) throw new BillingDiagnosticError('Billing mode mismatch.', 503, { stage, category: 'mode_mismatch' })
   return body
 }
 async function customerFor(env: BillingEnv, user: AccountUser, fetcher: typeof fetch) {
@@ -281,8 +309,17 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     if (kind === 'subscription') params.set('subscription_data[metadata][worldifact_uid]', user.id)
     else { params.set('metadata[worldifact_credits]', String(CREDIT_PACK.credits)); params.set('payment_intent_data[metadata][worldifact_uid]', user.id); params.set('payment_intent_data[metadata][worldifact_kind]', 'topup') }
     const session = await stripe(env, '/checkout/sessions', fetcher, params, `wf-checkout-${user.id}-${attempt.id}`)
-    if (typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/') || !resourceId(session.id, 'cs') || !Number.isSafeInteger(session.expires_at) || session.amount_total !== (kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount) || session.currency !== 'usd' || session.mode !== (kind === 'subscription' ? 'subscription' : 'payment') || idOf(session.customer) !== customer || session.client_reference_id !== user.id || uidFor(session) !== user.id || object(session.metadata).worldifact_kind !== kind || object(session.metadata).worldifact_checkout_id !== attempt.id) throw new EntitlementError('Checkout price or account was not confirmed.')
+    const checks: [string, boolean][] = [
+      ['url', typeof session.url === 'string' && session.url.startsWith('https://checkout.stripe.com/')], ['id', resourceId(session.id, 'cs')],
+      ['expires_at', Number.isSafeInteger(session.expires_at)], ['amount_total', session.amount_total === (kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount)],
+      ['currency', session.currency === 'usd'], ['mode', session.mode === (kind === 'subscription' ? 'subscription' : 'payment')],
+      ['customer', idOf(session.customer) === customer], ['client_reference_id', session.client_reference_id === user.id],
+      ['metadata.worldifact_uid', uidFor(session) === user.id], ['metadata.worldifact_kind', object(session.metadata).worldifact_kind === kind],
+      ['metadata.worldifact_checkout_id', object(session.metadata).worldifact_checkout_id === attempt.id],
+    ]
+    const fields = checks.filter(([, valid]) => !valid).map(([name]) => name)
+    if (fields.length) throw new BillingDiagnosticError('Checkout price or account was not confirmed.', 503, { stage: 'checkout_create', category: 'checkout_validation', fields })
     await entitlementCall(env, user.id, '/checkout-finish', { kind, id: attempt.id, url: session.url, sessionId: session.id, expiresAt: Number(session.expires_at) * 1000 })
     return json({ url: session.url, mode: config.mode })
-  } catch (error) { return json({ error: error instanceof EntitlementError ? error.message : 'Billing is temporarily unavailable. No account credit was inferred from this response.' }, error instanceof EntitlementError ? error.status : 503) }
+  } catch (error) { return json({ error: error instanceof EntitlementError ? error.message : 'Billing is temporarily unavailable. No account credit was inferred from this response.', ...(error instanceof BillingDiagnosticError ? { diagnostic: error.diagnostic } : {}) }, error instanceof EntitlementError ? error.status : 503) }
 }
