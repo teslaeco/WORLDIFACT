@@ -1,3 +1,72 @@
+# WORLDIFACT — USD 29.99 monthly membership and USD 30 credit packs (review branch)
+
+Date: 22 September 2026. PR: https://github.com/teslaeco/WORLDIFACT/pull/63 .
+
+## VERIFIED — code and local checks
+
+- Follow-up: approved monthly membership is USD 29.99 / 1,500 credits. A production-only GitHub Actions step is prepared to pass complete provider secret groups to Cloudflare through captured stdin; it never enables billing. No real secret has been retrieved or uploaded in this session. See `STRIPE_GITHUB_SETUP.md` for exact dashboard fields.
+- Owner-approved one-time pack: **USD 30.00 / 1,500 credits / 30 generations at 50 credits each**. Repeat purchases are supported. Separate follow-up subscription offer: **USD 29.99 monthly / 1,500 credits**. No competitor parity claim is made.
+- Cards and eligible Google Pay wallets use Stripe-hosted Checkout. PayPal uses server-created Orders v2; the supplied reusable HostedButtons ID is retained as an inactive reference because verified per-account binding was not established for that snippet.
+- Payment UI shows price, one-time nature, provider availability, test mode, return/cancel/pending states, and explicit notice that packs alone do not activate membership or unlock SLOW downloads.
+- Provider amount, currency, quantity, merchant/customer/account ownership, environment and settlement are checked server-side. Return URLs never grant credits. PayPal approved-order webhooks can complete an owned approved payment even if the browser does not return.
+- Transactional grant IDs prevent duplicates across capture/webhook paths; refund tombstones prevent late fulfillment from restoring reversed funds. PayPal disputes can hold generation/download access pending review.
+- Sandbox/test wallets, customers and orders have a separate Durable Object namespace. Provider/ledger mode mismatch fails closed.
+- Stripe historical one-time Price allowlist supports fixed-price settlement/refunds after rotation. Recurring Price/interval changes still require a separate migration.
+- No bank account numbers/screenshots were copied into repository files, bundles or payment code. Payout details remain an operator-dashboard task. No claim of encrypting the user's original chat attachments is made.
+- Latest full local run: **316 tests PASS / 1 browser test BLOCKED** (317 total, zero skipped/cancelled). The sole failure is the required Chromium availability assertion. Provider tests use stubs; they are not real PayPal/Stripe acceptance evidence. The eight new secret-sync tests and monthly price/settlement checks pass.
+- TypeScript/build, local HTTP DEMO/origin smoke, lint (warnings only), Worker dry-run and diff check passed. `npm run verify` was attempted; the existing native Chromium regression is unavailable locally because Chromium is absent. Recorded browser restrictions are preserved; no Android/visual pass is claimed.
+- Implementation review corrected test/live wallet mixing, interrupted PayPal browser-return recovery, historical Stripe price fulfillment and repeated-capture UI state.
+
+## BLOCKED — activation, payouts and full commercial release
+
+1. Configure Stripe merchant credentials, exact Price and signed webhook; enable Google Pay and validate eligible-device checkout.
+2. Configure PayPal REST app credentials, merchant ID and verified webhook. The public HostedButtons SDK snippet is not sufficient for automatic account credits.
+3. Choose and verify the Revolut payout destination in the payment provider's dashboard. No bank account was added or changed, and no payout destination is claimed connected.
+4. Configure the approved USD 29.99 monthly recurring Price. One-time USD 30.00 packs do not unlock subscription-only SLOW downloads.
+5. Complete provider sandbox create/approve/capture/credit/refund acceptance and browser/mobile review. Existing protected free-SLOW image preview and account migration limitations remain from the earlier milestone.
+6. Exact-head PR checks, owner approval for merge/production deployment and accepted merchant setup are required before release. **Production unchanged; payments not enabled; no real charge or paid AI generation performed.**
+
+Executed task: `docs/CODEX_TASK_PAYMENTS_20260922.md`. Configuration and primary provider sources: `docs/ACCOUNT_BILLING_SETUP.md`. Remote CI results are recorded in PR #63; the earlier shared-account CI below is historical evidence, not evidence for this new payment revision.
+
+---
+
+# WORLDIFACT — shared accounts and cosmic login (review branch)
+
+Date: 21 September 2026. Branch: `feat/shared-accounts-cosmic-login`.
+Base main: `360b9e0a9d86cfcf9f395a448d636c1073fc75b4`.
+
+## VERIFIED — implemented, checked locally and in PR CI
+
+- Existing Chess Supabase project `oiezgikconcyjvdeshdh` is reused; live read-only settings check returned HTTP 200, signup enabled, email/Google configured. No second password database, account creation or email send occurred during testing.
+- Secure HttpOnly cookie login/register/session/logout; existing account UUID verified upstream for authorization; rate limits, origin checks and guarded PKCE password recovery.
+- Same-origin copied Chess identity uses the existing AuthGate via a pinned-source adapter. Guest play remains available. External original Chess/FORGE sessions are separate, and copied Chess legacy social-data features and Google OAuth are not claimed migrated.
+- `/login`, `/account`, `/account/credits`, `/account/reset`, visible Sign in navigation and authenticated Chess launch.
+- Original FORGE sculpture verified by actual public GET: **9,807,116 bytes**, SHA-256 `c0b756d4c92744189a4161f19bbf5b3c7629de30a1196a09f05c1ed94276749a`. 48 meshes / 2,976 triangles retained. Five-second XYZ animation, cyan/green LEDs, five portal colors, NASA Earth background, success-only 2.8-second sun/paint effect, reduced-motion and WebGL fallback.
+- Atomic per-account ledger: 2 free FAST / rolling 24h, 1 free SLOW / UTC day; credit-funded generation 50 points; subscription grant 1,500 points = 30 generations; confirmed-failure refunds and idempotent settlement.
+- Studio receipts bind the account UUID in their HMAC, and blueprint idempotency IDs have a separate cryptographic namespace. Legacy Oracle routes cannot bypass account enforcement.
+- Free SLOW GLB/PBR/FBX/BLEND bytes are denied server-side. Previously generated owned results unlock when subscription is active. Uncertain submissions retain their reservation and expose a status-review state rather than automatic resubmission/refund.
+- Stripe integration is implemented but **BLOCKED / NOT ENABLED** until merchant secrets and verified webhook configuration exist; the owner subsequently approved USD 30 / 1,500 credits (see the payment milestone above). The owner subsequently selected USD 29.99 per month (see the current payment milestone). Checkout return URLs never grant credits. Tests cover paid invoice reconciliation, replayed/out-of-order events, duplicate subscriptions, refunds, customer binding and forged signatures.
+
+## Verification
+
+- **272/272 non-browser tests PASS**, no failures/skips in that subset. All new account/credit/security tests use stubs and are not live payment or live generation proof.
+- TypeScript, production build, real local HTTP DEMO/origin smoke, Worker dry-run and diff whitespace check: **PASS**. Lint: zero errors; existing and hook/HMR warnings remain.
+- `npm run verify` was executed; its browser-specific existing Chromium test cannot run here because Chromium is absent. The recorded browser approval block is respected; no alternate browser or renderer used. Browser/Android visual acceptance remains **BLOCKED / NOT VERIFIED**.
+- [PR #63](https://github.com/teslaeco/WORLDIFACT/pull/63), source head `784b7e30ac85600e7a3d573e973690dc49ff9614`, tree `c4f90bca2a56d0d3258a5b40536c4fd7c209dcf7`: all six GitHub checks **PASS**. [Verify WORLDIFACT run 35660547707](https://github.com/teslaeco/WORLDIFACT/actions/runs/35660547707) passed the complete `npm run verify`, pinned Chess/Terra foundation assembly and Worker dry-run. This CI result does not establish visual or physical-device acceptance.
+- No paid AI generation, purchase, production deployment or merge was performed.
+
+## NO-GO — full requested commercial release
+
+1. The current Oracle API has no reviewed protected raster-preview endpoint. Free SLOW jobs complete without exposing their full model; UI truthfully reports that the image preview is unavailable. Implement/deploy that backend capability before claiming the complete requested experience.
+2. The owner supplied USD 30 / 1,500 credits. The recurring offer is now USD 29.99/month. Configure/test payment providers and webhooks before enabling payment buttons. See the payment milestone above.
+3. Allowlist the exact Supabase recovery callback before setting `SUPABASE_RECOVERY_REDIRECT_READY=true`. Existing email/password sign-in and signup use the already configured Chess provider. Validate email-confirmation UX with an authorized real test account.
+4. Account enforcement intentionally rejects old anonymous signed receipts. Existing local downloaded originals are preserved. An owner-authorized legacy receipt migration/recovery process is needed before promising old server jobs are available in the new account.
+5. Exact PR CI, physical/mobile visual acceptance and owner permission are required before merge/production deployment. This branch is a reviewable implementation, not a claim that the new feature is live.
+
+Task executed: `docs/CODEX_TASK_SHARED_ACCOUNTS_20260921.md`. Auth evidence: `docs/SHARED_ACCOUNT_AUDIT.md`. Billing setup: `docs/ACCOUNT_BILLING_SETUP.md`.
+
+---
+
 # WORLDIFACT — project attachments + Oracle bridge release
 
 Date: 20 September 2026.

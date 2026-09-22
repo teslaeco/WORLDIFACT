@@ -71,3 +71,20 @@ test('explicit selection reset removes only the current receipt, not any archive
   assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), null)
   assert.equal(storage.getItem('unrelated-model'), 'keep')
 })
+
+test('explicit account quota rejection stays terminal across reload without endless polling or another POST', async () => {
+  const storage = store(), calls: string[] = []
+  const fetcher = (async url => {
+    calls.push(String(url))
+    return String(url).endsWith('/prepare') ? Response.json(receipt) : Response.json({ error: 'Your daily allowance is used.' }, { status: 429 })
+  }) as typeof fetch
+  const client = new StudioCoordinator(storage, fetcher)
+  const job = await client.start(input, () => {})
+  assert.equal(job.state, 'failed'); assert.match(job.detail, /daily allowance/)
+  const restored = new StudioCoordinator(storage, fetcher)
+  restored.restore()
+  assert.equal((await restored.poll()).state, 'failed')
+  assert.deepEqual(calls, ['/api/studio/prepare', '/api/studio/jobs'])
+  restored.clearSelection()
+  assert.equal(restored.current, null)
+})

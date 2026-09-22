@@ -6,8 +6,10 @@ import ShopPage from './ShopPage'
 import '../components/WorldTabs.css'
 import { PORTALS, getPortalById } from '../config/portals'
 import { foundationForPath } from '../config/foundations'
+import { useAccount } from '../lib/account'
 
 export default function PortalPage() {
+  const { user } = useAccount()
   const { portalId } = useParams()
   const { pathname } = useLocation()
   const [loadedFrame, setLoadedFrame] = useState('')
@@ -56,14 +58,15 @@ export default function PortalPage() {
 
     {planets ? <PlanetsWorld /> : app.route === '/chess' ? <section className="foundation-frame-shell world-primary-frame chess-launch" aria-label="Chess Cube launcher">
       <div>
-        <span className="eyebrow">MOBILE-SAFE LAUNCH</span>
+        <span className="eyebrow">CHESS CUBE 512 AI</span>
         <h2>Play Chess Cube 512 AI</h2>
-        <p>The copied guest build now opens full-screen instead of inside a second 3D iframe. This releases the WORLDIFACT scene first and avoids the mobile loading stall.</p>
+        <p>Step into eight levels of chess. Open the full-screen game with your shared WORLDIFACT identity, or explore as a guest.</p>
         <div className="foundation-actions">
-          <a className="button-link" href={`${app.frame}?guest=1`}>Launch Chess Cube 512 AI →</a>
+          <a className="button-link" href={user ? '/apps/chess/index.html' : `${app.frame}?guest=1`}>Launch Chess Cube 512 AI →</a>
+          {!user && <Link to="/login">Sign in with your Chess Cube account</Link>}
           <a href={app.original} target="_blank" rel="noopener noreferrer">Open original public build ↗</a>
         </div>
-        <small>The full-screen guest build includes a WORLDIFACT return control. No account is required.</small>
+        <small>{user ? 'Your shared identity is used in this WORLDIFACT copy. The original external website manages its own browser session.' : 'Guest play is available without an account.'}</small>
       </div>
     </section> : <div className="foundation-frame-shell world-primary-frame">
       {loadedFrame !== app.frame && <p className="foundation-loading" role="status">Opening {app.title}…</p>}

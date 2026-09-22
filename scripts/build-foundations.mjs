@@ -44,6 +44,16 @@ for (const [app, source] of Object.entries(sources)) {
     // English catalog itself is clean and remains the fallback rather than
     // rejecting legitimate Polish/German/etc. translations bundled for users.
     assertEnglishLocaleSource(await readFile(join(root, 'web/i18n/locales.js'), 'utf8'), 'Cube Chess locales.js');
+    // Reuse the existing Supabase identity through WORLDIFACT's HttpOnly cookie
+    // session. This modifies the pinned local build only, not the upstream repo.
+    const authPath = join(root, 'web/auth/AuthApi.js');
+    const authSource = await readFile(authPath, 'utf8');
+    const authProxy = await readFile('scripts/lib/chess-auth-proxy.js', 'utf8');
+    const authBlob = createHash('sha1').update(`blob ${Buffer.byteLength(authSource)}\0`).update(authSource).digest('hex');
+    if (authBlob !== '892ffbd020671c76d721588c115a1b106502d988' && authSource !== authProxy) {
+      throw Error('Review changed Chess authentication source before installing the shared-account adapter.');
+    }
+    await writeFile(authPath, authProxy);
   }
   run('npm', ['ci', '--no-audit', '--no-fund'], work);
   if (app === 'chess') run('npm', ['run', 'build', '--', '--base', source.base], work);

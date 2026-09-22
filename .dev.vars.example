@@ -13,3 +13,27 @@ GENERATION_ACCESS_TOKEN=
 GENERATION_REQUEST_LIMIT=0
 # Explicit approved expiry as an ISO 8601 UTC timestamp.
 GENERATION_EXPIRES_AT=
+
+# Server-side payment configuration. Empty by default; never put private keys in VITE_*.
+ENFORCE_ACCOUNT_ENTITLEMENTS=true
+ACCOUNT_LEDGER_MODE=sandbox
+ENABLE_BILLING=false
+BILLING_PUBLIC_ORIGIN=https://worldifact.xodobrox.workers.dev
+STRIPE_MODE=test
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+# One-time per-unit Price: exactly USD 30.00 for 1,500 credits.
+STRIPE_TOPUP_PRICE_ID=
+STRIPE_PREVIOUS_TOPUP_PRICE_IDS=
+STRIPE_TOPUP_CREDITS=1500
+# Approved membership: USD 29.99 per month for 1,500 credits. Activation remains separate.
+STRIPE_SUBSCRIPTION_PRICE_ID=
+STRIPE_SUBSCRIPTION_INTERVAL=month
+ENABLE_PAYPAL_BILLING=false
+PAYPAL_MODE=sandbox
+# REST app credentials; the supplied HostedButtons SDK client ID is not a REST secret.
+PAYPAL_CLIENT_ID=
+PAYPAL_CLIENT_SECRET=
+PAYPAL_WEBHOOK_ID=
+PAYPAL_MERCHANT_ID=
+# Configure Revolut payouts in the payment-provider dashboard. Never add bank details here.

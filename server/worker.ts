@@ -4,6 +4,12 @@ import { oracleJobApi } from "./oracle-jobs.ts";
 import { studioApi } from "./studio.ts";
 import { avatarApi } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
+import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
+import { entitlementApi, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
+import { billingApi, type BillingEnv } from './billing.ts';
+import { paypalApi, type PayPalEnv } from './paypal.ts';
+import { decorApi } from './decor.ts';
+export { AccountEntitlements } from './entitlements.ts';
 import {
   astraGenerationSchema,
   assetSpecForBlueprint,
@@ -14,7 +20,7 @@ import {
 import { budgetSettings } from "./budget.ts";
 import type { BudgetEnv, BudgetNamespace } from "./budget.ts";
 export { GenerationBudget } from "./budget.ts";
-export interface Env extends BudgetEnv, PlatformEnv {
+export interface Env extends BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   ENABLE_PAID_GENERATION?: string;
@@ -75,6 +81,20 @@ function validImage(value: unknown) {
 }
 export async function handle(request: Request, env: Env = {}, fetcher: typeof fetch = fetch): Promise<Response> {
   const url = new URL(request.url);
+  const decor = await decorApi(request, fetcher);
+  if (decor) return decor;
+  const entitlements = await entitlementApi(request, env, fetcher);
+  if (entitlements) return entitlements;
+  const accounts = await accountApi(request, env, fetcher);
+  if (accounts) return accounts;
+  const paypal = await paypalApi(request, env, fetcher);
+  if (paypal) return paypal;
+  const billing = await billingApi(request, env, fetcher);
+  if (billing) return billing;
+  // All customer mesh jobs use the owned Studio receipt/ledger path. The old
+  // bridge must not become an anonymous or unmetered alternative entry point.
+  if (env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true' && url.pathname.startsWith('/api/oracle/jobs'))
+    return json({ error: 'Use the account-enabled Studio generation and download flow.' }, 403);
   const avatar = await avatarApi(request, env, fetcher);
   if (avatar) return avatar;
   const projectFiles = await projectFileApi(request, env, fetcher);
@@ -128,24 +148,48 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (typeof requestedWorld !== "string" || !ORACLE_WORLD_IDS.includes(requestedWorld as PortalId))
     return json({ error: "Use one of the five supported WORLDIFACT portal IDs." }, 400);
   const worldId = requestedWorld as PortalId;
-  const requestId = crypto.randomUUID();
+  const suppliedRequestId = request.headers.get('X-WORLDIFACT-Request');
+  if (suppliedRequestId && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(suppliedRequestId))
+    return json({ error: 'Invalid generation request identifier.' }, 400);
+  // Namespace client idempotency keys before touching the shared job ledger.
+  // A supplied Studio receipt UUID can never claim ownership via Blueprint.
+  const requestSeed = suppliedRequestId || crypto.randomUUID();
+  const requestHash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('worldifact-blueprint-v1:' + requestSeed.toLowerCase()))), b => b.toString(16).padStart(2, '0')).join('');
+  const requestId = `${requestHash.slice(0, 8)}-${requestHash.slice(8, 12)}-${requestHash.slice(12, 16)}-${requestHash.slice(16, 20)}-${requestHash.slice(20, 32)}`;
   if (input.mode === "demo" || !configured) {
     const blueprint = demoBlueprint(`${PORTAL_CONTEXT[worldId]} ${input.prompt}`);
     return json({ mode: "DEMO", provenance: "MOCK", blueprint, assetSpec: assetSpecForBlueprint(blueprint), requestId, model: null,
       limitation: "Local rule-based scene. Reference images are not analyzed. GAME uses procedural meshes; MAKE remains validation-required." });
   }
   if (!generationConfigured) return json({ error: "Generation is not enabled safely yet.", requestId }, 503);
+  let account: AccountUser | null = null;
+  if (env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true') {
+    try { account = await getVerifiedAccount(request, env, fetcher); }
+    catch { return json({ error: 'The account service is temporarily unavailable.', requestId }, 503); }
+    if (!account) return json({ error: 'Sign in to generate a model.', accountRequired: true, requestId }, 401);
+  }
   if (!publicPilot && !(await validAccess(request, env.GENERATION_ACCESS_TOKEN!))) return json({ error: "A valid preview access code is required.", requestId }, 401);
   try { const { success } = await env.GENERATION_LIMITER!.limit({ key: request.headers.get("CF-Connecting-IP") || "unknown-client" }); if (!success) return json({ error: "Generation limit reached. Please try again later.", requestId }, 429); }
   catch { return json({ error: "Generation limit service unavailable.", requestId }, 503); }
   const model = configuredModel;
   if (model !== "gpt-6-astra") return json({ error: "Configured model requires review.", requestId }, 503);
+  if (account) {
+    try {
+      const reservation = await reserveUserGeneration(env, account.id, requestId, 'fast');
+      if (reservation.repeated) return json({ error: 'This generation request was already processed. No second model or charge was started.', requestId }, 409);
+      if (!reservation.allowed) return json({ error: reservation.reason === 'CREDITS_EXHAUSTED' ? 'Your credits have run out. Open your account to top up.' : 'Your generation allowance has been used. Check your account for the next reset.', requestId }, 429);
+    } catch { return json({ error: 'Your generation allowance could not be checked. No model was requested.', requestId }, 503); }
+  }
+  let generationCompleted = false;
+  async function finishUser(success: boolean) {
+    if (account) await settleUserGeneration(env, account.id, requestId, success ? 'completed' : 'failed');
+  }
   try {
     const budget = env.GENERATION_BUDGET!.get(env.GENERATION_BUDGET!.idFromName("worldifact-generation-budget-v1"));
     const reservation = await budget.fetch(new Request("https://budget.internal/reserve", { method: "POST", signal: AbortSignal.timeout(5000) }));
-    if (reservation.status === 429) return json({ error: "Preview generation allowance has ended. DEMO is still available.", requestId }, 429);
-    if (!reservation.ok || (await reservation.json() as { allowed?: boolean }).allowed !== true) return json({ error: "Generation allowance is unavailable.", requestId }, 503);
-  } catch { return json({ error: "Generation allowance is unavailable.", requestId }, 503); }
+    if (reservation.status === 429) { await finishUser(false); return json({ error: "Preview generation allowance has ended. DEMO is still available.", requestId }, 429); }
+    if (!reservation.ok || (await reservation.json() as { allowed?: boolean }).allowed !== true) { await finishUser(false); return json({ error: "Generation allowance is unavailable.", requestId }, 503); }
+  } catch { await finishUser(false).catch(() => {}); return json({ error: "Generation allowance is unavailable.", requestId }, 503); }
   try {
     const content: Record<string, unknown>[] = [{ type: "input_text", text: input.prompt }];
     if (input.image) content.push({ type: "input_image", image_url: input.image, detail: "low" });
@@ -175,10 +219,16 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
       providerResponseId: body.id, receivedAt: new Date().toISOString(), blueprintSha256,
       inputTokens: usageAvailable ? usage.input_tokens : null, outputTokens: usageAvailable ? usage.output_tokens : null, totalTokens: usageAvailable ? usage.total_tokens : null,
     } : undefined;
+    await finishUser(true);
+    generationCompleted = true;
     return json({ mode: "LIVE", provenance: "GENERATED", blueprint, assetSpec, requestId, model, ...(evidence ? { evidence } : {}),
       limitation: "Astra created a validated WorldBlueprint and AssetSpec. The scene change is real, but GAME uses procedural preview geometry and MAKE remains validation-required; no production file, quote or order was generated." });
   } catch (e) {
     return json({ error: e instanceof Error && ["TimeoutError", "AbortError"].includes(e.name) ? "Generation timed out. Previous scene is unchanged." : "Invalid AI result. Previous scene is unchanged.", requestId }, 502);
+  } finally {
+    // A synchronous blueprint request with no deliverable never consumes a
+    // customer's credit. The separate global provider-spend counter is retained.
+    if (!generationCompleted) await finishUser(false).catch(() => {});
   }
 }
 export default { fetch(request: Request, env: Env) { return handle(request, env); } };

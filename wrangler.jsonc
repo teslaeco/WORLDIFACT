@@ -16,12 +16,13 @@
     "ENABLE_ORACLE_JOBS": "false",
     "GENERATION_REQUEST_LIMIT": "0",
     "GENERATION_EXPIRES_AT": "",
-    "ENABLE_APPROVED_FAST_TEST": "true"
+    "ENABLE_APPROVED_FAST_TEST": "true",
+    "ENFORCE_ACCOUNT_ENTITLEMENTS": "true"
   },
   "durable_objects": {
-    "bindings": [{"name": "GENERATION_BUDGET", "class_name": "GenerationBudget"}]
+    "bindings": [{"name": "GENERATION_BUDGET", "class_name": "GenerationBudget"}, {"name": "ACCOUNT_ENTITLEMENTS", "class_name": "AccountEntitlements"}]
   },
-  "migrations": [{"tag": "v1", "new_sqlite_classes": ["GenerationBudget"]}],
-  "ratelimits": [{"name":"GENERATION_LIMITER", "namespace_id":"5122026", "simple":{"limit":3,"period":60}}],
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["GenerationBudget"]}, {"tag": "v2-account-credits", "new_sqlite_classes": ["AccountEntitlements"]}],
+  "ratelimits": [{"name":"GENERATION_LIMITER", "namespace_id":"5122026", "simple":{"limit":3,"period":60}}, {"name":"ACCOUNT_LIMITER", "namespace_id":"5122027", "simple":{"limit":20,"period":60}}],
   "observability": {"enabled":false}
 }

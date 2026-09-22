@@ -22,3 +22,11 @@ The globe inside Fix ISS is a visual backdrop for the simulator. It is not label
 ## ISS exterior source
 
 The copied Fix ISS simulator credits the NASA / Visualization Technology Applications and Development historical ISS 3D model in its in-product help. The repair stations, astronaut, tools, interiors and game tasks are separate training/simulation content and must not be interpreted as a list of current ISS faults or as NASA operating procedures.
+
+## WORLDIFACT account sculpture
+
+- The login and portal sculpture reuses the owner's original public FORGE model at `https://forge-world-builder.terraformingplanet.chatgpt.site/world-assets/polyhedron.glb`.
+- Audited source Site commit: `6f5f239239f05e72b029cc1014e982a587a2ece5`; original GLB SHA-256: `c0b756d4c92744189a4161f19bbf5b3c7629de30a1196a09f05c1ed94276749a`.
+- Use in WORLDIFACT was expressly requested by the owner on 21 September 2026. Original source and wood textures remain unchanged at FORGE; WORLDIFACT loads the public GLB through a hash-checked same-origin proxy and applies emissive LED materials at runtime. No general third-party asset redistribution license is inferred.
+- The audited model contains 48 open-frame meshes and 2,976 triangles. No replacement polyhedron or filled faces are generated.
+- The account background Earth uses NASA GIBS Blue Marble imagery through the existing project's reviewed image source. This is an artistic background, not a current Earth-observation result. Stars, bloom and paint effects are local Three.js animations.

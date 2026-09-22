@@ -7,12 +7,19 @@ const PortalPage = lazy(async () => import('./pages/PortalPage'))
 const InfoPage = lazy(async () => import('./pages/InfoPage'))
 const WorkbenchPage = lazy(async () => import('./pages/WorkbenchPage'))
 const ControlPage = lazy(async () => import('./pages/ControlPage'))
+const AccountPage = lazy(async () => import('./pages/AccountPage'))
+const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
+const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
 export default function App() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<AccountPage />} />
+        <Route path="/account" element={<AccountPage />} />
+        <Route path="/account/credits" element={<CreditsPage />} />
+        <Route path="/account/reset" element={<ResetPasswordPage />} />
         <Route path="/control" element={<ControlPage />} />
         <Route path="/portal/:portalId" element={<PortalPage />} />
         {['/chess', '/iss', '/planets', '/terra', '/shop'].map(path => (
@@ -27,6 +34,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <nav className="legal-nav" aria-label="Project information">
+        <Link to="/login">Account</Link>
         <a href="/blog/astra-vs-meshy-rim/">Astra vs Meshy: rim case study</a>
         <Link to="/control">Platform connections</Link>
         <Link to="/privacy">Privacy and data</Link>
