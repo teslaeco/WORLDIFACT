@@ -51,7 +51,7 @@ function portalMismatches(portal: Json, account: string, expectedId?: string) {
   const features = object(portal.features), cancel = object(features.subscription_cancel), profile = object(portal.business_profile), metadata = object(portal.metadata);
   const checks: [string, boolean][] = [
     ['object', portal.object === 'billing_portal.configuration'], ['id', validId(portal.id, 'bpc') && (!expectedId || portal.id === expectedId)],
-    ['active', portal.active === true], ['livemode', portal.livemode === true], ['application', portal.application == null], ['is_default', portal.is_default === false],
+    ['active', portal.active === true], ['livemode', portal.livemode === true], ['application', portal.application == null], ['is_default', typeof portal.is_default === 'boolean'],
     ['metadata.worldifact_setup', metadata.worldifact_setup === setupVersion], ['metadata.worldifact_account', metadata.worldifact_account === account],
     ['metadata.worldifact_kind', metadata.worldifact_kind === 'membership_management'], ['default_return_url', portal.default_return_url === `${origin}/account/credits`],
     ['business_profile.privacy_policy_url', profile.privacy_policy_url === `${origin}/privacy`], ['business_profile.terms_of_service_url', profile.terms_of_service_url === `${origin}/terms`],
@@ -68,7 +68,7 @@ function failPortal(stage: Stage, fields: string[]): never {
   fail(stage, `The owned portal does not match the reviewed cancellation policy. Mismatched fields: ${fields.join(', ')}. No unreviewed configuration was saved.`);
 }
 
-/** Prepare a dedicated customer portal, without changing a default portal or enabling checkout. */
+/** Prepare an explicitly bound customer portal, without modifying default portals or enabling checkout. */
 export async function prepareStripePortal(env: NodeJS.ProcessEnv, dependencies: Dependencies = {}) {
   const key = env.STRIPE_SECRET_KEY?.trim();
   if (!key || !/^(?:sk|rk)_live_[A-Za-z0-9_]{16,256}$/.test(key)) fail('credentials', 'A complete live account server key is required in STRIPE_SECRET_KEY. Its value is never printed.');
@@ -124,7 +124,8 @@ export async function prepareStripePortal(env: NodeJS.ProcessEnv, dependencies: 
   if (owned.length > 1) fail('portal preflight', 'Multiple owned configurations require operator review. No configuration was created or changed.');
   let portal = owned[0];
   if (!portal) {
-    // API-created configurations are dedicated and do not replace the account default.
+    // The first API-created configuration can be marked default by Stripe. Sessions
+    // still use its explicitly verified ID; no default-selection setting is written.
     // https://docs.stripe.com/api/customer_portal/configurations/create
     const params = new URLSearchParams({
       default_return_url: `${origin}/account/credits`,
@@ -157,7 +158,7 @@ export async function prepareStripePortal(env: NodeJS.ProcessEnv, dependencies: 
     const normalizable = mismatches.every(name => name === 'subscription_update.enabled' ? object(features.subscription_update).enabled === true : name === 'cancellation_reason.enabled' && reasons.enabled === true);
     // Complete only the intended disabled feature policy on our uniquely owned resource.
     // Any identity, ownership, default, URL, status or cancellation-policy mismatch blocks updates.
-    if (!normalizable) failPortal(stage, mismatches);
+    if (!normalizable || portal.is_default !== false) failPortal(stage, portal.is_default === true ? [...mismatches, 'is_default'] : mismatches);
     const params = new URLSearchParams();
     let revision = '';
     if (mismatches.includes('subscription_update.enabled')) { params.set('features[subscription_update][enabled]', 'false'); revision += 'u'; }
