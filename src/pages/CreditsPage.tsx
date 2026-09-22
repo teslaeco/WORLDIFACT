@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { accountRequest, useAccount, type AccountUser } from '../lib/account'
+import { paymentErrorMessage } from '../lib/paymentError'
 import './CreditsPage.css'
 
 type Balance = { credits: number; generationCost: number; subscriptionGrant: number; subscription: { active: boolean; expiresAt: string | null }; free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }; billingReview: boolean }
@@ -94,9 +95,9 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         return
       }
       window.location.assign(checkoutAddress(result.url, action === 'paypal' ? 'paypal' : action === 'portal' ? 'portal' : 'stripe'))
-    } catch {
+    } catch (error) {
       if (version !== actionVersion.current) return
-      setError('Secure checkout could not be opened. Please try again later.')
+      setError(paymentErrorMessage(error))
       setBusy(null); actionLock.current = false
     }
   }

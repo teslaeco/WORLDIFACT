@@ -1,3 +1,14 @@
+# WORLDIFAKT — authenticated checkout failure investigation
+
+Date: 22 September 2026. The owner reported that a signed-in buyer could not open the subscription checkout after payment activation.
+
+- Reproduced the same generic error in the production browser after the owner completed secure Google sign-in. No checkout payment was approved and no subscription was purchased. The previous activation checks established configuration, not an authenticated Checkout session.
+- The runtime now classifies Stripe failures by fixed request stage, category and provider HTTP status, with bounded allowlisted error codes/parameter names. Strict Checkout validation reports only fixed field labels. Provider messages, credentials, URLs, IDs and personal values are never returned in diagnostics.
+- The frontend preserves a safe support reference and gives specific session-expiry, throttling and existing-payment guidance. It does not print arbitrary server/provider error text. All account, amount, currency, mode, origin, idempotency and verified-settlement guards remain enforced.
+- New isolated regressions cover first-time Stripe Customer creation followed by Checkout and retry reuse, provider permission/validation failures, timeouts and secret redaction. This release supplies the missing failure evidence; it does not claim the underlying production fault is repaired. Local verification: 40/40 focused tests; lint, TypeScript and 385 aggregate tests pass, with the one existing Chromium-required test blocked locally (386 total). HTTP smoke, production build, Worker dry-run and diff checks pass. Actual diagnosis and subsequent acceptance will be recorded in the PR.
+
+---
+
 # WORLDIFAKT — owner-authorized Stripe payment activation
 
 Date: 22 September 2026. Branch: `feat/enable-stripe-payments`.
@@ -13,7 +24,7 @@ PR #69 merged as `f204b3b82402763859c8f08d5f918eae75cbcfca` after all five check
 
 Diagnostics report only fixed policy field names on validation failure. A fully matching owned configuration can be reused even when Stripe marked it default, because application sessions always specify its verified configuration ID. Default configurations are never normalized or otherwise modified. It can normalize the two optional disabled features on the uniquely owned configuration only when every identity, ownership, origin and cancellation guard already passes; arbitrary/default/foreign configurations and all other mismatches remain blocked. New configurations explicitly provide the pinned schema's required empty arrays instead of assuming disabled defaults. Existing owned resources are reused, not duplicated. Local checks: 13/13 focused tests pass; aggregate verify passes lint, TypeScript and 379 tests with the existing Chromium-required test blocked by the missing binary (380 total). Separate HTTP smoke, build, Worker dry-run and diff checks pass. Exact release results will be recorded in the follow-up PR.
 
-Production still runs version `578619f0-2294-4096-8f0c-91264ef60473` with checkout disabled until a successful release. Real paid settlement and a provider sandbox end-to-end purchase remain unverified; automated settlement/refund/duplicate tests use isolated fixtures.
+PR #72 merged as `817582fd27835be4fe31b834daaf842af53fd13e` after 380/380 CI tests. Deployment `35716855461` published version `de540227-b307-4bf3-8862-cc98b4070a0a`; live configuration and no-charge request guards passed. Those checks did not open an authenticated checkout. The owner subsequently reported an opening failure; see the diagnostic milestone above. Real paid settlement and a provider sandbox end-to-end purchase remain unverified; automated settlement/refund/duplicate tests use isolated fixtures.
 
 ---
 
