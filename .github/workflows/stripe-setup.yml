@@ -1,0 +1,44 @@
+name: Prepare Stripe prices and webhook
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type SETUP to prepare live USD 29.99 offers without accepting payments
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+jobs:
+  setup:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'SETUP'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require explicit Cloudflare-managed Stripe configuration
+        run: node -e "if (process.env.STRIPE_CONFIG_SOURCE !== 'cloudflare') throw new Error('Set the production environment variable STRIPE_CONFIG_SOURCE to cloudflare before setup.')"
+        env:
+          STRIPE_CONFIG_SOURCE: ${{ vars.STRIPE_CONFIG_SOURCE }}
+      - name: Check Cloudflare credential format
+        run: node scripts/release-check.ts credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: npm ci
+      - name: Verify setup and synchronization safeguards
+        run: node --test tests/setup-stripe.test.ts tests/connect-billing.test.ts
+      - name: Prepare live offers and save credentials directly to Cloudflare
+        run: node scripts/setup-stripe.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_SETUP_WEBHOOK_SECRET }}

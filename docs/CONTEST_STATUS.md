@@ -1,17 +1,30 @@
+# WORLDIFAKT — Stripe setup from the existing production key
+
+Date: 22 September 2026. Branch: `feat/stripe-account-bootstrap`.
+
+- The owner requested completion after saving the primary secret. GitHub's production environment visibly contains `STRIPE_SECRET_KEY`; only its name was inspected. The browser login is blocked by unsupported passkey authentication; backup-code recovery was rejected because it would temporarily remove two-factor protection, and was not retried. The existing application API credential is used only inside the authorized deployment environment.
+- The manual main-only setup workflow prepares fixed live USD 29.99 monthly and one-time 1,500-credit offers and the account webhook. It validates existing resources before writes, uses stable resource identities and idempotency keys, and refuses ambiguous or mismatched endpoints. The webhook secret is delivered directly to Cloudflare through captured stdin; no stored credential is retrieved, printed, committed or placed in an artifact.
+- Normal releases explicitly support Cloudflare-managed Stripe settings, so the owner does not need to copy three more values into GitHub. Default complete-group validation and independent PayPal synchronization remain intact. Setup and deployment share production concurrency.
+- Checkout activation, live payment settlement, PayPal merchant credentials and payout destinations are separate unfinished items. This change makes no charge, payout change or AI generation request.
+
+Local verification: 360 tests pass and the one existing Chromium-required regression is BLOCKED by the missing binary (361 total). Lint, TypeScript, real local HTTP DEMO/origin smoke, production build, Worker dry-run and diff checks pass. Focused setup/synchronization tests pass 20/20, including partial-failure recovery, mismatched existing resources, exact amounts, redirect/body limits and secret redaction. GitHub production variable `STRIPE_CONFIG_SOURCE=cloudflare` was saved and confirmed. Actual Stripe API validity, resource creation and Cloudflare synchronization remain pending the authorized setup run; its outcome will be recorded in the integration PR.
+
+---
+
 # WORLDIFAKT — Cloudflare account-request runtime correction
 
 Date: 22 September 2026. Follow-up to merged PR #65.
 
 - The real Google callback failure was reproduced using the actual account module in native Cloudflare `workerd`/Miniflare, with synthetic credentials and an isolated outbound fixture. `redirect: 'error'` throws synchronously in this runtime, before any Supabase request. The unchanged account handler returned the same HTTP 503 as production with **zero outbound calls**; changing the mode to `manual` reached the fixture and returned the expected HTTP 401 for invalid credentials. Fetch binding was independently excluded as the cause.
 - The correction uses supported manual redirects and explicitly rejects redirect responses. It never follows a provider redirect or forwards account/payment credentials to a redirected host. Existing PKCE, callback state, verified account identity, secure cookies and finite request deadlines remain enforced.
-- The same unsupported option is present in the Stripe, PayPal and original sculpture fetch paths and is corrected there as part of this runtime defect. Payments remain disabled pending the owner's merchant verification and credentials.
+- The same unsupported option is present in the Stripe, PayPal and original sculpture fetch paths and is corrected there as part of this runtime defect. Payments remained disabled for this runtime correction; the owner later confirmed merchant verification and saved the primary key. See the current setup milestone.
 - PR #65's timeout/header/diagnostic changes alone did **not** resolve production: after its successful deployment, owned synthetic password and session probes still returned HTTP 503 in approximately 8.2 seconds. Earlier end-to-end timings included client/network overhead and did not prove an upstream timeout. The previous causal timeout claim is withdrawn below.
-- Complete real Google sign-in acceptance remains **OPEN** until a real user completes sign-in after this correction. Synthetic failure probes establish connectivity and fail-closed behavior, not successful user authentication.
+- After publication the owner reported “Działa okej”, confirming real-user acceptance. Synthetic failure probes establish connectivity and fail-closed behavior; the successful login is owner-reported, not an automated browser observation.
 
 - Local verification: **348 tests pass / 1 existing Chromium-only test blocked**, 349 total, zero skipped/cancelled. All three new native `workerd` tests pass, including successful fixture PKCE token exchange followed by identity verification and secure session issuance; these are isolated fixtures, not real Google login evidence. Provider redirect regressions cover 301/302/303/307/308, body cancellation, no follow, no secret exposure and no credit grants. The exact already-locked esbuild/Miniflare versions are now explicit development dependencies; no resolved dependency was upgraded.
 - Lint has zero errors; TypeScript, real local HTTP DEMO/origin smoke, production build, Worker dry-run and diff check pass. The existing browser restriction is preserved.
 
-Publication and real-user Google acceptance: pending this runtime correction.
+PR #66 merged as `dd6a79c6dd9ae5d066b044cbb04943dc227c62f1` after all five head checks passed. Production verify `35698157226` passed 349/349 tests. Deployment `35698157133`, attempt 2, succeeded with Cloudflare version `68d9daf3-3519-4b92-9617-76db2bf4b069` and release smoke for 16 routes, 33 hub assets and 105 foundation assets. Attempt 1 had a transient Chromium test failure; the unchanged second attempt passed. The owner subsequently confirmed working sign-in.
 
 ---
 
