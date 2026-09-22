@@ -23,6 +23,9 @@ const OAUTH_COOKIE = '__Host-worldifact-google-flow'
 const OAUTH_FLOW_SECONDS = 600
 const MAX_BODY = 4096
 const MAX_UPSTREAM_BODY = 32_768
+// Observed valid Supabase error responses can take longer than twelve seconds.
+// Keep a finite budget without retrying one-time codes or rotating tokens.
+const UPSTREAM_TIMEOUT_MS = 25_000
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 type ProviderSession = { access_token: string; refresh_token: string; expires_in: number; user: AccountUser }
 export class AccountError extends Error {
@@ -99,9 +102,14 @@ function publicUser(value: unknown): AccountUser | null {
 }
 async function upstream(env: AccountEnv, fetcher: typeof fetch, path: string, method: string, body?: unknown, token?: string) {
   const { base, key } = config(env)
+  const headers: Record<string, string> = { apikey: key, 'Content-Type': 'application/json' }
+  // Publishable keys identify the application but are not bearer JWTs.
+  // Preserve support for legacy anon JWTs and authenticated user requests.
+  const bearer = token || (publicLegacyKey(key) ? key : undefined)
+  if (bearer) headers.Authorization = `Bearer ${bearer}`
   try {
-    return await fetcher(`${base}/auth/v1${path}`, { method, headers: { apikey: key, Authorization: `Bearer ${token || key}`, 'Content-Type': 'application/json' },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}), redirect: 'error', signal: AbortSignal.timeout(12_000) })
+    return await fetcher(`${base}/auth/v1${path}`, { method, headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}), redirect: 'error', signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
   } catch { throw new AccountError('Account service is temporarily unavailable. Please try again.') }
 }
 async function responseJson(response: Response) {
@@ -155,8 +163,13 @@ async function refresh(env: AccountEnv, fetcher: typeof fetch, refreshToken: str
     if (!response.ok) { await response.body?.cancel(); throw new AccountError('Account service is temporarily unavailable.') }
     return validateSession(await responseJson(response))
   })()
-  refreshes.set(key, { expires: now + 15_000, result })
-  try { return await result } catch (error) { refreshes.delete(key); throw error }
+  // A slow pending exchange must remain shared until it settles. Starting the
+  // reuse window before completion could rotate the same refresh token twice.
+  const entry = { expires: Infinity, result }
+  refreshes.set(key, entry)
+  try { return await result }
+  catch (error) { refreshes.delete(key); throw error }
+  finally { if (refreshes.get(key) === entry) entry.expires = Date.now() + 15_000 }
 }
 function checkOrigin(request: Request) {
   const origin = new URL(request.url).origin, supplied = request.headers.get('Origin')
@@ -169,6 +182,7 @@ function emailOf(value: unknown) {
 }
 function base64url(bytes: Uint8Array) { return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') }
 type OAuthFlow = { state: string; verifier: string; next: string; created: number }
+type OAuthFailure = 'config_unavailable' | 'flow_missing_or_expired' | 'state_mismatch' | 'invalid_callback' | 'provider_denied' | 'rate_limited' | 'exchange_failed' | 'service_unavailable' | 'identity_failed'
 function googleReady(request: Request, env: AccountEnv) {
   return env.SUPABASE_GOOGLE_REDIRECT_READY === 'true' && accountsConfigured(env) && !!(env.ACCOUNT_LIMITER ?? env.GENERATION_LIMITER) && new URL(request.url).protocol === 'https:'
 }
@@ -199,10 +213,13 @@ async function googleStart(request: Request, env: AccountEnv, input: Record<stri
   const encoded = base64url(new TextEncoder().encode(JSON.stringify(flow)))
   return json({ url: authorization.href }, 200, [cookie(OAUTH_COOKIE, encoded, OAUTH_FLOW_SECONDS)])
 }
-function googleRedirect(request: Request, result: 'success' | 'error', next: string, cookies: string[] = []) {
+function googleRedirect(request: Request, result: 'success' | 'error', next: string, cookies: string[] = [], reason?: OAuthFailure) {
   const destination = new URL('/login', request.url)
   destination.searchParams.set('oauth', result)
   destination.searchParams.set('next', safeAccountDestination(next))
+  // Only fixed diagnostic categories may reach the browser, never provider
+  // descriptions, callback values, tokens or the underlying exception.
+  if (result === 'error' && reason) destination.searchParams.set('reason', reason)
   // An explicit empty fragment prevents inheriting provider error/token
   // fragments when a browser follows this redirect.
   const headers = new Headers({ Location: destination.href + '#', 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff', Vary: 'Cookie' })
@@ -212,22 +229,33 @@ function googleRedirect(request: Request, result: 'success' | 'error', next: str
 async function googleCallback(request: Request, env: AccountEnv, fetcher: typeof fetch) {
   const flow = readOAuthFlow(request), url = new URL(request.url), states = url.searchParams.getAll('state'), codes = url.searchParams.getAll('code')
   const matches = !!flow && states.length === 1 && states[0] === flow.state
-  if (!googleReady(request, env) || url.search.length > 2048 || !matches) return googleRedirect(request, 'error', '/world')
+  if (!googleReady(request, env)) return googleRedirect(request, 'error', '/world', [], 'config_unavailable')
+  if (!flow) return googleRedirect(request, 'error', '/world', [], 'flow_missing_or_expired')
+  if (!matches) return googleRedirect(request, 'error', '/world', [], 'state_mismatch')
+  if (url.search.length > 2048) return googleRedirect(request, 'error', '/world', [], 'invalid_callback')
+  const failed = (reason: OAuthFailure) => googleRedirect(request, 'error', flow.next, [cookie(OAUTH_COOKIE, '', 0)], reason)
+  let stage: OAuthFailure = 'service_unavailable'
   try {
     await limit(request, env, 'oauth-callback')
-    if (url.searchParams.has('error') || url.searchParams.has('error_code') || codes.length !== 1 || !/^[A-Za-z0-9_-]{12,512}$/.test(codes[0])) throw new AccountError('Google sign-in was not completed.', 400)
+    if (url.searchParams.has('error') || url.searchParams.has('error_code')) return failed('provider_denied')
+    if (codes.length !== 1 || !/^[A-Za-z0-9_-]{12,512}$/.test(codes[0])) return failed('invalid_callback')
+    stage = 'exchange_failed'
     const response = await upstream(env, fetcher, '/token?grant_type=pkce', 'POST', { auth_code: codes[0], code_verifier: flow.verifier })
-    if (!response.ok) { await response.body?.cancel(); throw new AccountError('Google sign-in could not be completed.', 400) }
+    if (!response.ok) {
+      await response.body?.cancel()
+      return failed(response.status === 429 ? 'rate_limited' : response.status >= 500 ? 'service_unavailable' : 'exchange_failed')
+    }
     const session = validateSession(await responseJson(response))
     // Verify the returned token with the shared provider before installing the
     // session. Never trust identity supplied through query or browser storage.
+    stage = 'identity_failed'
     const user = await verifiedUser(env, fetcher, session.access_token)
-    if (!user || user.id !== session.user.id) throw new AccountError('Google account could not be verified.', 401)
+    if (!user || user.id !== session.user.id) return failed('identity_failed')
     return googleRedirect(request, 'success', flow.next, [cookie(OAUTH_COOKIE, '', 0), ...sessionCookies({ ...session, user })])
-  } catch {
+  } catch (error) {
     // Leave any prior signed-in session intact; erase only this matched flow.
     // Provider error descriptions, codes and tokens never enter the page URL.
-    return googleRedirect(request, 'error', flow.next, [cookie(OAUTH_COOKIE, '', 0)])
+    return failed(error instanceof AccountError && error.status === 429 ? 'rate_limited' : error instanceof AccountError && error.status === 503 ? 'service_unavailable' : stage)
   }
 }
 async function recoveryCallback(request: Request, env: AccountEnv, fetcher: typeof fetch) {

@@ -112,6 +112,56 @@ test('concurrent refreshes coalesce and never clear cookies on invalid or stale 
   const rejected = await f.call('session', 'GET', undefined, '__Host-worldifact-refresh=invalid-' + crypto.randomUUID())
   assert.deepEqual(await rejected.json(), { configured: true, user: null }); assert.equal(rejected.headers.getSetCookie().length, 0)
 })
+test('a refresh still pending after fifteen seconds stays shared, with reuse measured from completion', async (t) => {
+  const f = fixture(), refreshCookie = '__Host-worldifact-refresh=slow-refresh-' + crypto.randomUUID()
+  let now = Date.now(), calls = 0
+  t.mock.method(Date, 'now', () => now)
+  let announceStarted!: () => void, release!: () => void
+  const started = new Promise<void>(resolve => { announceStarted = resolve })
+  const pending = new Promise<void>(resolve => { release = resolve })
+  const fetcher = (async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    calls++
+    assert.ok(init?.signal); assert.equal(init.signal.aborted, false)
+    announceStarted()
+    await pending
+    return Response.json({ access_token: access, refresh_token: renewal, expires_in: 3600, user: rawUser })
+  }) as typeof fetch
+  const check = () => accountApi(f.request('session', 'GET', undefined, refreshCookie), f.env, fetcher)
+  const first = check()
+  await started
+  now += 20_000
+  const second = check()
+  // Let the limiter and asynchronous token digest finish while the first
+  // provider request remains unresolved, rather than racing the test itself.
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(calls, 1)
+  release()
+  for (const response of await Promise.all([first, second])) {
+    assert.equal(response?.status, 200)
+    assert.equal(response?.headers.getSetCookie().length, 2)
+  }
+  now += 14_000
+  assert.equal((await check())?.status, 200); assert.equal(calls, 1)
+  now += 2_000
+  assert.equal((await check())?.status, 200); assert.equal(calls, 2)
+})
+test('provider requests have a finite timeout and an interrupted exchange is not retried', async (t) => {
+  const budgets: number[] = [], controller = new AbortController()
+  t.mock.method(AbortSignal, 'timeout', (milliseconds: number) => { budgets.push(milliseconds); return controller.signal })
+  let calls = 0
+  const f = fixture(), fetcher = (async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    calls++
+    controller.abort(new DOMException('private fixture timeout', 'TimeoutError'))
+    init?.signal?.throwIfAborted()
+    throw new Error('Expected an aborted signal')
+  }) as typeof fetch
+  const response = await accountApi(f.request('login', 'POST', { email: 'timing@example.test', password: 'fixture-only-password' }), f.env, fetcher)
+  assert.equal(response?.status, 503); assert.equal(calls, 1)
+  assert.equal(budgets.length, 1)
+  assert.ok(Number.isFinite(budgets[0]) && budgets[0] >= 20_000 && budgets[0] <= 30_000)
+  assert.doesNotMatch(await response!.text(), /private fixture|TimeoutError/)
+  assert.equal(response?.headers.getSetCookie().length, 0)
+})
 test('anonymous session is no-cost and logout revokes the current session without exposing tokens', async () => {
   const f = fixture()
   assert.deepEqual(await (await f.call('session')).json(), { configured: true, user: null }); assert.equal(f.calls.length, 0)

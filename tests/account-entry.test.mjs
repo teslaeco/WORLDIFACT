@@ -36,5 +36,14 @@ test('login entry offers email, gated Google, truthful future providers and an e
     const failed = render('/login?oauth=error&error_description=SECRET_PROVIDER_DETAILS')
     assert.match(failed, /Google sign-in could not be completed/)
     assert.doesNotMatch(failed, /SECRET_PROVIDER_DETAILS/)
+    for (const reason of ['flow_missing_or_expired', 'state_mismatch']) {
+      const retry = render(`/login?oauth=error&reason=${reason}&error_description=SECRET_PROVIDER_DETAILS`)
+      assert.match(retry, /same tab and browser/)
+      assert.match(retry, /Chrome with site cookies allowed/)
+      assert.doesNotMatch(retry, /SECRET_PROVIDER_DETAILS|account-phase-success/)
+    }
+    const unknown = render('/login?oauth=error&reason=SECRET_PROVIDER_DETAILS')
+    assert.match(unknown, /Google sign-in could not be completed/)
+    assert.doesNotMatch(unknown, /SECRET_PROVIDER_DETAILS/)
   } finally { await vite.close() }
 })
