@@ -16,7 +16,7 @@ const diagnosticParameters = new Set([
   'login_page[enabled]', 'default_return_url', 'metadata',
 ]);
 type Json = Record<string, unknown>;
-type Stage = 'credentials' | 'account' | 'portal preflight' | 'portal creation' | 'secret synchronization';
+type Stage = 'credentials' | 'account' | 'portal preflight' | 'portal creation' | 'portal normalization' | 'secret synchronization';
 type Dependencies = { fetcher?: typeof fetch; upload?: (payload: BillingSecrets) => void | Promise<void> };
 class StripePortalError extends Error {}
 const object = (value: unknown): Json => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Json : {};
@@ -47,16 +47,25 @@ async function readJson(response: Response, stage: Stage): Promise<Json> {
   }
 }
 
-function validatePortal(portal: Json, account: string, stage: Stage) {
+function portalMismatches(portal: Json, account: string, expectedId?: string) {
   const features = object(portal.features), cancel = object(features.subscription_cancel), profile = object(portal.business_profile), metadata = object(portal.metadata);
-  if (portal.object !== 'billing_portal.configuration' || !validId(portal.id, 'bpc') || portal.active !== true || portal.livemode !== true || portal.application != null || portal.is_default !== false ||
-    metadata.worldifact_setup !== setupVersion || metadata.worldifact_account !== account || metadata.worldifact_kind !== 'membership_management' ||
-    portal.default_return_url !== `${origin}/account/credits` || profile.privacy_policy_url !== `${origin}/privacy` || profile.terms_of_service_url !== `${origin}/terms` ||
-    object(portal.login_page).enabled !== false || object(features.customer_update).enabled !== false || object(features.subscription_update).enabled !== false ||
-    object(features.payment_method_update).enabled !== true || object(features.invoice_history).enabled !== true ||
-    cancel.enabled !== true || cancel.mode !== 'at_period_end' || cancel.proration_behavior !== 'none' || object(cancel.cancellation_reason).enabled !== false || cancel.retention != null) {
-    fail(stage, 'The owned portal does not match the reviewed cancellation policy. No existing configuration was changed.');
-  }
+  const checks: [string, boolean][] = [
+    ['object', portal.object === 'billing_portal.configuration'], ['id', validId(portal.id, 'bpc') && (!expectedId || portal.id === expectedId)],
+    ['active', portal.active === true], ['livemode', portal.livemode === true], ['application', portal.application == null], ['is_default', portal.is_default === false],
+    ['metadata.worldifact_setup', metadata.worldifact_setup === setupVersion], ['metadata.worldifact_account', metadata.worldifact_account === account],
+    ['metadata.worldifact_kind', metadata.worldifact_kind === 'membership_management'], ['default_return_url', portal.default_return_url === `${origin}/account/credits`],
+    ['business_profile.privacy_policy_url', profile.privacy_policy_url === `${origin}/privacy`], ['business_profile.terms_of_service_url', profile.terms_of_service_url === `${origin}/terms`],
+    ['login_page.enabled', object(portal.login_page).enabled === false], ['customer_update.enabled', object(features.customer_update).enabled === false],
+    ['subscription_update.enabled', object(features.subscription_update).enabled === false], ['payment_method_update.enabled', object(features.payment_method_update).enabled === true],
+    ['invoice_history.enabled', object(features.invoice_history).enabled === true], ['subscription_cancel.enabled', cancel.enabled === true],
+    ['subscription_cancel.mode', cancel.mode === 'at_period_end'], ['subscription_cancel.proration_behavior', cancel.proration_behavior === 'none'],
+    ['cancellation_reason.enabled', object(cancel.cancellation_reason).enabled === false], ['subscription_cancel.retention', cancel.retention == null],
+  ];
+  return checks.filter(([, valid]) => !valid).map(([name]) => name);
+}
+function failPortal(stage: Stage, fields: string[]): never {
+  // Field names are fixed source literals; private provider values are never interpolated.
+  fail(stage, `The owned portal does not match the reviewed cancellation policy. Mismatched fields: ${fields.join(', ')}. No unreviewed configuration was saved.`);
 }
 
 /** Prepare a dedicated customer portal, without changing a default portal or enabling checkout. */
@@ -114,8 +123,7 @@ export async function prepareStripePortal(env: NodeJS.ProcessEnv, dependencies: 
   }
   if (owned.length > 1) fail('portal preflight', 'Multiple owned configurations require operator review. No configuration was created or changed.');
   let portal = owned[0];
-  if (portal) validatePortal(portal, account.id, 'portal preflight');
-  else {
+  if (!portal) {
     // API-created configurations are dedicated and do not replace the account default.
     // https://docs.stripe.com/api/customer_portal/configurations/create
     const params = new URLSearchParams({
@@ -125,22 +133,48 @@ export async function prepareStripePortal(env: NodeJS.ProcessEnv, dependencies: 
       'features[customer_update][enabled]': 'false',
       'features[invoice_history][enabled]': 'true',
       'features[payment_method_update][enabled]': 'true',
-      // In API 2024-06-20 these optional disabled objects require additional fields on CREATE.
-      // Omit them and verify the documented disabled defaults in the returned configuration.
+      // API 2024-06-20 requires these Emptyable arrays when their CREATE objects are present.
+      'features[subscription_update][enabled]': 'false',
+      'features[subscription_update][default_allowed_updates]': '',
+      'features[subscription_update][products]': '',
       'features[subscription_cancel][enabled]': 'true',
       'features[subscription_cancel][mode]': 'at_period_end',
       'features[subscription_cancel][proration_behavior]': 'none',
+      'features[subscription_cancel][cancellation_reason][enabled]': 'false',
+      'features[subscription_cancel][cancellation_reason][options]': '',
       'login_page[enabled]': 'false',
       'metadata[worldifact_setup]': setupVersion,
       'metadata[worldifact_account]': account.id,
       'metadata[worldifact_kind]': 'membership_management',
     });
-    portal = await request('/billing_portal/configurations', 'portal creation', params, `${setupVersion}-${account.id}-create-v2`);
-    validatePortal(portal, account.id, 'portal creation');
+    portal = await request('/billing_portal/configurations', 'portal creation', params, `${setupVersion}-${account.id}-create-v3`);
+  }
+  const mismatches = portalMismatches(portal, account.id);
+  let normalizedFields: string[] = [];
+  if (mismatches.length) {
+    const stage = owned.length ? 'portal preflight' : 'portal creation';
+    const features = object(portal.features), reasons = object(object(features.subscription_cancel).cancellation_reason);
+    const normalizable = mismatches.every(name => name === 'subscription_update.enabled' ? object(features.subscription_update).enabled === true : name === 'cancellation_reason.enabled' && reasons.enabled === true);
+    // Complete only the intended disabled feature policy on our uniquely owned resource.
+    // Any identity, ownership, default, URL, status or cancellation-policy mismatch blocks updates.
+    if (!normalizable) failPortal(stage, mismatches);
+    const params = new URLSearchParams();
+    let revision = '';
+    if (mismatches.includes('subscription_update.enabled')) { params.set('features[subscription_update][enabled]', 'false'); revision += 'u'; }
+    if (mismatches.includes('cancellation_reason.enabled')) { params.set('features[subscription_cancel][cancellation_reason][enabled]', 'false'); revision += 'r'; }
+    const previousId = portal.id as string;
+    portal = await request(`/billing_portal/configurations/${previousId}`, 'portal normalization', params, `${setupVersion}-${previousId}-disable-v1-${revision}`);
+    const remaining = portalMismatches(portal, account.id, previousId);
+    if (remaining.length) failPortal('portal normalization', remaining);
+    // An idempotent POST can replay a cached response; verify current provider state before saving.
+    portal = await request(`/billing_portal/configurations/${previousId}`, 'portal normalization');
+    const current = portalMismatches(portal, account.id, previousId);
+    if (current.length) failPortal('portal normalization', current);
+    normalizedFields = mismatches;
   }
   try { await upload({ STRIPE_BILLING_PORTAL_CONFIGURATION_ID: portal.id as string }); }
   catch { fail('secret synchronization', 'The portal ID could not be saved to Cloudflare. Sensitive details suppressed.'); }
-  return { status: 'portal_configured_without_checkout_activation', configurationId: portal.id as string };
+  return { status: 'portal_configured_without_checkout_activation', configurationId: portal.id as string, ...(normalizedFields.length ? { normalizedFields } : {}) };
 }
 
 export function stripePortalErrorMessage(error: unknown) {
