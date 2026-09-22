@@ -1,6 +1,6 @@
 # Account allowances and billing
 
-Status: the owner corrected all paid offers to one price: **USD 29.99 / 1,500 credits**. One-time credit packs, cards/eligible Google Pay via Stripe and PayPal Orders are implemented; live payments remain BLOCKED until merchant configuration and end-to-end sandbox acceptance. Monthly membership and optional one-time top-ups now have the same USD 29.99 price, shown in one paid offer panel. No real payment, provider-account mutation or payout configuration was performed during implementation.
+Status: the owner approved Stripe activation after successful live merchant setup on 22 September 2026. Both monthly membership and optional one-time top-ups cost **USD 29.99 / 1,500 credits**, shown in one paid offer panel. The activation release enables cards and eligible Google Pay through Stripe; deployment evidence belongs in its PR. PayPal remains separately disabled. Successful credential/resource setup and automated fixture tests do not establish a real paid or provider-sandbox end-to-end settlement; those acceptance checks remain unverified. No assistant-made charge or payout-destination change is included.
 
 ## Identity and quotas
 
@@ -45,6 +45,7 @@ Checkout responses contain only a validated hosted Stripe URL and test/live mode
 | `STRIPE_MODE` | `test` first; `live` only for an approved production offer |
 | `STRIPE_SECRET_KEY` | Server secret matching the selected mode; never a frontend/VITE variable |
 | `STRIPE_WEBHOOK_SECRET` | Server `whsec_...` secret from the exact endpoint |
+| `STRIPE_BILLING_PORTAL_CONFIGURATION_ID` | Dedicated verified `bpc_...` configuration with cancellation at period end; required for new subscriptions and portal sessions |
 | `STRIPE_SUBSCRIPTION_PRICE_ID` | Recurring USD 29.99 monthly per-unit Price; quantity one |
 | `STRIPE_SUBSCRIPTION_INTERVAL` | `month`, matched to Price interval count one; other values block recurring checkout |
 | `STRIPE_TOPUP_PRICE_ID` | One-time per-unit Price, exactly USD 29.99, quantity one |
@@ -53,7 +54,7 @@ Checkout responses contain only a validated hosted Stripe URL and test/live mode
 | `BILLING_PUBLIC_ORIGIN` | Exact public HTTPS origin, without a trailing slash or path |
 | `ACCOUNT_LIMITER` | Account/billing request limiter; existing `GENERATION_LIMITER` is an allowed fallback |
 
-The Stripe Price is fetched and validated before Checkout. The approved pack is USD 29.99 / 1,500 credits. The owner approved a USD 29.99 monthly membership with 1,500 credits each paid period; subscription checkout still requires complete provider configuration. Current implementation supports one fixed subscription product, not prorated upgrades, quantity changes or free trials. Configure the Stripe customer portal accordingly.
+The Stripe Price is fetched and validated before Checkout. The approved pack is USD 29.99 / 1,500 credits. The owner approved a USD 29.99 monthly membership with 1,500 credits each paid period; subscription checkout still requires complete provider configuration. Current implementation supports one fixed subscription product, not prorated upgrades, quantity changes or free trials. The release prepares a dedicated Stripe customer portal with cancellation at period end, no proration and no plan changes; the application passes its explicit configuration ID when creating a portal session. Existing/default merchant portal configurations are not overwritten.
 
 When rotating the one-time Price, retain its old ID in `STRIPE_PREVIOUS_TOPUP_PRICE_IDS` for as long as historical events/refunds may arrive. Settlement re-fetches that exact allowlisted Price and verifies the same fixed pack; archived Prices remain valid for already-issued payments but cannot create new checkout. Do not rotate the recurring Price or subscription interval without a separately reviewed migration; historical recurring subscriptions currently depend on that configuration.
 

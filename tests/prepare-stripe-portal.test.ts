@@ -1,0 +1,178 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { prepareStripePortal, stripePortalErrorMessage } from '../scripts/prepare-stripe-portal.ts';
+import type { BillingSecrets } from '../scripts/connect-billing.ts';
+
+const key = `rk_live_${'s'.repeat(32)}`;
+const env = { STRIPE_SECRET_KEY: ` \n${key}\n ` };
+const origin = 'https://worldifact.xodobrox.workers.dev';
+type Json = Record<string, unknown>;
+const object = (value: unknown) => value as Json;
+function configuration(id = 'bpc_WorldifactV1'): Json {
+  return {
+    id, object: 'billing_portal.configuration', active: true, livemode: true, application: null, is_default: false,
+    metadata: { worldifact_setup: 'worldifact-portal-v1', worldifact_account: 'acct_Merchant', worldifact_kind: 'membership_management' },
+    default_return_url: `${origin}/account/credits`, business_profile: { privacy_policy_url: `${origin}/privacy`, terms_of_service_url: `${origin}/terms` }, login_page: { enabled: false },
+    features: {
+      customer_update: { enabled: false }, subscription_update: { enabled: false }, payment_method_update: { enabled: true }, invoice_history: { enabled: true },
+      subscription_cancel: { enabled: true, mode: 'at_period_end', proration_behavior: 'none', cancellation_reason: { enabled: false } },
+    },
+  };
+}
+
+function fixture() {
+  const portals: Json[] = [];
+  const calls: { method: string; url: URL; params: URLSearchParams; idempotency: string | null }[] = [];
+  const uploads: BillingSecrets[] = [];
+  const state = { charges: true, failUpload: false };
+  const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input)), headers = new Headers(init?.headers), params = new URLSearchParams(String(init?.body ?? ''));
+    assert.equal(url.origin, 'https://api.stripe.com');
+    assert.equal(init?.redirect, 'manual');
+    assert.ok(init?.signal instanceof AbortSignal);
+    assert.equal(headers.get('Authorization'), `Bearer ${key}`);
+    assert.equal(headers.get('Stripe-Version'), '2024-06-20');
+    const method = init?.method ?? 'GET';
+    calls.push({ method, url, params, idempotency: headers.get('Idempotency-Key') });
+    if (url.pathname === '/v1/account' && method === 'GET') return Response.json({ object: 'account', id: 'acct_Merchant', charges_enabled: state.charges, email: 'private@example.test', profile: key });
+    assert.equal(url.pathname, '/v1/billing_portal/configurations');
+    if (method === 'GET') return Response.json({ object: 'list', data: portals, has_more: false });
+    assert.equal(method, 'POST');
+    assert.equal(headers.get('Content-Type'), 'application/x-www-form-urlencoded');
+    assert.equal(headers.get('Idempotency-Key'), 'worldifact-portal-v1-acct_Merchant');
+    assert.equal(params.get('features[subscription_cancel][enabled]'), 'true');
+    assert.equal(params.get('features[subscription_cancel][mode]'), 'at_period_end');
+    assert.equal(params.get('features[subscription_cancel][proration_behavior]'), 'none');
+    assert.equal(params.get('features[subscription_update][enabled]'), 'false');
+    assert.equal(params.get('features[payment_method_update][enabled]'), 'true');
+    assert.equal(params.get('login_page[enabled]'), 'false');
+    assert.equal(params.has('is_default'), false);
+    const portal = configuration();
+    portals.push(portal);
+    return Response.json(portal);
+  }) as typeof fetch;
+  const upload = (payload: BillingSecrets) => {
+    if (state.failUpload) throw new Error(`private synchronization diagnostic ${key}`);
+    uploads.push(payload);
+  };
+  const dependencies = { fetcher, upload };
+  return { portals, calls, uploads, state, dependencies, run: () => prepareStripePortal(env, dependencies), posts: () => calls.filter(call => call.method === 'POST') };
+}
+
+test('portal preparation creates one dedicated cancellation configuration and stores only its ID', async () => {
+  const f = fixture();
+  const result = await f.run();
+  assert.deepEqual(result, { status: 'portal_configured_without_checkout_activation', configurationId: 'bpc_WorldifactV1' });
+  assert.deepEqual(f.uploads, [{ STRIPE_BILLING_PORTAL_CONFIGURATION_ID: 'bpc_WorldifactV1' }]);
+  assert.equal(f.posts().length, 1);
+  assert.equal(f.portals.length, 1);
+  for (const privateValue of [key, 'acct_Merchant', 'private@example.test']) assert.ok(!JSON.stringify(result).includes(privateValue));
+  assert.ok(f.calls.every(call => ['/v1/account', '/v1/billing_portal/configurations'].includes(call.url.pathname)));
+});
+
+test('a failed Cloudflare synchronization resumes by reusing the owned portal without duplicating or modifying it', async () => {
+  const f = fixture();
+  f.state.failUpload = true;
+  await assert.rejects(f.run(), error => {
+    const message = stripePortalErrorMessage(error);
+    assert.match(message, /secret synchronization/);
+    assert.ok(!message.includes(key));
+    return true;
+  });
+  assert.equal(f.portals.length, 1);
+  f.state.failUpload = false;
+  f.calls.length = 0;
+  await f.run();
+  assert.equal(f.posts().length, 0);
+  assert.equal(f.portals.length, 1);
+  assert.equal(f.uploads.length, 1);
+});
+
+test('incompatible, inactive, foreign-account or default owned portals require review before any write', async () => {
+  const mutations = [
+    (p: Json) => { p.active = false; }, (p: Json) => { p.livemode = false; }, (p: Json) => { p.application = 'ca_Other'; },
+    (p: Json) => { p.is_default = true; }, (p: Json) => { object(p.metadata).worldifact_account = 'acct_Other'; },
+    (p: Json) => { object(object(p.features).subscription_cancel).enabled = false; },
+    (p: Json) => { object(object(p.features).subscription_cancel).mode = 'immediately'; },
+    (p: Json) => { object(object(p.features).subscription_cancel).proration_behavior = 'create_prorations'; },
+    (p: Json) => { object(object(p.features).subscription_cancel).retention = { type: 'coupon_offer' }; },
+    (p: Json) => { object(object(p.features).subscription_update).enabled = true; },
+    (p: Json) => { object(p.login_page).enabled = true; }, (p: Json) => { p.default_return_url = 'https://other.example'; },
+  ];
+  for (const mutate of mutations) {
+    const f = fixture(), portal = configuration();
+    mutate(portal); f.portals.push(portal);
+    await assert.rejects(f.run(), /reviewed cancellation policy/);
+    assert.equal(f.posts().length, 0);
+    assert.equal(f.uploads.length, 0);
+  }
+});
+
+test('unrelated account configurations remain untouched and duplicate owned configurations are rejected', async () => {
+  const f = fixture(), unrelated = configuration('bpc_ExistingDefault');
+  unrelated.metadata = {}; unrelated.is_default = true;
+  const original = structuredClone(unrelated);
+  f.portals.push(unrelated);
+  await f.run();
+  assert.deepEqual(f.portals[0], original);
+  f.calls.length = 0;
+  f.portals.push(configuration('bpc_Duplicate'));
+  await assert.rejects(f.run(), /Multiple owned configurations/);
+  assert.equal(f.posts().length, 0);
+  assert.equal(f.uploads.length, 1);
+});
+
+test('all configuration pages are checked before creating, and ambiguous pagination cannot create a duplicate', async () => {
+  const f = fixture();
+  let pages = 0;
+  const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/v1/account') return f.dependencies.fetcher(input, init);
+    assert.equal(init?.method, 'GET');
+    pages++;
+    if (pages === 1) return Response.json({ object: 'list', data: [{ ...configuration('bpc_Unrelated'), metadata: {} }], has_more: true });
+    assert.equal(url.searchParams.get('starting_after'), 'bpc_Unrelated');
+    return Response.json({ object: 'list', data: [configuration()], has_more: false });
+  }) as typeof fetch;
+  await prepareStripePortal(env, { ...f.dependencies, fetcher });
+  assert.equal(pages, 2);
+  assert.equal(f.uploads.length, 1);
+  pages = 0;
+  const loopFetcher = (async (input: string | URL | Request, init?: RequestInit) => String(input).endsWith('/account') ? f.dependencies.fetcher(input, init) : Response.json({ object: 'list', data: [configuration('bpc_Repeated')], has_more: true })) as typeof fetch;
+  await assert.rejects(prepareStripePortal(env, { ...f.dependencies, fetcher: loopFetcher }), /pagination is ambiguous/);
+  assert.equal(f.uploads.length, 1);
+});
+
+test('invalid keys and inactive live accounts fail before any provider configuration changes', async () => {
+  const f = fixture();
+  for (const value of ['', 'pk_live_private', `sk_test_${'x'.repeat(32)}`, `sk_org_${'x'.repeat(32)}`]) {
+    await assert.rejects(prepareStripePortal({ STRIPE_SECRET_KEY: value }, f.dependencies), /credentials/);
+    assert.equal(f.calls.length, 0);
+  }
+  f.state.charges = false;
+  await assert.rejects(f.run(), /not ready to accept payments/);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.posts().length, 0);
+});
+
+test('provider permission failures, redirects, malformed responses and transport errors never leak sensitive details', async () => {
+  for (const produce of [
+    () => Response.json({ error: key }, { status: 403 }),
+    () => new Response(key, { status: 302, headers: { Location: 'https://untrusted.example' } }),
+    () => new Response(key),
+    () => new Response('x'.repeat(256_001)),
+    () => new Response('', { headers: { 'Content-Length': '256001' } }),
+    () => { throw new Error(key); },
+  ]) {
+    const f = fixture();
+    let calls = 0;
+    const fetcher = (async () => { calls++; return produce(); }) as typeof fetch;
+    await assert.rejects(prepareStripePortal(env, { ...f.dependencies, fetcher }), error => {
+      assert.ok(!stripePortalErrorMessage(error).includes(key));
+      return true;
+    });
+    assert.equal(calls, 1);
+    assert.equal(f.uploads.length, 0);
+  }
+  assert.ok(!stripePortalErrorMessage(new Error(key)).includes(key));
+});

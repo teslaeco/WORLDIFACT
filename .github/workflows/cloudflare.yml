@@ -82,6 +82,21 @@ jobs:
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
           PAYPAL_WEBHOOK_ID: ${{ secrets.PAYPAL_WEBHOOK_ID }}
           PAYPAL_MERCHANT_ID: ${{ secrets.PAYPAL_MERCHANT_ID }}
+      - name: Prepare verified subscription cancellation before activating Stripe
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile } from 'node:fs/promises';
+          import { prepareStripePortal, stripePortalErrorMessage } from './scripts/prepare-stripe-portal.ts';
+          const config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));
+          if (config.vars.ENABLE_BILLING === 'true') {
+            try { console.log(JSON.stringify(await prepareStripePortal(process.env))); }
+            catch (error) { console.error(stripePortalErrorMessage(error)); process.exitCode = 1; }
+          } else console.log('Stripe activation is disabled; no portal settings changed.');
+          JS
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
       - name: Deploy reviewed WORLDIFACT release
         run: npx wrangler deploy --config "${{ steps.mode.outputs.config }}"
         env:
@@ -100,4 +115,37 @@ jobs:
           const services = await inspectWorldifactServices()
           console.log(JSON.stringify({ checkedAt: new Date().toISOString(), deploymentMode: '${{ steps.mode.outputs.mode }}', services }, null, 2))
           console.log('Read-only deployment diagnostic. No model request is made by this step.')
+          JS
+      - name: Verify activated Stripe readiness and payment request guards without a charge
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));
+          if (config.vars.ENABLE_BILLING !== 'true') {
+            console.log('Stripe activation is disabled in the reviewed configuration.');
+            process.exit(0);
+          }
+          const origin = 'https://worldifact.xodobrox.workers.dev';
+          async function request(path, expectedStatus, options = {}) {
+            const response = await fetch(origin + path, { ...options, redirect: 'error', signal: AbortSignal.timeout(20000) });
+            assert.equal(response.status, expectedStatus, `${path}: expected HTTP ${expectedStatus}`);
+            assert.match(response.headers.get('content-type') ?? '', /application\/json/);
+            return response.json();
+          }
+          const status = await request('/api/billing/status', 200);
+          assert.equal(status.status, 'CONFIGURED');
+          assert.equal(status.mode, 'live');
+          assert.equal(status.cardReady, true);
+          assert.equal(status.topupReady, true);
+          assert.equal(status.checkoutReady, true);
+          assert.equal(status.googlePay, 'eligible_devices');
+          assert.deepEqual(status.price, { amount: 2999, currency: 'USD', credits: 1500, kind: 'one_time' });
+          assert.deepEqual(status.subscriptionPrice, { amount: 2999, currency: 'USD', credits: 1500, kind: 'subscription', interval: 'month' });
+          const post = { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ kind: 'topup' }) };
+          await request('/api/billing/checkout', 401, post);
+          await request('/api/billing/checkout', 403, { ...post, headers: { ...post.headers, Origin: 'https://example.invalid' } });
+          const webhook = await request('/api/billing/webhook', 400, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          assert.equal(webhook.error, 'Invalid webhook signature.');
+          console.log('PASS: live Stripe configuration, USD 29.99 / 1500 credits, monthly and one-time offers, Google Pay eligibility, login/origin/signature guards. No checkout, charge or credit grant was created; settlement remains unverified.');
           JS

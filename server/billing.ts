@@ -5,6 +5,7 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
   ENABLE_BILLING?: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
+  STRIPE_BILLING_PORTAL_CONFIGURATION_ID?: string
   STRIPE_MODE?: string
   STRIPE_SUBSCRIPTION_PRICE_ID?: string
   STRIPE_SUBSCRIPTION_INTERVAL?: string
@@ -40,7 +41,7 @@ function billingConfig(env: BillingEnv) {
   const interval = env.STRIPE_SUBSCRIPTION_INTERVAL === MONTHLY_MEMBERSHIP.interval ? MONTHLY_MEMBERSHIP.interval : null
   const keyMatchesMode = ['sk', 'rk'].some(prefix => env.STRIPE_SECRET_KEY?.trim().startsWith(`${prefix}_${mode}_`))
   const ready = env.ENABLE_BILLING === 'true' && env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true' && !!env.ACCOUNT_ENTITLEMENTS && !!origin && modeValid && ledgerModeMatches && keyMatchesMode && !!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')
-  return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: ready && priceId(env.STRIPE_SUBSCRIPTION_PRICE_ID) && !!interval, interval, mode: modeValid ? mode : null }
+  return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: ready && priceId(env.STRIPE_SUBSCRIPTION_PRICE_ID) && !!interval && resourceId(env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID, 'bpc'), interval, mode: modeValid ? mode : null }
 }
 async function boundedText(value: Request | Response, maximum: number) {
   if (Number(value.headers.get('Content-Length')) > maximum) throw new EntitlementError('Billing request is too large.', 413)
@@ -246,8 +247,10 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     if (url.pathname === '/api/billing/portal') {
       const stored = await entitlementCall<{ customer: string | null }>(env, user.id, '/billing')
       if (!stored.customer) return json({ error: 'There is no billing account to manage yet.' }, 409)
-      const session = await stripe(env, '/billing_portal/sessions', fetcher, new URLSearchParams({ customer: stored.customer, return_url: `${config.origin}/account/credits` }))
-      if (typeof session.url !== 'string' || !session.url.startsWith('https://billing.stripe.com/')) throw new EntitlementError('Billing portal was not confirmed.')
+      const portalConfiguration = env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID
+      if (!resourceId(portalConfiguration, 'bpc')) throw new EntitlementError('Subscription management is not configured.')
+      const session = await stripe(env, '/billing_portal/sessions', fetcher, new URLSearchParams({ customer: stored.customer, configuration: portalConfiguration!, return_url: `${config.origin}/account/credits` }))
+      if (session.customer !== stored.customer || session.configuration !== portalConfiguration || typeof session.url !== 'string' || !session.url.startsWith('https://billing.stripe.com/')) throw new EntitlementError('Billing portal was not confirmed.')
       return json({ url: session.url })
     }
     if (url.pathname !== '/api/billing/checkout') return json({ error: 'Not found.' }, 404)
