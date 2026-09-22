@@ -173,6 +173,33 @@ test('Unconfigured checkout never calls a payment provider and unsigned webhook 
   assert.equal(bad?.status, 400); assert.equal(seen.length, 0)
   assert.equal((await entitlementStatus(env, USER)).credits, 0)
 })
+test('Stripe refuses redirected reads and checkout POSTs without forwarding secrets or following Location', async () => {
+  for (const status of [301, 302, 303, 307, 308]) for (const phase of ['price', 'checkout']) {
+    const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
+    const calls: string[] = []; let cancelled = false
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/auth/v1/user')) return f.fetcher(input, init)
+      calls.push(url)
+      assert.equal(new URL(url).origin, 'https://api.stripe.com')
+      assert.equal(init?.redirect, 'manual')
+      const redirectHere = phase === 'price' ? url.endsWith('/prices/price_Topup') : url.endsWith('/checkout/sessions')
+      if (redirectHere) {
+        const body = new ReadableStream({ cancel() { cancelled = true } })
+        return new Response(body, { status, headers: { Location: 'https://attacker.invalid/collect?private=redirect-detail' } })
+      }
+      return f.fetcher(input, init)
+    }) as typeof fetch
+    const response = await billingApi(checkoutRequest('topup'), f.env, fetcher)
+    assert.equal(response?.status, 502)
+    assert.equal(calls.length, phase === 'price' ? 1 : 2)
+    assert.equal(cancelled, true)
+    assert.equal(response?.headers.get('Location'), null)
+    const text = await response!.text()
+    assert.doesNotMatch(text, /attacker|redirect-detail|sk_test|Bearer|api\.stripe/)
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+  }
+})
 test('Webhook signature rejects stale/tampered bodies and accepts supported key-rotation signatures', async () => {
   const request = await signedEvent('invoice.paid', { id: 'in_fixture' }), signature = request.headers.get('Stripe-Signature')!, body = await request.text()
   assert.equal(await verifyStripeSignature(body, signature, WEBHOOK_SECRET), true)

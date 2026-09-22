@@ -56,10 +56,12 @@ async function boundedText(value: Request | Response, maximum: number) {
 }
 async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, params?: URLSearchParams, key?: string): Promise<Json> {
   const response = await fetcher(`https://api.stripe.com/v1${path}`, {
-    method: params ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(12_000),
+    // workerd supports manual/follow; reject redirects before credentials can leave Stripe.
+    method: params ? 'POST' : 'GET', redirect: 'manual', signal: AbortSignal.timeout(12_000),
     headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'Stripe-Version': STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
     ...(params ? { body: params.toString() } : {}),
   })
+  if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new EntitlementError('Billing could not be confirmed. Please retry the same action later.', 502) }
   if (!response.ok) { await response.body?.cancel(); throw new EntitlementError('Billing could not be confirmed. Please retry the same action later.', 502) }
   const body = object(JSON.parse(await boundedText(response, 256_000)))
   // List envelopes lack livemode; every resource response must explicitly match the selected mode.

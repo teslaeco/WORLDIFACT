@@ -108,8 +108,16 @@ async function upstream(env: AccountEnv, fetcher: typeof fetch, path: string, me
   const bearer = token || (publicLegacyKey(key) ? key : undefined)
   if (bearer) headers.Authorization = `Bearer ${bearer}`
   try {
-    return await fetcher(`${base}/auth/v1${path}`, { method, headers,
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}), redirect: 'error', signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+    // Workerd supports manual/follow, but throws before sending requests when
+    // redirect is "error". Reject redirects ourselves to keep credentials at
+    // the configured provider and never follow a response Location.
+    const response = await fetcher(`${base}/auth/v1${path}`, { method, headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}), redirect: 'manual', signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel()
+      throw new AccountError('Account service returned an unexpected redirect.')
+    }
+    return response
   } catch { throw new AccountError('Account service is temporarily unavailable. Please try again.') }
 }
 async function responseJson(response: Response) {

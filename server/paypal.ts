@@ -50,10 +50,12 @@ function provider(env: PayPalEnv, config: Config, fetcher: typeof fetch) {
   async function bearer() {
     if (!token) token = (async () => {
       const response = await fetcher(config.base + '/v1/oauth2/token', {
-        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(12_000),
+        // Refuse redirects explicitly; workerd does not support redirect: 'error'.
+        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(12_000),
         headers: { Authorization: 'Basic ' + btoa(`${env.PAYPAL_CLIENT_ID}:${env.PAYPAL_CLIENT_SECRET}`), 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
         body: 'grant_type=client_credentials',
       })
+      if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new EntitlementError('PayPal is temporarily unavailable.', 502) }
       if (!response.ok) { await response.body?.cancel(); throw new EntitlementError('PayPal is temporarily unavailable.', 502) }
       const body = await boundedJson(response, 16_384)
       if (body.token_type !== 'Bearer' || typeof body.access_token !== 'string' || !/^[A-Za-z0-9._~-]{10,4096}$/.test(body.access_token)) throw new EntitlementError('PayPal authorization could not be confirmed.', 502)
@@ -64,10 +66,11 @@ function provider(env: PayPalEnv, config: Config, fetcher: typeof fetch) {
   return async (path: string, body?: Json, requestId?: string): Promise<Json> => {
     const access = await bearer()
     const response = await fetcher(config.base + path, {
-      method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(12_000),
+      method: body === undefined ? 'GET' : 'POST', redirect: 'manual', signal: AbortSignal.timeout(12_000),
       headers: { Authorization: `Bearer ${access}`, Accept: 'application/json', Prefer: 'return=representation', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(requestId ? { 'PayPal-Request-Id': requestId } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })
+    if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new EntitlementError('PayPal could not confirm this payment. Retry the same payment later.', 502) }
     if (!response.ok) { await response.body?.cancel(); throw new EntitlementError('PayPal could not confirm this payment. Retry the same payment later.', 502) }
     return boundedJson(response, 256_000)
   }
