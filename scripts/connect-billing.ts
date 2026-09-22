@@ -14,7 +14,14 @@ const priceId = (value: string) => /^price_[A-Za-z0-9]{1,180}$/.test(value);
 /** Validate every provider before making any writes. Missing groups preserve existing Worker secrets. */
 export function readBillingSecrets(env: NodeJS.ProcessEnv): BillingSecrets | null {
   const payload: BillingSecrets = {};
+  const source = env.STRIPE_CONFIG_SOURCE || 'github';
+  if (source !== 'github' && source !== 'cloudflare') fail('Invalid STRIPE_CONFIG_SOURCE. Use github or cloudflare.');
+  if (source === 'cloudflare' && [...stripeNames.slice(1), 'STRIPE_PREVIOUS_TOPUP_PRICE_IDS'].some(name => !!env[name])) {
+    fail('Conflicting Stripe configuration: cloudflare mode preserves Worker settings. Remove the companion Stripe GitHub secrets or choose github mode with a complete group.');
+  }
   for (const names of [stripeNames, paypalNames]) {
+    // The primary GitHub key in Cloudflare mode belongs only to the explicit setup workflow.
+    if (names === stripeNames && source === 'cloudflare') continue;
     const supplied = names.some(name => !!env[name]) || (names === stripeNames && !!env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS);
     if (!supplied) continue;
     const missing = names.filter(name => !env[name]);
@@ -65,10 +72,11 @@ export function uploadBillingSecrets(payload: BillingSecrets, runner: SecretRunn
 
 export function connectBilling(env: NodeJS.ProcessEnv, upload: (payload: BillingSecrets) => void = uploadBillingSecrets) {
   const payload = readBillingSecrets(env);
-  if (!payload) return 'No billing credentials supplied. Existing Worker secrets are preserved.';
+  const preserved = env.STRIPE_CONFIG_SOURCE === 'cloudflare' ? ' Stripe configuration is managed in Cloudflare and preserved; readiness is not inferred.' : '';
+  if (!payload) return `No billing credentials selected for synchronization. Existing Worker secrets are preserved.${preserved}`;
   upload(payload);
   const providers = [payload.STRIPE_SECRET_KEY ? 'Stripe' : '', payload.PAYPAL_CLIENT_ID ? 'PayPal' : ''].filter(Boolean).join(', ');
-  return `${providers} configuration synchronized. Checkout activation is unchanged; live payment acceptance remains unverified.`;
+  return `${providers} configuration synchronized. Checkout activation is unchanged; live payment acceptance remains unverified.${preserved}`;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

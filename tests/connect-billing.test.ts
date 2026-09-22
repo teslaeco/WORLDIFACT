@@ -33,6 +33,35 @@ test('Stripe configuration uses the fixed live origin and monthly interval witho
   assert.ok(!Object.keys(payload).some(name => name.startsWith('ENABLE_') || name === 'ENFORCE_ACCOUNT_ENTITLEMENTS'));
 });
 
+test('explicit Cloudflare source preserves Stripe secrets even when the bootstrap key is present', () => {
+  const env = { STRIPE_CONFIG_SOURCE: 'cloudflare', STRIPE_SECRET_KEY: stripe.STRIPE_SECRET_KEY };
+  assert.equal(readBillingSecrets(env), null);
+  assert.match(connectBilling(env, neverUpload), /managed in Cloudflare and preserved; readiness is not inferred/);
+  let uploads = 0;
+  connectBilling({ ...env, ...paypal }, payload => {
+    uploads++;
+    assert.equal(payload.PAYPAL_CLIENT_SECRET, paypal.PAYPAL_CLIENT_SECRET);
+    assert.ok(!Object.keys(payload).some(name => name.startsWith('STRIPE_')));
+  });
+  assert.equal(uploads, 1);
+  assert.throws(() => connectBilling({ ...env, PAYPAL_CLIENT_ID: paypal.PAYPAL_CLIENT_ID }, neverUpload), /PAYPAL_CLIENT_SECRET/);
+});
+
+test('unknown or conflicting Stripe sources fail before writes without printing credentials', () => {
+  for (const env of [
+    { ...stripe, STRIPE_CONFIG_SOURCE: 'typo-private-value' },
+    { ...stripe, STRIPE_CONFIG_SOURCE: 'cloudflare' },
+    { STRIPE_CONFIG_SOURCE: 'cloudflare', STRIPE_PREVIOUS_TOPUP_PRICE_IDS: 'price_old' },
+  ]) {
+    assert.throws(() => connectBilling(env, neverUpload), error => {
+      assert.ok(error instanceof Error);
+      assert.ok(!error.message.includes(stripe.STRIPE_SECRET_KEY));
+      assert.ok(!error.message.includes('typo-private-value'));
+      return true;
+    });
+  }
+});
+
 test('PayPal is an independent optional complete provider and can be synchronized with Stripe', () => {
   for (const env of [paypal, { ...stripe, ...paypal }]) {
     let uploads = 0;
