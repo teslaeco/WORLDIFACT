@@ -1,3 +1,25 @@
+# WORLDIFAKT — premature account timeout and Google callback diagnostics
+
+Date: 22 September 2026. Branch: `fix/google-pkce-callback`.
+
+The owner reported the generic Google error after a real login. Supabase Auth logs show successful Google callbacks at 06:23:38 and 06:29:10 UTC, without a subsequent token exchange in the inspected interval. The previous cancellation-only probe verified the redirect allowlist, not a complete successful sign-in.
+
+- The callback now reports a fixed, non-sensitive failure category instead of collapsing configuration, missing/expired browser flow, state mismatch, incomplete callback, provider rejection, rate limit, exchange, service and identity failures into the same message. Raw provider errors, auth codes, states, credentials and user data are never included in these diagnostics.
+- Browser guidance distinguishes a lost/mismatched browser session from a provider or service failure. Unknown query values always render the fixed generic message; they cannot inject provider text.
+- Publishable Supabase keys are sent in `apikey`; user access JWTs and supported legacy anon JWTs are the only Bearer values. This conforms to the [Supabase API-key contract](https://supabase.com/docs/guides/getting-started/api-keys#known-limitations). Two synthetic invalid-code requests returned the same expected `404 flow_state_not_found` with and without the old Bearer header, so this header cleanup is **not established as the reported failure's cause**.
+- An owned production initiation/callback probe with a synthetic invalid code confirmed that the Worker sets its secure flow cookie, recognizes a returned matching flow and does not issue a session for a fake code. No real credential, account code, account creation or paid request was used.
+- Existing PKCE, state, exact-origin, provider identity, HttpOnly/Secure cookie and rate-limit protections remain enforced. No cookie/session protection was weakened.
+- Direct synthetic Supabase requests returned expected authentication failures after 13,947 ms (GET /user) and up to 14,485 ms (password grant), beyond the old 12-second deadline. Provider requests now have a bounded 25-second budget; the shared browser client allows 80 seconds for at most three sequential bounded provider operations. No automatic retry is added for one-time codes or rotating tokens. The cause of the provider/network slowness itself remains unconfirmed.
+- Pending refreshes remain coalesced until completion, with the 15-second result-reuse window starting afterward. Regression tests cover a refresh still pending after 20 seconds and ensure an interrupted exchange is not retried.
+- The premature timeout is reproduced; complete Google sign-in acceptance remains **OPEN** until a real user signs in after publication. Timing/error diagnostics alone do not establish full Google acceptance.
+
+- A production password-login probe using only a random address under reserved `example.invalid` and a random password returned HTTP 503 after 12,940 ms with the upstream-unavailable error and no session. This independently reproduces a server-to-Supabase failure; it does not use or test a real user's password. It shifts the investigation toward upstream connectivity rather than assuming the user's browser lost its flow cookie.
+- Local verification: 342 tests pass; the one existing Chromium-only test is blocked by the unavailable browser binary. TypeScript, lint (warnings only), real HTTP DEMO/origin smoke, production build, Worker dry-run and diff check pass.
+
+Publication and complete Google sign-in acceptance: pending.
+
+---
+
 # WORLDIFAKT — login-first and one USD 29.99 price correction
 
 Date: 22 September 2026. Local branch: `fix/worldifakt-login-and-single-price`.
@@ -16,7 +38,7 @@ Base production main: `8582b93ce667a0d244abb1ed0397f51099c6af69` (merged PR #63)
 - Payment keys remain deferred by the owner pending merchant verification. Card, eligible Google Pay and PayPal integrations stay disabled; no charge, payout change or paid model call occurred. Bank account details were not copied into the repository.
 - The owner completed Supabase dashboard sign-in and saved the Google callback. Its redirect has been verified; a real Google sign-in remains untested. The separate password-recovery callback remains an operator configuration gate. The Oracle protected raster preview, existing legacy-receipt recovery and copied Chess legacy social clients remain the separately documented backend/migration gaps; this correction does not claim those were completed.
 - Aggregate `npm run verify`: **336 PASS / 1 browser test BLOCKED**, 337 total, no skipped/cancelled tests. The only failure is the existing Chromium-required assertion; Chromium is absent and recorded browser restrictions are preserved. Lint has zero errors; TypeScript, separate real HTTP DEMO/origin smoke, production build, Worker dry-run and diff checks pass. Browser/device appearance remains unverified.
-- GitHub connector access recovered after the earlier transport HTTP 400 and browser HTTP 502 failures. The incomplete browser-created correction branch at `c29a2c713be9d9059b071f95ccf6ea1aeb28626a` is the publication parent. The complete reviewed file tree will replace that partial snapshot through a normal fast-forward commit; compare its exact tree before CI and merge. Publication is explicitly authorized; no new payment credentials or paid requests are needed. Final merge and deployment evidence is pending.
+- PR #64 merged as `71282740322db047adfd68f617ea009d7fc4c977` after all five head checks passed. Production verify `35693185139` passed 337/337 tests; deploy `35693185075` succeeded with Cloudflare version `13ccb29c-14f0-49c7-8f4d-e077b018ba6d`. Release smoke verified 16 routes, 33 hub assets and 105 foundation assets. Browser confirmed root login, enabled Google button, future-provider labels and one USD 29.99 price. No successful real Google sign-in was claimed; the owner subsequently reported a callback failure (see the current diagnostic milestone above).
 
 ---
 

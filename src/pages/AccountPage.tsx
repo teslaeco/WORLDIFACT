@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEven
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { accountRequest, useAccount } from '../lib/account'
 import { safeAccountDestination } from '../lib/accountDestination'
+import { accountOAuthError } from '../lib/accountOAuthError'
 import './AccountPage.css'
 
 const CosmicLoginScene = lazy(() => import('../components/CosmicLoginScene'))
@@ -15,7 +16,7 @@ export default function AccountPage() {
   const [tab, setTab] = useState<Tab>('login')
   const [phase, setPhase] = useState<'idle' | 'submitting' | 'success'>(oauth === 'success' ? 'submitting' : 'idle')
   const [googleReady, setGoogleReady] = useState<boolean | null>(null)
-  const [notice, setNotice] = useState(''), [error, setError] = useState(oauth === 'error' ? 'Google sign-in could not be completed. Please try again.' : '')
+  const [notice, setNotice] = useState(''), [error, setError] = useState(oauth === 'error' ? accountOAuthError(new URLSearchParams(location.search).get('reason')) : '')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
   useEffect(() => {

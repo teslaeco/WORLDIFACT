@@ -3,10 +3,13 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 export type AccountUser = { id: string; email: string; displayName: string }
 type AccountState = { user: AccountUser | null; loading: boolean; error: string; refresh: () => Promise<AccountUser | null>; signOut: () => Promise<void> }
 const AccountContext = createContext<AccountState | null>(null)
+// The shared client covers up to three bounded provider steps (password reset)
+// plus request overhead; ordinary session recovery needs at most two.
+const ACCOUNT_REQUEST_TIMEOUT_MS = 80_000
 
 export async function accountRequest(path: string, input?: unknown) {
   const response = await fetch(path, { method: input === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store',
-    headers: input === undefined ? undefined : { 'Content-Type': 'application/json' }, body: input === undefined ? undefined : JSON.stringify(input), signal: AbortSignal.timeout(25_000) })
+    headers: input === undefined ? undefined : { 'Content-Type': 'application/json' }, body: input === undefined ? undefined : JSON.stringify(input), signal: AbortSignal.timeout(ACCOUNT_REQUEST_TIMEOUT_MS) })
   const data = await response.json()
   if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'The account service is temporarily unavailable.')
   return data
