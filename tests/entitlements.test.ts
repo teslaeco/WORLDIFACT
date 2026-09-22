@@ -448,6 +448,27 @@ test('first-time monthly checkout creates and binds the customer before returnin
   assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
 })
 
+test('standard card checkout works when the Stripe account defaults to Managed Payments', async () => {
+  for (const kind of ['subscription', 'topup'] as const) {
+    const f = freshCheckoutFixture()
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (new URL(String(input)).hostname === 'api.stripe.com') assert.equal(new Headers(init?.headers).get('Stripe-Version'), new URL(String(input)).pathname === '/v1/checkout/sessions' ? '2025-03-31.basil' : '2024-06-20')
+      if (new URL(String(input)).pathname === '/v1/checkout/sessions') {
+        const params = new URLSearchParams(String(init?.body ?? ''))
+        // Stripe rejects the card selection while Managed Payments is inherited from the account.
+        if (params.get('managed_payments[enabled]') !== 'false') return Response.json({ error: { type: 'invalid_request_error', message: 'Unsupported parameter: payment_method_types. Managed Payments is enabled by default on your account.' } }, { status: 400 })
+        assert.equal(params.get('payment_method_types[0]'), 'card')
+        assert.equal(params.get('allow_promotion_codes'), 'false')
+      }
+      return f.fetcher(input, init)
+    }) as typeof fetch
+    const result = await billingApi(checkoutRequest(kind), f.env, fetcher)
+    assert.equal(result?.status, 200, kind)
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+    assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
+  }
+})
+
 test('Stripe HTTP diagnostics identify only fixed stages, status and allowlisted code or parameter labels', async () => {
   const privateValue = 'sk_live_private_customer_information'
   for (const [path, stage] of [['/v1/prices/price_Subscription', 'price_read'], ['/v1/customers', 'customer_create'], ['/v1/subscriptions', 'subscription_list'], ['/v1/checkout/sessions', 'checkout_create'], ['/v1/billing_portal/sessions', 'portal_create']] as const) {
