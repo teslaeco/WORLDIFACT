@@ -51,7 +51,7 @@ test('actual Shop initial render exposes SLOW quality and keeps FAST gated until
   assert.match(html, /aria-pressed="false"[^>]*disabled=""[^>]*><strong>FAST · DRAFT/s)
   assert.match(html, /FAST is waiting for the public GPT-6 Astra LIVE service/)
   assert.match(html, /Generate SLOW model \+ materials/)
-  assert.match(html, /Back to WORLDIFACT/)
+  assert.match(html, /Back to WORLDIFAKT/)
   assert.match(html, /GPT-6 Astra procedural draft/)
   assert.doesNotMatch(html, /<iframe|target="_top"|FAST guaranteed/)
 })

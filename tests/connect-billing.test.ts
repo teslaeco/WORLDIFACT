@@ -6,7 +6,7 @@ const stripe = {
   STRIPE_SECRET_KEY: `sk_live_${'a'.repeat(32)}`,
   STRIPE_WEBHOOK_SECRET: `whsec_${'b'.repeat(32)}`,
   STRIPE_SUBSCRIPTION_PRICE_ID: 'price_monthly2999',
-  STRIPE_TOPUP_PRICE_ID: 'price_topup3000',
+  STRIPE_TOPUP_PRICE_ID: 'price_topup2999',
 };
 const paypal = {
   PAYPAL_CLIENT_ID: 'paypal-client-identifier', PAYPAL_CLIENT_SECRET: 'paypal-private-credential',

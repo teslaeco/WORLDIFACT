@@ -1,6 +1,6 @@
 # Shared WORLDIFACT / Cube Chess accounts
 
-Audit and local implementation: 21 September 2026. This document does not claim production publication or a real end-to-end account test.
+Audit and local implementation: 21–22 September 2026. This document does not claim production publication or a real end-to-end account test.
 
 ## Existing account provider — VERIFIED from public source and deployed code
 
@@ -32,7 +32,21 @@ The published Chess site originally stores session tokens in localStorage on `te
 
 The build now replaces only the pinned local Chess foundation's `web/auth/AuthApi.js` with `scripts/lib/chess-auth-proxy.js`. The copied `/apps/chess/index.html` consumes the same WORLDIFACT HttpOnly session and player UUID. Signed-in portal links must use this account-capable entry. The explicit guest entry remains anonymous. Server session restoration precedes a remembered guest identity to avoid silently keeping a logged-in player in guest mode.
 
-This does not change the external GitHub Pages deployment or grant login sessions to independently hosted FORGE archives. The copied Chess profile/social clients that expect an old localStorage bearer token are not migrated by this identity adapter. Do not claim that those database features are fully integrated. Legacy provider buttons route to the WORLDIFACT email page; provider-specific OAuth is not implemented by this adapter.
+This does not change the external GitHub Pages deployment or grant login sessions to independently hosted FORGE archives. The copied Chess profile/social clients that expect an old localStorage bearer token are not migrated by this identity adapter. Do not claim that those database features are fully integrated. Legacy provider buttons route to the shared WORLDIFAKT sign-in page. The hub implements Google OAuth against the same existing project; activation is gated by the callback configuration below. Apple, Xbox, PlayStation and Steam are explicitly unavailable and labelled “wkrótce dostępne” (the owner’s requested Polish label).
+
+## Google OAuth callback configuration — VERIFIED 22 September 2026
+
+The public root now opens the WORLDIFAKT account screen; `/world` is the explicit world/guest route. Email sign-in and registration continue to use the existing project. Google starts through a same-origin POST, with a random state and PKCE verifier in a ten-minute Secure HttpOnly cookie. The callback exchanges the code server-side and verifies the resulting UUID with `/auth/v1/user` before issuing session cookies. Only `/world` and validated credit-checkout returns can be restored; query flags alone never prove login.
+
+Google is enabled in the shared provider. The first disposable authorization followed by standard cancellation returned to the existing `teslaeco.github.io` Chess site, establishing the missing callback configuration. The owner then saved the WORLDIFACT entry in the existing Supabase project's redirect allowlist, preserving the original Chess entry.
+
+The configured entry in **Authentication → URL Configuration → Redirect URLs** is:
+
+`https://worldifact.xodobrox.workers.dev/api/account/oauth/callback?state=*`
+
+The wildcard is restricted to the random state query on this exact HTTPS host and callback path. A second, explicitly authorized disposable PKCE authorization followed by standard cancellation returned HTTP 302 to `https://worldifact.xodobrox.workers.dev/api/account/oauth/callback`, preserving the exact locally generated state (`stateMatch: true`, expected cancellation error `access_denied`). Only the configured Supabase endpoints were requested; redirects were inspected without following Google or the application callback. No Google sign-in, account creation, email, payment, token exchange, secret read or login session occurred in either diagnostic. Random authorization state and verifier values were discarded and are not included in this record.
+
+Based on this verified callback acceptance, `wrangler.jsonc` now sets `SUPABASE_GOOGLE_REDIRECT_READY=true`. The ongoing LIVE configuration generator preserves this variable from the reviewed base; deployment still determines when production receives it. The local `.dev.vars.example` retains `false` because local callback URLs require their own configuration. This resolves the production callback configuration blocker without changing the existing user database. A completed real Google login, token exchange and physical-device experience remain unverified.
 
 ## Password recovery configuration gate
 
@@ -46,4 +60,4 @@ Registration uses the provider's existing verification-email configuration and e
 
 ## Verification
 
-Local tests cover safe cookie issuance, exact profile extraction, forged/duplicate cookies, cross-origin rejection, input bounds, enumeration-resistant registration, error sanitization, limiter fail-closed behavior, concurrent refresh, logout, privileged-key rejection, PKCE callback binding, password reset, and the copied Chess adapter contract. All provider responses in these tests are fixtures. No production account was created and no email was sent by the implementation checks.
+Local tests cover safe cookie issuance, exact profile extraction, forged/duplicate cookies, cross-origin rejection, input bounds, enumeration-resistant registration, error sanitization, limiter fail-closed behavior, concurrent refresh, logout, privileged-key rejection, PKCE callback binding, Google state/expiry/duplicate-parameter checks, unverified-user rejection, safe return destinations, password reset, and the copied Chess adapter contract. All provider responses in these tests are fixtures. No production account was created and no email was sent by the implementation checks.

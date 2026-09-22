@@ -121,7 +121,7 @@ export async function checkPublishedRelease(deployment: Deployment,
   const platform = await json(await request("/api/platform"), "/api/platform");
   requireCheck(platform.cloudflare === "RESPONDING" && typeof platform.ownerChecks === "boolean",
     "Platform status endpoint did not return its contract");
-  const routes = ["/", "/control", "/privacy", "/terms", "/terra", "/chess/shop", "/builder", "/make", ...PORTALS.map(portal => portal.route)];
+  const routes = ["/", "/world", "/login", "/account/credits", "/control", "/privacy", "/terms", "/terra", "/chess/shop", "/builder", "/make", ...PORTALS.map(portal => portal.route)];
   for (const path of routes) {
     await matchingAsset(path, digest(expectedHtml), ["text/html"], { headers: { Accept: "text/html" } });
   }
@@ -130,6 +130,15 @@ export async function checkPublishedRelease(deployment: Deployment,
     "The release must include JavaScript and CSS assets.");
   for (const path of assets) {
     const types = path.endsWith(".webp") ? ["image/webp"] : path.endsWith(".png") ? ["image/png"] : path.endsWith(".css") ? ["text/css"] : ["text/javascript", "application/javascript"];
+    await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
+  }
+  // The login hero and all five portal frames must come from this release's
+  // bundled original geometry. An HTML fallback/old proxy error is not a model.
+  const sculptureAssets = [
+    { path: "world-assets/polyhedron-led.gltf", types: ["model/gltf+json", "application/json"] },
+    { path: "world-assets/polyhedron-led-poster.svg", types: ["image/svg+xml"] },
+  ];
+  for (const { path, types } of sculptureAssets) {
     await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
   }
   const foundation = JSON.parse(await readFile(join(dist, "foundation-release.json"), "utf8")) as {
@@ -169,7 +178,7 @@ export async function checkPublishedRelease(deployment: Deployment,
     ...options, headers: { ...options.headers, Origin: "https://invalid-origin.example" },
   });
   await json(rejected, "Cross-origin blueprint request", 403);
-  return { origin, versionId, mode: liveHealth ? "LIVE" : "DEMO", htmlRoutes: routes.length, verifiedAssets: assets.length, foundationAssets: foundation.files.length };
+  return { origin, versionId, mode: liveHealth ? "LIVE" : "DEMO", htmlRoutes: routes.length, verifiedAssets: assets.length + sculptureAssets.length, foundationAssets: foundation.files.length };
 }
 
 async function main() {

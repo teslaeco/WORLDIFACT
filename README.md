@@ -46,7 +46,8 @@ Move with WASD/arrows or the left analogue joystick; drag on the scene with anot
 
 | Route | Current scope |
 |---|---|
-| `/` | Mirror Lake, rover, workshop, walk-in portal navigation |
+| `/`, `/login` | WORLDIFAKT account entry with email and Google sign-in |
+| `/world` | River meadow, rover, workshop, walk-in portal navigation |
 | `/chess` | Chess Cube 512 AI + shared Astra blueprint generator |
 | `/iss` | Fix ISS simulation + shared Astra blueprint generator |
 | `/planets` | 8 Planets campaign + shared Astra blueprint generator |

@@ -7,7 +7,7 @@ import { renderShopMarkup } from './shop-render-helper.mjs'
 
 test('native Shop presents a customer creation flow with cart and no visible engineering controls', async () => {
   const html = await renderShopMarkup()
-  assert.match(html, /href="\/"[^>]*>← Back to WORLDIFACT/)
+  assert.match(html, /href="\/world"[^>]*>← Back to WORLDIFAKT/)
   for (const portal of PORTALS) assert.ok(html.includes(`href="${portal.route}"`))
   assert.match(html, /id="studio-prompt"/)
   assert.match(html, /id="studio-photos"/)

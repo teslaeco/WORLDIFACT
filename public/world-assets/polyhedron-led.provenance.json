@@ -1,0 +1,2038 @@
+{
+  "source": "https://forge-world-builder.terraformingplanet.chatgpt.site/world-assets/polyhedron.glb",
+  "sourceSha256": "c0b756d4c92744189a4161f19bbf5b3c7629de30a1196a09f05c1ed94276749a",
+  "sourceBytes": 9807116,
+  "assetSha256": "b9fcc0315079e268efbb44465afb285b49e8d858aeaecb2cf96c1bcb0db2ade3",
+  "assetBytes": 228692,
+  "geometryBufferSha256": "aac357c5288fb186d0776b1313fbef98a8462f2027de876c79d1198ff233c82c",
+  "meshes": 48,
+  "nodes": 49,
+  "triangles": 2976,
+  "meshDefinitionSha256": "430c26e23798a02d02e7141e7c9f16098b6477c8b10ea920e9361035b94ac117",
+  "nodeDefinitionSha256": "eab3120b191961b86982628159290f07f431270c06a4266ee85a664efb22c450",
+  "sceneDefinitionSha256": "9a22fbda388e5ac9fe3e456513190e983f500463d59f24f149f39ec4c5846fc1",
+  "accessors": [
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          1.0062147378921509,
+          -0.3536103367805481,
+          -0.2380734533071518
+        ],
+        "min": [
+          0.6125031113624573,
+          -0.6688077449798584,
+          -0.6033477187156677
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "9f273dded264f50624156f9559394736b1a44baca1e66c35da53bb8c0cbe5e89"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "ea7276ea3e2cced4c87e6ad71bf07b400a4198c86cd3c80274b486904cf4b9ef"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "f5eb1fd62a3d0c335e540d4638608fd704e3c289204da6d9495e03336bf8c3dc"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "fab784bb757a5f941cf55d9835f8405bebef033b4acfdbb05492c585f751a28a"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          1.0074620246887207,
+          0.11718131601810455,
+          -0.2370707243680954
+        ],
+        "min": [
+          0.8929169774055481,
+          -0.3686431348323822,
+          -0.5812830328941345
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "9107eea9ee01f2caebe1c71a1d7c5c4cbbc276fdf66c6a33c7f79526ef3e22c4"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "5ff454342b9026e4ee5524059a0d5b1b97d026dc6c3db7c86682ce7fad2e7117"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "fa7f3629494324f9a0b110308e474d1ce914d48c64c3c2d8724af36a64a4d542"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "3f7e66f6b23f3f1c1016e19e46b46a8debfd39fe364752007277972d6af25bfa"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.9284963011741638,
+          0.12579728662967682,
+          -0.5586532354354858
+        ],
+        "min": [
+          0.5375137329101562,
+          -0.18670767545700073,
+          -0.9308961033821106
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "62fd175cc0eaa2cebf72a1416661cedd0b9e1ed66d275ae61c954da365949138"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "2c12ec9846039ee8ad7343641212d9da26d3fe478bcdcb6b228827349b8ed93f"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "10d336b92341e82b413ce4787e065e9ec83f73835f16565be7314aa70e95cb26"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "c44731cceec518e870a4b3b48c0fa66ef8864c12e530eb53f8e90f1a8c7e8a4d"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.6430082321166992,
+          -0.17481489479541779,
+          -0.580512523651123
+        ],
+        "min": [
+          0.5301763415336609,
+          -0.6653296947479248,
+          -0.9309021234512329
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "ba171dd9418308cbe08cd9e08bdc08f46bf637ea15574e12d87205c2ead90b99"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "277727bc5279d383edc384bb892fd330ab3216b69b99e9801078360e247dbe1c"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "a29fcd33475d946db037b28c0f5c14ea674aa2c2fa7bf30bfa58fa6001917993"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "788b517ecbe8940419bbeda5315007cd0c227ebf3f50e2959e2e98180fa81598"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.6125031113624573,
+          0.6688077449798584,
+          0.6033477187156677
+        ],
+        "min": [
+          -1.0062147378921509,
+          0.3536103367805481,
+          0.2380734533071518
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "8eba535f4e548806c6be73e85073b821e30604cfbf8d8cbc87b7d1f931b54d9f"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "911b92d8b023a17d542b074f2e42eaeb0e74562e47e9b3466d22283b3f3bc6aa"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "0e1b44f7098ec2c3301d9122a9bfe69a163c36e28e2361fd48368b215f4914e6"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "07dc210845e0480c97b88ba68ab541688401e0ae5499d290f68046b31a558577"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.5301763415336609,
+          0.6653296947479248,
+          0.9309021234512329
+        ],
+        "min": [
+          -0.6430082321166992,
+          0.17481489479541779,
+          0.580512523651123
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "de451cae22be618c78300a63048aa37b5f03a21d4ee52b75f91d2f8980ff3b9e"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "9d8cfa5db6f710a693b5b94a6aa8200110c84cffd797ae59ae9656b7ec2ec22d"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "cf832f1701e385366928eba684a233a016c91ddfcdb5efea22f4f0dca2a1bea9"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "e5fe5fb176a18fbd04f95996697d765c0e693a202e0fd0e3236339a60940ece6"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.5375137329101562,
+          0.18670767545700073,
+          0.9308961033821106
+        ],
+        "min": [
+          -0.9284963011741638,
+          -0.12579728662967682,
+          0.5586532354354858
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "5bdfe6174a75b0b7c2a6af0e9436309285873ef08441ab7bf3a0b257ebb97ab4"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "e6320172d4d03e2eed1de53a4c0a636d970fccd0746b1662846f0e549631cdbf"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "25d01befeb60939ee5b33e399843fbe8ac7fa65284c1b8635fa2b6d48dfff97b"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "ecbc8785b9051904f2a63d3dea8b46af1e0e708e14b1790a4d855d905e47878e"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.8929169774055481,
+          0.3686431348323822,
+          0.5812830328941345
+        ],
+        "min": [
+          -1.0074620246887207,
+          -0.11718131601810455,
+          0.2370707243680954
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "90008ffd0a9ad4a3eade212575ef3611d6e6fed6fcb74d32f9ea38c159456023"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "d4014f7c9209edc2cc2d1053ab8b1a370e8ddf850025943f281b8c4c76fc8705"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "23ee417d6064f994e63488ae01eca680e0c4da0cc4a58aa020a495997b69c94d"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "b95efa4ace0d39f9feae979a39390f8e2da1f14912be441a56a2a9276afdb6ac"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.4339566230773926,
+          -0.1717141568660736,
+          -0.5760339498519897
+        ],
+        "min": [
+          -0.9039055109024048,
+          -0.3592515289783478,
+          -0.9408559203147888
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "a854836e919675b0d0a32039a2e04ff90684aee1d167fdfe80c23bcf561f89e7"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "3a106e2759e0b5d64d8c944baeda01061adbe52539db7ae6813d998fa1763c52"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "8db11ff763a7970cbf98cc04a02e57a254354c22df9fb1cee4708d799e1b16b2"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "62f59b8188fc9ddc6027c20fff9691ccbb479401e4c8d5c69e5c63bc86415899"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.7931011915206909,
+          -0.18400141596794128,
+          -0.2548362612724304
+        ],
+        "min": [
+          -0.906647801399231,
+          -0.6755108833312988,
+          -0.5992382764816284
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "dcf2f9e3881d83aa1bfdf865e981238dc053b392d35a2e7c6a57342b6a756c7f"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "b79000682cf91ab08ddc9f9d50ed87a7164c19e533b893589bfd964f970475a8"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "dcd724d88d2fae267778efc4f3cb6f54fcb099e7237614878356ebbe2994b4d9"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "418ea88a45a4eef445981d8dfad2d63106516fa5d30e16a64e142b09b53aae55"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.3589671850204468,
+          -0.6482365727424622,
+          -0.2554807662963867
+        ],
+        "min": [
+          -0.8261870741844177,
+          -0.8377491235733032,
+          -0.6134200096130371
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "01cb7df02d526ac877e9f322e52cc0a1fce4f5b6cf15c141edafc8097719958a"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "0d591870ed4c4117cb6ff9e7bd8ee39d51700de76f17fecef691a5289847d5da"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "541afdd368c4062af618ec4682c8b18355834ac810447cd617a28d46506f601f"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "373bd129e78441295f227c1c78910b12bed1dcc96f7cf68cb98b3532d4ff4ca0"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.34794560074806213,
+          -0.3375045955181122,
+          -0.5900835990905762
+        ],
+        "min": [
+          -0.46049797534942627,
+          -0.8346003890037537,
+          -0.9408597946166992
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "3cfc3993775e6fabceb4b6b7344e18778290c406b28dd250f541df10ad065902"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "c374164baf9d670c39e65838d5ba35566531ed97228db678bd9dc47d31798be4"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "bdeda8f16947826f509089d8a6ada3d9682b465c4f7df7c3d29972e4046fa7be"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "dbc6b18604590792d8ab79a264fcf4e1263e35b28dca621ce9e35930719e6ef6"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.9039055109024048,
+          0.3592515289783478,
+          0.9408559203147888
+        ],
+        "min": [
+          0.4339566230773926,
+          0.1717141568660736,
+          0.5760339498519897
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "231cd77062f0cffe4efd7b630b1bed94170920cb8f5233400def0fe4dd428ff1"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "140f39093cbe15dd78defc9fc3acd0bdf91c797b79f658edeea3030c07ec261a"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "d24bf81e12b05b69de31b059e244ecbdfbe669f8813373e7990da208307e3ec2"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "cb32180596da27b1e5875f6121a678cfa88f8f9ede16bfaa101fe9c3d3e2d16b"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.46049797534942627,
+          0.8346003890037537,
+          0.9408597946166992
+        ],
+        "min": [
+          0.34794560074806213,
+          0.3375045955181122,
+          0.5900835990905762
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "cbb8afb89bdd0069a50723be38700e8b48d66afd33cfd1a89f8aeff9ed0c8b08"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "f4c2daa5c641d13afa78c03016d57fbb8401183b1b268ee6fe4a7ffb32638cf1"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "fbac45819060a9772373877d84d37e085129fbe34638cfaad5577867455a3a84"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "d5cba20e61a647eb5377116a2375309fd4c8f9414e3baefa893ce9a71b0a345c"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.8261870741844177,
+          0.8377491235733032,
+          0.6134200096130371
+        ],
+        "min": [
+          0.3589671850204468,
+          0.6482365727424622,
+          0.2554807662963867
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "7dc0f0c9ab2181ab69d3324c75b0d96a77c1923c5ab247fb744c1bc433e91a61"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "ecfca26c373b725b9b46b8436aed8c5c89174d328430f2c53d4454e967a0501e"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "ba1144555ecb4066f99794a7f9db40bb8c1b5258d1d50620e10707bae82af5a9"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "b5ec6ff6adbebb72a5a9a978796ab4bc3c87d84a257ea7755395be90f4182d87"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.906647801399231,
+          0.6755108833312988,
+          0.5992382764816284
+        ],
+        "min": [
+          0.7931011915206909,
+          0.18400141596794128,
+          0.2548362612724304
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "0ab33d4a639724a3141264a3e69553c640ed2b4ae8803c249b88f74abea88bae"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "97e0b97f384b8a980ce757dfa91d03fa721664ae7e55b794f5d73f44a3f1a117"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "44dd840b34ff8216e7058d3ea19f7b51fcbf2f62a2b912658a37b4f3aabb93a4"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "1d3e5fc282a2f0657bbc6de295c674b37502c30987c58ceaa7dc87ee987d590f"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.27909013628959656,
+          1.0643478631973267,
+          -0.20575450360774994
+        ],
+        "min": [
+          -0.17606334388256073,
+          0.8711140155792236,
+          -0.5631627440452576
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "446495d0ed73ef183d27a96e8ba927a57879d20d49634aa2050ac9166aa89cce"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "339fb5b3db3adc62bcf2fd22421e73adb38304ba3582c87f0ffe71e8ddecdab4"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "5b9239ded1dfbf31e9c4e95d2d4e3b82ec07e16c7d490b2ab2a68835fda1d4fe"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "d0c3ef41fa6ef00217c85aad6393a6a1079a867075d1efa9eef0b1bb5de6dbc1"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.16897159814834595,
+          1.0643113851547241,
+          -0.20611274242401123
+        ],
+        "min": [
+          -0.5484315156936646,
+          0.7383858561515808,
+          -0.5710456967353821
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "ff1b5919744317744bdba7d18eb17c09373065beeeab0b635a28fbe72422df19"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "2bc854bdfb883fa3e8ce60cd7399d138c7149e958a5bfcb16867e08e521a39f8"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "69fa91de9dbcab6e4f606984e0409975ebd7c55cb2ff4c5f66e728f8b0277d19"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "442d8bb62971532eadab7f8cd110f17f844c03f4502cbecf619b34b3c11de760"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          -0.08928549289703369,
+          0.7698808312416077,
+          -0.5492441654205322
+        ],
+        "min": [
+          -0.5462602972984314,
+          0.5801675915718079,
+          -0.9129840731620789
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "e78bd1cb52dfb0a5df9e25587150f77fda16a4d56968378c3de0f76f18c78fb3"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "b27f93e319b7c6f0747baaa994047a42947d78436fc02e72f6fdcb0b7c16c736"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "f1162cbc90114deca8de3b32be30ae8d1ebed242af0134aa2ee0b3976ceee448"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "46d0e099466ee92db5710ed9352f8dcabe63cbcf0cdc2616607a5b5de5a81489"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.2825360596179962,
+          0.9052202701568604,
+          -0.5414345264434814
+        ],
+        "min": [
+          -0.09495005011558533,
+          0.5838779211044312,
+          -0.9129819273948669
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "c5c29e29aefe2c69d46411b2c7d4b0b598dfc286f1d0d3a46dd8022c9e584e77"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "946af31692a141d062e96f25ccc14d0fb5467a40789c826d4ea8070fbb510116"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "a0da6be668a39f64d479e2dcc177535f2143a524823201170d429dc2f3e7e497"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "9130786e14b6655bc5d53e45d711af2baa4e75fd169f6eadf5348a8fd714f169"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.17606334388256073,
+          -0.8711140155792236,
+          0.5631627440452576
+        ],
+        "min": [
+          -0.27909013628959656,
+          -1.0643478631973267,
+          0.20575450360774994
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "0732a6d44ebb6fbc276d8ca92af16109b600798ae95ac50fb175df47b27a4e46"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "c6e4fe3ebb6c69dec6a69e089daaf9ef960dfe6335fad3188fa03155738629d2"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "b7bf0cda5f7d95e10d10eede2d3ca3b166a3b1f64f8c94c8fa70be088c34df4f"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "587aeee648b604d921c4f897c83cf2ba97519fcbef4162ef816e51f396cf026a"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.09495005011558533,
+          -0.5838779211044312,
+          0.9129819273948669
+        ],
+        "min": [
+          -0.2825360596179962,
+          -0.9052202701568604,
+          0.5414345264434814
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "57ec7cf968d5b2b140dd47c7ad3705d5951d3dd8c995a6af18c46073316348ba"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "f80508554cf1611fd99bcbd4da8ef09d9030e442451ef4cf32a0a286f076cf35"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "00ad2d82117d588b6f34d0d7e44716b608e1a6c15da209bb95cbfee4b5f446c2"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "3119af0628299a31ce148070158f36f57842f3393ffce5db332bbf2105a11bfa"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.5462602972984314,
+          -0.5801675915718079,
+          0.9129840731620789
+        ],
+        "min": [
+          0.08928549289703369,
+          -0.7698808312416077,
+          0.5492441654205322
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "1c6b94ce000a3f8063779dc9c46010c140580e5df3579dc9bda10daf2342da27"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "013786aaf58c0cfe93bb53d187de3935ac9ab95a68928b1884d02ac8fee9c8f0"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "971743e6e9671c55dcacaf739057897868e9012abd3d06694b19cb7c33e37c00"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "f1e170ed5cf310e041e424849e5335d87d7f88325a448cb98d6e02f2240d62f6"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "max": [
+          0.5484315156936646,
+          -0.7383858561515808,
+          0.5710456967353821
+        ],
+        "min": [
+          0.16897159814834595,
+          -1.0643113851547241,
+          0.20611274242401123
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "f7bbc5b024452541689614344ccb83f8fe4e357c30dba937566eea1d84d152f6"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC3"
+      },
+      "viewSha256": "fc00f0fa5ed0cc74cef1e07396d4841e518105d753b4c6d43a992f94fdb1444a"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 78,
+        "type": "VEC2"
+      },
+      "viewSha256": "8a4f81e77d31228a896ad228bcd35d506f471534390f78e3056a4b90d1863243"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 204,
+        "type": "SCALAR"
+      },
+      "viewSha256": "b3e2b86794b9923c59e19185f82b55be96111ee9a5c839ae19e5ab85ef92f6bb"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.17940577864646912,
+          -0.8032193779945374,
+          -0.3851800560951233
+        ],
+        "min": [
+          -0.37385985255241394,
+          -1.0473549365997314,
+          -0.6191794276237488
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "e3ec64d4b9751dd3eabfba4f9fbff023666eacf41f389bf635e11815678b5a67"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "94adc18743c34d5eb59ca9562f0f51a399dcec744622831d6cf90e7fca3b91a3"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "b320bf86439a41013649d7e0837b9b20b83a5c617e40d9236c10337e280b17e1"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "48d245a904f74b13f4faea9bdef8d8ab5c0cc7c9dfa4906acdbae7f692f5e7d1"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.6377083659172058,
+          -0.6411793231964111,
+          -0.38482099771499634
+        ],
+        "min": [
+          0.17228162288665771,
+          -1.0473549365997314,
+          -0.6095147132873535
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "99fdd6de5573e8ce8a809846566bfa3de1a546ae8f3d2c7bcba71fd90d715e37"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "14f77f14932b4f549fb6ccc71b3f28687eb1fc8ab6a23ffc11b8551e5e8f7af4"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "8209e3bb4de9f53dec882c4e14ce6c0b65bc2553c4a3d567afed8fd4f30ed901"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "389ca2d4a8cc72c905a3a37114f4bd42b3a6fe785ffa6cb7a50f9783756674bb"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.5593178868293762,
+          0.044775813817977905,
+          -0.8965311050415039
+        ],
+        "min": [
+          0.005826666951179504,
+          -0.19425202906131744,
+          -1.137382984161377
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "61c9480f83e5e03afcaa0570496786dbbde5d67c51c81c3b334d6749f3334a19"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "8b41bba134b1e6d94ff8d9d2f5568bcd1a6849bc62c984782a6c3fd504fb7308"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "4ec954c37ca15578e2ed565c389de6e5a9dfdaf95fa52d9fd6c5179d0dbfad73"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "d4ebda988b781920a27a43790d65c4a40b8c3e8f25334654015c6a0b428e148d"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.009736597537994385,
+          0.03816944360733032,
+          -0.9061020016670227
+        ],
+        "min": [
+          -0.45337429642677307,
+          -0.3562909960746765,
+          -1.137382984161377
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "d52363f5be47ff0d436c044d11fc1044eee2ffebaa37a05ce9f8eae075f02fad"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "ea1bc34b1c4d5ce1314514d3f3eb1ab11269f0b6efc7e72bce36603823f6a0f5"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "d7b9fc962c1854115fb4448b1b5159dd5cafa156c01dc5e47589b89b043b9994"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "cb8ac8cf02bda4628a7aada028f2d7c0cd6f3da3b671c394f72f37d29a3d48c6"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.9307560920715332,
+          0.6925007104873657,
+          -0.33609384298324585
+        ],
+        "min": [
+          0.7964210510253906,
+          0.11143434047698975,
+          -0.5866945385932922
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "fe3e0e40ca0beda6e3de2c2f9409db75bf89ba2820dac4abdb7ea0c42aa9dd7a"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "6ce2a487eb75c20278d45de319c0bd71cb4c741a1537690b4ced9ddac95afc2d"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "9a4e48830cb5289e708e9d5fa7e33958873fcfa3dc7a3ef554d866843c66d466"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "471078db84a20a28a6eb96577651be7ea2dd8d74784c6203ef9b758858e8a2b7"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          1.0074665546417236,
+          -0.3420894742012024,
+          0.3743192255496979
+        ],
+        "min": [
+          0.9642706513404846,
+          -0.39818477630615234,
+          -0.2531384825706482
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "94222181f3d11178e83a8ccdf6a25710a70f78ed8a32176a107aee1fa0174b5b"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "dd7daad1a691a8cd9832426b09ea9ffac031569e0a0ded6328183477af6fa318"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "13341de6fe30b19e42f1a914eda3082a5d48aa897badab7113ef2dbcc3cdf1b0"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "1cecfed4e1c06eabd4fbe6632fd2a3aa20006930cadbf911d6cc0d3fd3649cfd"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          1.0041757822036743,
+          0.19216535985469818,
+          0.604512095451355
+        ],
+        "min": [
+          0.868765652179718,
+          -0.38562679290771484,
+          0.3538614511489868
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "0f15c7c24d496bb97c844f33d9c329deff37f628a9c9db20579d803e71aed2f5"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "a8d9714085ed37aa752618648ad3d5cc2e98f7701d761b65a9e5cb22c8a8579a"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "f4137204611d89f262ea04222e4ce40d2d116809dafe98b0cea08b77b44b8760"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "830d60cc11bd6af66eaa04fc64bf8aa245bb150877db691cc630f892e0d1383c"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.8339655995368958,
+          0.6993919014930725,
+          0.2711920142173767
+        ],
+        "min": [
+          0.7909480333328247,
+          0.6433143615722656,
+          -0.35626569390296936
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "e188356c8a46238bfadcaa6b2365165d22c345c30f184f1b5b235411d7c49ca7"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "596de215913bbcca1fcc80752025c0ea5d5247ad820077967f9aa284b69bd5be"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "54b84aa40b854f6eb61483541b51c474e328f9a659f69f895bb21a39086cc1a6"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "f9cfb0fdda2115e6742efabcf4f550d323c50c5f66c56f8a61ec069477182ddd"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          -0.9642706513404846,
+          0.39818477630615234,
+          0.2531384825706482
+        ],
+        "min": [
+          -1.0074665546417236,
+          0.3420894742012024,
+          -0.3743192255496979
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "b010629fce21afa6baf8db940a949d697d3e64e5fb6f542e8058e5a0f3f68231"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "4a017f0fc3c815027e8bc9eaa6862f479ce9b9be03175a3686ea8a9c13955004"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "eba43a8760610b265dc0c8a8291cc81640baa7e7aaa946d1acd0141783fa1e02"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "524742daa56c220d50a168c7c13dbcd6f5d7dc94acf9b1b12e397d180f75aebf"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          -0.7964210510253906,
+          -0.11143434047698975,
+          0.5866945385932922
+        ],
+        "min": [
+          -0.9307560920715332,
+          -0.6925007104873657,
+          0.33609384298324585
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "f307746c2aa8fd4d1c453a6fb2685c8a309baa6380447e8d32ef292529be540a"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "02bf3b74758430696a87d6d6dc55f6123e1b66ab9ff3f3c2424f29a000babe06"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "29c8918b4654e493e844541d228a6279ee8a442552d983e8f75dc7f09963f88f"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "016456084aba9aff60564dfbd8be5b837edd1670caace4e50247df8b01bf4ac7"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          -0.7909480333328247,
+          -0.6433143615722656,
+          0.35626569390296936
+        ],
+        "min": [
+          -0.8339655995368958,
+          -0.6993919014930725,
+          -0.2711920142173767
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "2f06cc75cfddb7f40076af2f7e7e22f58ae74088985eaa7f237693d3d3c6472f"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "c7fc47fd943dcc021b0c173c864c2f49d4c6eb230c758fd0dfe4b65d7abfd2d3"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "d3ece264b77b9162bc19ab3a87cfcc5832649aab08f3cfe2edc2c412ad58902c"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "5f699657f07c437975636d3ef64ba779ccbe34ee9345074b241ccb2a6a124dbf"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          -0.868765652179718,
+          0.38562679290771484,
+          -0.3538614511489868
+        ],
+        "min": [
+          -1.0041757822036743,
+          -0.19216535985469818,
+          -0.604512095451355
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "5ab020da5292826cc676900cc6b27c9c5e8afeb6e8c7a1096607f53e11797237"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "d17396a0923f32bb235dcf76c01a06e98babc3bf0013bb629b65aaa81c255b94"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "c0bd49a8597df6f35ac31524933b199efada120e1b4478659ab6ff7019987424"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "b904daafd22427603c0635b13a24537baf108c1ca227c8019cdb5b5534098419"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.45337429642677307,
+          0.3562909960746765,
+          1.137382984161377
+        ],
+        "min": [
+          -0.009736597537994385,
+          -0.03816944360733032,
+          0.9061020016670227
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "6afae9f9495cc085f2e30f47796dfc971db84048c28ff5283f91fa94a21e1ae9"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "060d5a5c63e5d4a98fb536ae09958dea54319ebada24e4d22e550f515d2d9583"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "48f9ddee459b8267ab446627f50291697b0d4a0b938ebd6134dd61256bfbe074"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "499c1c1d775a9df59f70fae53e9cf37891e812720f9611e2d6d7d07861243871"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          -0.005826666951179504,
+          0.19425202906131744,
+          1.137382984161377
+        ],
+        "min": [
+          -0.5593178868293762,
+          -0.044775813817977905,
+          0.8965311050415039
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "3062e48b7b783ffa3c893d50935fcb59495f7d3437d96ac133de7cdbcf6a1692"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "c7f269c06d847b68d5cb922c395596151b4febcf6268f3898cf32bec20e0adde"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "e01e2153ce9efad4550dceda8bd82381f5ecded6950e2190523da6680725f070"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "1f1d38d017f79ca6e4275c474bfff3a84a7b698f1cb6630644d2b512f8e466b0"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          -0.17228162288665771,
+          1.0473549365997314,
+          0.6095147132873535
+        ],
+        "min": [
+          -0.6377083659172058,
+          0.6411793231964111,
+          0.38482099771499634
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "50f01a306e42fcf047fc23f70df1f0b2cb1182bf3ef757a09d4987b8210e693e"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "36f941e4698e5a9c866d7a24d21f86e389d8d23043f101b404feb3efa89816ae"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "48020471b66a1af9b435961df4e9f268f971bfc12e3621b0bb56e5a89612a289"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "f44301a1ef480089da93d29d0ea8ca73eaf61493022c37dd825854ad3300d632"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.37385985255241394,
+          1.0473549365997314,
+          0.6191794276237488
+        ],
+        "min": [
+          -0.17940577864646912,
+          0.8032193779945374,
+          0.3851800560951233
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "e85f8e5dce85c84b0a159437edb5ef528545b3697183413fc537a7c9a8ffb4dc"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "06053be89378f1d068f4d143df884f09cc05faab3b687ad31db7b5b7c787505d"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "e2a463f2c3f2d938b4824c2c7752cc4cb1797318f643e4584cf01f36f0e16336"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "0538c1cc549412e3d17f0d680c013f70553535ae741cf650b08eec6f462c5634"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.8295426368713379,
+          0.9069646596908569,
+          -0.33544784784317017
+        ],
+        "min": [
+          0.26693570613861084,
+          0.6650627851486206,
+          -0.5693076252937317
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "daeb541a687545f268e05af06785e553c41dd3fead342f0cbe30ca101e575cdc"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "6ff8364bfe5b4c2c150d07fbef6e72726340bee8ee49dd68bce42adc73d405dd"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "d31c20e6f64d0fa28418f37d9107a449f61c2375f12c1635045e658d0cd5bdd5"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "9786b30a9239bae6c67d6dec38494dd5334fbfa4c25aed38543eb83fbe133794"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.023732788860797882,
+          0.6085647344589233,
+          -0.8793128132820129
+        ],
+        "min": [
+          -0.10941247642040253,
+          0.029625162482261658,
+          -1.137382984161377
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "858317dd99cf7c9a57246217724f5fc07a34e69d14aada0697bbf4c1e27ef5eb"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "3a9097dcc4ae4e4bbb6c04d8b9f7cfbac6b257e43d88928c1a60b2d3031b0633"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "63adff073d678214ab6cf06e4632a76e2ddb734cb0047d00a0486fd2767cfdc2"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "e6e55af8c6d09b4b075c0d547b51dad73cbc743096471c973a8b0cfc94da5546"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          1.0028960704803467,
+          -0.37046003341674805,
+          0.577460527420044
+        ],
+        "min": [
+          0.5257267951965332,
+          -0.7686419486999512,
+          0.3528563976287842
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "e2bc92a35145a9c19263729aa99550e876476f0dbbda9e488ae935534677c102"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "263691a6ab0c32b0febf3c49b136d2b877b890aef8d5e1e6c6bc09842ab25864"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "d093de7b9b4853722f1dad32f4df3ca45abd424693504de3e5e37a81d09da46c"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "5b4a12237edd7c99dcad95d7f34156636723737ebf84b45bc2236b1a1bf88777"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.19572025537490845,
+          -1.0083016157150269,
+          0.22065965831279755
+        ],
+        "min": [
+          0.1531105786561966,
+          -1.0643311738967896,
+          -0.40679803490638733
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "8dbec9ca8b3e656376d90139376e6446e5b6a4747ae948449965823f17ff198e"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "2b65d2e0efc501a249412a590e300c43f8aaac2a099bc3395e70b1c33d83f011"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "cb1053aab6c47aec64c0022ca37e444a22c450367878b26b8d938fd15c73380d"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "f68c1e9fc60d52ceb3be1b23dca908052f237f0a26ec0b0755d7f0ca2475c094"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          -0.1531105786561966,
+          1.0643311738967896,
+          0.40679803490638733
+        ],
+        "min": [
+          -0.19572025537490845,
+          1.0083016157150269,
+          -0.22065965831279755
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "062a03dad505f1ce5863ebc6743d49a814bc4e55cc7dbee4787a3459323894be"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "a6547ddda06e1692ec26bdd0786a3bd3871ea40f9e06ee5c3b246e898c16edd3"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "ac22602dc829523e175088bea1b026302f52791104eb45f331ce9a4f4be9c6a9"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "9e89850c46562667235b0d504d0d305de69f76967420c56de20fd39d09e4f952"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          -0.5257267951965332,
+          0.7686419486999512,
+          -0.3528563976287842
+        ],
+        "min": [
+          -1.0028960704803467,
+          0.37046003341674805,
+          -0.577460527420044
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "471d0e651404b37ebd48f4a86de32627f34b74f46750f1febda176a5ca1bf8f7"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "61b858a5c91d9334bc83da750446241ce5d60a8716536908c51867a3c7adce0e"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "5b1e9da4b3d9c559159dd384e8e53bcd155ab03f37e41c37288c79f149ab4d8b"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "8f0e2d2904e796747ccf5a8105f51bb3d19c382febbcab628d6218c6b6ec0a05"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          0.10941247642040253,
+          -0.029625162482261658,
+          1.137382984161377
+        ],
+        "min": [
+          -0.023732788860797882,
+          -0.6085647344589233,
+          0.8793128132820129
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "d61c37620fb99e2074f678a9ba567675e24e157c8c5dab2fe4c08fe7d2dd0948"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "0222dc18674e09eee9154863df73ddfc246aeaf9e8cff63abbc96ee586f2f132"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "ef43d7e4511356a5490856d1a308019e938cd8e5c91ce69a61da8a1d975cb0e4"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "7bbf987fa976eee21708269c684f7fde2366fa01ce83f8019b9c50c4ce6df72e"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "max": [
+          -0.26693570613861084,
+          -0.6650627851486206,
+          0.5693076252937317
+        ],
+        "min": [
+          -0.8295426368713379,
+          -0.9069646596908569,
+          0.33544784784317017
+        ],
+        "type": "VEC3"
+      },
+      "viewSha256": "74ddaef07b3ced8fd771d6db30a46cfa8f4c9e09ecd87a3d66e2673138170533"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC3"
+      },
+      "viewSha256": "bd0c1c2f454297e837a4d69da4b97c314d791a08f78623cc47c9c2b3eccbd689"
+    },
+    {
+      "definition": {
+        "componentType": 5126,
+        "count": 66,
+        "type": "VEC2"
+      },
+      "viewSha256": "c82b2403285802c5c1aa92e45c5f998855d2cb11fe36f4bf501c447a5a910075"
+    },
+    {
+      "definition": {
+        "componentType": 5123,
+        "count": 168,
+        "type": "SCALAR"
+      },
+      "viewSha256": "91d432f7bed069917db9fdce969db6d29c22220759f622bec4ceda08e7ebcdb0"
+    }
+  ],
+  "changes": [
+    "Removed three embedded 4K wood textures",
+    "Replaced source materials with LED-ready surfaces",
+    "Repacked unchanged geometry buffer views into an embedded data buffer"
+  ],
+  "posterSha256": "f27de03d1b2381531344c9b83e6e273a37c02761fd6010b81a7a588b1909bc31"
+}

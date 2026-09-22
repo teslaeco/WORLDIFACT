@@ -20,7 +20,7 @@
 .credits-signin>div{flex:1}
 .credits-signin p{color:#afc2d6;font-size:15px;line-height:1.6;margin-bottom:0}
 .credits-signin .credits-action{width:auto;min-width:230px}
-.credits-plans{display:grid;grid-template-columns:1fr 1.2fr 1fr;max-width:1240px;margin:30px auto;gap:22px;align-items:start}
+.credits-plans{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.35fr);max-width:1100px;margin:30px auto;gap:22px;align-items:start}
 .credits-plans article{min-width:0;background:linear-gradient(135deg,#152033ee,#0b1423);border:1px solid #8bbfe841;border-radius:18px;padding:28px;display:flex;flex-direction:column}
 .credits-plans .credits-featured{border-color:#6cdcc891;background:linear-gradient(145deg,#173d43,#112133 65%);box-shadow:0 0 50px #45cfc816}
 .credits-plans h2{font-size:26px;font-weight:600;letter-spacing:-.03em;margin:18px 0 18px}
@@ -64,5 +64,16 @@
 .credits-trust p{font-size:15px;line-height:1.7;color:#a5bdd0;margin:8px 0 0;max-width:900px}
 .credits-footnote{max-width:1100px;text-align:center;color:#9cb2c9;line-height:1.8;font-size:14px;margin:30px auto 50px}
 .credits-page footer{font-size:14px;border-top:1px solid #829ec633;padding-top:24px;flex-wrap:wrap}
-@media(max-width:1100px){.credits-plans{grid-template-columns:repeat(2,minmax(0,1fr))}.credits-plans>article:last-child{grid-column:1/-1}.credits-plans>article:last-child ul{grid-template-columns:repeat(2,minmax(0,1fr))}.credits-plans>article:last-child .credits-action{max-width:400px}}
-@media(max-width:720px){.credits-page{padding:24px 20px 32px}.credits-plans{grid-template-columns:1fr}.credits-plans>article:last-child{grid-column:auto}.credits-plans>article:last-child ul{grid-template-columns:1fr}.credits-plans>article:last-child .credits-action{max-width:none}.credits-plans article{padding:25px}.credits-heading{margin-top:42px}.credits-heading>span,.credits-plan-tag{letter-spacing:.08em}.credits-balance,.credits-signin{flex-wrap:wrap;gap:24px;padding:22px}.credits-balance button{margin:0}.credits-signin .credits-action{width:100%;min-width:0}.credits-wordmark{font-size:16px;letter-spacing:.13em}.credits-page>header{gap:15px;align-items:start}.credits-page>header>a:last-child{font-size:14px;max-width:45%;text-align:right}.credits-footnote{text-align:left}.credits-return{grid-template-columns:1fr;padding:24px;gap:20px}.credits-trust{padding:24px}.credits-page footer{gap:22px}}
+@media(max-width:900px){.credits-plans{grid-template-columns:1fr;max-width:680px}.credits-plans article{padding:28px}}
+@media(max-width:720px){.credits-page{padding:24px 20px 32px}.credits-plans{grid-template-columns:1fr}.credits-plans article{padding:25px}.credits-heading{margin-top:42px}.credits-heading>span,.credits-plan-tag{letter-spacing:.08em}.credits-balance,.credits-signin{flex-wrap:wrap;gap:24px;padding:22px}.credits-balance button{margin:0}.credits-signin .credits-action{width:100%;min-width:0}.credits-wordmark{font-size:16px;letter-spacing:.13em}.credits-page>header{gap:15px;align-items:start}.credits-page>header>a:last-child{font-size:14px;max-width:45%;text-align:right}.credits-footnote{text-align:left}.credits-return{grid-template-columns:1fr;padding:24px;gap:20px}.credits-trust{padding:24px}.credits-page footer{gap:22px}}
+
+.credits-purchase-choice{border:0;margin:15px 0 6px;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0}
+.credits-purchase-choice legend{color:#cde6ef;font-size:15px;font-weight:600;padding:0;margin-bottom:12px}
+.credits-purchase-choice label{display:flex;align-items:flex-start;gap:10px;padding:15px 12px;border:1px solid #88b8cf4f;background:#102331;border-radius:10px;cursor:pointer;min-width:0}
+.credits-purchase-choice label.selected{border-color:#8ce6ca;background:#1b3f45;box-shadow:0 0 0 1px #8ce6ca44}
+.credits-purchase-choice input{width:18px;height:18px;flex:0 0 18px;margin:2px 0 0;accent-color:#91e8cc}
+.credits-purchase-choice span{display:grid;gap:7px;min-width:0}
+.credits-purchase-choice strong{font-size:15px;font-weight:600;line-height:1.45;color:#ecf7fa}
+.credits-purchase-choice small{font-size:14px;color:#bed2de;line-height:1.5}
+.credits-purchase-choice:disabled label{cursor:default;opacity:.65}
+@media(max-width:480px){.credits-purchase-choice{grid-template-columns:1fr}.credits-price strong{font-size:48px}}

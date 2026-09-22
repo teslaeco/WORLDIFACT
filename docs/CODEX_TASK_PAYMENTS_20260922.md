@@ -2,11 +2,11 @@
 
 ## Owner request
 
-Add a USD 30 offer for 1,500 credits (50 credits per generation, 30 generations), repeatable top-ups, PayPal, cards and Google Pay. Protect the supplied Revolut banking information. Reuse the shared Chess account and credit ledger from PR #63.
+Add a USD 29.99 offer for 1,500 credits (50 credits per generation, 30 generations), repeatable top-ups, PayPal, cards and Google Pay. Protect the supplied Revolut banking information. Reuse the shared Chess account and credit ledger from PR #63.
 
 ## Implementation scope
 
-1. Keep the owner-approved price exact: USD 30.00, 1,500 points, one-time pack. Do not invent a subscription period or auto-renewal agreement.
+1. Keep the owner-approved price exact: USD 29.99, 1,500 points, one-time pack. Do not invent a subscription period or auto-renewal agreement.
 2. Extend Stripe-hosted Checkout for cards and eligible Google Pay wallets. Verify the fixed Price, total, currency, quantity, customer, test/live mode and payment status before fulfillment. Allow standalone packs; retain the existing active-subscription requirement for SLOW downloads and disclose it before purchase.
 3. Add server-created PayPal Orders v2 with an authenticated account-to-order binding, exact amount/currency/merchant validation, idempotent capture, signed webhook verification, duplicate-delivery protection and conservative refund/dispute handling.
 4. Keep keys in Worker secrets. Do not copy bank account numbers or bank screenshots into source, bundles, logs, documentation or git history. Configure payout destinations inside the operator's dashboard.
@@ -25,8 +25,8 @@ Add a USD 30 offer for 1,500 credits (50 credits per generation, 30 generations)
 
 ## Commercial decisions and remaining acceptance
 
-- Follow-up owner decision: recurring membership is USD 29.99 per month for 1,500 credits; the one-time USD 30.00 pack remains separate. Real billing activation is not performed by this change.
+- Follow-up owner decision: recurring membership is USD 29.99 per month for 1,500 credits; all one-time packs also cost USD 29.99; show one paid price. Real billing activation is not performed by this change.
 - Buying a credit pack alone does not activate subscription-only SLOW downloads. The page states this before payment; this restriction remains from the owner's original account rules.
-- No competitor-price parity claim is made: USD 30 is the owner's chosen price, not a market-research conclusion.
+- No competitor-price parity claim is made: USD 29.99 is the owner's chosen price, not a market-research conclusion.
 
 See `ACCOUNT_BILLING_SETUP.md` and the current first section of `CONTEST_STATUS.md` for configuration and measured results.

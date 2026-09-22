@@ -1,8 +1,30 @@
-# WORLDIFACT — USD 29.99 monthly membership and USD 30 credit packs (review branch)
+# WORLDIFAKT — login-first and one USD 29.99 price correction
+
+Date: 22 September 2026. Local branch: `fix/worldifakt-login-and-single-price`.
+Base production main: `8582b93ce667a0d244abb1ed0397f51099c6af69` (merged PR #63).
+
+## Implementation and review findings
+
+- Owner correction supersedes the former USD 30 top-up price: every paid 1,500-credit offer now costs **USD 29.99**. The page has one paid card, with explicit monthly or one-time purchase selection. PayPal is one-time only; renewal terms and download entitlements remain explicit. Settlement rejects stale USD 30 amounts.
+- `/` opens the account page first. `/world` opens the existing meadow and five portals. The account screen uses illuminated depth-styled **WORLDIFAKT** lettering, email registration/login, a Google action and disabled future providers with lowercase “wkrótce dostępne” (the owner’s requested Polish label). Cube Chess names are removed from that screen, while the original app and shared database are preserved.
+- Google OAuth with server-side PKCE and verified HttpOnly sessions is implemented against the existing Chess Supabase project. The owner saved the exact WORLDIFACT callback in the same project. A new disposable PKCE authorization/cancellation diagnostic returned to WORLDIFACT with matching state, confirming the allowlist is accepted. The reviewed Google readiness flag is enabled for deployment. See `SHARED_ACCOUNT_AUDIT.md`; no real user was created or signed in.
+- The original sculpture proxy currently returns HTTP 502. A bundled 228 KB geometry-only glTF now preserves all original vertices, indices, transforms, 48 meshes and 2,976 triangles. Its poster projects those actual triangles for loading/no-WebGL cases. The shared loader fixes both the entry screen and five portals without depending on the failed proxy. Source hashes and reproduction evidence accompany the assets.
+- The five-second XYZ animation and verified-login 2.8-second transition are preserved, with reduced-motion support. Static React rendering confirms login-first routing, provider labels and a single paid price; it is not browser/Android visual evidence.
+
+## Current gates and publication state
+
+- Payment keys remain deferred by the owner pending merchant verification. Card, eligible Google Pay and PayPal integrations stay disabled; no charge, payout change or paid model call occurred. Bank account details were not copied into the repository.
+- The owner completed Supabase dashboard sign-in and saved the Google callback. Its redirect has been verified; a real Google sign-in remains untested. The separate password-recovery callback remains an operator configuration gate. The Oracle protected raster preview, existing legacy-receipt recovery and copied Chess legacy social clients remain the separately documented backend/migration gaps; this correction does not claim those were completed.
+- Aggregate `npm run verify`: **336 PASS / 1 browser test BLOCKED**, 337 total, no skipped/cancelled tests. The only failure is the existing Chromium-required assertion; Chromium is absent and recorded browser restrictions are preserved. Lint has zero errors; TypeScript, separate real HTTP DEMO/origin smoke, production build, Worker dry-run and diff checks pass. Browser/device appearance remains unverified.
+- GitHub connector access recovered after the earlier transport HTTP 400 and browser HTTP 502 failures. The incomplete browser-created correction branch at `c29a2c713be9d9059b071f95ccf6ea1aeb28626a` is the publication parent. The complete reviewed file tree will replace that partial snapshot through a normal fast-forward commit; compare its exact tree before CI and merge. Publication is explicitly authorized; no new payment credentials or paid requests are needed. Final merge and deployment evidence is pending.
+
+---
+
+# Historical PR #63 — membership and credit packs (price superseded below)
 
 Date: 22 September 2026. PR: https://github.com/teslaeco/WORLDIFACT/pull/63 .
 
-## VERIFIED — code and local checks
+## VERIFIED — code and local checks at PR #63 preparation
 
 - Follow-up: approved monthly membership is USD 29.99 / 1,500 credits. A production-only GitHub Actions step is prepared to pass complete provider secret groups to Cloudflare through captured stdin; it never enables billing. No real secret has been retrieved or uploaded in this session. See `STRIPE_GITHUB_SETUP.md` for exact dashboard fields.
 - Owner-approved one-time pack: **USD 30.00 / 1,500 credits / 30 generations at 50 credits each**. Repeat purchases are supported. Separate follow-up subscription offer: **USD 29.99 monthly / 1,500 credits**. No competitor parity claim is made.
@@ -24,7 +46,7 @@ Date: 22 September 2026. PR: https://github.com/teslaeco/WORLDIFACT/pull/63 .
 3. Choose and verify the Revolut payout destination in the payment provider's dashboard. No bank account was added or changed, and no payout destination is claimed connected.
 4. Configure the approved USD 29.99 monthly recurring Price. One-time USD 30.00 packs do not unlock subscription-only SLOW downloads.
 5. Complete provider sandbox create/approve/capture/credit/refund acceptance and browser/mobile review. Existing protected free-SLOW image preview and account migration limitations remain from the earlier milestone.
-6. Exact-head PR checks, owner approval for merge/production deployment and accepted merchant setup are required before release. **Production unchanged; payments not enabled; no real charge or paid AI generation performed.**
+6. This preparation-stage publication block was subsequently resolved: PR #63 merged as `8582b93ce667a0d244abb1ed0397f51099c6af69`; verify run `35688114182` and deploy run `35688114247` succeeded. Cloudflare version: `800e051d-5646-4e43-bb67-59add99e59a5`. Payments remained disabled. The owner then rejected the split-price display; the current correction above supersedes it.
 
 Executed task: `docs/CODEX_TASK_PAYMENTS_20260922.md`. Configuration and primary provider sources: `docs/ACCOUNT_BILLING_SETUP.md`. Remote CI results are recorded in PR #63; the earlier shared-account CI below is historical evidence, not evidence for this new payment revision.
 

@@ -17,7 +17,7 @@ export default function PortalPage() {
   if (legacy) return <Navigate to={legacy.route} replace />
   if (pathname === '/chess/shop') return <Navigate to="/shop" replace />
   const app = foundationForPath(pathname)
-  if (!app) return <Navigate to="/" replace />
+  if (!app) return <Navigate to="/world" replace />
 
   if (app.route === '/shop') return <>
     <ShopPage />
@@ -31,7 +31,7 @@ export default function PortalPage() {
   const worldId = app.id as 'chess-cube-512-ai' | 'terra-fix-iss' | '8-planets-in-8-days'
   return <main className="portal-page foundation-page">
     <header className="portal-header">
-      <Link to="/" className="brand">WORLDIFACT<span>← Back to the meadow</span></Link>
+      <Link to="/world" className="brand">WORLDIFAKT<span>← Back to the meadow</span></Link>
       <nav aria-label="World portals">
         {PORTALS.map(portal => <Link key={portal.id} to={portal.route}
           className={portal.id === app.id ? 'active' : ''}>{portal.shortTitle}</Link>)}

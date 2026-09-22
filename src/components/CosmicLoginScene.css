@@ -11,6 +11,16 @@
 }
 .cosmic-login-canvas { position: absolute; inset: 0; }
 .cosmic-login-canvas canvas { width: 100%; height: 100%; display: block; }
+.cosmic-login-scene--fallback .cosmic-login-canvas { opacity: 0; }
+.cosmic-sculpture-poster {
+  position: absolute;
+  left: var(--sculpture-center-x, 27%);
+  top: var(--sculpture-center-y, 470px);
+  width: var(--sculpture-size, min(29vw, 360px));
+  height: auto;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 13px #37d6ca33);
+}
 .cosmic-login-vignette {
   position: absolute;
   inset: 0;
@@ -21,7 +31,7 @@
   position: absolute;
   z-index: 2;
   left: clamp(18px, 3.4vw, 56px);
-  top: 730px;
+  bottom: 24px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -46,13 +56,14 @@
 .cosmic-scene-tools :focus-visible { outline: 2px solid #70ffc0; outline-offset: 4px; }
 .cosmic-scene-notice {
   position: absolute;
-  left: clamp(20px, 9vw, 150px);
-  top: 44%;
-  width: min(34vw, 320px);
+  left: var(--sculpture-center-x, 27%);
+  top: calc(var(--sculpture-center-y, 470px) + var(--sculpture-size, 320px) / 2 + 12px);
+  transform: translateX(-50%);
+  width: min(36vw, 320px);
   margin: 0;
   text-align: center;
   color: #afc9d3;
-  font-size: 13px;
+  font-size: 11px;
 }
 .cosmic-login-scene--fallback::before {
   content: "";
@@ -63,8 +74,9 @@
 }
 @media (max-width: 800px) {
   .cosmic-login-vignette { background: linear-gradient(0deg, #030811 0, #030811aa 40%, transparent 68%, #03081133 100%); }
-  .cosmic-scene-notice { width: calc(100% - 48px); left: 24px; top: 25%; }
-  .cosmic-scene-tools { top: 264px; gap: 5px; flex-direction: column; align-items: flex-start; }
+  .cosmic-sculpture-poster { left: var(--sculpture-center-x, 80%); top: var(--sculpture-center-y, 112px); width: var(--sculpture-size, min(31vw, 118px)); }
+  .cosmic-scene-notice { width: 120px; font-size: 9px; left: var(--sculpture-center-x, 80%); top: calc(var(--sculpture-center-y, 112px) + 62px); }
+  .cosmic-scene-tools { bottom: 9px; left: 6vw; gap: 7px; flex-direction: row; align-items: center; }
   .cosmic-scene-tools button { min-height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {

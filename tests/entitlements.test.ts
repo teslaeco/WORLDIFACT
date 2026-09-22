@@ -145,10 +145,10 @@ function billingFixture() {
   const env: BillingEnv = { ...f.env, ENABLE_BILLING: 'true', ACCOUNT_LEDGER_MODE: 'sandbox', STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_fixture', STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET, STRIPE_SUBSCRIPTION_PRICE_ID: 'price_Subscription', STRIPE_SUBSCRIPTION_INTERVAL: 'month', STRIPE_TOPUP_PRICE_ID: 'price_Topup', STRIPE_TOPUP_CREDITS: '1500', BILLING_PUBLIC_ORIGIN: 'https://worldifact.test', ACCOUNT_LIMITER: { async limit() { return { success: true } } } }
   const subscription = { livemode: false, id: 'sub_fixture', customer: 'cus_fixture', metadata: { worldifact_uid: USER }, status: 'active', current_period_end: Math.floor(f.now() / 1000) + 31 * 86400, latest_invoice: 'in_fixture', items: { data: [{ price: { id: 'price_Subscription' }, quantity: 1 }] } }
   const invoice = { livemode: false, id: 'in_fixture', subscription: 'sub_fixture', customer: 'cus_fixture', paid: true, status: 'paid', amount_paid: 2999, total: 2999, currency: 'usd', billing_reason: 'subscription_create', lines: { data: [{ price: { id: 'price_Subscription' }, quantity: 1, amount: 2999, currency: 'usd' }] } }
-  const session = { livemode: false, id: 'cs_fixture', amount_total: 3000, currency: 'usd', client_reference_id: USER, customer: 'cus_fixture', payment_intent: 'pi_fixture', status: 'complete', payment_status: 'paid', mode: 'payment', metadata: { worldifact_uid: USER, worldifact_kind: 'topup', worldifact_credits: '1500' } }
-  const price = { livemode: false, id: 'price_Topup', active: true, unit_amount: 3000, currency: 'usd', type: 'one_time', billing_scheme: 'per_unit' }
+  const session = { livemode: false, id: 'cs_fixture', amount_total: 2999, currency: 'usd', client_reference_id: USER, customer: 'cus_fixture', payment_intent: 'pi_fixture', status: 'complete', payment_status: 'paid', mode: 'payment', metadata: { worldifact_uid: USER, worldifact_kind: 'topup', worldifact_credits: '1500' } }
+  const price = { livemode: false, id: 'price_Topup', active: true, unit_amount: 2999, currency: 'usd', type: 'one_time', billing_scheme: 'per_unit' }
   const subscriptionPrice = { ...price, id: 'price_Subscription', unit_amount: 2999, type: 'recurring', recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' } }
-  const lineItems = { data: [{ price: { id: 'price_Topup' }, quantity: 1, amount_total: 3000, currency: 'usd' }] }
+  const lineItems = { data: [{ price: { id: 'price_Topup' }, quantity: 1, amount_total: 2999, currency: 'usd' }] }
   const seen: string[] = []
   const fetcher = (async (input: Parameters<typeof fetch>[0]) => {
     const url = String(input); seen.push(url)
@@ -159,7 +159,7 @@ function billingFixture() {
     if (url.endsWith('/invoices/in_fixture')) return Response.json(invoice)
     if (url.endsWith('/checkout/sessions/cs_fixture')) return Response.json(session)
     if (url.includes('/checkout/sessions/cs_fixture/line_items')) return Response.json(lineItems)
-    if (url.endsWith('/charges/ch_fixture')) return Response.json({ livemode: false, id: 'ch_fixture', customer: 'cus_fixture', invoice: 'in_fixture', amount_refunded: 3000 })
+    if (url.endsWith('/charges/ch_fixture')) return Response.json({ livemode: false, id: 'ch_fixture', customer: 'cus_fixture', invoice: 'in_fixture', amount_refunded: 2999 })
     throw new Error(`Unexpected test request: ${url}`)
   }) as typeof fetch
   return { ...f, env, subscription, invoice, session, price, subscriptionPrice, lineItems, fetcher, seen }
@@ -270,7 +270,7 @@ test('One-time pack readiness does not require a recurring price or unapproved i
   f.env.STRIPE_TOPUP_CREDITS = '1000000'
   const response = await billingApi(new Request('https://worldifact.test/api/billing/status'), f.env, f.fetcher)
   const status = await response!.json() as Record<string, unknown>
-  assert.deepEqual(status.price, { amount: 3000, currency: 'USD', credits: 1500, kind: 'one_time' })
+  assert.deepEqual(status.price, { amount: 2999, currency: 'USD', credits: 1500, kind: 'one_time' })
   assert.deepEqual(status.subscriptionPrice, { amount: 2999, currency: 'USD', credits: 1500, kind: 'subscription', interval: 'month' })
   assert.equal(status.status, 'CONFIGURED')
   assert.equal(status.topupReady, true)
@@ -332,7 +332,7 @@ test('Browser price, credit and identity injection is rejected before any Stripe
   }
 })
 
-test('Monthly membership checkout accepts USD 29.99 and rejects the USD 30 top-up amount', async () => {
+test('Monthly membership checkout accepts USD 29.99 and rejects the obsolete amount', async () => {
   for (const amount of [2999, 3000]) {
     const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
     let params: URLSearchParams | undefined
@@ -357,7 +357,7 @@ test('Monthly membership checkout accepts USD 29.99 and rejects the USD 30 top-u
 test('Checkout rejects a wrong catalog amount, currency or provider mode before creating a session', async () => {
   for (const variant of ['amount', 'currency', 'mode', 'missingMode', 'quantityTransform']) {
     const f = billingFixture()
-    if (variant === 'amount') f.price.unit_amount = 2999
+    if (variant === 'amount') f.price.unit_amount = 3000
     if (variant === 'currency') f.price.currency = 'eur'
     if (variant === 'mode') f.price.livemode = true
     if (variant === 'missingMode') Reflect.deleteProperty(f.price, 'livemode')
@@ -368,7 +368,7 @@ test('Checkout rejects a wrong catalog amount, currency or provider mode before 
 })
 
 test('Checkout creation rechecks the returned total, currency and account before exposing a payment link', async () => {
-  for (const changed of [{ amount_total: 2999 }, { currency: 'eur' }, { customer: 'cus_other' }, { client_reference_id: OTHER }, { livemode: true }]) {
+  for (const changed of [{ amount_total: 3000 }, { currency: 'eur' }, { customer: 'cus_other' }, { client_reference_id: OTHER }, { livemode: true }]) {
     const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
     const fetcher = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
       if (String(input).endsWith('/checkout/sessions') && init?.method === 'POST') {
@@ -386,7 +386,7 @@ test('Checkout creation rechecks the returned total, currency and account before
 test('Paid top-ups reject wrong amount, currency, quantity, metadata credits and account binding', async () => {
   for (const variant of ['amount', 'currency', 'quantity', 'lineAmount', 'lineCurrency', 'credits', 'customer', 'reference', 'mode', 'unpaid', 'catalog']) {
     const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
-    if (variant === 'amount') f.session.amount_total = 2999
+    if (variant === 'amount') f.session.amount_total = 3000
     if (variant === 'currency') f.session.currency = 'eur'
     if (variant === 'quantity') f.lineItems.data[0].quantity = 2
     if (variant === 'lineAmount') f.lineItems.data[0].amount_total = 1000
@@ -457,7 +457,7 @@ test('An explicitly allowlisted historical pack price supports settlement and re
   f.env.STRIPE_TOPUP_PRICE_ID = 'price_NewTopup'
   const fetcher = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const url = String(input)
-    if (url.endsWith('/charges/ch_fixture')) return Response.json({ livemode: false, id: 'ch_fixture', customer: 'cus_fixture', payment_intent: 'pi_fixture', amount_refunded: 3000 })
+    if (url.endsWith('/charges/ch_fixture')) return Response.json({ livemode: false, id: 'ch_fixture', customer: 'cus_fixture', payment_intent: 'pi_fixture', amount_refunded: 2999 })
     if (url.includes('/checkout/sessions?payment_intent=')) return Response.json({ data: [f.session] })
     return f.fetcher(input, init)
   }) as typeof fetch
