@@ -27,7 +27,8 @@ type BillingStage = 'price_read' | 'customer_create' | 'subscription_list' | 'ch
 type BillingDiagnostic = { stage: BillingStage; category: 'provider_http' | 'provider_timeout' | 'provider_transport' | 'provider_response' | 'mode_mismatch' | 'checkout_validation'; httpStatus?: number; type?: string; code?: string; parameter?: string; fields?: string[] }
 class BillingDiagnosticError extends EntitlementError {
   diagnostic: BillingDiagnostic
-  constructor(message: string, status: number, diagnostic: BillingDiagnostic) { super(message, status); this.diagnostic = diagnostic }
+  managedPaymentsRejection: boolean
+  constructor(message: string, status: number, diagnostic: BillingDiagnostic, managedPaymentsRejection = false) { super(message, status); this.diagnostic = diagnostic; this.managedPaymentsRejection = managedPaymentsRejection }
 }
 const diagnosticCodes = new Set(['parameter_missing', 'parameter_unknown', 'parameter_invalid_empty', 'parameter_invalid_integer', 'resource_missing', 'permission_denied', 'account_invalid', 'api_key_expired', 'idempotency_key_in_use'])
 const diagnosticTypes = new Set(['api_error', 'card_error', 'idempotency_error', 'invalid_request_error'])
@@ -67,7 +68,7 @@ async function boundedText(value: Request | Response, maximum: number) {
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
   return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
 }
-async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, params?: URLSearchParams, key?: string): Promise<Json> {
+async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, params?: URLSearchParams, key?: string, legacyCheckout = false): Promise<Json> {
   const stage: BillingStage = params ? path === '/customers' ? 'customer_create' : path === '/checkout/sessions' ? 'checkout_create' : path === '/billing_portal/sessions' ? 'portal_create' : 'other_read' : path.startsWith('/prices/') ? 'price_read' : path.startsWith('/subscriptions?') ? 'subscription_list' : 'other_read'
   const signal = AbortSignal.timeout(12_000)
   let response: Response
@@ -75,7 +76,7 @@ async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, para
     response = await fetcher(`https://api.stripe.com/v1${path}`, {
       // workerd supports manual/follow; reject redirects before credentials can leave Stripe.
       method: params ? 'POST' : 'GET', redirect: 'manual', signal,
-      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY?.trim()}`, 'Stripe-Version': path === '/checkout/sessions' && params ? STRIPE_CHECKOUT_API_VERSION : STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
+      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY?.trim()}`, 'Stripe-Version': path === '/checkout/sessions' && params && !legacyCheckout ? STRIPE_CHECKOUT_API_VERSION : STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
       ...(params ? { body: params.toString() } : {}),
     })
   } catch (error) {
@@ -84,6 +85,7 @@ async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, para
   }
   if (!response.ok) {
     const diagnostic: BillingDiagnostic = { stage, category: 'provider_http', httpStatus: response.status }
+    let managedPaymentsRejection = false
     if (response.status >= 400) {
       try {
         const error = object(object(JSON.parse(await boundedText(response, 256_000))).error)
@@ -91,9 +93,12 @@ async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, para
         if (typeof error.type === 'string' && diagnosticTypes.has(error.type)) diagnostic.type = error.type
         if (typeof error.code === 'string' && diagnosticCodes.has(error.code)) diagnostic.code = error.code
         if (typeof error.param === 'string' && diagnosticParameters.has(error.param)) diagnostic.parameter = error.param
+        const message = typeof error.message === 'string' ? error.message.toLowerCase() : ''
+        managedPaymentsRejection = stage === 'checkout_create' && response.status === 400 && error.type === 'invalid_request_error'
+          && ['unsupported parameter', 'payment_method_types', 'managed payments', 'enabled', 'default'].every(phrase => message.includes(phrase))
       } catch { /* Keep only the safe stage and HTTP status for malformed or oversized errors. */ }
     } else await response.body?.cancel()
-    throw new BillingDiagnosticError('Billing could not be confirmed. Please retry the same action later.', 502, diagnostic)
+    throw new BillingDiagnosticError('Billing could not be confirmed. Please retry the same action later.', 502, diagnostic, managedPaymentsRejection)
   }
   let body: Json
   try { body = object(JSON.parse(await boundedText(response, 256_000))) }
@@ -101,6 +106,24 @@ async function stripe(env: BillingEnv, path: string, fetcher: typeof fetch, para
   // List envelopes lack livemode; every resource response must explicitly match the selected mode.
   if ((!Array.isArray(body.data) || body.livemode !== undefined) && body.livemode !== (env.STRIPE_MODE === 'live')) throw new BillingDiagnosticError('Billing mode mismatch.', 503, { stage, category: 'mode_mismatch' })
   return body
+}
+async function createCheckout(env: BillingEnv, fetcher: typeof fetch, params: URLSearchParams, key: string): Promise<Json> {
+  try { return await stripe(env, '/checkout/sessions', fetcher, params, key) }
+  catch (error) {
+    if (!(error instanceof BillingDiagnosticError) || error.diagnostic.stage !== 'checkout_create' || error.diagnostic.category !== 'provider_http' || error.diagnostic.httpStatus !== 400 || error.diagnostic.type !== 'idempotency_error') throw error
+    // Replay the exact pre-opt-out request to retrieve its authoritative Stripe result.
+    // An unknown failure never authorizes a new key or a second purchase attempt.
+    const legacy = new URLSearchParams(params); legacy.delete('managed_payments[enabled]')
+    try {
+      const original = await stripe(env, '/checkout/sessions', fetcher, legacy, key, true)
+      if (original.status !== 'open' || original.payment_status !== 'unpaid') throw new EntitlementError('The original payment requires review before opening checkout again.', 409)
+      return original // The caller still verifies every price, identity, URL and attempt field.
+    } catch (originalError) {
+      if (!(originalError instanceof BillingDiagnosticError) || !originalError.managedPaymentsRejection) throw originalError
+      // Only a confirmed parameter rejection (no checkout) permits this one fixed recovery key.
+      return await stripe(env, '/checkout/sessions', fetcher, params, `${key}-standard-v2`)
+    }
+  }
 }
 async function customerFor(env: BillingEnv, user: AccountUser, fetcher: typeof fetch) {
   const stored = await entitlementCall<{ customer: string | null }>(env, user.id, '/billing')
@@ -314,7 +337,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     })
     if (kind === 'subscription') params.set('subscription_data[metadata][worldifact_uid]', user.id)
     else { params.set('metadata[worldifact_credits]', String(CREDIT_PACK.credits)); params.set('payment_intent_data[metadata][worldifact_uid]', user.id); params.set('payment_intent_data[metadata][worldifact_kind]', 'topup') }
-    const session = await stripe(env, '/checkout/sessions', fetcher, params, `wf-checkout-${user.id}-${attempt.id}`)
+    const session = await createCheckout(env, fetcher, params, `wf-checkout-${user.id}-${attempt.id}`)
     const checks: [string, boolean][] = [
       ['url', typeof session.url === 'string' && session.url.startsWith('https://checkout.stripe.com/')], ['id', resourceId(session.id, 'cs')],
       ['expires_at', Number.isSafeInteger(session.expires_at)], ['amount_total', session.amount_total === (kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount)],
