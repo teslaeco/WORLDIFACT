@@ -6,6 +6,15 @@ import { STRIPE_API_VERSION } from '../server/billing.ts';
 const origin = 'https://worldifact.xodobrox.workers.dev';
 const setupVersion = 'worldifact-portal-v1';
 const maximumResponseBytes = 256_000;
+const diagnosticCodes = new Set(['parameter_missing', 'parameter_unknown', 'parameter_invalid_empty', 'parameter_invalid_string_blank', 'resource_missing', 'permission_denied', 'idempotency_key_in_use']);
+const diagnosticParameters = new Set([
+  'business_profile', 'business_profile[privacy_policy_url]', 'business_profile[terms_of_service_url]',
+  'features', 'features[customer_update][enabled]', 'features[invoice_history][enabled]', 'features[payment_method_update][enabled]',
+  'features[subscription_update][enabled]', 'features[subscription_update][default_allowed_updates]', 'features[subscription_update][products]',
+  'features[subscription_cancel][enabled]', 'features[subscription_cancel][mode]', 'features[subscription_cancel][proration_behavior]',
+  'features[subscription_cancel][cancellation_reason][enabled]', 'features[subscription_cancel][cancellation_reason][options]',
+  'login_page[enabled]', 'default_return_url', 'metadata',
+]);
 type Json = Record<string, unknown>;
 type Stage = 'credentials' | 'account' | 'portal preflight' | 'portal creation' | 'secret synchronization';
 type Dependencies = { fetcher?: typeof fetch; upload?: (payload: BillingSecrets) => void | Promise<void> };
@@ -63,7 +72,19 @@ export async function prepareStripePortal(env: NodeJS.ProcessEnv, dependencies: 
         headers: { Authorization: `Bearer ${key}`, 'Stripe-Version': STRIPE_API_VERSION, ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
         ...(params ? { body: params.toString() } : {}),
       });
-      if (!response.ok) { await response.body?.cancel(); fail(stage, `Provider returned HTTP ${response.status}. Sensitive response details suppressed.`); }
+      if (!response.ok) {
+        let diagnostic = '';
+        if (response.status >= 400) {
+          try {
+            const error = object((await readJson(response, stage)).error);
+            // Match exact public schema names only. Never print messages, arbitrary codes or values.
+            const code = typeof error.code === 'string' && diagnosticCodes.has(error.code) ? error.code : '';
+            const parameter = typeof error.param === 'string' && diagnosticParameters.has(error.param) ? error.param : '';
+            diagnostic = [code, parameter].filter(Boolean).join('; ');
+          } catch { /* Invalid or oversized error bodies retain only their safe HTTP status. */ }
+        } else await response.body?.cancel();
+        fail(stage, `Provider returned HTTP ${response.status}${diagnostic ? ` (${diagnostic})` : ''}. Sensitive response details suppressed.`);
+      }
       return await readJson(response, stage);
     } catch (error) {
       if (error instanceof StripePortalError) throw error;
@@ -104,17 +125,17 @@ export async function prepareStripePortal(env: NodeJS.ProcessEnv, dependencies: 
       'features[customer_update][enabled]': 'false',
       'features[invoice_history][enabled]': 'true',
       'features[payment_method_update][enabled]': 'true',
-      'features[subscription_update][enabled]': 'false',
+      // In API 2024-06-20 these optional disabled objects require additional fields on CREATE.
+      // Omit them and verify the documented disabled defaults in the returned configuration.
       'features[subscription_cancel][enabled]': 'true',
       'features[subscription_cancel][mode]': 'at_period_end',
       'features[subscription_cancel][proration_behavior]': 'none',
-      'features[subscription_cancel][cancellation_reason][enabled]': 'false',
       'login_page[enabled]': 'false',
       'metadata[worldifact_setup]': setupVersion,
       'metadata[worldifact_account]': account.id,
       'metadata[worldifact_kind]': 'membership_management',
     });
-    portal = await request('/billing_portal/configurations', 'portal creation', params, `${setupVersion}-${account.id}`);
+    portal = await request('/billing_portal/configurations', 'portal creation', params, `${setupVersion}-${account.id}-create-v2`);
     validatePortal(portal, account.id, 'portal creation');
   }
   try { await upload({ STRIPE_BILLING_PORTAL_CONFIGURATION_ID: portal.id as string }); }
