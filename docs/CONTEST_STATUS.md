@@ -2,6 +2,10 @@
 
 Date: 22 September 2026. The owner reported that a signed-in buyer could not open the subscription checkout after payment activation.
 
+PR #73 merged as `33e906fb7b20d6106cd53c6875fad12744850969` after all five checks and 386/386 CI tests passed; production deployment `35719758275` succeeded. A fresh authenticated browser attempt now identifies `checkout_create/provider_http/400`: Stripe accepted the preceding account/price/customer/subscription checks but rejected Checkout creation. This is not a successful purchase or a repaired payment flow.
+
+The follow-up release gate creates a synthetic, unpaid monthly Checkout Session directly inside the existing production credential environment, verifies the exact approved offer and immediately expires its own session. It submits no personal or card data, never confirms a payment, and prints no checkout URL or credential. Rejection diagnostics use fixed vocabulary only. A failed probe stops publication; the previously deployed site remains available. Actual provider diagnosis and the final authenticated acceptance will be recorded in the PR.
+
 - Reproduced the same generic error in the production browser after the owner completed secure Google sign-in. No checkout payment was approved and no subscription was purchased. The previous activation checks established configuration, not an authenticated Checkout session.
 - The runtime now classifies Stripe failures by fixed request stage, category and provider HTTP status, with bounded allowlisted error codes/parameter names. Strict Checkout validation reports only fixed field labels. Provider messages, credentials, URLs, IDs and personal values are never returned in diagnostics.
 - The frontend preserves a safe support reference and gives specific session-expiry, throttling and existing-payment guidance. It does not print arbitrary server/provider error text. All account, amount, currency, mode, origin, idempotency and verified-settlement guards remain enforced.

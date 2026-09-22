@@ -455,19 +455,19 @@ test('Stripe HTTP diagnostics identify only fixed stages, status and allowlisted
       const f = freshCheckoutFixture()
       if (stage === 'portal_create') await entitlementCall(f.env, USER, '/customer', { customer: 'cus_NewCustomer' })
       const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => new URL(String(input)).pathname === path
-        ? Response.json({ error: { code: status === 400 ? 'parameter_missing' : 'permission_denied', param: status === 400 ? 'line_items[0][price]' : privateValue, message: privateValue, request_log_url: privateValue } }, { status })
+        ? Response.json({ error: { type: 'invalid_request_error', code: status === 400 ? 'parameter_missing' : 'permission_denied', param: status === 400 ? 'line_items[0][price]' : privateValue, message: privateValue, request_log_url: privateValue } }, { status })
         : f.fetcher(input, init)) as typeof fetch
       const request = stage === 'portal_create' ? new Request('https://worldifact.test/api/billing/portal', { method: 'POST', headers: checkoutRequest('subscription').headers }) : checkoutRequest('subscription')
       const response = await billingApi(request, f.env, fetcher)
       assert.equal(response?.status, 502)
       const body = await response!.json() as Record<string, unknown>
-      assert.deepEqual(body.diagnostic, { stage, category: 'provider_http', httpStatus: status, code: status === 400 ? 'parameter_missing' : 'permission_denied', ...(status === 400 ? { parameter: 'line_items[0][price]' } : {}) })
+      assert.deepEqual(body.diagnostic, { stage, category: 'provider_http', httpStatus: status, type: 'invalid_request_error', code: status === 400 ? 'parameter_missing' : 'permission_denied', ...(status === 400 ? { parameter: 'line_items[0][price]' } : {}) })
       assert.ok(!JSON.stringify(body).includes(privateValue))
       assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
     }
   }
   const f = freshCheckoutFixture()
-  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => String(input).includes('api.stripe.com') ? Response.json({ error: { code: privateValue, param: `customer${privateValue}`, message: privateValue } }, { status: 400 }) : f.fetcher(input, init)) as typeof fetch
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => String(input).includes('api.stripe.com') ? Response.json({ error: { type: privateValue, code: privateValue, param: `customer${privateValue}`, message: privateValue } }, { status: 400 }) : f.fetcher(input, init)) as typeof fetch
   const body = await (await billingApi(checkoutRequest('subscription'), f.env, fetcher))!.json() as Record<string, unknown>
   assert.deepEqual(body.diagnostic, { stage: 'price_read', category: 'provider_http', httpStatus: 400 })
   assert.ok(!JSON.stringify(body).includes(privateValue))
