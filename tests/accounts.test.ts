@@ -13,7 +13,7 @@ function fixture() {
   const env: AccountEnv = { GENERATION_LIMITER: { async limit({ key }) { buckets.push(key); return { success: !blocked } } } }
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: String(url), init })
-    assert.equal(init?.redirect, 'error')
+    assert.equal(init?.redirect, 'manual')
     assert.equal(new URL(String(url)).origin, 'https://oiezgikconcyjvdeshdh.supabase.co')
     assert.ok(new Headers(init?.headers).get('apikey')?.startsWith('sb_publishable_'))
     if (failure === 'network') throw new Error('private upstream stack')

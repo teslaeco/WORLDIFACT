@@ -18,7 +18,7 @@ function fixture() {
     const url = String(input), headers = new Headers(init?.headers), method = init?.method ?? 'GET'
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : undefined
     calls.push({ url, method, headers, body })
-    assert.equal(new URL(url).origin, CHESS_AUTH_URL); assert.equal(init?.redirect, 'error'); assert.ok(init?.signal)
+    assert.equal(new URL(url).origin, CHESS_AUTH_URL); assert.equal(init?.redirect, 'manual'); assert.ok(init?.signal)
     if (env.SUPABASE_ANON_KEY) assert.equal(headers.get('apikey'), env.SUPABASE_ANON_KEY)
     else assert.ok(headers.get('apikey')?.startsWith('sb_publishable_'))
     if (fail === 'network') throw new Error('private Google error stack')

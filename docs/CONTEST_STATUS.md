@@ -1,4 +1,21 @@
-# WORLDIFAKT — premature account timeout and Google callback diagnostics
+# WORLDIFAKT — Cloudflare account-request runtime correction
+
+Date: 22 September 2026. Follow-up to merged PR #65.
+
+- The real Google callback failure was reproduced using the actual account module in native Cloudflare `workerd`/Miniflare, with synthetic credentials and an isolated outbound fixture. `redirect: 'error'` throws synchronously in this runtime, before any Supabase request. The unchanged account handler returned the same HTTP 503 as production with **zero outbound calls**; changing the mode to `manual` reached the fixture and returned the expected HTTP 401 for invalid credentials. Fetch binding was independently excluded as the cause.
+- The correction uses supported manual redirects and explicitly rejects redirect responses. It never follows a provider redirect or forwards account/payment credentials to a redirected host. Existing PKCE, callback state, verified account identity, secure cookies and finite request deadlines remain enforced.
+- The same unsupported option is present in the Stripe, PayPal and original sculpture fetch paths and is corrected there as part of this runtime defect. Payments remain disabled pending the owner's merchant verification and credentials.
+- PR #65's timeout/header/diagnostic changes alone did **not** resolve production: after its successful deployment, owned synthetic password and session probes still returned HTTP 503 in approximately 8.2 seconds. Earlier end-to-end timings included client/network overhead and did not prove an upstream timeout. The previous causal timeout claim is withdrawn below.
+- Complete real Google sign-in acceptance remains **OPEN** until a real user completes sign-in after this correction. Synthetic failure probes establish connectivity and fail-closed behavior, not successful user authentication.
+
+- Local verification: **348 tests pass / 1 existing Chromium-only test blocked**, 349 total, zero skipped/cancelled. All three new native `workerd` tests pass, including successful fixture PKCE token exchange followed by identity verification and secure session issuance; these are isolated fixtures, not real Google login evidence. Provider redirect regressions cover 301/302/303/307/308, body cancellation, no follow, no secret exposure and no credit grants. The exact already-locked esbuild/Miniflare versions are now explicit development dependencies; no resolved dependency was upgraded.
+- Lint has zero errors; TypeScript, real local HTTP DEMO/origin smoke, production build, Worker dry-run and diff check pass. The existing browser restriction is preserved.
+
+Publication and real-user Google acceptance: pending this runtime correction.
+
+---
+
+# WORLDIFAKT — account time budget and Google callback diagnostics (PR #65)
 
 Date: 22 September 2026. Branch: `fix/google-pkce-callback`.
 
@@ -11,12 +28,12 @@ The owner reported the generic Google error after a real login. Supabase Auth lo
 - Existing PKCE, state, exact-origin, provider identity, HttpOnly/Secure cookie and rate-limit protections remain enforced. No cookie/session protection was weakened.
 - Direct synthetic Supabase requests returned expected authentication failures after 13,947 ms (GET /user) and up to 14,485 ms (password grant), beyond the old 12-second deadline. Provider requests now have a bounded 25-second budget; the shared browser client allows 80 seconds for at most three sequential bounded provider operations. No automatic retry is added for one-time codes or rotating tokens. The cause of the provider/network slowness itself remains unconfirmed.
 - Pending refreshes remain coalesced until completion, with the 15-second result-reuse window starting afterward. Regression tests cover a refresh still pending after 20 seconds and ensure an interrupted exchange is not retried.
-- The premature timeout is reproduced; complete Google sign-in acceptance remains **OPEN** until a real user signs in after publication. Timing/error diagnostics alone do not establish full Google acceptance.
+- The initial timeout hypothesis was **not established** by these end-to-end timings and is superseded by the native runtime reproduction above. Complete Google sign-in acceptance remains **OPEN** until a real user signs in after the runtime correction.
 
 - A production password-login probe using only a random address under reserved `example.invalid` and a random password returned HTTP 503 after 12,940 ms with the upstream-unavailable error and no session. This independently reproduces a server-to-Supabase failure; it does not use or test a real user's password. It shifts the investigation toward upstream connectivity rather than assuming the user's browser lost its flow cookie.
 - Local verification: 342 tests pass; the one existing Chromium-only test is blocked by the unavailable browser binary. TypeScript, lint (warnings only), real HTTP DEMO/origin smoke, production build, Worker dry-run and diff check pass.
 
-Publication and complete Google sign-in acceptance: pending.
+PR #65 merged as `e472507de5da5c258d5a2d6dd7cbeff96b9eb1ba` after all five PR checks passed. Production verify `35696853068` and deploy `35696853111` passed 343/343 tests. Cloudflare version `a3b89a41-29dc-4ebf-b573-fe45c89e5b0a` passed release smoke (16 routes, 33 hub assets and 105 foundation assets), but production account probes still returned HTTP 503. This release did **not** fix Google sign-in; the runtime correction above follows from that failed acceptance check.
 
 ---
 

@@ -4,10 +4,28 @@ import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import * as THREE from 'three'
 import { loadPortalSculpture, clonePortalSculpture, rotatePortalSculpture, PORTAL_SCULPTURE_URL, SCULPTURE_CYCLE_SECONDS } from '../src/lib/portalSculpture.ts'
+import { decorApi, POLYHEDRON_SOURCE } from '../server/decor.ts'
 
 const assetPath = new URL('../public/world-assets/polyhedron-led.gltf', import.meta.url)
 const manifestPath = new URL('../public/world-assets/polyhedron-led.provenance.json', import.meta.url)
 const sha = value => createHash('sha256').update(value).digest('hex')
+
+test('Legacy sculpture proxy rejects redirects without following Location or exposing source details', async () => {
+  for (const status of [301, 302, 303, 307, 308]) {
+    let calls = 0, cancelled = false
+    const response = await decorApi(new Request('https://worldifact.test/api/decor/polyhedron.glb'), async (url, init) => {
+      calls++
+      assert.equal(url, POLYHEDRON_SOURCE)
+      assert.equal(init.redirect, 'manual')
+      return new Response(new ReadableStream({ cancel() { cancelled = true } }), { status, headers: { Location: 'https://attacker.invalid/private-source' } })
+    })
+    assert.equal(response.status, 502)
+    assert.equal(calls, 1)
+    assert.equal(cancelled, true)
+    assert.equal(response.headers.get('Location'), null)
+    assert.doesNotMatch(await response.text(), /attacker|private-source|Source redirect/)
+  }
+})
 
 test('Bundled LED sculpture retains every reviewed accessor, mesh and node transform without texture/external dependencies', async () => {
   const bytes = await readFile(assetPath), asset = JSON.parse(bytes), proof = JSON.parse(await readFile(manifestPath, 'utf8'))

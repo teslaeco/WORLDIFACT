@@ -52,7 +52,7 @@ function fixture() {
     seen.push({ url, method, body, headers })
     if (url.endsWith('/auth/v1/user')) return Response.json({ id: authenticated, email: 'player@example.test' })
     assert.equal(new URL(url).origin, BASE)
-    assert.equal(init?.redirect, 'error')
+    assert.equal(init?.redirect, 'manual')
     assert.ok(init?.signal)
     if (url.endsWith('/v1/oauth2/token')) {
       assert.equal(headers.get('Authorization'), 'Basic ' + btoa(env.PAYPAL_CLIENT_ID + ':' + env.PAYPAL_CLIENT_SECRET))
@@ -105,6 +105,31 @@ test('PayPal rejects cross-origin, anonymous and browser-controlled pricing with
   assert.equal((await paypalApi(request('order', {}, { Cookie: '' }), f.env, f.fetcher))?.status, 401)
   assert.equal((await paypalApi(request('order', { amount: '0.01', credits: 999999 }), f.env, f.fetcher))?.status, 400)
   assert.equal(f.seen.filter(item => item.url.startsWith(BASE)).length, 0)
+})
+test('PayPal rejects OAuth and order redirects without forwarding credentials, following Location or granting credits', async () => {
+  for (const status of [301, 302, 303, 307, 308]) for (const phase of ['oauth', 'order']) {
+    const f = fixture(), calls: string[] = []; let cancelled = false
+    const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/auth/v1/user')) return f.fetcher(input, init)
+      calls.push(url)
+      assert.equal(new URL(url).origin, BASE)
+      assert.equal(init?.redirect, 'manual')
+      const redirectHere = phase === 'oauth' ? url.endsWith('/v1/oauth2/token') : url.endsWith('/v2/checkout/orders')
+      if (redirectHere) {
+        const body = new ReadableStream({ cancel() { cancelled = true } })
+        return new Response(body, { status, headers: { Location: 'https://attacker.invalid/collect?private=redirect-detail' } })
+      }
+      return f.fetcher(input, init)
+    }) as typeof fetch
+    const response = await paypalApi(request('order'), f.env, fetcher)
+    assert.equal(response?.status, 502)
+    assert.equal(calls.length, phase === 'oauth' ? 1 : 2)
+    assert.equal(cancelled, true)
+    assert.equal(response?.headers.get('Location'), null)
+    assert.doesNotMatch(await response!.text(), /attacker|redirect-detail|ServerSecret|accessToken|Basic|Bearer/)
+    assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
+  }
 })
 test('PayPal creates only the fixed USD 29.99 pack with server identity and no shipping; persisted checkout survives restart', async () => {
   const f = fixture()

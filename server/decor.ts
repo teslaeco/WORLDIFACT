@@ -6,7 +6,8 @@ export async function decorApi(request: Request, fetcher: typeof fetch = fetch):
   if (new URL(request.url).pathname !== '/api/decor/polyhedron.glb') return null
   if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 })
   try {
-    const response = await fetcher(POLYHEDRON_SOURCE, { redirect: 'error', signal: AbortSignal.timeout(25_000) })
+    const response = await fetcher(POLYHEDRON_SOURCE, { redirect: 'manual', signal: AbortSignal.timeout(25_000) })
+    if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new Error('Source redirect refused') }
     if (!response.ok || !['model/gltf-binary', 'application/octet-stream'].includes(response.headers.get('content-type')?.split(';')[0] || '') || Number(response.headers.get('content-length')) > MAX_BYTES) {
       await response.body?.cancel(); throw new Error('Source unavailable')
     }
