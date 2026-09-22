@@ -114,10 +114,10 @@ test('a failed Cloudflare synchronization resumes by reusing the owned portal wi
   assert.equal(f.uploads.length, 1);
 });
 
-test('incompatible, inactive, foreign-account or default owned portals require review before any write', async () => {
+test('incompatible, inactive, foreign-account or malformed owned portals require review before any write', async () => {
   const mutations = [
     (p: Json) => { p.active = false; }, (p: Json) => { p.livemode = false; }, (p: Json) => { p.application = 'ca_Other'; },
-    (p: Json) => { p.is_default = true; }, (p: Json) => { object(p.metadata).worldifact_account = 'acct_Other'; },
+    (p: Json) => { p.is_default = 'true'; }, (p: Json) => { object(p.metadata).worldifact_account = 'acct_Other'; },
     (p: Json) => { object(object(p.features).subscription_cancel).enabled = false; },
     (p: Json) => { object(object(p.features).subscription_cancel).mode = 'immediately'; },
     (p: Json) => { object(object(p.features).subscription_cancel).proration_behavior = 'create_prorations'; },
@@ -274,6 +274,19 @@ test('normalization never repairs unrelated policy failures, unknown booleans or
   await assert.rejects(f.run(), /Mismatched fields: id/);
   assert.equal(f.posts().length, 1);
   assert.equal(f.uploads.length, 0);
+});
+
+test('a matching owned portal marked default by Stripe is reused without modification', async () => {
+  const f = fixture(), portal = configuration();
+  portal.is_default = true;
+  f.portals.push(portal);
+  const result = await f.run();
+  assert.equal(result.configurationId, 'bpc_WorldifactV1');
+  assert.equal(f.posts().length, 0);
+  assert.deepEqual(f.uploads, [{ STRIPE_BILLING_PORTAL_CONFIGURATION_ID: 'bpc_WorldifactV1' }]);
+  portal.is_default = 'true';
+  await assert.rejects(f.run(), /Mismatched fields: is_default/);
+  assert.equal(f.posts().length, 0);
 });
 
 test('a cached normalization response cannot override a fresh provider read showing the feature still enabled', async () => {
