@@ -14,6 +14,9 @@ import { fallingBodyY, FLIGHT_BODY_Y, FLIGHT_SPEED, inRiver, nextWaterMode, SWIM
 import { createWorldAudio, worldAudioTheme } from "../lib/worldAudio";
 import { clonePortalSculpture, loadPortalSculpture, rotatePortalSculpture } from "../lib/portalSculpture";
 import TouchJoystick from "./TouchJoystick";
+import { createJumpState, requestJump, resetJump, stepJump, jumpFlipAngle } from "../lib/playerJump";
+import { createMeadowGrass } from "../lib/meadowGrass";
+import "./WorldMovement.css";
 import {
   createDecorativeTerrain,
   createWorldObject,
@@ -39,10 +42,11 @@ export default function StartingWorld({
   const mount = useRef<HTMLDivElement>(null),
     input = useRef<Record<string, boolean>>({}),
     action = useRef(""),
+    jumpRequests = useRef(0),
     runtimeObjects = useRef<RuntimeObject[]>([]);
   const audio = useRef<ReturnType<typeof createWorldAudio> | null>(null);
   const audioEnabled = useRef(false);
-  const zoom = useRef(6);
+  const zoom = useRef(4.8);
   const overview = useRef(false);
   const [music, setMusic] = useState(false);
   const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("queen");
@@ -53,7 +57,8 @@ export default function StartingWorld({
   const [transition, setTransition] = useState(false);
   const [captureNotice, setCaptureNotice] = useState("");
   const [wide, setWide] = useState(false);
-  const [zoomValue, setZoomValue] = useState(6);
+  const [zoomValue, setZoomValue] = useState(4.8);
+  const [jumpCount, setJumpCount] = useState(0);
   const capture = useRef<(() => void) | null>(null);
   const avatarRuntime = useRef<ReturnType<typeof createPlayerAvatar> | null>(null);
   useEffect(() => {
@@ -137,7 +142,7 @@ export default function StartingWorld({
     );
     scene.fog = new THREE.Fog(scene.background, 40, 155);
     const camera = new THREE.PerspectiveCamera(
-      65,
+      60,
       host.clientWidth / host.clientHeight,
       0.1,
       240,
@@ -162,11 +167,12 @@ export default function StartingWorld({
       ground.name = lunar ? "lunar-ground" : "green-meadow";
       ground.receiveShadow = true;
       const mat = ground.material;
-      mat.onBeforeCompile = shader => {
+      if (!lunar) mat.onBeforeCompile = shader => {
         shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vMeadow;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvMeadow = position;');
         shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vMeadow;').replace('#include <color_fragment>', '#include <color_fragment>\nfloat mottling = sin(vMeadow.x * 2.1 + sin(vMeadow.y * 1.7)) * sin(vMeadow.y * 2.9) * 0.06 + sin(vMeadow.x * 0.18 + vMeadow.y * 0.13) * 0.07;\ndiffuseColor.rgb *= 0.93 + mottling;');
       };
       scene.add(ground);
+      if (!lunar) scene.add(createMeadowGrass(mobile));
     }
     if (lunar) {
       scene.add(createDecorativeTerrain(Array.from({ length: 32 }, (_, i) => ({
@@ -325,7 +331,11 @@ export default function StartingWorld({
     const player = new THREE.Vector3(0, 2.3, 17),
       forward = new THREE.Vector3(),
       right = new THREE.Vector3(),
-      target = new THREE.Vector3();
+      target = new THREE.Vector3(),
+      cameraGoal = new THREE.Vector3(),
+      cameraAim = new THREE.Vector3();
+    const jump = createJumpState();
+    let flightHeight = 0, shownJumps = -1, cameraInitialized = false;
     let yaw = 0,
       pitch = -0.16,
       ride: (typeof objects)[number] | null = null,
@@ -342,6 +352,7 @@ export default function StartingWorld({
       input.current = {};
       stick.current = { ...STILL };
       action.current = "";
+      jumpRequests.current = 0;
       drag = null;
     };
     const enter = (id: string) => {
@@ -378,10 +389,13 @@ export default function StartingWorld({
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement
+        e.target instanceof HTMLSelectElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
       )
         return;
       const k = e.key.toLowerCase();
+      // Focused DOM controls keep their native Space activation (one press, not two).
+      if (k === " " && e.target instanceof HTMLButtonElement) return;
       if (
         [
           "w",
@@ -396,6 +410,7 @@ export default function StartingWorld({
           "f",
           "g",
           "i",
+          " ",
         ].includes(k)
       ) {
         e.preventDefault();
@@ -405,6 +420,7 @@ export default function StartingWorld({
       if (k === "f" && !e.repeat) action.current = "fan-drone";
       if (k === "g" && !e.repeat) action.current = "fan-flight";
       if (k === "i" && !e.repeat) setInventoryOpen(value => !value);
+      if (k === " " && !e.repeat) jumpRequests.current = Math.min(2, jumpRequests.current + 1);
       if (k === "escape") action.current = equipmentMode === "drone" || equipmentMode === "flight" ? "fan-stow" : "exit";
     };
     const up = (e: KeyboardEvent) => {
@@ -501,6 +517,11 @@ export default function StartingWorld({
       const move = waitingForQueen || boarding || overview.current ? 0 : axes.forward;
       const side = waitingForQueen || boarding || overview.current ? 0 : axes.side;
       const controllingDrone = equipmentMode === "drone";
+      const canJump = !waitingForQueen && !boarding && !ride && !overview.current && equipmentMode === "stowed" && waterMode === "land" && flightHeight < .05;
+      if (!canJump) resetJump(jump);
+      for (let presses = jumpRequests.current; presses > 0; presses--) requestJump(jump, canJump);
+      jumpRequests.current = 0;
+      stepJump(jump, dt);
       if (ride) yaw -= side * dt * 1.25;
       forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
       right.set(Math.cos(yaw), 0, -Math.sin(yaw));
@@ -533,7 +554,7 @@ export default function StartingWorld({
 
         if (!ride && !boarding) {
           const beforeWater = waterMode;
-          const proposed = nextWaterMode(waterMode, player, PORTALS, PORTAL_RADIUS, equipmentMode);
+          const proposed = jump.height > .02 ? waterMode : nextWaterMode(waterMode, player, PORTALS, PORTAL_RADIUS, equipmentMode);
           if (beforeWater === "land" && proposed === "falling") {
             waterMode = "falling";
             waterEnteredAt = elapsed;
@@ -560,11 +581,16 @@ export default function StartingWorld({
       if (action.current && !boarding) {
         const a = action.current;
         action.current = "";
-        if (a === "fan-drone") {
+        if (waitingForQueen && a !== "reset") {
+          setCaptureNotice("The original character is still loading.");
+        } else if (jump.jumps > 0 && (a === "drive" || (a === "interact" && near && !nearPortal))) {
+          setCaptureNotice("Land before entering the rover.");
+        } else if (a === "fan-drone") {
           if (ride) setCaptureNotice("Exit the rover before deploying the fan drone.");
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-drone");
             equipmentMode = next;
+            resetJump(jump);
             avatar.setFlightFans(false);
             if (next === "drone") {
               fanDrone.root.visible = true;
@@ -582,13 +608,14 @@ export default function StartingWorld({
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-flight");
             equipmentMode = next;
+            resetJump(jump);
             fanDrone.root.visible = false;
             avatar.setFlightFans(next === "flight");
             setEquipmentStatus(next);
             if (next === "flight") {
               if (inRiver(player)) splashAt(player.x, player.z, .8);
               waterMode = "land";
-              setCaptureNotice("Fan 2 engaged — both fans mounted horizontally at the shoulders. Joystick / WASD controls flight.");
+              setCaptureNotice("Flight engaged — raise the hand fan and steer with the joystick / WASD.");
             } else {
               waterMode = inRiver(player) ? "swimming" : "land";
               if (waterMode === "swimming") splashAt(player.x, player.z, .65);
@@ -606,6 +633,8 @@ export default function StartingWorld({
           return;
         } else if (a === "reset") {
           player.set(0, 2.3, 17);
+          resetJump(jump); flightHeight = 0; cameraInitialized = false;
+          zoom.current = 4.8; setZoomValue(4.8);
           overview.current = false; setWide(false);
           for (const object of objects) object.doorOpen = false;
           yaw = 0;
@@ -705,14 +734,18 @@ export default function StartingWorld({
         avatar.root.rotation.y = yaw;
       } else if (equipmentMode === "flight") {
         swimming = false;
-        avatar.root.position.set(player.x, FLIGHT_BODY_Y + Math.sin(elapsed * 2.1) * .08, player.z);
+        flightHeight = THREE.MathUtils.damp(flightHeight, FLIGHT_BODY_Y, 5, dt);
+        avatar.root.position.set(player.x, flightHeight + Math.sin(elapsed * 2.1) * .04, player.z);
         if (gait > .02) avatar.root.rotation.y = Math.atan2(-(player.x - old.x), -(player.z - old.z));
       } else {
+        flightHeight = THREE.MathUtils.damp(flightHeight, 0, 6, dt);
+        if (flightHeight < .005) flightHeight = 0;
         const bodyY = waterMode === "falling" ? fallingBodyY(elapsed - waterEnteredAt) : waterMode === "swimming" ? swimBodyY(elapsed) : 0;
-        avatar.root.position.set(player.x, bodyY, player.z);
+        avatar.root.position.set(player.x, bodyY + jump.height + flightHeight, player.z);
         if (gait > .02) avatar.root.rotation.y = Math.atan2(-(player.x - old.x), -(player.z - old.z));
       }
-      avatar.update(elapsed, gait, seated, reaching, swimming);
+      avatar.update(elapsed, gait, seated, reaching, swimming, equipmentMode === "flight", jumpFlipAngle(jump, reduced), jump.jumps > 0);
+      if (shownJumps !== jump.jumps) { shownJumps = jump.jumps; setJumpCount(shownJumps); }
       fanDrone.update(elapsed, Math.min(1, Math.hypot(axes.forward, axes.side)));
       updateSplashes(dt);
 
@@ -733,18 +766,19 @@ export default function StartingWorld({
         camera.lookAt(target);
         for (const w of ride.group.children)
           if (w.name === "wheel") w.rotation.x -= move * dt * 14;
-      } else if (equipmentMode === "flight") {
-        player.y = FLIGHT_BODY_Y + 2.2;
-        camera.position.copy(player).addScaledVector(forward, -zoom.current);
-        camera.position.y = FLIGHT_BODY_Y + Math.max(2.4, zoom.current * .22);
-        target.set(player.x, FLIGHT_BODY_Y + .9, player.z).addScaledVector(forward, 1.8);
-        camera.lookAt(target);
       } else {
+        const visualY = avatar.root.position.y;
         player.y = swimming ? 1.15 : 2.3;
-        camera.position.copy(player).addScaledVector(forward, -zoom.current);
-        camera.position.y = swimming ? Math.max(1.05, 1.35 - Math.sin(pitch) * zoom.current * .4) : Math.max(1.5, 2.4 - Math.sin(pitch) * zoom.current);
-        target.set(player.x, swimming ? .62 : 1.3, player.z).addScaledVector(forward, 1.2);
-        camera.lookAt(target);
+        cameraGoal.copy(player).addScaledVector(forward, -zoom.current);
+        cameraGoal.y = Math.max(1.05, visualY + 2.05 - Math.sin(pitch) * zoom.current * .72);
+        target.set(player.x, visualY + (swimming ? 1.35 : 1.05), player.z).addScaledVector(forward, .35);
+        if (!cameraInitialized) {
+          camera.position.copy(cameraGoal); cameraAim.copy(target); cameraInitialized = true;
+        } else {
+          const blend = 1 - Math.exp(-10 * dt);
+          camera.position.lerp(cameraGoal, blend); cameraAim.lerp(target, blend);
+        }
+        camera.lookAt(cameraAim);
       }
       if (overview.current) {
         camera.position.set(Math.sin(yaw) * 18, 48 + zoom.current, 30 + Math.cos(yaw) * 12);
@@ -772,14 +806,14 @@ export default function StartingWorld({
             : controllingDrone
               ? "Fan 1 drone · joystick / WASD fly · Equipment to recall"
               : equipmentMode === "flight"
-                ? "Shoulder fans active · joystick / WASD fly · Equipment to land"
+                ? "Flight active · joystick / WASD steer · tap Land to return"
                 : waterMode === "swimming" || waterMode === "falling"
                   ? "Swimming · joystick / WASD · you can enter portals directly from the water"
                   : ride
                     ? "Joystick: drive & steer · drag to look"
                     : near
                       ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
-                      : mobile ? "Left thumb: move · right thumb: look · Equipment opens fans" : "WASD move · F fan drone · G shoulder flight · I equipment",
+                      : mobile ? "Left thumb: move · right thumb: look · tap Jump twice for a flip" : "WASD move · Space jump (twice: flip) · G fly/land · I equipment",
         );
         setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
       }
@@ -884,7 +918,7 @@ export default function StartingWorld({
         <button onClick={() => { overview.current = !overview.current; setWide(overview.current); }} aria-pressed={wide}>{wide ? "Follow character" : "Whole meadow"}</button>
         <button onClick={() => { void toggleMusic(); }} aria-pressed={music}>{music ? "Music off" : "Music on"}</button>
         <button onClick={() => capture.current?.()}>Save view PNG</button>
-        <label className="camera-zoom">Camera <input aria-label="Camera distance" type="range" min="3" max="24" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
+        <label className="camera-zoom">Camera <input aria-label="Camera distance" type="range" min="3" max="24" step="0.1" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
       </div>
       <label className="avatar-note avatar-picker">Character
         <select value={avatarChoice} onChange={e => setAvatarChoice(e.target.value as AvatarChoice)} aria-label="Choose player character">
@@ -897,7 +931,8 @@ export default function StartingWorld({
       </button>
       {inventoryOpen && <div className="equipment-panel" role="group" aria-label="Player equipment">
         <strong>Equipment</strong>
-        <small>Original hand fan stays visible. Shoulder flight fans are optional GAME equipment.</small>
+        <label>Camera distance <input aria-label="Equipment camera distance" type="range" min="3" max="12" step="0.1" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
+        <small>The original hand fan stays lowered on foot and rises for flight. Six-blade rotors are GAME equipment.</small>
         <label>Outfit
           <select value={outfit} onChange={e => setOutfit(e.target.value as OutfitPreset)} aria-label="Choose outfit">
             <option value="original">Original</option>
@@ -913,7 +948,7 @@ export default function StartingWorld({
           {equipmentStatus === "flight" ? "Fan 2 · Land + stow" : "Fan 2 · Mount both / fly"}
         </button>
         <button type="button" disabled={equipmentStatus === "stowed"} onClick={() => { action.current = "fan-stow"; }}>Stow fans</button>
-        <small>Keyboard: F drone · G flight · I equipment.</small>
+        <small>Keyboard: Space jump · press twice for a flip · G flight · F drone · I equipment.</small>
       </div>}
       {captureNotice && <div className="capture-notice" role="status">{captureNotice}</div>}
       <div className="world-hint" role="status">
@@ -923,6 +958,10 @@ export default function StartingWorld({
         <TouchJoystick onMove={onStickMove} disabled={!ready || failed} />
         <div className="world-interact">
           <span>DRAG TO LOOK</span>
+          <div className="world-special-actions">
+            <button type="button" disabled={!ready || failed || driving || avatarState !== "ready"} aria-pressed={equipmentStatus === "flight"} onClick={() => { action.current = "fan-flight"; }}>{equipmentStatus === "flight" ? "Land" : "Fly"}<span className="keyboard-shortcut" aria-hidden="true">G</span></button>
+            <button type="button" disabled={!ready || failed || driving || avatarState !== "ready" || equipmentStatus !== "stowed" || jumpCount >= 2} aria-label={jumpCount === 1 ? "Double jump and flip" : "Jump"} onClick={() => { jumpRequests.current = Math.min(2, jumpRequests.current + 1); }}>{jumpCount === 1 ? "Double jump" : "Jump"}<span className="keyboard-shortcut" aria-hidden="true">Space</span></button>
+          </div>
           <button
             type="button"
             disabled={!ready || failed || interaction === "Interact"}

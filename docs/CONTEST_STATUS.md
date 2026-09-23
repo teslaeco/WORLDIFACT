@@ -1,3 +1,15 @@
+# WORLDIFACT — Queen controls and mobile presentation, 23 September 2026
+
+Current owner authorization explicitly includes branch publication, merge and deployment of this repair. The previous answer's local-only changes were not published. This patch is rebuilt from verified main `1421e02fc124a692c5f08c5f537a1beb17a72c62` (tree `72c4e5714e8d6261f244e81d8ece69146cd10d98`). No private credentials or model files were exported. No paid generation, checkout payment, credit grant, order or new contest submission is part of this change.
+
+Implemented: visible Fly/Land and Jump controls outside the hidden mobile toolbar; frame-safe double tap, second upward impulse and a hip-centered flip; gravity/landing reset and no third jump; canonical forward orientation for the original Queen; lower-on-foot/raised-in-flight actual fan-side arm; five six-blade rotor units on each face of the original fan; articulated knees/ankles and a satin finish on the existing shoes without replacing geometry; closer damped camera, mobile camera slider and bounded instanced meadow grass; smaller uncropped official logos and a specifically scoped dark-on-light petition link fixing AccountPage's inherited link color. Original textures, geometry and brand attribution are retained.
+
+Local TypeScript and focused motion/geometry tests passed. The recorded previous `ERR_UNKNOWN_FILE_EXTENSION` failure came from running Node 22 without its TypeScript stripping flag; the repository CI uses Node 24. Existing full verification and deployment dry-run remain mandatory before merge. No browser preview/security block is bypassed. The exact authenticated original Queen/device appearance and physical Android frame rate remain NOT VISUALLY VERIFIED; synthetic geometry tests do not replace that acceptance. The implementation PR records the final CI, merge and actual production result, not inferred success.
+
+Previous production baseline: PR #80 and its published-asset checks succeeded in deployment run `35907747007`; PR #79 repaired stale receipt recovery and credits. Older ledger sections below are historical and do not describe the current deployment state.
+
+---
+
 # WORLDIFAKT — homepage brand banners
 
 The owner requested professional homepage banners for OpenAI, Product Hunt, Shopify, eBay, Blender and FORGE MCP. A shared responsive section now follows the login experience on `/`, `/login` and `/account`, and follows the portals on `/world`. It uses locally served official logos, the approved FORGE poster, clear destination links, keyboard focus styling and reduced-motion support. Shopify/eBay are platform discovery links, not claims of connected stores or partnerships. Existing Product Hunt badges and conversation remain available on `/world`.

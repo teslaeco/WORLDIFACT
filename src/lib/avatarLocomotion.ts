@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { addFanRotors } from './queenDetails.ts'
 
 /** Runtime GAME rig only. Original positions, UVs, indices and materials are retained.
  * Never use this approximate anatomical binding as a manufacturing/source export. */
@@ -6,7 +7,7 @@ export type GameRig = ReturnType<typeof bindStaticAvatar>
 const smooth = THREE.MathUtils.smoothstep
 const labelOf = (mesh: THREE.Mesh) => `${mesh.name} ${Array.isArray(mesh.material) ? mesh.material.map(m => m.name).join(' ') : mesh.material.name}`.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
 const isFan = (s: string) => /(?:^|[^a-z])(?:fan(?:surface|blade|handle|frame|membrane|rib)?|wachlarz|handfan|peacock)(?:[^a-z]|$)/i.test(s.replace(/([a-z])([A-Z])/g, '$1_$2'))
-const isArm = (s: string) => /arm|hand|palm|finger|thumb|wrist|elbow/.test(s) && !/charm|armour|armor/.test(s)
+const isArm = (s: string) => /arm(?!ou?r)|hand|palm|finger|thumb|wrist|elbow|sleeve|gauntlet/.test(s) && !/charm/.test(s)
 const isHand = (s: string) => /hand|palm|finger|thumb|wrist/.test(s) && !isFan(s)
 
 /** Frame the body rather than a wide/raised fan or display pedestal. */
@@ -90,7 +91,8 @@ export function bindStaticAvatar(root: THREE.Group) {
     const hand = bone(side < 0 ? 'LeftHand' : 'RightHand', elbow, lower.x, lower.y, lower.z)
     const down = hasHand ? new THREE.Quaternion().setFromUnitVectors(upper.clone().normalize(), new THREE.Vector3(side * .12, -1, 0).normalize()) : new THREE.Quaternion()
     const elbowDown = hasHand ? new THREE.Quaternion().setFromUnitVectors(lower.clone().normalize(), new THREE.Vector3(side * .08, -1, 0).normalize().applyQuaternion(down.clone().invert())) : new THREE.Quaternion()
-    return { shoulder, elbow, hand, rest, down, elbowDown, hasHand, point: handPoint, shoulderPoint, elbowPoint }
+    const up = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(side * .12, -1, 0).normalize(), new THREE.Vector3(side * .22, 1, -.12).normalize()).multiply(down)
+    return { shoulder, elbow, hand, rest, down, up, elbowDown, hasHand, point: handPoint, shoulderPoint, elbowPoint }
 
   })
   root.updateMatrixWorld(true)
@@ -150,7 +152,8 @@ export function bindStaticAvatar(root: THREE.Group) {
     skinned.updateMatrixWorld(true); skinned.bind(skeleton, original.matrixWorld.clone())
     original.removeFromParent(); original.geometry.dispose()
   }
-  let fanAttached = false
+  let fanAttached = false, fanArmIndex = -1
+  let fanRotors: ReturnType<typeof addFanRotors> | null = null
   if (fans.length) {
     const fanBox = new THREE.Box3()
     fans.forEach(m => fanBox.union(localBounds(m)))
@@ -162,7 +165,9 @@ export function bindStaticAvatar(root: THREE.Group) {
       root.add(fan); fan.position.copy(arm.point); root.updateMatrixWorld(true)
       // attach preserves the whole original fan, including its surface and ribs.
       for (const part of fans) { part.visible = true; fan.attach(part) }
+      fanRotors = addFanRotors(fan, fans)
       arm.hand.attach(fan)
+      fanArmIndex = arms.indexOf(arm)
       // Point the fan away from the face, down along the thigh, not across the body.
       const wristDown = arm.down.clone().multiply(arm.elbowDown)
       const direction = center.clone().sub(arm.point).applyQuaternion(wristDown)
@@ -180,23 +185,26 @@ export function bindStaticAvatar(root: THREE.Group) {
     const visibleMaterials = original.map(material => { const copy = material.clone(); copy.side = THREE.DoubleSide; return copy })
     m.material = Array.isArray(m.material) ? visibleMaterials : visibleMaterials[0]
   })
-  let phase = 0, blend = 0
+  let phase = 0, blend = 0, flightBlend = 0
   return {
-    skeleton, hips, legs, arms, fanParts: fans.length, fanAttached,
-    update(delta: number, speed: number, seated = false, swimming = false) {
-      blend = THREE.MathUtils.damp(blend, seated || swimming ? 0 : Math.min(1, speed), 14, delta)
+    skeleton, hips, legs, arms, fanParts: fans.length, fanAttached, fanArmIndex,
+    update(delta: number, speed: number, seated = false, swimming = false, flying = false, jumping = false) {
+      blend = THREE.MathUtils.damp(blend, seated || swimming || flying || jumping ? 0 : Math.min(1, speed), 14, delta)
+      flightBlend = THREE.MathUtils.damp(flightBlend, flying ? 1 : 0, 10, delta)
+      fanRotors?.update(delta, flying)
       phase += Math.max(0, speed) * 2.1 / 1.12 * delta
-      const drop = .065 * blend
+      const drop = .008 + .065 * blend
       hips.position.y = .90 - drop
       legs.forEach((leg, index) => {
         const step = footCycle(phase + index * .5, blend)
         const angles = legAngles(step.z, step.lift, drop)
-        leg.thigh.rotation.x = seated ? 1.25 : swimming ? Math.sin(phase * Math.PI * 2 + index * Math.PI) * .2 : angles.hip
-        leg.knee.rotation.x = seated ? -1.35 : swimming ? -.3 : angles.knee
-        leg.ankle.rotation.x = seated || swimming ? 0 : angles.ankle
+        leg.thigh.rotation.x = seated ? 1.25 : jumping ? .45 : flying ? .12 : swimming ? Math.sin(phase * Math.PI * 2 + index * Math.PI) * .2 : angles.hip
+        leg.knee.rotation.x = seated ? -1.35 : jumping ? -.85 : flying ? -.25 : swimming ? -.3 : angles.knee
+        leg.ankle.rotation.x = seated || swimming ? 0 : jumping ? .4 : flying ? .13 : angles.ankle
       })
       arms.forEach((arm, index) => {
         arm.shoulder.quaternion.copy(arm.down)
+        if (index === fanArmIndex) arm.shoulder.quaternion.slerp(arm.up, flightBlend)
         arm.elbow.quaternion.copy(arm.elbowDown)
         const swing = Math.sin(phase * Math.PI * 2 + index * Math.PI) * blend * (fanAttached ? .09 : .20)
         arm.shoulder.rotateX(swimming ? Math.sin(phase * Math.PI * 2 + index * Math.PI) * .55 : seated ? .6 : swing)

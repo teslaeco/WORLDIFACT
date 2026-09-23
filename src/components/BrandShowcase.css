@@ -130,3 +130,31 @@
   .iss-petition { align-items: stretch; flex-direction: column; padding: 19px; gap: 18px; }
 }
 @media (max-width: 340px) { .brand-showcase-grid { grid-template-columns: 1fr; } }
+
+/* Readable at both entry points, including AccountPage's inherited link color. */
+.brand-showcase { margin-bottom: 26px; }
+.brand-showcase-heading h2 { font-size: clamp(23px, 2.1vw, 29px); }
+.brand-showcase-grid { gap: 10px; }
+.brand-showcase .brand-banner { padding: 12px 15px 10px; min-height: 104px; border-radius: 11px; }
+.brand-showcase .brand-banner-logo { height: 42px; gap: 7px; }
+.brand-showcase .brand-banner-logo img { width: 105px; height: 29px; object-fit: contain; }
+.brand-showcase .brand-banner--openai .brand-banner-logo img { width: 96px; height: 27px; }
+.brand-showcase .brand-banner--product-hunt .brand-banner-logo img { width: 118px; height: 27px; }
+.brand-showcase .brand-banner--ebay .brand-banner-logo img { width: 82px; height: 30px; }
+.brand-showcase .brand-banner--forge .brand-banner-logo img { width: 27px; height: 29px; }
+.brand-showcase .brand-banner--forge .brand-banner-logo > span { font-size: 15px; }
+.brand-showcase .brand-banner-action { padding-top: 7px; font-size: 10px; }
+.brand-showcase .iss-petition-sign,
+.account-universe .brand-showcase .iss-petition-sign:link,
+.account-universe .brand-showcase .iss-petition-sign:visited {
+  color: #092b32; background: #c5ffe8; border: 2px solid #eafff7;
+  min-height: 58px; min-width: 185px; padding: 14px 22px;
+  font-size: 16px; font-weight: 800; text-shadow: none;
+  box-shadow: 0 3px 12px #02131d50; opacity: 1;
+}
+.brand-showcase .iss-petition-sign:hover { color: #092b32; background: #e7fff4; }
+.brand-showcase .iss-petition-sign:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+@media(max-width:620px) {
+  .brand-showcase .iss-petition-sign { width: 100%; }
+  .brand-showcase .brand-banner { padding: 10px 11px; }
+}

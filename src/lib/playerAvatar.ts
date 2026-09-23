@@ -4,6 +4,7 @@ import { createAvatarEquipment, type OutfitPreset } from './playerEquipment.ts';
 import { avatarBodyBounds, bindStaticAvatar, type GameRig } from './avatarLocomotion.ts';
 import { disposeObject } from './worldGeometry.ts';
 import { loadAvatarBytes } from './avatarAsset.ts';
+import { orientQueenForGameplay, polishQueenFootwear } from './queenDetails.ts';
 
 export const NEPTUNE_QUEEN_AVATAR_JOB = '99397623-e45c-48dc-95ec-6f84446a54d5';
 export type AvatarChoice = 'queen' | 'rapper';
@@ -66,8 +67,9 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (st
   rootState('loading');
   function rootState(state: 'loading' | 'ready' | 'error') { onState?.(state); }
   const root = new THREE.Group(); root.name = choice === 'rapper' ? 'rapper-player' : 'neptune-queen-player'; root.userData.avatarSource = choice === 'rapper' ? 'froge-archive:rapper-v10.glb' : `oracle-job:${NEPTUNE_QUEEN_AVATAR_JOB}`;
-  root.add(fallback.root);
-  const equipment = createAvatarEquipment(root);
+  const visualRoot = new THREE.Group(); visualRoot.name = "avatar-hip-pivot"; root.add(visualRoot);
+  visualRoot.add(fallback.root);
+  const equipment = createAvatarEquipment(visualRoot);
   let loaded: THREE.Object3D | null = null, rig: Rig = {}, mixer: THREE.AnimationMixer | null = null, last = 0;
   let loadedBaseY = 0;
 
@@ -79,6 +81,7 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (st
       if (!gltf) return;
       if (disposed) { disposeObject(gltf.scene); return; }
       const model = gltf.scene;
+      if (choice === "queen") { orientQueenForGameplay(model); polishQueenFootwear(model); }
       const { body: bounds } = avatarBodyBounds(model), size = bounds.getSize(new THREE.Vector3());
       if (!Number.isFinite(size.y) || size.y <= .01) { disposeObject(model); rootState('error'); return; }
       const scale = 1.78 / size.y;
@@ -89,11 +92,11 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (st
       model.name = choice === 'rapper' ? 'Rapper_archive_v10' : 'Neptune_Queen_current_99397623';
       // The original fan belongs to the character; it must not be hidden.
       model.traverse(part => { if (part instanceof THREE.Mesh) { part.castShadow = true; part.receiveShadow = true; } });
-      fallback.root.visible = false; loaded = model; root.add(model); rig = findRig(model);
+      fallback.root.visible = false; loaded = model; visualRoot.add(model); rig = findRig(model);
       if (choice === 'queen' && !rig.leftLeg && !rig.rightLeg && !gltf.animations.length) {
         // Bind only the original character, not the optional equipment overlays.
         equipment.root.removeFromParent();
-        try { gameRig = bindStaticAvatar(root); } finally { root.add(equipment.root); }
+        try { gameRig = bindStaticAvatar(visualRoot); } finally { visualRoot.add(equipment.root); }
         root.userData.fanParts = gameRig.fanParts; root.userData.fanAttached = gameRig.fanAttached;
       }
       if (gltf.animations.length) {
@@ -110,14 +113,17 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (st
     dispose() { disposed = true; mixer?.stopAllAction(); if (loaded) mixer?.uncacheRoot(loaded); gameRig?.dispose(); },
     setOutfit(next: OutfitPreset) { equipment.setOutfit(next); },
     setFlightFans(active: boolean) { equipment.setFlightFans(active); },
-    update(time: number, speed: number, seated = false, reaching = 0, swimming = false) {
+    update(time: number, speed: number, seated = false, reaching = 0, swimming = false, flying = false, flip = 0, jumping = false) {
       const delta = last ? Math.min(.05, Math.max(0,time-last)) : 0; last=time; mixer?.update(delta);
       const gait = Math.sin(time * (swimming ? 5.4 : 8)) * Math.min(speed,1);
       fallback.legs.forEach((leg,i)=>{leg.rotation.x=swimming ? gait*(i?-.25:.25)-.3 : seated?-1.35:gait*(i?-.48:.48);});
       fallback.knees.forEach((knee,i)=>{knee.rotation.x=swimming ? .35 + Math.max(0,gait*(i?-1:1))*.25 : seated?1.35:Math.max(0,gait*(i?-1:1))*.65;});
       fallback.arms.forEach((arm,i)=>{arm.rotation.x=swimming ? Math.sin(time*5.4 + i*Math.PI)*.85 : seated?-.95:-gait*(i?-.38:.38);});
       if (fallback.arms[0]) fallback.arms[0].rotation.z=-reaching*.72;
-      gameRig?.update(delta, speed, seated, swimming);
+      gameRig?.update(delta, speed, seated, swimming, flying, jumping);
+      // Rotate the entire rendered character about the hips, never the camera/collider.
+      visualRoot.rotation.x = -flip;
+      visualRoot.position.set(0, .9 * (1 - Math.cos(flip)), .9 * Math.sin(flip));
       if (loaded && !mixer && !gameRig) {
         if (rig.leftLeg) rig.leftLeg.rotation.x = swimming ? gait*.24-.25 : seated ? -1.15 : gait*.42;
         if (rig.rightLeg) rig.rightLeg.rotation.x = swimming ? -gait*.24-.25 : seated ? -1.15 : -gait*.42;
