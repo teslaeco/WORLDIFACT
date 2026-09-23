@@ -61,9 +61,10 @@ test('both real bucket tools lower into transformed sand, carry their load and d
     const machine=createBackhoe(car);machine.setEnabled(true);machine.setTool(tool)
     for(let i=0;i<90;i++)machine.update(1/60,field)
     assert.equal(machine.load.amount,0,'raised bucket must not mine remotely')
-    machine.setAction('dig');for(let i=0;i<300;i++)machine.update(1/60,field)
+    machine.setAction('dig');let lowest=Infinity;for(let i=0;i<300;i++){machine.update(1/60,field);lowest=Math.min(lowest,machine.contact().y)}
     assert.ok(machine.load.amount>.08,`${tool} at ${yaw} must collect real soil`)
-    assert.ok(machine.contact().y<.35);near(field.volumeDelta()+machine.load.amount,0)
+    assert.ok(lowest<.35,'cutting edge contacted the surface before the automatic full-bucket lift');
+    if(machine.action==='carry')near(machine.load.amount,machine.load.capacity);near(field.volumeDelta()+machine.load.amount,0)
     const collected=machine.load.amount;machine.setAction('carry');for(let i=0;i<90;i++)machine.update(1/60,field)
     near(machine.load.amount,collected);assert.ok(machine.contact().y>.8)
     car.position.x+=3;machine.setAction('dump');for(let i=0;i<200;i++)machine.update(1/60,field)

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { JumpAnimation } from './playerJump.ts'
-export const WALK_SPEED=1.55
+export const WALK_SPEED=3.0
 export const STRIDE=.31
 export const STANCE=.60
 /** -Z is forward. The planted foot translates backward at the actual travel speed. */

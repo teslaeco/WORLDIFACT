@@ -30,3 +30,7 @@ The copied Fix ISS simulator credits the NASA / Visualization Technology Applica
 - Use in WORLDIFACT was expressly requested by the owner on 21 September 2026. Original source and wood textures remain unchanged at FORGE; WORLDIFACT loads the public GLB through a hash-checked same-origin proxy and applies emissive LED materials at runtime. No general third-party asset redistribution license is inferred.
 - The audited model contains 48 open-frame meshes and 2,976 triangles. No replacement polyhedron or filled faces are generated.
 - The account background Earth uses NASA GIBS Blue Marble imagery through the existing project's reviewed image source. This is an artistic background, not a current Earth-observation result. Stars, bloom and paint effects are local Three.js animations.
+
+## 24 September gameplay materials
+
+`src/lib/pvMaterial.ts` creates an original local GAME cell pattern for the rover and separate loader/bucket panels. No external texture, paid generation, brand asset or manufacturing approval is involved. The Queen audit records source hashes and aggregate geometric checks only; its original binary is not copied into the public repository. The screenshot-comparison rim is not replaced with a newly invented asset.

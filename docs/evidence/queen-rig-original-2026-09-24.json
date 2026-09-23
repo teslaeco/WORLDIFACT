@@ -1,0 +1,16 @@
+{
+  "sourceJob": "99397623-e45c-48dc-95ec-6f84446a54d5",
+  "sha256": "1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba",
+  "bytes": 27676800,
+  "sourceMeshes": 237,
+  "preservedGeometryAttributes": true,
+  "completeFanMeshes": 92,
+  "rotorModules": 9,
+  "namedLegChainsSeparated": true,
+  "walkSamples": 36,
+  "minimumLegGapMetres": 0.03579917164442104,
+  "maximumGripToHandSurfaceMetres": 0.008001357145600962,
+  "minimumShoeHeightMetres": 0.010852694667944446,
+  "maximumTuckKneeRadians": -2.25,
+  "verification": "NUMERICAL ORIGINAL-MODEL AUDIT; NOT A RENDER OR ANDROID FPS TEST"
+}

@@ -33,3 +33,38 @@
   .starting-world-shell .vehicle-tools { top:4.5rem; left:25%; width:44%; grid-template-columns:repeat(3,1fr); }
   .starting-world-shell .vehicle-tools button { min-height:40px; font-size:.7rem; }
 }
+
+/* One drawer replaces the overlapping camera/action toolbar. The loader drawer
+   and equipment drawer are mutually exclusive, including Android desktop mode. */
+.starting-world-shell .equipment-panel .world-actions {
+  position:static; display:grid !important; grid-template-columns:1fr 1fr;
+  max-width:none; width:100%; gap:6px; margin:0; padding:0;
+}
+.starting-world-shell .equipment-panel .world-actions .camera-zoom { display:none; }
+.starting-world-shell .equipment-panel { max-height:calc(100% - 9rem); overflow:auto; width:min(310px,85%); }
+.starting-world-shell .world-top { max-width:calc(100% - 245px); }
+.starting-world-shell .world-top > strong { font-size:1.1rem; }
+.starting-world-shell .world-top .eyebrow { font-size:.58rem; }
+.starting-world-shell .avatar-picker { width:210px; max-width:36%; }
+.starting-world-shell .vehicle-tools {
+  top:7.8rem; left:12px; width:min(320px,49%); padding:8px;
+  grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px;
+  box-shadow:0 5px 18px #00101b55;
+}
+.starting-world-shell .vehicle-tools button { min-height:44px; font-size:.75rem; line-height:1.2; padding:5px; }
+.starting-world-shell .vehicle-tools output { font-size:.72rem; line-height:1.45; min-height:32px; }
+.starting-world-shell.is-driving .world-hint { max-width:calc(100% - 210px); bottom:170px; font-size:.74rem; }
+.starting-world-shell .world-top button { pointer-events:auto; }
+@media (max-width:520px) {
+  .starting-world-shell .vehicle-tools { top:7rem; width:54%; grid-template-columns:1fr 1fr; }
+  .starting-world-shell .world-top { max-width:55%; padding:6px; }
+  .starting-world-shell .world-top > strong { font-size:.95rem; }
+  .starting-world-shell .world-top .eyebrow { display:none; }
+  .starting-world-shell .avatar-picker { width:39%; max-width:39%; }
+  .starting-world-shell .avatar-picker select { width:100%; font-size:.64rem; }
+  .starting-world-shell .vehicle-tools button { font-size:.68rem; }
+}
+@media (max-height:520px) and (orientation:landscape) {
+  .starting-world-shell .vehicle-tools { top:5.4rem; left:12px; width:48%; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .starting-world-shell.is-driving .world-hint { display:none; }
+}

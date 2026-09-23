@@ -1,5 +1,14 @@
 # WORLDIFACT — screenshot-driven Queen and terrain repair, 23 September 2026
 
+## 24 September — original-model and excavation correction (verification milestone)
+
+The owner's new screenshots reject the visual quality of PR #82; its green tests did not establish realistic presentation. The actual current Queen GLB has now been inspected numerically, rather than relying only on a surrogate. [Task, findings, changes and limits](VISUAL_EXCAVATION_REPAIR_20260924.md) and [actual source-model audit](evidence/queen-rig-original-2026-09-24.json).
+
+VERIFIED: torso-based centering, single-chain named legs, wholly hand-weighted fingers, complete 92-mesh original fan including nine rotor modules; source geometry signatures preserved. Faster traversal, separated vehicle camera orbit, front-quarter digging view, larger photovoltaic loader and a unified HUD are implemented. Targeted 27/27 tests, typecheck, lint (no errors), DEMO HTTP and frontend bundle pass locally. Full CI, merge and deployment are not inferred from this local milestone; their actual results belong in the PR/release record.
+
+BLOCKED: exact rim GLB from the comparison was not recovered; screenshots are not a substitute. UNKNOWN: rendered artistic quality and physical Android performance. Existing provider, billing and release safeguards are unchanged. Previous records are retained below, with their visual claims limited by this newer evidence.
+
+
 Owner authorization: implement on a branch, create a PR and merge after green CI. Baseline main is `76c8f8344cd33e1b0bdc5de32863d2ad26a723c0` / PR #81. The owner rejected PR #81's walking, straight-legged flip, fan embellishments and sparse grass. Earlier synthetic passes are not positive original-model visual acceptance.
 
 Implemented in this revision: stride-dependent pelvis height, separate named leg/whole-foot weights, takeoff crouch, articulated tucked double-jump and landing absorption; original fan grouping/grip with added rotor decorations removed; dense bounded instanced green clumps and local ground texture; a real editable desert mesh with no covering flat ground, front-loader/rear-backhoe contact-based digging, conserved bucket payload and actual deposited mounds; collision-height sampling and mobile equipment controls. Original Queen geometry/source job and all five portals remain. No billing, generator-backend, logo or petition-copy changes.
