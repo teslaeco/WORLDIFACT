@@ -1,0 +1,18 @@
+.account-status-bar{position:sticky;top:0;z-index:200;isolation:isolate;background:rgba(9,23,31,.98);color:#edf8fa;border-bottom:1px solid #365663;padding:10px max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left));font-size:14px;box-shadow:0 4px 18px #0003}
+.account-status-row{max-width:1440px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.account-status-brand{color:#e2f4f8;font-weight:800;letter-spacing:.08em;text-decoration:none}
+.account-status-tools{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px}
+.account-status-credits{display:flex;align-items:center;gap:12px;padding:8px 14px;border:1px solid #77caba;border-radius:10px;background:#173d3a;color:#fff;text-decoration:none;white-space:nowrap}
+.account-status-credits span{font-size:12px;text-transform:uppercase;letter-spacing:.07em}
+.account-status-credits strong{font-size:19px;font-variant-numeric:tabular-nums}
+.account-status-free{color:#c6dce3;font-size:12px;white-space:nowrap}
+.account-status-refresh,.account-status-return button{border:1px solid #577882;border-radius:8px;background:#203840;color:#eaf6fa;padding:8px 12px;font:inherit;cursor:pointer}
+.account-status-bar a:focus-visible,.account-status-bar button:focus-visible{outline:3px solid #fac771;outline-offset:3px}
+.account-status-error{max-width:1440px;margin:8px auto 0;color:#ffd6a3;font-size:12px}
+.account-status-return{max-width:1440px;margin:10px auto 0;border:1px solid #667657;border-radius:10px;padding:12px 16px;background:#2e3328}
+.account-status-return.is-confirmed{border-color:#71ba9b;background:#163c30}
+.account-status-return p{margin:0 0 10px;line-height:1.5;max-width:110ch}
+.account-status-return>div{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.account-status-return a{color:#c1f3ef;font-weight:700}
+.account-status-return button{margin-left:auto}
+@media(max-width:600px){.account-status-brand{display:none}.account-status-tools{width:100%;justify-content:space-between;gap:8px}.account-status-credits{padding:7px 10px;gap:8px}.account-status-credits strong{font-size:18px}.account-status-refresh{padding:7px 9px;font-size:12px}.account-status-free{order:3;width:100%;white-space:normal}.account-status-return{padding:10px;font-size:13px}}

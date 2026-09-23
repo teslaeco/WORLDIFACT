@@ -133,9 +133,25 @@ export class StudioCoordinator {
     const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}`, {
       headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(40_000),
     })
-    const job = parseStudioJob(await responseJson(response), saved.receipt.id)
-    if (this.saved?.receipt.id === job.id) this.confirmedJob = job
-    return job
+    try {
+      const job = parseStudioJob(await responseJson(response), saved.receipt.id)
+      if (this.saved?.receipt.id === job.id) this.confirmedJob = job
+      return job
+    } catch (error) {
+      // These exact 401 responses reject the recovery credential itself. An
+      // expired login, another account, a timeout, 404 or 5xx is NOT equivalent.
+      const unusableReceipt = error instanceof StudioResponseError && error.status === 401 &&
+        ['The job receipt is not valid.', 'This job receipt expired. Keep your saved model.'].includes(error.message)
+      if (!unusableReceipt || this.saved?.receipt.id !== saved.receipt.id || this.submitting) throw error
+      // Preserve the complete original before releasing the UI. This is a LOCAL
+      // recovery failure, not an assertion that Oracle failed/cancelled the job.
+      // No settlement, cancellation, refund, generation POST or signature bypass.
+      this.preserveReceipt(saved)
+      const rejected: StudioJob = { id: saved.receipt.id, state: 'failed',
+        detail: 'The saved job receipt is no longer accepted. Its recovery record was preserved locally. The old model status is unknown; no model was deleted, cancelled or resubmitted. Your draft is kept. You can start a new model explicitly.' }
+      this.rejectedJob = rejected; this.confirmedJob = rejected
+      return rejected
+    }
   }
   async artifact(format: 'model' | 'pbr' | 'fbx' | 'blend', saved = this.saved): Promise<Blob> {
     if (!saved) throw new Error('No job receipt is selected.')
