@@ -14,8 +14,13 @@ import { fallingBodyY, FLIGHT_BODY_Y, FLIGHT_SPEED, inRiver, nextWaterMode, SWIM
 import { createWorldAudio, worldAudioTheme } from "../lib/worldAudio";
 import { clonePortalSculpture, loadPortalSculpture, rotatePortalSculpture } from "../lib/portalSculpture";
 import TouchJoystick from "./TouchJoystick";
-import { createJumpState, requestJump, resetJump, stepJump, jumpFlipAngle } from "../lib/playerJump";
-import { createMeadowGrass } from "../lib/meadowGrass";
+import { createJumpState, requestJump, resetJump, stepJump, jumpFlipAngle, jumpAnimation } from "../lib/playerJump";
+import { createMeadowGrass, createMeadowTexture, updateMeadowGrass } from "../lib/meadowGrass";
+import { WALK_SPEED } from "../lib/avatarPose";
+import { createSandField, createSoilLoad, inDesert } from "../lib/desertTerrain";
+import { createDesertScene, meadowGroundGeometry } from "../lib/desertScene";
+import { createBackhoe, type DigTool } from "../lib/backhoe";
+import { parseRim, mountRim } from "../lib/vehicleRims";
 import "./WorldMovement.css";
 import {
   createDecorativeTerrain,
@@ -59,6 +64,31 @@ export default function StartingWorld({
   const [wide, setWide] = useState(false);
   const [zoomValue, setZoomValue] = useState(4.8);
   const [jumpCount, setJumpCount] = useState(0);
+  const [vehicleHud, setVehicleHud] = useState({ enabled: false, tool: "loader", action: "carry", load: 0 });
+  const [rimStatus, setRimStatus] = useState("Original Astra rim: file not linked. Load the original GLB; no screenshot substitute.");
+  const sandSession = useRef<{ key: string; field: ReturnType<typeof createSandField>; loads: Map<string, { load: ReturnType<typeof createSoilLoad>; enabled: boolean; tool: DigTool }> } | null>(null);
+  const rimSource = useRef<THREE.Object3D | null>(null);
+  const rimInstaller = useRef<((model: THREE.Object3D) => void) | null>(null);
+  const rimEpoch = useRef(0);
+  useEffect(() => () => { rimEpoch.current++; if (rimSource.current) disposeObject(rimSource.current); rimSource.current = null; }, []);
+  const importRim = async (file: File | undefined) => {
+    if (!file) return;
+    const epoch = ++rimEpoch.current;
+    let model: THREE.Object3D | null = null;
+    try {
+      if (!/\.glb$/i.test(file.name) || file.size > 30 * 1024 * 1024) throw new Error("Choose the original embedded GLB rim, up to 30 MB.");
+      setRimStatus("Validating original rim…");
+      model = await parseRim(await file.arrayBuffer());
+      if (epoch !== rimEpoch.current) { disposeObject(model); return; }
+      rimInstaller.current?.(model);
+      if (rimSource.current) disposeObject(rimSource.current);
+      rimSource.current = model; model = null;
+      setRimStatus(`Owner-provided rim: ${file.name}. Original geometry retained; provider not independently verified.`);
+    } catch (error) {
+      if (model) disposeObject(model);
+      if (epoch === rimEpoch.current) setRimStatus(error instanceof Error ? error.message : "The rim could not be loaded.");
+    }
+  };
   const capture = useRef<(() => void) | null>(null);
   const avatarRuntime = useRef<ReturnType<typeof createPlayerAvatar> | null>(null);
   useEffect(() => {
@@ -158,21 +188,33 @@ export default function StartingWorld({
     sun.shadow.bias = -.0004;
     scene.add(sun);
     const environment = lunar ? null : createLakeEnvironment(scene, mobile, () => setTextureFailed(true), sea);
+    if (!lunar && !sea && sandSession.current?.key !== sceneStructure) sandSession.current = { key: sceneStructure, field: createSandField(), loads: new Map() };
+    const sandField = !lunar && !sea ? sandSession.current!.field : null;
+    const desert = sandField ? createDesertScene(sandField) : null;
+    if (desert) {
+    const canvas=document.createElement('canvas');canvas.width=512;canvas.height=192
+    const ctx=canvas.getContext('2d')
+    if(ctx){
+      ctx.fillStyle='#213342';ctx.fillRect(0,0,512,192);ctx.textAlign='center'
+      ctx.fillStyle='#ffe3a7';ctx.font='bold 36px sans-serif';ctx.fillText('DESERT WORKSITE',256,65)
+      ctx.fillStyle='#ffffff';ctx.font='24px sans-serif';ctx.fillText('Drive · lower bucket · collect · dump',256,111)
+      ctx.font='20px sans-serif';ctx.fillText('GAME terrain · changes last in this session',256,156)
+      const label=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas),depthTest:true,depthWrite:false}))
+      label.position.set(17.5,2.7,15.5);label.scale.set(5.1,1.91,1);desert.root.add(label)
+    }
+  }
+    const grass = !lunar && !sea ? createMeadowGrass(mobile) : null;
+    const groundAt = (x: number, z: number) => sandField?.heightAt(x, z) ?? 0;
     if (!sea) {
       const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(230, 230),
-        new THREE.MeshStandardMaterial({ color: lunar ? "#626874" : "#62905d", roughness: 1 }),
+        lunar ? new THREE.PlaneGeometry(230, 230) : meadowGroundGeometry(),
+        new THREE.MeshStandardMaterial({ color: lunar ? "#626874" : "#ffffff", map: lunar ? null : createMeadowTexture(), roughness: 1 }),
       );
-      ground.rotation.x = -Math.PI / 2;
+      if (lunar) ground.rotation.x = -Math.PI / 2;
       ground.name = lunar ? "lunar-ground" : "green-meadow";
-      ground.receiveShadow = true;
-      const mat = ground.material;
-      if (!lunar) mat.onBeforeCompile = shader => {
-        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vMeadow;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvMeadow = position;');
-        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vMeadow;').replace('#include <color_fragment>', '#include <color_fragment>\nfloat mottling = sin(vMeadow.x * 2.1 + sin(vMeadow.y * 1.7)) * sin(vMeadow.y * 2.9) * 0.06 + sin(vMeadow.x * 0.18 + vMeadow.y * 0.13) * 0.07;\ndiffuseColor.rgb *= 0.93 + mottling;');
-      };
-      scene.add(ground);
-      if (!lunar) scene.add(createMeadowGrass(mobile));
+      ground.receiveShadow = true; scene.add(ground);
+      if (grass) scene.add(grass);
+      if (desert) scene.add(desert.root);
     }
     if (lunar) {
       scene.add(createDecorativeTerrain(Array.from({ length: 32 }, (_, i) => ({
@@ -184,7 +226,7 @@ export default function StartingWorld({
       const trees: WorldObject[] = [];
       for (let i = 0; i < 65; i++) {
         const x = ((i * 31) % 125) - 62, z = ((i * 47) % 120) - 60;
-        if (Math.abs(z) < 10 || (Math.abs(x) < 24 && Math.abs(z) < 32)) continue;
+        if (Math.abs(z) < 10 || (Math.abs(x) < 24 && Math.abs(z) < 32) || inDesert(x, z, 1)) continue;
         trees.push({ id: `valley-tree-${i}`, kind: "tree", name: "Valley flora", x, z, scale: 0.6 + i % 5 * 0.2, rotation: i * 17 % 360, color: i % 2 ? "#2e674d" : "#45754c" });
       }
       scene.add(createDecorativeTerrain(trees));
@@ -199,6 +241,28 @@ export default function StartingWorld({
       runtime.spec;
     runtimeObjects.current = objects;
     for (const o of objects) scene.add(o.group);
+    const backhoes = new Map(objects.filter(o => specOf(o).kind === "rover").map(o => {
+      const saved = sandSession.current?.loads.get(o.spec.id);
+      const load = saved?.load ?? createSoilLoad();
+      return [o, createBackhoe(o.group, load, saved)];
+    }));
+    let rimMounts: ReturnType<typeof mountRim>[] = [];
+    rimInstaller.current = model => {
+      const next: ReturnType<typeof mountRim>[] = [];
+      try { for (const car of backhoes.keys()) next.push(mountRim(car.group, model)); }
+      catch (error) { next.forEach(mount => mount.dispose()); throw error; }
+      rimMounts.forEach(mount => mount.dispose()); rimMounts = next;
+      for (const car of backhoes.keys()) car.group.traverse(child => { if (child.name === "stock-wheel-disc" || child.name === "stock-wheel-hub") child.visible = false; });
+    };
+    if (rimSource.current) rimInstaller.current(rimSource.current);
+    const vehicleGround = (car: RuntimeObject, x: number, z: number, rotation: number) => {
+      const scale = specOf(car).scale;
+      const heights = [-1, 1].flatMap(side => [-1.55, 1.55].map(wz => {
+        const wx = side * 1.4 * scale, zz = wz * scale;
+        return groundAt(x + Math.cos(rotation) * wx + Math.sin(rotation) * zz, z - Math.sin(rotation) * wx + Math.cos(rotation) * zz);
+      }));
+      return { y: Math.max(...heights), spread: Math.max(...heights) - Math.min(...heights) };
+    };
     const portals = PORTALS.map((p, i) => {
       const g = new THREE.Group();
       g.position.set(p.position.x, 0.08, p.position.z);
@@ -353,6 +417,7 @@ export default function StartingWorld({
       stick.current = { ...STILL };
       action.current = "";
       jumpRequests.current = 0;
+      for (const machine of backhoes.values()) machine.setAction("carry");
       drag = null;
     };
     const enter = (id: string) => {
@@ -514,8 +579,10 @@ export default function StartingWorld({
       elapsed += dt;
       const axes = movementAxes(input.current, stick.current);
       const waitingForQueen = avatarChoice === "queen" && !avatar.root.userData.avatarLoaded;
-      const move = waitingForQueen || boarding || overview.current ? 0 : axes.forward;
-      const side = waitingForQueen || boarding || overview.current ? 0 : axes.side;
+      const operating = ride ? backhoes.get(ride) : undefined;
+      const movingBucket = operating?.enabled && operating.action !== "carry";
+      const move = waitingForQueen || boarding || overview.current || movingBucket || jump.preparation > 0 ? 0 : axes.forward;
+      const side = waitingForQueen || boarding || overview.current || movingBucket || jump.preparation > 0 ? 0 : axes.side;
       const controllingDrone = equipmentMode === "drone";
       const canJump = !waitingForQueen && !boarding && !ride && !overview.current && equipmentMode === "stowed" && waterMode === "land" && flightHeight < .05;
       if (!canJump) resetJump(jump);
@@ -536,7 +603,7 @@ export default function StartingWorld({
         fanDrone.root.position.z = THREE.MathUtils.clamp(fanDrone.root.position.z, -46, 46);
         fanDrone.root.position.y = THREE.MathUtils.damp(fanDrone.root.position.y, 2.7 + Math.sin(elapsed * 1.8) * .18, 5, dt);
       } else {
-        const movementSpeed = ride ? 16 : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? 2.1 : SWIM_SPEED;
+        const movementSpeed = ride ? (operating?.enabled ? 3.2 : 9) : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? WALK_SPEED : SWIM_SPEED;
         player.addScaledVector(forward, move * dt * movementSpeed);
         if (!ride) player.addScaledVector(right, side * dt * movementSpeed);
         player.x = THREE.MathUtils.clamp(player.x, -42, 42);
@@ -544,10 +611,13 @@ export default function StartingWorld({
 
         let moved = equipmentMode === "flight"
           ? { x: player.x, z: player.z }
-          : movePlayer(old, player, habitats, ride ? 3 * specOf(ride).scale : 0);
+          : movePlayer(old, player, habitats, ride ? (operating?.enabled ? 6 : 3) * specOf(ride).scale : 0);
         if (!ride && !boarding && equipmentMode !== "flight") moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
         player.x = moved.x;
         player.z = moved.z;
+        if (ride && vehicleGround(ride, player.x, player.z, yaw).spread > .62 * specOf(ride).scale) {
+          player.x = old.x; player.z = old.z;
+        }
 
         const crossed = enteredPortal(old, player, PORTALS, activePortalId);
         if (crossed && !boarding) { enter(crossed.id); return; }
@@ -585,6 +655,19 @@ export default function StartingWorld({
           setCaptureNotice("The original character is still loading.");
         } else if (jump.jumps > 0 && (a === "drive" || (a === "interact" && near && !nearPortal))) {
           setCaptureNotice("Land before entering the rover.");
+        } else if (a.startsWith("bucket-") || a === "backhoe-mode") {
+          const machine = ride ? backhoes.get(ride) : undefined;
+          if (!machine || !sandField) setCaptureNotice("Enter the rover in the meadow to use the loader.");
+          else if (a === "backhoe-mode") {
+            if (machine.load.amount > .00001 && machine.enabled) setCaptureNotice("Empty the bucket before removing the attachment.");
+            else { machine.setEnabled(!machine.enabled); setCaptureNotice("Desert digging area: right of the meadow, X 15–40 / Z 14–39. Dig lowers the selected bucket into contact with the sand."); }
+          } else if (a === "bucket-tool") {
+            if (machine.load.amount > .00001) setCaptureNotice("Empty the current bucket before switching tools.");
+            else machine.setTool(machine.tool === "loader" ? "backhoe" : "loader");
+          }
+          else if (a === "bucket-dig") machine.setAction("dig");
+          else if (a === "bucket-dump") machine.setAction("dump");
+          else machine.setAction("carry");
         } else if (a === "fan-drone") {
           if (ride) setCaptureNotice("Exit the rover before deploying the fan drone.");
           else {
@@ -634,6 +717,7 @@ export default function StartingWorld({
         } else if (a === "reset") {
           player.set(0, 2.3, 17);
           resetJump(jump); flightHeight = 0; cameraInitialized = false;
+          for (const machine of backhoes.values()) machine.setAction("carry");
           zoom.current = 4.8; setZoomValue(4.8);
           overview.current = false; setWide(false);
           for (const object of objects) object.doorOpen = false;
@@ -651,10 +735,11 @@ export default function StartingWorld({
           (ride && (a === "drive" || a === "interact"))
         ) {
           if (ride) {
+            backhoes.get(ride)?.setAction("carry");
             const exit = findRoverExit(ride.group.position, ride.group.rotation.y, specOf(ride).scale, habitats, true);
             if (exit) {
               const seat = new THREE.Vector3(-.55, .26, .1).multiplyScalar(specOf(ride).scale).applyAxisAngle(new THREE.Vector3(0,1,0), ride.group.rotation.y).add(ride.group.position);
-              boarding = { car: ride, from: seat.clone(), outside: new THREE.Vector3(exit.x, 0, exit.z), seat, time: 0, exiting: true };
+              boarding = { car: ride, from: seat.clone(), outside: new THREE.Vector3(exit.x, groundAt(exit.x, exit.z), exit.z), seat, time: 0, exiting: true };
               ride.doorOpen = true;
             }
           }
@@ -671,9 +756,10 @@ export default function StartingWorld({
           if (r && r.group.position.distanceTo(player) < 6) {
             const transform = (v: THREE.Vector3) => v.multiplyScalar(specOf(r).scale).applyAxisAngle(new THREE.Vector3(0,1,0), r.group.rotation.y).add(r.group.position);
             const outside = transform(new THREE.Vector3(-2.15, 0, .25));
+            outside.y = groundAt(outside.x, outside.z);
             const clearPath = avoidVehicleBodies(player, movePlayer(player, outside, habitats), objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
             if (Math.hypot(clearPath.x - outside.x, clearPath.z - outside.z) < .01) {
-              boarding = { car: r, from: new THREE.Vector3(player.x, 0, player.z), outside, seat: transform(new THREE.Vector3(-.55, .26, .1)), time: 0, exiting: false };
+              boarding = { car: r, from: new THREE.Vector3(player.x, groundAt(player.x, player.z), player.z), outside, seat: transform(new THREE.Vector3(-.55, .26, .1)), time: 0, exiting: false };
               yaw = r.group.rotation.y;
             } else setCaptureNotice("Approach the left-hand door to enter.");
           }
@@ -700,8 +786,14 @@ export default function StartingWorld({
             dt,
           );
       }
+      for (const [car, machine] of backhoes) {
+        if (ride === car && !boarding) { car.group.position.set(player.x, vehicleGround(car, player.x, player.z, yaw).y, player.z); car.group.rotation.y = yaw; }
+        machine.update(dt, sandField);
+      }
+      desert?.sync();
+      if (grass) updateMeadowGrass(grass, reduced ? 0 : elapsed);
       let seated = !!ride;
-      let gait = Math.min(1, Math.hypot(player.x - old.x, player.z - old.z) / Math.max(dt * 2.1, .001));
+      let gait = Math.min(1, Math.hypot(player.x - old.x, player.z - old.z) / Math.max(dt * WALK_SPEED, .001));
       let reaching = 0;
       let swimming = waterMode !== "land";
       if (boarding) {
@@ -730,7 +822,7 @@ export default function StartingWorld({
         }
       } else if (ride) {
         swimming = false;
-        avatar.root.position.set(-.55, .26, .1).multiplyScalar(specOf(ride).scale).applyAxisAngle(new THREE.Vector3(0,1,0), yaw).add(new THREE.Vector3(player.x, 0, player.z));
+        avatar.root.position.set(-.55, .26, .1).multiplyScalar(specOf(ride).scale).applyAxisAngle(new THREE.Vector3(0,1,0), yaw).add(new THREE.Vector3(player.x, ride.group.position.y, player.z));
         avatar.root.rotation.y = yaw;
       } else if (equipmentMode === "flight") {
         swimming = false;
@@ -740,11 +832,11 @@ export default function StartingWorld({
       } else {
         flightHeight = THREE.MathUtils.damp(flightHeight, 0, 6, dt);
         if (flightHeight < .005) flightHeight = 0;
-        const bodyY = waterMode === "falling" ? fallingBodyY(elapsed - waterEnteredAt) : waterMode === "swimming" ? swimBodyY(elapsed) : 0;
+        const bodyY = waterMode === "falling" ? fallingBodyY(elapsed - waterEnteredAt) : waterMode === "swimming" ? swimBodyY(elapsed) : groundAt(player.x, player.z);
         avatar.root.position.set(player.x, bodyY + jump.height + flightHeight, player.z);
         if (gait > .02) avatar.root.rotation.y = Math.atan2(-(player.x - old.x), -(player.z - old.z));
       }
-      avatar.update(elapsed, gait, seated, reaching, swimming, equipmentMode === "flight", jumpFlipAngle(jump, reduced), jump.jumps > 0);
+      avatar.update(elapsed, gait, seated, reaching, swimming, equipmentMode === "flight", jumpFlipAngle(jump, reduced), jump.jumps > 0, jumpAnimation(jump));
       if (shownJumps !== jump.jumps) { shownJumps = jump.jumps; setJumpCount(shownJumps); }
       fanDrone.update(elapsed, Math.min(1, Math.hypot(axes.forward, axes.side)));
       updateSplashes(dt);
@@ -755,17 +847,17 @@ export default function StartingWorld({
         target.copy(fanDrone.root.position).addScaledVector(forward, 1.4);
         camera.lookAt(target);
       } else if (ride && !boarding) {
-        ride.group.position.set(player.x, 0, player.z);
+        ride.group.position.set(player.x, vehicleGround(ride, player.x, player.z, yaw).y, player.z);
         ride.group.rotation.y = yaw;
         camera.position
           .copy(player)
           .addScaledVector(forward, -(zoom.current + 1) * specOf(ride).scale);
-        camera.position.y = 4.6 * specOf(ride).scale;
+        camera.position.y = ride.group.position.y + 4.6 * specOf(ride).scale;
         target.copy(player).addScaledVector(forward, 6);
-        target.y = 1.3;
+        target.y = ride.group.position.y + 1.3;
         camera.lookAt(target);
         for (const w of ride.group.children)
-          if (w.name === "wheel") w.rotation.x -= move * dt * 14;
+          if (w.name === "wheel") w.rotation.x -= Math.sign(move) * Math.hypot(player.x - old.x, player.z - old.z) / (.66 * specOf(ride).scale);
       } else {
         const visualY = avatar.root.position.y;
         player.y = swimming ? 1.15 : 2.3;
@@ -796,6 +888,8 @@ export default function StartingWorld({
       }
       if (now - hud > 200) {
         hud = now;
+        const machine = ride ? backhoes.get(ride) : undefined;
+        setVehicleHud({ enabled: machine?.enabled ?? false, tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0 });
         const travelMode = controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
         setLocation(
           `${sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
@@ -810,7 +904,7 @@ export default function StartingWorld({
                 : waterMode === "swimming" || waterMode === "falling"
                   ? "Swimming · joystick / WASD · you can enter portals directly from the water"
                   : ride
-                    ? "Joystick: drive & steer · drag to look"
+                    ? machine?.enabled ? `Desert X 15–40 / Z 14–39 · ${machine.tool} · ${Math.round(machine.load.amount * 1000)} L · Raise/carry to drive` : "Joystick: drive & steer · enable Backhoe mode to dig in the desert"
                     : near
                       ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
                       : mobile ? "Left thumb: move · right thumb: look · tap Jump twice for a flip" : "WASD move · Space jump (twice: flip) · G fly/land · I equipment",
@@ -846,8 +940,10 @@ export default function StartingWorld({
       renderer.domElement.removeEventListener("webglcontextlost", lost);
       renderer.domElement.removeEventListener("webglcontextrestored", restored);
       clear();
+      for (const [car, machine] of backhoes) if (sandSession.current?.key === sceneStructure) sandSession.current.loads.set(car.spec.id, { load: machine.load, enabled: machine.enabled, tool: machine.tool });
       avatar.dispose();
       if (avatarRuntime.current === avatar) avatarRuntime.current = null;
+      rimInstaller.current = null; rimMounts.forEach(mount => mount.dispose()); rimMounts = [];
       runtimeObjects.current = [];
       environment?.dispose();
       disposeObject(scene);
@@ -932,7 +1028,7 @@ export default function StartingWorld({
       {inventoryOpen && <div className="equipment-panel" role="group" aria-label="Player equipment">
         <strong>Equipment</strong>
         <label>Camera distance <input aria-label="Equipment camera distance" type="range" min="3" max="12" step="0.1" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
-        <small>The original hand fan stays lowered on foot and rises for flight. Six-blade rotors are GAME equipment.</small>
+        <small>The complete original fan stays in the hand; added decorative rotors were removed. Flight hardware is separate GAME equipment.</small>
         <label>Outfit
           <select value={outfit} onChange={e => setOutfit(e.target.value as OutfitPreset)} aria-label="Choose outfit">
             <option value="original">Original</option>
@@ -948,7 +1044,22 @@ export default function StartingWorld({
           {equipmentStatus === "flight" ? "Fan 2 · Land + stow" : "Fan 2 · Mount both / fly"}
         </button>
         <button type="button" disabled={equipmentStatus === "stowed"} onClick={() => { action.current = "fan-stow"; }}>Stow fans</button>
+        <label>Original rim GLB (local only)
+          <input type="file" accept=".glb,model/gltf-binary" aria-label="Load original vehicle rim GLB" onChange={event => { void importRim(event.target.files?.[0]); event.target.value = ""; }} />
+        </label>
+        <small role="status">{rimStatus}</small>
+        <small>Editable desert: X 15–40 / Z 14–39. Digging changes the terrain mesh. Terrain and bucket loads last for this world session.</small>
         <small>Keyboard: Space jump · press twice for a flip · G flight · F drone · I equipment.</small>
+      </div>}
+      {driving && <div className="vehicle-tools" role="group" aria-label="Backhoe-loader controls">
+        <button type="button" aria-pressed={vehicleHud.enabled} onClick={() => { action.current = "backhoe-mode"; }}>{vehicleHud.enabled ? "Remove attachment" : "Backhoe mode"}</button>
+        {vehicleHud.enabled && <>
+          <button type="button" disabled={vehicleHud.load > 0} onClick={() => { action.current = "bucket-tool"; }}>{vehicleHud.tool === "loader" ? "Front loader" : "Rear backhoe"} ⇄</button>
+          <button type="button" aria-pressed={vehicleHud.action === "dig"} onClick={() => { action.current = "bucket-dig"; }}>Lower / dig</button>
+          <button type="button" aria-pressed={vehicleHud.action === "carry"} onClick={() => { action.current = "bucket-carry"; }}>Raise / carry</button>
+          <button type="button" disabled={vehicleHud.load === 0} aria-pressed={vehicleHud.action === "dump"} onClick={() => { action.current = "bucket-dump"; }}>Dump load</button>
+          <output aria-live="off">Bucket: {vehicleHud.load} / 650 L · GAME</output>
+        </>}
       </div>}
       {captureNotice && <div className="capture-notice" role="status">{captureNotice}</div>}
       <div className="world-hint" role="status">

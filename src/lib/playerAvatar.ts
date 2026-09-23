@@ -4,6 +4,7 @@ import { createAvatarEquipment, type OutfitPreset } from './playerEquipment.ts';
 import { avatarBodyBounds, bindStaticAvatar, type GameRig } from './avatarLocomotion.ts';
 import { disposeObject } from './worldGeometry.ts';
 import { loadAvatarBytes } from './avatarAsset.ts';
+import type { JumpAnimation } from './playerJump.ts';
 import { orientQueenForGameplay, polishQueenFootwear } from './queenDetails.ts';
 
 export const NEPTUNE_QUEEN_AVATAR_JOB = '99397623-e45c-48dc-95ec-6f84446a54d5';
@@ -13,6 +14,7 @@ type Rig = {
   hips?: THREE.Bone; head?: THREE.Bone;
   leftArm?: THREE.Bone; rightArm?: THREE.Bone;
   leftLeg?: THREE.Bone; rightLeg?: THREE.Bone;
+  leftKnee?: THREE.Bone; rightKnee?: THREE.Bone; leftFoot?: THREE.Bone; rightFoot?: THREE.Bone;
 };
 
 function proceduralRapperFallback() {
@@ -57,7 +59,9 @@ function findRig(root: THREE.Object3D): Rig {
   return {
     hips: findBone(root,[/hips?/,/pelvis/]), head: findBone(root,[/^head/,/head$/]),
     leftArm: findBone(root,[/left.*upper.*arm/,/upperarm_l/,/arm_l/]), rightArm: findBone(root,[/right.*upper.*arm/,/upperarm_r/,/arm_r/]),
-    leftLeg: findBone(root,[/left.*thigh/,/thigh_l/,/upleg_l/]), rightLeg: findBone(root,[/right.*thigh/,/thigh_r/,/upleg_r/]),
+    leftLeg: findBone(root,[/left.*thigh/,/left.*upleg/,/thigh_l/,/upleg_l/]), rightLeg: findBone(root,[/right.*thigh/,/right.*upleg/,/thigh_r/,/upleg_r/]),
+    leftKnee: findBone(root,[/leftleg$/,/left.*calf/,/calf_l/,/shin_l/]), rightKnee: findBone(root,[/rightleg$/,/right.*calf/,/calf_r/,/shin_r/]),
+    leftFoot: findBone(root,[/left.*foot/,/foot_l/]), rightFoot: findBone(root,[/right.*foot/,/foot_r/]),
   };
 }
 
@@ -113,14 +117,14 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (st
     dispose() { disposed = true; mixer?.stopAllAction(); if (loaded) mixer?.uncacheRoot(loaded); gameRig?.dispose(); },
     setOutfit(next: OutfitPreset) { equipment.setOutfit(next); },
     setFlightFans(active: boolean) { equipment.setFlightFans(active); },
-    update(time: number, speed: number, seated = false, reaching = 0, swimming = false, flying = false, flip = 0, jumping = false) {
+    update(time: number, speed: number, seated = false, reaching = 0, swimming = false, flying = false, flip = 0, jumping = false, motion: JumpAnimation = { tuck: jumping ? Math.max(.2, Math.sin(flip / 2) ** 2) : 0, crouch: 0, airborne: jumping }) {
       const delta = last ? Math.min(.05, Math.max(0,time-last)) : 0; last=time; mixer?.update(delta);
       const gait = Math.sin(time * (swimming ? 5.4 : 8)) * Math.min(speed,1);
       fallback.legs.forEach((leg,i)=>{leg.rotation.x=swimming ? gait*(i?-.25:.25)-.3 : seated?-1.35:gait*(i?-.48:.48);});
       fallback.knees.forEach((knee,i)=>{knee.rotation.x=swimming ? .35 + Math.max(0,gait*(i?-1:1))*.25 : seated?1.35:Math.max(0,gait*(i?-1:1))*.65;});
       fallback.arms.forEach((arm,i)=>{arm.rotation.x=swimming ? Math.sin(time*5.4 + i*Math.PI)*.85 : seated?-.95:-gait*(i?-.38:.38);});
       if (fallback.arms[0]) fallback.arms[0].rotation.z=-reaching*.72;
-      gameRig?.update(delta, speed, seated, swimming, flying, jumping);
+      gameRig?.update(delta, speed, seated, swimming, flying, jumping, motion);
       // Rotate the entire rendered character about the hips, never the camera/collider.
       visualRoot.rotation.x = -flip;
       visualRoot.position.set(0, .9 * (1 - Math.cos(flip)), .9 * Math.sin(flip));
@@ -131,6 +135,16 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (st
         if (rig.rightArm) rig.rightArm.rotation.x = swimming ? Math.sin(time*5.4+Math.PI)*.72 : seated ? -.75 : gait*.34;
         if (rig.leftArm) rig.leftArm.rotation.z = -reaching*.55;
         if (rig.head) rig.head.rotation.y = Math.sin(time*.8)*.025;
+      }
+      // Native rigs and the optional fallback also articulate the knees during the flip.
+      if (!gameRig && (motion.airborne || motion.crouch > 0)) {
+        const bend = motion.airborne ? .30 + 1.95 * motion.tuck : 1.0 * motion.crouch;
+        const hip = motion.airborne ? .18 + 1.35 * motion.tuck : .5 * motion.crouch;
+        for (const leg of [rig.leftLeg, rig.rightLeg]) if (leg) leg.rotation.x = hip;
+        for (const knee of [rig.leftKnee, rig.rightKnee]) if (knee) knee.rotation.x = -bend;
+        for (const foot of [rig.leftFoot, rig.rightFoot]) if (foot) foot.rotation.x = bend - hip;
+        fallback.legs.forEach(leg => { leg.rotation.x = hip; });
+        fallback.knees.forEach(knee => { knee.rotation.x = -bend; });
       }
       const visual = loaded ?? fallback.root;
       if (!gameRig) visual.position.y = (loaded ? loadedBaseY : 0) + Math.sin(time*(swimming?2.8:1.7))*(swimming?.015:.003);

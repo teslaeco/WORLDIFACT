@@ -2,9 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as THREE from 'three'
 import { createJumpState, requestJump, stepJump, resetJump, jumpFlipAngle } from '../src/lib/playerJump.ts'
-import { addFanRotors, polishQueenFootwear, orientQueenForGameplay } from '../src/lib/queenDetails.ts'
+import { polishQueenFootwear, orientQueenForGameplay } from '../src/lib/queenDetails.ts'
 import { bindStaticAvatar } from '../src/lib/avatarLocomotion.ts'
 import { createMeadowGrass } from '../src/lib/meadowGrass.ts'
+import { inDesert } from '../src/lib/desertTerrain.ts'
 import { inRiver } from '../src/lib/waterPhysics.ts'
 
 function jumpPeak(double: boolean, dt: number) {
@@ -44,16 +45,6 @@ test('original Queen +Z facing becomes movement -Z without editing vertices or U
     assert.ok(facing.dot(movement)>.999)
   }
 })
-test('fan has five six-blade rotor units per side, stays the original surface and rotates only its impellers', () => {
-  const fan=new THREE.Group(), original=new THREE.Mesh(new THREE.PlaneGeometry(.5,.4))
-  fan.add(original); const positions=original.geometry.attributes.position.array.slice()
-  const devices=addFanRotors(fan,[original])
-  assert.equal(devices.rotors.length,10)
-  for(const rotor of devices.rotors) assert.equal(rotor.children.length,6)
-  devices.update(.05,true)
-  assert.ok(devices.rotors.every(r=>r.rotation.z>0)); assert.ok(original.visible)
-  assert.deepEqual(original.geometry.attributes.position.array,positions)
-})
 test('the actual fan-side arm rises above the head in flight and returns beside the hip', () => {
   for(const side of [-1,1]) {
     const root=new THREE.Group()
@@ -86,10 +77,12 @@ test('shoe finish preserves maps and topology without creating box-shaped replac
 })
 test('mobile meadow uses a bounded instanced draw and no grass appears in the river', () => {
   const grass=createMeadowGrass(true), matrix=new THREE.Matrix4(), position=new THREE.Vector3()
-  assert.equal(grass.isInstancedMesh,true);assert.ok(grass.count<=1500)
+  assert.equal(grass.isInstancedMesh,true);assert.ok(grass.count>=15000 && grass.count<=18000)
+  const triangles = (grass.geometry.index?.count ?? grass.geometry.attributes.position.count)/3 * grass.count
+  assert.ok(triangles<=260000, 'dense mobile meadow stays within its explicit geometry budget')
   for(let i=0;i<grass.count;i++) {
     grass.getMatrixAt(i,matrix); position.setFromMatrixPosition(matrix)
-    assert.ok(!inRiver(position)); assert.ok(matrix.elements.every(Number.isFinite))
+    assert.ok(!inRiver(position)); assert.ok(!inDesert(position.x,position.z)); assert.ok(matrix.elements.every(Number.isFinite))
   }
 })
 

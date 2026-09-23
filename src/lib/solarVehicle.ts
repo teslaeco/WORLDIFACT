@@ -47,9 +47,9 @@ export function createSolarVehicle() {
     addBox(car, [.58, .12, .035], [side * .81, 1.28, -2.32], lamp);
     for (const z of [-1.55, 1.55]) {
       const wheel = new THREE.Group(); wheel.name = 'wheel'; wheel.position.set(side * 1.4, .68, z);
-      const tire = new THREE.Mesh(new THREE.CylinderGeometry(.66, .66, .43, 32), rubber); tire.rotation.z = Math.PI / 2; wheel.add(tire);
-      const disc = new THREE.Mesh(new THREE.CylinderGeometry(.49, .49, .455, 32), pv); disc.rotation.z = Math.PI / 2; wheel.add(disc);
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(.13, .13, .48, 16), trim); hub.rotation.z = Math.PI / 2; wheel.add(hub);
+      const tire = new THREE.Mesh(new THREE.TorusGeometry(.565, .095, 10, 40), rubber); tire.name = 'hollow-wheel-tyre'; tire.scale.z = .43 / .19; tire.rotation.y = Math.PI / 2; wheel.add(tire);
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(.49, .49, .455, 32), pv); disc.name = 'stock-wheel-disc'; disc.rotation.z = Math.PI / 2; wheel.add(disc);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(.13, .13, .48, 16), trim); hub.name = 'stock-wheel-hub'; hub.rotation.z = Math.PI / 2; wheel.add(hub);
       for (let i = 0; i < 24; i++) {
         const a = i * Math.PI / 12;
         const tread = addBox(wheel, [.45, .075, .095], [0, Math.cos(a) * .64, Math.sin(a) * .64], rubber);
