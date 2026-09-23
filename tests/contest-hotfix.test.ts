@@ -47,7 +47,8 @@ test('shared world avatar picker offers the exact current Queen and archived rap
   const world = await readFile(new URL('../src/components/StartingWorld.tsx', import.meta.url), 'utf8');
   const css = await readFile(new URL('../src/mobile-hotfix.css', import.meta.url), 'utf8');
   assert.match(player, /99397623-e45c-48dc-95ec-6f84446a54d5/);
-  assert.match(player, /\/api\/avatar\/rapper-la/);
+  const asset = await readFile(new URL('../src/lib/avatarAsset.ts', import.meta.url), 'utf8');
+  assert.match(asset, /\/api\/avatar\/rapper-la/);
   assert.match(world, /Fan Queen · 8 Planets \/ MPC2/);
   assert.match(world, /Fan 1 · Throw \/ drone/);
   assert.match(world, /Fan 2 · Mount both \/ fly/);

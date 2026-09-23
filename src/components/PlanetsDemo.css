@@ -43,3 +43,22 @@
 }
 @media (max-width:480px) { .planet-route { grid-template-columns:1fr; } }
 @media (prefers-reduced-motion:reduce) { .planet-runner { transition:none; } }
+
+/* Original planetary map images; gradient remains a network-failure fallback. */
+.planet-visual { min-height: 290px; background-color: #050d19; }
+.planet-sphere { width: 200px; height: 200px; right: calc(50% - 100px); top: 32px; background-size: auto 100%; background-repeat: repeat-x; background-position: 45% center; box-shadow: inset -48px -12px 45px #000b, inset 6px 3px 14px #ffffff25, 0 0 35px #7196cf30; animation: planet-map-turn 100s linear infinite; }
+.planet-mercury { background-image: url('https://www.solarsystemscope.com/textures/download/2k_mercury.jpg'), linear-gradient(135deg,#c5b9a4,#6e6256); }
+.planet-venus { background-image: url('https://www.solarsystemscope.com/textures/download/2k_venus_atmosphere.jpg'), linear-gradient(135deg,#f1c17f,#8c4f2d); }
+.planet-earth { background-image: url('https://www.solarsystemscope.com/textures/download/2k_earth_daymap.jpg'), linear-gradient(135deg,#59bce5,#2b6f4e); box-shadow: inset -48px -12px 45px #000b, inset 5px 2px 12px #e5f8ff66, 0 0 18px #499df85c; }
+.planet-mars { background-image: url('https://www.solarsystemscope.com/textures/download/2k_mars.jpg'), linear-gradient(135deg,#e47c52,#7b2f27); }
+.planet-jupiter { background-image: url('https://www.solarsystemscope.com/textures/download/2k_jupiter.jpg'), linear-gradient(135deg,#ead3ad,#b87954); }
+.planet-saturn { background-image: url('https://www.solarsystemscope.com/textures/download/2k_saturn.jpg'), linear-gradient(135deg,#e7d39d,#9d8357); }
+.planet-uranus { background-image: url('https://www.solarsystemscope.com/textures/download/2k_uranus.jpg'), linear-gradient(135deg,#b4edf1,#4ba1ae); }
+.planet-neptune { background-image: url('https://www.solarsystemscope.com/textures/download/2k_neptune.jpg'), linear-gradient(135deg,#5c8df1,#1b347a); }
+.planet-saturn-rings { position: absolute; width: 310px; height: 88px; left: calc(50% - 155px); top: 95px; border-radius: 50%; border: 21px double #d4c496a8; transform: rotate(-25deg); clip-path: polygon(0 50%, 100% 50%, 100% 100%, 0 100%); box-shadow: 0 5px 10px #0006; }
+.planet-texture-credit { color: #a5c4ce; font-size: 10px; line-height: 1.5; }
+.planet-texture-credit a { color: #cae7e8; }
+.planet-flight-line { bottom: 28px; opacity: .45; }
+.planet-rover { bottom: 29px; }
+@keyframes planet-map-turn { from { background-position: 45% center; } to { background-position: 245% center; } }
+@media (prefers-reduced-motion: reduce) { .planet-sphere { animation: none; } }

@@ -1,50 +1,18 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createAvatarEquipment, hideEmbeddedFanNodes, type OutfitPreset } from './playerEquipment.ts';
+import { createAvatarEquipment, type OutfitPreset } from './playerEquipment.ts';
+import { avatarBodyBounds, bindStaticAvatar, type GameRig } from './avatarLocomotion.ts';
+import { disposeObject } from './worldGeometry.ts';
+import { loadAvatarBytes } from './avatarAsset.ts';
 
 export const NEPTUNE_QUEEN_AVATAR_JOB = '99397623-e45c-48dc-95ec-6f84446a54d5';
 export type AvatarChoice = 'queen' | 'rapper';
-const AVATAR_URLS: Record<AvatarChoice, string> = { queen: '/api/avatar/neptune-queen', rapper: '/api/avatar/rapper-la' };
 
 type Rig = {
   hips?: THREE.Bone; head?: THREE.Bone;
   leftArm?: THREE.Bone; rightArm?: THREE.Bone;
   leftLeg?: THREE.Bone; rightLeg?: THREE.Bone;
 };
-
-function proceduralQueenFallback() {
-  const root = new THREE.Group(); root.name = 'neptune-queen-fallback';
-  const dark = new THREE.MeshStandardMaterial({ color: '#071525', roughness: .58, metalness: .18 });
-  const teal = new THREE.MeshStandardMaterial({ color: '#078c89', roughness: .38, metalness: .42 });
-  const emerald = new THREE.MeshStandardMaterial({ color: '#087547', roughness: .42, metalness: .28 });
-  const skin = new THREE.MeshStandardMaterial({ color: '#b98568', roughness: .72 });
-  const hair = new THREE.MeshStandardMaterial({ color: '#111216', roughness: .62 });
-  const part = (parent: THREE.Group, radius: number, length: number, y: number, mat = dark) => {
-    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 6, 10), mat);
-    mesh.position.y = y; mesh.castShadow = true; parent.add(mesh); return mesh;
-  };
-  part(root, .19, .33, 1.16, dark);
-  const waist = new THREE.Mesh(new THREE.ConeGeometry(.24, .17, 8), teal); waist.position.y = .96; root.add(waist);
-  const neck = part(root, .07, .05, 1.48, skin); neck.scale.x = .9;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.15, 18, 14), skin); head.position.y = 1.69; head.scale.set(.9, 1.15, .9); root.add(head);
-  const bun = new THREE.Mesh(new THREE.SphereGeometry(.095, 14, 10), hair); bun.position.set(0,1.86,.01); bun.scale.set(.9,1.2,.9); root.add(bun);
-  const collar = new THREE.Mesh(new THREE.ConeGeometry(.2,.25,6,1), teal); collar.position.set(0,1.44,.02); collar.rotation.x = Math.PI; root.add(collar);
-  const legs: THREE.Group[] = [], knees: THREE.Group[] = [], arms: THREE.Group[] = [];
-  for (const side of [-1, 1]) {
-    const hip = new THREE.Group(); hip.position.set(side * .115, .88, 0); root.add(hip); legs.push(hip);
-    part(hip, .072, .32, -.2, skin);
-    const knee = new THREE.Group(); knee.position.y = -.42; hip.add(knee); knees.push(knee);
-    part(knee, .06, .3, -.21, skin);
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(.13,.09,.25), dark); shoe.position.set(0,-.45,-.06); knee.add(shoe);
-    const shoulder = new THREE.Group(); shoulder.position.set(side * .27,1.38,0); root.add(shoulder); arms.push(shoulder);
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(.16,.36,4), side < 0 ? emerald : teal); spike.rotation.z = side * Math.PI / 2; spike.position.set(side * .12,.02,0); shoulder.add(spike);
-    part(shoulder,.058,.2,-.14,dark);
-    const fore = new THREE.Group(); fore.position.y=-.29; shoulder.add(fore); part(fore,.047,.2,-.14,skin);
-  }
-  root.userData.avatarSource = 'procedural-fallback-current-queen-target';
-  return { root, legs, knees, arms };
-}
-
 
 function proceduralRapperFallback() {
   const root = new THREE.Group(); root.name = 'rapper-fallback';
@@ -92,40 +60,54 @@ function findRig(root: THREE.Object3D): Rig {
   };
 }
 
-export function createPlayerAvatar(choice: AvatarChoice = 'queen') {
-  const fallback = choice === 'rapper' ? proceduralRapperFallback() : proceduralQueenFallback();
+export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (state: 'loading' | 'ready' | 'error') => void) {
+  const fallback = choice === 'rapper' ? proceduralRapperFallback() : { root: new THREE.Group(), legs: [] as THREE.Group[], knees: [] as THREE.Group[], arms: [] as THREE.Group[] };
+  let disposed = false, gameRig: GameRig | null = null;
+  rootState('loading');
+  function rootState(state: 'loading' | 'ready' | 'error') { onState?.(state); }
   const root = new THREE.Group(); root.name = choice === 'rapper' ? 'rapper-player' : 'neptune-queen-player'; root.userData.avatarSource = choice === 'rapper' ? 'froge-archive:rapper-v10.glb' : `oracle-job:${NEPTUNE_QUEEN_AVATAR_JOB}`;
-  const avatarUrl = AVATAR_URLS[choice];
   root.add(fallback.root);
   const equipment = createAvatarEquipment(root);
   let loaded: THREE.Object3D | null = null, rig: Rig = {}, mixer: THREE.AnimationMixer | null = null, last = 0;
   let loadedBaseY = 0;
 
   if ('document' in globalThis) {
-    new GLTFLoader().load(avatarUrl, gltf => {
+    void loadAvatarBytes(choice).then(bytes => {
+      if (disposed) return null;
+      return new GLTFLoader().parseAsync(bytes, '/api/avatar/');
+    }).then(gltf => {
+      if (!gltf) return;
+      if (disposed) { disposeObject(gltf.scene); return; }
       const model = gltf.scene;
-      const bounds = new THREE.Box3().setFromObject(model), size = bounds.getSize(new THREE.Vector3());
-      if (!Number.isFinite(size.y) || size.y <= .01) return;
+      const { body: bounds } = avatarBodyBounds(model), size = bounds.getSize(new THREE.Vector3());
+      if (!Number.isFinite(size.y) || size.y <= .01) { disposeObject(model); rootState('error'); return; }
       const scale = 1.78 / size.y;
-      model.scale.setScalar(scale); model.updateMatrixWorld(true);
-      const scaled = new THREE.Box3().setFromObject(model), center = scaled.getCenter(new THREE.Vector3());
+      model.scale.multiplyScalar(scale); model.updateMatrixWorld(true);
+      const { body: scaled, center } = avatarBodyBounds(model);
       model.position.x -= center.x; model.position.z -= center.z; model.position.y -= scaled.min.y;
       loadedBaseY = model.position.y;
       model.name = choice === 'rapper' ? 'Rapper_archive_v10' : 'Neptune_Queen_current_99397623';
-      if (choice === 'queen') root.userData.hiddenEmbeddedFans = hideEmbeddedFanNodes(model);
+      // The original fan belongs to the character; it must not be hidden.
       model.traverse(part => { if (part instanceof THREE.Mesh) { part.castShadow = true; part.receiveShadow = true; } });
       fallback.root.visible = false; loaded = model; root.add(model); rig = findRig(model);
+      if (choice === 'queen' && !rig.leftLeg && !rig.rightLeg && !gltf.animations.length) {
+        // Bind only the original character, not the optional equipment overlays.
+        equipment.root.removeFromParent();
+        try { gameRig = bindStaticAvatar(root); } finally { root.add(equipment.root); }
+        root.userData.fanParts = gameRig.fanParts; root.userData.fanAttached = gameRig.fanAttached;
+      }
       if (gltf.animations.length) {
         mixer = new THREE.AnimationMixer(model);
         const clip = gltf.animations.find(c => /idle|walk|locomotion/i.test(c.name)) ?? gltf.animations[0];
         mixer.clipAction(clip).reset().play();
       }
-      root.userData.avatarLoaded = true;
-    }, undefined, () => { root.userData.avatarLoaded = false; });
+      root.userData.avatarLoaded = true; rootState('ready');
+    }).catch(() => { if (!disposed) { root.userData.avatarLoaded = false; root.visible = false; rootState('error'); } });
   }
 
   return {
     root,
+    dispose() { disposed = true; mixer?.stopAllAction(); if (loaded) mixer?.uncacheRoot(loaded); gameRig?.dispose(); },
     setOutfit(next: OutfitPreset) { equipment.setOutfit(next); },
     setFlightFans(active: boolean) { equipment.setFlightFans(active); },
     update(time: number, speed: number, seated = false, reaching = 0, swimming = false) {
@@ -134,8 +116,9 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen') {
       fallback.legs.forEach((leg,i)=>{leg.rotation.x=swimming ? gait*(i?-.25:.25)-.3 : seated?-1.35:gait*(i?-.48:.48);});
       fallback.knees.forEach((knee,i)=>{knee.rotation.x=swimming ? .35 + Math.max(0,gait*(i?-1:1))*.25 : seated?1.35:Math.max(0,gait*(i?-1:1))*.65;});
       fallback.arms.forEach((arm,i)=>{arm.rotation.x=swimming ? Math.sin(time*5.4 + i*Math.PI)*.85 : seated?-.95:-gait*(i?-.38:.38);});
-      fallback.arms[0].rotation.z=-reaching*.72;
-      if (loaded && !mixer) {
+      if (fallback.arms[0]) fallback.arms[0].rotation.z=-reaching*.72;
+      gameRig?.update(delta, speed, seated, swimming);
+      if (loaded && !mixer && !gameRig) {
         if (rig.leftLeg) rig.leftLeg.rotation.x = swimming ? gait*.24-.25 : seated ? -1.15 : gait*.42;
         if (rig.rightLeg) rig.rightLeg.rotation.x = swimming ? -gait*.24-.25 : seated ? -1.15 : -gait*.42;
         if (rig.leftArm) rig.leftArm.rotation.x = swimming ? Math.sin(time*5.4)*.72 : seated ? -.75 : -gait*.34;
@@ -144,8 +127,8 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen') {
         if (rig.head) rig.head.rotation.y = Math.sin(time*.8)*.025;
       }
       const visual = loaded ?? fallback.root;
-      visual.position.y = (loaded ? loadedBaseY : 0) + Math.sin(time*(swimming?2.8:1.7))*(swimming?.015:.003);
-      visual.rotation.z = swimming ? Math.sin(time*2.1)*.035 : Math.sin(time*.75)*.004;
+      if (!gameRig) visual.position.y = (loaded ? loadedBaseY : 0) + Math.sin(time*(swimming?2.8:1.7))*(swimming?.015:.003);
+      if (!gameRig) visual.rotation.z = swimming ? Math.sin(time*2.1)*.035 : Math.sin(time*.75)*.004;
       equipment.update(time);
     }
   };

@@ -38,9 +38,11 @@ export default function PlanetsWorld() {
           <p><strong>Hazard:</strong> {planet.hazard}</p>
           <div className="planet-visual" aria-hidden="true">
             <span className={`planet-sphere planet-${planet.id}`} />
+            {planet.id === 'saturn' && <span className="planet-saturn-rings" />}
             <span className="planet-flight-line" />
             <span className="planet-rover">▲</span>
           </div>
+          <small className="planet-texture-credit">Planet maps: <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener noreferrer">Solar System Scope</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. Artistic lighting and map projection.</small>
           <div className="scene-toolbar">
             <button type="button" className="primary" onClick={() => setTab('mini')}>Play Mini test</button>
             <button type="button" disabled>Start full level · PLANNED</button>
