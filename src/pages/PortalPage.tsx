@@ -60,6 +60,16 @@ export default function PortalPage() {
       <div>
         <span className="eyebrow">CHESS CUBE 512 AI</span>
         <h2>Play Chess Cube 512 AI</h2>
+        <svg className="chess-instant-preview" viewBox="0 0 560 410" role="img" aria-label="Chess Cube preview: eight boards, eight rows and eight columns, 512 squares">
+          <title>Chess Cube 512 — board preview</title>
+          <defs><linearGradient id="chess-preview-glow" x2="1" y2="1"><stop stopColor="#72ead7"/><stop offset="1" stopColor="#8c9dff"/></linearGradient></defs>
+          {Array.from({ length: 8 }, (_, layer) => <g key={layer} transform={`translate(110 ${356 - layer * 39}) matrix(1 .32 1 -.32 0 0)`}>
+            <rect x="-2" y="-2" width="164" height="164" fill="#0c182a" stroke="url(#chess-preview-glow)" strokeWidth="2"/>
+            {Array.from({ length: 64 }, (_, square) => <rect key={square} x={(square % 8) * 20} y={Math.floor(square / 8) * 20} width="19" height="19" fill={(square % 8 + Math.floor(square / 8)) % 2 ? '#20354b' : '#d0e8e5'} />)}
+          </g>)}
+          <path d="M110 83V356M430 83V356M270 32V305" stroke="url(#chess-preview-glow)" strokeWidth="2" opacity=".65"/>
+          <text x="280" y="401" textAnchor="middle" fill="#c5e6ec" fontSize="13">8 × 8 × 8 · BOARD PREVIEW</text>
+        </svg>
         <p>Step into eight levels of chess. Open the full-screen game with your shared WORLDIFACT identity, or explore as a guest.</p>
         <div className="foundation-actions">
           <a className="button-link" href={user ? '/apps/chess/index.html' : `${app.frame}?guest=1`}>Launch Chess Cube 512 AI →</a>

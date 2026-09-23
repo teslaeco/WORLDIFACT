@@ -42,3 +42,6 @@
   .world-tabs > * { width:100%; text-align:center; }
 }
 @media (max-width:460px) { .world-tabs { grid-template-columns:1fr; } }
+
+.chess-instant-preview { display: block; width: min(100%, 500px); height: auto; max-height: 390px; margin: 8px auto 16px; filter: drop-shadow(0 0 15px #65dcc326); }
+.chess-launch { height: auto !important; min-height: 0; }

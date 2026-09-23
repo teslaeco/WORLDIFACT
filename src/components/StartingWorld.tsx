@@ -81,6 +81,8 @@ export default function StartingWorld({
   const [failed, setFailed] = useState(false),
     [ready, setReady] = useState(false),
     [driving, setDriving] = useState(false);
+  const [avatarState, setAvatarState] = useState<"loading" | "ready" | "error">("loading");
+  const [avatarAttempt, setAvatarAttempt] = useState(0);
   const [textureFailed, setTextureFailed] = useState(false);
   const [sculptureFailed, setSculptureFailed] = useState(false);
   const [interaction, setInteraction] = useState("Interact");
@@ -267,7 +269,7 @@ export default function StartingWorld({
         portal.g.add(sculpture);
       }
     }).catch(() => { if (!sculptureDisposed) setSculptureFailed(true); });
-    const avatar = createPlayerAvatar(avatarChoice);
+    const avatar = createPlayerAvatar(avatarChoice, state => queueMicrotask(() => { if (!sculptureDisposed) setAvatarState(state); }));
     avatarRuntime.current = avatar;
     avatar.setOutfit(outfitRef.current);
     avatar.setFlightFans(false);
@@ -495,8 +497,9 @@ export default function StartingWorld({
       previous = now;
       elapsed += dt;
       const axes = movementAxes(input.current, stick.current);
-      const move = boarding || overview.current ? 0 : axes.forward;
-      const side = boarding || overview.current ? 0 : axes.side;
+      const waitingForQueen = avatarChoice === "queen" && !avatar.root.userData.avatarLoaded;
+      const move = waitingForQueen || boarding || overview.current ? 0 : axes.forward;
+      const side = waitingForQueen || boarding || overview.current ? 0 : axes.side;
       const controllingDrone = equipmentMode === "drone";
       if (ride) yaw -= side * dt * 1.25;
       forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
@@ -512,7 +515,7 @@ export default function StartingWorld({
         fanDrone.root.position.z = THREE.MathUtils.clamp(fanDrone.root.position.z, -46, 46);
         fanDrone.root.position.y = THREE.MathUtils.damp(fanDrone.root.position.y, 2.7 + Math.sin(elapsed * 1.8) * .18, 5, dt);
       } else {
-        const movementSpeed = ride ? 16 : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? 7 : SWIM_SPEED;
+        const movementSpeed = ride ? 16 : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? 2.1 : SWIM_SPEED;
         player.addScaledVector(forward, move * dt * movementSpeed);
         if (!ride) player.addScaledVector(right, side * dt * movementSpeed);
         player.x = THREE.MathUtils.clamp(player.x, -42, 42);
@@ -669,7 +672,7 @@ export default function StartingWorld({
           );
       }
       let seated = !!ride;
-      let gait = Math.min(1, Math.hypot(player.x - old.x, player.z - old.z) / Math.max(dt * 4, .001));
+      let gait = Math.min(1, Math.hypot(player.x - old.x, player.z - old.z) / Math.max(dt * 2.1, .001));
       let reaching = 0;
       let swimming = waterMode !== "land";
       if (boarding) {
@@ -809,6 +812,7 @@ export default function StartingWorld({
       renderer.domElement.removeEventListener("webglcontextlost", lost);
       renderer.domElement.removeEventListener("webglcontextrestored", restored);
       clear();
+      avatar.dispose();
       if (avatarRuntime.current === avatar) avatarRuntime.current = null;
       runtimeObjects.current = [];
       environment?.dispose();
@@ -817,7 +821,7 @@ export default function StartingWorld({
       renderer.forceContextLoss();
       renderer.domElement.remove();
     };
-  }, [sceneStructure, activePortalId, avatarChoice]);
+  }, [sceneStructure, activePortalId, avatarChoice, avatarAttempt]);
   useEffect(() => {
     const byId = new Map(blueprint.objects.map((o) => [o.id, o]));
     for (const runtime of runtimeObjects.current) {
@@ -848,6 +852,8 @@ export default function StartingWorld({
         <span className="eyebrow">GENERATED SCENERY · DEMO GAMEPLAY</span>
         <strong>{blueprint.title}</strong>
         <span>{location}</span>
+        {avatarState === "loading" && <span role="status">Loading the original detailed character…</span>}
+        {avatarState === "error" && <span role="alert">The original character could not load. <button type="button" onClick={() => setAvatarAttempt(value => value + 1)}>Retry character</button></span>}
         {textureFailed ? <span role="status">Scenery image unavailable. Movement remains available.</span> : null}
         {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
       </div>
@@ -891,7 +897,7 @@ export default function StartingWorld({
       </button>
       {inventoryOpen && <div className="equipment-panel" role="group" aria-label="Player equipment">
         <strong>Equipment</strong>
-        <small>Starts fan-free. Outfit overlays are GAME preview equipment.</small>
+        <small>Original hand fan stays visible. Shoulder flight fans are optional GAME equipment.</small>
         <label>Outfit
           <select value={outfit} onChange={e => setOutfit(e.target.value as OutfitPreset)} aria-label="Choose outfit">
             <option value="original">Original</option>

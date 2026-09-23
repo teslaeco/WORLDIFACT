@@ -33,5 +33,14 @@ export default function BrandShowcase() {
         </a>
       </li>)}
     </ul>
+    <section className="iss-petition" aria-labelledby="iss-petition-title">
+      <div>
+        <span className="brand-showcase-eyebrow">OUR PRESERVATION CAMPAIGN</span>
+        <h2 id="iss-petition-title">Repair the ISS. Don’t destroy it.</h2>
+        <p>Help us call for the study of repair and preservation of the International Space Station as humanity’s heritage. We would be grateful for your signature and for sharing the petition. Thank you for supporting this idea.</p>
+        <small>A citizen-led proposal, not a claim of technical feasibility or space-agency endorsement.</small>
+      </div>
+      <a className="iss-petition-sign" href="https://c.org/QkbzHd5kWN" target="_blank" rel="noopener noreferrer">Sign the petition <span aria-hidden="true">↗</span><span className="brand-banner-sr"> (opens in a new tab)</span></a>
+    </section>
   </section>
 }

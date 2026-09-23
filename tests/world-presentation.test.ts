@@ -54,8 +54,8 @@ test('vehicle has distinct hinged doors, four complete wheels and fits its colli
   disposeObject(car);
 });
 
-test('animation mannequin has a standing height and seated animation stays finite', () => {
-  const avatar = createPlayerAvatar();
+test('the optional rapper mannequin has a standing height and seated animation stays finite', () => {
+  const avatar = createPlayerAvatar('rapper');
   const bounds = new THREE.Box3().setFromObject(avatar.root);
   assert.ok(bounds.min.y >= -.04 && bounds.max.y > 1.7 && bounds.max.y < 2);
   for (const seated of [false, true]) for (const time of [0, .4, 1.1]) {
@@ -65,3 +65,15 @@ test('animation mannequin has a standing height and seated animation stays finit
   }
   disposeObject(avatar.root);
 });
+
+
+test('the Queen never renders a low-detail substitute while her original is unavailable', () => {
+  const avatar = createPlayerAvatar('queen')
+  let visibleMeshes = 0
+  avatar.root.traverseVisible(object => { if (object instanceof THREE.Mesh) visibleMeshes++ })
+  assert.equal(visibleMeshes, 0)
+  assert.notEqual(avatar.root.userData.avatarLoaded, true)
+  avatar.update(1, 0)
+  avatar.dispose()
+  disposeObject(avatar.root)
+})

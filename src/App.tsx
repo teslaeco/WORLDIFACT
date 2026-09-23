@@ -1,7 +1,9 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import LoadingFallback from './components/LoadingFallback'
 import AccountStatusBar from './components/AccountStatusBar'
+import { useAccount } from './lib/account'
+import { clearAvatarAssets, loadAvatarBytes } from './lib/avatarAsset'
 
 const HomePage = lazy(async () => import('./pages/HomePage'))
 const PortalPage = lazy(async () => import('./pages/PortalPage'))
@@ -12,9 +14,21 @@ const AccountPage = lazy(async () => import('./pages/AccountPage'))
 const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
+function AvatarPreload() {
+  const { user } = useAccount()
+  // Use the login transition to prepare the exact original, not a low-detail copy.
+  useEffect(() => {
+    clearAvatarAssets()
+    if (user) void loadAvatarBytes('queen').catch(() => { /* The world offers explicit retry. */ })
+    return clearAvatarAssets
+  }, [user?.id])
+  return null
+}
+
 export default function App() {
   return (
     <>
+    <AvatarPreload />
     <AccountStatusBar />
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
