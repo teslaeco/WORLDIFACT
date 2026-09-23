@@ -1,21 +1,10 @@
 import * as THREE from 'three';
+import { createPVMaterial } from './pvMaterial.ts';
 
 /** Original procedural GAME mesh shaped from the owner's PV vehicle reference. */
 export function createSolarVehicle() {
   const car = new THREE.Group();
-  const data = new Uint8Array(64 * 64 * 4);
-  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
-    const i = (y * 64 + x) * 4;
-    const border = x % 16 === 0 || y % 32 === 0;
-    const busbar = x % 16 === 8;
-    data.set(border ? [109, 154, 177, 255] : busbar ? [54, 100, 128, 255] : [13 + y % 3, 37 + y % 3, 66 + y % 3, 255], i);
-  }
-  const cells = new THREE.DataTexture(data, 64, 64);
-  cells.colorSpace = THREE.SRGBColorSpace;
-  cells.wrapS = cells.wrapT = THREE.RepeatWrapping;
-  cells.repeat.set(2, 2);
-  cells.needsUpdate = true;
-  const pv = new THREE.MeshStandardMaterial({ map: cells, color: '#b7d6ed', roughness: .31, metalness: .45 });
+  const pv = createPVMaterial();
   const trim = new THREE.MeshStandardMaterial({ color: '#344b59', roughness: .4, metalness: .75 });
   trim.name = 'worldifact-object-color';
   const rubber = new THREE.MeshStandardMaterial({ color: '#18212a', roughness: .98 });

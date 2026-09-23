@@ -18,6 +18,7 @@ import { createJumpState, requestJump, resetJump, stepJump, jumpFlipAngle, jumpA
 import { createMeadowGrass, createMeadowTexture, updateMeadowGrass } from "../lib/meadowGrass";
 import { WALK_SPEED } from "../lib/avatarPose";
 import { createSandField, createSoilLoad, inDesert } from "../lib/desertTerrain";
+import { excavationCamera } from "../lib/excavationCamera";
 import { createDesertScene, meadowGroundGeometry } from "../lib/desertScene";
 import { createBackhoe, type DigTool } from "../lib/backhoe";
 import { parseRim, mountRim } from "../lib/vehicleRims";
@@ -64,7 +65,7 @@ export default function StartingWorld({
   const [wide, setWide] = useState(false);
   const [zoomValue, setZoomValue] = useState(4.8);
   const [jumpCount, setJumpCount] = useState(0);
-  const [vehicleHud, setVehicleHud] = useState({ enabled: false, tool: "loader", action: "carry", load: 0 });
+  const [vehicleHud, setVehicleHud] = useState({ enabled: false, tool: "loader", action: "carry", load: 0, capacity: 1600, status: "Ready" });
   const [rimStatus, setRimStatus] = useState("Original Astra rim: file not linked. Load the original GLB; no screenshot substitute.");
   const sandSession = useRef<{ key: string; field: ReturnType<typeof createSandField>; loads: Map<string, { load: ReturnType<typeof createSoilLoad>; enabled: boolean; tool: DigTool }> } | null>(null);
   const rimSource = useRef<THREE.Object3D | null>(null);
@@ -200,7 +201,7 @@ export default function StartingWorld({
       ctx.fillStyle='#ffffff';ctx.font='24px sans-serif';ctx.fillText('Drive · lower bucket · collect · dump',256,111)
       ctx.font='20px sans-serif';ctx.fillText('GAME terrain · changes last in this session',256,156)
       const label=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas),depthTest:true,depthWrite:false}))
-      label.position.set(17.5,2.7,15.5);label.scale.set(5.1,1.91,1);desert.root.add(label)
+      label.position.set(39,1.5,37);label.scale.set(2.8,1.05,1);desert.root.add(label)
     }
   }
     const grass = !lunar && !sea ? createMeadowGrass(mobile) : null;
@@ -400,6 +401,7 @@ export default function StartingWorld({
       cameraAim = new THREE.Vector3();
     const jump = createJumpState();
     let flightHeight = 0, shownJumps = -1, cameraInitialized = false;
+    let vehicleViewYaw = 0;
     let yaw = 0,
       pitch = -0.16,
       ride: (typeof objects)[number] | null = null,
@@ -502,7 +504,9 @@ export default function StartingWorld({
       const dx = e.clientX - drag.x,
         dy = e.clientY - drag.y;
       drag.moved += Math.abs(dx) + Math.abs(dy);
-      yaw -= dx * 0.003;
+      // Looking around a parked excavator must NOT turn the chassis or move its bucket.
+      if (ride) vehicleViewYaw -= dx * 0.003;
+      else yaw -= dx * 0.003;
       pitch = THREE.MathUtils.clamp(pitch - dy * 0.003, -0.8, 0.6);
       drag.x = e.clientX;
       drag.y = e.clientY;
@@ -660,10 +664,10 @@ export default function StartingWorld({
           if (!machine || !sandField) setCaptureNotice("Enter the rover in the meadow to use the loader.");
           else if (a === "backhoe-mode") {
             if (machine.load.amount > .00001 && machine.enabled) setCaptureNotice("Empty the bucket before removing the attachment.");
-            else { machine.setEnabled(!machine.enabled); setCaptureNotice("Desert digging area: right of the meadow, X 15–40 / Z 14–39. Dig lowers the selected bucket into contact with the sand."); }
+            else { vehicleViewYaw = 0; machine.setEnabled(!machine.enabled); setCaptureNotice("Desert digging area: right of the meadow, X 15–40 / Z 14–39. Dig lowers the selected bucket into contact with the sand."); }
           } else if (a === "bucket-tool") {
             if (machine.load.amount > .00001) setCaptureNotice("Empty the current bucket before switching tools.");
-            else machine.setTool(machine.tool === "loader" ? "backhoe" : "loader");
+            else { vehicleViewYaw = 0; machine.setTool(machine.tool === "loader" ? "backhoe" : "loader"); }
           }
           else if (a === "bucket-dig") machine.setAction("dig");
           else if (a === "bucket-dump") machine.setAction("dump");
@@ -721,7 +725,7 @@ export default function StartingWorld({
           zoom.current = 4.8; setZoomValue(4.8);
           overview.current = false; setWide(false);
           for (const object of objects) object.doorOpen = false;
-          yaw = 0;
+          yaw = 0; vehicleViewYaw = 0;
           pitch = -0.16;
           ride = null;
           setDriving(false);
@@ -849,13 +853,19 @@ export default function StartingWorld({
       } else if (ride && !boarding) {
         ride.group.position.set(player.x, vehicleGround(ride, player.x, player.z, yaw).y, player.z);
         ride.group.rotation.y = yaw;
-        camera.position
-          .copy(player)
-          .addScaledVector(forward, -(zoom.current + 1) * specOf(ride).scale);
-        camera.position.y = ride.group.position.y + 4.6 * specOf(ride).scale;
-        target.copy(player).addScaledVector(forward, 6);
-        target.y = ride.group.position.y + 1.3;
-        camera.lookAt(target);
+        const machine = backhoes.get(ride);
+        if (machine?.enabled) {
+          const view = excavationCamera(ride.group, machine.contact(), machine.tool === "backhoe", zoom.current, vehicleViewYaw, pitch);
+          cameraGoal.copy(view.position); cameraAim.copy(view.target);
+        } else {
+          const orbit = forward.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), vehicleViewYaw);
+          cameraGoal.copy(player).addScaledVector(orbit, -(zoom.current + 1) * specOf(ride).scale);
+          cameraGoal.y = ride.group.position.y + 4.6 * specOf(ride).scale;
+          cameraAim.copy(player).addScaledVector(forward, 2.0);
+          cameraAim.y = ride.group.position.y + 1.3;
+        }
+        camera.position.lerp(cameraGoal, 1 - Math.exp(-7 * dt));
+        target.lerp(cameraAim, 1 - Math.exp(-9 * dt)); camera.lookAt(target);
         for (const w of ride.group.children)
           if (w.name === "wheel") w.rotation.x -= Math.sign(move) * Math.hypot(player.x - old.x, player.z - old.z) / (.66 * specOf(ride).scale);
       } else {
@@ -889,7 +899,7 @@ export default function StartingWorld({
       if (now - hud > 200) {
         hud = now;
         const machine = ride ? backhoes.get(ride) : undefined;
-        setVehicleHud({ enabled: machine?.enabled ?? false, tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0 });
+        setVehicleHud({ enabled: machine?.enabled ?? false, tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0, capacity: machine ? Math.round(machine.load.capacity * 1000) : 1600, status: machine?.status ?? "Ready" });
         const travelMode = controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
         setLocation(
           `${sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
@@ -904,7 +914,7 @@ export default function StartingWorld({
                 : waterMode === "swimming" || waterMode === "falling"
                   ? "Swimming · joystick / WASD · you can enter portals directly from the water"
                   : ride
-                    ? machine?.enabled ? `Desert X 15–40 / Z 14–39 · ${machine.tool} · ${Math.round(machine.load.amount * 1000)} L · Raise/carry to drive` : "Joystick: drive & steer · enable Backhoe mode to dig in the desert"
+                    ? machine?.enabled ? `Front-quarter work view · drag to look · ${machine.status}` : "Joystick: drive & steer · enable Backhoe mode to dig in the desert"
                     : near
                       ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
                       : mobile ? "Left thumb: move · right thumb: look · tap Jump twice for a flip" : "WASD move · Space jump (twice: flip) · G fly/land · I equipment",
@@ -962,7 +972,7 @@ export default function StartingWorld({
   }, [blueprint]);
   return (
     <section
-      className="starting-world-shell"
+      className={`starting-world-shell${driving ? " is-driving" : ""}${inventoryOpen ? " equipment-open" : ""}`}
       aria-label="WORLDIFACT playable world"
     >
       <div className="starting-world" ref={mount} />
@@ -987,7 +997,18 @@ export default function StartingWorld({
         {textureFailed ? <span role="status">Scenery image unavailable. Movement remains available.</span> : null}
         {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
       </div>
-      <div className="world-actions">
+      <label className="avatar-note avatar-picker">Character
+        <select value={avatarChoice} onChange={e => setAvatarChoice(e.target.value as AvatarChoice)} aria-label="Choose player character">
+          <option value="queen">Fan Queen · 8 Planets / MPC2</option>
+          <option value="rapper">Rapper · MPC2 archive</option>
+        </select>
+      </label>
+      <button type="button" className="equipment-toggle" aria-expanded={inventoryOpen} onClick={() => setInventoryOpen(value => !value)}>
+        Equipment
+      </button>
+      {inventoryOpen && <div className="equipment-panel" role="group" aria-label="Player equipment">
+        <strong>Equipment &amp; view</strong>
+        <div className="world-actions">
         <button
           onClick={() => {
             action.current = "drive";
@@ -1016,19 +1037,8 @@ export default function StartingWorld({
         <button onClick={() => capture.current?.()}>Save view PNG</button>
         <label className="camera-zoom">Camera <input aria-label="Camera distance" type="range" min="3" max="24" step="0.1" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
       </div>
-      <label className="avatar-note avatar-picker">Character
-        <select value={avatarChoice} onChange={e => setAvatarChoice(e.target.value as AvatarChoice)} aria-label="Choose player character">
-          <option value="queen">Fan Queen · 8 Planets / MPC2</option>
-          <option value="rapper">Rapper · MPC2 archive</option>
-        </select>
-      </label>
-      <button type="button" className="equipment-toggle" aria-expanded={inventoryOpen} onClick={() => setInventoryOpen(value => !value)}>
-        Equipment
-      </button>
-      {inventoryOpen && <div className="equipment-panel" role="group" aria-label="Player equipment">
-        <strong>Equipment</strong>
         <label>Camera distance <input aria-label="Equipment camera distance" type="range" min="3" max="12" step="0.1" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
-        <small>The complete original fan stays in the hand; added decorative rotors were removed. Flight hardware is separate GAME equipment.</small>
+        <small>The original fan, its handle and all nine original rotor modules move together with the hand. Flight hardware is separate GAME equipment.</small>
         <label>Outfit
           <select value={outfit} onChange={e => setOutfit(e.target.value as OutfitPreset)} aria-label="Choose outfit">
             <option value="original">Original</option>
@@ -1051,14 +1061,14 @@ export default function StartingWorld({
         <small>Editable desert: X 15–40 / Z 14–39. Digging changes the terrain mesh. Terrain and bucket loads last for this world session.</small>
         <small>Keyboard: Space jump · press twice for a flip · G flight · F drone · I equipment.</small>
       </div>}
-      {driving && <div className="vehicle-tools" role="group" aria-label="Backhoe-loader controls">
+      {driving && !inventoryOpen && <div className="vehicle-tools" role="group" aria-label="Backhoe-loader controls">
         <button type="button" aria-pressed={vehicleHud.enabled} onClick={() => { action.current = "backhoe-mode"; }}>{vehicleHud.enabled ? "Remove attachment" : "Backhoe mode"}</button>
         {vehicleHud.enabled && <>
           <button type="button" disabled={vehicleHud.load > 0} onClick={() => { action.current = "bucket-tool"; }}>{vehicleHud.tool === "loader" ? "Front loader" : "Rear backhoe"} ⇄</button>
           <button type="button" aria-pressed={vehicleHud.action === "dig"} onClick={() => { action.current = "bucket-dig"; }}>Lower / dig</button>
           <button type="button" aria-pressed={vehicleHud.action === "carry"} onClick={() => { action.current = "bucket-carry"; }}>Raise / carry</button>
           <button type="button" disabled={vehicleHud.load === 0} aria-pressed={vehicleHud.action === "dump"} onClick={() => { action.current = "bucket-dump"; }}>Dump load</button>
-          <output aria-live="off">Bucket: {vehicleHud.load} / 650 L · GAME</output>
+          <output aria-live="off">Bucket: {vehicleHud.load} / {vehicleHud.capacity} L · GAME<br />{vehicleHud.status}</output>
         </>}
       </div>}
       {captureNotice && <div className="capture-notice" role="status">{captureNotice}</div>}
@@ -1069,10 +1079,10 @@ export default function StartingWorld({
         <TouchJoystick onMove={onStickMove} disabled={!ready || failed} />
         <div className="world-interact">
           <span>DRAG TO LOOK</span>
-          <div className="world-special-actions">
+          {!driving && <div className="world-special-actions">
             <button type="button" disabled={!ready || failed || driving || avatarState !== "ready"} aria-pressed={equipmentStatus === "flight"} onClick={() => { action.current = "fan-flight"; }}>{equipmentStatus === "flight" ? "Land" : "Fly"}<span className="keyboard-shortcut" aria-hidden="true">G</span></button>
             <button type="button" disabled={!ready || failed || driving || avatarState !== "ready" || equipmentStatus !== "stowed" || jumpCount >= 2} aria-label={jumpCount === 1 ? "Double jump and flip" : "Jump"} onClick={() => { jumpRequests.current = Math.min(2, jumpRequests.current + 1); }}>{jumpCount === 1 ? "Double jump" : "Jump"}<span className="keyboard-shortcut" aria-hidden="true">Space</span></button>
-          </div>
+          </div>}
           <button
             type="button"
             disabled={!ready || failed || interaction === "Interact"}

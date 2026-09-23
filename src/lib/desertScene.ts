@@ -22,10 +22,12 @@ export function createDesertScene(field:SandField) {
   }
   const geometry=new THREE.BufferGeometry();geometry.setIndex(indices)
   geometry.setAttribute('position',new THREE.BufferAttribute(position,3).setUsage(THREE.DynamicDrawUsage));geometry.setAttribute('uv',new THREE.BufferAttribute(uv,2));geometry.computeVertexNormals()
-  const material=new THREE.MeshStandardMaterial({color:'#d8ad6e',roughness:.97})
+  const colors=new Float32Array(field.heights.length*3)
+  geometry.setAttribute('color',new THREE.BufferAttribute(colors,3).setUsage(THREE.DynamicDrawUsage))
+  const material=new THREE.MeshStandardMaterial({color:'#e6bc7b',vertexColors:true,roughness:.97})
   material.onBeforeCompile=shader=>{
     shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vSand;').replace('#include <begin_vertex>','#include <begin_vertex>\nvSand = position;')
-    shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vSand;').replace('#include <color_fragment>','#include <color_fragment>\nfloat dune = sin(vSand.x * 9.0 + sin(vSand.z * 2.0)) * 0.04;\ndiffuseColor.rgb *= 0.96 + dune;')
+    shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vSand;').replace('#include <color_fragment>','#include <color_fragment>\nfloat dune = sin(vSand.x * 9.0 + sin(vSand.z * 2.0)) * 0.04 + sin(vSand.x * 82.0) * sin(vSand.z * 117.0) * 0.018;\ndiffuseColor.rgb *= 0.96 + dune;')
   }
   const mesh=new THREE.Mesh(geometry,material);mesh.name='diggable-sand-surface';mesh.receiveShadow=true;root.add(mesh)
   // A bounded subsurface bottom, below the maximum digging depth, closes the terrain box.
@@ -35,7 +37,12 @@ export function createDesertScene(field:SandField) {
   return {root,mesh, sync(){
     if(revision===field.revision)return false
     revision=field.revision
-    for(let i=0;i<field.heights.length;i++)position[i*3+1]=field.heights[i]
+    for(let i=0;i<field.heights.length;i++){
+      position[i*3+1]=field.heights[i]
+      const cut=Math.min(1,Math.max(0,field.original[i]-field.heights[i])/.70)
+      colors.set([1-.36*cut,1-.45*cut,1-.54*cut],i*3)
+    }
+    geometry.attributes.color.needsUpdate=true
     geometry.attributes.position.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingSphere();geometry.computeBoundingBox();return true
   }}
 }

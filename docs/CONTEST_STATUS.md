@@ -1,4 +1,17 @@
+## VERIFIED — final fast-travel cadence correction
+
+Full-speed movement uses a jogging support interval rather than six walking steps/second. 28 focused tests and a repeated numerical audit of the exact Queen GLB passed locally; the new CI head must pass before merge. No original-scene rendering or Android FPS is claimed.
+
 # WORLDIFACT — screenshot-driven Queen and terrain repair, 23 September 2026
+
+## 24 September — original-model and excavation correction (verification milestone)
+
+The owner's new screenshots reject the visual quality of PR #82; its green tests did not establish realistic presentation. The actual current Queen GLB has now been inspected numerically, rather than relying only on a surrogate. [Task, findings, changes and limits](VISUAL_EXCAVATION_REPAIR_20260924.md) and [actual source-model audit](evidence/queen-rig-original-2026-09-24.json).
+
+VERIFIED: torso-based centering, single-chain named legs, wholly hand-weighted fingers, complete 92-mesh original fan including nine rotor modules; source geometry signatures preserved. Faster traversal, separated vehicle camera orbit, front-quarter digging view, larger photovoltaic loader and a unified HUD are implemented. Targeted 27/27 tests, typecheck, lint (no errors), DEMO HTTP and frontend bundle pass locally. Full CI, merge and deployment are not inferred from this local milestone; their actual results belong in the PR/release record.
+
+BLOCKED: exact rim GLB from the comparison was not recovered; screenshots are not a substitute. UNKNOWN: rendered artistic quality and physical Android performance. Existing provider, billing and release safeguards are unchanged. Previous records are retained below, with their visual claims limited by this newer evidence.
+
 
 Owner authorization: implement on a branch, create a PR and merge after green CI. Baseline main is `76c8f8344cd33e1b0bdc5de32863d2ad26a723c0` / PR #81. The owner rejected PR #81's walking, straight-legged flip, fan embellishments and sparse grass. Earlier synthetic passes are not positive original-model visual acceptance.
 

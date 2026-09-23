@@ -5,7 +5,7 @@ export function inDesert(x: number, z: number, margin = 0) {
 }
 export interface SoilLoad { amount: number; capacity: number }
 export interface Contact { x: number; y: number; z: number; radius: number }
-export const createSoilLoad = (): SoilLoad => ({ amount: 0, capacity: .65 })
+export const createSoilLoad = (): SoilLoad => ({ amount: 0, capacity: 1.6 })
 export function createSandField() {
   const columns = Math.round((DESERT.maxX - DESERT.minX) / DESERT.cell) + 1
   const rows = Math.round((DESERT.maxZ - DESERT.minZ) / DESERT.cell) + 1
@@ -68,12 +68,12 @@ export function createSandField() {
   return {columns,rows,heights,original,heightAt,volumeDelta,get revision(){return revision},
     dig(contact:Contact,load:SoilLoad,seconds:number){
       if(!Number.isFinite(seconds)||seconds<=0||!validLoad(load))return 0
-      const moved=transfer(contact,Math.min(load.capacity-load.amount,.42*Math.min(seconds,.05)),true)
+      const moved=transfer(contact,Math.min(load.capacity-load.amount,.72*Math.min(seconds,.05)),true)
       load.amount+=moved;return moved
     },
     dump(contact:Contact,load:SoilLoad,seconds:number){
       if(!Number.isFinite(seconds)||seconds<=0||!validLoad(load))return 0
-      const moved=transfer(contact,Math.min(load.amount,.65*Math.min(seconds,.05)),false)
+      const moved=transfer(contact,Math.min(load.amount,1.15*Math.min(seconds,.05)),false)
       load.amount-=moved;if(load.amount<1e-12)load.amount=0;return moved
     }
   }

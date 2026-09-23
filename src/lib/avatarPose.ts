@@ -1,13 +1,16 @@
 import * as THREE from 'three'
 import type { JumpAnimation } from './playerJump.ts'
-export const WALK_SPEED=1.55
+export const WALK_SPEED=3.0
 export const STRIDE=.31
 export const STANCE=.60
+/** A faster travel speed becomes a jog, rather than doubling walking cadence. */
+export function gaitStance(amount:number){ return STANCE-.22*THREE.MathUtils.smoothstep(amount,.60,1) }
+export function gaitFrequency(amount:number){ return Math.max(0,amount)*WALK_SPEED*gaitStance(amount)/(2*STRIDE) }
 /** -Z is forward. The planted foot translates backward at the actual travel speed. */
-export function footCycle(phase:number,amount:number){
+export function footCycle(phase:number,amount:number,stance=STANCE){
   const p=((phase%1)+1)%1
-  if(p<STANCE)return {z:(-STRIDE+2*STRIDE*p/STANCE)*amount,lift:0}
-  const t=(p-STANCE)/(1-STANCE),ease=t*t*(3-2*t)
+  if(p<stance)return {z:(-STRIDE+2*STRIDE*p/stance)*amount,lift:0}
+  const t=(p-stance)/(1-stance),ease=t*t*(3-2*t)
   return {z:(STRIDE-2*STRIDE*ease)*amount,lift:Math.sin(Math.PI*t)*.15*amount}
 }
 export function legAngles(z:number,lift:number,pelvisDrop:number){
@@ -18,8 +21,8 @@ export function legAngles(z:number,lift:number,pelvisDrop:number){
   const knee=-Math.acos(THREE.MathUtils.clamp((distance*distance-upper*upper-lower*lower)/(2*upper*lower),-1,1))
   return {hip:direction+alpha,knee,ankle:-(direction+alpha+knee)}
 }
-export function gaitPose(phase:number,amount:number,motion:JumpAnimation={tuck:0,crouch:0,airborne:false}){
-  const steps=[footCycle(phase,amount),footCycle(phase+.5,amount)]
+export function gaitPose(phase:number,amount:number,motion:JumpAnimation={tuck:0,crouch:0,airborne:false},stance=STANCE){
+  const steps=[footCycle(phase,amount,stance),footCycle(phase+.5,amount,stance)]
   const reach=Math.max(0,...steps.filter(s=>s.lift<.001).map(s=>Math.abs(s.z)))
   // Pelvis only lowers as needed at double support, rather than a permanent squat.
   const drop=.004+(.82-Math.sqrt(.82*.82-reach*reach))+.17*motion.crouch
