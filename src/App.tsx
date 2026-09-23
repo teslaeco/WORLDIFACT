@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import LoadingFallback from './components/LoadingFallback'
+import AccountStatusBar from './components/AccountStatusBar'
 
 const HomePage = lazy(async () => import('./pages/HomePage'))
 const PortalPage = lazy(async () => import('./pages/PortalPage'))
@@ -13,6 +14,8 @@ const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
 export default function App() {
   return (
+    <>
+    <AccountStatusBar />
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route path="/" element={<AccountPage />} />
@@ -43,5 +46,6 @@ export default function App() {
         <a href="https://github.com/teslaeco/WORLDIFACT" target="_blank" rel="noreferrer">Source and licences ↗</a>
       </nav>
     </Suspense>
+    </>
   )
 }
