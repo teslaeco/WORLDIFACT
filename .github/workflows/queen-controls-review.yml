@@ -1,0 +1,24 @@
+name: Queen controls source snapshot
+on:
+  push:
+    branches: [fix/queen-flight-controls-20260923]
+    paths: [.github/workflows/queen-controls-review.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Snapshot only public tracked source
+        run: |
+          mkdir -p /tmp/queen-source
+          git archive --format=tar.gz 1421e02fc124a692c5f08c5f537a1beb17a72c62 > /tmp/queen-source/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: queen-controls-source
+          path: /tmp/queen-source/
+          retention-days: 2
