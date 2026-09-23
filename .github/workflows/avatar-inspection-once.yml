@@ -1,0 +1,35 @@
+name: Inspect existing public avatar once
+on:
+  push:
+    branches: [fix/visual-excavation-20260924]
+    paths: [.github/workflows/avatar-inspection-once.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read only the existing anonymous avatar route
+        shell: bash
+        run: |
+          mkdir -p inspection
+          node --input-type=module <<'JS'
+          import {writeFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          const r=await fetch('https://worldifact.xodobrox.workers.dev/api/avatar/neptune-queen',{redirect:'error',signal:AbortSignal.timeout(30000)});
+          if(!r.ok) throw new Error('Public avatar read stopped: '+r.status);
+          const b=Buffer.from(await r.arrayBuffer());
+          if(b.length>48*1024*1024||b.readUInt32LE(0)!==0x46546c67||b.readUInt32LE(8)!==b.length)throw new Error('Invalid public GLB');
+          writeFileSync('inspection/current-queen.glb',b);
+          writeFileSync('inspection/source.json',JSON.stringify({route:'/api/avatar/neptune-queen',source:r.headers.get('x-worldifact-source-job'),sha256:createHash('sha256').update(b).digest('hex'),bytes:b.length}));
+          console.log('Existing public avatar downloaded; no login, no generation, no credentials.');
+          JS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: existing-public-avatar-inspection
+          path: inspection/
+          retention-days: 1
