@@ -1,0 +1,31 @@
+name: Prepare gameplay repair snapshot
+on:
+  push:
+    branches: [fix/queen-terrain-loader-20260923]
+    paths: [.github/workflows/repair-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Package tracked source and installed test tools only
+        run: |
+          git archive --format=tar HEAD > /tmp/worldifact-source.tar
+          tar -czf /tmp/worldifact-dependencies.tar.gz node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gameplay-repair-inputs
+          path: |
+            /tmp/worldifact-source.tar
+            /tmp/worldifact-dependencies.tar.gz
+          retention-days: 2
