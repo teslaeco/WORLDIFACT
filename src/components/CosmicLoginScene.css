@@ -9,7 +9,8 @@
     radial-gradient(ellipse at 72% 72%, #101333 0, transparent 48%),
     #030811;
 }
-.cosmic-login-canvas { position: absolute; inset: 0; }
+/* Keep the GPU render targets bounded as content below the login grows. */
+.cosmic-login-canvas { position: absolute; inset: 0; max-height: 1100px; mask-image: linear-gradient(#000 calc(100% - 160px), transparent); }
 .cosmic-login-canvas canvas { width: 100%; height: 100%; display: block; }
 .cosmic-login-scene--fallback .cosmic-login-canvas { opacity: 0; }
 .cosmic-sculpture-poster {
@@ -73,6 +74,7 @@
   background-size: 213px 217px, 287px 191px, 373px 311px;
 }
 @media (max-width: 800px) {
+  .cosmic-login-canvas { max-height: 900px; }
   .cosmic-login-vignette { background: linear-gradient(0deg, #030811 0, #030811aa 40%, transparent 68%, #03081133 100%); }
   .cosmic-sculpture-poster { left: var(--sculpture-center-x, 80%); top: var(--sculpture-center-y, 112px); width: var(--sculpture-size, min(31vw, 118px)); }
   .cosmic-scene-notice { width: 120px; font-size: 9px; left: var(--sculpture-center-x, 80%); top: calc(var(--sculpture-center-y, 112px) + 62px); }

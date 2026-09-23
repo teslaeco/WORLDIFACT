@@ -1,3 +1,11 @@
+# WORLDIFAKT — homepage brand banners
+
+The owner requested professional homepage banners for OpenAI, Product Hunt, Shopify, eBay, Blender and FORGE MCP. A shared responsive section now follows the login experience on `/`, `/login` and `/account`, and follows the portals on `/world`. It uses locally served official logos, the approved FORGE poster, clear destination links, keyboard focus styling and reduced-motion support. Shopify/eBay are platform discovery links, not claims of connected stores or partnerships. Existing Product Hunt badges and conversation remain available on `/world`.
+
+The change adds no dependencies, remote scripts, account changes or billing changes. The decorative login canvas is bounded to avoid expanding GPU render targets for the added cards. Asset provenance is recorded in `ASSET_LICENSES.md`. Local verification passes lint, TypeScript and 394 tests; the sole remaining test requires a Chromium binary missing in this runtime and remains BLOCKED locally. The existing CI browser regression must pass before merge. HTTP smoke passes with no paid call. Final build, Worker packaging, CI and production evidence belong in the implementation PR; production is not inferred from local checks.
+
+---
+
 # WORLDIFAKT — Stripe account-default Checkout compatibility repair
 
 PR #75 merged as `62aa0b3393d12907bc76ca0839e627c652f53128` after all five checks and 392/392 CI tests. Deployment `35721930410` succeeded, version `f2b7b15c-e0b3-44b5-8b63-ffe1e2d452f9`. Stripe accepted and expired the isolated USD29.99 monthly checkout. The owner's previously attempted checkout still returned a typed `idempotency_error`: its stored Stripe key was bound to the pre-fix request. This distinguishes successful new-session creation from recovery of an existing failed attempt.

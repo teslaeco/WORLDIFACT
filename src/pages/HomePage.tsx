@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import LoadingFallback from "../components/LoadingFallback";
 import PortalCardsNav from "../components/PortalCardsNav";
 import WorldifactLogo from "../components/WorldifactLogo";
+import BrandShowcase from "../components/BrandShowcase";
 import { getPortalById } from "../config/portals";
 import { useAccount } from "../lib/account";
 const StartingWorld = lazy(() => import("../components/StartingWorld"));
@@ -38,6 +39,7 @@ export default function HomePage() {
         </div>
         <PortalCardsNav />
       </section>
+      <BrandShowcase />
       <section className="product-hunt-panel" aria-labelledby="product-hunt-title">
         <div className="product-hunt-heading">
           <div>

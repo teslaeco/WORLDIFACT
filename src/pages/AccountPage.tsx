@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { accountRequest, useAccount } from '../lib/account'
 import { safeAccountDestination } from '../lib/accountDestination'
 import { accountOAuthError } from '../lib/accountOAuthError'
+import BrandShowcase from '../components/BrandShowcase'
 import './AccountPage.css'
 
 const CosmicLoginScene = lazy(() => import('../components/CosmicLoginScene'))
@@ -121,6 +122,7 @@ export default function AccountPage() {
         <details className="account-free-note"><summary>Start creating for free <span aria-hidden="true">+</span></summary><p>2 FAST generations per 24h, with downloads.<br />1 SLOW generation per day. SLOW downloads require a subscription.</p><p>Membership: $29.99/month · 1,500 credits.<br />50 credits per paid generation · 30 models per grant.</p><Link to="/account/credits">Explore membership →</Link></details>
       </section>
     </div>
+    <BrandShowcase />
     <footer className="account-about"><span>BUILT FROM CURIOSITY.</span><p>WORLDIFAKT brings games, Earth observation and AI creation into one playable universe. Created for the OpenAI × Product Hunt challenge and born from a passion for AI. Have fun exploring our portals.</p><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link></footer>
     {phase === 'success' && <span className="account-success-status" role="status">Signed in. Opening your world…</span>}
   </main>
