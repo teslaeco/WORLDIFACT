@@ -4,6 +4,8 @@ The owner requested professional homepage banners for OpenAI, Product Hunt, Shop
 
 The change adds no dependencies, remote scripts, account changes or billing changes. The decorative login canvas is bounded to avoid expanding GPU render targets for the added cards. Asset provenance is recorded in `ASSET_LICENSES.md`. Local verification passes lint, TypeScript and 394 tests; the sole remaining test requires a Chromium binary missing in this runtime and remains BLOCKED locally. The existing CI browser regression must pass before merge. HTTP smoke passes with no paid call. Final build, Worker packaging, CI and production evidence belong in the implementation PR; production is not inferred from local checks.
 
+PR #77 merged as `ead113c262ab940c55bfb559b13822e4719b28e3` after all five checks and 395/395 CI tests. Deployment `35820518434` succeeded with Worker `454f373b-8bfe-442b-9266-cec70293d7a8`; production browser inspection confirmed all six local images loaded. The first official Product Hunt PNG has a dark wordmark, so the follow-up switches to its official white horizontal version under a fresh filename to avoid cached dark artwork. The symbol, proportions and colors remain unmodified. Final contrast acceptance belongs in the follow-up PR.
+
 ---
 
 # WORLDIFAKT — Stripe account-default Checkout compatibility repair
