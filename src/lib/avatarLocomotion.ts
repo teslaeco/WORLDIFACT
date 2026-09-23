@@ -1,11 +1,19 @@
 import * as THREE from 'three'
-import { addFanRotors } from './queenDetails.ts'
+import { gaitPose, STANCE, STRIDE, WALK_SPEED } from './avatarPose.ts'
+import type { JumpAnimation } from './playerJump.ts'
+export { footCycle, legAngles } from './avatarPose.ts'
 
 /** Runtime GAME rig only. Original positions, UVs, indices and materials are retained.
  * Never use this approximate anatomical binding as a manufacturing/source export. */
 export type GameRig = ReturnType<typeof bindStaticAvatar>
 const smooth = THREE.MathUtils.smoothstep
-const labelOf = (mesh: THREE.Mesh) => `${mesh.name} ${Array.isArray(mesh.material) ? mesh.material.map(m => m.name).join(' ') : mesh.material.name}`.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
+const labelOf = (mesh: THREE.Mesh) => {
+  // Generated assets often name the GROUP, with anonymous mesh/primitive children.
+  const names = [mesh.name, ...(Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(m => m.name)]
+  let parent = mesh.parent
+  while (parent && parent.parent) { names.push(parent.name); parent = parent.parent }
+  return names.join(' ').replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
+}
 const isFan = (s: string) => /(?:^|[^a-z])(?:fan(?:surface|blade|handle|frame|membrane|rib)?|wachlarz|handfan|peacock)(?:[^a-z]|$)/i.test(s.replace(/([a-z])([A-Z])/g, '$1_$2'))
 const isArm = (s: string) => /arm(?!ou?r)|hand|palm|finger|thumb|wrist|elbow|sleeve|gauntlet/.test(s) && !/charm/.test(s)
 const isHand = (s: string) => /hand|palm|finger|thumb|wrist/.test(s) && !isFan(s)
@@ -24,21 +32,6 @@ export function avatarBodyBounds(root: THREE.Object3D) {
   })
   if (body.isEmpty()) body.setFromObject(root)
   return { body, center: (core.isEmpty() ? body : core).getCenter(new THREE.Vector3()) }
-}
-
-export function footCycle(phase: number, amount: number) {
-  const p = ((phase % 1) + 1) % 1
-  // The stance foot moves backwards at a constant rate, matching forward travel.
-  return { z: (p < .5 ? -.28 + 1.12 * p : .28 - 1.12 * (p - .5)) * amount,
-    lift: p < .5 ? 0 : Math.sin((p - .5) * Math.PI * 2) * .12 * amount }
-}
-export function legAngles(z: number, lift: number, pelvisDrop: number) {
-  const upper = .41, lower = .41, down = .82 - pelvisDrop - lift
-  const distance = Math.min(upper + lower - .000001, Math.hypot(down, z))
-  const direction = Math.atan2(-z, down)
-  const alpha = Math.acos(THREE.MathUtils.clamp((upper * upper + distance * distance - lower * lower) / (2 * upper * distance), -1, 1))
-  const knee = -Math.acos(THREE.MathUtils.clamp((distance * distance - upper * upper - lower * lower) / (2 * upper * lower), -1, 1))
-  return { hip: direction + alpha, knee, ankle: -(direction + alpha + knee) }
 }
 
 export function bindStaticAvatar(root: THREE.Group) {
@@ -101,6 +94,8 @@ export function bindStaticAvatar(root: THREE.Group) {
   const fans = meshes.filter(m => {
     // Never move a whole body solely because one of its material slots is a fan.
     const materials = Array.isArray(m.material) ? m.material : [m.material]
+    let parent = m.parent
+    while (parent && parent !== root) { if (isFan(parent.name)) return true; parent = parent.parent }
     return isFan(m.name) || (materials.length > 0 && materials.every(mat => isFan(mat.name)))
   })
   const p = new THREE.Vector3(), nearestUpper = new THREE.Vector3(), nearestLower = new THREE.Vector3()
@@ -124,13 +119,14 @@ export function bindStaticAvatar(root: THREE.Group) {
         const upperDistance = armSegments[arm].upper.closestPointToPoint(p, true, nearestUpper).distanceTo(p)
         const lowerDistance = armSegments[arm].lower.closestPointToPoint(p, true, nearestLower).distanceTo(p)
         const lowerWeight = isHand(label) || /(?:fore|lower)[ _-]*arm/.test(label) ? 1 : smooth(upperDistance - lowerDistance, -.035, .035)
-        indices[k + 1] = 8 + arm * 3; indices[k + 2] = 9 + arm * 3
+        indices[k + 1] = 8 + arm * 3; indices[k + 2] = (isHand(label) ? 10 : 9) + arm * 3
         weights[k] = 1 - influence; weights[k + 1] = influence * (1 - lowerWeight); weights[k + 2] = influence * lowerWeight
-      } else if (!decorative && p.y < .94 && Math.abs(p.x) < .34 && Math.abs(p.z) < .34) {
-        const side = p.x < 0 ? 0 : 1, thigh = 2 + side * 3
-        const leg = 1 - smooth(p.y, .80, .94)
-        const shin = 1 - smooth(p.y, .41, .57)
-        const foot = 1 - smooth(p.y, .10, .18)
+      } else if (!decorative && ((/leg|thigh|calf|shin|knee|foot|shoe|boot|heel|sandal/.test(label) && p.y < 1.02) || (p.y < .94 && Math.abs(p.x) < .34 && Math.abs(p.z) < .38))) {
+        const side = (Math.abs(center.x) > .06 && /leg|thigh|calf|shin|knee|foot|shoe|boot|heel|sandal/.test(label) ? center.x : p.x) < 0 ? 0 : 1, thigh = 2 + side * 3
+        const rigidFoot = /foot|shoe|boot|heel|sandal/.test(label)
+        const leg = rigidFoot ? 1 : 1 - smooth(p.y, .84, .96)
+        const shin = rigidFoot ? 1 : 1 - smooth(p.y, .435, .535)
+        const foot = rigidFoot ? 1 : 1 - smooth(p.y, .10, .17)
         indices[k + 1] = thigh; indices[k + 2] = thigh + 1; indices[k + 3] = thigh + 2
         weights[k] = 1 - leg; weights[k + 1] = leg * (1 - shin)
         weights[k + 2] = leg * shin * (1 - foot); weights[k + 3] = leg * shin * foot
@@ -153,7 +149,6 @@ export function bindStaticAvatar(root: THREE.Group) {
     original.removeFromParent(); original.geometry.dispose()
   }
   let fanAttached = false, fanArmIndex = -1
-  let fanRotors: ReturnType<typeof addFanRotors> | null = null
   if (fans.length) {
     const fanBox = new THREE.Box3()
     fans.forEach(m => fanBox.union(localBounds(m)))
@@ -165,7 +160,6 @@ export function bindStaticAvatar(root: THREE.Group) {
       root.add(fan); fan.position.copy(arm.point); root.updateMatrixWorld(true)
       // attach preserves the whole original fan, including its surface and ribs.
       for (const part of fans) { part.visible = true; fan.attach(part) }
-      fanRotors = addFanRotors(fan, fans)
       arm.hand.attach(fan)
       fanArmIndex = arms.indexOf(arm)
       // Point the fan away from the face, down along the thigh, not across the body.
@@ -188,25 +182,26 @@ export function bindStaticAvatar(root: THREE.Group) {
   let phase = 0, blend = 0, flightBlend = 0
   return {
     skeleton, hips, legs, arms, fanParts: fans.length, fanAttached, fanArmIndex,
-    update(delta: number, speed: number, seated = false, swimming = false, flying = false, jumping = false) {
+    update(delta: number, speed: number, seated = false, swimming = false, flying = false, jumping = false, motion: JumpAnimation = { tuck: jumping ? .2 : 0, crouch: 0, airborne: jumping }) {
       blend = THREE.MathUtils.damp(blend, seated || swimming || flying || jumping ? 0 : Math.min(1, speed), 14, delta)
       flightBlend = THREE.MathUtils.damp(flightBlend, flying ? 1 : 0, 10, delta)
-      fanRotors?.update(delta, flying)
-      phase += Math.max(0, speed) * 2.1 / 1.12 * delta
-      const drop = .008 + .065 * blend
-      hips.position.y = .90 - drop
+      phase += Math.max(0, speed) * WALK_SPEED * STANCE / (2 * STRIDE) * delta
+      const pose = gaitPose(phase, blend, motion)
+      hips.position.y = .90 - pose.drop
+      hips.position.x = Math.sin(phase * Math.PI * 2) * .009 * blend
       legs.forEach((leg, index) => {
-        const step = footCycle(phase + index * .5, blend)
-        const angles = legAngles(step.z, step.lift, drop)
-        leg.thigh.rotation.x = seated ? 1.25 : jumping ? .45 : flying ? .12 : swimming ? Math.sin(phase * Math.PI * 2 + index * Math.PI) * .2 : angles.hip
-        leg.knee.rotation.x = seated ? -1.35 : jumping ? -.85 : flying ? -.25 : swimming ? -.3 : angles.knee
-        leg.ankle.rotation.x = seated || swimming ? 0 : jumping ? .4 : flying ? .13 : angles.ankle
+        const angles = pose.legs[index], side = index ? 1 : -1
+        // Separate the feet slightly without remeshing, elongating or replacing the legs.
+        leg.thigh.position.x = side * (.11 + .018 * blend)
+        leg.thigh.rotation.x = seated ? 1.25 : flying ? .12 : swimming ? Math.sin(phase * Math.PI * 2 + index * Math.PI) * .2 : angles.hip
+        leg.knee.rotation.x = seated ? -1.35 : flying ? -.25 : swimming ? -.3 : angles.knee
+        leg.ankle.rotation.x = seated || swimming ? 0 : flying ? .13 : angles.ankle
       })
       arms.forEach((arm, index) => {
         arm.shoulder.quaternion.copy(arm.down)
         if (index === fanArmIndex) arm.shoulder.quaternion.slerp(arm.up, flightBlend)
         arm.elbow.quaternion.copy(arm.elbowDown)
-        const swing = Math.sin(phase * Math.PI * 2 + index * Math.PI) * blend * (fanAttached ? .09 : .20)
+        const swing = Math.sin(phase * Math.PI * 2 + index * Math.PI) * blend * (index === fanArmIndex ? .055 : .20)
         arm.shoulder.rotateX(swimming ? Math.sin(phase * Math.PI * 2 + index * Math.PI) * .55 : seated ? .6 : swing)
       })
       root.updateMatrixWorld(true)

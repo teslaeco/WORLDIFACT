@@ -1,3 +1,17 @@
+# WORLDIFACT — screenshot-driven Queen and terrain repair, 23 September 2026
+
+Owner authorization: implement on a branch, create a PR and merge after green CI. Baseline main is `76c8f8344cd33e1b0bdc5de32863d2ad26a723c0` / PR #81. The owner rejected PR #81's walking, straight-legged flip, fan embellishments and sparse grass. Earlier synthetic passes are not positive original-model visual acceptance.
+
+Implemented in this revision: stride-dependent pelvis height, separate named leg/whole-foot weights, takeoff crouch, articulated tucked double-jump and landing absorption; original fan grouping/grip with added rotor decorations removed; dense bounded instanced green clumps and local ground texture; a real editable desert mesh with no covering flat ground, front-loader/rear-backhoe contact-based digging, conserved bucket payload and actual deposited mounds; collision-height sampling and mobile equipment controls. Original Queen geometry/source job and all five portals remain. No billing, generator-backend, logo or petition-copy changes.
+
+The exact requested Astra rim was not recovered: available comparison evidence is screenshots, not source geometry. Automatic installation remains **BLOCKED**. A guarded local original-GLB mount preserves geometry/materials, hides only the stock discs, keeps hollow tyres and wheel rotation, and does not pass off a look-alike as the original.
+
+Local typecheck and frontend bundle pass; lint has 0 errors and 17 existing warnings. Focused motion/terrain/rim regressions pass. Full local verification is not claimed: the inherited native browser fixture did not complete here, and missing prepared ISS vendor assets block that local fixture. The existing full CI, foundation assembly and Worker dry-run must pass before merge; exact final counts and deployment evidence belong in the implementation PR.
+
+**Original-model and Android visual acceptance remain NOT VISUALLY VERIFIED.** Runtime binding is approximate; source preservation and mathematical tests do not certify satisfactory appearance. No browser/authentication block was bypassed. No paid generation, payment or order was performed. See `docs/GAMEPLAY_REPAIR_TASK_20260923.md` for the executed instruction, controls, geometry budgets, session-only persistence and outstanding acceptance.
+
+---
+
 # WORLDIFACT — Queen controls and mobile presentation, 23 September 2026
 
 Current owner authorization explicitly includes branch publication, merge and deployment of this repair. The previous answer's local-only changes were not published. This patch is rebuilt from verified main `1421e02fc124a692c5f08c5f537a1beb17a72c62` (tree `72c4e5714e8d6261f244e81d8ece69146cd10d98`). No private credentials or model files were exported. No paid generation, checkout payment, credit grant, order or new contest submission is part of this change.
