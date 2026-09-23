@@ -13,7 +13,7 @@ The original has 237 mesh instances, no skeleton or animation clips. Head-based 
 ## Changes
 
 - Center on the torso, derive lateral leg pivots from the original limbs, assign each named leg to one chain and hand/glove vertices wholly to the hand. Preserve all source geometry/UV/normal/index attributes. Keep the original 92-piece fan, including nine original six-blade modules, attached at its real handle; no replacement propellers or mannequin.
-- Increase travel from 1.55 to 3.0 world units/second, retaining the distance-driven stride, crouch/tuck/landing, original footwear and independent feet.
+- Increase travel from 1.55 to 3.0 world units/second, retaining the distance-driven stride, crouch/tuck/landing, original footwear and independent feet. At full speed a jogging support phase holds cadence below four steps/second instead of accelerating the walk to nearly six; the original GLB was numerically re-audited after this correction.
 - Separate camera-orbit input from chassis steering. Selecting either tool uses a front-quarter view beyond its cutting edge. A drag while parked no longer rotates the vehicle or moves the excavation contact.
 - Enlarge the front bucket to 3.1 units wide; carry up to 1,600 L in the front and 800 L in the rear GAME bucket. Keep contact, finite-input, depth and volume guards. A full scoop lifts automatically. Excavation depth darkens the actual edited sand surface; dumping conserves material.
 - Add local photovoltaic cell materials and separate exterior panels on the loader beams and bucket back, away from cutting teeth and articulated joints. No paid or third-party texture generation.
@@ -23,7 +23,7 @@ The original has 237 mesh instances, no skeleton or animation clips. Head-based 
 
 `tools/audit-queen-rig.mjs ORIGINAL.glb [REPORT.json]` numerically checks the actual model without rendering or decoding images. [Recorded result](evidence/queen-rig-original-2026-09-24.json): all 237 geometry signatures preserved; 92 fan meshes together; 36 walking samples; minimum leg gap 0.0358 m; handle-to-hand surface distance at most 0.0081 m; lowest shoe point 0.0108 m; tucked knee angle -2.25 rad.
 
-27 targeted tests passed. New regression tests exercise the real rover geometry, three chassis orientations, an automatically filled/lifted bucket, a rendered-mesh ray hit more than 45 cm below the original surface, volume conservation and the hole's projection inside the working camera viewport. Typecheck, lint (warnings, no errors), local DEMO HTTP smoke and the frontend bundle passed. Local broad tests passed 438 tests but the ISS foundation suite lacked downloaded vendor bytes; the browser-specific fixture was not run locally. The unchanged full CI must hydrate its pinned assets and run all tests before merge.
+28 targeted tests passed. New regression tests exercise the real rover geometry, three chassis orientations, an automatically filled/lifted bucket, a rendered-mesh ray hit more than 45 cm below the original surface, volume conservation and the hole's projection inside the working camera viewport. Typecheck, lint (warnings, no errors), local DEMO HTTP smoke and the frontend bundle passed. Local broad tests passed 438 tests but the ISS foundation suite lacked downloaded vendor bytes; the browser-specific fixture was not run locally. The unchanged full CI must hydrate its pinned assets and run all tests before merge.
 
 ## Honest limits / remaining work
 

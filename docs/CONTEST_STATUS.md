@@ -1,3 +1,7 @@
+## VERIFIED — final fast-travel cadence correction
+
+Full-speed movement uses a jogging support interval rather than six walking steps/second. 28 focused tests and a repeated numerical audit of the exact Queen GLB passed locally; the new CI head must pass before merge. No original-scene rendering or Android FPS is claimed.
+
 # WORLDIFACT — screenshot-driven Queen and terrain repair, 23 September 2026
 
 ## 24 September — original-model and excavation correction (verification milestone)

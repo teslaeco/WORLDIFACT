@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { gaitPose, STANCE, STRIDE, WALK_SPEED } from './avatarPose.ts'
+import { gaitPose, gaitStance, gaitFrequency } from './avatarPose.ts'
 import type { JumpAnimation } from './playerJump.ts'
 export { footCycle, legAngles } from './avatarPose.ts'
 
@@ -204,8 +204,8 @@ export function bindStaticAvatar(root: THREE.Group) {
     update(delta: number, speed: number, seated = false, swimming = false, flying = false, jumping = false, motion: JumpAnimation = { tuck: jumping ? .2 : 0, crouch: 0, airborne: jumping }) {
       blend = THREE.MathUtils.damp(blend, seated || swimming || flying || jumping ? 0 : Math.min(1, speed), 14, delta)
       flightBlend = THREE.MathUtils.damp(flightBlend, flying ? 1 : 0, 10, delta)
-      phase += Math.max(0, speed) * WALK_SPEED * STANCE / (2 * STRIDE) * delta
-      const pose = gaitPose(phase, blend, motion)
+      phase += gaitFrequency(speed) * delta
+      const pose = gaitPose(phase, blend, motion, gaitStance(speed))
       hips.position.y = .90 - pose.drop
       hips.position.x = Math.sin(phase * Math.PI * 2) * .009 * blend
       legs.forEach((leg, index) => {

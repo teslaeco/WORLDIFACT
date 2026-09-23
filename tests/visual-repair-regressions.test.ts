@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import * as THREE from 'three'
 import { readFile } from 'node:fs/promises'
 import { avatarBodyBounds, bindStaticAvatar } from '../src/lib/avatarLocomotion.ts'
-import { WALK_SPEED } from '../src/lib/avatarPose.ts'
+import { WALK_SPEED, gaitFrequency, gaitStance, footCycle } from '../src/lib/avatarPose.ts'
 import { createSandField } from '../src/lib/desertTerrain.ts'
 import { createDesertScene } from '../src/lib/desertScene.ts'
 import { createBackhoe } from '../src/lib/backhoe.ts'
@@ -84,4 +84,12 @@ test('view dragging is separated from chassis yaw and the camera toolbar shares 
  assert.match(source,/!driving && <div className="world-special-actions">/)
  assert.match(source,/excavationCamera\(ride.group, machine.contact\(\)/)
  assert.match(source,/vehicleHud.capacity/)
+})
+
+
+test('fast travel uses a jogging support phase instead of six frantic walking steps per second',()=>{
+ assert.ok(gaitFrequency(1)*2>=3 && gaitFrequency(1)*2<=4)
+ assert.ok(gaitStance(1)<.5 && gaitStance(.5)>=.5)
+ const phase=.42,stance=gaitStance(1)
+ assert.ok(footCycle(phase,1,stance).lift>0 && footCycle(phase+.5,1,stance).lift>0,'jog has an actual flight interval')
 })
