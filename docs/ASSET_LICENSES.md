@@ -15,3 +15,17 @@
 The MIT license applies to the project's source, documentation and procedural code. It does not grant rights to private imported models, reference photographs, third-party brands or linked project assets. License choice follows the owner's previously recorded MIT preference; publishing a source review branch does not grant rights to private assets.
 
 Standard license reference: [SPDX MIT](https://spdx.org/licenses/MIT.html).
+
+## Homepage brand banners — 23 September 2026
+
+Owner-requested links to tools, platforms and the WORLDIFACT community use the following official brand assets. These third-party marks remain their owners' property and are excluded from the project MIT license. The section does not describe sponsorship or partnerships. Shopify and eBay link to the platforms, not to connected WORLDIFACT stores.
+
+| Local file | Official source | Treatment |
+|---|---|---|
+| `public/brands/openai.svg` | [OpenAI brand](https://openai.com/brand/), [logo ZIP](https://cdn.openai.com/brand/openai-logos.zip), `OpenAI-logos/SVGs/OAI_OpenAI_Wordmark_White.svg` | White standalone wordmark; only the outer viewBox whitespace is trimmed. Original paths and colors retained. |
+| `public/brands/product-hunt.png` | [Product Hunt branding](https://www.producthunt.com/branding), [logo ZIP](https://s3.producthunt.com/static/Product-Hunt-logo-all-1022.zip), `Product-Hunt-logo-all-1022/Pixels/product-hunt-logo-horizontal-orange.png` | Unmodified official horizontal orange logo; links to the existing WORLDIFACT listing. |
+| `public/brands/shopify.svg` | [Shopify brand assets](https://www.shopify.com/brand-assets), [inverted primary SVG](https://cdn.shopify.com/shopifycloud/brochure/assets/brand-assets/shopify-logo-inverted-primary-logo-bdc6ddd67862d9bb1f8c559e1bb50dd233112ac57b29cac2edcf17ed2e1fe6fa.svg) | Unmodified green shopping bag and white wordmark on a neutral dark background. |
+| `public/brands/ebay.svg` | [eBay brand resources](https://playbook.ebay.com/tools-and-resources), [logo ZIP](https://assets.ebay.com/m/2d5176c6399d84c2/original/eBay-Logo-Package.zip), `eBay-Logo-Package/03-eBayLogo-White/eBayLogo-White-RGB/eBayLogo-White-RGB.svg` | Official white logo; only the outer viewBox whitespace is trimmed. Original paths and colors retained. |
+| `public/brands/blender-white.png` | [Blender logo](https://www.blender.org/about/logo/), [logo kit](https://download.blender.org/branding/blender_logo_kit.zip), `blender_logo_kit/blender_logo_no_socket_white.png` | Unmodified complete white logo; links to Blender. |
+
+The FORGE MCP banner reuses the previously approved local polyhedron poster described above and the canonical Studio URL from `src/config/references.ts`. Logo assets are served locally with no new third-party scripts or tracking requests. Decorative lighting is applied to card backgrounds, not to third-party logo artwork.
