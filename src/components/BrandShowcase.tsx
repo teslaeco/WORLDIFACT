@@ -23,7 +23,7 @@ export default function BrandShowcase() {
       {brands.map((brand, index) => <li key={brand.id}>
         <a className={`brand-banner brand-banner--${brand.id}`} href={brand.href} target="_blank" rel="noopener noreferrer">
           <div className="brand-banner-top"><span>{brand.category}</span><span className="brand-banner-index" aria-hidden="true">0{index + 1}</span></div>
-          <div className="brand-banner-logo">
+          <div className="brand-banner-logo" translate="no">
             <img src={brand.logo} alt={brand.id === 'forge' ? '' : brand.name} width={180} height={52} loading="lazy" decoding="async" />
             {brand.id === 'forge' && <span>FORGE <b>MCP</b></span>}
           </div>

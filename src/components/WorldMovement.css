@@ -1,0 +1,16 @@
+.starting-world-shell .world-special-actions { display:grid; gap:7px; pointer-events:auto; }
+.starting-world-shell .world-special-actions button {
+  display:flex; align-items:center; justify-content:center; gap:7px;
+  min-height:48px; background:#102d40ed; color:#f0ffff;
+  border:1px solid #adede5; border-radius:12px; font-weight:750;
+  touch-action:manipulation; user-select:none;
+}
+.starting-world-shell .world-special-actions button[aria-pressed=true] { background:#225748; border-color:#dcfff0; }
+.starting-world-shell .world-special-actions button:disabled { opacity:.5; }
+.starting-world-shell .world-special-actions button:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+@media (max-width:760px) {
+  .starting-world-shell .world-special-actions { gap:6px; }
+  .starting-world-shell .world-special-actions button { min-height:48px; font-size:.82rem; }
+  .starting-world-shell .world-hint { max-width:calc(100% - 260px); }
+}
+@media (max-width:370px) { .starting-world-shell .world-hint { display:none; } }
