@@ -23,12 +23,14 @@ for (const message of ['The job receipt is not valid.', 'This job receipt expire
     const job = await client.poll()
     assert.equal(job.state, 'failed'); assert.equal(canSubmitNewDraft(id, job), true)
     assert.match(job.detail, /old model status is unknown/)
-    assert.equal(store.getItem(STUDIO_RECEIPT_HISTORY_PREFIX + id), JSON.stringify(saved))
+    const archived = store.getItem(STUDIO_RECEIPT_HISTORY_PREFIX + id)!
+    // readReceipt normalizes property order. Every original value must survive.
+    assert.deepEqual(JSON.parse(archived), saved)
     assert.equal((await client.poll()).state, 'failed'); assert.equal(calls.length, 1)
     client.clearSelection()
     assert.equal(client.current, null); assert.equal(store.getItem(STUDIO_RECEIPT_KEY), null)
     assert.equal(store.getItem('existing-model'), 'keep')
-    assert.equal(JSON.parse(store.getItem(STUDIO_RECEIPT_HISTORY_PREFIX + id)!).prompt, saved.prompt)
+    assert.equal(store.getItem(STUDIO_RECEIPT_HISTORY_PREFIX + id), archived)
     assert.equal(new StudioCoordinator(store).restore(), null)
     assert.ok(calls.every(url => !url.includes(saved.receipt.ticket)))
   })
