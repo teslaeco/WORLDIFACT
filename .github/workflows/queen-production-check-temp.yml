@@ -8,21 +8,61 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
     steps:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Fixed public asset metadata, no private data or generation
+      - name: Require the exact reviewed publication
         shell: bash
         run: |
           node --input-type=module <<'JS'
-          const base = 'https://worldifact.xodobrox.workers.dev';
-          for (const path of ['/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.gz', '/api/avatar/neptune-queen']) {
-            for (const method of ['HEAD', 'GET']) {
-              const r = await fetch(base + path, { method, redirect: 'manual', headers: { 'Accept-Encoding': 'identity' }, signal: AbortSignal.timeout(15000) });
-              console.log(JSON.stringify({ path, method, status: r.status, headers: Object.fromEntries(['content-type','content-encoding','content-length','cache-control','etag','location','x-worldifact-avatar-cache'].map(k => [k,r.headers.get(k)])) }));
-              if (r.body) { const reader = r.body.getReader(); const first = await reader.read(); console.log('first12',Array.from(first.value?.slice(0,12) ?? [])); await reader.cancel(); }
-            }
+          import assert from 'node:assert/strict';
+          let done = false;
+          for (let i = 0; i < 30; i++) {
+            const r = await fetch('https://api.github.com/repos/teslaeco/WORLDIFACT/actions/runs/35981114000', { redirect: 'error', signal: AbortSignal.timeout(15000) });
+            assert.equal(r.status, 200); const run = await r.json();
+            assert.equal(run.head_sha, '84050ed629c37fd1073ffa1cf89b52272da47656');
+            if (run.status === 'completed') { assert.equal(run.conclusion, 'success'); done = true; break; }
+            await new Promise(resolve => setTimeout(resolve, 10000));
           }
+          assert.ok(done, 'Expected publication did not succeed within five minutes.');
+          JS
+      - name: Five complete original deliveries and two HEAD checks with no retries
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { request } from 'node:https';
+          import { createHash } from 'node:crypto';
+          import { gunzipSync } from 'node:zlib';
+          const url = 'https://worldifact.xodobrox.workers.dev/api/avatar/neptune-queen';
+          const expected = '1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba';
+          async function check(encoding, method = 'GET') {
+            const start = performance.now();
+            const { r, wire, headersMs } = await new Promise((resolve, reject) => {
+              const q = request(url, { method, headers: { 'Accept-Encoding': encoding }, signal: AbortSignal.timeout(90000) }, r => {
+                const headersMs = Math.round(performance.now() - start), chunks = []; let total = 0;
+                r.on('data', chunk => { total += chunk.length; if (total > 27676800) { r.destroy(new Error('Oversized model')); return; } chunks.push(chunk); });
+                r.on('error', reject); r.on('end', () => resolve({ r, wire: Buffer.concat(chunks), headersMs }));
+              });
+              q.on('error', reject); q.end();
+            });
+            assert.equal(r.statusCode, 200, `${method} ${encoding}`);
+            assert.equal(r.headers['x-worldifact-avatar-cache'], 'STATIC');
+            assert.equal(r.headers['x-worldifact-model-sha256'], expected);
+            assert.equal(r.headers['x-worldifact-source-job'], '99397623-e45c-48dc-95ec-6f84446a54d5');
+            assert.equal(r.headers['content-encoding'] ?? null, encoding === 'gzip' ? 'gzip' : null);
+            let decodedBytes = 0;
+            if (method === 'GET') {
+              assert.equal(wire.length, encoding === 'gzip' ? 18076285 : 27676800);
+              const bytes = encoding === 'gzip' ? gunzipSync(wire, { maxOutputLength: 27676800 }) : wire;
+              decodedBytes = bytes.length; assert.equal(decodedBytes, 27676800);
+              assert.equal(createHash('sha256').update(bytes).digest('hex'), expected);
+            } else assert.equal(wire.length, 0);
+            console.log(JSON.stringify({ method, encoding, status: r.statusCode, cache: 'STATIC', wireBytes: wire.length, decodedBytes, sha256: method === 'GET' ? expected : null, headersMs, totalMs: Math.round(performance.now() - start) }));
+          }
+          for (const encoding of ['gzip', 'gzip', 'gzip', 'gzip', 'identity']) await check(encoding);
+          for (const encoding of ['gzip', 'identity']) await check(encoding, 'HEAD');
+          console.log('PASS: five consecutive complete exact-original deliveries plus two HEAD checks; no retries or generation; no binary export.');
           JS
