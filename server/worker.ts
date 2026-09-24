@@ -2,7 +2,7 @@ import { ORACLE_WORLD_IDS, platformApi } from "./platform.ts";
 import type { PlatformEnv } from "./platform.ts";
 import { oracleJobApi } from "./oracle-jobs.ts";
 import { studioApi } from "./studio.ts";
-import { avatarApi } from "./avatar.ts";
+import { avatarApi, type AvatarContext } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
 import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
 import { entitlementApi, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
@@ -79,7 +79,7 @@ function validImage(value: unknown) {
   try { const start = atob(m[2].slice(0, 32)); return m[1] === "png" ? start.startsWith("\x89PNG\r\n\x1a\n") : m[1] === "jpeg" ? start.startsWith("\xff\xd8\xff") : start.startsWith("RIFF") && start.slice(8, 12) === "WEBP"; }
   catch { return false; }
 }
-export async function handle(request: Request, env: Env = {}, fetcher: typeof fetch = fetch): Promise<Response> {
+export async function handle(request: Request, env: Env = {}, fetcher: typeof fetch = fetch, context?: AvatarContext): Promise<Response> {
   const url = new URL(request.url);
   const decor = await decorApi(request, fetcher);
   if (decor) return decor;
@@ -95,7 +95,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   // bridge must not become an anonymous or unmetered alternative entry point.
   if (env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true' && url.pathname.startsWith('/api/oracle/jobs'))
     return json({ error: 'Use the account-enabled Studio generation and download flow.' }, 403);
-  const avatar = await avatarApi(request, env, fetcher);
+  const avatar = await avatarApi(request, env, fetcher, undefined, context);
   if (avatar) return avatar;
   const projectFiles = await projectFileApi(request, env, fetcher);
   if (projectFiles) return projectFiles;
@@ -231,4 +231,4 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     if (!generationCompleted) await finishUser(false).catch(() => {});
   }
 }
-export default { fetch(request: Request, env: Env) { return handle(request, env); } };
+export default { fetch(request: Request, env: Env, context?: AvatarContext) { return handle(request, env, fetch, context); } };
