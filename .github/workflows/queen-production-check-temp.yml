@@ -1,0 +1,37 @@
+name: Verify deployed Queen transport (temporary)
+on:
+  push:
+    branches: [verify/queen-loading-production-20260924]
+    paths: [.github/workflows/queen-production-check-temp.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Require the exact completed production publication
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const url = 'https://api.github.com/repos/teslaeco/WORLDIFACT/actions/runs/35978415804';
+          let done = false;
+          for (let i = 0; i < 30; i++) {
+            const response = await fetch(url, { redirect: 'error', headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(15000) });
+            assert.equal(response.status, 200);
+            const run = await response.json();
+            assert.equal(run.head_sha, '113fda7105ca8dd49a258405608cafdb675eb529');
+            if (run.status === 'completed') { assert.equal(run.conclusion, 'success'); done = true; break; }
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          }
+          assert.ok(done, 'Expected production publication did not finish successfully within five minutes.');
+          JS
+      - name: Check exact original, compression and two consecutive deliveries
+        run: node scripts/check-avatar-delivery.mjs
