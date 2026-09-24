@@ -50,3 +50,18 @@ test('release gate is part of every production build and does not publish source
   assert.equal(pkg.scripts.postbuild, 'node scripts/prepare-queen-release.mjs');
   assert.ok((await readFile('.gitignore', 'utf8')).split('\n').includes('dist'));
 });
+
+// Production ASSETS binding omits Content-Length; this is not an invalid model.
+test('headerless internal static streams and HEAD remain valid without buffering or an invented wire size', async () => {
+  const env = { ...configured, ASSETS: { async fetch(request: Request) {
+    return new Response(request.method === 'HEAD' ? null : gzip, { headers: { 'Content-Type': 'application/gzip' } });
+  } } };
+  for (const method of ['GET', 'HEAD']) {
+    const response = (await avatarApi(new Request(url, { method, headers: { 'Accept-Encoding': 'gzip' } }), env, failFetch))!;
+    assert.equal(response.status, 200); assert.equal(response.headers.get('Content-Length'), null);
+    assert.equal(response.headers.get('X-WORLDIFACT-Avatar-Cache'), 'STATIC');
+    assert.equal(response.headers.get('Content-Encoding'), 'gzip');
+    if (method === 'GET') assert.deepEqual(new Uint8Array(gunzipSync(await response.arrayBuffer())), source);
+    else assert.equal(response.body, null);
+  }
+});
