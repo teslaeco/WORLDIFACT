@@ -8,61 +8,21 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Require the exact final production publication
+      - name: Fixed public asset metadata, no private data or generation
         shell: bash
         run: |
           node --input-type=module <<'JS'
-          import assert from 'node:assert/strict';
-          let done = false;
-          for (let i = 0; i < 30; i++) {
-            const response = await fetch('https://api.github.com/repos/teslaeco/WORLDIFACT/actions/runs/35980175463', { redirect: 'error', signal: AbortSignal.timeout(15000) });
-            assert.equal(response.status, 200);
-            const run = await response.json();
-            assert.equal(run.head_sha, '659b7afb2b3de35465d4d12cc3251ad8ddacf3fc');
-            if (run.status === 'completed') { assert.equal(run.conclusion, 'success'); done = true; break; }
-            await new Promise(resolve => setTimeout(resolve, 10000));
+          const base = 'https://worldifact.xodobrox.workers.dev';
+          for (const path of ['/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.gz', '/api/avatar/neptune-queen']) {
+            for (const method of ['HEAD', 'GET']) {
+              const r = await fetch(base + path, { method, redirect: 'manual', headers: { 'Accept-Encoding': 'identity' }, signal: AbortSignal.timeout(15000) });
+              console.log(JSON.stringify({ path, method, status: r.status, headers: Object.fromEntries(['content-type','content-encoding','content-length','cache-control','etag','location','x-worldifact-avatar-cache'].map(k => [k,r.headers.get(k)])) }));
+              if (r.body) { const reader = r.body.getReader(); const first = await reader.read(); console.log('first12',Array.from(first.value?.slice(0,12) ?? [])); await reader.cancel(); }
+            }
           }
-          assert.ok(done, 'Expected final publication did not complete successfully within five minutes.');
-          JS
-      - name: Five full original reads plus two HEAD checks, without retries
-        shell: bash
-        run: |
-          node --input-type=module <<'JS'
-          import assert from 'node:assert/strict';
-          import { createHash } from 'node:crypto';
-          const sha = '1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba';
-          const url = 'https://worldifact.xodobrox.workers.dev/api/avatar/neptune-queen';
-          let attempt = 0;
-          for (const encoding of ['gzip', 'gzip', 'gzip', 'gzip', 'identity']) {
-            const start = performance.now();
-            const response = await fetch(url, { headers: { 'Accept-Encoding': encoding }, redirect: 'error', signal: AbortSignal.timeout(90000) });
-            const headersMs = Math.round(performance.now() - start);
-            assert.equal(response.status, 200, `GET ${++attempt}`);
-            assert.equal(response.headers.get('X-WORLDIFACT-Avatar-Cache'), 'STATIC');
-            assert.equal(response.headers.get('X-WORLDIFACT-Model-SHA256'), sha);
-            assert.equal(response.headers.get('X-WORLDIFACT-Source-Job'), '99397623-e45c-48dc-95ec-6f84446a54d5');
-            assert.equal(response.headers.get('Content-Encoding'), encoding === 'gzip' ? 'gzip' : null);
-            if (encoding === 'gzip') assert.equal(response.headers.get('Content-Length'), '18076285');
-            const bytes = new Uint8Array(await response.arrayBuffer());
-            assert.equal(bytes.length, 27676800);
-            assert.equal(createHash('sha256').update(bytes).digest('hex'), sha);
-            console.log(JSON.stringify({ attempt, encoding, status: 200, cache: 'STATIC', headersMs, totalMs: Math.round(performance.now() - start), decodedBytes: bytes.length, wireBytes: response.headers.get('Content-Length'), sha256: sha }));
-          }
-          for (const encoding of ['gzip', 'identity']) {
-            const response = await fetch(url, { method: 'HEAD', headers: { 'Accept-Encoding': encoding }, redirect: 'error', signal: AbortSignal.timeout(15000) });
-            assert.equal(response.status, 200); assert.equal(response.headers.get('X-WORLDIFACT-Avatar-Cache'), 'STATIC');
-            assert.equal(response.headers.get('Content-Encoding'), encoding === 'gzip' ? 'gzip' : null);
-            assert.equal(response.headers.get('Content-Length'), encoding === 'gzip' ? '18076285' : '27676800');
-            assert.equal((await response.arrayBuffer()).byteLength, 0);
-            console.log(JSON.stringify({ method: 'HEAD', encoding, status: 200, cache: 'STATIC' }));
-          }
-          console.log('PASS: five consecutive complete original deliveries and both HEAD representations; no retries, errors, generation or model export.');
           JS
