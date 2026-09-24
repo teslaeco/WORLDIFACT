@@ -16,22 +16,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Require the exact completed production publication
+      - name: Read-only bounded response diagnostics
         shell: bash
         run: |
           node --input-type=module <<'JS'
-          import assert from 'node:assert/strict';
-          const url = 'https://api.github.com/repos/teslaeco/WORLDIFACT/actions/runs/35978415804';
-          let done = false;
-          for (let i = 0; i < 30; i++) {
-            const response = await fetch(url, { redirect: 'error', headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(15000) });
-            assert.equal(response.status, 200);
-            const run = await response.json();
-            assert.equal(run.head_sha, '113fda7105ca8dd49a258405608cafdb675eb529');
-            if (run.status === 'completed') { assert.equal(run.conclusion, 'success'); done = true; break; }
-            await new Promise(resolve => setTimeout(resolve, 10000));
+          import { createHash } from 'node:crypto';
+          for (const encoding of ['gzip', 'gzip', 'gzip', 'identity']) {
+            const start = performance.now();
+            try {
+              const r = await fetch('https://worldifact.xodobrox.workers.dev/api/avatar/neptune-queen', { headers: { 'Accept-Encoding': encoding }, redirect: 'error', signal: AbortSignal.timeout(90000) });
+              const headers = Object.fromEntries(['content-type','content-encoding','content-length','x-worldifact-glb-length','x-worldifact-avatar-cache','cache-control','cf-ray'].map(k => [k, r.headers.get(k)]));
+              if (r.status !== 200) {
+                const text = (await r.text()).slice(0, 20000);
+                console.log(JSON.stringify({ encoding, status: r.status, headers, signals: text.match(/(?:error code|exceeded|1102|memory|temporarily unavailable)[^<\r\n]{0,100}/gi), ms: Math.round(performance.now()-start) }));
+              } else {
+                const data = new Uint8Array(await r.arrayBuffer());
+                console.log(JSON.stringify({ encoding, status:r.status, headers, bytes:data.length, sha256:createHash('sha256').update(data).digest('hex'), ms:Math.round(performance.now()-start) }));
+              }
+            } catch (error) { console.log(JSON.stringify({ encoding, error: error.name, code: error.cause?.code, ms:Math.round(performance.now()-start) })); }
+            await new Promise(resolve => setTimeout(resolve, 1500));
           }
-          assert.ok(done, 'Expected production publication did not finish successfully within five minutes.');
           JS
-      - name: Check exact original, compression and two consecutive deliveries
-        run: node scripts/check-avatar-delivery.mjs
