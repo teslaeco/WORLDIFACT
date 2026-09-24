@@ -1,3 +1,4 @@
+import { avatarAcceptsGzip, bundledQueenResponse, type AvatarAssets } from './queen-release.ts';
 import { oracleOrigin } from './platform.ts';
 import type { PlatformEnv } from './platform.ts';
 
@@ -46,20 +47,13 @@ async function readGlb(response: Response) {
   return bytes;
 }
 
-function acceptsGzip(request: Request) {
-  return (request.headers.get('accept-encoding') ?? '').split(',').some(item => {
-    const [name, ...parameters] = item.trim().toLowerCase().split(';');
-    const q = parameters.find(parameter => parameter.trim().startsWith('q='));
-    return name === 'gzip' && (!q || Number(q.trim().slice(2)) > 0);
-  });
-}
 function wireResponse(body: ConstructorParameters<typeof Response>[0], headers: Headers) {
   // Cloudflare must not gzip an already compressed representation a second time.
   const init: ResponseInit & { encodeBody: 'manual' } = { status: 200, headers, encodeBody: 'manual' };
   return new Response(body, init);
 }
 
-export async function avatarApi(request: Request, env: PlatformEnv, fetcher: typeof fetch = fetch,
+export async function avatarApi(request: Request, env: PlatformEnv & { ASSETS?: AvatarAssets }, fetcher: typeof fetch = fetch,
   storage: AvatarCache | undefined = edgeCache(), context?: AvatarContext) {
   const url = new URL(request.url);
   if (!['/api/avatar/neptune-queen', '/api/avatar/rapper-la'].includes(url.pathname)) return null;
@@ -73,7 +67,11 @@ export async function avatarApi(request: Request, env: PlatformEnv, fetcher: typ
   // Do not let an old cache entry bypass removal of the configured source.
   if (queen && (!origin || !env.ORACLE_API_TOKEN)) return unavailable();
   const source = queen ? `Oracle-job:${NEPTUNE_QUEEN_JOB_ID}` : 'Froge-MPC2:rapper-v10.glb';
-  const gzip = acceptsGzip(request);
+  if (queen && env.ASSETS) {
+    try { return await bundledQueenResponse(request, env.ASSETS, source); }
+    catch { return unavailable(); } // A missing release must not trigger heavy Oracle compression.
+  }
+  const gzip = avatarAcceptsGzip(request);
   // Canonical, versioned keys; no visitor cookies, tokens or arbitrary query strings.
   const cacheUrl = new URL(url.pathname, url.origin);
   cacheUrl.search = new URLSearchParams({ revision: queen ? NEPTUNE_QUEEN_JOB_ID : 'rapper-v10', encoding: gzip ? 'gzip' : 'identity', transport: '2' }).toString();
