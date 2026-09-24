@@ -18,7 +18,8 @@
     "deploy": "wrangler deploy",
     "prebuild": "node scripts/prepare-iss-assets.mjs",
     "foundations:build": "node scripts/build-foundations.mjs",
-    "preverify": "node scripts/prepare-iss-assets.mjs"
+    "preverify": "node scripts/prepare-iss-assets.mjs",
+    "postbuild": "node scripts/prepare-queen-release.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",
