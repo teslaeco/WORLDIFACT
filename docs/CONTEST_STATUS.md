@@ -1,3 +1,9 @@
+## 24 September — original Queen loading repair
+
+The owner reports absent/slow character loading on mobile. The repair preserves the exact model and fixes its delivery: lossless HTTP gzip, validated versioned edge caching, progress-aware bounded timeouts, one transient GET retry and a real download/preparation status. [Findings, test evidence and limits](AVATAR_LOADING_REPAIR_20260924.md). Twenty focused tests, TypeScript, lint, frontend bundle and Worker dry-run pass locally; full local verification is blocked by the ISS vendor DNS fetch. Full current-head CI must pass before merge; PR/release records carry actual deployment and read-only production measurements. Physical Android rendering remains unmeasured. No deferred comparison-image/button, generator, payment or contest-submission changes.
+
+---
+
 ## VERIFIED — final fast-travel cadence correction
 
 Full-speed movement uses a jogging support interval rather than six walking steps/second. 28 focused tests and a repeated numerical audit of the exact Queen GLB passed locally; the new CI head must pass before merge. No original-scene rendering or Android FPS is claimed.

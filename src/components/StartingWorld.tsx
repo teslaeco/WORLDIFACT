@@ -9,6 +9,7 @@ import type { MoveAxes } from "../lib/gameControls";
 import { enteredPortal, nearestPortal, PORTAL_RADIUS } from "../lib/portalNavigation";
 import { createLakeEnvironment } from "../lib/lakeEnvironment";
 import { createPlayerAvatar, type AvatarChoice } from "../lib/playerAvatar";
+import { avatarProgressLabel, subscribeAvatarProgress, type AvatarProgress } from "../lib/avatarAsset";
 import { createFanDrone, nextEquipmentMode, type EquipmentMode, type OutfitPreset } from "../lib/playerEquipment";
 import { fallingBodyY, FLIGHT_BODY_Y, FLIGHT_SPEED, inRiver, nextWaterMode, SWIM_SPEED, swimBodyY, WATER_LEVEL, type WaterMode } from "../lib/waterPhysics";
 import { createWorldAudio, worldAudioTheme } from "../lib/worldAudio";
@@ -119,6 +120,8 @@ export default function StartingWorld({
     [driving, setDriving] = useState(false);
   const [avatarState, setAvatarState] = useState<"loading" | "ready" | "error">("loading");
   const [avatarAttempt, setAvatarAttempt] = useState(0);
+  const [avatarProgress, setAvatarProgress] = useState<AvatarProgress | null>(null);
+  useEffect(() => subscribeAvatarProgress(avatarChoice, setAvatarProgress), [avatarChoice, avatarAttempt]);
   const [textureFailed, setTextureFailed] = useState(false);
   const [sculptureFailed, setSculptureFailed] = useState(false);
   const [interaction, setInteraction] = useState("Interact");
@@ -992,7 +995,7 @@ export default function StartingWorld({
         <span className="eyebrow">GENERATED SCENERY · DEMO GAMEPLAY</span>
         <strong>{blueprint.title}</strong>
         <span>{location}</span>
-        {avatarState === "loading" && <span role="status">Loading the original detailed character…</span>}
+        {avatarState === "loading" && <span role="status">{avatarProgressLabel(avatarProgress)}</span>}
         {avatarState === "error" && <span role="alert">The original character could not load. <button type="button" onClick={() => setAvatarAttempt(value => value + 1)}>Retry character</button></span>}
         {textureFailed ? <span role="status">Scenery image unavailable. Movement remains available.</span> : null}
         {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
