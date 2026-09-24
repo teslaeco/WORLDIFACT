@@ -23,6 +23,10 @@ jobs:
           python3 - <<'PY'
           import base64, gzip, hashlib, pathlib
           encoded = pathlib.Path('ops/queen-loading.patch.b64').read_text()
+          replacements = [('zR991swnrYgbRtLDJdfSZrl+3dduPalIK', 'zR991swnrYgbRtLDdfSZrl+3dduPalIK'), ('ZxwAAuYBpYpvqb9u6oId6Gw0LbtFtHrxE', 'ZxwAAuYBpYpvqb9u3oId6Gw0LbtFtHrxE'), ('vvHp7tnx1038PfUxZZUGFhDG5Pm7oQVDU', 'vvHp7tnx1038PfUxZUGFhDG5Pm7oQVDU')]
+          for before, after in replacements:
+              assert encoded.count(before) == 1
+              encoded = encoded.replace(before, after)
           patch = gzip.decompress(base64.b64decode(encoded, validate=False))
           assert hashlib.sha256(patch).hexdigest() == 'c45d05164eee4b5d8a46be7daebc63a2204058c76c112db81d6fffda92d4817b', 'Transport hash mismatch; no application'
           pathlib.Path('/tmp/queen-loading.patch').write_bytes(patch)
