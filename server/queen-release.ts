@@ -19,10 +19,14 @@ export async function bundledQueenResponse(request: Request, assets: AvatarAsset
     method: request.method, headers: { 'Accept-Encoding': 'identity' }, redirect: 'manual',
   });
   const asset = await assets.fetch(assetRequest);
-  const length = Number(asset.headers.get('Content-Length'));
+  // ASSETS may omit Content-Length on its internal stream, even when the public
+  // HTTP response has one. The pinned release was already size/hash checked at build.
+  const declaredLength = asset.headers.get('Content-Length');
+  const length = declaredLength === null ? null : Number(declaredLength);
   const type = asset.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase();
   if (asset.status !== 200 || !['application/gzip', 'application/x-gzip', 'application/octet-stream'].includes(type ?? '') ||
-      asset.headers.has('Content-Encoding') || !Number.isSafeInteger(length) || length < 20 || length > 25 * 1024 * 1024 ||
+      asset.headers.has('Content-Encoding') ||
+      (length !== null && (!Number.isSafeInteger(length) || length < 20 || length > 25 * 1024 * 1024)) ||
       (request.method !== 'HEAD' && !asset.body)) {
     await asset.body?.cancel(); throw new Error('QUEEN_RELEASE_UNAVAILABLE');
   }
@@ -35,7 +39,10 @@ export async function bundledQueenResponse(request: Request, assets: AvatarAsset
     'X-WORLDIFACT-Source-Job': source.slice('Oracle-job:'.length),
     'X-WORLDIFACT-Avatar-Cache': 'STATIC', 'X-WORLDIFACT-Model-SHA256': QUEEN_SHA256,
   });
-  if (gzip) { headers.set('Content-Encoding', 'gzip'); headers.set('Content-Length', String(length)); }
+  if (gzip) {
+    headers.set('Content-Encoding', 'gzip');
+    if (length !== null) headers.set('Content-Length', String(length));
+  }
   else if (request.method === 'HEAD') headers.set('Content-Length', String(QUEEN_DECODED_BYTES));
   // The release asset was hash-checked BEFORE deployment. Never buffer/compress it
   // in the request isolate. Backpressure/cancellation pass directly to the asset.
