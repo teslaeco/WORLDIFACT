@@ -38,13 +38,13 @@ test('one transient failure retries automatically and still shares the original 
     assert.deepEqual(new Uint8Array(await pending), fixture()); assert.equal(calls, 2)
   } finally { clearAvatarAssets(); globalThis.fetch = original; t.mock.timers.reset() }
 })
-test('persistent failures stop after two attempts rather than looping forever', async t => {
+test('persistent failures stop after three bounded attempts rather than looping forever', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const original = globalThis.fetch; clearAvatarAssets(); let calls = 0
   globalThis.fetch = (async () => { calls++; throw new TypeError('network unavailable') }) as typeof fetch
   try {
     const rejected = assert.rejects(loadAvatarBytes('queen'), /network unavailable/)
-    await flush(); t.mock.timers.tick(800); await rejected; assert.equal(calls, 2)
+    await flush(); t.mock.timers.tick(800); await flush(); t.mock.timers.tick(800); await rejected; assert.equal(calls, 3)
   } finally { clearAvatarAssets(); globalThis.fetch = original; t.mock.timers.reset() }
 })
 test('logout during retry backoff cancels the retry and discards the old session request', async t => {
