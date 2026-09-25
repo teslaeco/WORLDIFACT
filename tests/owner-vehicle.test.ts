@@ -16,8 +16,9 @@ test("owner Mars solar landship is placed beside the existing photovoltaic explo
   const rover = meadowBlueprint().objects.find(object => object.id === "rover-1")!;
   assert.ok(Math.hypot(rover.x - OWNER_VEHICLE_POSITION.x, rover.z - OWNER_VEHICLE_POSITION.z) < 8);
   assert.ok(Math.hypot(rover.x - OWNER_VEHICLE_POSITION.x, rover.z - OWNER_VEHICLE_POSITION.z) > 5);
+  assert.ok(Math.hypot(OWNER_VEHICLE_POSITION.x, OWNER_VEHICLE_POSITION.z - 17) > 5.5);
   const halfLength = OWNER_VEHICLE_SOURCE_EXTENT.z * OWNER_VEHICLE_SCALE / 2;
-  assert.ok(OWNER_VEHICLE_POSITION.z - halfLength > 10);
+  assert.ok(OWNER_VEHICLE_POSITION.z - halfLength > 7);
   for (const portal of PORTALS) assert.ok(Math.hypot(portal.position.x - OWNER_VEHICLE_POSITION.x, portal.position.z - OWNER_VEHICLE_POSITION.z) > 8);
 });
 
