@@ -6,6 +6,7 @@ import {
   GIANT_BUILDING_HEIGHT,
   GIANT_BUILDING_POSITION,
   GIANT_BUILDING_SCALE,
+  GIANT_BUILDING_PARTS,
   GIANT_INTERIOR_BOUNDS,
   GIANT_INTERIOR_EXIT,
   GIANT_INTERIOR_SPAWN,
@@ -42,4 +43,12 @@ test("generated interior bounds are navigable and exit returns through a dedicat
   assert.ok(GIANT_INTERIOR_SPAWN.z < GIANT_INTERIOR_EXIT.z);
   assert.equal(nearGiantInteriorExit(GIANT_INTERIOR_EXIT), true);
   assert.equal(nearGiantInteriorExit({ x: 0, z: -5 }), false);
+});
+
+
+test("giant building runtime manifest uses the complete reviewed ten-part package", () => {
+  assert.equal(GIANT_BUILDING_PARTS.length, 10);
+  assert.equal(GIANT_BUILDING_PARTS[0], "/world-assets/giant-building/part-00.b64");
+  assert.equal(GIANT_BUILDING_PARTS[9], "/world-assets/giant-building/part-09.b64");
+  assert.equal(new Set(GIANT_BUILDING_PARTS).size, 10);
 });
