@@ -1,3 +1,16 @@
+# WORLDIFACT — Giant Tower load + landship drive + optional Shop size, 25 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · EXACT-HEAD CI / MERGE / PRODUCTION VERIFICATION PENDING.** Issue #94 records the owner-requested Android production repair.
+
+- **VERIFIED root cause in source:** the high-fidelity Giant Tower package/test contains ten parts, but the runtime manifest in `src/lib/giantBuilding.ts` still listed only `part-00` through `part-03`. The decoder therefore could not reconstruct the reviewed 585,484-byte GLB. The runtime manifest now references all ten reviewed parts and a regression asserts the exact first/last entries and unique count.
+- Giant Tower loading now performs one bounded transient retry and reports the actual bounded failure reason before retaining the truthful **GAME / GENERATED INTERIOR** fallback. Queen and portal startup remain independent.
+- The already-visible owner Mars solar landship is now registered after load as a GAME rideable vehicle. Interact/keyboard/mobile joystick can board, drive/steer and exit it. It uses landship-specific seat, exit, footprint/ground sampling and camera scaling; the backhoe controls remain exclusive to the photovoltaic rover/loader.
+- Landship collision now follows its current driven pose instead of remaining at the original spawn. Whole-model GAME motion does not claim a verified source rig or source animation.
+- AI Shop target dimensions are now **opt-in**. Default is no target size: the preview is not rescaled and no 100×100×100 mm target is shown. The user must explicitly check **Specify model dimensions (optional)** before quick-size/X/Y/Z controls appear. Manufacturing/cart pricing accepts `dimensions: null`; exact-size quote logic remains unchanged when enabled.
+- No paid model generation, checkout, supplier order or MAKE/manufacturing approval is part of this repair. Physical Android rendering and artistic acceptance remain **UNKNOWN** until the post-deploy device check.
+
+---
+
 # WORLDIFACT — owner visual correction, 25 September 2026
 
 **Status: LIVE · MERGED · PRODUCTION VERIFIED.** Reviewed head `c062fbc182fbe2268b99b63ab8414efa02baf9ba` passed all five exact-head workflows and was squash-merged as `a7721a9be1f3f66d7ea91d1ab8e09dd920a845f1`. Post-merge main CI run `36138773680` and production workflow `36138773777` both passed.
