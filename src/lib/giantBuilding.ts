@@ -1,9 +1,9 @@
 import * as THREE from "three";
 
 export const GIANT_BUILDING_SOURCE_SHA256 = "9c2c61af94243788e1938d99b598f8bfd1281ac710bf41236467db263b5a4e5a";
-export const GIANT_BUILDING_GAME_SHA256 = "032d4cb75880d75d8b78493fe75babefea64676b041389fe23e17a362d982ccd";
+export const GIANT_BUILDING_GAME_SHA256 = "5cdb61971ce42634acfb3759a73a8ff01f94cb71b18f8feb5df436d754e443d2";
 export const GIANT_BUILDING_SOURCE_TRIANGLES = 242_120;
-export const GIANT_BUILDING_GAME_TRIANGLES = 2_690;
+export const GIANT_BUILDING_GAME_TRIANGLES = 14_785;
 
 export const GIANT_BUILDING_POSITION = Object.freeze({ x: -30, z: -24 });
 export const GIANT_BUILDING_SCALE = 5.5;
@@ -30,8 +30,8 @@ export const GIANT_BUILDING_PARTS = Object.freeze([
   "/world-assets/giant-building/part-03.b64",
 ]);
 
-const MAX_PART_CHARS = 25_000;
-const MAX_TOTAL_CHARS = 100_000;
+const MAX_PART_CHARS = 48_000;
+const MAX_TOTAL_CHARS = 480_000;
 
 function label(text: string, width = 512, height = 128) {
   const browserDocument = (globalThis as unknown as { document?: { createElement: (tagName: "canvas") => any } }).document;
@@ -126,7 +126,7 @@ async function gunzip(bytes: Uint8Array) {
   new Uint8Array(packedBuffer).set(bytes);
   const stream = new Blob([packedBuffer]).stream().pipeThrough(new DecompressionStream("gzip"));
   const buffer = await new Response(stream).arrayBuffer();
-  if (buffer.byteLength < 90_000 || buffer.byteLength > 120_000) throw new Error("Giant building GAME asset size is invalid.");
+  if (buffer.byteLength < 560_000 || buffer.byteLength > 610_000) throw new Error("Giant building GAME asset size is invalid.");
   return buffer;
 }
 
@@ -139,7 +139,7 @@ export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
     return text;
   }));
   const packed = base64ToBytes(parts.join(""));
-  if (packed.byteLength < 50_000 || packed.byteLength > 70_000) throw new Error("Giant building GAME package size is invalid.");
+  if (packed.byteLength < 340_000 || packed.byteLength > 365_000) throw new Error("Giant building GAME package size is invalid.");
   const bytes = await gunzip(packed);
   const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
   const gltf = await new GLTFLoader().parseAsync(bytes, "");
@@ -147,7 +147,7 @@ export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
   root.name = "giant-owner-building-game-derivative";
   root.position.set(GIANT_BUILDING_POSITION.x, .11, GIANT_BUILDING_POSITION.z);
   root.scale.setScalar(GIANT_BUILDING_SCALE);
-  root.userData.provenance = "OWNER_PROVIDED_SOURCE__GAME_OPTIMIZED_DERIVATIVE";
+  root.userData.provenance = "OWNER_PROVIDED_SOURCE__HIGHER_FIDELITY_GAME_DERIVATIVE";
   root.userData.sourceSha256 = GIANT_BUILDING_SOURCE_SHA256;
   root.userData.gameSha256 = GIANT_BUILDING_GAME_SHA256;
   root.traverse((object) => {
