@@ -1,3 +1,17 @@
+# WORLDIFACT — Shop PBR/FBX/Blender download repair, 25 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · MERGE / PRODUCTION DEPLOYMENT PENDING OWNER APPROVAL AFTER GREEN CI.**
+
+- Owner Android evidence shows the SLOW model preview/GLB is present while PBR texture, FBX and Blender download attempts can end in the red `Please wait before checking or submitting again.` error.
+- **VERIFIED root cause in source:** all model/export reads shared one Cloudflare `studio:artifact:<IP>` rate-limit bucket. Production is configured for only **3 requests per 60 seconds**. Automatic GLB preview/recovery plus manual GLB/PBR/FBX/BLEND clicks could therefore consume the same three slots and reject later downloads with HTTP 429 even though the signed job receipt remained valid.
+- The Worker now preserves the 3/minute protection but scopes it by export kind: model, PBR, FBX and BLEND no longer consume one another's allowance. Repeated hammering of the same format is still rate-limited.
+- The browser reuses the already-loaded current GLB instead of fetching identical model bytes again, clears stale export errors before a retry and attaches the temporary download link to the document before clicking it for better Android/browser compatibility.
+- A regression simulates the production 3/minute limiter and verifies automatic/model reads plus PBR, FBX and BLEND downloads can all succeed in the same minute. Signed receipt/account authorization and SLOW subscription download rules remain unchanged.
+- Upstream Oracle export existence is still checked honestly. A genuinely missing/not-yet-ready export continues to fail rather than fabricating a file.
+- No new model generation, paid AI request, checkout, subscription mutation, supplier action or manufacturing claim is part of this repair.
+
+---
+
 # WORLDIFACT — Giant Tower direct-GLB Android hardening, 25 September 2026
 
 **Status: IMPLEMENTED ON REVIEW BRANCH · MERGE / PRODUCTION DEPLOYMENT PENDING OWNER APPROVAL AFTER GREEN CI.** Issue #97 tracks the second Android visibility repair.
