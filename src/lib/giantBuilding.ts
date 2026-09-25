@@ -28,14 +28,10 @@ export const GIANT_BUILDING_PARTS = Object.freeze([
   "/world-assets/giant-building/part-01.b64",
   "/world-assets/giant-building/part-02.b64",
   "/world-assets/giant-building/part-03.b64",
-  "/world-assets/giant-building/part-04.b64",
-  "/world-assets/giant-building/part-05.b64",
-  "/world-assets/giant-building/part-06.b64",
-  "/world-assets/giant-building/part-07.b64",
 ]);
 
-const MAX_PART_CHARS = 100_000;
-const MAX_TOTAL_CHARS = 800_000;
+const MAX_PART_CHARS = 25_000;
+const MAX_TOTAL_CHARS = 100_000;
 
 function label(text: string, width = 512, height = 128) {
   const canvas = document.createElement("canvas");
@@ -122,6 +118,14 @@ function base64ToBytes(value: string) {
   return bytes;
 }
 
+async function gunzip(bytes: Uint8Array) {
+  if (typeof DecompressionStream !== "function") throw new Error("This browser cannot unpack the giant building GAME asset.");
+  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const buffer = await new Response(stream).arrayBuffer();
+  if (buffer.byteLength < 90_000 || buffer.byteLength > 120_000) throw new Error("Giant building GAME asset size is invalid.");
+  return buffer;
+}
+
 export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
   const parts = await Promise.all(GIANT_BUILDING_PARTS.map(async (path) => {
     const response = await fetcher(path, { cache: "force-cache", credentials: "same-origin" });
@@ -130,10 +134,11 @@ export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
     if (!text || text.length > MAX_PART_CHARS) throw new Error("Giant building GAME asset part is invalid.");
     return text;
   }));
-  const bytes = base64ToBytes(parts.join(""));
-  if (bytes.byteLength < 100_000 || bytes.byteLength > 700_000) throw new Error("Giant building GAME asset size is invalid.");
+  const packed = base64ToBytes(parts.join(""));
+  if (packed.byteLength < 50_000 || packed.byteLength > 70_000) throw new Error("Giant building GAME package size is invalid.");
+  const bytes = await gunzip(packed);
   const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-  const gltf = await new GLTFLoader().parseAsync(bytes.buffer, "");
+  const gltf = await new GLTFLoader().parseAsync(bytes, "");
   const root = gltf.scene;
   root.name = "giant-owner-building-game-derivative";
   root.position.set(GIANT_BUILDING_POSITION.x, .11, GIANT_BUILDING_POSITION.z);
