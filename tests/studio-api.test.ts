@@ -114,6 +114,29 @@ test('GLB and texture exports need the exact receipt and never trigger generatio
   assert.equal(posts(f).length, 0)
 })
 
+test('GLB preview and PBR/FBX/BLEND downloads do not exhaust one shared artifact bucket', async () => {
+  const f = fixture(), counts = new Map<string, number>()
+  f.env.GENERATION_LIMITER = {
+    async limit({ key }: { key: string }) {
+      const next = (counts.get(key) ?? 0) + 1
+      counts.set(key, next)
+      return { success: next <= 3 }
+    },
+  }
+  const prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  const path = `/api/studio/jobs/${prepared.id}`
+  for (const suffix of ['model', 'model', 'exports/pbr', 'exports/fbx', 'exports/blend']) {
+    assert.equal((await f.call(`${path}/${suffix}`, 'GET', undefined, prepared.ticket)).status, 200)
+  }
+  const artifactKeys = [...counts.keys()].filter(key => key.includes('studio:artifact:')).sort()
+  assert.deepEqual(artifactKeys, [
+    'studio:artifact:exports-blend:unknown-client',
+    'studio:artifact:exports-fbx:unknown-client',
+    'studio:artifact:exports-pbr:unknown-client',
+    'studio:artifact:model:unknown-client',
+  ])
+})
+
 test('invalid photos and unrecognized fields are rejected before contacting paid services', async () => {
   const f = fixture()
   for (const body of [{ ...input, photos: [{ dataUrl: 'https://private.invalid' }] }, { ...input, apiKey: 'not-allowed' }, { ...input, prompt: '' }, { ...input, textureMaxSize: '4096' }]) assert.equal((await f.call('/api/studio/prepare', 'POST', body)).status, 400)
