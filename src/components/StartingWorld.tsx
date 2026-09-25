@@ -23,6 +23,18 @@ import { excavationCamera } from "../lib/excavationCamera";
 import { createDesertScene, meadowGroundGeometry } from "../lib/desertScene";
 import { createBackhoe, type DigTool } from "../lib/backhoe";
 import { parseRim, mountRim } from "../lib/vehicleRims";
+import {
+  GIANT_BUILDING_ENTRANCE,
+  GIANT_INTERIOR_FLOOR_Y,
+  GIANT_INTERIOR_SPAWN,
+  clampGiantInterior,
+  createGiantBuildingEntrance,
+  createGiantBuildingInterior,
+  loadGiantBuilding,
+  nearGiantBuildingEntrance,
+  nearGiantInteriorExit,
+  resolveGiantBuildingCollision,
+} from "../lib/giantBuilding";
 import "./WorldMovement.css";
 import {
   createDecorativeTerrain,
@@ -124,6 +136,8 @@ export default function StartingWorld({
   useEffect(() => subscribeAvatarProgress(avatarChoice, setAvatarProgress), [avatarChoice, avatarAttempt]);
   const [textureFailed, setTextureFailed] = useState(false);
   const [sculptureFailed, setSculptureFailed] = useState(false);
+  const [buildingStatus, setBuildingStatus] = useState("Giant tower: queued");
+  const [insideGiantBuilding, setInsideGiantBuilding] = useState(false);
   const [interaction, setInteraction] = useState("Interact");
   const [hint, setHint] = useState(
       "Walk onto a glowing water portal to enter.",
@@ -153,6 +167,8 @@ export default function StartingWorld({
       setDriving(false);
       setTextureFailed(false);
       setSculptureFailed(false);
+      setBuildingStatus("Giant tower: queued");
+      setInsideGiantBuilding(false);
     });
     renderer.setSize(host.clientWidth, host.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -245,6 +261,27 @@ export default function StartingWorld({
       runtime.spec;
     runtimeObjects.current = objects;
     for (const o of objects) scene.add(o.group);
+
+    // The owner's source GLB is represented in-browser by a bounded GAME-optimized
+    // derivative. Its exterior is loaded after the core world/avatar so this
+    // 3D landmark cannot delay the five portals or Queen startup.
+    const giantEntrance = !lunar && !sea ? createGiantBuildingEntrance() : null;
+    const giantInterior = !lunar && !sea ? createGiantBuildingInterior() : null;
+    if (giantEntrance) scene.add(giantEntrance);
+    if (giantInterior) scene.add(giantInterior);
+    let giantBuildingDisposed = false;
+    const giantBuildingLoadTimer = giantEntrance ? window.setTimeout(() => {
+      queueMicrotask(() => setBuildingStatus("Giant tower: loading owner model…"));
+      void loadGiantBuilding().then(root => {
+        if (giantBuildingDisposed) { disposeObject(root); return; }
+        scene.add(root);
+        queueMicrotask(() => setBuildingStatus("Giant tower: owner model ready · GAME optimized"));
+      }).catch(() => {
+        if (!giantBuildingDisposed) queueMicrotask(() => setBuildingStatus("Giant tower exterior unavailable · generated GAME interior remains accessible"));
+      });
+    }, mobile ? 900 : 450) : undefined;
+    if (!giantEntrance) queueMicrotask(() => setBuildingStatus("Giant tower is available in the valley world"));
+
     const backhoes = new Map(objects.filter(o => specOf(o).kind === "rover").map(o => {
       const saved = sandSession.current?.loads.get(o.spec.id);
       const load = saved?.load ?? createSoilLoad();
@@ -414,6 +451,7 @@ export default function StartingWorld({
       elapsed = 0;
     let contextLost = false;
     let navigating = false;
+    let insideBuilding = false;
     let navigationTimer: ReturnType<typeof setTimeout> | undefined;
     let drag: { id: number; x: number; y: number; moved: number } | null = null;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -610,26 +648,34 @@ export default function StartingWorld({
         fanDrone.root.position.z = THREE.MathUtils.clamp(fanDrone.root.position.z, -46, 46);
         fanDrone.root.position.y = THREE.MathUtils.damp(fanDrone.root.position.y, 2.7 + Math.sin(elapsed * 1.8) * .18, 5, dt);
       } else {
-        const movementSpeed = ride ? (operating?.enabled ? 3.2 : 9) : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? WALK_SPEED : SWIM_SPEED;
+        const movementSpeed = insideBuilding ? WALK_SPEED : ride ? (operating?.enabled ? 3.2 : 9) : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? WALK_SPEED : SWIM_SPEED;
         player.addScaledVector(forward, move * dt * movementSpeed);
         if (!ride) player.addScaledVector(right, side * dt * movementSpeed);
-        player.x = THREE.MathUtils.clamp(player.x, -42, 42);
-        player.z = THREE.MathUtils.clamp(player.z, -42, 42);
+        if (insideBuilding) {
+          const bounded = clampGiantInterior(player);
+          player.x = bounded.x; player.z = bounded.z;
+        } else {
+          player.x = THREE.MathUtils.clamp(player.x, -42, 42);
+          player.z = THREE.MathUtils.clamp(player.z, -42, 42);
+        }
 
-        let moved = equipmentMode === "flight"
+        let moved = insideBuilding
           ? { x: player.x, z: player.z }
-          : movePlayer(old, player, habitats, ride ? (operating?.enabled ? 6 : 3) * specOf(ride).scale : 0);
-        if (!ride && !boarding && equipmentMode !== "flight") moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
+          : equipmentMode === "flight"
+            ? { x: player.x, z: player.z }
+            : movePlayer(old, player, habitats, ride ? (operating?.enabled ? 6 : 3) * specOf(ride).scale : 0);
+        if (!insideBuilding && !ride && !boarding && equipmentMode !== "flight") moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
+        if (!insideBuilding && equipmentMode !== "flight") moved = resolveGiantBuildingCollision(old, moved, ride ? 2.4 * specOf(ride).scale : .55);
         player.x = moved.x;
         player.z = moved.z;
         if (ride && vehicleGround(ride, player.x, player.z, yaw).spread > .62 * specOf(ride).scale) {
           player.x = old.x; player.z = old.z;
         }
 
-        const crossed = enteredPortal(old, player, PORTALS, activePortalId);
+        const crossed = insideBuilding ? undefined : enteredPortal(old, player, PORTALS, activePortalId);
         if (crossed && !boarding) { enter(crossed.id); return; }
 
-        if (!ride && !boarding) {
+        if (!insideBuilding && !ride && !boarding) {
           const beforeWater = waterMode;
           const proposed = jump.height > .02 ? waterMode : nextWaterMode(waterMode, player, PORTALS, PORTAL_RADIUS, equipmentMode);
           if (beforeWater === "land" && proposed === "falling") {
@@ -646,21 +692,23 @@ export default function StartingWorld({
         } else waterMode = "land";
       }
 
-      const near = controllingDrone ? undefined : objects
+      const near = controllingDrone || insideBuilding ? undefined : objects
         .filter((o) => (specOf(o).kind === "rover" && o.group.position.distanceTo(player) < 6) || (specOf(o).kind === "habitat" && o.group.position.distanceTo(player) < 7))
         .sort(
           (a, b) =>
             a.group.position.distanceTo(player) -
             b.group.position.distanceTo(player),
         )[0];
-      const nearPortal = controllingDrone ? undefined : nearestPortal(player, PORTALS, activePortalId);
+      const nearPortal = controllingDrone || insideBuilding ? undefined : nearestPortal(player, PORTALS, activePortalId);
+      const nearBuildingEntrance = !!giantEntrance && !controllingDrone && !insideBuilding && nearGiantBuildingEntrance(player);
+      const nearBuildingExit = !!giantInterior && insideBuilding && nearGiantInteriorExit(player);
       if (boarding) action.current = "";
       if (action.current && !boarding) {
         const a = action.current;
         action.current = "";
         if (waitingForQueen && a !== "reset") {
           setCaptureNotice("The original character is still loading.");
-        } else if (jump.jumps > 0 && (a === "drive" || (a === "interact" && near && !nearPortal))) {
+        } else if (jump.jumps > 0 && (a === "drive" || (a === "interact" && ((near && !nearPortal) || nearBuildingEntrance || nearBuildingExit)))) {
           setCaptureNotice("Land before entering the rover.");
         } else if (a.startsWith("bucket-") || a === "backhoe-mode") {
           const machine = ride ? backhoes.get(ride) : undefined;
@@ -676,7 +724,8 @@ export default function StartingWorld({
           else if (a === "bucket-dump") machine.setAction("dump");
           else machine.setAction("carry");
         } else if (a === "fan-drone") {
-          if (ride) setCaptureNotice("Exit the rover before deploying the fan drone.");
+          if (insideBuilding) setCaptureNotice("Drone equipment stays stowed inside the Giant Tower.");
+          else if (ride) setCaptureNotice("Exit the rover before deploying the fan drone.");
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-drone");
             equipmentMode = next;
@@ -694,7 +743,8 @@ export default function StartingWorld({
             }
           }
         } else if (a === "fan-flight") {
-          if (ride) setCaptureNotice("Exit the rover before using shoulder flight.");
+          if (insideBuilding) setCaptureNotice("Flight equipment stays stowed inside the Giant Tower.");
+          else if (ride) setCaptureNotice("Exit the rover before using shoulder flight.");
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-flight");
             equipmentMode = next;
@@ -718,6 +768,28 @@ export default function StartingWorld({
           avatar.setFlightFans(false);
           setEquipmentStatus("stowed");
           waterMode = inRiver(player) ? "swimming" : "land";
+        } else if (a === "interact" && nearBuildingExit) {
+          insideBuilding = false;
+          if (giantInterior) giantInterior.visible = false;
+          setInsideGiantBuilding(false);
+          player.set(GIANT_BUILDING_ENTRANCE.x, 2.3, GIANT_BUILDING_ENTRANCE.z + 1.65);
+          resetJump(jump); flightHeight = 0; waterMode = "land"; cameraInitialized = false;
+          yaw = 0; pitch = -0.16;
+          setCaptureNotice("Back outside the giant tower.");
+        } else if (a === "interact" && nearBuildingEntrance) {
+          if (ride || equipmentMode !== "stowed") {
+            setCaptureNotice("Exit the vehicle and stow flight equipment before entering the tower.");
+          } else if (!giantInterior) {
+            setCaptureNotice("The tower interior is unavailable in this world.");
+          } else {
+            insideBuilding = true;
+            giantInterior.visible = true;
+            setInsideGiantBuilding(true);
+            player.set(GIANT_INTERIOR_SPAWN.x, 2.3, GIANT_INTERIOR_SPAWN.z);
+            resetJump(jump); flightHeight = 0; waterMode = "land"; cameraInitialized = false;
+            yaw = Math.PI; pitch = -0.12;
+            setCaptureNotice("Entered Giant Tower · GAME / GENERATED INTERIOR. The owner model exterior is separate.");
+          }
         } else if (a === "interact" && nearPortal) {
           enter(nearPortal.id);
           return;
@@ -737,6 +809,9 @@ export default function StartingWorld({
           avatar.setFlightFans(false);
           setEquipmentStatus("stowed");
           waterMode = "land";
+          insideBuilding = false;
+          if (giantInterior) giantInterior.visible = false;
+          setInsideGiantBuilding(false);
         } else if (
           a === "exit" ||
           (ride && (a === "drive" || a === "interact"))
@@ -839,7 +914,7 @@ export default function StartingWorld({
       } else {
         flightHeight = THREE.MathUtils.damp(flightHeight, 0, 6, dt);
         if (flightHeight < .005) flightHeight = 0;
-        const bodyY = waterMode === "falling" ? fallingBodyY(elapsed - waterEnteredAt) : waterMode === "swimming" ? swimBodyY(elapsed) : groundAt(player.x, player.z);
+        const bodyY = insideBuilding ? GIANT_INTERIOR_FLOOR_Y : waterMode === "falling" ? fallingBodyY(elapsed - waterEnteredAt) : waterMode === "swimming" ? swimBodyY(elapsed) : groundAt(player.x, player.z);
         avatar.root.position.set(player.x, bodyY + jump.height + flightHeight, player.z);
         if (gait > .02) avatar.root.rotation.y = Math.atan2(-(player.x - old.x), -(player.z - old.z));
       }
@@ -903,14 +978,18 @@ export default function StartingWorld({
         hud = now;
         const machine = ride ? backhoes.get(ride) : undefined;
         setVehicleHud({ enabled: machine?.enabled ?? false, tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0, capacity: machine ? Math.round(machine.load.capacity * 1000) : 1600, status: machine?.status ?? "Ready" });
-        const travelMode = controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
+        const travelMode = insideBuilding ? "inside giant tower" : controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
         setLocation(
-          `${sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
+          `${insideBuilding ? "Giant Tower · GAME interior" : sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
         );
         setHint(
-          nearPortal
-            ? `${waterMode === "swimming" || waterMode === "falling" ? "Swim" : "Move"} onto the light to enter ${nearPortal.shortTitle}`
-            : controllingDrone
+          nearBuildingExit
+            ? `${mobile ? "Tap the action button" : "E"} · exit Giant Tower to the meadow`
+            : nearBuildingEntrance
+              ? `${mobile ? "Tap the action button" : "E"} · enter the enormous Giant Tower`
+              : nearPortal
+                ? `${waterMode === "swimming" || waterMode === "falling" ? "Swim" : "Move"} onto the light to enter ${nearPortal.shortTitle}`
+                : controllingDrone
               ? "Fan 1 drone · joystick / WASD fly · Equipment to recall"
               : equipmentMode === "flight"
                 ? "Flight active · joystick / WASD steer · tap Land to return"
@@ -920,9 +999,11 @@ export default function StartingWorld({
                     ? machine?.enabled ? `Front-quarter work view · drag to look · ${machine.status}` : "Joystick: drive & steer · enable Backhoe mode to dig in the desert"
                     : near
                       ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
-                      : mobile ? "Left thumb: move · right thumb: look · tap Jump twice for a flip" : "WASD move · Space jump (twice: flip) · G fly/land · I equipment",
+                      : insideBuilding
+                        ? "Walk through the generated GAME lobby · use the glowing EXIT marker to leave"
+                        : mobile ? "Left thumb: move · right thumb: look · tap Jump twice for a flip" : "WASD move · Space jump (twice: flip) · G fly/land · I equipment",
         );
-        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
+        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearBuildingExit ? "Exit Giant Tower" : nearBuildingEntrance ? "Enter Giant Tower" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
       }
       renderer.render(scene, camera);
       if (!contextLost) frame = requestAnimationFrame(animate);
@@ -934,6 +1015,8 @@ export default function StartingWorld({
     });
     return () => {
       sculptureDisposed = true;
+      giantBuildingDisposed = true;
+      if (giantBuildingLoadTimer !== undefined) clearTimeout(giantBuildingLoadTimer);
       contextLost = true;
       cancelAnimationFrame(frame);
       clearTimeout(navigationTimer);
@@ -999,6 +1082,8 @@ export default function StartingWorld({
         {avatarState === "error" && <span role="alert">The original character could not load. <button type="button" onClick={() => setAvatarAttempt(value => value + 1)}>Retry character</button></span>}
         {textureFailed ? <span role="status">Scenery image unavailable. Movement remains available.</span> : null}
         {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
+        <span role="status">{buildingStatus}</span>
+        {insideGiantBuilding ? <span>Giant Tower · GAME / GENERATED INTERIOR</span> : null}
       </div>
       <label className="avatar-note avatar-picker">Character
         <select value={avatarChoice} onChange={e => setAvatarChoice(e.target.value as AvatarChoice)} aria-label="Choose player character">
@@ -1050,10 +1135,10 @@ export default function StartingWorld({
             <option value="casual">Casual</option>
           </select>
         </label>
-        <button type="button" disabled={!ready || failed || driving} onClick={() => { action.current = "fan-drone"; }}>
+        <button type="button" disabled={!ready || failed || driving || insideGiantBuilding} onClick={() => { action.current = "fan-drone"; }}>
           {equipmentStatus === "drone" ? "Fan 1 · Recall drone" : "Fan 1 · Throw / drone"}
         </button>
-        <button type="button" disabled={!ready || failed || driving} onClick={() => { action.current = "fan-flight"; }}>
+        <button type="button" disabled={!ready || failed || driving || insideGiantBuilding} onClick={() => { action.current = "fan-flight"; }}>
           {equipmentStatus === "flight" ? "Fan 2 · Land + stow" : "Fan 2 · Mount both / fly"}
         </button>
         <button type="button" disabled={equipmentStatus === "stowed"} onClick={() => { action.current = "fan-stow"; }}>Stow fans</button>
@@ -1083,7 +1168,7 @@ export default function StartingWorld({
         <div className="world-interact">
           <span>DRAG TO LOOK</span>
           {!driving && <div className="world-special-actions">
-            <button type="button" disabled={!ready || failed || driving || avatarState !== "ready"} aria-pressed={equipmentStatus === "flight"} onClick={() => { action.current = "fan-flight"; }}>{equipmentStatus === "flight" ? "Land" : "Fly"}<span className="keyboard-shortcut" aria-hidden="true">G</span></button>
+            <button type="button" disabled={!ready || failed || driving || insideGiantBuilding || avatarState !== "ready"} aria-pressed={equipmentStatus === "flight"} onClick={() => { action.current = "fan-flight"; }}>{equipmentStatus === "flight" ? "Land" : "Fly"}<span className="keyboard-shortcut" aria-hidden="true">G</span></button>
             <button type="button" disabled={!ready || failed || driving || avatarState !== "ready" || equipmentStatus !== "stowed" || jumpCount >= 2} aria-label={jumpCount === 1 ? "Double jump and flip" : "Jump"} onClick={() => { jumpRequests.current = Math.min(2, jumpRequests.current + 1); }}>{jumpCount === 1 ? "Double jump" : "Jump"}<span className="keyboard-shortcut" aria-hidden="true">Space</span></button>
           </div>}
           <button
