@@ -66,7 +66,7 @@ class ExportPreparePatchTests(unittest.TestCase):
         self.assertIn("if _file_sha256(model)!=before:",text)
         self.assertIn("EXPORT_PREPARING.discard(job_id)",text)
         # Existing paid-generation admission remains byte-for-byte in semantic markers.
-        for marker in ("reserve-studio","/v1/jobs","generate_code(","ENABLE_STUDIO_JOBS"):
+        for marker in ("/v1/jobs","generate_code(","requested_profile(data)","run_blender_finalize"):
             self.assertIn(marker,text)
 
     def test_unknown_or_twice_patched_source_fails_closed(self):
