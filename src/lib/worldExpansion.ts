@@ -24,6 +24,12 @@ function ribbon(points: THREE.Vector3[], width: number, material: THREE.Material
   return new THREE.Mesh(geometry, material);
 }
 
+export function expandedGroundHeight(x: number, z: number) {
+  if (x < GRAND_DESERT.minX || x > GRAND_DESERT.maxX || z < GRAND_DESERT.minZ || z > GRAND_DESERT.maxZ) return 0;
+  const edge = Math.min(1, Math.max(0, (x - GRAND_DESERT.minX) / 16));
+  return Math.max(.03, edge * (.55 + 1.45 * Math.sin(x * .105 + z * .058) ** 2 + .42 * Math.sin(z * .16 + x * .035)));
+}
+
 function duneMesh(mobile: boolean) {
   const columns = mobile ? 30 : 54, rows = mobile ? 44 : 78;
   const width = GRAND_DESERT.maxX - GRAND_DESERT.minX, depth = GRAND_DESERT.maxZ - GRAND_DESERT.minZ;
@@ -33,9 +39,7 @@ function duneMesh(mobile: boolean) {
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i) + (GRAND_DESERT.minX + GRAND_DESERT.maxX) / 2;
     const z = p.getZ(i);
-    const edge = Math.min(1, Math.max(0, (x - GRAND_DESERT.minX) / 16));
-    const y = edge * (.55 + 1.45 * Math.sin(x * .105 + z * .058) ** 2 + .42 * Math.sin(z * .16 + x * .035));
-    p.setY(i, Math.max(.03, y));
+    p.setY(i, expandedGroundHeight(x, z));
   }
   geometry.computeVertexNormals();
   const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: "#d9a35d", roughness: .98, metalness: 0 }));
