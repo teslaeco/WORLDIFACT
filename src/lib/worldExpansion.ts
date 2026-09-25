@@ -89,8 +89,9 @@ function coastForest(mobile: boolean) {
     count,
   );
   for (let i = 0; i < count; i++) {
-    const x = -61 - ((i * 23) % 67), z = -112 + ((i * 41) % 224);
-    if (Math.abs(z) < 13 && x > -94) continue;
+    const x = -61 - ((i * 23) % 67);
+    let z = -112 + ((i * 41) % 224);
+    if (Math.abs(z) < 13 && x > -94) z += z >= 0 ? 18 : -18;
     const scale = .7 + (i % 5) * .12;
     transform.position.set(x, 1.2 * scale, z); transform.rotation.set(0, i * .37, 0); transform.scale.setScalar(scale); transform.updateMatrix(); trunks.setMatrixAt(i, transform.matrix);
     transform.position.set(x, 3.1 * scale, z); transform.scale.set(1.25 * scale, 1.45 * scale, 1.25 * scale); transform.updateMatrix(); crowns.setMatrixAt(i, transform.matrix);
