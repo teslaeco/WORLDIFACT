@@ -287,13 +287,29 @@ export default function StartingWorld({
     let giantBuildingDisposed = false;
     const giantBuildingLoadTimer = giantEntrance ? window.setTimeout(() => {
       queueMicrotask(() => setBuildingStatus("Giant tower: loading owner model…"));
-      void loadGiantBuilding().then(root => {
-        if (giantBuildingDisposed) { disposeObject(root); return; }
-        scene.add(root);
-        queueMicrotask(() => setBuildingStatus("Giant tower: higher-fidelity owner model ready · GAME"));
-      }).catch(() => {
-        if (!giantBuildingDisposed) queueMicrotask(() => setBuildingStatus("Giant tower exterior unavailable · generated GAME interior remains accessible"));
-      });
+      void (async () => {
+        let lastError: unknown;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const root = await loadGiantBuilding();
+            if (giantBuildingDisposed) { disposeObject(root); return; }
+            scene.add(root);
+            queueMicrotask(() => setBuildingStatus("Giant tower: higher-fidelity owner model ready · GAME"));
+            return;
+          } catch (error) {
+            lastError = error;
+            if (attempt === 0 && !giantBuildingDisposed) {
+              queueMicrotask(() => setBuildingStatus("Giant tower: retrying exterior load…"));
+              await new Promise(resolve => window.setTimeout(resolve, 850));
+            }
+          }
+        }
+        console.error("[WORLDIFACT Giant Tower]", lastError);
+        if (!giantBuildingDisposed) {
+          const reason = lastError instanceof Error ? lastError.message.replace(/^Giant building GAME /, "").slice(0, 90) : "load failed";
+          queueMicrotask(() => setBuildingStatus(`Giant tower exterior unavailable · ${reason} · generated GAME interior remains accessible`));
+        }
+      })();
     }, mobile ? 900 : 450) : undefined;
     if (!giantEntrance) queueMicrotask(() => setBuildingStatus("Giant tower is available in the valley world"));
 
