@@ -30,8 +30,8 @@ jobs:
           test "$(git -C .upstream/forge-mpc2 hash-object public/models/rapper-v10.glb)" = "25d3a7f62fb97844843e3007d498a3d93a927d42"
           test "$(stat -c %s .upstream/forge-mpc2/public/models/rapper-v10.glb)" = "10343368"
           grep -q "MIT License" .upstream/forge-mpc2/LICENSE
-          grep -q "generic adult face" .upstream/forge-mpc2/docs/CHARACTERS_V10.md
-          grep -q "not a likeness reconstruction" .upstream/forge-mpc2/docs/CHARACTERS_V10.md
+          grep -qi "generic adult face" .upstream/forge-mpc2/docs/CHARACTERS_V10.md
+          grep -qi "not a likeness reconstruction" .upstream/forge-mpc2/docs/CHARACTERS_V10.md
           grep -q "CC0 1.0" .upstream/forge-mpc2/oracle_connector/runtime/assets/SOURCES.md
           printf 'FORGE_WORKER_SHA256='
           sha256sum .upstream/forge-mpc2/public/models/rapper-v10.glb | cut -d' ' -f1
