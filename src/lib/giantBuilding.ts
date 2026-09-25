@@ -23,12 +23,9 @@ export const GIANT_BUILDING_FOOTPRINT = Object.freeze({
   maxZ: GIANT_BUILDING_POSITION.z + SOURCE_HALF_Z,
 });
 
-export const GIANT_BUILDING_PARTS = Object.freeze([
-  "/world-assets/giant-building/part-00.b64",
-  "/world-assets/giant-building/part-01.b64",
-  "/world-assets/giant-building/part-02.b64",
-  "/world-assets/giant-building/part-03.b64",
-]);
+export const GIANT_BUILDING_PARTS = Object.freeze(
+  Array.from({ length: 10 }, (_, index) => `/world-assets/giant-building/part-${String(index).padStart(2, "0")}.b64`),
+);
 
 const MAX_PART_CHARS = 48_000;
 const MAX_TOTAL_CHARS = 480_000;
