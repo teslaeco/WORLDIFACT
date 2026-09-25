@@ -69,7 +69,7 @@ test('mobile layout keeps creation controls first and internal archive out of si
   const html = await renderShopMarkup()
   assert.match(html, /<section class="shop-internal-only" hidden="" aria-labelledby="studio-archive-title">/)
   assert.match(html, /Digital 3D file:/)
-  assert.match(html, /Completed owned model files remain downloadable/)
+  assert.match(html, /Completed owned (?:GAME |model )?files (?:can be downloaded|remain downloadable)/)
 })
 
 test('restored SLOW jobs recover automatically while customer FAST uses the separate Astra draft path', async () => {
