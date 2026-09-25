@@ -9,12 +9,12 @@ The existing Cube Chess Supabase UUID is the identity key. `AccountEntitlements`
 | Account operation | Implemented rule |
 | --- | --- |
 | Free FAST | Two reservations in a rolling 24-hour window; successful models may be downloaded |
-| Free SLOW | One reservation per UTC calendar day; model downloads require a currently active paid subscription |
+| Free SLOW | One reservation per UTC calendar day; completed owned model files remain downloadable |
 | Subscription payment | 1,500 credits for each verified initial or renewal invoice for the configured subscription price |
 | Credit generation | 50 credits per reservation, for FAST or SLOW; 1,500 / 50 = 30 models |
 | Active subscription with no credits | Generation is blocked until more credits are purchased |
-| One-time credit pack / top-up | USD 29.99 for 1,500 credits; any signed-in account may buy; does not activate subscription-only SLOW downloads |
-| Remaining credits after subscription expiry | Credits remain usable; SLOW downloads remain locked until the subscription is active again |
+| One-time credit pack / top-up | USD 29.99 for 1,500 credits; any signed-in account may buy; does not activate monthly membership |
+| Remaining credits after subscription expiry | Credits remain usable; completed owned model downloads remain available |
 | Explicit failed generation | One idempotent refund of its credits or free quota |
 | Uncertain provider acceptance | Preserve the reservation and job ID; never refund or automatically start a second job |
 | Terminal successful job | Immutable settlement; cannot later be refunded by a replayed failed status |
