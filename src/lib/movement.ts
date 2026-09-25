@@ -1,6 +1,7 @@
 import type { WorldObject } from "./blueprint.ts";
 export interface PointXZ { x: number; z: number }
 export interface HabitatObstacle { spec: WorldObject; doorOpen: boolean }
+export const WORLD_MOVE_BOUND = 174;
 
 /** Keep the walking avatar outside car bodies; boarding owns the door passage. */
 export function avoidVehicleBodies(from: PointXZ, target: PointXZ, vehicles: WorldObject[]): PointXZ {
@@ -43,7 +44,7 @@ function blocked(point: PointXZ, habitats: HabitatObstacle[], vehicleRadius: num
 export function movePlayer(from: PointXZ, target: PointXZ, habitats: HabitatObstacle[], vehicleRadius = 0): PointXZ {
   if (![from.x, from.z, target.x, target.z, vehicleRadius].every(Number.isFinite) || vehicleRadius < 0)
     return { ...from };
-  const bound = 42 - vehicleRadius;
+  const bound = WORLD_MOVE_BOUND - vehicleRadius;
   const end = {
     x: Math.max(-bound, Math.min(bound, target.x)),
     z: Math.max(-bound, Math.min(bound, target.z)),
@@ -64,7 +65,7 @@ export function findRoverExit(rover: PointXZ, rotation: number, scale: number, h
     const angle = rotation + offset;
     const distance = 3.5 * scale + 0.5;
     const point = { x: rover.x + Math.sin(angle) * distance, z: rover.z + Math.cos(angle) * distance };
-    if (Math.abs(point.x) <= 41.5 && Math.abs(point.z) <= 41.5 && !blocked(point, habitats, 0.3, true)) return point;
+    if (Math.abs(point.x) <= WORLD_MOVE_BOUND - 0.5 && Math.abs(point.z) <= WORLD_MOVE_BOUND - 0.5 && !blocked(point, habitats, 0.3, true)) return point;
   }
   return null;
 }
