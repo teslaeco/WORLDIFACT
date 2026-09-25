@@ -194,15 +194,16 @@ test('new reference selection and draft clearing preserve the displayed old mode
   } finally { h.close() }
 })
 
-test('completed free SLOW displays its subscription lock and never fetches the downloadable GLB for a preview', async () => {
+test('completed owned SLOW loads its GLB and exposes transfer downloads without a membership gate', async () => {
   const h = await harness({ ready: true, downloadAllowed: false })
   try {
     await h.poll()
-    assert.equal(h.calls.filter(call => call.path.endsWith('/model')).length, 0)
-    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Your SLOW model is ready'))
-    assert.ok(h.all().some(node => node.props.to === '/account/credits' && text(node).includes('View subscription')))
-    assert.equal(h.all().some(node => node.type === 'button' && text(node).includes('Download model')), false)
-    assert.ok(h.all().some(node => text(node).includes('protected image preview is not available')))
+    assert.equal(h.calls.filter(call => call.path.endsWith('/model')).length, 1)
+    assert.ok(h.all().some(node => node.type === 'button' && text(node).includes('Download model · GLB')))
+    assert.ok(h.all().some(node => node.type === 'button' && text(node).includes('Download / prepare PBR')))
+    assert.ok(h.all().some(node => node.type === 'button' && text(node).includes('Download / prepare FBX')))
+    assert.ok(h.all().some(node => node.type === 'button' && text(node).includes('Download / prepare Blender')))
+    assert.equal(h.all().some(node => node.props.to === '/account/credits' && text(node).includes('View subscription')), false)
   } finally { h.close() }
 })
 
