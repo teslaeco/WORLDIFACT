@@ -80,7 +80,7 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (st
   if ('document' in globalThis) {
     void loadAvatarBytes(choice).then(bytes => {
       if (disposed) return null;
-      return new GLTFLoader().parseAsync(bytes, '/api/avatar/');
+      return new GLTFLoader().parseAsync(bytes, choice === 'queen' ? '/game-assets/' : '/api/avatar/');
     }).then(gltf => {
       if (!gltf) return;
       if (disposed) { disposeObject(gltf.scene); return; }
