@@ -1,3 +1,17 @@
+# WORLDIFACT — Giant Tower direct-GLB Android hardening, 25 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · MERGE / PRODUCTION DEPLOYMENT PENDING OWNER APPROVAL AFTER GREEN CI.** Issue #97 tracks the second Android visibility repair.
+
+- Re-uploaded owner GLB is byte-identical to the previously audited building source: SHA-256 `9c2c61af94243788e1938d99b598f8bfd1281ac710bf41236467db263b5a4e5a`, 23,449,560 bytes.
+- The previous runtime still reconstructed the 585,484-byte GAME derivative in the browser from ten base64/gzip parts. That path depended on browser `DecompressionStream` and multiple asset reads; Android still reported/behaved as if the exterior was unavailable.
+- Build/test preparation now reconstructs the exact same reviewed derivative once into a single static `giant-tower.glb` (SHA-256 `5cdb61971ce42634acfb3759a73a8ff01f94cb71b18f8feb5df436d754e443d2`). Runtime validates direct HTTP status, exact byte length, GLB header and SHA-256 before parsing.
+- Production release smoke now hashes the published `/world-assets/giant-building/giant-tower.glb`, so an HTML fallback, stale file or wrong MIME cannot pass release verification.
+- The landmark is moved from (-30,-24) to (-18,-18), keeping it clear of the portal line while bringing the >50-unit tower into the center-left initial view. Entrance moves consistently to (-18,-6.8).
+- The separate lobby remains explicitly **GAME / GENERATED INTERIOR**. No MAKE/manufacturing or engineering claim changes.
+- No paid generation, checkout or supplier action is part of this repair. Physical Android artistic acceptance remains **UNKNOWN** until the owner tests the deployed revision.
+
+---
+
 # WORLDIFACT — Giant Tower load + landship drive + optional Shop size, 25 September 2026
 
 **Status: LIVE · MERGED · PRODUCTION VERIFIED.** Issue #94 / PR #95 are complete. Reviewed head `bcb8b6bfc37b78bc543858b6ad8149d571bbb8c8` passed all five exact-head workflows and was squash-merged as `d1fa57b3487294ff7aad91c79d35bc62acd3f0cf`.
