@@ -119,7 +119,7 @@ export default function AccountPage() {
         </>}
         {notice && <p role="status" className="account-notice">{notice}</p>}
         {error && <p role="alert" className="account-error">{error}</p>}
-        <details className="account-free-note"><summary>Start creating for free <span aria-hidden="true">+</span></summary><p>2 FAST generations per 24h, with downloads.<br />1 SLOW generation per day. SLOW downloads require a subscription.</p><p>Membership: $29.99/month · 1,500 credits.<br />50 credits per paid generation · 30 models per grant.</p><Link to="/account/credits">Explore membership →</Link></details>
+        <details className="account-free-note"><summary>Start creating for free <span aria-hidden="true">+</span></summary><p>2 FAST generations per 24h, with downloads.<br />1 SLOW generation per day. Completed owned model files remain downloadable.</p><p>Membership: $29.99/month · 1,500 credits.<br />50 credits per paid generation · 30 models per grant.</p><Link to="/account/credits">Explore membership →</Link></details>
       </section>
     </div>
     <BrandShowcase />
