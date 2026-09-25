@@ -4,6 +4,8 @@ import { PORTALS } from "../config/portals";
 import { meadowBlueprint } from "../lib/blueprint";
 import type { WorldBlueprint, WorldObject } from "../lib/blueprint";
 import { avoidVehicleBodies, findRoverExit, movePlayer } from "../lib/movement";
+import { createExpandedWorld, expandedGroundHeight, expandedZoneName, GRAND_DESERT, WORLD_BOUND } from "../lib/worldExpansion";
+import { createForgeNpcSystem } from "../lib/worldNpcs";
 import { movementAxes, STILL } from "../lib/gameControls";
 import type { MoveAxes } from "../lib/gameControls";
 import { enteredPortal, nearestPortal, PORTAL_RADIUS } from "../lib/portalNavigation";
@@ -155,6 +157,7 @@ export default function StartingWorld({
   const [sculptureFailed, setSculptureFailed] = useState(false);
   const [buildingStatus, setBuildingStatus] = useState("Giant tower: queued");
   const [ownerVehicleStatus, setOwnerVehicleStatus] = useState("Mars solar landship: queued");
+  const [forgeNpcStatus, setForgeNpcStatus] = useState("Forge workers: queued");
   const [insideGiantBuilding, setInsideGiantBuilding] = useState(false);
   const [interaction, setInteraction] = useState("Interact");
   const [hint, setHint] = useState(
@@ -187,6 +190,7 @@ export default function StartingWorld({
       setSculptureFailed(false);
       setBuildingStatus("Giant tower: queued");
       setOwnerVehicleStatus("Mars solar landship: queued");
+      setForgeNpcStatus("Forge workers: queued");
       setInsideGiantBuilding(false);
     });
     renderer.setSize(host.clientWidth, host.clientHeight);
@@ -209,12 +213,12 @@ export default function StartingWorld({
     scene.background = new THREE.Color(
       lunar ? "#172842" : sea ? "#7487bb" : "#a1c8cf",
     );
-    scene.fog = new THREE.Fog(scene.background, 40, 155);
+    scene.fog = new THREE.Fog(scene.background, 70, 320);
     const camera = new THREE.PerspectiveCamera(
       60,
       host.clientWidth / host.clientHeight,
       0.1,
-      240,
+      420,
     );
     scene.add(
       new THREE.HemisphereLight("#fff5db", lunar ? "#253449" : "#294437", 2.3),
@@ -243,7 +247,7 @@ export default function StartingWorld({
     }
   }
     const grass = !lunar && !sea ? createMeadowGrass(mobile) : null;
-    const groundAt = (x: number, z: number) => sandField?.heightAt(x, z) ?? 0;
+    const groundAt = (x: number, z: number) => sandField && inDesert(x, z) ? sandField.heightAt(x, z) : expandedGroundHeight(x, z);
     if (!sea) {
       const ground = new THREE.Mesh(
         lunar ? new THREE.PlaneGeometry(230, 230) : meadowGroundGeometry(),
@@ -255,6 +259,12 @@ export default function StartingWorld({
       if (grass) scene.add(grass);
       if (desert) scene.add(desert.root);
     }
+    const expandedWorld = !lunar && !sea ? createExpandedWorld(mobile) : null;
+    if (expandedWorld) scene.add(expandedWorld);
+    const forgeNpcs = !lunar && !sea
+      ? createForgeNpcSystem(scene, mobile, groundAt, value => queueMicrotask(() => setForgeNpcStatus(value)))
+      : null;
+    if (!forgeNpcs) queueMicrotask(() => setForgeNpcStatus("Forge workers are active only in the shared valley world."));
     if (lunar) {
       scene.add(createDecorativeTerrain(Array.from({ length: 32 }, (_, i) => ({
         id: `lunar-rock-${i}`, kind: "rock", name: "Lunar rock",
@@ -265,7 +275,7 @@ export default function StartingWorld({
       const trees: WorldObject[] = [];
       for (let i = 0; i < 65; i++) {
         const x = ((i * 31) % 125) - 62, z = ((i * 47) % 120) - 60;
-        if (Math.abs(z) < 10 || (Math.abs(x) < 24 && Math.abs(z) < 32) || inDesert(x, z, 1)) continue;
+        if (Math.abs(z) < 10 || (Math.abs(x) < 24 && Math.abs(z) < 32) || inDesert(x, z, 1) || x >= GRAND_DESERT.minX) continue;
         trees.push({ id: `valley-tree-${i}`, kind: "tree", name: "Valley flora", x, z, scale: 0.6 + i % 5 * 0.2, rotation: i * 17 % 360, color: i % 2 ? "#2e674d" : "#45754c" });
       }
       scene.add(createDecorativeTerrain(trees));
@@ -789,8 +799,8 @@ export default function StartingWorld({
       if (controllingDrone) {
         fanDrone.root.position.addScaledVector(forward, move * dt * 9.5);
         fanDrone.root.position.addScaledVector(right, side * dt * 9.5);
-        fanDrone.root.position.x = THREE.MathUtils.clamp(fanDrone.root.position.x, -46, 46);
-        fanDrone.root.position.z = THREE.MathUtils.clamp(fanDrone.root.position.z, -46, 46);
+        fanDrone.root.position.x = THREE.MathUtils.clamp(fanDrone.root.position.x, -WORLD_BOUND, WORLD_BOUND);
+        fanDrone.root.position.z = THREE.MathUtils.clamp(fanDrone.root.position.z, -WORLD_BOUND, WORLD_BOUND);
         fanDrone.root.position.y = THREE.MathUtils.damp(fanDrone.root.position.y, 2.7 + Math.sin(elapsed * 1.8) * .18, 5, dt);
       } else {
         const movementSpeed = insideBuilding ? WALK_SPEED : ride ? isOwnerVehicle(ride) ? OWNER_VEHICLE_SPEED : (operating?.enabled ? 3.2 : 9) : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? WALK_SPEED : SWIM_SPEED;
@@ -800,8 +810,8 @@ export default function StartingWorld({
           const bounded = clampGiantInterior(player);
           player.x = bounded.x; player.z = bounded.z;
         } else {
-          player.x = THREE.MathUtils.clamp(player.x, -42, 42);
-          player.z = THREE.MathUtils.clamp(player.z, -42, 42);
+          player.x = THREE.MathUtils.clamp(player.x, -WORLD_BOUND, WORLD_BOUND);
+          player.z = THREE.MathUtils.clamp(player.z, -WORLD_BOUND, WORLD_BOUND);
         }
 
         let moved = insideBuilding
@@ -1027,6 +1037,7 @@ export default function StartingWorld({
       }
       desert?.sync();
       if (grass) updateMeadowGrass(grass, reduced ? 0 : elapsed);
+      forgeNpcs?.update(reduced ? 0 : elapsed, dt);
       let seated = !!ride;
       let gait = Math.min(1, Math.hypot(player.x - old.x, player.z - old.z) / Math.max(dt * WALK_SPEED, .001));
       let reaching = 0;
@@ -1115,8 +1126,8 @@ export default function StartingWorld({
         camera.lookAt(cameraAim);
       }
       if (overview.current) {
-        camera.position.set(Math.sin(yaw) * 18, 48 + zoom.current, 30 + Math.cos(yaw) * 12);
-        camera.lookAt(0, 0, 3);
+        camera.position.set(Math.sin(yaw) * 72, 145 + zoom.current * 2, 105 + Math.cos(yaw) * 52);
+        camera.lookAt(0, 0, 0);
       }
       environment?.update(reduced ? 0 : elapsed);
       for (const p of portals) {
@@ -1133,8 +1144,9 @@ export default function StartingWorld({
         const machine = ride ? backhoes.get(ride) : undefined;
         setVehicleHud({ enabled: machine?.enabled ?? false, ownerVehicle: isOwnerVehicle(ride), tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0, capacity: machine ? Math.round(machine.load.capacity * 1000) : 1600, status: machine?.status ?? (isOwnerVehicle(ride) ? "Mars solar landship · GAME drive" : "Ready") });
         const travelMode = insideBuilding ? "inside giant tower" : controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
+        const worldLabel = insideBuilding ? "Giant Tower · GAME interior" : (!lunar && !sea ? expandedZoneName(player.x, player.z) : sceneBlueprint.biome);
         setLocation(
-          `${insideBuilding ? "Giant Tower · GAME interior" : sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
+          `${worldLabel} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
         );
         setHint(
           nearBuildingExit
@@ -1194,6 +1206,7 @@ export default function StartingWorld({
       renderer.domElement.removeEventListener("webglcontextrestored", restored);
       clear();
       for (const [car, machine] of backhoes) if (sandSession.current?.key === sceneStructure) sandSession.current.loads.set(car.spec.id, { load: machine.load, enabled: machine.enabled, tool: machine.tool });
+      forgeNpcs?.dispose();
       avatar.dispose();
       if (avatarRuntime.current === avatar) avatarRuntime.current = null;
       rimInstaller.current = null; rimMounts.forEach(mount => mount.dispose()); rimMounts = [];
@@ -1216,7 +1229,7 @@ export default function StartingWorld({
   return (
     <section
       className={`starting-world-shell${driving ? " is-driving" : ""}${inventoryOpen ? " equipment-open" : ""}`}
-      aria-label="WORLDIFACT playable world"
+      aria-label="WORLDIFACT playable world with meadow, Grand Desert and Mountain Coast"
     >
       <div className="starting-world" ref={mount} />
       {transition && <div className="portal-transition" aria-live="polite">Entering world…</div>}
@@ -1241,6 +1254,7 @@ export default function StartingWorld({
         {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
         <span role="status">{buildingStatus}</span>
         <span role="status">{ownerVehicleStatus}</span>
+        <span role="status">{forgeNpcStatus}</span>
         {insideGiantBuilding ? <span>Giant Tower · GAME / GENERATED INTERIOR</span> : null}
       </div>
       <label className="avatar-note avatar-picker">Character
@@ -1278,7 +1292,7 @@ export default function StartingWorld({
         >
           Reset view
         </button>
-        <button onClick={() => { overview.current = !overview.current; setWide(overview.current); }} aria-pressed={wide}>{wide ? "Follow character" : "Whole meadow"}</button>
+        <button onClick={() => { overview.current = !overview.current; setWide(overview.current); }} aria-pressed={wide}>{wide ? "Follow character" : "Whole world"}</button>
         <button onClick={() => { void toggleMusic(); }} aria-pressed={music}>{music ? "Music off" : "Music on"}</button>
         <button onClick={() => capture.current?.()}>Save view PNG</button>
         <button
