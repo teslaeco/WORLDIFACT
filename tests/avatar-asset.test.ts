@@ -6,7 +6,7 @@ const fixture = () => { const bytes = new Uint8Array(20); const view = new DataV
 test('prefetch and world loading share exactly one authorized GET and the same original bytes', async () => {
   const original = globalThis.fetch; clearAvatarAssets(); let calls = 0
   globalThis.fetch = (async (url, init) => {
-    calls++; assert.equal(url, '/api/avatar/neptune-queen'); assert.equal(init?.credentials, 'same-origin'); assert.equal(init?.redirect, 'error'); assert.equal(init?.method, undefined)
+    calls++; assert.equal(url, '/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb'); assert.equal(init?.credentials, 'same-origin'); assert.equal(init?.redirect, 'error'); assert.equal(init?.method, undefined)
     return new Response(fixture())
   }) as typeof fetch
   try {
