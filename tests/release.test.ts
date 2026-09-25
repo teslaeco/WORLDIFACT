@@ -51,7 +51,8 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     ["/world-assets/polyhedron-led.gltf", '{"asset":{"version":"2.0"},"fixture":"bundled original model bytes"}'],
     ["/world-assets/polyhedron-led-poster.svg", '<svg xmlns="http://www.w3.org/2000/svg"><title>Exact model poster fixture</title></svg>'],
     ["/world-assets/giant-building/giant-tower.glb", "glTF direct Giant Tower fixture"],
-    ["/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb", "glTF direct Queen fixture"],
+    ["/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-00.bin", "Queen raw part zero fixture"],
+    ["/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-01.bin", "Queen raw part one fixture"],
     ["/apps/chess/index.html", '<html>Existing chess app<script src="./game.js"></script></html>'],
     ["/apps/chess/guest.html", '<html>Existing guest app<script src="./game.js"></script></html>'],
     ["/apps/chess/game.js", "export const originalChess = true;"],
@@ -74,7 +75,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     }) as typeof fetch);
     const asset = files.get(url.pathname);
     return new Response(asset ?? files.get("/index.html"), { headers: {
-      "Content-Type": !asset || url.pathname.endsWith(".html") ? "text/html" : (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".gltf") ? "model/gltf+json" : url.pathname.endsWith(".glb") ? "model/gltf-binary" : url.pathname.endsWith(".svg") ? "image/svg+xml" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript"),
+      "Content-Type": !asset || url.pathname.endsWith(".html") ? "text/html" : (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".gltf") ? "model/gltf+json" : url.pathname.endsWith(".glb") ? "model/gltf-binary" : url.pathname.endsWith(".bin") ? "application/octet-stream" : url.pathname.endsWith(".svg") ? "image/svg+xml" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript"),
     } });
   };
   return { dist, files, requests, fetcher, retryDelaysMs: [], providerCalls: () => providerCalls };
@@ -84,10 +85,10 @@ test("release smoke verifies deep links and lazy assets and only sends DEMO with
   const f = await fixture(t);
   const result = await checkPublishedRelease({ origin, versionId }, f);
   assert.equal(result.htmlRoutes, 16);
-  assert.equal(result.verifiedAssets, 8);
+  assert.equal(result.verifiedAssets, 9);
   assert.equal(result.foundationAssets, 5);
   assert.equal(f.providerCalls(), 0);
-  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg", "/world-assets/giant-building/giant-tower.glb", "/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb"]) {
+  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg", "/world-assets/giant-building/giant-tower.glb", "/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-00.bin", "/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-01.bin"]) {
     assert.ok(f.requests.some(request => new URL(request.url).pathname === path), `${path} must be checked`);
   }
   const posts = f.requests.filter((request) => request.method === "POST");
@@ -209,7 +210,7 @@ test("release smoke detects a missing panorama served as HTML or a stale image",
 });
 
 test("release requires both bundled sculpture files with exact build bytes and a valid content type", async (t) => {
-  for (const [path, mime] of [["/world-assets/polyhedron-led.gltf", "model/gltf+json"], ["/world-assets/polyhedron-led-poster.svg", "image/svg+xml"], ["/world-assets/giant-building/giant-tower.glb", "model/gltf-binary"], ["/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb", "model/gltf-binary"]]) {
+  for (const [path, mime] of [["/world-assets/polyhedron-led.gltf", "model/gltf+json"], ["/world-assets/polyhedron-led-poster.svg", "image/svg+xml"], ["/world-assets/giant-building/giant-tower.glb", "model/gltf-binary"], ["/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-00.bin", "application/octet-stream"], ["/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-01.bin", "application/octet-stream"]]) {
     for (const variant of ["html", "stale", "wrong-mime", "missing"]) {
       const f = await fixture(t);
       const fetcher = async (url: URL, init: RequestInit) => url.pathname === path
