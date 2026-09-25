@@ -165,21 +165,13 @@ export default function ShopPage() {
   const loadResult = async (selected: SavedStudioJob, known?: StudioJob) => {
     const flags = operations.current, client = coordinator.current
     if (!client || flags.artifact || flags.submit) return
-    if (known?.downloadAllowed === false) {
-      setNotice('Your SLOW model is complete and preserved. An active subscription is required to download the model and textures. A protected image preview is not available on the connected worker yet.')
-      return
-    }
     flags.artifact = true; setArtifactBusy(true); setError('')
     const token = clearPreview()
     try {
-      // A GLB preview contains the downloadable original. Check server rights
-      // before loading it; a free SLOW result stays on the worker.
+      // A completed owned GLB is both the preview source and a customer export.
+      // Ownership is enforced by the signed receipt/account on the server.
       const confirmed = known || (status?.accountRequired ? await client.poll(selected) : undefined)
       if (confirmed && mounted.current) setJob(confirmed)
-      if (confirmed?.downloadAllowed === false) {
-        setNotice('Your SLOW model is complete and preserved. Subscribe to download it. Protected image preview is currently unavailable.')
-        return
-      }
       const blob = await client.artifact('model', selected)
       if (!mounted.current || token !== epoch.current) return
       await showBlob(blob, { id: selected.receipt.id, origin: 'job', label: selected.prompt }, token)
@@ -338,9 +330,13 @@ export default function ShopPage() {
   const exportFile = async (format: 'model' | 'pbr' | 'fbx' | 'blend') => {
     const flags = operations.current
     if (flags.artifact || !saved || !mayExportCurrentJob(saved.receipt.id, job?.state, preview) || !coordinator.current) return
-    if (job?.downloadAllowed === false || (saved.generationProfile === FAST_DRAFT_PROFILE && !['model', 'blend'].includes(format))) return
-    flags.artifact = true; setArtifactBusy(true)
-    try { const blob = await coordinator.current.artifact(format, saved); download(blob, `WORLDIFACT-${saved.receipt.id}.${format === 'pbr' ? 'textures.zip' : format === 'model' ? 'glb' : format}`) }
+    flags.artifact = true; setArtifactBusy(true); setError('')
+    try {
+      if (format !== 'model') setNotice('Checking the saved Blender job and preparing a missing export if possible. No new AI generation is submitted.')
+      const blob = await coordinator.current.artifact(format, saved)
+      download(blob, `WORLDIFACT-${saved.receipt.id}.${format === 'pbr' ? 'textures.zip' : format === 'model' ? 'glb' : format}`)
+      if (mounted.current) setNotice(`${format === 'model' ? 'GLB' : format.toUpperCase()} download started. Use downloaded files for downstream/B2B review; manufacturing readiness still requires separate validation.`)
+    }
     catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'This export is not available on the connected worker.') }
     finally { flags.artifact = false; if (mounted.current) setArtifactBusy(false) }
   }
@@ -356,7 +352,7 @@ export default function ShopPage() {
   const canGenerate = !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 &&
     (fast ? fastAvailable && !photos.length && purpose !== 'terrain' && prompt.length <= 2000
       : !!coordinator.current && !!status?.ready && (!photos.length || status.photoReady))
-  const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
+  const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview)
   const activeReady = fast ? fastAvailable : status?.ready === true
 
   return <main className="portal-page native-shop">
@@ -379,12 +375,9 @@ export default function ShopPage() {
           {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
         </> : saved ? <div className="native-shop-progress" role="status">
           <h2>{job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your SLOW model is ready' : job?.state === 'failed' ? 'Previous model did not finish' : job?.state === 'cancelled' ? 'Previous model was cancelled' : 'Preparing your model…'}</h2>
-          <p>{job?.reconciliationRequired ? job.detail : job?.state === 'succeeded' && job.downloadAllowed === false
-            ? 'Model and texture downloads require an active subscription. Your result is preserved; a protected image preview is not available on this worker yet.'
-            : terminal(job?.state)
-            ? 'That job is finished. Your description is preserved; start a new model below instead of waiting on this old receipt.'
+          <p>{job?.reconciliationRequired ? job.detail : terminal(job?.state)
+            ? 'That job is finished. Your description is preserved; completed owned files remain downloadable for transfer and B2B review.'
             : 'Please keep this page open. Your preview will appear here when it is ready.'}</p>
-          {job?.state === 'succeeded' && job.downloadAllowed === false && <Link to="/account/credits">View subscription & credits</Link>}
           {!terminal(job?.state) && !job?.reconciliationRequired && <p>Elapsed: {Math.floor(seconds / 60)}m {seconds % 60}s</p>}
           {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={dismissFinishedJob}>Start a new model</button>}
         </div> : <>
@@ -392,13 +385,13 @@ export default function ShopPage() {
           <div className="native-shop-views">{['front', 'left', 'back', 'face'].map(view => <button key={view} type="button" aria-pressed={sampleView === view} onClick={() => { setSampleView(view); setSampleMissing(false) }}>{view === 'left' ? 'Left side' : view[0].toUpperCase() + view.slice(1)}</button>)}</div>
           <small>Example only. Your own generated preview replaces it after generation succeeds.</small>
         </>}
-        {saved && <div className="native-shop-actions"><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
+        {saved && <div className="native-shop-actions"><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download / prepare PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>Download / prepare FBX</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Download / prepare Blender</button></>}</div>}
       </div>
       <div className="native-shop-form">
         <span className="eyebrow">CREATE YOUR PRODUCT</span><h1>Describe it.<br />See it in 3D.</h1>
         <p>Describe your object and optionally add up to three reference images. The account plan includes 2 free FAST generations per 24 hours and 1 free SLOW generation per day.</p>
         {status && !status.accountRequired && <small>Account limits are awaiting server activation. The existing experimental generation window remains in effect.</small>}
-        <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'You can describe your next model while the current preview stays unchanged.' : 'You can prepare the next idea while the current model is being completed.' : 'Free FAST includes downloads. SLOW downloads require an active subscription.'}</p>
+        <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'You can describe your next model while the current preview stays unchanged.' : 'You can prepare the next idea while the current model is being completed.' : 'Completed owned models can be downloaded for transfer and B2B review. Manufacturing approval remains separate.'}</p>
         <button type="button" data-testid="clear-studio-draft" disabled={busy || photoBusy} onClick={clearDraft}>Clear description</button>
         <button type="button" className="shop-internal-only" hidden disabled={busy || photoBusy} onClick={clearDraft}>Clear next-model draft</button>
         <form onSubmit={generate} aria-describedby="studio-draft-help">
