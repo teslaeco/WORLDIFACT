@@ -1,3 +1,17 @@
+# WORLDIFACT — Giant Tower integration, 25 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · CI / MERGE / PRODUCTION VERIFICATION PENDING.** Owner authorization explicitly includes merge and production deployment after green exact-head checks.
+
+- Owner-supplied source GLB: SHA-256 `9c2c61af94243788e1938d99b598f8bfd1281ac710bf41236467db263b5a4e5a`, 23,449,560 bytes; inspected as 15 meshes / 15 materials / 14 textures / 522,672 vertices / 242,120 triangles / no animations.
+- Public runtime exterior: GAME-optimized derivative, SHA-256 `032d4cb75880d75d8b78493fe75babefea64676b041389fe23e17a362d982ccd`, 98,392 bytes, 2,086 vertices / 2,690 triangles. It preserves all 15 source material groups as lightweight material regions but **does not claim source topology, textures, UV or material parity**.
+- The tower is placed as a >50-unit-high landmark at the far side of the valley, outside the five portal line, spawn, photovoltaic rover and excavation worksite. The derivative is loaded asynchronously after core world/avatar startup and has a safe missing-asset path.
+- The supplied source did not establish a verified walkable interior or door animation. WORLDIFACT therefore provides a separate, clearly labelled **GAME / GENERATED INTERIOR** lobby with bounded walking, an entrance marker and an exit back to the exterior entrance. This is not described as original source geometry.
+- Focused regressions cover placement, exterior collision, entrance/exit and interior bounds. A package-integrity regression rebuilds the gzip/base64 transport and verifies the exact derivative GLB SHA-256/container length.
+- No paid generation, payment, supplier action or manufacturing claim is part of this change. MAKE remains unvalidated. Physical Android rendering and artistic acceptance remain UNKNOWN until device QA.
+- GitHub task: issue #87. Exact CI, merge commit, deployment run and public HTTP evidence belong in the PR/release record and must not be inferred from this branch preparation.
+
+---
+
 ## 24 September — original Queen loading repair
 
 The owner reports absent/slow character loading on mobile. The repair preserves the exact model and fixes its delivery: lossless HTTP gzip, validated versioned edge caching, progress-aware bounded timeouts, one transient GET retry and a real download/preparation status. [Findings, test evidence and limits](AVATAR_LOADING_REPAIR_20260924.md). Twenty focused tests, TypeScript, lint, frontend bundle and Worker dry-run pass locally; full local verification is blocked by the ISS vendor DNS fetch. Full current-head CI must pass before merge; PR/release records carry actual deployment and read-only production measurements. Physical Android rendering remains unmeasured. No deferred comparison-image/button, generator, payment or contest-submission changes.
