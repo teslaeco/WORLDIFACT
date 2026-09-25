@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { readFile } from 'node:fs/promises';
 import { avatarApi } from '../server/avatar.ts';
-import { avatarAcceptsGzip, QUEEN_DIRECT_PATH, QUEEN_RELEASE_PATH, QUEEN_DECODED_BYTES } from '../server/queen-release.ts';
+import { avatarAcceptsGzip, QUEEN_DIRECT_PART_BYTES, QUEEN_DIRECT_PART_PATHS, QUEEN_RELEASE_PATH, QUEEN_DECODED_BYTES } from '../server/queen-release.ts';
 const url = 'https://worldifact.test/api/avatar/neptune-queen';
 const source = new Uint8Array(4096); const gzip = gzipSync(source);
 const configured = { ORACLE_ENDPOINT: 'https://queen.trycloudflare.com', ORACLE_API_TOKEN: 'never-forward-this' };
