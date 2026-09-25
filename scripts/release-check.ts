@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateGenerationResult } from "../src/lib/blueprint.ts";
 import { PORTALS } from "../src/config/portals.ts";
+import { QUEEN_DIRECT_PATH } from "../server/queen-release.ts";
 
 const requireCheck: (condition: unknown, message: string) => asserts condition = (condition, message) => {
   if (!condition) throw new Error(message);
@@ -138,6 +139,7 @@ export async function checkPublishedRelease(deployment: Deployment,
     { path: "world-assets/polyhedron-led.gltf", types: ["model/gltf+json", "application/json"] },
     { path: "world-assets/polyhedron-led-poster.svg", types: ["image/svg+xml"] },
     { path: "world-assets/giant-building/giant-tower.glb", types: ["model/gltf-binary", "application/octet-stream"] },
+    { path: QUEEN_DIRECT_PATH.replace(/^\//, ""), types: ["model/gltf-binary", "application/octet-stream"] },
   ];
   for (const { path, types } of sculptureAssets) {
     await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
