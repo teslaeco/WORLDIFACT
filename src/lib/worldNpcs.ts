@@ -83,10 +83,10 @@ function faceAlong(root: THREE.Object3D, dx: number, dz: number) {
   if (Math.abs(dx) + Math.abs(dz) > .001) root.rotation.y = Math.atan2(-dx, -dz);
 }
 
-export function createForgeNpcSystem(scene: THREE.Scene, mobile: boolean, onStatus?: (value: string) => void) {
+export function createForgeNpcSystem(scene: THREE.Scene, mobile: boolean, groundAt: (x: number, z: number) => number, onStatus?: (value: string) => void) {
   const root = new THREE.Group(); root.name = "forge-mpc2-living-workers"; root.userData.provenance = "FORGEMPC2_MIT__CC0_ANATOMY_COMPONENTS";
   const npcs: RuntimeNpc[] = forgeNpcPlans(mobile).map((plan,index) => {
-    const npcRoot = new THREE.Group(); npcRoot.name = plan.id; npcRoot.position.set(plan.from.x,0,plan.from.z);
+    const npcRoot = new THREE.Group(); npcRoot.name = plan.id; npcRoot.position.set(plan.from.x,groundAt(plan.from.x,plan.from.z),plan.from.z);
     const visual = fallbackWorker(index), prop = taskProp(plan.task); npcRoot.add(visual,prop); root.add(npcRoot);
     return { plan, root:npcRoot, visual, prop };
   });
@@ -132,7 +132,7 @@ export function createForgeNpcSystem(scene: THREE.Scene, mobile: boolean, onStat
       if (onStatus) onStatus("Forge workers: " + npcs.length + " GAME NPCs active with procedural fallback · ForgeMPC2 asset unavailable");
     }
   };
-  const loadTimer = window.setTimeout(() => { void upgrade(); }, mobile ? 3000 : 1600);
+  const loadTimer = window.setTimeout(() => { void upgrade(); }, mobile ? 12_000 : 6_000);
 
   const update = (elapsed:number, dt:number) => {
     for (const [index,npcItem] of npcs.entries()) {
@@ -143,7 +143,8 @@ export function createForgeNpcSystem(scene: THREE.Scene, mobile: boolean, onStat
       else if(local<11){t=1;working=true;}
       else if(local<17){t=1-THREE.MathUtils.smoothstep((local-11)/6,0,1);dx=-dx;dz=-dz;}
       else t=0;
-      npcItem.root.position.set(THREE.MathUtils.lerp(a.x,b.x,t),0,THREE.MathUtils.lerp(a.z,b.z,t));
+      const px=THREE.MathUtils.lerp(a.x,b.x,t), pz=THREE.MathUtils.lerp(a.z,b.z,t);
+      npcItem.root.position.set(px,groundAt(px,pz),pz);
       faceAlong(npcItem.root,dx,dz);
       npcItem.visual.position.y = working ? Math.sin(elapsed*2+index)*.015 : Math.abs(Math.sin(elapsed*6+index))*.035;
       npcItem.visual.rotation.z = working ? Math.sin(elapsed*2.4+index)*.035 : 0;
