@@ -1,0 +1,38 @@
+name: Review ForgeMPC2 NPC source
+on:
+  pull_request:
+    paths:
+      - 'src/lib/worldNpcs.ts'
+      - 'src/lib/worldExpansion.ts'
+      - 'src/components/StartingWorld.tsx'
+      - 'tests/world-npcs.test.ts'
+      - 'tests/world-expansion.test.ts'
+      - 'ASSET_LICENSES.md'
+      - '.github/workflows/forge-npc-review.yml'
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: bac2827fc1ec31e71dc0f5c586df43c507338725
+          path: .upstream/forge-mpc2
+          persist-credentials: false
+      - name: Verify exact public Forge character source and license evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .upstream/forge-mpc2 hash-object public/models/rapper-v10.glb)" = "25d3a7f62fb97844843e3007d498a3d93a927d42"
+          test "$(stat -c %s .upstream/forge-mpc2/public/models/rapper-v10.glb)" = "10343368"
+          grep -q "MIT License" .upstream/forge-mpc2/LICENSE
+          grep -q "generic adult face" .upstream/forge-mpc2/docs/CHARACTERS_V10.md
+          grep -q "not a likeness reconstruction" .upstream/forge-mpc2/docs/CHARACTERS_V10.md
+          grep -q "CC0 1.0" .upstream/forge-mpc2/oracle_connector/runtime/assets/SOURCES.md
+          printf 'FORGE_WORKER_SHA256='
+          sha256sum .upstream/forge-mpc2/public/models/rapper-v10.glb | cut -d' ' -f1
+          echo 'PASS: pinned ForgeMPC2 generic-adult GLB, MIT repo license and CC0 anatomy provenance verified. No generation or deployment.'
