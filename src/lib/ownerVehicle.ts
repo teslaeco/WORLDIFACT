@@ -15,9 +15,8 @@ export const OWNER_VEHICLE_CAMERA_SCALE = 1.45;
 export const OWNER_VEHICLE_SEAT_OFFSET = Object.freeze({ x: -0.3, y: 1.42, z: -0.35 });
 export const OWNER_VEHICLE_EXIT_OFFSET = Object.freeze({ x: -2.35, y: 0, z: 0 });
 export const OWNER_VEHICLE_SOURCE_EXTENT = Object.freeze({ x: 13.73599984552134, y: 14.59000039100647, z: 29.989337921142578 });
-
-const HALF_X = OWNER_VEHICLE_SOURCE_EXTENT.x * OWNER_VEHICLE_SCALE / 2;
-const HALF_Z = OWNER_VEHICLE_SOURCE_EXTENT.z * OWNER_VEHICLE_SCALE / 2;
+export const OWNER_VEHICLE_HALF_X = OWNER_VEHICLE_SOURCE_EXTENT.x * OWNER_VEHICLE_SCALE / 2;
+export const OWNER_VEHICLE_HALF_Z = OWNER_VEHICLE_SOURCE_EXTENT.z * OWNER_VEHICLE_SCALE / 2;
 
 export const OWNER_VEHICLE_PARTS = Object.freeze(
   Array.from({ length: 6 }, (_, index) => `/world-assets/owner-landship/part-${String(index).padStart(2, "0")}.b64`),
@@ -27,8 +26,7 @@ const MAX_PART_CHARS = 48_000;
 const MAX_TOTAL_CHARS = 300_000;
 
 function base64ToBytes(value: string) {
-  if (value.length > MAX_TOTAL_CHARS || !/^[A-Za-z0-9+/=\r
-]+$/.test(value)) throw new Error("Invalid owner vehicle asset encoding.");
+  if (value.length > MAX_TOTAL_CHARS || !/^[A-Za-z0-9+/=\r\n]+$/.test(value)) throw new Error("Invalid owner vehicle asset encoding.");
   const compact = value.replace(/\s+/g, "");
   const decoded = atob(compact);
   const bytes = new Uint8Array(decoded.length);
@@ -47,11 +45,11 @@ async function gunzip(bytes: Uint8Array) {
 }
 
 export async function loadOwnerVehicle(fetcher: typeof fetch = fetch) {
-  const parts = await Promise.all(OWNER_VEHICLE_PARTS.map(async (path) => {
-    const response = await fetcher(path, { cache: "force-cache", credentials: "same-origin" });
-    if (!response.ok) throw new Error("Owner vehicle GAME asset is unavailable.");
+  const parts = await Promise.all(OWNER_VEHICLE_PARTS.map(async (partPath) => {
+    const response = await fetcher(partPath, { cache: "force-cache", credentials: "same-origin" });
+    if (!response.ok) throw new Error(`Owner vehicle GAME asset is unavailable: ${partPath} (${response.status}).`);
     const text = await response.text();
-    if (!text || text.length > MAX_PART_CHARS) throw new Error("Owner vehicle GAME asset part is invalid.");
+    if (!text || text.length > MAX_PART_CHARS) throw new Error(`Owner vehicle GAME asset part is invalid: ${partPath}.`);
     return text;
   }));
   const packed = base64ToBytes(parts.join(""));
