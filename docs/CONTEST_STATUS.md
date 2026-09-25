@@ -1,6 +1,22 @@
+# WORLDIFACT — Grand Desert + Mountain Coast + living Forge workers, 26 September 2026
+
+**Status: IMPLEMENTED ON FEATURE BRANCH · CI / MERGE / PRODUCTION DEVICE QA PENDING.** Issue #106 records the owner-requested overnight P1 expansion.
+
+- The central five-portal Riverlight meadow remains the hub. Walkable world bounds expand from roughly ±42 to ±174 GAME units and the meadow support plane expands to ±180.
+- **Grand Desert** begins east/right of the hub at X≈52 and extends to X≈174 with a mobile-bounded dune mesh, rocks and an oasis. The existing editable excavation worksite at X 15–40 / Z 14–39 remains separate and functional.
+- **Mountain Coast** begins west/left of the hub at X≈-52 with layered instanced ridges, green forested valleys, a GAME river and a visible western ocean/coast. The ocean is scenery at the far edge; it is not labelled real Earth observation.
+- New terrain and workers are deliberately outside the five-portal line and do not replace Giant Tower, spawn or owner vehicles. Camera/fog/world movement limits expand to expose the new biomes.
+- Living NPC plans use finite deterministic GAME loops: planting saplings, carrying material, assembling simple blocks and surveying. Mobile is capped at 4 NPCs; desktop at 7.
+- Pinned ForgeMPC2 candidate: `teslaeco/Froge-MPC-2-test@bac2827fc1ec31e71dc0f5c586df43c507338725` / `public/models/rapper-v10.glb` / Git blob `25d3a7f62fb97844843e3007d498a3d93a927d42` / 10,343,368 bytes. Upstream calls it a generic adult and explicitly not a likeness reconstruction. MIT repository license + CC0 MakeHuman anatomy provenance are retained in `ASSET_LICENSES.md`.
+- The Forge GLB is loaded only after core world startup (12 s mobile / 6 s desktop), validated for expected byte length + GLB container and cloned for NPC visuals. Procedural GAME workers remain as a safe fallback if the optional remote asset is unavailable.
+- NPC work loops are fictional GAME activity, not actual B2B labor, manufacturing validation or construction guidance.
+- No paid generation, checkout, supplier order or manufacturing action is part of this feature. Physical Android FPS/visual acceptance and the remote Forge asset's real production fetch remain **UNKNOWN** until post-deploy device QA.
+
+---
+
 # WORLDIFACT — universal owned downloads + no-AI post-hoc exports, 26 September 2026
 
-**Status: IMPLEMENTED ON REVIEW BRANCH · ORACLE POST-HOC EXPORT PATCH REVIEW/INSTALLATION PENDING.** Issue #104 records the owner-requested download repair.
+**Status: SITE LIVE · ORACLE POST-HOC EXPORT INSTALLATION PENDING.** Issue #104 / PR #105 site changes were reviewed and merged as `81521fa275525b3369e0b876f05c3cfab257321a`; post-merge CI `36202257002` and production workflow `36202257007` passed. Cloudflare version `7da1a879-3879-4f8f-a56d-d1442ba93b59` is live.
 
 - Completed model ownership, not monthly membership, is now the artifact access boundary. Signed receipt + account ownership are still required; another account cannot fetch the job.
 - Successful owned SLOW/FAST Studio jobs report downloadable preview/file access. The Shop exposes GLB, PBR, FBX and Blender controls for the completed current job without a subscription gate.
@@ -8,7 +24,7 @@
 - The preparation route is explicitly **NO AI / NO NEW GENERATION**: it proxies only to a reviewed Oracle worker post-hoc finalizer for the same saved job. It does not reserve generation allowance/credits, submit `/v1/jobs`, call Astra/OpenAI, create checkout or place a B2B order.
 - A narrow worker source patch is under `tools/export_prepare/`. It targets the exact current FAST-v33 + project-files server SHA-256 `6795c356d67c72f4aed545505772182f907c9a242ad0cf0076689720a386bb14`, requires the job to be succeeded, requires the saved `model.glb` and `model.blend`, refuses to compete with an active generation, runs only `run_blender_finalize(..., finalize=True)`, verifies the base GLB SHA-256 did not change, and reports only actually available formats.
 - Downloaded files are for user backup / downstream B2B review. They are **not** automatically MAKE-approved, manufacturing-ready, supplier-approved or ordered.
-- Production Oracle installation is still **BLOCKED/PENDING** until the exact worker patch passes CI and can be applied through the existing controlled Oracle maintenance path. Site deployment alone must not claim missing worker exports are fixed.
+- The no-AI worker patch itself passed the exact-source review in PR #105, but production Oracle installation is still **BLOCKED/PENDING** because this chat does not have the Cloud Shell/SSH-key execution surface required by the controlled installer. Site deployment alone does not claim missing worker exports are fixed; existing GLB downloads are live, while absent PBR/FBX/BLEND require that Oracle maintenance step.
 - No paid model generation, payment, checkout, supplier order or manufacturing approval is part of this repair.
 
 ---
