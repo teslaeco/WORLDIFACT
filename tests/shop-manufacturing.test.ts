@@ -7,6 +7,7 @@ import {
   MANUFACTURING_HARD_RULES,
   customerPriceForSelection,
   largestDimensionMm,
+  optionalDimensions,
   sanitizeDimensions,
 } from '../src/lib/shopManufacturing.ts'
 import { FAST_DRAFT_PROFILE, oracleStudioPayload, type StudioInput } from '../src/lib/studioProtocol.ts'
@@ -15,6 +16,16 @@ test('client manufacturing sizes still cover 5–20 cm and custom XYZ are bounde
   assert.deepEqual(CLIENT_SIZES_MM, [50, 75, 100, 125, 150, 175, 200])
   assert.deepEqual(sanitizeDimensions({ xMm: 0, yMm: 123.456, zMm: 5000 }), { xMm: 5, yMm: 123.5, zMm: 1000 })
   assert.equal(largestDimensionMm({ xMm: 80, yMm: 120, zMm: 60 }), 120)
+})
+
+test('model dimensions are opt-in and omitted by default', () => {
+  const draft = { xMm: 100, yMm: 100, zMm: 100 }
+  assert.equal(optionalDimensions(false, draft), null)
+  assert.deepEqual(optionalDimensions(true, draft), draft)
+  const withoutSize = customerPriceForSelection('plastic', '3d-print', 'plain', null)
+  assert.equal(withoutSize.status, 'PENDING_VERIFIED_QUOTE')
+  assert.equal(withoutSize.orderable, false)
+  assert.match(withoutSize.customerMessage, /optional/i)
 })
 
 test('recorded ISS quote keeps the real observed values but is not sellable after thin-wall rejection', () => {
