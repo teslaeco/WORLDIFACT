@@ -67,9 +67,11 @@ test('headerless internal static streams and HEAD remain valid without buffering
 });
 
 
-test("build publishes the exact Queen as a direct mobile GLB as well as the legacy gzip release", async () => {
-  assert.match(QUEEN_DIRECT_PATH, /^\\/game-assets\\/queen-[a-f0-9]{64}\\.glb$/);
+test("build publishes the exact Queen as two bounded raw mobile parts as well as the legacy gzip release", async () => {
+  assert.equal(QUEEN_DIRECT_PART_PATHS.length, 2);
+  assert.ok(QUEEN_DIRECT_PART_BYTES < 25 * 1024 * 1024);
+  for (const path of QUEEN_DIRECT_PART_PATHS) assert.match(path, /^\/game-assets\/queen-[a-f0-9]{64}\.glb\.part-0[01]\.bin$/);
   const source = await readFile("scripts/prepare-queen-release.mjs", "utf8");
-  assert.match(source, /QUEEN_DIRECT_PATH/);
-  assert.match(source, /directOutput/);
+  assert.match(source, /QUEEN_DIRECT_PART_PATHS/);
+  assert.match(source, /QUEEN_DIRECT_PART_BYTES/);
 });
