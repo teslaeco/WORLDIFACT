@@ -43,7 +43,7 @@ test('unavailable generation is customer-friendly and does not expose quota diag
   assert.match(html, /Generation temporarily unavailable/)
   assert.match(html, /Preview DEMO · no API cost/)
   assert.match(html, /local DEMO preview/)
-  assert.match(html, /Free FAST includes downloads/)
+  assert.match(html, /Completed owned models can be downloaded/)
   assert.match(html, /Experimental beta/)
   assert.doesNotMatch(html, /blocked by the exhausted pilot quota/)
 })
@@ -69,7 +69,7 @@ test('mobile layout keeps creation controls first and internal archive out of si
   const html = await renderShopMarkup()
   assert.match(html, /<section class="shop-internal-only" hidden="" aria-labelledby="studio-archive-title">/)
   assert.match(html, /Digital 3D file:/)
-  assert.match(html, /SLOW model downloads require an active subscription/)
+  assert.match(html, /Completed owned model files remain downloadable/)
 })
 
 test('restored SLOW jobs recover automatically while customer FAST uses the separate Astra draft path', async () => {
