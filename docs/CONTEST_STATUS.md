@@ -1,6 +1,6 @@
 # WORLDIFACT — Giant Tower integration, 25 September 2026
 
-**Status: IMPLEMENTED ON REVIEW BRANCH · CI / MERGE / PRODUCTION VERIFICATION PENDING.** Owner authorization explicitly includes merge and production deployment after green exact-head checks.
+**Status: LIVE · MERGED · PRODUCTION VERIFIED.** Reviewed head `ae814f4948355dd24d8261639bd404975d75ee05` passed all five exact-head workflows and was squash-merged as `d848be44216c7b15657cd462e2ac14090b32ba2a`. Main push CI and the Cloudflare publication both passed.
 
 - Owner-supplied source GLB: SHA-256 `9c2c61af94243788e1938d99b598f8bfd1281ac710bf41236467db263b5a4e5a`, 23,449,560 bytes; inspected as 15 meshes / 15 materials / 14 textures / 522,672 vertices / 242,120 triangles / no animations.
 - Public runtime exterior: GAME-optimized derivative, SHA-256 `032d4cb75880d75d8b78493fe75babefea64676b041389fe23e17a362d982ccd`, 98,392 bytes, 2,086 vertices / 2,690 triangles. It preserves all 15 source material groups as lightweight material regions but **does not claim source topology, textures, UV or material parity**.
@@ -8,7 +8,7 @@
 - The supplied source did not establish a verified walkable interior or door animation. WORLDIFACT therefore provides a separate, clearly labelled **GAME / GENERATED INTERIOR** lobby with bounded walking, an entrance marker and an exit back to the exterior entrance. This is not described as original source geometry.
 - Focused regressions cover placement, exterior collision, entrance/exit and interior bounds. A package-integrity regression rebuilds the gzip/base64 transport and verifies the exact derivative GLB SHA-256/container length.
 - No paid generation, payment, supplier action or manufacturing claim is part of this change. MAKE remains unvalidated. Physical Android rendering and artistic acceptance remain UNKNOWN until device QA.
-- GitHub task: issue #87. Exact CI, merge commit, deployment run and public HTTP evidence belong in the PR/release record and must not be inferred from this branch preparation.
+- GitHub task: issue #87 / PR #88 are complete. Production run `36134482737` deployed Cloudflare version `f50b7334-d32d-4c06-858a-1bf0193c2ab6` to `https://worldifact.xodobrox.workers.dev`; release smoke passed for the published HTML/assets and no-cost DEMO path. No paid API call was made during release verification. Physical Android rendering and artistic acceptance of the tower remain UNKNOWN.
 
 ---
 
