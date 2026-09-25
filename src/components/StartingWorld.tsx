@@ -35,6 +35,7 @@ import {
   nearGiantInteriorExit,
   resolveGiantBuildingCollision,
 } from "../lib/giantBuilding";
+import { loadOwnerVehicle, resolveOwnerVehicleCollision } from "../lib/ownerVehicle";
 import "./WorldMovement.css";
 import {
   createDecorativeTerrain,
@@ -137,6 +138,7 @@ export default function StartingWorld({
   const [textureFailed, setTextureFailed] = useState(false);
   const [sculptureFailed, setSculptureFailed] = useState(false);
   const [buildingStatus, setBuildingStatus] = useState("Giant tower: queued");
+  const [ownerVehicleStatus, setOwnerVehicleStatus] = useState("Mars solar landship: queued");
   const [insideGiantBuilding, setInsideGiantBuilding] = useState(false);
   const [interaction, setInteraction] = useState("Interact");
   const [hint, setHint] = useState(
@@ -168,6 +170,7 @@ export default function StartingWorld({
       setTextureFailed(false);
       setSculptureFailed(false);
       setBuildingStatus("Giant tower: queued");
+      setOwnerVehicleStatus("Mars solar landship: queued");
       setInsideGiantBuilding(false);
     });
     renderer.setSize(host.clientWidth, host.clientHeight);
@@ -275,12 +278,28 @@ export default function StartingWorld({
       void loadGiantBuilding().then(root => {
         if (giantBuildingDisposed) { disposeObject(root); return; }
         scene.add(root);
-        queueMicrotask(() => setBuildingStatus("Giant tower: owner model ready · GAME optimized"));
+        queueMicrotask(() => setBuildingStatus("Giant tower: higher-fidelity owner model ready · GAME"));
       }).catch(() => {
         if (!giantBuildingDisposed) queueMicrotask(() => setBuildingStatus("Giant tower exterior unavailable · generated GAME interior remains accessible"));
       });
     }, mobile ? 900 : 450) : undefined;
     if (!giantEntrance) queueMicrotask(() => setBuildingStatus("Giant tower is available in the valley world"));
+
+    // The owner's second supplied vehicle is a static GAME model until a reviewed
+    // rig/drive setup exists. Load it separately so it cannot delay the Queen,
+    // portals, or the existing photovoltaic explorer.
+    let ownerVehicleDisposed = false;
+    const ownerVehicleLoadTimer = !lunar && !sea ? window.setTimeout(() => {
+      queueMicrotask(() => setOwnerVehicleStatus("Mars solar landship: loading owner model…"));
+      void loadOwnerVehicle().then(root => {
+        if (ownerVehicleDisposed) { disposeObject(root); return; }
+        scene.add(root);
+        queueMicrotask(() => setOwnerVehicleStatus("Mars solar landship: owner model ready · GAME"));
+      }).catch(() => {
+        if (!ownerVehicleDisposed) queueMicrotask(() => setOwnerVehicleStatus("Mars solar landship unavailable · existing world remains playable"));
+      });
+    }, mobile ? 1_350 : 700) : undefined;
+    if (lunar || sea) queueMicrotask(() => setOwnerVehicleStatus("Mars solar landship is available in the valley world"));
 
     const backhoes = new Map(objects.filter(o => specOf(o).kind === "rover").map(o => {
       const saved = sandSession.current?.loads.get(o.spec.id);
@@ -666,6 +685,7 @@ export default function StartingWorld({
             : movePlayer(old, player, habitats, ride ? (operating?.enabled ? 6 : 3) * specOf(ride).scale : 0);
         if (!insideBuilding && !ride && !boarding && equipmentMode !== "flight") moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
         if (!insideBuilding && equipmentMode !== "flight") moved = resolveGiantBuildingCollision(old, moved, ride ? 2.4 * specOf(ride).scale : .55);
+        if (!insideBuilding && equipmentMode !== "flight") moved = resolveOwnerVehicleCollision(old, moved, ride ? 2.1 * specOf(ride).scale : .6);
         player.x = moved.x;
         player.z = moved.z;
         if (ride && vehicleGround(ride, player.x, player.z, yaw).spread > .62 * specOf(ride).scale) {
@@ -1016,7 +1036,9 @@ export default function StartingWorld({
     return () => {
       sculptureDisposed = true;
       giantBuildingDisposed = true;
+      ownerVehicleDisposed = true;
       if (giantBuildingLoadTimer !== undefined) clearTimeout(giantBuildingLoadTimer);
+      if (ownerVehicleLoadTimer !== undefined) clearTimeout(ownerVehicleLoadTimer);
       contextLost = true;
       cancelAnimationFrame(frame);
       clearTimeout(navigationTimer);
@@ -1083,6 +1105,7 @@ export default function StartingWorld({
         {textureFailed ? <span role="status">Scenery image unavailable. Movement remains available.</span> : null}
         {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
         <span role="status">{buildingStatus}</span>
+        <span role="status">{ownerVehicleStatus}</span>
         {insideGiantBuilding ? <span>Giant Tower · GAME / GENERATED INTERIOR</span> : null}
       </div>
       <label className="avatar-note avatar-picker">Character

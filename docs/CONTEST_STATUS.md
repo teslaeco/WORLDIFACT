@@ -1,3 +1,17 @@
+# WORLDIFACT — owner visual correction, 25 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · EXACT-HEAD CI / MERGE / PRODUCTION VERIFICATION PENDING.** The owner explicitly authorized merge and production deployment after green checks.
+
+- Production screenshots rejected the first Giant Tower derivative as visually too simplified and confirmed that the newly supplied Mars solar landship was missing from the five-portal valley.
+- Tower source remains SHA-256 `9c2c61af94243788e1938d99b598f8bfd1281ac710bf41236467db263b5a4e5a` / 23,449,560 bytes. The replacement GAME derivative is SHA-256 `5cdb61971ce42634acfb3759a73a8ff01f94cb71b18f8feb5df436d754e443d2` / 585,484 bytes / 16,321 vertices / 14,785 triangles. It retains substantially more geometry and all 15 source material regions; embedded image textures are replaced by bounded PBR colors. The separate lobby remains explicitly **GAME / GENERATED INTERIOR**.
+- New owner vehicle source is SHA-256 `4dcd03f56c9ccaa8c11a286a4103c60101fe14a687481e22eb525c3bf62af6bd` / 2,822,664 bytes. Its GAME derivative is SHA-256 `7f27b281103325aa6f2aa58fcc396be7cf319bc683a91c4798ca374d592d70c3` / 1,291,820 bytes and retains source mesh shapes/instances with lightweight materials.
+- The landship is lazy-loaded independently beside the existing photovoltaic explorer at a spawn/river/portal-safe position. It has bounded collision and is deliberately static until a reviewed rig/drive implementation exists.
+- Both added packages have exact reconstruction/hash tests. Core Queen/portal startup remains independent of these lazy loads and teardown disposes scene resources.
+- No paid generation, checkout, supplier action or MAKE/manufacturing validation is part of this correction. Physical Android rendering and artistic acceptance of the corrected release remain **UNKNOWN** until post-deploy device QA.
+- GitHub task: issue #90. Exact CI, merge SHA, production run, Cloudflare version and public smoke evidence must be recorded after they actually occur.
+
+---
+
 # WORLDIFACT — Giant Tower integration, 25 September 2026
 
 **Status: LIVE · MERGED · PRODUCTION VERIFIED.** Reviewed head `ae814f4948355dd24d8261639bd404975d75ee05` passed all five exact-head workflows and was squash-merged as `d848be44216c7b15657cd462e2ac14090b32ba2a`. Main push CI and the Cloudflare publication both passed.
