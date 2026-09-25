@@ -1,13 +1,16 @@
 # WORLDIFACT — Giant Tower load + landship drive + optional Shop size, 25 September 2026
 
-**Status: IMPLEMENTED ON REVIEW BRANCH · EXACT-HEAD CI / MERGE / PRODUCTION VERIFICATION PENDING.** Issue #94 records the owner-requested Android production repair.
+**Status: LIVE · MERGED · PRODUCTION VERIFIED.** Issue #94 / PR #95 are complete. Reviewed head `bcb8b6bfc37b78bc543858b6ad8149d571bbb8c8` passed all five exact-head workflows and was squash-merged as `d1fa57b3487294ff7aad91c79d35bc62acd3f0cf`.
 
 - **VERIFIED root cause in source:** the high-fidelity Giant Tower package/test contains ten parts, but the runtime manifest in `src/lib/giantBuilding.ts` still listed only `part-00` through `part-03`. The decoder therefore could not reconstruct the reviewed 585,484-byte GLB. The runtime manifest now references all ten reviewed parts and a regression asserts the exact first/last entries and unique count.
 - Giant Tower loading now performs one bounded transient retry and reports the actual bounded failure reason before retaining the truthful **GAME / GENERATED INTERIOR** fallback. Queen and portal startup remain independent.
 - The already-visible owner Mars solar landship is now registered after load as a GAME rideable vehicle. Interact/keyboard/mobile joystick can board, drive/steer and exit it. It uses landship-specific seat, exit, footprint/ground sampling and camera scaling; the backhoe controls remain exclusive to the photovoltaic rover/loader.
 - Landship collision now follows its current driven pose instead of remaining at the original spawn. Whole-model GAME motion does not claim a verified source rig or source animation.
 - AI Shop target dimensions are now **opt-in**. Default is no target size: the preview is not rescaled and no 100×100×100 mm target is shown. The user must explicitly check **Specify model dimensions (optional)** before quick-size/X/Y/Z controls appear. Manufacturing/cart pricing accepts `dimensions: null`; exact-size quote logic remains unchanged when enabled.
-- No paid model generation, checkout, supplier order or MAKE/manufacturing approval is part of this repair. Physical Android rendering and artistic acceptance remain **UNKNOWN** until the post-deploy device check.
+- No paid model generation, checkout, supplier order or MAKE/manufacturing approval is part of this repair.
+- Post-merge main CI run `36143213651`: **SUCCESS**. Production workflow `36143213837`: **SUCCESS**. Cloudflare version `8166e862-ab60-453d-b8ea-b116ca687f55` is live at `https://worldifact.xodobrox.workers.dev`.
+- Public release smoke passed for 16 HTML routes, 38 matching hub assets, 105 original app entries/assets, API 404 behavior, the explicit no-cost DEMO path and origin rejection. No paid API call was made.
+- Physical Android rendering and artistic acceptance of the new tower/drive interaction remain **UNKNOWN** until the owner rechecks a fresh mobile session.
 
 ---
 
