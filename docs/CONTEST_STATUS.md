@@ -1,3 +1,18 @@
+# WORLDIFACT — universal owned downloads + no-AI post-hoc exports, 26 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · ORACLE POST-HOC EXPORT PATCH REVIEW/INSTALLATION PENDING.** Issue #104 records the owner-requested download repair.
+
+- Completed model ownership, not monthly membership, is now the artifact access boundary. Signed receipt + account ownership are still required; another account cannot fetch the job.
+- Successful owned SLOW/FAST Studio jobs report downloadable preview/file access. The Shop exposes GLB, PBR, FBX and Blender controls for the completed current job without a subscription gate.
+- GLB download remains read-only. For PBR/FBX/BLEND, the client first performs the normal GET. On worker HTTP 409 it calls the new same-origin `POST /api/studio/jobs/:id/exports/prepare` once and retries that artifact.
+- The preparation route is explicitly **NO AI / NO NEW GENERATION**: it proxies only to a reviewed Oracle worker post-hoc finalizer for the same saved job. It does not reserve generation allowance/credits, submit `/v1/jobs`, call Astra/OpenAI, create checkout or place a B2B order.
+- A narrow worker source patch is under `tools/export_prepare/`. It targets the exact current FAST-v33 + project-files server SHA-256 `6795c356d67c72f4aed545505772182f907c9a242ad0cf0076689720a386bb14`, requires the job to be succeeded, requires the saved `model.glb` and `model.blend`, refuses to compete with an active generation, runs only `run_blender_finalize(..., finalize=True)`, verifies the base GLB SHA-256 did not change, and reports only actually available formats.
+- Downloaded files are for user backup / downstream B2B review. They are **not** automatically MAKE-approved, manufacturing-ready, supplier-approved or ordered.
+- Production Oracle installation is still **BLOCKED/PENDING** until the exact worker patch passes CI and can be applied through the existing controlled Oracle maintenance path. Site deployment alone must not claim missing worker exports are fixed.
+- No paid model generation, payment, checkout, supplier order or manufacturing approval is part of this repair.
+
+---
+
 # WORLDIFACT — mobile Queen + Giant Tower + Shop artifact QA, 25 September 2026
 
 **Status: IMPLEMENTED ON REVIEW BRANCH · EXACT-HEAD CI / MERGE / PRODUCTION VERIFICATION PENDING.** Issue #101 records the owner-reported Android regression.
