@@ -5,10 +5,10 @@ export const GIANT_BUILDING_GAME_SHA256 = "5cdb61971ce42634acfb3759a73a8ff01f94c
 export const GIANT_BUILDING_SOURCE_TRIANGLES = 242_120;
 export const GIANT_BUILDING_GAME_TRIANGLES = 14_785;
 
-export const GIANT_BUILDING_POSITION = Object.freeze({ x: -30, z: -24 });
+export const GIANT_BUILDING_POSITION = Object.freeze({ x: -18, z: -18 });
 export const GIANT_BUILDING_SCALE = 5.5;
 export const GIANT_BUILDING_HEIGHT = 10.02797893 * GIANT_BUILDING_SCALE;
-export const GIANT_BUILDING_ENTRANCE = Object.freeze({ x: -30, z: -12.8 });
+export const GIANT_BUILDING_ENTRANCE = Object.freeze({ x: -18, z: -6.8 });
 export const GIANT_INTERIOR_FLOOR_Y = 72;
 export const GIANT_INTERIOR_SPAWN = Object.freeze({ x: 0, z: 5.25 });
 export const GIANT_INTERIOR_EXIT = Object.freeze({ x: 0, z: 7.25 });
@@ -26,9 +26,8 @@ export const GIANT_BUILDING_FOOTPRINT = Object.freeze({
 export const GIANT_BUILDING_PARTS = Object.freeze(
   Array.from({ length: 10 }, (_, index) => `/world-assets/giant-building/part-${String(index).padStart(2, "0")}.b64`),
 );
-
-const MAX_PART_CHARS = 48_000;
-const MAX_TOTAL_CHARS = 480_000;
+export const GIANT_BUILDING_URL = "/world-assets/giant-building/giant-tower.glb";
+export const GIANT_BUILDING_GAME_BYTES = 585_484;
 
 function label(text: string, width = 512, height = 128) {
   const browserDocument = (globalThis as unknown as { document?: { createElement: (tagName: "canvas") => any } }).document;
@@ -108,36 +107,21 @@ export function createGiantBuildingInterior() {
   return root;
 }
 
-function base64ToBytes(value: string) {
-  if (value.length > MAX_TOTAL_CHARS || !/^[A-Za-z0-9+/=\r\n]+$/.test(value)) throw new Error("Invalid building asset encoding.");
-  const compact = value.replace(/\s+/g, "");
-  const decoded = atob(compact);
-  const bytes = new Uint8Array(decoded.length);
-  for (let i = 0; i < decoded.length; i++) bytes[i] = decoded.charCodeAt(i);
-  return bytes;
-}
-
-async function gunzip(bytes: Uint8Array) {
-  if (typeof DecompressionStream !== "function") throw new Error("This browser cannot unpack the giant building GAME asset.");
-  const packedBuffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(packedBuffer).set(bytes);
-  const stream = new Blob([packedBuffer]).stream().pipeThrough(new DecompressionStream("gzip"));
-  const buffer = await new Response(stream).arrayBuffer();
-  if (buffer.byteLength < 560_000 || buffer.byteLength > 610_000) throw new Error("Giant building GAME asset size is invalid.");
-  return buffer;
+function hex(bytes: ArrayBuffer) {
+  return Array.from(new Uint8Array(bytes), value => value.toString(16).padStart(2, "0")).join("");
 }
 
 export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
-  const parts = await Promise.all(GIANT_BUILDING_PARTS.map(async (path) => {
-    const response = await fetcher(path, { cache: "force-cache", credentials: "same-origin" });
-    if (!response.ok) throw new Error("Giant building GAME asset is unavailable.");
-    const text = await response.text();
-    if (!text || text.length > MAX_PART_CHARS) throw new Error("Giant building GAME asset part is invalid.");
-    return text;
-  }));
-  const packed = base64ToBytes(parts.join(""));
-  if (packed.byteLength < 340_000 || packed.byteLength > 365_000) throw new Error("Giant building GAME package size is invalid.");
-  const bytes = await gunzip(packed);
+  const response = await fetcher(GIANT_BUILDING_URL, { cache: "force-cache", credentials: "same-origin" });
+  if (!response.ok) throw new Error(`direct asset unavailable (${response.status})`);
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength !== GIANT_BUILDING_GAME_BYTES) throw new Error(`direct asset size mismatch (${bytes.byteLength})`);
+  const header = new DataView(bytes, 0, 12);
+  if (String.fromCharCode(...new Uint8Array(bytes, 0, 4)) !== "glTF" || header.getUint32(4, true) !== 2 || header.getUint32(8, true) !== bytes.byteLength)
+    throw new Error("direct GLB container invalid");
+  if (!globalThis.crypto?.subtle) throw new Error("browser SHA-256 unavailable");
+  const digest = hex(await globalThis.crypto.subtle.digest("SHA-256", bytes));
+  if (digest !== GIANT_BUILDING_GAME_SHA256) throw new Error("direct GLB hash mismatch");
   const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
   const gltf = await new GLTFLoader().parseAsync(bytes, "");
   const root = gltf.scene;
