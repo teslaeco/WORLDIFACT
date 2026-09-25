@@ -514,7 +514,6 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         formats: Array.isArray(value.formats) ? value.formats.filter(item => typeof item === 'string').slice(0, 16) : [],
         paidGenerationRequested: false, generationRequested: false })
     }
-
     const match = new RegExp(`^/api/studio/jobs/(${UUID})(?:/(model|exports/(?:pbr|fbx|blend)))?import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
