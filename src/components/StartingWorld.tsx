@@ -10,6 +10,7 @@ import { enteredPortal, nearestPortal, PORTAL_RADIUS } from "../lib/portalNaviga
 import { createLakeEnvironment } from "../lib/lakeEnvironment";
 import { createPlayerAvatar, type AvatarChoice } from "../lib/playerAvatar";
 import { avatarProgressLabel, subscribeAvatarProgress, type AvatarProgress } from "../lib/avatarAsset";
+import { fetchExistingShopArtifacts, shopArtifactSummary } from "../lib/shopWorldArtifacts";
 import { createFanDrone, nextEquipmentMode, type EquipmentMode, type OutfitPreset } from "../lib/playerEquipment";
 import { fallingBodyY, FLIGHT_BODY_Y, FLIGHT_SPEED, inRiver, nextWaterMode, SWIM_SPEED, swimBodyY, WATER_LEVEL, type WaterMode } from "../lib/waterPhysics";
 import { createWorldAudio, worldAudioTheme } from "../lib/worldAudio";
@@ -93,6 +94,9 @@ export default function StartingWorld({
   const [jumpCount, setJumpCount] = useState(0);
   const [vehicleHud, setVehicleHud] = useState({ enabled: false, ownerVehicle: false, tool: "loader", action: "carry", load: 0, capacity: 1600, status: "Ready" });
   const [rimStatus, setRimStatus] = useState("Original Astra rim: file not linked. Load the original GLB; no screenshot substitute.");
+  const [shopArtifactStatus, setShopArtifactStatus] = useState("Last AI Shop model: not checked.");
+  const [shopArtifactBusy, setShopArtifactBusy] = useState(false);
+  const shopArtifactImport = useRef<(() => Promise<void>) | null>(null);
   const sandSession = useRef<{ key: string; field: ReturnType<typeof createSandField>; loads: Map<string, { load: ReturnType<typeof createSoilLoad>; enabled: boolean; tool: DigTool }> } | null>(null);
   const rimSource = useRef<THREE.Object3D | null>(null);
   const rimInstaller = useRef<((model: THREE.Object3D) => void) | null>(null);
@@ -276,6 +280,51 @@ export default function StartingWorld({
       runtime.spec;
     runtimeObjects.current = objects;
     for (const o of objects) scene.add(o.group);
+
+    let importedShopModel: THREE.Object3D | null = null;
+    shopArtifactImport.current = async () => {
+      setShopArtifactStatus("Checking the existing saved AI Shop receipt and downloading its current artifacts… no generation is sent.");
+      const audit = await fetchExistingShopArtifacts(localStorage);
+      const model = audit.results.find(result => result.format === "model");
+      let loadedIntoWorld = false;
+      if (model?.ok && model.blob) {
+        try {
+          const bytes = await model.blob.arrayBuffer();
+          if (bytes.byteLength < 20) throw new Error("Downloaded GLB is too small.");
+          const view = new DataView(bytes, 0, 12);
+          if (view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2 || view.getUint32(8, true) !== bytes.byteLength)
+            throw new Error("Downloaded Shop model is not a complete GLB.");
+          const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+          const gltf = await new GLTFLoader().parseAsync(bytes, "");
+          if (importedShopModel) { importedShopModel.removeFromParent(); disposeObject(importedShopModel); }
+          importedShopModel = gltf.scene;
+          importedShopModel.name = "last-ai-shop-model-existing-receipt";
+          importedShopModel.userData.provenance = "EXISTING_SIGNED_SHOP_JOB__DOWNLOADED_NO_GENERATION";
+          importedShopModel.traverse(object => {
+            if (object instanceof THREE.Mesh) { object.castShadow = true; object.receiveShadow = true; }
+          });
+          importedShopModel.updateMatrixWorld(true);
+          let bounds = new THREE.Box3().setFromObject(importedShopModel);
+          const size = bounds.getSize(new THREE.Vector3());
+          const largest = Math.max(size.x, size.y, size.z);
+          if (!Number.isFinite(largest) || largest <= 0) throw new Error("Downloaded Shop model bounds are invalid.");
+          importedShopModel.scale.multiplyScalar(Math.min(1, 7 / largest));
+          importedShopModel.updateMatrixWorld(true);
+          bounds = new THREE.Box3().setFromObject(importedShopModel);
+          const center = bounds.getCenter(new THREE.Vector3());
+          const targetX = 13, targetZ = -14;
+          importedShopModel.position.x += targetX - center.x;
+          importedShopModel.position.z += targetZ - center.z;
+          importedShopModel.position.y += groundAt(targetX, targetZ) + .04 - bounds.min.y;
+          scene.add(importedShopModel);
+          loadedIntoWorld = true;
+        } catch (error) {
+          model.ok = false; model.bytes = 0; model.error = error instanceof Error ? error.message : "GLB could not be added to the world.";
+        }
+      }
+      const summary = shopArtifactSummary(audit.results);
+      setShopArtifactStatus(`${loadedIntoWorld ? "Shop GLB added to the meadow with its embedded materials/textures." : "Shop GLB was not added."} Full GET verification: ${summary}. PBR ZIP / FBX / BLEND are download checks only; Three.js renders the GLB.`);
+    };
 
     // The owner's source GLB is represented in-browser by a bounded GAME-optimized
     // derivative. Its exterior is loaded after the core world/avatar so this
@@ -1112,6 +1161,7 @@ export default function StartingWorld({
       cancelAnimationFrame(frame);
       clearTimeout(navigationTimer);
       capture.current = null;
+      shopArtifactImport.current = null;
       sun.shadow.dispose();
       resize.disconnect();
       window.removeEventListener("keydown", down);
@@ -1215,6 +1265,20 @@ export default function StartingWorld({
         <button onClick={() => { overview.current = !overview.current; setWide(overview.current); }} aria-pressed={wide}>{wide ? "Follow character" : "Whole meadow"}</button>
         <button onClick={() => { void toggleMusic(); }} aria-pressed={music}>{music ? "Music off" : "Music on"}</button>
         <button onClick={() => capture.current?.()}>Save view PNG</button>
+        <button
+          type="button"
+          disabled={shopArtifactBusy}
+          onClick={() => {
+            const task = shopArtifactImport.current;
+            if (!task) { setShopArtifactStatus("Portal world is still preparing."); return; }
+            setShopArtifactBusy(true);
+            void task().catch(error => setShopArtifactStatus(error instanceof Error ? error.message : "Shop artifact check failed. No generation was sent."))
+              .finally(() => setShopArtifactBusy(false));
+          }}
+        >
+          {shopArtifactBusy ? "Checking Shop downloads…" : "Import last Shop model + test downloads"}
+        </button>
+        <small role="status">{shopArtifactStatus}</small>
         <label className="camera-zoom">Camera <input aria-label="Camera distance" type="range" min="3" max="24" step="0.1" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
       </div>
         <label>Camera distance <input aria-label="Equipment camera distance" type="range" min="3" max="12" step="0.1" value={zoomValue} onChange={e => { zoom.current = Number(e.target.value); setZoomValue(zoom.current); }} /></label>
