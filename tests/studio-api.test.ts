@@ -28,6 +28,9 @@ function fixture(used = 5) {
       if (acceptLost) throw new TypeError('Simulated lost response, not a provider call')
       const body = JSON.parse(String(init.body)); return Response.json({ id: body.id, state: 'building' }, { status: 202 })
     }
+    if (String(url).endsWith('/exports/prepare') && init?.method === 'POST') {
+      return Response.json({ prepared: true, alreadyReady: false, formats: ['pbr','fbx','blend'], paidGenerationRequested: false, generationRequested: false })
+    }
     if (String(url).endsWith('/model')) {
       const bytes = new Uint8Array(24), view = new DataView(bytes.buffer)
       view.setUint32(0, invalidModel ? 0 : 0x46546c67, true); view.setUint32(4, 2, true); view.setUint32(8, 24, true)
@@ -113,6 +116,26 @@ test('GLB and texture exports need the exact receipt and never trigger generatio
   f.corruptModel(); assert.equal((await f.call(path + '/model', 'GET', undefined, prepared.ticket)).status, 502)
   assert.equal(posts(f).length, 0)
 })
+
+test('owned receipt can request idempotent post-hoc exports without a generation POST', async () => {
+  const f = fixture(), prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  const path = `/api/studio/jobs/${prepared.id}/exports/prepare`
+  assert.equal((await f.call(path, 'POST', {}, undefined)).status, 401)
+  assert.equal((await f.call(path, 'POST', {}, prepared.ticket, 'https://other.test')).status, 403)
+  const response = await f.call(path, 'POST', {}, prepared.ticket)
+  assert.equal(response.status, 200)
+  const value = await response.json() as { prepared: boolean; alreadyReady: boolean; formats: string[]; paidGenerationRequested: boolean; generationRequested: boolean }
+  assert.equal(value.prepared, true)
+  assert.equal(value.alreadyReady, false)
+  assert.deepEqual(value.formats, ['pbr','fbx','blend'])
+  assert.equal(value.paidGenerationRequested, false)
+  assert.equal(value.generationRequested, false)
+  assert.equal(posts(f).length, 0)
+  const upstream = f.calls.filter(call => call.url.endsWith('/exports/prepare'))
+  assert.equal(upstream.length, 1)
+  assert.equal(upstream[0].init?.method, 'POST')
+})
+
 
 test('invalid photos and unrecognized fields are rejected before contacting paid services', async () => {
   const f = fixture()
