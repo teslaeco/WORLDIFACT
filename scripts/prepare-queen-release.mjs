@@ -4,9 +4,10 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { QUEEN_RELEASE_PATH, QUEEN_SHA256, QUEEN_DECODED_BYTES } from '../server/queen-release.ts';
+import { QUEEN_RELEASE_PATH, QUEEN_DIRECT_PATH, QUEEN_SHA256, QUEEN_DECODED_BYTES } from '../server/queen-release.ts';
 const origin = 'https://worldifact.xodobrox.workers.dev';
 const output = `dist${QUEEN_RELEASE_PATH}`;
+const directOutput = `dist${QUEEN_DIRECT_PATH}`;
 export function verifyQueen(bytes) {
   if (bytes.length !== QUEEN_DECODED_BYTES || createHash('sha256').update(bytes).digest('hex') !== QUEEN_SHA256)
     throw new Error('Original Queen changed: review and pin a new revision before release.');
@@ -59,6 +60,7 @@ export async function prepareQueenRelease() {
   verifyQueen(gunzipSync(encoded, { maxOutputLength: QUEEN_DECODED_BYTES }));
   await mkdir(dirname(output), { recursive: true });
   await writeFile(`${output}.part`, encoded); await rename(`${output}.part`, output);
-  console.log(`PASS: exact Queen release ${QUEEN_SHA256}: ${bytes.length} decoded bytes, ${encoded.length} wire bytes; no source model committed.`);
+  await writeFile(`${directOutput}.part`, bytes); await rename(`${directOutput}.part`, directOutput);
+  console.log(`PASS: exact Queen release ${QUEEN_SHA256}: ${bytes.length} decoded bytes, ${encoded.length} gzip bytes; direct GLB published for mobile; no source model committed.`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await prepareQueenRelease();
