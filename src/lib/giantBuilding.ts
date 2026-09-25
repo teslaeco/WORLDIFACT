@@ -34,7 +34,9 @@ const MAX_PART_CHARS = 25_000;
 const MAX_TOTAL_CHARS = 100_000;
 
 function label(text: string, width = 512, height = 128) {
-  const browserDocument = (globalThis as unknown as { document?: { createElement: (tagName: "canvas") => any } }).document;\n  if (!browserDocument) return null;\n  const canvas = browserDocument.createElement("canvas");
+  const browserDocument = (globalThis as unknown as { document?: { createElement: (tagName: "canvas") => any } }).document;
+  if (!browserDocument) return null;
+  const canvas = browserDocument.createElement("canvas");
   canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
