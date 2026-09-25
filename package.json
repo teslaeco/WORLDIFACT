@@ -16,10 +16,11 @@
     "verify": "npm run lint && npm run typecheck && npm test && npm run test:http && npm run build",
     "deploy:check": "wrangler deploy --dry-run --outdir .wrangler/preview",
     "deploy": "wrangler deploy",
-    "prebuild": "node scripts/prepare-iss-assets.mjs",
+    "prebuild": "node scripts/prepare-iss-assets.mjs && node scripts/prepare-giant-building.mjs",
     "foundations:build": "node scripts/build-foundations.mjs",
-    "preverify": "node scripts/prepare-iss-assets.mjs",
-    "postbuild": "node scripts/prepare-queen-release.mjs"
+    "preverify": "node scripts/prepare-iss-assets.mjs && node scripts/prepare-giant-building.mjs",
+    "postbuild": "node scripts/prepare-queen-release.mjs",
+    "pretest": "node scripts/prepare-giant-building.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",
