@@ -122,7 +122,9 @@ function base64ToBytes(value: string) {
 
 async function gunzip(bytes: Uint8Array) {
   if (typeof DecompressionStream !== "function") throw new Error("This browser cannot unpack the giant building GAME asset.");
-  const packedBuffer = new ArrayBuffer(bytes.byteLength);\n  new Uint8Array(packedBuffer).set(bytes);\n  const stream = new Blob([packedBuffer]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const packedBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(packedBuffer).set(bytes);
+  const stream = new Blob([packedBuffer]).stream().pipeThrough(new DecompressionStream("gzip"));
   const buffer = await new Response(stream).arrayBuffer();
   if (buffer.byteLength < 90_000 || buffer.byteLength > 120_000) throw new Error("Giant building GAME asset size is invalid.");
   return buffer;
