@@ -1,7 +1,7 @@
 /** Only the two existing, server-authorized avatar GETs; never a generation call. */
 export type AvatarAsset = 'queen' | 'rapper'
 export type AvatarProgress = { phase: 'waiting' | 'downloading' | 'retrying' | 'downloaded'; loaded: number; total: number; attempt: number }
-const urls: Record<AvatarAsset, string> = { queen: '/api/avatar/neptune-queen', rapper: '/api/avatar/rapper-la' }
+const urls: Record<AvatarAsset, string> = { queen: '/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb', rapper: '/api/avatar/rapper-la' }
 const MAX_BYTES = 48 * 1024 * 1024
 const FIRST_BYTE_MS = 90_000, STALL_MS = 30_000, MAX_DOWNLOAD_MS = 180_000
 const cache = new Map<AvatarAsset, { controller: AbortController; promise: Promise<ArrayBuffer> }>()
@@ -98,12 +98,12 @@ export function loadAvatarBytes(choice: AvatarAsset): Promise<ArrayBuffer> {
   const controller = new AbortController()
   const entry = { controller, promise: Promise.resolve(new ArrayBuffer(0)) }
   entry.promise = (async () => {
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try { return await download(choice, controller.signal, attempt) }
       catch (error) {
         controller.signal.throwIfAborted()
         const transient = error instanceof AvatarDownloadError ? error.retryable : error instanceof TypeError || (error instanceof DOMException && ['AbortError', 'TimeoutError'].includes(error.name))
-        if (!transient || attempt === 2) throw error
+        if (!transient || attempt === 3) throw error
         report(choice, { phase: 'retrying', loaded: 0, total: 0, attempt: attempt + 1 })
         await retryDelay(controller.signal)
       }
