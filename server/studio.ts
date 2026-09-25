@@ -502,7 +502,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       await limit(request, env, `artifact-prepare:${auth.id}`)
       const response = await oracle(env, `/v1/jobs/${auth.id}/exports/prepare`, fetcher, { method: 'POST', body: '{}' })
       if (!response.ok) {
-        let message = 'The worker could not prepare the missing exports from the saved model.'
+        let message = 'The worker could not prepare missing exports from the saved model.'
         try {
           const value = await limitedJson(response, 16_384)
           if (typeof value.error === 'string' && value.error) message = value.error.slice(0, 600)
@@ -770,9 +770,9 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const access = await accountAccess(env, user?.id, auth.id)
       await limit(request, env, match[2] ? 'artifact' : `poll:${auth.id}`)
       if (match[2]) {
-        // Ownership + signed receipt are the download entitlement. Completed
-        // customer files must remain retrievable for downstream/B2B review.
-        // This does not imply manufacturing approval.
+        // The signed receipt plus account ownership is the download entitlement
+        // for completed customer models. This enables transfer to downstream/B2B
+        // review but does not imply manufacturing approval.
         void access
         return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
       }
