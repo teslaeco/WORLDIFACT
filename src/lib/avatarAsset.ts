@@ -1,12 +1,20 @@
-/** Only the two existing, server-authorized avatar GETs; never a generation call. */
+/** Existing, read-only avatar assets; never a generation call. */
 export type AvatarAsset = 'queen' | 'rapper'
 export type AvatarProgress = { phase: 'waiting' | 'downloading' | 'retrying' | 'downloaded'; loaded: number; total: number; attempt: number }
-const urls: Record<AvatarAsset, string> = { queen: '/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb', rapper: '/api/avatar/rapper-la' }
+
+const QUEEN_TOTAL_BYTES = 27_676_800
+const QUEEN_PART_MAX_BYTES = 14 * 1024 * 1024
+const QUEEN_STATIC_PARTS = [
+  '/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-00.bin',
+  '/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-01.bin',
+] as const
+const RAPPER_URL = '/api/avatar/rapper-la'
 const MAX_BYTES = 48 * 1024 * 1024
 const FIRST_BYTE_MS = 90_000, STALL_MS = 30_000, MAX_DOWNLOAD_MS = 180_000
 const cache = new Map<AvatarAsset, { controller: AbortController; promise: Promise<ArrayBuffer> }>()
 const progress = new Map<AvatarAsset, AvatarProgress>()
 const listeners = new Map<AvatarAsset, Set<(value: AvatarProgress) => void>>()
+
 function report(choice: AvatarAsset, value: AvatarProgress) {
   const previous = progress.get(choice)
   progress.set(choice, value)
@@ -42,7 +50,69 @@ function retryDelay(signal: AbortSignal) {
     signal.addEventListener('abort', abort, { once: true })
   })
 }
-async function download(choice: AvatarAsset, parent: AbortSignal, attempt: number) {
+function validateGlb(bytes: Uint8Array, expectedLength: number, message: string, retryable = false) {
+  if (bytes.byteLength !== expectedLength || bytes.byteLength < 20) throw new AvatarDownloadError(message, retryable)
+  const header = new DataView(bytes.buffer, bytes.byteOffset, 12)
+  if (header.getUint32(0, true) !== 0x46546c67 || header.getUint32(4, true) !== 2 || header.getUint32(8, true) !== bytes.byteLength)
+    throw new AvatarDownloadError(message, retryable)
+}
+
+async function downloadQueenStatic(parent: AbortSignal, attempt: number) {
+  parent.throwIfAborted()
+  const controller = new AbortController()
+  const abort = () => controller.abort(parent.reason)
+  parent.addEventListener('abort', abort, { once: true })
+  const timedOut = () => controller.abort(new DOMException('Character download timed out.', 'TimeoutError'))
+  let idle = setTimeout(timedOut, FIRST_BYTE_MS)
+  const deadline = setTimeout(timedOut, MAX_DOWNLOAD_MS)
+  const resetIdle = (ms: number) => { clearTimeout(idle); idle = setTimeout(timedOut, ms) }
+  const target = new Uint8Array(QUEEN_TOTAL_BYTES)
+  let offset = 0
+  report('queen', { phase: 'waiting', loaded: 0, total: QUEEN_TOTAL_BYTES, attempt })
+  try {
+    for (const partUrl of QUEEN_STATIC_PARTS) {
+      resetIdle(FIRST_BYTE_MS)
+      const init: RequestInit & { priority: 'high' } = { credentials: 'same-origin', signal: controller.signal, redirect: 'error', priority: 'high', cache: 'force-cache' }
+      const response = await fetch(partUrl, init)
+      if (!response.ok || !response.body) {
+        await response.body?.cancel()
+        throw new AvatarDownloadError('The original character static part is temporarily unavailable.', [404, 408, 500, 502, 503, 504].includes(response.status))
+      }
+      const declared = Number(response.headers.get('content-length') || 0)
+      if (!Number.isSafeInteger(declared) || declared < 0 || declared > QUEEN_PART_MAX_BYTES || offset + declared > QUEEN_TOTAL_BYTES) {
+        await response.body.cancel()
+        throw new AvatarDownloadError('The original character static part has an invalid size.', true)
+      }
+      const reader = response.body.getReader()
+      let partBytes = 0
+      resetIdle(STALL_MS)
+      try {
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          controller.signal.throwIfAborted()
+          if (partBytes + value.byteLength > QUEEN_PART_MAX_BYTES || offset + value.byteLength > QUEEN_TOTAL_BYTES)
+            throw new AvatarDownloadError('The original character exceeds the preview size limit.')
+          target.set(value, offset)
+          offset += value.byteLength
+          partBytes += value.byteLength
+          resetIdle(STALL_MS)
+          report('queen', { phase: 'downloading', loaded: offset, total: QUEEN_TOTAL_BYTES, attempt })
+        }
+      } catch (error) { await reader.cancel().catch(() => {}); throw error }
+      finally { reader.releaseLock() }
+      if (!partBytes || (declared && declared !== partBytes)) throw new AvatarDownloadError('The original character static part was incomplete.', true)
+    }
+    controller.signal.throwIfAborted()
+    validateGlb(target, QUEEN_TOTAL_BYTES, 'The original character response is not a complete GLB.', true)
+    report('queen', { phase: 'downloaded', loaded: QUEEN_TOTAL_BYTES, total: QUEEN_TOTAL_BYTES, attempt })
+    return target.buffer
+  } finally {
+    clearTimeout(idle); clearTimeout(deadline); parent.removeEventListener('abort', abort)
+  }
+}
+
+async function downloadRapper(parent: AbortSignal, attempt: number) {
   parent.throwIfAborted()
   const controller = new AbortController()
   const abort = () => controller.abort(parent.reason)
@@ -51,15 +121,14 @@ async function download(choice: AvatarAsset, parent: AbortSignal, attempt: numbe
   let idle = setTimeout(timedOut, FIRST_BYTE_MS)
   const deadline = setTimeout(timedOut, MAX_DOWNLOAD_MS)
   const activity = () => { clearTimeout(idle); idle = setTimeout(timedOut, STALL_MS) }
-  report(choice, { phase: 'waiting', loaded: 0, total: 0, attempt })
+  report('rapper', { phase: 'waiting', loaded: 0, total: 0, attempt })
   try {
     const init: RequestInit & { priority: 'high' } = { credentials: 'same-origin', signal: controller.signal, redirect: 'error', priority: 'high' }
-    const response = await fetch(urls[choice], init)
+    const response = await fetch(RAPPER_URL, init)
     if (!response.ok || !response.body) {
       await response.body?.cancel()
       throw new AvatarDownloadError('The original character is temporarily unavailable.', [408, 500, 502, 503, 504].includes(response.status))
     }
-    // Fetch decodes HTTP gzip automatically; Content-Length may be the WIRE size.
     const declared = Number(response.headers.get('X-WORLDIFACT-GLB-Length') || (!response.headers.get('content-encoding') ? response.headers.get('content-length') : '') || 0)
     if (!Number.isSafeInteger(declared) || declared < 0 || (declared > 0 && declared < 20) || declared > MAX_BYTES) {
       await response.body.cancel(); throw new AvatarDownloadError('The character exceeds the preview size limit.')
@@ -77,21 +146,25 @@ async function download(choice: AvatarAsset, parent: AbortSignal, attempt: numbe
         if (target) target.set(value, length); else chunks.push(value)
         length += value.byteLength
         activity()
-        report(choice, { phase: 'downloading', loaded: length, total: declared, attempt })
+        report('rapper', { phase: 'downloading', loaded: length, total: declared, attempt })
       }
     } catch (error) { await reader.cancel().catch(() => {}); throw error }
     finally { reader.releaseLock() }
     controller.signal.throwIfAborted()
     const bytes = target ?? new Uint8Array(length); let offset = 0
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
-    const header = new DataView(bytes.buffer)
-    if (length < 20 || (declared && declared !== length) || header.getUint32(0, true) !== 0x46546c67 || header.getUint32(4, true) !== 2 || header.getUint32(8, true) !== length) throw new AvatarDownloadError('The original character response is not a complete GLB.')
-    report(choice, { phase: 'downloaded', loaded: length, total: length, attempt })
+    validateGlb(bytes, length, 'The original character response is not a complete GLB.')
+    report('rapper', { phase: 'downloaded', loaded: length, total: length, attempt })
     return bytes.buffer
   } finally {
     clearTimeout(idle); clearTimeout(deadline); parent.removeEventListener('abort', abort)
   }
 }
+
+async function download(choice: AvatarAsset, parent: AbortSignal, attempt: number) {
+  return choice === 'queen' ? downloadQueenStatic(parent, attempt) : downloadRapper(parent, attempt)
+}
+
 export function loadAvatarBytes(choice: AvatarAsset): Promise<ArrayBuffer> {
   const present = cache.get(choice)
   if (present) return present.promise
@@ -104,7 +177,7 @@ export function loadAvatarBytes(choice: AvatarAsset): Promise<ArrayBuffer> {
         controller.signal.throwIfAborted()
         const transient = error instanceof AvatarDownloadError ? error.retryable : error instanceof TypeError || (error instanceof DOMException && ['AbortError', 'TimeoutError'].includes(error.name))
         if (!transient || attempt === 3) throw error
-        report(choice, { phase: 'retrying', loaded: 0, total: 0, attempt: attempt + 1 })
+        report(choice, { phase: 'retrying', loaded: 0, total: choice === 'queen' ? QUEEN_TOTAL_BYTES : 0, attempt: attempt + 1 })
         await retryDelay(controller.signal)
       }
     }
