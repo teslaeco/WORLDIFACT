@@ -72,21 +72,22 @@ test('account-bound prepared receipts cannot be submitted or read by another use
   assert.equal((await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket, 'bob')).status, 401)
 })
 
-test('free SLOW completion preserves the job but never transfers GLB or texture bytes', async () => {
+test('free SLOW completion keeps owner-bound downloads available without membership', async () => {
   const f = fixture(), receipt = await f.prepare()
   await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
   const response = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
   const { job } = await response.json() as { job: StudioJob }
-  assert.equal(job.state, 'succeeded'); assert.equal(job.downloadAllowed, false); assert.equal(job.previewOnly, true); assert.equal(job.previewAvailable, false)
-  for (const path of ['model', 'exports/pbr', 'exports/fbx', 'exports/blend']) assert.equal((await f.call(`/api/studio/jobs/${receipt.id}/${path}`, 'GET', undefined, receipt.ticket)).status, 403)
-  assert.equal(f.artifacts(), 0)
+  assert.equal(job.state, 'succeeded'); assert.equal(job.downloadAllowed, true); assert.equal(job.previewOnly, false); assert.equal(job.previewAvailable, true)
+  for (const path of ['model', 'exports/pbr', 'exports/fbx', 'exports/blend']) {
+    const artifact = await f.call(`/api/studio/jobs/${receipt.id}/${path}`, 'GET', undefined, receipt.ticket)
+    assert.equal(artifact.status, 200)
+  }
+  assert.equal(f.artifacts(), 4)
   const next = await f.prepare()
   assert.equal((await f.call('/api/studio/jobs', 'POST', input, next.ticket)).status, 429)
   assert.equal(f.posts(), 1)
-  await f.subscribe()
-  const unlocked = await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket)
-  assert.equal(unlocked.status, 200); assert.equal((await unlocked.arrayBuffer()).byteLength, 24)
-  assert.equal((await entitlementStatus(f.env, alice)).credits, 1500, 'Downloading an already generated model does not debit another generation')
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 0, 'Downloading an already generated free model does not mint or debit credits')
+  assert.equal((await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket, 'bob')).status, 401)
 })
 
 test('concurrent repeated SLOW submission debits 50 once; confirmed failure refunds once', async () => {
