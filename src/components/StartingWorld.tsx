@@ -91,7 +91,7 @@ export default function StartingWorld({
   const [wide, setWide] = useState(false);
   const [zoomValue, setZoomValue] = useState(4.8);
   const [jumpCount, setJumpCount] = useState(0);
-  const [vehicleHud, setVehicleHud] = useState({ enabled: false, tool: "loader", action: "carry", load: 0, capacity: 1600, status: "Ready" });
+  const [vehicleHud, setVehicleHud] = useState({ enabled: false, ownerVehicle: false, tool: "loader", action: "carry", load: 0, capacity: 1600, status: "Ready" });
   const [rimStatus, setRimStatus] = useState("Original Astra rim: file not linked. Load the original GLB; no screenshot substitute.");
   const sandSession = useRef<{ key: string; field: ReturnType<typeof createSandField>; loads: Map<string, { load: ReturnType<typeof createSoilLoad>; enabled: boolean; tool: DigTool }> } | null>(null);
   const rimSource = useRef<THREE.Object3D | null>(null);
@@ -922,7 +922,7 @@ export default function StartingWorld({
         ) {
           const r =
             a === "drive"
-              ? objects.find((o) => specOf(o).kind === "rover")
+              ? (near && specOf(near).kind === "rover" ? near : objects.find((o) => specOf(o).kind === "rover"))
               : near;
           if (r && r.group.position.distanceTo(player) < (isOwnerVehicle(r) ? 7.5 : 6)) {
             const outside = vehicleOutsideWorld(r);
@@ -1066,7 +1066,7 @@ export default function StartingWorld({
       if (now - hud > 200) {
         hud = now;
         const machine = ride ? backhoes.get(ride) : undefined;
-        setVehicleHud({ enabled: machine?.enabled ?? false, tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0, capacity: machine ? Math.round(machine.load.capacity * 1000) : 1600, status: machine?.status ?? "Ready" });
+        setVehicleHud({ enabled: machine?.enabled ?? false, ownerVehicle: isOwnerVehicle(ride), tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0, capacity: machine ? Math.round(machine.load.capacity * 1000) : 1600, status: machine?.status ?? (isOwnerVehicle(ride) ? "Mars solar landship · GAME drive" : "Ready") });
         const travelMode = insideBuilding ? "inside giant tower" : controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
         setLocation(
           `${insideBuilding ? "Giant Tower · GAME interior" : sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
@@ -1193,7 +1193,7 @@ export default function StartingWorld({
           onClick={() => {
             action.current = "drive";
           }}
-          disabled={!blueprint.objects.some((o) => o.kind === "rover") || (!driving && interaction !== "Drive rover")}
+          disabled={!driving && interaction !== "Drive rover" && interaction !== "Drive Mars landship"}
         >
           {driving ? "Exit vehicle" : "Drive vehicle"}
         </button>
@@ -1241,14 +1241,16 @@ export default function StartingWorld({
         <small>Editable desert: X 15–40 / Z 14–39. Digging changes the terrain mesh. Terrain and bucket loads last for this world session.</small>
         <small>Keyboard: Space jump · press twice for a flip · G flight · F drone · I equipment.</small>
       </div>}
-      {driving && !inventoryOpen && <div className="vehicle-tools" role="group" aria-label="Backhoe-loader controls">
-        <button type="button" aria-pressed={vehicleHud.enabled} onClick={() => { action.current = "backhoe-mode"; }}>{vehicleHud.enabled ? "Remove attachment" : "Backhoe mode"}</button>
-        {vehicleHud.enabled && <>
-          <button type="button" disabled={vehicleHud.load > 0} onClick={() => { action.current = "bucket-tool"; }}>{vehicleHud.tool === "loader" ? "Front loader" : "Rear backhoe"} ⇄</button>
-          <button type="button" aria-pressed={vehicleHud.action === "dig"} onClick={() => { action.current = "bucket-dig"; }}>Lower / dig</button>
-          <button type="button" aria-pressed={vehicleHud.action === "carry"} onClick={() => { action.current = "bucket-carry"; }}>Raise / carry</button>
-          <button type="button" disabled={vehicleHud.load === 0} aria-pressed={vehicleHud.action === "dump"} onClick={() => { action.current = "bucket-dump"; }}>Dump load</button>
-          <output aria-live="off">Bucket: {vehicleHud.load} / {vehicleHud.capacity} L · GAME<br />{vehicleHud.status}</output>
+      {driving && !inventoryOpen && <div className="vehicle-tools" role="group" aria-label={vehicleHud.ownerVehicle ? "Mars solar landship controls" : "Backhoe-loader controls"}>
+        {vehicleHud.ownerVehicle ? <output aria-live="off">Mars solar landship · GAME vehicle<br />Joystick / WASD drive & steer · Interact to exit</output> : <>
+          <button type="button" aria-pressed={vehicleHud.enabled} onClick={() => { action.current = "backhoe-mode"; }}>{vehicleHud.enabled ? "Remove attachment" : "Backhoe mode"}</button>
+          {vehicleHud.enabled && <>
+            <button type="button" disabled={vehicleHud.load > 0} onClick={() => { action.current = "bucket-tool"; }}>{vehicleHud.tool === "loader" ? "Front loader" : "Rear backhoe"} ⇄</button>
+            <button type="button" aria-pressed={vehicleHud.action === "dig"} onClick={() => { action.current = "bucket-dig"; }}>Lower / dig</button>
+            <button type="button" aria-pressed={vehicleHud.action === "carry"} onClick={() => { action.current = "bucket-carry"; }}>Raise / carry</button>
+            <button type="button" disabled={vehicleHud.load === 0} aria-pressed={vehicleHud.action === "dump"} onClick={() => { action.current = "bucket-dump"; }}>Dump load</button>
+            <output aria-live="off">Bucket: {vehicleHud.load} / {vehicleHud.capacity} L · GAME<br />{vehicleHud.status}</output>
+          </>}
         </>}
       </div>}
       {captureNotice && <div className="capture-notice" role="status">{captureNotice}</div>}
