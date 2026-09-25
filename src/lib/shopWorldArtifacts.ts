@@ -22,7 +22,6 @@ export async function fetchExistingShopArtifacts(store: ReceiptStore, fetcher: t
   if (!saved) throw new Error('No saved AI Shop model receipt is available on this device.')
   const job = await client.poll(saved)
   if (job.state !== 'succeeded') throw new Error(`The saved AI Shop job is ${job.state}; no replacement generation was sent.`)
-  if (job.downloadAllowed === false) throw new Error('This saved model is preserved, but its account does not currently allow artifact downloads.')
 
   const results: ShopWorldArtifactResult[] = []
   for (const format of SHOP_WORLD_ARTIFACT_FORMATS) {
