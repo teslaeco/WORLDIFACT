@@ -1,6 +1,6 @@
 # WORLDIFACT — Stripe and GitHub configuration
 
-Approved offer: **USD 29.99 monthly / 1,500 credits**, with subscription-only SLOW downloads. The optional one-time top-up uses the same **USD 29.99 / 1,500 credits** and does not activate membership. Every generation costs 50 credits.
+Approved offer: **USD 29.99 monthly / 1,500 credits**. Completed owned model downloads are not a subscription-only entitlement. The optional one-time top-up uses the same **USD 29.99 / 1,500 credits** and does not activate membership. Every generation costs 50 credits.
 
 ## 1. Merchant account and server key
 
