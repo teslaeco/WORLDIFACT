@@ -27,3 +27,14 @@ The exact 23.4 MB source binary is not published in this repository by this chan
 The supplied source did not contain a verified walkable interior or door animation. WORLDIFACT therefore uses a separate procedural lobby labelled **GAME / GENERATED INTERIOR**. Walking inside that lobby does not prove the original source model contains that interior.
 
 The exterior instance is scaled at runtime only. The project does not claim a real-world building scale, engineering approval, structural validation, manufacturing readiness or a supplier-approved construction model.
+
+
+## Direct mobile/browser delivery
+
+Android device QA showed that browser-side base64 concatenation plus `DecompressionStream` was still a fragile delivery path even after the manifest was corrected. The committed ten-part package remains the reviewed source-of-truth transport, but build/test preparation now reconstructs that same derivative into:
+
+- `public/world-assets/giant-building/giant-tower.glb`
+- 585,484 bytes
+- SHA-256 `5cdb61971ce42634acfb3759a73a8ff01f94cb71b18f8feb5df436d754e443d2`
+
+The runtime fetches this single static GLB, validates its container length and SHA-256, and only then parses it. The release smoke also verifies the published file bytes so an HTML fallback or stale asset cannot silently pass. The generated direct GLB is not committed; it is deterministically rebuilt from the reviewed ten transport parts.

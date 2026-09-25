@@ -137,6 +137,7 @@ export async function checkPublishedRelease(deployment: Deployment,
   const sculptureAssets = [
     { path: "world-assets/polyhedron-led.gltf", types: ["model/gltf+json", "application/json"] },
     { path: "world-assets/polyhedron-led-poster.svg", types: ["image/svg+xml"] },
+    { path: "world-assets/giant-building/giant-tower.glb", types: ["model/gltf-binary", "application/octet-stream"] },
   ];
   for (const { path, types } of sculptureAssets) {
     await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);

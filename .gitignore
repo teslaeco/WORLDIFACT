@@ -183,3 +183,6 @@ source-models/
 .upstream/
 public/apps/iss/assets/
 public/apps/iss/vendor/
+
+# Reconstructed from reviewed Giant Tower transport parts during build/test
+public/world-assets/giant-building/giant-tower.glb

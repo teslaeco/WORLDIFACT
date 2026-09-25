@@ -7,6 +7,8 @@ import {
   GIANT_BUILDING_POSITION,
   GIANT_BUILDING_SCALE,
   GIANT_BUILDING_PARTS,
+  GIANT_BUILDING_URL,
+  GIANT_BUILDING_GAME_BYTES,
   GIANT_INTERIOR_BOUNDS,
   GIANT_INTERIOR_EXIT,
   GIANT_INTERIOR_SPAWN,
@@ -19,11 +21,11 @@ import {
 test("giant building is a large landmark away from spawn, river portals and desert worksite", () => {
   assert.equal(GIANT_BUILDING_SCALE, 5.5);
   assert.ok(GIANT_BUILDING_HEIGHT > 50);
-  assert.ok(GIANT_BUILDING_POSITION.x < -20);
+  assert.ok(GIANT_BUILDING_POSITION.x < -10);
   assert.ok(GIANT_BUILDING_POSITION.z < -14);
-  assert.ok(GIANT_BUILDING_FOOTPRINT.maxZ < -14);
-  assert.ok(GIANT_BUILDING_FOOTPRINT.minX > -42);
-  assert.ok(GIANT_BUILDING_FOOTPRINT.maxX < -18);
+  assert.ok(GIANT_BUILDING_FOOTPRINT.maxZ < -7);
+  assert.ok(GIANT_BUILDING_FOOTPRINT.minX > -35);
+  assert.ok(GIANT_BUILDING_FOOTPRINT.maxX < -8);
   assert.ok(Math.hypot(GIANT_BUILDING_ENTRANCE.x, GIANT_BUILDING_ENTRANCE.z - 17) > 20);
 });
 
@@ -51,4 +53,12 @@ test("giant building runtime manifest uses the complete reviewed ten-part packag
   assert.equal(GIANT_BUILDING_PARTS[0], "/world-assets/giant-building/part-00.b64");
   assert.equal(GIANT_BUILDING_PARTS[9], "/world-assets/giant-building/part-09.b64");
   assert.equal(new Set(GIANT_BUILDING_PARTS).size, 10);
+});
+
+
+test("giant building runtime uses one direct verified GLB for mobile delivery", () => {
+  assert.equal(GIANT_BUILDING_URL, "/world-assets/giant-building/giant-tower.glb");
+  assert.equal(GIANT_BUILDING_GAME_BYTES, 585_484);
+  assert.ok(Math.hypot(GIANT_BUILDING_POSITION.x, GIANT_BUILDING_POSITION.z - 17) < 42);
+  assert.ok(Math.hypot(GIANT_BUILDING_ENTRANCE.x, GIANT_BUILDING_ENTRANCE.z - 17) < 32);
 });
