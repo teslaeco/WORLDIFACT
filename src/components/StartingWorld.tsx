@@ -322,8 +322,24 @@ export default function StartingWorld({
           model.ok = false; model.bytes = 0; model.error = error instanceof Error ? error.message : "GLB could not be added to the world.";
         }
       }
+      const downloadable = audit.results.filter(result => result.ok && result.blob && result.format !== "model");
+      let saveAttempts = 0;
+      for (const result of downloadable) {
+        const blob = result.blob!;
+        const extension = result.format === "pbr" ? "textures.zip" : result.format;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `WORLDIFACT-${audit.saved.receipt.id}.${extension}`;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        saveAttempts++;
+      }
       const summary = shopArtifactSummary(audit.results);
-      setShopArtifactStatus(`${loadedIntoWorld ? "Shop GLB added to the meadow with its embedded materials/textures." : "Shop GLB was not added."} Full GET verification: ${summary}. PBR ZIP / FBX / BLEND are download checks only; Three.js renders the GLB.`);
+      setShopArtifactStatus(`${loadedIntoWorld ? "Shop GLB added to the meadow with its embedded materials/textures." : "Shop GLB was not added."} Full GET verification: ${summary}. ${saveAttempts ? `Browser download started for ${saveAttempts} verified PBR/FBX/BLEND artifact(s).` : "No PBR/FBX/BLEND artifact was available to save."} Three.js renders only the GLB.`);
     };
 
     // The owner's source GLB is represented in-browser by a bounded GAME-optimized
