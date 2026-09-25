@@ -72,13 +72,21 @@ export type CustomerPrice = {
   customerMessage: string
 }
 
+export function optionalDimensions(enabled: boolean, dimensions: ClientDimensions): ClientDimensions | null {
+  return enabled ? sanitizeDimensions(dimensions) : null
+}
+
 export function customerPriceForSelection(
   material: ClientMaterial,
   machine: ClientMachine,
   color: ClientColor,
-  dimensions: ClientDimensions,
+  dimensions: ClientDimensions | null,
   exactApprovedQuote?: VerifiedSupplierQuote | null,
 ): CustomerPrice {
+  if (!dimensions) return {
+    status: 'PENDING_VERIFIED_QUOTE', amountUsd: null, shippingUsd: null, orderable: false,
+    customerMessage: 'Model size is optional. Add dimensions only if you want a specific physical size; a manufacturing price still requires partner validation.',
+  }
   const quote = exactApprovedQuote ?? null
   const largest = largestDimensionMm(dimensions)
   const exact = quote && quote.supplierAcceptedGeometry && quote.finalPriceVerified &&

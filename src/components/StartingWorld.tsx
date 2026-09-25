@@ -35,7 +35,19 @@ import {
   nearGiantInteriorExit,
   resolveGiantBuildingCollision,
 } from "../lib/giantBuilding";
-import { loadOwnerVehicle, resolveOwnerVehicleCollision } from "../lib/ownerVehicle";
+import {
+  OWNER_VEHICLE_CAMERA_SCALE,
+  OWNER_VEHICLE_DRIVE_SCALE,
+  OWNER_VEHICLE_EXIT_OFFSET,
+  OWNER_VEHICLE_HALF_X,
+  OWNER_VEHICLE_HALF_Z,
+  OWNER_VEHICLE_RUNTIME_ID,
+  OWNER_VEHICLE_SEAT_OFFSET,
+  OWNER_VEHICLE_SPEED,
+  OWNER_VEHICLE_TURN_SPEED,
+  loadOwnerVehicle,
+  resolveOwnerVehicleCollision,
+} from "../lib/ownerVehicle";
 import "./WorldMovement.css";
 import {
   createDecorativeTerrain,
@@ -79,7 +91,7 @@ export default function StartingWorld({
   const [wide, setWide] = useState(false);
   const [zoomValue, setZoomValue] = useState(4.8);
   const [jumpCount, setJumpCount] = useState(0);
-  const [vehicleHud, setVehicleHud] = useState({ enabled: false, tool: "loader", action: "carry", load: 0, capacity: 1600, status: "Ready" });
+  const [vehicleHud, setVehicleHud] = useState({ enabled: false, ownerVehicle: false, tool: "loader", action: "carry", load: 0, capacity: 1600, status: "Ready" });
   const [rimStatus, setRimStatus] = useState("Original Astra rim: file not linked. Load the original GLB; no screenshot substitute.");
   const sandSession = useRef<{ key: string; field: ReturnType<typeof createSandField>; loads: Map<string, { load: ReturnType<typeof createSoilLoad>; enabled: boolean; tool: DigTool }> } | null>(null);
   const rimSource = useRef<THREE.Object3D | null>(null);
@@ -275,13 +287,29 @@ export default function StartingWorld({
     let giantBuildingDisposed = false;
     const giantBuildingLoadTimer = giantEntrance ? window.setTimeout(() => {
       queueMicrotask(() => setBuildingStatus("Giant tower: loading owner model…"));
-      void loadGiantBuilding().then(root => {
-        if (giantBuildingDisposed) { disposeObject(root); return; }
-        scene.add(root);
-        queueMicrotask(() => setBuildingStatus("Giant tower: higher-fidelity owner model ready · GAME"));
-      }).catch(() => {
-        if (!giantBuildingDisposed) queueMicrotask(() => setBuildingStatus("Giant tower exterior unavailable · generated GAME interior remains accessible"));
-      });
+      void (async () => {
+        let lastError: unknown;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const root = await loadGiantBuilding();
+            if (giantBuildingDisposed) { disposeObject(root); return; }
+            scene.add(root);
+            queueMicrotask(() => setBuildingStatus("Giant tower: higher-fidelity owner model ready · GAME"));
+            return;
+          } catch (error) {
+            lastError = error;
+            if (attempt === 0 && !giantBuildingDisposed) {
+              queueMicrotask(() => setBuildingStatus("Giant tower: retrying exterior load…"));
+              await new Promise(resolve => window.setTimeout(resolve, 850));
+            }
+          }
+        }
+        console.error("[WORLDIFACT Giant Tower]", lastError);
+        if (!giantBuildingDisposed) {
+          const reason = lastError instanceof Error ? lastError.message.replace(/^Giant building GAME /, "").slice(0, 90) : "load failed";
+          queueMicrotask(() => setBuildingStatus(`Giant tower exterior unavailable · ${reason} · generated GAME interior remains accessible`));
+        }
+      })();
     }, mobile ? 900 : 450) : undefined;
     if (!giantEntrance) queueMicrotask(() => setBuildingStatus("Giant tower is available in the valley world"));
 
@@ -289,13 +317,32 @@ export default function StartingWorld({
     // rig/drive setup exists. Load it separately so it cannot delay the Queen,
     // portals, or the existing photovoltaic explorer.
     let ownerVehicleDisposed = false;
+    let ownerVehicleRuntime: RuntimeObject | null = null;
     const ownerVehicleLoadTimer = !lunar && !sea ? window.setTimeout(() => {
       queueMicrotask(() => setOwnerVehicleStatus("Mars solar landship: loading owner model…"));
       void loadOwnerVehicle().then(root => {
         if (ownerVehicleDisposed) { disposeObject(root); return; }
+        const runtime: RuntimeObject = {
+          spec: {
+            id: OWNER_VEHICLE_RUNTIME_ID,
+            kind: "rover",
+            name: "Mars solar landship",
+            x: root.position.x,
+            z: root.position.z,
+            scale: OWNER_VEHICLE_DRIVE_SCALE,
+            rotation: THREE.MathUtils.radToDeg(root.rotation.y),
+            color: "#6f7881",
+          },
+          group: root,
+          doorOpen: false,
+        };
+        ownerVehicleRuntime = runtime;
+        objects.push(runtime);
+        runtimeObjects.current = objects;
         scene.add(root);
-        queueMicrotask(() => setOwnerVehicleStatus("Mars solar landship: owner model ready · GAME"));
-      }).catch(() => {
+        queueMicrotask(() => setOwnerVehicleStatus("Mars solar landship: owner model ready · DRIVEABLE GAME vehicle"));
+      }).catch(error => {
+        console.error("[WORLDIFACT owner landship]", error);
         if (!ownerVehicleDisposed) queueMicrotask(() => setOwnerVehicleStatus("Mars solar landship unavailable · existing world remains playable"));
       });
     }, mobile ? 1_350 : 700) : undefined;
@@ -315,12 +362,26 @@ export default function StartingWorld({
       for (const car of backhoes.keys()) car.group.traverse(child => { if (child.name === "stock-wheel-disc" || child.name === "stock-wheel-hub") child.visible = false; });
     };
     if (rimSource.current) rimInstaller.current(rimSource.current);
+    const isOwnerVehicle = (car: RuntimeObject | null | undefined) => car?.spec.id === OWNER_VEHICLE_RUNTIME_ID;
+    const worldOffset = (car: RuntimeObject, offset: { x: number; y: number; z: number }, scaleOffset = true) => {
+      const v = new THREE.Vector3(offset.x, offset.y, offset.z);
+      if (scaleOffset) v.multiplyScalar(specOf(car).scale);
+      return v.applyAxisAngle(new THREE.Vector3(0, 1, 0), car.group.rotation.y).add(car.group.position);
+    };
+    const vehicleSeatWorld = (car: RuntimeObject) => isOwnerVehicle(car)
+      ? worldOffset(car, OWNER_VEHICLE_SEAT_OFFSET, false)
+      : worldOffset(car, { x: -.55, y: .26, z: .1 });
+    const vehicleOutsideWorld = (car: RuntimeObject) => isOwnerVehicle(car)
+      ? worldOffset(car, OWNER_VEHICLE_EXIT_OFFSET, false)
+      : worldOffset(car, { x: -2.15, y: 0, z: .25 });
     const vehicleGround = (car: RuntimeObject, x: number, z: number, rotation: number) => {
-      const scale = specOf(car).scale;
-      const heights = [-1, 1].flatMap(side => [-1.55, 1.55].map(wz => {
-        const wx = side * 1.4 * scale, zz = wz * scale;
-        return groundAt(x + Math.cos(rotation) * wx + Math.sin(rotation) * zz, z - Math.sin(rotation) * wx + Math.cos(rotation) * zz);
-      }));
+      const offsets = isOwnerVehicle(car)
+        ? [-1, 1].flatMap(side => [-1, 1].map(front => ({ x: side * OWNER_VEHICLE_HALF_X * .82, z: front * OWNER_VEHICLE_HALF_Z * .78 })))
+        : [-1, 1].flatMap(side => [-1.55, 1.55].map(wz => ({ x: side * 1.4 * specOf(car).scale, z: wz * specOf(car).scale })));
+      const heights = offsets.map(offset => groundAt(
+        x + Math.cos(rotation) * offset.x + Math.sin(rotation) * offset.z,
+        z - Math.sin(rotation) * offset.x + Math.cos(rotation) * offset.z,
+      ));
       return { y: Math.max(...heights), spread: Math.max(...heights) - Math.min(...heights) };
     };
     const portals = PORTALS.map((p, i) => {
@@ -653,7 +714,7 @@ export default function StartingWorld({
       for (let presses = jumpRequests.current; presses > 0; presses--) requestJump(jump, canJump);
       jumpRequests.current = 0;
       stepJump(jump, dt);
-      if (ride) yaw -= side * dt * 1.25;
+      if (ride) yaw -= side * dt * (isOwnerVehicle(ride) ? OWNER_VEHICLE_TURN_SPEED : 1.25);
       forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
       right.set(Math.cos(yaw), 0, -Math.sin(yaw));
       const old = player.clone();
@@ -667,7 +728,7 @@ export default function StartingWorld({
         fanDrone.root.position.z = THREE.MathUtils.clamp(fanDrone.root.position.z, -46, 46);
         fanDrone.root.position.y = THREE.MathUtils.damp(fanDrone.root.position.y, 2.7 + Math.sin(elapsed * 1.8) * .18, 5, dt);
       } else {
-        const movementSpeed = insideBuilding ? WALK_SPEED : ride ? (operating?.enabled ? 3.2 : 9) : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? WALK_SPEED : SWIM_SPEED;
+        const movementSpeed = insideBuilding ? WALK_SPEED : ride ? isOwnerVehicle(ride) ? OWNER_VEHICLE_SPEED : (operating?.enabled ? 3.2 : 9) : equipmentMode === "flight" ? FLIGHT_SPEED : waterMode === "land" ? WALK_SPEED : SWIM_SPEED;
         player.addScaledVector(forward, move * dt * movementSpeed);
         if (!ride) player.addScaledVector(right, side * dt * movementSpeed);
         if (insideBuilding) {
@@ -685,7 +746,12 @@ export default function StartingWorld({
             : movePlayer(old, player, habitats, ride ? (operating?.enabled ? 6 : 3) * specOf(ride).scale : 0);
         if (!insideBuilding && !ride && !boarding && equipmentMode !== "flight") moved = avoidVehicleBodies(old, moved, objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
         if (!insideBuilding && equipmentMode !== "flight") moved = resolveGiantBuildingCollision(old, moved, ride ? 2.4 * specOf(ride).scale : .55);
-        if (!insideBuilding && equipmentMode !== "flight") moved = resolveOwnerVehicleCollision(old, moved, ride ? 2.1 * specOf(ride).scale : .6);
+        if (!insideBuilding && equipmentMode !== "flight" && ownerVehicleRuntime && ride !== ownerVehicleRuntime) moved = resolveOwnerVehicleCollision(
+          old,
+          moved,
+          ride ? 2.1 * specOf(ride).scale : .6,
+          { x: ownerVehicleRuntime.group.position.x, z: ownerVehicleRuntime.group.position.z, rotation: ownerVehicleRuntime.group.rotation.y },
+        );
         player.x = moved.x;
         player.z = moved.z;
         if (ride && vehicleGround(ride, player.x, player.z, yaw).spread > .62 * specOf(ride).scale) {
@@ -713,7 +779,7 @@ export default function StartingWorld({
       }
 
       const near = controllingDrone || insideBuilding ? undefined : objects
-        .filter((o) => (specOf(o).kind === "rover" && o.group.position.distanceTo(player) < 6) || (specOf(o).kind === "habitat" && o.group.position.distanceTo(player) < 7))
+        .filter((o) => (specOf(o).kind === "rover" && o.group.position.distanceTo(player) < (isOwnerVehicle(o) ? 7.5 : 6)) || (specOf(o).kind === "habitat" && o.group.position.distanceTo(player) < 7))
         .sort(
           (a, b) =>
             a.group.position.distanceTo(player) -
@@ -729,7 +795,7 @@ export default function StartingWorld({
         if (waitingForQueen && a !== "reset") {
           setCaptureNotice("The original character is still loading.");
         } else if (jump.jumps > 0 && (a === "drive" || (a === "interact" && ((near && !nearPortal) || nearBuildingEntrance || nearBuildingExit)))) {
-          setCaptureNotice("Land before entering the rover.");
+          setCaptureNotice("Land before entering a vehicle.");
         } else if (a.startsWith("bucket-") || a === "backhoe-mode") {
           const machine = ride ? backhoes.get(ride) : undefined;
           if (!machine || !sandField) setCaptureNotice("Enter the rover in the meadow to use the loader.");
@@ -745,7 +811,7 @@ export default function StartingWorld({
           else machine.setAction("carry");
         } else if (a === "fan-drone") {
           if (insideBuilding) setCaptureNotice("Drone equipment stays stowed inside the Giant Tower.");
-          else if (ride) setCaptureNotice("Exit the rover before deploying the fan drone.");
+          else if (ride) setCaptureNotice("Exit the vehicle before deploying the fan drone.");
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-drone");
             equipmentMode = next;
@@ -764,7 +830,7 @@ export default function StartingWorld({
           }
         } else if (a === "fan-flight") {
           if (insideBuilding) setCaptureNotice("Flight equipment stays stowed inside the Giant Tower.");
-          else if (ride) setCaptureNotice("Exit the rover before using shoulder flight.");
+          else if (ride) setCaptureNotice("Exit the vehicle before using shoulder flight.");
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-flight");
             equipmentMode = next;
@@ -838,9 +904,12 @@ export default function StartingWorld({
         ) {
           if (ride) {
             backhoes.get(ride)?.setAction("carry");
-            const exit = findRoverExit(ride.group.position, ride.group.rotation.y, specOf(ride).scale, habitats, true);
+            const seat = vehicleSeatWorld(ride);
+            const ownerOutside = isOwnerVehicle(ride) ? vehicleOutsideWorld(ride) : null;
+            const exit = ownerOutside
+              ? { x: ownerOutside.x, z: ownerOutside.z }
+              : findRoverExit(ride.group.position, ride.group.rotation.y, specOf(ride).scale, habitats, true);
             if (exit) {
-              const seat = new THREE.Vector3(-.55, .26, .1).multiplyScalar(specOf(ride).scale).applyAxisAngle(new THREE.Vector3(0,1,0), ride.group.rotation.y).add(ride.group.position);
               boarding = { car: ride, from: seat.clone(), outside: new THREE.Vector3(exit.x, groundAt(exit.x, exit.z), exit.z), seat, time: 0, exiting: true };
               ride.doorOpen = true;
             }
@@ -853,17 +922,16 @@ export default function StartingWorld({
         ) {
           const r =
             a === "drive"
-              ? objects.find((o) => specOf(o).kind === "rover")
+              ? (near && specOf(near).kind === "rover" ? near : objects.find((o) => specOf(o).kind === "rover"))
               : near;
-          if (r && r.group.position.distanceTo(player) < 6) {
-            const transform = (v: THREE.Vector3) => v.multiplyScalar(specOf(r).scale).applyAxisAngle(new THREE.Vector3(0,1,0), r.group.rotation.y).add(r.group.position);
-            const outside = transform(new THREE.Vector3(-2.15, 0, .25));
+          if (r && r.group.position.distanceTo(player) < (isOwnerVehicle(r) ? 7.5 : 6)) {
+            const outside = vehicleOutsideWorld(r);
             outside.y = groundAt(outside.x, outside.z);
-            const clearPath = avoidVehicleBodies(player, movePlayer(player, outside, habitats), objects.filter(o => specOf(o).kind === 'rover').map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
+            const clearPath = avoidVehicleBodies(player, movePlayer(player, outside, habitats), objects.filter(o => specOf(o).kind === "rover").map(o => ({ ...specOf(o), x: o.group.position.x, z: o.group.position.z, rotation: o.group.rotation.y * 180 / Math.PI })));
             if (Math.hypot(clearPath.x - outside.x, clearPath.z - outside.z) < .01) {
-              boarding = { car: r, from: new THREE.Vector3(player.x, groundAt(player.x, player.z), player.z), outside, seat: transform(new THREE.Vector3(-.55, .26, .1)), time: 0, exiting: false };
+              boarding = { car: r, from: new THREE.Vector3(player.x, groundAt(player.x, player.z), player.z), outside, seat: vehicleSeatWorld(r), time: 0, exiting: false };
               yaw = r.group.rotation.y;
-            } else setCaptureNotice("Approach the left-hand door to enter.");
+            } else setCaptureNotice(isOwnerVehicle(r) ? "Move to the left side of the Mars landship to enter." : "Approach the left-hand door to enter.");
           }
         } else if (
           a === "door" ||
@@ -924,7 +992,7 @@ export default function StartingWorld({
         }
       } else if (ride) {
         swimming = false;
-        avatar.root.position.set(-.55, .26, .1).multiplyScalar(specOf(ride).scale).applyAxisAngle(new THREE.Vector3(0,1,0), yaw).add(new THREE.Vector3(player.x, ride.group.position.y, player.z));
+        avatar.root.position.copy(vehicleSeatWorld(ride));
         avatar.root.rotation.y = yaw;
       } else if (equipmentMode === "flight") {
         swimming = false;
@@ -957,10 +1025,11 @@ export default function StartingWorld({
           cameraGoal.copy(view.position); cameraAim.copy(view.target);
         } else {
           const orbit = forward.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), vehicleViewYaw);
-          cameraGoal.copy(player).addScaledVector(orbit, -(zoom.current + 1) * specOf(ride).scale);
-          cameraGoal.y = ride.group.position.y + 4.6 * specOf(ride).scale;
-          cameraAim.copy(player).addScaledVector(forward, 2.0);
-          cameraAim.y = ride.group.position.y + 1.3;
+          const cameraScale = isOwnerVehicle(ride) ? OWNER_VEHICLE_CAMERA_SCALE : specOf(ride).scale;
+          cameraGoal.copy(player).addScaledVector(orbit, -(zoom.current + 1) * cameraScale);
+          cameraGoal.y = ride.group.position.y + 4.6 * cameraScale;
+          cameraAim.copy(player).addScaledVector(forward, isOwnerVehicle(ride) ? 3.2 : 2.0);
+          cameraAim.y = ride.group.position.y + (isOwnerVehicle(ride) ? 1.7 : 1.3);
         }
         camera.position.lerp(cameraGoal, 1 - Math.exp(-7 * dt));
         target.lerp(cameraAim, 1 - Math.exp(-9 * dt)); camera.lookAt(target);
@@ -997,7 +1066,7 @@ export default function StartingWorld({
       if (now - hud > 200) {
         hud = now;
         const machine = ride ? backhoes.get(ride) : undefined;
-        setVehicleHud({ enabled: machine?.enabled ?? false, tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0, capacity: machine ? Math.round(machine.load.capacity * 1000) : 1600, status: machine?.status ?? "Ready" });
+        setVehicleHud({ enabled: machine?.enabled ?? false, ownerVehicle: isOwnerVehicle(ride), tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0, capacity: machine ? Math.round(machine.load.capacity * 1000) : 1600, status: machine?.status ?? (isOwnerVehicle(ride) ? "Mars solar landship · GAME drive" : "Ready") });
         const travelMode = insideBuilding ? "inside giant tower" : controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
         setLocation(
           `${insideBuilding ? "Giant Tower · GAME interior" : sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
@@ -1016,14 +1085,14 @@ export default function StartingWorld({
                 : waterMode === "swimming" || waterMode === "falling"
                   ? "Swimming · joystick / WASD · you can enter portals directly from the water"
                   : ride
-                    ? machine?.enabled ? `Front-quarter work view · drag to look · ${machine.status}` : "Joystick: drive & steer · enable Backhoe mode to dig in the desert"
+                    ? isOwnerVehicle(ride) ? "Mars solar landship · joystick / WASD drive & steer · Interact to exit" : machine?.enabled ? `Front-quarter work view · drag to look · ${machine.status}` : "Joystick: drive & steer · enable Backhoe mode to dig in the desert"
                     : near
-                      ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : "drive rover"}`
+                      ? `${mobile ? "Tap the action button" : "E"} · ${specOf(near).kind === "habitat" ? "open / close door" : isOwnerVehicle(near) ? "drive Mars solar landship" : "drive rover"}`
                       : insideBuilding
                         ? "Walk through the generated GAME lobby · use the glowing EXIT marker to leave"
                         : mobile ? "Left thumb: move · right thumb: look · tap Jump twice for a flip" : "WASD move · Space jump (twice: flip) · G fly/land · I equipment",
         );
-        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearBuildingExit ? "Exit Giant Tower" : nearBuildingEntrance ? "Enter Giant Tower" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : "Drive rover" : "Interact");
+        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearBuildingExit ? "Exit Giant Tower" : nearBuildingEntrance ? "Enter Giant Tower" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? isOwnerVehicle(ride) ? "Exit Mars landship" : "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : isOwnerVehicle(near) ? "Drive Mars landship" : "Drive rover" : "Interact");
       }
       renderer.render(scene, camera);
       if (!contextLost) frame = requestAnimationFrame(animate);
@@ -1124,9 +1193,9 @@ export default function StartingWorld({
           onClick={() => {
             action.current = "drive";
           }}
-          disabled={!blueprint.objects.some((o) => o.kind === "rover") || (!driving && interaction !== "Drive rover")}
+          disabled={!driving && interaction !== "Drive rover" && interaction !== "Drive Mars landship"}
         >
-          {driving ? "Exit rover" : "Drive rover"}
+          {driving ? "Exit vehicle" : "Drive vehicle"}
         </button>
         {blueprint.objects.some(o => o.kind === "habitat") && <button
           onClick={() => {
@@ -1172,14 +1241,16 @@ export default function StartingWorld({
         <small>Editable desert: X 15–40 / Z 14–39. Digging changes the terrain mesh. Terrain and bucket loads last for this world session.</small>
         <small>Keyboard: Space jump · press twice for a flip · G flight · F drone · I equipment.</small>
       </div>}
-      {driving && !inventoryOpen && <div className="vehicle-tools" role="group" aria-label="Backhoe-loader controls">
-        <button type="button" aria-pressed={vehicleHud.enabled} onClick={() => { action.current = "backhoe-mode"; }}>{vehicleHud.enabled ? "Remove attachment" : "Backhoe mode"}</button>
-        {vehicleHud.enabled && <>
-          <button type="button" disabled={vehicleHud.load > 0} onClick={() => { action.current = "bucket-tool"; }}>{vehicleHud.tool === "loader" ? "Front loader" : "Rear backhoe"} ⇄</button>
-          <button type="button" aria-pressed={vehicleHud.action === "dig"} onClick={() => { action.current = "bucket-dig"; }}>Lower / dig</button>
-          <button type="button" aria-pressed={vehicleHud.action === "carry"} onClick={() => { action.current = "bucket-carry"; }}>Raise / carry</button>
-          <button type="button" disabled={vehicleHud.load === 0} aria-pressed={vehicleHud.action === "dump"} onClick={() => { action.current = "bucket-dump"; }}>Dump load</button>
-          <output aria-live="off">Bucket: {vehicleHud.load} / {vehicleHud.capacity} L · GAME<br />{vehicleHud.status}</output>
+      {driving && !inventoryOpen && <div className="vehicle-tools" role="group" aria-label={vehicleHud.ownerVehicle ? "Mars solar landship controls" : "Backhoe-loader controls"}>
+        {vehicleHud.ownerVehicle ? <output aria-live="off">Mars solar landship · GAME vehicle<br />Joystick / WASD drive & steer · Interact to exit</output> : <>
+          <button type="button" aria-pressed={vehicleHud.enabled} onClick={() => { action.current = "backhoe-mode"; }}>{vehicleHud.enabled ? "Remove attachment" : "Backhoe mode"}</button>
+          {vehicleHud.enabled && <>
+            <button type="button" disabled={vehicleHud.load > 0} onClick={() => { action.current = "bucket-tool"; }}>{vehicleHud.tool === "loader" ? "Front loader" : "Rear backhoe"} ⇄</button>
+            <button type="button" aria-pressed={vehicleHud.action === "dig"} onClick={() => { action.current = "bucket-dig"; }}>Lower / dig</button>
+            <button type="button" aria-pressed={vehicleHud.action === "carry"} onClick={() => { action.current = "bucket-carry"; }}>Raise / carry</button>
+            <button type="button" disabled={vehicleHud.load === 0} aria-pressed={vehicleHud.action === "dump"} onClick={() => { action.current = "bucket-dump"; }}>Dump load</button>
+            <output aria-live="off">Bucket: {vehicleHud.load} / {vehicleHud.capacity} L · GAME<br />{vehicleHud.status}</output>
+          </>}
         </>}
       </div>}
       {captureNotice && <div className="capture-notice" role="status">{captureNotice}</div>}
