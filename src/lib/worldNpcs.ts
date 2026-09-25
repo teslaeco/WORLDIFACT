@@ -132,7 +132,7 @@ export function createForgeNpcSystem(scene: THREE.Scene, mobile: boolean, ground
       if (onStatus) onStatus("Forge workers: " + npcs.length + " GAME NPCs active with procedural fallback · ForgeMPC2 asset unavailable");
     }
   };
-  const loadTimer = window.setTimeout(() => { void upgrade(); }, mobile ? 12_000 : 6_000);
+  const loadTimer = setTimeout(() => { void upgrade(); }, mobile ? 12_000 : 6_000);
 
   const update = (elapsed:number, dt:number) => {
     for (const [index,npcItem] of npcs.entries()) {
