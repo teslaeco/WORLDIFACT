@@ -67,5 +67,5 @@ test("giant building runtime uses one direct verified GLB for mobile delivery", 
 test("mobile Giant Tower runtime does not require WebCrypto after release-time hash verification", async () => {
   const source = await import("node:fs/promises").then(fs => fs.readFile(new URL("../src/lib/giantBuilding.ts", import.meta.url), "utf8"));
   assert.doesNotMatch(source, /crypto\\.subtle|SHA-256 unavailable/);
-  assert.match(source, /new THREE\\.Box3\\(\\)\\.setFromObject\\(root\\)/);
+  assert.ok(source.includes("new THREE.Box3().setFromObject(root)"));
 });
