@@ -5,6 +5,7 @@ export const FORGE_WORKER_SOURCE = Object.freeze({
   commit: "bac2827fc1ec31e71dc0f5c586df43c507338725",
   path: "public/models/rapper-v10.glb",
   gitBlobSha: "25d3a7f62fb97844843e3007d498a3d93a927d42",
+  sha256: "4b7e83d07723be958e7325f1cd7afc509ebc72d61a6357925c824ac716052adf",
   bytes: 10_343_368,
   url: "https://raw.githubusercontent.com/teslaeco/Froge-MPC-2-test/bac2827fc1ec31e71dc0f5c586df43c507338725/public/models/rapper-v10.glb",
   label: "Forge Worker · generic adult static example",
@@ -103,6 +104,10 @@ export function createForgeNpcSystem(scene: THREE.Scene, mobile: boolean, ground
       if (bytes.byteLength !== FORGE_WORKER_SOURCE.bytes) throw new Error("Forge asset size mismatch: " + bytes.byteLength);
       const header = new DataView(bytes,0,12);
       if (header.getUint32(0,true)!==0x46546c67 || header.getUint32(4,true)!==2 || header.getUint32(8,true)!==bytes.byteLength) throw new Error("Forge asset is not a complete GLB");
+      if (globalThis.crypto?.subtle) {
+        const digest = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes)), value => value.toString(16).padStart(2, "0")).join("");
+        if (digest !== FORGE_WORKER_SOURCE.sha256) throw new Error("Forge asset SHA-256 mismatch");
+      }
       const loaderModule = await import("three/examples/jsm/loaders/GLTFLoader.js");
       const skeletonModule = await import("three/examples/jsm/utils/SkeletonUtils.js");
       const gltf = await new loaderModule.GLTFLoader().parseAsync(bytes, "");
