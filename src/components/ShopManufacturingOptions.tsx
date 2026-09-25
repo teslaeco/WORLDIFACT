@@ -99,7 +99,7 @@ export default function ShopManufacturingOptions({ dimensions, dimensionsEnabled
       <label className="shop-consent"><input type="checkbox" checked={deliveryAccepted} onChange={e => setDeliveryAccepted(e.target.checked)} /> I understand production and delivery may take longer if the manufacturing partner requests additional validation or geometry changes.</label>
       <button type="button" className="shop-checkout" disabled={!checkoutReady}>Proceed to payment</button>
       <small>Payment is not connected yet. The secure checkout will be activated only after a payment provider is integrated and the final manufacturing price, delivery and file revision are verified.</small>
-      <p><strong>Digital 3D file:</strong> FAST draft downloads are included. SLOW model downloads require an active subscription. Manufacturing checkout is a separate purchase and never grants an unverified production approval.</p>
+      <p><strong>Digital 3D file:</strong> Completed owned GAME files can be downloaded for transfer to a downstream/B2B reviewer. Manufacturing checkout is a separate process and never grants an unverified production approval.</p>
     </section>
 
     <button className="shop-internal-only" hidden type="button" onClick={() => onPrepareIssDraft(ISS_PRINT_PREP_PROMPT)}>Prepare internal ISS manufacturing repair draft</button>

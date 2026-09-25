@@ -1,0 +1,47 @@
+name: Review post-hoc export preparation
+on:
+  pull_request:
+    paths:
+      - 'tools/export_prepare/**'
+      - 'server/studio.ts'
+      - 'src/lib/studioClient.ts'
+      - 'src/pages/ShopPage.tsx'
+      - 'tests/studio-*'
+      - 'tests/shop-*'
+      - 'docs/CONTEST_STATUS.md'
+      - '.github/workflows/export-prepare-review.yml'
+permissions:
+  contents: read
+concurrency:
+  group: export-prepare-review-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .upstream/export-froge
+          persist-credentials: false
+      - name: Review Python 3.9 syntax
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for path in Path('tools/export_prepare').glob('*.py'):
+              ast.parse(path.read_text(), filename=str(path), feature_version=(3,9))
+          print('Export-preparation maintenance sources parse as Python 3.9.')
+          PY
+      - name: Reconstruct exact live v33 and test no-AI export patch
+        env:
+          FROGE_SOURCE_ROOT: ${{ github.workspace }}/.upstream/export-froge/oracle_connector
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B tools/export_prepare/test_export_prepare.py -v
+      - name: Confirm review did not execute maintenance or AI
+        run: |
+          test ! -e tools/export_prepare/INSTALL_STATUS.json
+          echo 'PASS: source review only; no Oracle connection, restart, generation, checkout or AI request.'

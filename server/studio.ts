@@ -56,8 +56,9 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
   if (state === 'succeeded') await settleUserGeneration(env, userId, id, 'completed')
   if (state === 'failed' || state === 'cancelled') await settleUserGeneration(env, userId, id, 'failed')
   const access = await accountAccess(env, userId, id)
-  return { id, state, detail: JOB_DETAILS[state], downloadAllowed: access!.downloadAllowed,
-    previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed }
+  const completed = state === 'succeeded'
+  return { id, state, detail: JOB_DETAILS[state], downloadAllowed: completed ? true : access!.downloadAllowed,
+    previewOnly: completed ? false : access!.previewOnly, previewAvailable: completed ? true : access!.downloadAllowed }
 }
 async function limitedJson(response: Request | Response, limit: number) {
   if (!response.headers.get('content-type')?.toLowerCase().startsWith('application/json')) throw new StudioError('Expected application/json.', 415)
@@ -245,6 +246,26 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state']) }, 202)
       } catch { return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending } }, 202) }
     }
+    const prepareMatch = new RegExp(`^/api/studio/jobs/(${UUID})/exports/prepare$`).exec(url.pathname)
+    if (prepareMatch && request.method === 'POST') {
+      const user = await accountIdentity(request, env, fetcher)
+      const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', prepareMatch[1], !!user, user?.id)
+      await accountAccess(env, user?.id, auth.id)
+      await limit(request, env, `artifact-prepare:${auth.id}`)
+      const response = await oracle(env, `/v1/jobs/${auth.id}/exports/prepare`, fetcher, { method: 'POST', body: '{}' })
+      if (!response.ok) {
+        let message = 'The worker could not prepare missing exports from the saved model.'
+        try {
+          const value = await limitedJson(response, 16_384)
+          if (typeof value.error === 'string' && value.error) message = value.error.slice(0, 600)
+        } catch { await response.body?.cancel().catch(() => {}) }
+        throw new StudioError(message, [404, 409, 429].includes(response.status) ? response.status : 502)
+      }
+      const value = await limitedJson(response, 16_384)
+      return json({ prepared: value.prepared === true, alreadyReady: value.alreadyReady === true,
+        formats: Array.isArray(value.formats) ? value.formats.filter(item => typeof item === 'string').slice(0, 16) : [],
+        paidGenerationRequested: false, generationRequested: false })
+    }
     const match = new RegExp(`^/api/studio/jobs/(${UUID})(?:/(model|exports/(?:pbr|fbx|blend)))?$`).exec(url.pathname)
     if (match && request.method === 'GET') {
       const user = await accountIdentity(request, env, fetcher)
@@ -252,9 +273,10 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const access = await accountAccess(env, user?.id, auth.id)
       await limit(request, env, match[2] ? 'artifact' : `poll:${auth.id}`)
       if (match[2]) {
-        // Previewing a GLB transfers its complete bytes. A free SLOW preview
-        // therefore cannot use this route; an active subscription is required.
-        if (access && !access.downloadAllowed) throw new StudioError('SLOW models and textures require an active subscription to download. Your generated model is preserved.', 403)
+        // The signed receipt plus account ownership is the download entitlement
+        // for completed customer models. This enables transfer to downstream/B2B
+        // review but does not imply manufacturing approval.
+        void access
         return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
       }
       const response = await oracle(env, `/v1/jobs/${auth.id}`, fetcher)

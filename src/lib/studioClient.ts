@@ -153,12 +153,36 @@ export class StudioCoordinator {
       return rejected
     }
   }
+  async prepareExports(saved = this.saved): Promise<{ prepared: boolean; alreadyReady: boolean; formats: string[] }> {
+    if (!saved) throw new Error('No job receipt is selected.')
+    const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}/exports/prepare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': saved.receipt.ticket },
+      body: '{}',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(190_000),
+    })
+    const value = await responseJson(response)
+    if (!object(value) || typeof value.prepared !== 'boolean' || typeof value.alreadyReady !== 'boolean' || !Array.isArray(value.formats) ||
+      value.formats.some(format => typeof format !== 'string'))
+      throw new Error('The worker returned an invalid export-preparation result.')
+    return { prepared: value.prepared, alreadyReady: value.alreadyReady, formats: value.formats as string[] }
+  }
   async artifact(format: 'model' | 'pbr' | 'fbx' | 'blend', saved = this.saved): Promise<Blob> {
     if (!saved) throw new Error('No job receipt is selected.')
     const path = format === 'model' ? 'model' : `exports/${format}`
-    const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}/${path}`, {
+    const read = () => this.fetcher(`/api/studio/jobs/${saved.receipt.id}/${path}`, {
       headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(180_000),
     })
+    let response = await read()
+    // A timeout-recovered job can have its reviewed GLB/model.blend while optional
+    // interchange exports are still absent. Prepare those exports from the saved
+    // Blender file exactly once; never resubmit generation or call paid AI.
+    if (format !== 'model' && response.status === 409) {
+      await response.body?.cancel().catch(() => {})
+      await this.prepareExports(saved)
+      response = await read()
+    }
     if (!response.ok) { await responseJson(response); throw new Error('The artifact is unavailable.') }
     const maximum = format === 'model' ? STUDIO_MODEL_LIMIT : 512 * 1024 * 1024
     const declared = Number(response.headers.get('content-length') || 0)

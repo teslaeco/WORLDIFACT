@@ -74,3 +74,32 @@ test('explicitly injected fetch is receiver-safe and a lost response plus reload
   assert.equal(calls.filter(call => call.path === '/api/studio/jobs').length, 1)
   assert.equal(calls.filter(call => call.path === '/api/studio/prepare').length, 1)
 })
+
+
+test('missing export is prepared once from the saved job and retried without a generation POST', async () => {
+  const store = memoryStore(), now = Date.now()
+  const receipt = { id, createdAt: new Date(now).toISOString(), ticket: `${id}.${now}.${'a'.repeat(64)}.${'b'.repeat(64)}` }
+  store.setItem('worldifact-studio-current-v1', JSON.stringify({ receipt, prompt: input.prompt, startedAt: receipt.createdAt }))
+  const calls: { path: string; method: string }[] = []
+  let pbrReads = 0
+  const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+    const path = String(url), method = init?.method ?? 'GET'; calls.push({ path, method })
+    assert.equal(new Headers(init?.headers).get('X-WORLDIFACT-Job'), receipt.ticket)
+    if (path.endsWith('/exports/pbr')) {
+      pbrReads++
+      return pbrReads === 1 ? Response.json({ error: 'missing export' }, { status: 409 }) :
+        new Response(new Uint8Array([7,8,9]), { headers: { 'Content-Length': '3', 'Content-Type': 'application/zip' } })
+    }
+    if (path.endsWith('/exports/prepare') && method === 'POST')
+      return Response.json({ prepared: true, alreadyReady: false, formats: ['pbr'], paidGenerationRequested: false, generationRequested: false })
+    throw new Error('Unexpected request: '+path)
+  }) as typeof fetch
+  const client = new StudioCoordinator(store, fetcher); client.restore()
+  assert.equal((await client.artifact('pbr')).size, 3)
+  assert.deepEqual(calls, [
+    { path: `/api/studio/jobs/${id}/exports/pbr`, method: 'GET' },
+    { path: `/api/studio/jobs/${id}/exports/prepare`, method: 'POST' },
+    { path: `/api/studio/jobs/${id}/exports/pbr`, method: 'GET' },
+  ])
+  assert.equal(calls.some(call => call.path === '/api/studio/jobs'), false)
+})
