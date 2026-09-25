@@ -34,7 +34,7 @@ const MAX_PART_CHARS = 25_000;
 const MAX_TOTAL_CHARS = 100_000;
 
 function label(text: string, width = 512, height = 128) {
-  const canvas = document.createElement("canvas");
+  const browserDocument = (globalThis as unknown as { document?: { createElement: (tagName: "canvas") => any } }).document;\n  if (!browserDocument) return null;\n  const canvas = browserDocument.createElement("canvas");
   canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
@@ -120,7 +120,7 @@ function base64ToBytes(value: string) {
 
 async function gunzip(bytes: Uint8Array) {
   if (typeof DecompressionStream !== "function") throw new Error("This browser cannot unpack the giant building GAME asset.");
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
   const buffer = await new Response(stream).arrayBuffer();
   if (buffer.byteLength < 90_000 || buffer.byteLength > 120_000) throw new Error("Giant building GAME asset size is invalid.");
   return buffer;
