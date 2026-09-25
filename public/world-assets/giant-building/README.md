@@ -14,12 +14,13 @@ The exact 23.4 MB source binary is not published in this repository by this chan
 
 ## Runtime derivative
 
-- Decompressed GLB size: 98,392 bytes.
-- SHA-256: `032d4cb75880d75d8b78493fe75babefea64676b041389fe23e17a362d982ccd`.
-- 2,086 vertices / 2,690 triangles.
-- All 15 source material groups remain represented, but geometry is simplified and textures are removed/replaced by lightweight PBR color materials.
-- This derivative does **not** claim source topology, texture, UV or material parity and is not a MAKE/manufacturing file.
-- The GLB is gzip-compressed and base64-split into four small static parts only as a repository/browser transport package. The client reconstructs and validates the bounded GLB before rendering.
+- Decompressed GLB size: 585,484 bytes.
+- SHA-256: `5cdb61971ce42634acfb3759a73a8ff01f94cb71b18f8feb5df436d754e443d2`.
+- 16,321 vertices / 14,785 triangles.
+- This replacement was rebuilt directly from the owner source after mobile screenshots showed that the first 2,690-triangle derivative lost too much of the recognizable stacked/terraced architecture.
+- All 15 source material regions remain represented. The derivative keeps substantially more source geometry while replacing embedded image textures with bounded representative PBR colors for browser/mobile delivery.
+- It remains a GAME derivative and does **not** claim source topology, texture, UV or material parity or MAKE/manufacturing approval.
+- The GLB is gzip-compressed and base64-split into ten bounded static parts only as a repository/browser transport package. The client reconstructs and validates the exact reviewed derivative before rendering.
 
 ## Interior truth boundary
 
