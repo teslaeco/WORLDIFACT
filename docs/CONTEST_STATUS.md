@@ -1,6 +1,6 @@
 # WORLDIFACT — mobile Queen + Giant Tower + Shop artifact QA, 25 September 2026
 
-**Status: IMPLEMENTED ON REVIEW BRANCH · EXACT-HEAD CI / MERGE / PRODUCTION VERIFICATION PENDING.** Issue #101 records the owner-reported Android regression.
+**Status: LIVE · MERGED · PRODUCTION VERIFIED.** Issue #101 / PR #102 are complete. Reviewed head `c3886614eb27725cc31ea25df3b41080538b9bf4` passed all five exact-head workflows and was squash-merged as `f119ce936ac1026af4c0f401be72a3e72d8d2f28`.
 
 - **Queen:** the exact pinned Neptune Queen remains SHA-256 `1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba`, 27,676,800 decoded GLB bytes, Oracle source job `99397623-e45c-48dc-95ec-6f84446a54d5`. Build preparation now publishes the same verified GLB as two bounded raw static parts below the Cloudflare per-file ceiling. The mobile client reconstructs those exact bytes directly from static assets, validates the completed GLB header/length and uses three bounded retries. It no longer depends on the avatar Worker/content-encoding path for Queen rendering. The existing gzip/API release remains available for compatibility.
 - **Release gate:** production smoke now hashes both Queen static raw parts against the exact build output before a release can pass. No substitute Queen is allowed.
@@ -8,7 +8,11 @@
 - **Existing AI Shop job audit:** the five-portal world gains **Import last Shop model + test downloads**. It restores only the existing same-device signed Studio receipt, polls that same job and performs GET-only reads of GLB, PBR ZIP, FBX and BLEND. It never prepares/submits/resubmits generation. A valid GLB is added to the meadow with its embedded materials/textures; successful PBR/FBX/BLEND blobs trigger browser download attempts and every format reports its real success/failure.
 - PBR ZIP / FBX / BLEND are **download-verification artifacts only**; Three.js renders the GLB and they are not falsely described as rendered or production-approved.
 - The current Shop screenshot proves the GLB preview works but at least one export request returns `This model/export is not available on the worker yet.`. This repair exposes the exact per-format result in the world; it does not invent a missing Oracle export.
-- No paid generation, checkout, supplier order or MAKE/manufacturing approval is part of this repair. Physical Android visual acceptance remains **UNKNOWN** until the deployed revision is tested on the owner's device.
+- No paid generation, checkout, supplier order or MAKE/manufacturing approval is part of this repair.
+- Post-merge main CI run `36188480894`: **SUCCESS**. Production workflow `36188480931`: **SUCCESS**. Cloudflare version `fd8ce5f7-177a-4fee-8813-76bb9afa8982` is live at `https://worldifact.xodobrox.workers.dev`.
+- Build evidence: exact Queen SHA-256 `1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba`, 27,676,800 decoded bytes, 18,076,285 gzip bytes; two bounded raw static parts published for mobile. Production release smoke passed for 16 HTML routes, 41 matching hub assets and 105 original app entries/assets. No paid API call was made.
+- Current-job PBR/FBX/BLEND availability remains **per-job evidence**, not a platform-wide claim. CI cannot read the owner's private browser localStorage receipt; the deployed five-portal action reports that same-device job's exact GET result without generating a replacement.
+- Physical Android visual acceptance remains **UNKNOWN** until the deployed revision is tested on the owner's device.
 
 ---
 
