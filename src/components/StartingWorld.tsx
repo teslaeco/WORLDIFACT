@@ -724,7 +724,8 @@ export default function StartingWorld({
           else if (a === "bucket-dump") machine.setAction("dump");
           else machine.setAction("carry");
         } else if (a === "fan-drone") {
-          if (ride) setCaptureNotice("Exit the rover before deploying the fan drone.");
+          if (insideBuilding) setCaptureNotice("Drone equipment stays stowed inside the Giant Tower.");
+          else if (ride) setCaptureNotice("Exit the rover before deploying the fan drone.");
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-drone");
             equipmentMode = next;
@@ -742,7 +743,8 @@ export default function StartingWorld({
             }
           }
         } else if (a === "fan-flight") {
-          if (ride) setCaptureNotice("Exit the rover before using shoulder flight.");
+          if (insideBuilding) setCaptureNotice("Flight equipment stays stowed inside the Giant Tower.");
+          else if (ride) setCaptureNotice("Exit the rover before using shoulder flight.");
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-flight");
             equipmentMode = next;
