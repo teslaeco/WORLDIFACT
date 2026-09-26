@@ -86,9 +86,15 @@ async function readOracleHealth(env: PlatformEnv, fetcher: typeof fetch) {
     const characterStandard = body.characterStandard;
     const provider = body.provider;
     const model = body.model;
+    const posthocExportRevision = body.posthocExportRevision;
+    const legacyGlbExportRecoveryRevision = body.legacyGlbExportRecoveryRevision;
+    const projectFilesRevision = body.projectFilesRevision;
     if (typeof body.ready !== 'boolean' ||
       typeof connectorVersion !== 'number' || !Number.isSafeInteger(connectorVersion) || connectorVersion < 1 || connectorVersion > 10_000 ||
       (characterStandard !== undefined && (typeof characterStandard !== 'number' || !Number.isSafeInteger(characterStandard) || characterStandard < 1 || characterStandard > 10_000)) ||
+      (posthocExportRevision !== undefined && (typeof posthocExportRevision !== 'number' || !Number.isSafeInteger(posthocExportRevision) || posthocExportRevision < 1 || posthocExportRevision > 10_000)) ||
+      (legacyGlbExportRecoveryRevision !== undefined && (typeof legacyGlbExportRecoveryRevision !== 'number' || !Number.isSafeInteger(legacyGlbExportRecoveryRevision) || legacyGlbExportRecoveryRevision < 1 || legacyGlbExportRecoveryRevision > 10_000)) ||
+      (projectFilesRevision !== undefined && (typeof projectFilesRevision !== 'number' || !Number.isSafeInteger(projectFilesRevision) || projectFilesRevision < 1 || projectFilesRevision > 10_000)) ||
       (provider !== undefined && (typeof provider !== 'string' || !['openai', 'ollama'].includes(provider))) ||
       (model !== undefined && (typeof model !== 'string' || !/^[A-Za-z0-9._:-]{1,120}$/.test(model))))
       return { oracle: 'INVALID_HEALTH_RESPONSE' as const };
@@ -96,6 +102,9 @@ async function readOracleHealth(env: PlatformEnv, fetcher: typeof fetch) {
       oracle: body.ready === true ? 'CONNECTOR_READY' as const : 'CONNECTOR_NOT_READY' as const,
       connectorVersion,
       ...(typeof characterStandard === 'number' ? { characterStandard } : {}),
+      ...(typeof posthocExportRevision === 'number' ? { posthocExportRevision } : {}),
+      ...(typeof legacyGlbExportRecoveryRevision === 'number' ? { legacyGlbExportRecoveryRevision } : {}),
+      ...(typeof projectFilesRevision === 'number' ? { projectFilesRevision } : {}),
       ...(typeof provider === 'string' ? { provider } : {}),
       ...(typeof model === 'string' ? { model } : {}),
     };
@@ -125,6 +134,9 @@ export async function platformApi(request: Request, env: PlatformEnv, fetcher: t
       oracle: health.oracle,
       ...('connectorVersion' in health ? { connectorVersion: health.connectorVersion } : {}),
       ...('characterStandard' in health ? { characterStandard: health.characterStandard } : {}),
+      ...('posthocExportRevision' in health ? { posthocExportRevision: health.posthocExportRevision } : {}),
+      ...('legacyGlbExportRecoveryRevision' in health ? { legacyGlbExportRecoveryRevision: health.legacyGlbExportRecoveryRevision } : {}),
+      ...('projectFilesRevision' in health ? { projectFilesRevision: health.projectFilesRevision } : {}),
       ...('provider' in health ? { provider: health.provider } : {}),
       ...('model' in health ? { model: health.model } : {}),
       worlds: ORACLE_WORLD_IDS.map(id => ({ id, oracle: health.oracle })),
