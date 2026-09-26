@@ -49,7 +49,7 @@ class DirectV33ExportPatchTests(unittest.TestCase):
         self.assertIn("if file_sha256(model)!=before",text)
         self.assertNotIn("projectFilesRevision",text)
         # Generation admission and FAST policy remain present but are not called by prepare.
-        for marker in ("requested_profile(data)","/v1/jobs","generate_code(","fast-draft-v1"):
+        for marker in ("requested_profile(data)","read_profile(JOBS/job_id)","/v1/jobs","generate_code("):
             self.assertIn(marker,text)
 
     def test_legacy_glb_recovery_is_bounded_and_never_overwrites_glb(self):
