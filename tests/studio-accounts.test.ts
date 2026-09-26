@@ -25,7 +25,7 @@ function fixture() {
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const users = new Map<string, AccountEntitlements>()
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() })); return users.get(key)! } }
-  let posts = 0, artifacts = 0, loss = false, state: StudioJob['state'] = 'succeeded', status404 = false
+  let posts = 0, artifacts = 0, loss = false, busy = false, state: StudioJob['state'] = 'succeeded', status404 = false
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname
     if (path === '/auth/v1/user') {
@@ -35,7 +35,12 @@ function fixture() {
       return Response.json({}, { status: 401 })
     }
     if (path === '/v1/health') return Response.json({ ready: true, provider: 'openai', model: 'gpt-6-astra', connectorVersion: 33, promptMaxLength: 5000 })
-    if (path === '/v1/jobs') { posts++; if (loss) throw new Error('Unconfirmed transport acceptance'); return Response.json({ id: JSON.parse(String(init?.body)).id, state: 'building' }) }
+    if (path === '/v1/jobs') {
+      posts++
+      if (loss) throw new Error('Unconfirmed transport acceptance')
+      if (busy) return Response.json({ error: 'Serwer wykonuje poprzedni model. Poczekaj na wynik.' }, { status: 409 })
+      return Response.json({ id: JSON.parse(String(init?.body)).id, state: 'building' })
+    }
     if (/\/model$|\/exports\//.test(path)) {
       artifacts++
       const bytes = new Uint8Array(24), view = new DataView(bytes.buffer)
@@ -54,7 +59,8 @@ function fixture() {
     await entitlementCall(env, alice, '/grant', { id: 'in_subscription', credits: 1500, subscriptionId: 'sub_test' })
     await entitlementCall(env, alice, '/subscription', { id: 'sub_test', until: Date.now() + 86400000, active: true, revision: 1, grantId: 'in_subscription' })
   }
-  return { env, call, prepare, subscribe, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' }, lose: () => { loss = true; status404 = true } }
+  return { env, call, prepare, subscribe, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
+    busy: () => { busy = true }, lose: () => { loss = true; status404 = true } }
 }
 
 test('account-bound prepared receipts cannot be submitted or read by another user', async () => {
@@ -127,3 +133,38 @@ test('a server budget rejection refunds the customer reservation before any Orac
   assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).status, 429)
   assert.equal(f.posts(), 0); assert.equal((await entitlementStatus(f.env, alice)).credits, 1500)
 })
+
+test('explicit Oracle busy rejection refunds credits immediately and does not create a fake pending job', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare(); f.busy()
+  const response = await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  assert.equal(response.status, 409)
+  const value = await response.json() as { error: string }
+  assert.match(value.error, /finishing another model/i)
+  assert.equal(f.posts(), 1)
+  const status = await entitlementStatus(f.env, alice)
+  assert.equal(status.credits, 1500, 'explicit upstream rejection restores the reserved 50 credits')
+  const access = await entitlementCall<{ owned: boolean; state?: string }>(f.env, alice, '/job', { id: receipt.id })
+  assert.equal(access.owned, true)
+  assert.equal(access.state, 'failed')
+})
+
+test('legacy uncertain receipt can be reconciled only after Oracle confirms 404, restoring credits without resubmission', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare(); f.lose()
+  assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).status, 202)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 1450)
+  const now = Date.now
+  try {
+    Date.now = () => now() + 181_000
+    const before = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(before.job.reconciliationRequired, true)
+    const reconciled = await f.call(`/api/studio/jobs/${receipt.id}/reconcile-missing`, 'POST', {}, receipt.ticket)
+    assert.equal(reconciled.status, 200)
+    const result = await reconciled.json() as { job: StudioJob; reconciled: boolean; generationRequested: boolean }
+    assert.equal(result.reconciled, true)
+    assert.equal(result.generationRequested, false)
+    assert.equal(result.job.state, 'failed')
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 1500)
+    assert.equal(f.posts(), 1, 'reconciliation never submits another Oracle generation')
+  } finally { Date.now = now }
+})
+
