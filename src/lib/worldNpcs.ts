@@ -18,7 +18,8 @@ export const FORGE_WORKER_SOURCE = Object.freeze({
   gitBlobSha: "25d3a7f62fb97844843e3007d498a3d93a927d42",
   sha256: "4b7e83d07723be958e7325f1cd7afc509ebc72d61a6357925c824ac716052adf",
   bytes: 10_343_368,
-  url: "https://raw.githubusercontent.com/teslaeco/Froge-MPC-2-test/bac2827fc1ec31e71dc0f5c586df43c507338725/public/models/rapper-v10.glb",
+  upstreamUrl: "https://raw.githubusercontent.com/teslaeco/Froge-MPC-2-test/bac2827fc1ec31e71dc0f5c586df43c507338725/public/models/rapper-v10.glb",
+  url: "/world-assets/forge/rapper-v10.glb",
   label: "Forge Worker · generic adult static example",
 });
 
@@ -34,10 +35,10 @@ export type NpcPlan = {
 const PLANS: NpcPlan[] = [
   // The first four are deliberately visible/reachable from the central hub on mobile.
   // Keep them clear of the five portal line at z≈2.7.
-  { id: "forge-planter-east", task: "planting", from: { x: 28, z: -22 }, to: { x: 43, z: -29 }, offset: 0 },
-  { id: "forge-builder-east", task: "building", from: { x: 31, z: 22 }, to: { x: 45, z: 30 }, offset: 4.5 },
-  { id: "forge-carrier-west", task: "carrying", from: { x: -28, z: -23 }, to: { x: -44, z: -30 }, offset: 9 },
-  { id: "forge-planter-west", task: "planting", from: { x: -31, z: 23 }, to: { x: -46, z: 33 }, offset: 2 },
+  { id: "forge-planter-east", task: "planting", from: { x: 14, z: -15 }, to: { x: 24, z: -22 }, offset: 0 },
+  { id: "forge-builder-east", task: "building", from: { x: 16, z: 17 }, to: { x: 27, z: 24 }, offset: 4.5 },
+  { id: "forge-carrier-west", task: "carrying", from: { x: -14, z: 16 }, to: { x: -25, z: 23 }, offset: 9 },
+  { id: "forge-planter-west", task: "planting", from: { x: -17, z: 18 }, to: { x: -29, z: 27 }, offset: 2 },
   // Desktop keeps additional workers deeper in the new biomes.
   { id: "forge-builder-desert", task: "building", from: { x: 72, z: 38 }, to: { x: 106, z: 44 }, offset: 7 },
   { id: "forge-surveyor-coast", task: "surveying", from: { x: -74, z: 17 }, to: { x: -108, z: 9 }, offset: 11 },
@@ -244,7 +245,7 @@ export function createForgeNpcSystem(
       if (onStatus) onStatus("Forge workers: " + npcs.length + " GAME NPCs active with procedural fallback · ForgeMPC2 asset unavailable");
     }
   };
-  const loadTimer = setTimeout(() => { void upgrade(); }, mobile ? 3_000 : 2_000);
+  const loadTimer = setTimeout(() => { void upgrade(); }, mobile ? 600 : 300);
 
   const update = (elapsed:number, dt:number) => {
     for (const [index,npcItem] of npcs.entries()) {
