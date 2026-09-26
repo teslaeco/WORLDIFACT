@@ -12,6 +12,13 @@ def main():
     key=Path.home()/"ssh-key-2026-09-06.key"
     if not key.is_file() or not os.access(key,os.R_OK):raise RuntimeError("Missing existing OCI Cloud Shell SSH key.")
     package=launcher.package()
+    print("Checking Oracle queue. Existing customer/test jobs are never cancelled automatically.",flush=True)
+    idle=launcher.call_remote(key,"wait-idle",package,timeout=1600)
+    print(json.dumps(idle,indent=2))
+    if idle.get("phase")!="IDLE":
+        jobs=idle.get("activeJobs",[])
+        summary=", ".join(str(j.get("id","?"))[:8]+":"+str(j.get("state","?"))+" age="+str(j.get("ageSeconds","?"))+"s" for j in jobs if isinstance(j,dict))
+        raise RuntimeError("Oracle still has an active model job after the bounded wait. Nothing was cancelled or changed. "+summary)
     maintenance=launcher.call_remote(key,"apply",package,timeout=380)
     print(json.dumps(maintenance,indent=2))
     if maintenance.get("phase") not in SUCCESS or maintenance.get("posthocExportRevision")!=2 or maintenance.get("legacyGlbExportRecoveryRevision")!=1:

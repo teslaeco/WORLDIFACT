@@ -37,3 +37,17 @@ test('Cloud Shell finisher runs maintenance then the resumable same-job E2E path
   assert.match(source, /WORLDIFACT_EXPORT_E2E_PASS/)
   assert.match(source, /WORLDIFACT_ORACLE_EXPORT_FIX_AND_E2E_COMPLETE/)
 })
+
+test('Oracle maintenance waits for active jobs without cancelling or mutating them', async () => {
+  const source = await readFile(new URL('../tools/export_prepare/oracle_direct_export_fix.py', import.meta.url), 'utf8')
+  const finisher = await readFile(new URL('../tools/export_prepare/finish_and_verify.py', import.meta.url), 'utf8')
+  assert.match(source, /def active_jobs_snapshot\(\):/)
+  assert.match(source, /mode=ro/)
+  assert.match(source, /def wait_idle\(max_seconds=1500\):/)
+  assert.match(source, /"phase":"ACTIVE_TIMEOUT"/)
+  assert.match(source, /elif MODE=="wait-idle"/)
+  assert.doesNotMatch(source, /UPDATE jobs SET state/)
+  assert.match(finisher, /call_remote\(key,"wait-idle"/)
+  assert.match(finisher, /never cancelled automatically/i)
+  assert.match(finisher, /Nothing was cancelled or changed/)
+})
