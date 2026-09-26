@@ -110,10 +110,10 @@ def prepare_customer_exports(job_id,row):
     with LOCK:
         if job_id in POSTHOC_EXPORTING:return {'error':'Eksport tego modelu jest juz przygotowywany.'},409
         POSTHOC_EXPORTING.add(job_id)
-    before=file_sha256(model)
+    before=file_sha256(model);blend=folder/'model.blend'
+    had_blend=blend.is_file() and not blend.is_symlink()
     try:
-        blend=folder/'model.blend'
-        if blend.is_file() and not blend.is_symlink():
+        if had_blend:
             run_blender_finalize(job_id,folder,threading.Event(),timeout=300)
         else:
             run_legacy_glb_export(job_id,folder,timeout=300)
@@ -121,7 +121,7 @@ def prepare_customer_exports(job_id,row):
         ready=available_customer_exports(folder)
         if not ready:return {'error':'Blender nie przygotowal dodatkowych plikow. GLB pozostaje bez zmian.'},409
         return {'prepared':True,'alreadyReady':False,'formats':ready,'paidGenerationRequested':False,'generationRequested':False,
-                'legacyGlbRecovery':not blend.exists()},200
+                'legacyGlbRecovery':not had_blend},200
     except (ValueError,TimeoutError,OSError,subprocess.SubprocessError):
         return {'error':'Nie udalo sie przygotowac eksportow z zapisanego modelu. GLB pozostaje bez zmian; nie wyslano zapytania AI.'},409
     finally:
@@ -142,7 +142,9 @@ def patch_server(source: str) -> str:
     source=once(source,"            if write and action == 'cancel':\n",PREPARE+"            if write and action == 'cancel':\n")
     source=once(source,"return self.send_json(capability(health()))",
         "return self.send_json({**capability(health()),'posthocExportRevision':2,'legacyGlbExportRecoveryRevision':1})")
-    # Existing read-only export route now accepts the truthful texture fallback.
-    source=once(source,"paths = export_files(folder, name)","paths = customer_export_files(folder, name)")
+    # Both export-listing and concrete download use the same verified fallback.
+    old="paths = export_files(folder, name)"
+    if source.count(old)!=2:raise ValueError("Export route context changed.")
+    source=source.replace(old,"paths = customer_export_files(folder, name)")
     compile(source,'server.py','exec')
     return source
