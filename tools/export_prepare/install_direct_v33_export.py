@@ -84,8 +84,7 @@ def install(source):
     backup=source/"state/code-backups"/("direct-export-v2-"+str(time.time_ns()))
     backup.mkdir(parents=True,mode=0o700);os.chmod(backup,0o700)
     (backup/"server.py").write_bytes(original);os.chmod(backup/"server.py",0o600)
-    (backup/"manifest.json").write_text(json.dumps({"feature":"direct-posthoc-export-v2","original_sha256":current,"patched_sha256":patched_sha,"paidGenerationRequested":False},indent=2)+"
-");os.chmod(backup/"manifest.json",0o600)
+    (backup/"manifest.json").write_text(json.dumps({"feature":"direct-posthoc-export-v2","original_sha256":current,"patched_sha256":patched_sha,"paidGenerationRequested":False},indent=2)+"\n");os.chmod(backup/"manifest.json",0o600)
     mode=stat.S_IMODE(server.stat().st_mode);stopped=False
     try:
         if active_jobs(source)!=0:raise InstallError("A model job started during maintenance preparation.")
