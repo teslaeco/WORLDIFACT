@@ -68,6 +68,7 @@ export class StudioCoordinator {
   private confirmedJob: StudioJob | null = null
   private rejectedJob: StudioJob | null = null
   private submitting = false
+  private exportPreparations = new Map<string, Promise<{ prepared: boolean; alreadyReady: boolean; formats: string[] }>>()
   private store: ReceiptStore
   private fetcher: Fetcher
   constructor(store: ReceiptStore, fetcher: Fetcher = fetch) { this.store = store; this.fetcher = fetcher.bind(globalThis) }
@@ -155,18 +156,26 @@ export class StudioCoordinator {
   }
   async prepareExports(saved = this.saved): Promise<{ prepared: boolean; alreadyReady: boolean; formats: string[] }> {
     if (!saved) throw new Error('No job receipt is selected.')
-    const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}/exports/prepare`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': saved.receipt.ticket },
-      body: '{}',
-      cache: 'no-store',
-      signal: AbortSignal.timeout(340_000),
-    })
-    const value = await responseJson(response)
-    if (!object(value) || typeof value.prepared !== 'boolean' || typeof value.alreadyReady !== 'boolean' || !Array.isArray(value.formats) ||
-      value.formats.some(format => typeof format !== 'string'))
-      throw new Error('The worker returned an invalid export-preparation result.')
-    return { prepared: value.prepared, alreadyReady: value.alreadyReady, formats: value.formats as string[] }
+    const key = saved.receipt.id
+    const existing = this.exportPreparations.get(key)
+    if (existing) return existing
+    const pending = (async () => {
+      const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}/exports/prepare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': saved.receipt.ticket },
+        body: '{}',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(340_000),
+      })
+      const value = await responseJson(response)
+      if (!object(value) || typeof value.prepared !== 'boolean' || typeof value.alreadyReady !== 'boolean' || !Array.isArray(value.formats) ||
+        value.formats.some(format => typeof format !== 'string'))
+        throw new Error('The worker returned an invalid export-preparation result.')
+      return { prepared: value.prepared, alreadyReady: value.alreadyReady, formats: value.formats as string[] }
+    })()
+    this.exportPreparations.set(key, pending)
+    try { return await pending }
+    catch (error) { this.exportPreparations.delete(key); throw error }
   }
   async artifact(format: 'model' | 'pbr' | 'fbx' | 'blend', saved = this.saved): Promise<Blob> {
     if (!saved) throw new Error('No job receipt is selected.')
@@ -174,16 +183,25 @@ export class StudioCoordinator {
     const read = () => this.fetcher(`/api/studio/jobs/${saved.receipt.id}/${path}`, {
       headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(180_000),
     })
-    let response = await read()
-    // A timeout-recovered job can have its reviewed GLB/model.blend while optional
-    // interchange exports are still absent. Prepare those exports from the saved
-    // Blender file exactly once; never resubmit generation or call paid AI.
-    if (format !== 'model' && response.status === 409) {
-      await response.body?.cancel().catch(() => {})
-      await this.prepareExports(saved)
-      response = await read()
+    // Prepare all optional interchange exports once before the first non-GLB
+    // download. The old GET -> prepare -> immediate GET sequence consumed the same
+    // artifact rate-limit bucket twice and could return HTTP 429 on the retry.
+    // Preparation is no-AI and idempotent; if it is temporarily unavailable we
+    // still try one GET so already-existing exports remain downloadable.
+    let preparationError: unknown = null
+    if (format !== 'model') {
+      try { await this.prepareExports(saved) }
+      catch (error) { preparationError = error }
     }
-    if (!response.ok) { await responseJson(response); throw new Error('The artifact is unavailable.') }
+    const response = await read()
+    if (!response.ok) {
+      if (response.status === 409 && preparationError) {
+        await response.body?.cancel().catch(() => {})
+        throw preparationError
+      }
+      await responseJson(response)
+      throw new Error('The artifact is unavailable.')
+    }
     const maximum = format === 'model' ? STUDIO_MODEL_LIMIT : 512 * 1024 * 1024
     const declared = Number(response.headers.get('content-length') || 0)
     if (declared && declared > maximum) { await response.body?.cancel(); throw new Error('This export is too large for this download.') }
@@ -202,6 +220,6 @@ export class StudioCoordinator {
   clearSelection() {
     if (this.submitting) throw new Error('Wait for submission to finish before changing jobs.')
     if (this.saved) this.preserveReceipt(this.saved)
-    this.store.removeItem(STUDIO_RECEIPT_KEY); this.saved = null; this.confirmedJob = null; this.rejectedJob = null
+    this.store.removeItem(STUDIO_RECEIPT_KEY); this.saved = null; this.confirmedJob = null; this.rejectedJob = null; this.exportPreparations.clear()
   }
 }
