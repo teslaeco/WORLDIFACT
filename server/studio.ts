@@ -85,7 +85,7 @@ async function limit(request: Request, env: StudioEnv, bucket: string) {
   if (!env.GENERATION_LIMITER) throw new StudioError('Request limiter is unavailable.', 503)
   try {
     const key = `studio:${bucket}:${request.headers.get('CF-Connecting-IP') || 'unknown-client'}`
-    if (!(await env.GENERATION_LIMITER.limit({ key })).success) throw new StudioError('Please wait before checking or submitting again.', 429)
+    if (!(await env.GENERATION_LIMITER.limit({ key })).success) throw new StudioError(bucket.startsWith('artifact:') ? 'Please wait a moment before downloading this same export again.' : 'Please wait before checking or submitting again.', 429)
   } catch (e) { if (e instanceof StudioError) throw e; throw new StudioError('Request limiter is unavailable.', 503) }
 }
 function budget(env: StudioEnv) {
@@ -250,7 +250,8 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const user = await accountIdentity(request, env, fetcher)
       const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', match[1], !!user, user?.id)
       const access = await accountAccess(env, user?.id, auth.id)
-      await limit(request, env, match[2] ? 'artifact' : `poll:${auth.id}`)
+      const artifactBucket = match[2] ? `artifact:${match[2].replace('/', '-')}` : ''
+      await limit(request, env, artifactBucket || `poll:${auth.id}`)
       if (match[2]) {
         // Previewing a GLB transfers its complete bytes. A free SLOW preview
         // therefore cannot use this route; an active subscription is required.

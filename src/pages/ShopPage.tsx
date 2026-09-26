@@ -30,7 +30,8 @@ const REASONS: Record<string, string> = {
 const terminal = (state?: string) => ['succeeded', 'failed', 'cancelled'].includes(state || '')
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob), link = document.createElement('a')
-  link.href = url; link.download = name; link.click()
+  link.href = url; link.download = name; link.style.display = 'none'
+  document.body.appendChild(link); link.click(); link.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 type Preview = StudioPreviewIdentity & { blob: Blob; url: string; warning: string }
@@ -339,8 +340,12 @@ export default function ShopPage() {
     const flags = operations.current
     if (flags.artifact || !saved || !mayExportCurrentJob(saved.receipt.id, job?.state, preview) || !coordinator.current) return
     if (job?.downloadAllowed === false || (saved.generationProfile === FAST_DRAFT_PROFILE && !['model', 'blend'].includes(format))) return
-    flags.artifact = true; setArtifactBusy(true)
-    try { const blob = await coordinator.current.artifact(format, saved); download(blob, `WORLDIFACT-${saved.receipt.id}.${format === 'pbr' ? 'textures.zip' : format === 'model' ? 'glb' : format}`) }
+    flags.artifact = true; setArtifactBusy(true); setError('')
+    try {
+      const filename = `WORLDIFACT-${saved.receipt.id}.${format === 'pbr' ? 'textures.zip' : format === 'model' ? 'glb' : format}`
+      if (format === 'model' && preview?.origin === 'job' && preview.id === saved.receipt.id && preview.blob.size) download(preview.blob, filename)
+      else download(await coordinator.current.artifact(format, saved), filename)
+    }
     catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'This export is not available on the connected worker.') }
     finally { flags.artifact = false; if (mounted.current) setArtifactBusy(false) }
   }
