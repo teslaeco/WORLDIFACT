@@ -44,6 +44,7 @@ jobs:
           python3 -B tools/export_prepare/test_export_prepare.py -v
           python3 -B tools/export_prepare/test_direct_v33_export.py -v
           python3 -B tools/export_prepare/test_install_direct_v33_export.py -v
+          python3 -B tools/export_prepare/test_upgrade_direct_v33_export.py -v
           python3 -B tools/export_prepare/test_oracle_direct_export_launcher.py -v
       - name: Confirm review did not execute maintenance or AI
         run: |
