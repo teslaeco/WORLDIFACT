@@ -155,3 +155,18 @@ test('photo bytes and requested texture limit reach the existing protocol, never
   assert.equal((await blocked.call('/api/studio/prepare', 'POST', body)).status, 409)
   assert.equal(posts(blocked).length, 0)
 })
+
+test('different export formats use independent limiter buckets for the same owned job', async () => {
+  const f = fixture(), seen = new Set<string>()
+  f.env.GENERATION_LIMITER = { async limit({ key }: { key: string }) {
+    if (seen.has(key)) return { success: false }
+    seen.add(key); return { success: true }
+  } }
+  const prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  const base = `/api/studio/jobs/${prepared.id}`
+  assert.equal((await f.call(base + '/exports/prepare', 'POST', {}, prepared.ticket)).status, 200)
+  assert.equal((await f.call(base + '/exports/pbr', 'GET', undefined, prepared.ticket)).status, 200)
+  assert.equal((await f.call(base + '/exports/fbx', 'GET', undefined, prepared.ticket)).status, 200)
+  assert.ok([...seen].some(key => key.includes(`artifact:${prepared.id}:pbr`)))
+  assert.ok([...seen].some(key => key.includes(`artifact:${prepared.id}:fbx`)))
+})
