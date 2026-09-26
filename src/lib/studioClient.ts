@@ -154,6 +154,23 @@ export class StudioCoordinator {
       return rejected
     }
   }
+  async reconcileMissing(saved = this.saved): Promise<StudioJob> {
+    if (!saved) throw new Error('No job receipt is selected.')
+    const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}/reconcile-missing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': saved.receipt.ticket },
+      body: '{}',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(45_000),
+    })
+    const job = parseStudioJob(await responseJson(response), saved.receipt.id)
+    if (this.saved?.receipt.id === job.id) {
+      this.confirmedJob = job
+      if (job.state === 'failed' || job.state === 'cancelled') this.rejectedJob = job
+    }
+    return job
+  }
+
   async prepareExports(saved = this.saved): Promise<{ prepared: boolean; alreadyReady: boolean; formats: string[] }> {
     if (!saved) throw new Error('No job receipt is selected.')
     const key = saved.receipt.id
