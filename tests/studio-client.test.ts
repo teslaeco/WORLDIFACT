@@ -88,3 +88,27 @@ test('explicit account quota rejection stays terminal across reload without endl
   restored.clearSelection()
   assert.equal(restored.current, null)
 })
+
+test('optional exports prepare once before download and never perform the old GET-prepare-GET retry', async () => {
+  const storage = store()
+  storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: new Date().toISOString() }))
+  const calls: { url: string; method: string }[] = []
+  const fake = (async (url: string | URL | Request, init?: RequestInit) => {
+    const target = String(url), method = init?.method ?? 'GET'
+    calls.push({ url: target, method })
+    if (target.endsWith('/exports/prepare')) return Response.json({ prepared: true, alreadyReady: false, formats: ['pbr', 'fbx', 'blend'] })
+    if (target.endsWith('/exports/pbr') || target.endsWith('/exports/fbx')) {
+      return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Length': '3', 'Content-Type': 'application/octet-stream' } })
+    }
+    throw new Error('Unexpected request: ' + target)
+  }) as typeof fetch
+  const client = new StudioCoordinator(storage, fake)
+  client.restore()
+  assert.equal((await client.artifact('pbr')).size, 3)
+  assert.equal((await client.artifact('fbx')).size, 3)
+  assert.deepEqual(calls, [
+    { url: `/api/studio/jobs/${id}/exports/prepare`, method: 'POST' },
+    { url: `/api/studio/jobs/${id}/exports/pbr`, method: 'GET' },
+    { url: `/api/studio/jobs/${id}/exports/fbx`, method: 'GET' },
+  ])
+})
