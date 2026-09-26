@@ -160,7 +160,7 @@ export class StudioCoordinator {
       headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': saved.receipt.ticket },
       body: '{}',
       cache: 'no-store',
-      signal: AbortSignal.timeout(190_000),
+      signal: AbortSignal.timeout(340_000),
     })
     const value = await responseJson(response)
     if (!object(value) || typeof value.prepared !== 'boolean' || typeof value.alreadyReady !== 'boolean' || !Array.isArray(value.formats) ||
