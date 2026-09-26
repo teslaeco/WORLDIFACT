@@ -89,15 +89,18 @@ test('explicit account quota rejection stays terminal across reload without endl
   assert.equal(restored.current, null)
 })
 
-test('optional exports prepare once before download and never perform the old GET-prepare-GET retry', async () => {
+test('missing optional exports prepare once and retry through a separate prepared read stage', async () => {
   const storage = store()
   storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: new Date().toISOString() }))
-  const calls: { url: string; method: string }[] = []
+  const calls: { url: string; method: string; stage: string | null }[] = []
+  const reads = new Map<string, number>()
   const fake = (async (url: string | URL | Request, init?: RequestInit) => {
-    const target = String(url), method = init?.method ?? 'GET'
-    calls.push({ url: target, method })
+    const target = String(url), method = init?.method ?? 'GET', stage = new Headers(init?.headers).get('X-WORLDIFACT-Artifact-Stage')
+    calls.push({ url: target, method, stage })
     if (target.endsWith('/exports/prepare')) return Response.json({ prepared: true, alreadyReady: false, formats: ['pbr', 'fbx', 'blend'] })
     if (target.endsWith('/exports/pbr') || target.endsWith('/exports/fbx')) {
+      const count = (reads.get(target) ?? 0) + 1; reads.set(target, count)
+      if (count === 1) return Response.json({ error: 'missing export' }, { status: 409 })
       return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Length': '3', 'Content-Type': 'application/octet-stream' } })
     }
     throw new Error('Unexpected request: ' + target)
@@ -107,8 +110,10 @@ test('optional exports prepare once before download and never perform the old GE
   assert.equal((await client.artifact('pbr')).size, 3)
   assert.equal((await client.artifact('fbx')).size, 3)
   assert.deepEqual(calls, [
-    { url: `/api/studio/jobs/${id}/exports/prepare`, method: 'POST' },
-    { url: `/api/studio/jobs/${id}/exports/pbr`, method: 'GET' },
-    { url: `/api/studio/jobs/${id}/exports/fbx`, method: 'GET' },
+    { url: `/api/studio/jobs/${id}/exports/pbr`, method: 'GET', stage: 'initial' },
+    { url: `/api/studio/jobs/${id}/exports/prepare`, method: 'POST', stage: null },
+    { url: `/api/studio/jobs/${id}/exports/pbr`, method: 'GET', stage: 'prepared' },
+    { url: `/api/studio/jobs/${id}/exports/fbx`, method: 'GET', stage: 'initial' },
+    { url: `/api/studio/jobs/${id}/exports/fbx`, method: 'GET', stage: 'prepared' },
   ])
 })
