@@ -41,7 +41,7 @@ export async function inspectWorldifactServices(fetcher = fetch) {
       // Keep both values visible; never turn fastReady into generationReady.
       for (const key of ['generationReady', 'ready', 'photoReady', 'fastReady', 'fastBudgetReady']) if (typeof body[key] === 'boolean') record[key] = body[key]
       for (const key of ['oracle', 'mode', 'reason']) if (typeof body[key] === 'string' && /^[A-Z_]{1,60}$/.test(body[key])) record[key] = body[key]
-      for (const key of ['connectorVersion', 'characterStandard']) if (Number.isSafeInteger(body[key])) record[key] = body[key]
+      for (const key of ['connectorVersion', 'characterStandard', 'posthocExportRevision', 'legacyGlbExportRecoveryRevision', 'projectFilesRevision']) if (Number.isSafeInteger(body[key])) record[key] = body[key]
       if (body.allowance) record.allowance = Object.fromEntries(['used', 'limit', 'remaining'].filter(key => Number.isSafeInteger(body.allowance[key])).map(key => [key, body.allowance[key]]))
       results.push(record)
     } catch { results.push({ path, http: 'UNKNOWN', generation: 'NOT_REQUESTED' }) }

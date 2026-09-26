@@ -1,3 +1,18 @@
+# WORLDIFACT — P0 download/NPC repair live release, 26 September 2026
+
+**Status: LIVE · MERGED · PRODUCTION VERIFIED.** PR #117 was squash-merged as `62d953c4dcc7a39282b978d5d8231e0fa1fdf706`.
+
+- Main CI run `36234284770`: **SUCCESS**.
+- Production workflow `36234284830`: **SUCCESS**.
+- Cloudflare version: `c63a9626-0bc6-402e-b645-da08cbb4accf`.
+- Public release smoke: **PASS** for 16 HTML routes, 43 matching hub assets and 105 original app entries/assets.
+- The published same-origin ForgeMPC2 worker GLB was build-verified at 10,343,368 bytes / SHA-256 `4b7e83d07723be958e7325f1cd7afc509ebc72d61a6357925c824ac716052adf` and included in release verification.
+- Production diagnostics report Oracle `CONNECTOR_READY`, `connectorVersion: 33`. This confirms the live Oracle connector is reachable; the deploy diagnostic does not currently expose `posthocExportRevision` / `legacyGlbExportRecoveryRevision`, so those exact revision markers are not inferred from this release log.
+- The Android HTTP 429 self-throttling path is removed: missing PBR/FBX/BLEND recovery uses an `initial` artifact read, one cached no-AI prepare on 409, then one separately rate-limited `prepared` read.
+- No paid AI/model request was made by CI or deployment.
+
+---
+
 # WORLDIFACT — Android export 429 + Forge worker delivery repair, 26 September 2026
 
 **Status: IMPLEMENTED ON REVIEW BRANCH · CODE HEAD CI VERIFIED · MERGE / PRODUCTION / ORACLE CAPABILITY VERIFICATION PENDING.** Branch: `fix/p0-downloads-forge-same-origin-20260926`.
