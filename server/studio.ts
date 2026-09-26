@@ -272,7 +272,8 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const user = await accountIdentity(request, env, fetcher)
       const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', match[1], !!user, user?.id)
       const access = await accountAccess(env, user?.id, auth.id)
-      await limit(request, env, match[2] ? `artifact:${auth.id}:${match[2].replace('exports/', '')}` : `poll:${auth.id}`)
+      const artifactStage = request.headers.get('X-WORLDIFACT-Artifact-Stage') === 'prepared' ? 'prepared' : 'initial'
+      await limit(request, env, match[2] ? `artifact:${auth.id}:${match[2].replace('exports/', '')}:${artifactStage}` : `poll:${auth.id}`)
       if (match[2]) {
         // The signed receipt plus account ownership is the download entitlement
         // for completed customer models. This enables transfer to downstream/B2B
