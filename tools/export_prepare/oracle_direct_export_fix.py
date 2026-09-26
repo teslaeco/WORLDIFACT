@@ -17,7 +17,7 @@ FILES={
     "patch_server.py":"e034736a4123bd16e973aa52843dff04aa367cc0",
     "upgrade_direct_v33_export.py":"4c7758da210c7c04b0f51dfaa95ab5cf7c0c83bc",
     "install_direct_v33_export_v3.py":"dc69b5687aa3c3eeae4e403e3618ec761a0c4acf",
-    "oracle_worker_e2e.py":"5230b3adb092c44a1820c58c88e3e7023b0da604",
+    "oracle_worker_e2e.py":"0dd23e8e32989f3cf5493dd1f0ea10ffdeb05af1",
 }
 SUCCESS={"INSTALLED_AND_LOCALLY_VERIFIED","ALREADY_INSTALLED_AND_VERIFIED"}
 
