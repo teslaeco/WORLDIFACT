@@ -177,28 +177,23 @@ export class StudioCoordinator {
     try { return await pending }
     catch (error) { this.exportPreparations.delete(key); throw error }
   }
-  async artifact(format: 'model' | 'pbr' | 'fbx' | 'blend', saved = this.saved): Promise<Blob> {
+  async artifact(format: 'model' | 'pbr' | 'fbx' | 'blend', saved = this.saved, options: { prepareMissing?: boolean } = {}): Promise<Blob> {
     if (!saved) throw new Error('No job receipt is selected.')
     const path = format === 'model' ? 'model' : `exports/${format}`
-    const read = () => this.fetcher(`/api/studio/jobs/${saved.receipt.id}/${path}`, {
-      headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(180_000),
+    const read = (stage: 'initial' | 'prepared' = 'initial') => this.fetcher(`/api/studio/jobs/${saved.receipt.id}/${path}`, {
+      headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket, 'X-WORLDIFACT-Artifact-Stage': stage },
+      cache: 'no-store', signal: AbortSignal.timeout(180_000),
     })
-    // Prepare all optional interchange exports once before the first non-GLB
-    // download. The old GET -> prepare -> immediate GET sequence consumed the same
-    // artifact rate-limit bucket twice and could return HTTP 429 on the retry.
-    // Preparation is no-AI and idempotent; if it is temporarily unavailable we
-    // still try one GET so already-existing exports remain downloadable.
-    let preparationError: unknown = null
-    if (format !== 'model') {
-      try { await this.prepareExports(saved) }
-      catch (error) { preparationError = error }
+    // Read existing exports first. Only a worker 409 may trigger the idempotent
+    // no-AI finalizer. The retry is explicitly marked "prepared" so it consumes
+    // a different bounded server limiter bucket instead of self-throttling.
+    let response = await read()
+    if (format !== 'model' && options.prepareMissing !== false && response.status === 409) {
+      await response.body?.cancel().catch(() => {})
+      await this.prepareExports(saved)
+      response = await read('prepared')
     }
-    const response = await read()
     if (!response.ok) {
-      if (response.status === 409 && preparationError) {
-        await response.body?.cancel().catch(() => {})
-        throw preparationError
-      }
       await responseJson(response)
       throw new Error('The artifact is unavailable.')
     }
