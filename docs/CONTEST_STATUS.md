@@ -1,6 +1,6 @@
 # WORLDIFACT — Grand Desert + Mountain Coast + living Forge workers, 26 September 2026
 
-**Status: REBASED ON CURRENT MAIN · EXACT-HEAD CI / MERGE / PRODUCTION DEVICE QA PENDING.** Rebuilt from PR #107 on top of the current main so Oracle maintenance changes remain intact.
+**Status: LIVE · MERGED · PRODUCTION VERIFIED.** PR #112 rebuilt the expansion on current main, passed all seven exact-head checks, and was squash-merged as `03c345d37e91d3b1af608084c64c676eb86d594f`.
 
 - The central five-portal Riverlight meadow remains the hub. Walkable world bounds expand from roughly ±42 to ±174 GAME units and the meadow support plane expands to ±180.
 - **Grand Desert** begins east/right of the hub at X≈52 and extends to X≈174 with a mobile-bounded dune mesh, rocks and an oasis. The existing editable excavation worksite at X 15–40 / Z 14–39 remains separate and functional.
@@ -12,6 +12,9 @@
 - NPC work loops are fictional GAME activity, not actual B2B labor, manufacturing validation or construction guidance.
 - No paid generation, checkout, supplier order or manufacturing action is part of this feature. Physical Android FPS/visual acceptance and the remote Forge asset's real production fetch remain **UNKNOWN** until post-deploy device QA.
 - Oracle post-hoc export installation remains a separate maintenance blocker; this world expansion does not claim that P0 worker capability is installed.
+- Post-merge main CI run `36224932558`: **SUCCESS**. Production workflow `36224932571`: **SUCCESS**. Cloudflare version `ed1c98bd-5676-4179-9f56-94d724aa5b79` is live at `https://worldifact.xodobrox.workers.dev`.
+- Production diagnostics reported `generation: NOT_REQUESTED` and Oracle `connectorVersion: 33`; this deployment did not spend a new model-generation request.
+- Physical Android FPS/visual acceptance remains **UNKNOWN** until owner device QA.
 
 ---
 
