@@ -1,6 +1,6 @@
 # WORLDIFACT — Android export 429 + Forge worker delivery repair, 26 September 2026
 
-**Status: IMPLEMENTED ON REVIEW BRANCH · CI / MERGE / PRODUCTION / ORACLE CAPABILITY VERIFICATION PENDING.** Branch: `fix/p0-downloads-forge-same-origin-20260926`.
+**Status: IMPLEMENTED ON REVIEW BRANCH · CODE HEAD CI VERIFIED · MERGE / PRODUCTION / ORACLE CAPABILITY VERIFICATION PENDING.** Branch: `fix/p0-downloads-forge-same-origin-20260926`.
 
 - **VERIFIED root cause from current source and owner screenshot:** the optional-export client performed GET → POST prepare → immediate GET. Both artifact GETs used the same Cloudflare rate-limit bucket, so the second read could return HTTP 429 with the exact UI error `Please wait before checking or submitting again.`.
 - The client now reads an existing PBR/FBX/BLEND artifact first. Only HTTP 409 triggers one cached, idempotent, no-AI export-preparation request for that saved job and one retry marked as the `prepared` stage. The read-only world audit explicitly disables preparation and remains GET-only.
@@ -10,6 +10,7 @@
 - The Forge worker is still a generic GAME character; task differences come from WORLDIFACT props/behavior. Procedural workers remain a truthful fallback if the verified GLB cannot load.
 - **BLOCKED / separate dependency:** if an older completed Oracle job never produced PBR/FBX/BLEND, the production Oracle worker still needs the reviewed post-hoc export capability. Merged website code alone does not prove that VM capability is installed. Do not claim legacy missing exports fixed until production health confirms `posthocExportRevision=2` (or equivalent reviewed capability) and an owned saved job succeeds end-to-end.
 - No Astra/OpenAI generation, model submission, checkout, payment, supplier order or manufacturing approval is performed by this repair.
+- Code head `8c363cbdf267d6e9f8e4fe9fe86047601e9b3daa` passed all eight review workflows: Verify WORLDIFACT `36231931579`, ForgeMPC2 source `36231931585`, post-hoc export review `36231931583`, FAST worker `36231931569`, FAST install safety `36231931559`, Cloud Shell launcher `36231931607`, Oracle project-file review `36231931563`, and FAST cost guard `36231931560`. This documentation-only follow-up still requires its own exact-head checks before merge.
 
 ---
 
