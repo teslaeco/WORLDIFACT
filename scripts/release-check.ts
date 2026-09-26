@@ -122,7 +122,27 @@ export async function checkPublishedRelease(deployment: Deployment,
   const platform = await json(await request("/api/platform"), "/api/platform");
   requireCheck(platform.cloudflare === "RESPONDING" && typeof platform.ownerChecks === "boolean",
     "Platform status endpoint did not return its contract");
-  const routes = ["/", "/world", "/login", "/account/credits", "/control", "/privacy", "/terms", "/terra", "/chess/shop", "/builder", "/make", ...PORTALS.map(portal => portal.route)];
+  const oracleWorlds = await json(await request("/api/platform/oracle-worlds"), "/api/platform/oracle-worlds");
+  const studioStatus = await json(await request("/api/studio/status"), "/api/studio/status");
+  if (liveHealth) {
+    requireCheck(oracleWorlds.oracle === "CONNECTOR_READY" && Number(oracleWorlds.connectorVersion) >= 33 &&
+      Number(oracleWorlds.posthocExportRevision) >= 2 && Number(oracleWorlds.legacyGlbExportRecoveryRevision) >= 1,
+      "LIVE release must expose the reviewed Oracle v33 generation/export capability.");
+    requireCheck(studioStatus.ready === true && studioStatus.reason === "READY" &&
+      studioStatus.oracle === "CONNECTOR_READY" && studioStatus.publicPilot === true && studioStatus.accountRequired === true,
+      "LIVE release must advertise the account-enabled Studio as READY.");
+    const unauthenticatedPrepare = await request("/api/studio/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin },
+      body: JSON.stringify({ worldId: "enchanted-ai-shop", prompt: "release audit cube", purpose: "object", textureMaxSize: 2048, photos: [] }),
+    });
+    const denied = await json(unauthenticatedPrepare, "Unauthenticated Studio prepare", 401);
+    requireCheck(typeof denied.error === "string" && /sign in/i.test(denied.error),
+      "LIVE Studio must reject generation preparation without a verified account before any provider call.");
+    await json(await request("/api/account/entitlements"), "/api/account/entitlements", 401);
+  }
+  const routes = ["/", "/world", "/login", "/account", "/account/credits", "/account/reset", "/control", "/privacy", "/terms",
+    "/terra", "/chess/shop", "/builder", "/make", ...PORTALS.map(portal => portal.route), ...PORTALS.map(portal => `/portal/${portal.id}`)];
   for (const path of routes) {
     await matchingAsset(path, digest(expectedHtml), ["text/html"], { headers: { Accept: "text/html" } });
   }
@@ -182,7 +202,8 @@ export async function checkPublishedRelease(deployment: Deployment,
     ...options, headers: { ...options.headers, Origin: "https://invalid-origin.example" },
   });
   await json(rejected, "Cross-origin blueprint request", 403);
-  return { origin, versionId, mode: liveHealth ? "LIVE" : "DEMO", htmlRoutes: routes.length, verifiedAssets: assets.length + sculptureAssets.length, foundationAssets: foundation.files.length };
+  return { origin, versionId, mode: liveHealth ? "LIVE" : "DEMO", htmlRoutes: routes.length, verifiedAssets: assets.length + sculptureAssets.length,
+    foundationAssets: foundation.files.length, studio: liveHealth ? "READY_ACCOUNT_GUARDED" : "DEMO_OR_DISABLED" };
 }
 
 async function main() {
@@ -197,7 +218,7 @@ async function main() {
   console.log(`Deployed URL: ${deployment.origin}`);
   console.log(`Cloudflare version: ${deployment.versionId}`);
   const result = await checkPublishedRelease(deployment);
-  console.log(`PASS: ${result.mode} release; ${result.htmlRoutes} HTML routes, ${result.verifiedAssets} matching hub assets, ${result.foundationAssets} original app entries/assets, API 404, explicit DEMO generation path and origin rejection. No paid API call.`);
+  console.log(`PASS: ${result.mode} release; ${result.htmlRoutes} HTML routes, ${result.verifiedAssets} matching hub assets, ${result.foundationAssets} original app entries/assets, Studio=${result.studio}, API 404, explicit DEMO generation path and origin rejection. No paid API call.`);
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `url=${result.origin}\n`);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY,
     `## WORLDIFACT ${result.mode} release\n\n[Open WORLDIFACT](${result.origin})\n\n` +
