@@ -234,7 +234,7 @@ def connection():
         raise LaunchError('Invalid instance identifier.')
     address=one(invoke(prefix+[
         'compute','instance','list-vnics','--instance-id',instance,'--all',
-        '--query','data[?"is-primary" == \`true\`]."public-ip"','--output','json'
+        '--query','data[?"is-primary" == `true`]."public-ip"','--output','json'
     ]),'primary IP')
     ipaddress.ip_address(address)
     return [
