@@ -9,7 +9,8 @@ const request = (code = token, origin = 'https://worldifact.test') => new Reques
   method: 'POST', headers: { Origin: origin, 'X-WORLDIFACT-Owner': code },
 });
 
-const oracleHealth = { ready: true, provider: 'openai', model: 'gpt-6-astra', connectorVersion: 33, characterStandard: 20 };
+const oracleHealth = { ready: true, provider: 'openai', model: 'gpt-6-astra', connectorVersion: 33, characterStandard: 20,
+  posthocExportRevision: 2, legacyGlbExportRecoveryRevision: 1, projectFilesRevision: 1 };
 
 test('public status does not contact providers or disclose credentials and endpoints', async () => {
   const r = await platformApi(new Request('https://worldifact.test/api/platform'), env, (() => { throw Error('No network expected'); }) as typeof fetch);
@@ -32,10 +33,13 @@ test('one read-only Oracle health check is shared across all five worlds', async
     headers: { 'CF-Connecting-IP': '203.0.113.7' },
   }), { ...env, GENERATION_LIMITER: { limit: async ({ key }) => { limiterKeys.push(key); return { success: true }; } } }, fetcher);
   assert.equal(response.status, 200);
-  const result = await response.json() as { oracle: string; connectorVersion: number; characterStandard: number; provider: string; model: string; worlds: { id: string; oracle: string }[]; evidence: string };
+  const result = await response.json() as { oracle: string; connectorVersion: number; characterStandard: number; posthocExportRevision: number; legacyGlbExportRecoveryRevision: number; projectFilesRevision: number; provider: string; model: string; worlds: { id: string; oracle: string }[]; evidence: string };
   assert.equal(result.oracle, 'CONNECTOR_READY');
   assert.equal(result.connectorVersion, 33);
   assert.equal(result.characterStandard, 20);
+  assert.equal(result.posthocExportRevision, 2);
+  assert.equal(result.legacyGlbExportRecoveryRevision, 1);
+  assert.equal(result.projectFilesRevision, 1);
   assert.equal(result.provider, 'openai');
   assert.equal(result.model, 'gpt-6-astra');
   assert.deepEqual(result.worlds.map(item => item.id), [...ORACLE_WORLD_IDS]);
