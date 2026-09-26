@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 
 from patch_server import patch_server
@@ -75,19 +76,28 @@ def local_health(source):
     value=json.loads(regular(config_path,16384))
     token=value.get('token')
     if not isinstance(token,str) or not 20<=len(token)<=256:raise InstallError('Worker token is invalid.')
-    request=urllib.request.Request('http://127.0.0.1:8765/v1/health',
-        headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
-    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    with opener.open(request,timeout=12) as response:
-        if response.status!=200:raise InstallError('Local health did not return 200.')
-        body=json.loads(response.read(32768))
-    if body.get('ready') is not True or body.get('provider')!='openai' or body.get('model')!='gpt-6-astra':
-        raise InstallError('Existing worker is not ready after restart.')
-    if body.get('connectorVersion')!=33:
-        raise InstallError('Connector version changed unexpectedly.')
-    if body.get('projectFilesRevision')!=1 or body.get('projectFileMaxBytes')!=100*1024*1024 or body.get('projectFileMaxCount')!=2:
-        raise InstallError('Project-file capability was not verified after restart.')
-    return {'connectorVersion':33,'projectFilesRevision':1,'projectFileMaxBytes':100*1024*1024,'projectFileMaxCount':2}
+    last_transport=None
+    deadline=time.monotonic()+60
+    while time.monotonic()<deadline:
+        try:
+            request=urllib.request.Request('http://127.0.0.1:8765/v1/health',
+                headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+            opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(request,timeout=8) as response:
+                if response.status!=200:raise InstallError('Local health did not return 200.')
+                body=json.loads(response.read(32768))
+            if body.get('ready') is not True or body.get('provider')!='openai' or body.get('model')!='gpt-6-astra':
+                raise InstallError('Existing worker is not ready after restart.')
+            if body.get('connectorVersion')!=33:
+                raise InstallError('Connector version changed unexpectedly.')
+            if body.get('projectFilesRevision')!=1 or body.get('projectFileMaxBytes')!=100*1024*1024 or body.get('projectFileMaxCount')!=2:
+                raise InstallError('Project-file capability was not verified after restart.')
+            return {'connectorVersion':33,'projectFilesRevision':1,'projectFileMaxBytes':100*1024*1024,'projectFileMaxCount':2}
+        except (urllib.error.URLError,ConnectionError,TimeoutError,OSError) as error:
+            last_transport=error
+            if service_state(WORKER)=='failed':raise InstallError('Worker failed while waiting for local health.') from None
+            time.sleep(2)
+    raise InstallError('Worker did not reopen local health within 60 seconds after restart.') from last_transport
 
 def install(source):
     source=Path(source).resolve()
