@@ -11,6 +11,8 @@
 - One explicit owner-approved production smoke is gated by `ops/P0_FULL_RECOVERY_SMOKE_20260926`: one deterministic Oracle job ID, bounded busy retry only after explicit 409 non-acceptance, then real GLB + PBR ZIP + FBX + BLEND validation. Secrets are not printed.
 - Payments, orders, supplier actions and manufacturing approval are outside this recovery.
 
+---
+
 # WORLDIFACT — Oracle queue heartbeat follow-up, 26 September 2026
 
 **Status: IMPLEMENTED ON REVIEW BRANCH · CI PENDING · NO JOB CANCELLATION.**
@@ -91,3 +93,36 @@
 - New terrain and workers are outside the five-portal line and do not replace Giant Tower, spawn or owner vehicles. Camera/fog/world movement limits expand to expose the new biomes.
 - Living NPC plans use finite deterministic GAME loops: planting saplings, carrying material, assembling simple blocks and surveying. Mobile is capped at 4 NPCs; desktop at 7.
 - Pinned ForgeMPC2 candidate: `teslaeco/Froge-MPC-2-test@bac2827fc1ec31e71dc0f5c586df43c507338725` / `public/models/rapper-v10.glb` / Git blob `25d3a7f62fb97844843e3007d498a3d93a927d42` / 10,343,368 bytes. Provenance and licensing are recorded in `ASSET_LICENSES.md`.
+- The Forge GLB is loaded only after core world startup (12 s mobile / 6 s desktop), validated for expected byte length + GLB container and cloned for NPC visuals. Procedural GAME workers remain as a safe fallback if the optional remote asset is unavailable.
+- NPC work loops are fictional GAME activity, not actual B2B labor, manufacturing validation or construction guidance.
+- No paid generation, checkout, supplier order or manufacturing action is part of this feature. Physical Android FPS/visual acceptance and the remote Forge asset's real production fetch remain **UNKNOWN** until post-deploy device QA.
+- Oracle post-hoc export installation remains a separate maintenance blocker; this world expansion does not claim that P0 worker capability is installed.
+- Post-merge main CI run `36224932558`: **SUCCESS**. Production workflow `36224932571`: **SUCCESS**. Cloudflare version `ed1c98bd-5676-4179-9f56-94d724aa5b79` is live at `https://worldifact.xodobrox.workers.dev`.
+- Production diagnostics reported `generation: NOT_REQUESTED` and Oracle `connectorVersion: 33`; this deployment did not spend a new model-generation request.
+- Physical Android FPS/visual acceptance remains **UNKNOWN** until owner device QA.
+
+---
+
+# WORLDIFACT — universal owned downloads + no-AI post-hoc exports, 26 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · ORACLE POST-HOC EXPORT PATCH REVIEW/INSTALLATION PENDING.** Issue #104 records the owner-requested download repair.
+
+- Completed model ownership, not monthly membership, is now the artifact access boundary. Signed receipt + account ownership are still required; another account cannot fetch the job.
+- Successful owned SLOW/FAST Studio jobs report downloadable preview/file access. The Shop exposes GLB, PBR, FBX and Blender controls for the completed current job without a subscription gate.
+- GLB download remains read-only. For PBR/FBX/BLEND, the client first performs the normal GET. On worker HTTP 409 it calls the new same-origin `POST /api/studio/jobs/:id/exports/prepare` once and retries that artifact.
+- The preparation route is explicitly **NO AI / NO NEW GENERATION**: it proxies only to a reviewed Oracle worker post-hoc finalizer for the same saved job. It does not reserve generation allowance/credits, submit `/v1/jobs`, call Astra/OpenAI, create checkout or place a B2B order.
+- A narrow worker source patch is under `tools/export_prepare/`. It targets the exact current FAST-v33 + project-files server SHA-256 `6795c356d67c72f4aed545505772182f907c9a242ad0cf0076689720a386bb14`, requires the job to be succeeded, requires the saved `model.glb` and `model.blend`, refuses to compete with an active generation, runs only `run_blender_finalize(..., finalize=True)`, verifies the base GLB SHA-256 did not change, and reports only actually available formats.
+- Downloaded files are for user backup / downstream B2B review. They are **not** automatically MAKE-approved, manufacturing-ready, supplier-approved or ordered.
+- Production Oracle installation is still **BLOCKED/PENDING** until the exact worker patch passes CI and can be applied through the existing controlled Oracle maintenance path. Site deployment alone must not claim missing worker exports are fixed.
+- No paid model generation, payment, checkout, supplier order or manufacturing approval is part of this repair.
+
+---
+
+# WORLDIFACT — mobile Queen + Giant Tower + Shop artifact QA, 25 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · EXACT-HEAD CI / MERGE / PRODUCTION VERIFICATION PENDING.** Issue #101 records the owner-reported Android regression.
+
+- **Queen:** the exact pinned Neptune Queen remains SHA-256 `1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba`, 27,676,800 decoded GLB bytes, Oracle source job `99397623-e45c-48dc-95ec-6f84446a54d5`. Build preparation now publishes the same verified GLB as two bounded raw static parts below the Cloudflare per-file ceiling. The mobile client reconstructs those exact bytes directly from static assets, validates the completed GLB header/length and uses three bounded retries. It no longer depends on the avatar Worker/content-encoding path for Queen rendering. The existing gzip/API release remains available for compatibility.
+- **Release gate:** production smoke now hashes both Queen static raw parts against the exact build output before a release can pass. No substitute Queen is allowed.
+- **Giant Tower:** client loading still uses the exact build/release-verified 585,484-byte GAME derivative, but Android rendering no longer depends on runtime WebCrypto. The model is grounded from its actual parsed bounds and moved to `(-8,-18)` with entrance at `(-8,-6.8)` so it is clearly ahead/left of the initial player while remaining outside the river/portal line.
+- **Existing AI Shop job audit:** the five-portal world gains **Import last Shop model + test downloads**. It restores only the existing same-device signed Studio receipt, polls that same job and performs GET-only reads of GLB, PBR ZIP, FBX and BLEND. It never prepares/submits/resubmits generation. A valid GLB is added to the meadow with its embedded materials/textures; successful PBR/FBX/BLEND blobs trigger browser download attempts and every format reports its real success/failure.
