@@ -1185,3 +1185,13 @@ Public URLs:
 - AI Game Lab: https://worldifact.xodobrox.workers.dev/lab
 - Terra Observation inside WORLDIFACT: https://worldifact.xodobrox.workers.dev/terra
 - Original Terra Observation: https://terraforming-planet.github.io/Polar-Sun-Moon-Analysis/
+
+
+## 2026-09-26 — Oracle export-preparation operations + PR audit
+
+- Repository PR inventory audit: `docs/PR_AUDIT_2026-09-26.md`.
+- P0 site-side download recovery remains the merged PR #105 implementation.
+- The worker installer remains `tools/export_prepare/install_export_prepare.py` and still requires the exact reviewed v33 + project-files source SHA-256 before any change.
+- Added `tools/export_prepare/oracle_launch.py`: an Oracle Cloud Shell launcher pinned to main `81521fa275525b3369e0b876f05c3cfab257321a` and exact Git blob IDs for the two reviewed export-preparation files. It uses the existing Cloud Shell key only through `ssh -i`, keeps strict host-key checking, records one systemd maintenance attempt, never uploads the key and never starts generation.
+- Installation is complete only when the launcher reports `INSTALLED_AND_LOCALLY_VERIFIED` or `ALREADY_INSTALLED_AND_VERIFIED` together with `posthocExportRevision: 1`, and both `froge-worker.service` and `froge-tunnel.service` are active.
+- No paid AI request, new generation, checkout, B2B order or manufacturing action is part of this maintenance path.
