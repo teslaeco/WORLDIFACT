@@ -39,8 +39,8 @@ function fixture(used = 5) {
     if (String(url).includes('/exports/')) return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Length': '3', 'Content-Type': 'application/zip' } })
     return Response.json({ state: 'succeeded', detail: 'PRIVATE detail must not be echoed' })
   }) as typeof fetch
-  const call = (path: string, method = 'GET', body?: unknown, ticket?: string, requestOrigin = origin) => studioApi(new Request(origin + path, {
-    method, headers: { Origin: requestOrigin, 'Content-Type': 'application/json', ...(ticket ? { 'X-WORLDIFACT-Job': ticket } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  const call = (path: string, method = 'GET', body?: unknown, ticket?: string, requestOrigin = origin, extraHeaders: Record<string, string> = {}) => studioApi(new Request(origin + path, {
+    method, headers: { Origin: requestOrigin, 'Content-Type': 'application/json', ...(ticket ? { 'X-WORLDIFACT-Job': ticket } : {}), ...extraHeaders }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   }), env, fetcher)
   return { env, values, calls, call, object, loseResponse: () => { acceptLost = true }, blockPhotos: () => { photoReady = false }, corruptModel: () => { invalidModel = true } }
 }
@@ -156,7 +156,7 @@ test('photo bytes and requested texture limit reach the existing protocol, never
   assert.equal(posts(blocked).length, 0)
 })
 
-test('different export formats use independent limiter buckets for the same owned job', async () => {
+test('artifact limiter separates initial and prepared retry stages plus export formats', async () => {
   const f = fixture(), seen = new Set<string>()
   f.env.GENERATION_LIMITER = { async limit({ key }: { key: string }) {
     if (seen.has(key)) return { success: false }
@@ -165,8 +165,10 @@ test('different export formats use independent limiter buckets for the same owne
   const prepared = await data(f.call('/api/studio/prepare', 'POST', input))
   const base = `/api/studio/jobs/${prepared.id}`
   assert.equal((await f.call(base + '/exports/prepare', 'POST', {}, prepared.ticket)).status, 200)
-  assert.equal((await f.call(base + '/exports/pbr', 'GET', undefined, prepared.ticket)).status, 200)
-  assert.equal((await f.call(base + '/exports/fbx', 'GET', undefined, prepared.ticket)).status, 200)
-  assert.ok([...seen].some(key => key.includes(`artifact:${prepared.id}:pbr`)))
-  assert.ok([...seen].some(key => key.includes(`artifact:${prepared.id}:fbx`)))
+  assert.equal((await f.call(base + '/exports/pbr', 'GET', undefined, prepared.ticket, origin, { 'X-WORLDIFACT-Artifact-Stage': 'initial' })).status, 200)
+  assert.equal((await f.call(base + '/exports/pbr', 'GET', undefined, prepared.ticket, origin, { 'X-WORLDIFACT-Artifact-Stage': 'prepared' })).status, 200)
+  assert.equal((await f.call(base + '/exports/fbx', 'GET', undefined, prepared.ticket, origin, { 'X-WORLDIFACT-Artifact-Stage': 'initial' })).status, 200)
+  assert.ok([...seen].some(key => key.includes(`artifact:${prepared.id}:pbr:initial`)))
+  assert.ok([...seen].some(key => key.includes(`artifact:${prepared.id}:pbr:prepared`)))
+  assert.ok([...seen].some(key => key.includes(`artifact:${prepared.id}:fbx:initial`)))
 })
