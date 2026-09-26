@@ -48,20 +48,26 @@ export function forgeNpcPlans(mobile: boolean) {
   return PLANS.slice(0, mobile ? 4 : 7);
 }
 
-function npcLabel(task: NpcTask) {
-  const canvas=document.createElement("canvas"); canvas.width=256; canvas.height=80;
-  const ctx=canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle="rgba(8,20,24,.82)"; ctx.fillRect(0,0,256,80);
-    ctx.strokeStyle="rgba(255,244,199,.9)"; ctx.lineWidth=4; ctx.strokeRect(3,3,250,74);
-    ctx.textAlign="center"; ctx.fillStyle="#fff4c7"; ctx.font="bold 24px sans-serif";
-    ctx.fillText("FIELD NPC",128,31);
-    ctx.fillStyle="#ffffff"; ctx.font="18px sans-serif"; ctx.fillText(task.toUpperCase(),128,58);
-  }
-  const texture=new THREE.CanvasTexture(canvas);
-  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false}));
-  sprite.name="forge-worker-label"; sprite.position.set(0,2.65,0); sprite.scale.set(2.9,.9,1);
-  return sprite;
+function npcMarker(task: NpcTask) {
+  const root = new THREE.Group(); root.name = "forge-worker-visible-marker";
+  const taskColor = task === "planting" ? "#8ee39a" : task === "building" ? "#ffcf72" : task === "carrying" ? "#90caf9" : "#ce93d8";
+  const halo = new THREE.Mesh(
+    new THREE.TorusGeometry(.42,.07,7,18),
+    new THREE.MeshBasicMaterial({ color:taskColor, transparent:true, opacity:.92, depthWrite:false }),
+  );
+  halo.rotation.x=Math.PI/2; halo.position.y=2.62;
+  const diamond = new THREE.Mesh(
+    new THREE.OctahedronGeometry(.19,0),
+    new THREE.MeshBasicMaterial({ color:"#fff4c7", transparent:true, opacity:.96, depthWrite:false }),
+  );
+  diamond.position.y=2.62;
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(.018,.018,.72,6),
+    new THREE.MeshBasicMaterial({ color:taskColor, transparent:true, opacity:.6, depthWrite:false }),
+  );
+  stem.position.y=2.22;
+  root.add(halo,diamond,stem);
+  return root;
 }
 
 function material(color: string) {
@@ -149,7 +155,7 @@ export function createForgeNpcSystem(
   const root = new THREE.Group(); root.name = "forge-mpc2-living-workers"; root.userData.provenance = "FORGEMPC2_MIT__CC0_ANATOMY_COMPONENTS";
   const npcs: RuntimeNpc[] = forgeNpcPlans(mobile).map((plan,index) => {
     const npcRoot = new THREE.Group(); npcRoot.name = plan.id; npcRoot.position.set(plan.from.x,groundAt(plan.from.x,plan.from.z),plan.from.z);
-    const visual = fallbackWorker(index), prop = taskProp(plan.task), label = npcLabel(plan.task); npcRoot.add(visual,prop,label); root.add(npcRoot);
+    const visual = fallbackWorker(index), prop = taskProp(plan.task), marker = npcMarker(plan.task); npcRoot.add(visual,prop,marker); root.add(npcRoot);
     return { plan, root:npcRoot, visual, prop };
   });
   const missionResults = new THREE.Group(); missionResults.name = "field-mission-results"; root.add(missionResults);
