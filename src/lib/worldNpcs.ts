@@ -1,4 +1,15 @@
 import * as THREE from "three";
+import {
+  applyMissionInteraction,
+  createMissionState,
+  missionInteraction,
+  missionMessage,
+  missionStatus,
+  missionTarget,
+  type MissionContext,
+  type MissionPoint,
+  type MissionTask,
+} from "./worldNpcMissions.ts";
 
 export const FORGE_WORKER_SOURCE = Object.freeze({
   repository: "teslaeco/Froge-MPC-2-test",
@@ -11,7 +22,7 @@ export const FORGE_WORKER_SOURCE = Object.freeze({
   label: "Forge Worker · generic adult static example",
 });
 
-export type NpcTask = "planting" | "building" | "carrying" | "surveying";
+export type NpcTask = MissionTask;
 export type NpcPlan = {
   id: string;
   task: NpcTask;
@@ -72,6 +83,31 @@ function taskProp(task: NpcTask) {
   return root;
 }
 
+function missionResult(task: NpcTask) {
+  const root = new THREE.Group(); root.name = "field-mission-result-" + task; root.userData.provenance = "GAME_GENERATED_FIELD_MISSION_RESULT";
+  if (task === "planting") {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.09,.13,1.6,7), material("#6d4b31")); trunk.position.y=.8;
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(.85,1.8,9), material("#3f8d52")); crown.position.y=2.05;
+    root.add(trunk,crown);
+  } else if (task === "building") {
+    for (let i=0;i<3;i++) {
+      const block = new THREE.Mesh(new THREE.BoxGeometry(1.1,.5,.5), material(i === 2 ? "#65717c" : "#b38e69"));
+      block.position.set((i-1)*.9,.25 + i*.48,0); root.add(block);
+    }
+  } else if (task === "carrying") {
+    for (let i=0;i<3;i++) {
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(.65,.5,.58), material("#9a6f3f"));
+      crate.position.set((i-1)*.58,.25 + (i===1?.5:0),0); root.add(crate);
+    }
+  } else {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,2,7), material("#d8e0d5")); pole.position.y=1;
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(.65,.3,.035), material("#ffcf72")); flag.position.set(.34,1.7,0);
+    root.add(pole,flag);
+  }
+  root.traverse(o=>{ if(o instanceof THREE.Mesh){o.castShadow=true;o.receiveShadow=true;} });
+  return root;
+}
+
 type RuntimeNpc = {
   plan: NpcPlan;
   root: THREE.Group;
@@ -84,17 +120,63 @@ function faceAlong(root: THREE.Object3D, dx: number, dz: number) {
   if (Math.abs(dx) + Math.abs(dz) > .001) root.rotation.y = Math.atan2(-dx, -dz);
 }
 
-export function createForgeNpcSystem(scene: THREE.Scene, mobile: boolean, groundAt: (x: number, z: number) => number, onStatus?: (value: string) => void) {
+export function createForgeNpcSystem(
+  scene: THREE.Scene,
+  mobile: boolean,
+  groundAt: (x: number, z: number) => number,
+  onStatus?: (value: string) => void,
+  onMissionStatus?: (value: string) => void,
+) {
   const root = new THREE.Group(); root.name = "forge-mpc2-living-workers"; root.userData.provenance = "FORGEMPC2_MIT__CC0_ANATOMY_COMPONENTS";
   const npcs: RuntimeNpc[] = forgeNpcPlans(mobile).map((plan,index) => {
     const npcRoot = new THREE.Group(); npcRoot.name = plan.id; npcRoot.position.set(plan.from.x,groundAt(plan.from.x,plan.from.z),plan.from.z);
     const visual = fallbackWorker(index), prop = taskProp(plan.task); npcRoot.add(visual,prop); root.add(npcRoot);
     return { plan, root:npcRoot, visual, prop };
   });
+  const missionResults = new THREE.Group(); missionResults.name = "field-mission-results"; root.add(missionResults);
+  const marker = new THREE.Group(); marker.name = "field-mission-marker"; marker.visible = false;
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(.8,1.15,28),
+    new THREE.MeshBasicMaterial({ color:"#fff1a8", transparent:true, opacity:.9, side:THREE.DoubleSide, depthWrite:false }),
+  );
+  ring.rotation.x = -Math.PI/2; marker.add(ring);
+  const beacon = new THREE.Mesh(
+    new THREE.CylinderGeometry(.04,.04,2.8,6),
+    new THREE.MeshBasicMaterial({ color:"#fff4c7", transparent:true, opacity:.55, depthWrite:false }),
+  );
+  beacon.position.y=1.4; marker.add(beacon); root.add(marker);
+
+  let missionState = createMissionState();
+  const contexts = (): MissionContext[] => npcs.map(item => ({
+    id:item.plan.id,
+    task:item.plan.task,
+    npc:{ x:item.root.position.x, z:item.root.position.z },
+    target:item.plan.to,
+  }));
+  const publishMission = () => onMissionStatus?.(missionStatus(contexts(), missionState));
+  const interactionAt = (point: MissionPoint) => missionInteraction(contexts(), missionState, point);
+  const interact = (point: MissionPoint) => {
+    const interaction = interactionAt(point);
+    if (!interaction) return null;
+    const wasComplete = interaction.kind === "complete";
+    missionState = applyMissionInteraction(missionState, interaction);
+    if (wasComplete) {
+      const plan = npcs.find(item => item.plan.id === interaction.missionId)?.plan;
+      if (plan && !missionResults.getObjectByName("mission-result-" + plan.id)) {
+        const result = missionResult(plan.task); result.name = "mission-result-" + plan.id;
+        result.position.set(plan.to.x, groundAt(plan.to.x,plan.to.z), plan.to.z);
+        missionResults.add(result);
+      }
+    }
+    publishMission();
+    return missionMessage(interaction);
+  };
+
   scene.add(root);
   let disposed = false;
   const abort = new AbortController();
   if (onStatus) onStatus("Forge workers: " + npcs.length + " GAME NPCs active · loading verified ForgeMPC2 character…");
+  publishMission();
 
   const upgrade = async () => {
     try {
@@ -166,11 +248,23 @@ export function createForgeNpcSystem(scene: THREE.Scene, mobile: boolean, ground
       }
       if(npcItem.mixer) npcItem.mixer.update(dt);
     }
+    const target = missionTarget(contexts(), missionState);
+    marker.visible = !!target;
+    if (target) {
+      marker.position.set(target.x, groundAt(target.x,target.z) + .04, target.z);
+      const pulse = 1 + Math.sin(elapsed * 3.2) * .12;
+      ring.scale.setScalar(pulse);
+      ring.rotation.z = elapsed * .65;
+      beacon.material.opacity = .42 + Math.sin(elapsed * 2.4) * .16;
+    }
   };
 
   return {
     root,
     update,
+    interactionAt,
+    interact,
+    missionStatus: () => missionStatus(contexts(), missionState),
     dispose(){
       disposed=true; abort.abort(); clearTimeout(loadTimer); root.removeFromParent();
       const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>(),textures=new Set<THREE.Texture>();
