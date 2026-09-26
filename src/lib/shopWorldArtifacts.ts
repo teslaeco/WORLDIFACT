@@ -26,7 +26,7 @@ export async function fetchExistingShopArtifacts(store: ReceiptStore, fetcher: t
   const results: ShopWorldArtifactResult[] = []
   for (const format of SHOP_WORLD_ARTIFACT_FORMATS) {
     try {
-      const blob = await client.artifact(format, saved)
+      const blob = await client.artifact(format, saved, { prepareMissing: false })
       results.push({ format, ok: true, bytes: blob.size, blob })
     } catch (error) {
       results.push({ format, ok: false, bytes: 0, error: error instanceof Error ? error.message : 'Artifact unavailable.' })
