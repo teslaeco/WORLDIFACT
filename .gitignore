@@ -186,3 +186,5 @@ public/apps/iss/vendor/
 
 # Reconstructed from reviewed Giant Tower transport parts during build/test
 public/world-assets/giant-building/giant-tower.glb
+# Hydrated from the immutable reviewed ForgeMPC2 source during build/test
+public/world-assets/forge/rapper-v10.glb
