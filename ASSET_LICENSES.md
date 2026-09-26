@@ -52,3 +52,16 @@ The copied Fix ISS simulator credits the NASA / Visualization Technology Applica
 - Public GAME derivative: SHA-256 `7f27b281103325aa6f2aa58fcc396be7cf319bc683a91c4798ca374d592d70c3`, 1,291,820 bytes after decompression. Source mesh shapes/instances are retained while embedded image textures are replaced by lightweight representative PBR colors for bounded mobile delivery.
 - Runtime transport files: `public/world-assets/owner-landship/part-00.b64` through `part-05.b64`; see the directory README for limits and provenance.
 - The landship is owner-provided GAME geometry beside the existing photovoltaic explorer. WORLDIFACT may move/steer the whole scene instance as a GAME vehicle and place the avatar at a runtime seat/exit point; this does **not** claim that the source contains a verified vehicle rig, wheel animation, physics model or original driving animation. No engineering approval, manufacturing readiness or supplier approval is claimed.
+
+
+
+## 26 September ForgeMPC2 living worker NPC
+
+- Runtime source repository: `teslaeco/Froge-MPC-2-test`, pinned revision `bac2827fc1ec31e71dc0f5c586df43c507338725`.
+- Pinned character file: `public/models/rapper-v10.glb`, Git blob `25d3a7f62fb97844843e3007d498a3d93a927d42`, 10,343,368 bytes.
+- Repository software/documentation license: MIT License, copyright (c) 2026 Terraforming Planet. Keep that notice with redistributed source/substantial portions.
+- The upstream `docs/CHARACTERS_V10.md` describes this static example as a **generic adult face** with early-2000s styling and explicitly says it is **not a likeness reconstruction**. WORLDIFACT therefore labels it neutrally as `Forge Worker`; it is not presented as Eminem or any real person.
+- Upstream `oracle_connector/runtime/assets/SOURCES.md` documents bundled MakeHuman anatomy/skin inputs as CC0 1.0 and includes `LICENSE.CC0.md`. The static GLB also uses Froge-generated/procedural wardrobe/textile work described by the upstream project.
+- WORLDIFACT loads the exact pinned public GLB lazily from the immutable GitHub revision, validates the expected 10,343,368-byte GLB container, normalizes only its scene scale/ground position at runtime, and clones it for bounded GAME NPCs. Geometry is not called manufacturing-ready.
+- If the optional pinned source cannot be fetched on a client, WORLDIFACT keeps clearly procedural fallback workers so Queen/player/portal startup is not blocked. The fallback is original GAME geometry and is not represented as the Forge asset.
+- NPC walking, planting, carrying, surveying and building loops are WORLDIFACT GAME behavior. They are not source animations, real labor records or construction instructions.
