@@ -1,3 +1,18 @@
+# WORLDIFACT — active-job wait release live, 26 September 2026
+
+**Status: MERGED · MAIN CI GREEN · PRODUCTION DEPLOYED · ORACLE EXPORT APPLY/E2E PENDING OWNER CLOUD SHELL RUN.**
+
+- PR #123 merged to `main` as `8f67a21660f02d6407f8914cc94638c1b7b25760`.
+- Main CI run `36255751997`: **SUCCESS**.
+- Production workflow `36255752108`: **SUCCESS**.
+- Cloudflare version: `288062cd-2345-46bf-b94a-d3fc9a7259ec`.
+- Public release smoke: **PASS** for 16 HTML routes, 43 matching hub assets and 105 original app entries/assets.
+- Production diagnostics: `generationReady=true`, Oracle `CONNECTOR_READY`, `connectorVersion=33`.
+- The live finisher now waits read-only for an active Oracle job to finish naturally before maintenance. It never cancels that job automatically.
+- Final P0 DONE still requires the owner Cloud Shell run to reach `WORLDIFACT_EXPORT_E2E_PASS` and `WORLDIFACT_ORACLE_EXPORT_FIX_AND_E2E_COMPLETE`, proving actual GLB + PBR/texture ZIP + FBX + BLEND retrieval.
+
+---
+
 # WORLDIFACT — Oracle export active-job guard follow-up, 26 September 2026
 
 **Status: IMPLEMENTED ON REVIEW BRANCH · CI PENDING · NO JOB CANCELLATION.**
@@ -118,16 +133,3 @@
 - Post-merge main CI run `36156105314`: **SUCCESS**. Production workflow `36156105267`: **SUCCESS**. Cloudflare version `1b277d5c-27fd-4b77-8a34-586eb0faddb4` is live at `https://worldifact.xodobrox.workers.dev`.
 - Public release smoke passed for 16 HTML routes, 39 matching hub assets and 105 original app entries/assets, including exact published-byte/MIME verification of `/world-assets/giant-building/giant-tower.glb`. No paid API call was made.
 - Physical Android/WebGL artistic acceptance remains **UNKNOWN** until the owner tests the deployed revision.
-
----
-
-# WORLDIFACT — Giant Tower load + landship drive + optional Shop size, 25 September 2026
-
-**Status: LIVE · MERGED · PRODUCTION VERIFIED.** Issue #94 / PR #95 are complete. Reviewed head `bcb8b6bfc37b78bc543858b6ad8149d571bbb8c8` passed all five exact-head workflows and was squash-merged as `d1fa57b3487294ff7aad91c79d35bc62acd3f0cf`.
-
-- **VERIFIED root cause in source:** the high-fidelity Giant Tower package/test contains ten parts, but the runtime manifest in `src/lib/giantBuilding.ts` still listed only `part-00` through `part-03`. The decoder therefore could not reconstruct the reviewed 585,484-byte GLB. The runtime manifest now references all ten reviewed parts and a regression asserts the exact first/last entries and unique count.
-- Giant Tower loading now performs one bounded transient retry and reports the actual bounded failure reason before retaining the truthful **GAME / GENERATED INTERIOR** fallback. Queen and portal startup remain independent.
-- The already-visible owner Mars solar landship is now registered after load as a GAME rideable vehicle. Interact/keyboard/mobile joystick can board, drive/steer and exit it. It uses landship-specific seat, exit, footprint/ground sampling and camera scaling; the backhoe controls remain exclusive to the photovoltaic rover/loader.
-- Landship collision now follows its current driven pose instead of remaining at the original spawn. Whole-model GAME motion does not claim a verified source rig or source animation.
-- AI Shop target dimensions are now **opt-in**. Default is no target size: the preview is not rescaled and no 100×100×100 mm target is shown. The user must explicitly check **Specify model dimensions (optional)** before quick-size/X/Y/Z controls appear. Manufacturing/cart pricing accepts `dimensions: null`; exact-size quote logic remains unchanged when enabled.
-- No paid model generation, checkout, supplier order or MAKE/manufacturing approval is part of this repair.
