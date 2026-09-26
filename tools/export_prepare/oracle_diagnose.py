@@ -30,16 +30,19 @@ show=run(["systemctl","--user","show",unit,
           "--property=ExecMainCode","--property=ExecMainStatus"])
 journal=run(["journalctl","--user","-u",unit,"-n","60","--no-pager","-o","cat"])
 result=None
-rp=job/"result.json"
-if rp.is_file() and not rp.is_symlink() and rp.stat().st_size<65536:
-    try:
-        value=json.loads(rp.read_text())
-        if isinstance(value,dict):
-            allow={"phase","source_sha256","backup","connectorVersion","projectFilesRevision",
-                   "posthocExportRevision","runnerExitCode","paidGenerationRequested","error"}
-            result={k:v for k,v in value.items() if k in allow}
-    except Exception:
-        result={"parse":"FAILED"}
+pendingResult=None
+allow={"phase","source_sha256","backup","connectorVersion","projectFilesRevision",
+       "posthocExportRevision","runnerExitCode","paidGenerationRequested","error"}
+for name,target in (("result.json","result"),("result.json.tmp","pending")):
+    rp=job/name
+    if rp.is_file() and not rp.is_symlink() and rp.stat().st_size<65536:
+        try:
+            value=json.loads(rp.read_text())
+            parsed={k:v for k,v in value.items() if k in allow} if isinstance(value,dict) else {"parse":"FAILED"}
+        except Exception:
+            parsed={"parse":"FAILED"}
+        if target=="result": result=parsed
+        else: pendingResult=parsed
 runner={"exists":False,"syntax":"UNKNOWN"}
 rr=job/"runner.py"
 if rr.is_file() and not rr.is_symlink() and rr.stat().st_size<262144:
@@ -62,6 +65,7 @@ out={
  "unit":unit,
  "service":show,
  "result":result,
+ "pendingResult":pendingResult,
  "runner":runner,
  "files":files,
  "journal":journal,
