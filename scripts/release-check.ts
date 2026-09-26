@@ -122,9 +122,9 @@ export async function checkPublishedRelease(deployment: Deployment,
   const platform = await json(await request("/api/platform"), "/api/platform");
   requireCheck(platform.cloudflare === "RESPONDING" && typeof platform.ownerChecks === "boolean",
     "Platform status endpoint did not return its contract");
-  const oracleWorlds = await json(await request("/api/platform/oracle-worlds"), "/api/platform/oracle-worlds");
-  const studioStatus = await json(await request("/api/studio/status"), "/api/studio/status");
   if (liveHealth) {
+    const oracleWorlds = await json(await request("/api/platform/oracle-worlds"), "/api/platform/oracle-worlds");
+    const studioStatus = await json(await request("/api/studio/status"), "/api/studio/status");
     requireCheck(oracleWorlds.oracle === "CONNECTOR_READY" && Number(oracleWorlds.connectorVersion) >= 33 &&
       Number(oracleWorlds.posthocExportRevision) >= 2 && Number(oracleWorlds.legacyGlbExportRecoveryRevision) >= 1,
       "LIVE release must expose the reviewed Oracle v33 generation/export capability.");
