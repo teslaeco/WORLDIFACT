@@ -1,3 +1,18 @@
+# WORLDIFACT — Android export 429 + Forge worker delivery repair, 26 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · CI / MERGE / PRODUCTION / ORACLE CAPABILITY VERIFICATION PENDING.** Branch: `fix/p0-downloads-forge-same-origin-20260926`.
+
+- **VERIFIED root cause from current source and owner screenshot:** the optional-export client performed GET → POST prepare → immediate GET. Both artifact GETs used the same Cloudflare rate-limit bucket, so the second read could return HTTP 429 with the exact UI error `Please wait before checking or submitting again.`.
+- The client now performs one idempotent, no-AI export-preparation request before the first PBR/FBX/BLEND download, caches that preparation per saved job, and performs exactly one artifact GET. Already-existing exports still get one read if preparation is temporarily unavailable.
+- Artifact read limits are now isolated by signed job + format, so PBR, FBX and BLEND do not throttle one another just because the user downloads them consecutively.
+- **VERIFIED ForgeMPC2 source inventory:** pinned `teslaeco/Froge-MPC-2-test@bac2827fc1ec31e71dc0f5c586df43c507338725` contains one committed 3D character binary: `public/models/rapper-v10.glb` (10,343,368 bytes, Git blob `25d3a7f62fb97844843e3007d498a3d93a927d42`). No additional committed FBX/BLEND/GLB character library was found, so this repair does not invent missing characters.
+- Build/verify now hydrates that exact immutable GLB, checks size/container/SHA-256, publishes it same-origin at `/world-assets/forge/rapper-v10.glb`, and production smoke must hash the published copy. The four mobile workers are moved closer to the hub and the verified asset upgrade starts after 600 ms (300 ms desktop); seven desktop task instances remain.
+- The Forge worker is still a generic GAME character; task differences come from WORLDIFACT props/behavior. Procedural workers remain a truthful fallback if the verified GLB cannot load.
+- **BLOCKED / separate dependency:** if an older completed Oracle job never produced PBR/FBX/BLEND, the production Oracle worker still needs the reviewed post-hoc export capability. Merged website code alone does not prove that VM capability is installed. Do not claim legacy missing exports fixed until production health confirms `posthocExportRevision=2` (or equivalent reviewed capability) and an owned saved job succeeds end-to-end.
+- No Astra/OpenAI generation, model submission, checkout, payment, supplier order or manufacturing approval is performed by this repair.
+
+---
+
 # WORLDIFACT — Grand Desert + Mountain Coast + living Forge workers, 26 September 2026
 
 **Status: LIVE · MERGED · PRODUCTION VERIFIED.** PR #112 rebuilt the expansion on current main, passed all seven exact-head checks, and was squash-merged as `03c345d37e91d3b1af608084c64c676eb86d594f`.
