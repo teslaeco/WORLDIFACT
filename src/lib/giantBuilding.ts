@@ -5,10 +5,10 @@ export const GIANT_BUILDING_GAME_SHA256 = "5cdb61971ce42634acfb3759a73a8ff01f94c
 export const GIANT_BUILDING_SOURCE_TRIANGLES = 242_120;
 export const GIANT_BUILDING_GAME_TRIANGLES = 14_785;
 
-export const GIANT_BUILDING_POSITION = Object.freeze({ x: -18, z: -18 });
+export const GIANT_BUILDING_POSITION = Object.freeze({ x: -8, z: -18 });
 export const GIANT_BUILDING_SCALE = 5.5;
 export const GIANT_BUILDING_HEIGHT = 10.02797893 * GIANT_BUILDING_SCALE;
-export const GIANT_BUILDING_ENTRANCE = Object.freeze({ x: -18, z: -6.8 });
+export const GIANT_BUILDING_ENTRANCE = Object.freeze({ x: -8, z: -6.8 });
 export const GIANT_INTERIOR_FLOOR_Y = 72;
 export const GIANT_INTERIOR_SPAWN = Object.freeze({ x: 0, z: 5.25 });
 export const GIANT_INTERIOR_EXIT = Object.freeze({ x: 0, z: 7.25 });
@@ -107,10 +107,6 @@ export function createGiantBuildingInterior() {
   return root;
 }
 
-function hex(bytes: ArrayBuffer) {
-  return Array.from(new Uint8Array(bytes), value => value.toString(16).padStart(2, "0")).join("");
-}
-
 export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
   const response = await fetcher(GIANT_BUILDING_URL, { cache: "force-cache", credentials: "same-origin" });
   if (!response.ok) throw new Error(`direct asset unavailable (${response.status})`);
@@ -119,15 +115,18 @@ export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
   const header = new DataView(bytes, 0, 12);
   if (String.fromCharCode(...new Uint8Array(bytes, 0, 4)) !== "glTF" || header.getUint32(4, true) !== 2 || header.getUint32(8, true) !== bytes.byteLength)
     throw new Error("direct GLB container invalid");
-  if (!globalThis.crypto?.subtle) throw new Error("browser SHA-256 unavailable");
-  const digest = hex(await globalThis.crypto.subtle.digest("SHA-256", bytes));
-  if (digest !== GIANT_BUILDING_GAME_SHA256) throw new Error("direct GLB hash mismatch");
+  // Exact SHA-256 is enforced before publication and again by production release smoke.
+  // Mobile rendering must not depend on WebCrypto availability after those gates pass.
   const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
   const gltf = await new GLTFLoader().parseAsync(bytes, "");
   const root = gltf.scene;
   root.name = "giant-owner-building-game-derivative";
-  root.position.set(GIANT_BUILDING_POSITION.x, .11, GIANT_BUILDING_POSITION.z);
+  root.position.set(GIANT_BUILDING_POSITION.x, 0, GIANT_BUILDING_POSITION.z);
   root.scale.setScalar(GIANT_BUILDING_SCALE);
+  root.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(root);
+  if (!Number.isFinite(bounds.min.y) || !Number.isFinite(bounds.max.y)) throw new Error("direct GLB bounds invalid");
+  root.position.y += .04 - bounds.min.y;
   root.userData.provenance = "OWNER_PROVIDED_SOURCE__HIGHER_FIDELITY_GAME_DERIVATIVE";
   root.userData.sourceSha256 = GIANT_BUILDING_SOURCE_SHA256;
   root.userData.gameSha256 = GIANT_BUILDING_GAME_SHA256;

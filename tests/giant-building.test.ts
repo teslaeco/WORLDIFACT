@@ -21,11 +21,11 @@ import {
 test("giant building is a large landmark away from spawn, river portals and desert worksite", () => {
   assert.equal(GIANT_BUILDING_SCALE, 5.5);
   assert.ok(GIANT_BUILDING_HEIGHT > 50);
-  assert.ok(GIANT_BUILDING_POSITION.x < -10);
+  assert.ok(GIANT_BUILDING_POSITION.x < 0);
   assert.ok(GIANT_BUILDING_POSITION.z < -14);
   assert.ok(GIANT_BUILDING_FOOTPRINT.maxZ < -7);
-  assert.ok(GIANT_BUILDING_FOOTPRINT.minX > -35);
-  assert.ok(GIANT_BUILDING_FOOTPRINT.maxX < -8);
+  assert.ok(GIANT_BUILDING_FOOTPRINT.minX > -20);
+  assert.ok(GIANT_BUILDING_FOOTPRINT.maxX < 3);
   assert.ok(Math.hypot(GIANT_BUILDING_ENTRANCE.x, GIANT_BUILDING_ENTRANCE.z - 17) > 20);
 });
 
@@ -61,4 +61,11 @@ test("giant building runtime uses one direct verified GLB for mobile delivery", 
   assert.equal(GIANT_BUILDING_GAME_BYTES, 585_484);
   assert.ok(Math.hypot(GIANT_BUILDING_POSITION.x, GIANT_BUILDING_POSITION.z - 17) < 42);
   assert.ok(Math.hypot(GIANT_BUILDING_ENTRANCE.x, GIANT_BUILDING_ENTRANCE.z - 17) < 32);
+});
+
+
+test("mobile Giant Tower runtime does not require WebCrypto after release-time hash verification", async () => {
+  const source = await import("node:fs/promises").then(fs => fs.readFile(new URL("../src/lib/giantBuilding.ts", import.meta.url), "utf8"));
+  assert.doesNotMatch(source, /crypto\\.subtle|SHA-256 unavailable/);
+  assert.ok(source.includes("new THREE.Box3().setFromObject(root)"));
 });

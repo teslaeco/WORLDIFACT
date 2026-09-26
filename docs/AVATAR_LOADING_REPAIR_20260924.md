@@ -24,3 +24,12 @@ With the existing ASSETS binding, the Queen API now streams the already prepared
 ## Evidence and limits
 
 The release adds tests for zero pre-consumption of the forwarded stream, no Oracle/cookie/token forwarding, fixed asset selection, correct identity/HEAD handling, invalid asset/configuration guards, mandatory build preparation, and rejected truncated or same-size substituted originals. Full current-head CI and actual repeated production delivery must pass before declaring this follow-up released. Physical Android rendering/FPS and decoding time remain unmeasured; browser security restrictions remain respected. Exact final evidence is recorded in the follow-up PR.
+
+
+## 25 September Android follow-up
+
+A later owner Android check again showed the Queen absent in the five-portal world even though the gzip release and API smoke remained green. The next repair removes the Queen's browser dependency on Worker response encoding/decompression entirely without changing model bytes.
+
+Build preparation first verifies the same pinned 27,676,800-byte GLB and SHA-256 `1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba`, then writes two raw static parts (14 MiB maximum each) alongside the existing gzip compatibility release. The client downloads the two parts sequentially into one preallocated buffer, reports real total progress, validates the reconstructed GLB container, and retries transient failures at most three times. Release smoke hashes both published static parts against the build output before production can pass.
+
+This is transport-only. Geometry, textures, fan, rig and source identity are unchanged. Physical Android render/FPS and final visual acceptance remain device QA, not CI claims.

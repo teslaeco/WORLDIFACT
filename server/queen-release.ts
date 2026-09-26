@@ -2,6 +2,11 @@
 export const QUEEN_DECODED_BYTES = 27_676_800;
 export const QUEEN_SHA256 = '1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba';
 export const QUEEN_RELEASE_PATH = `/game-assets/queen-${QUEEN_SHA256}.glb.gz`;
+export const QUEEN_DIRECT_PART_BYTES = 14 * 1024 * 1024;
+export const QUEEN_DIRECT_PART_PATHS = [
+  `/game-assets/queen-${QUEEN_SHA256}.glb.part-00.bin`,
+  `/game-assets/queen-${QUEEN_SHA256}.glb.part-01.bin`,
+] as const;
 export interface AvatarAssets { fetch(request: Request): Promise<Response> }
 
 export function avatarAcceptsGzip(request: Request) {

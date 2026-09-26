@@ -4,7 +4,7 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { QUEEN_RELEASE_PATH, QUEEN_SHA256, QUEEN_DECODED_BYTES } from '../server/queen-release.ts';
+import { QUEEN_RELEASE_PATH, QUEEN_DIRECT_PART_BYTES, QUEEN_DIRECT_PART_PATHS, QUEEN_SHA256, QUEEN_DECODED_BYTES } from '../server/queen-release.ts';
 const origin = 'https://worldifact.xodobrox.workers.dev';
 const output = `dist${QUEEN_RELEASE_PATH}`;
 export function verifyQueen(bytes) {
@@ -59,6 +59,16 @@ export async function prepareQueenRelease() {
   verifyQueen(gunzipSync(encoded, { maxOutputLength: QUEEN_DECODED_BYTES }));
   await mkdir(dirname(output), { recursive: true });
   await writeFile(`${output}.part`, encoded); await rename(`${output}.part`, output);
-  console.log(`PASS: exact Queen release ${QUEEN_SHA256}: ${bytes.length} decoded bytes, ${encoded.length} wire bytes; no source model committed.`);
+  let offset = 0;
+  for (const [index, partPath] of QUEEN_DIRECT_PART_PATHS.entries()) {
+    const end = index === QUEEN_DIRECT_PART_PATHS.length - 1 ? bytes.length : Math.min(bytes.length, offset + QUEEN_DIRECT_PART_BYTES);
+    const part = bytes.subarray(offset, end);
+    if (!part.length || part.length > QUEEN_DIRECT_PART_BYTES) throw new Error('Queen direct part exceeds the bounded static-asset size.');
+    const partOutput = `dist${partPath}`;
+    await writeFile(`${partOutput}.part`, part); await rename(`${partOutput}.part`, partOutput);
+    offset = end;
+  }
+  if (offset !== bytes.length) throw new Error('Queen direct parts do not cover the exact model.');
+  console.log(`PASS: exact Queen release ${QUEEN_SHA256}: ${bytes.length} decoded bytes, ${encoded.length} gzip bytes; two bounded raw parts published for mobile; no source model committed.`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await prepareQueenRelease();

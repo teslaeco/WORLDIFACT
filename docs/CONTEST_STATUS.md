@@ -1,6 +1,24 @@
+# WORLDIFACT — mobile Queen + Giant Tower + Shop artifact QA, 25 September 2026
+
+**Status: LIVE · MERGED · PRODUCTION VERIFIED.** Issue #101 / PR #102 are complete. Reviewed head `c3886614eb27725cc31ea25df3b41080538b9bf4` passed all five exact-head workflows and was squash-merged as `f119ce936ac1026af4c0f401be72a3e72d8d2f28`.
+
+- **Queen:** the exact pinned Neptune Queen remains SHA-256 `1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba`, 27,676,800 decoded GLB bytes, Oracle source job `99397623-e45c-48dc-95ec-6f84446a54d5`. Build preparation now publishes the same verified GLB as two bounded raw static parts below the Cloudflare per-file ceiling. The mobile client reconstructs those exact bytes directly from static assets, validates the completed GLB header/length and uses three bounded retries. It no longer depends on the avatar Worker/content-encoding path for Queen rendering. The existing gzip/API release remains available for compatibility.
+- **Release gate:** production smoke now hashes both Queen static raw parts against the exact build output before a release can pass. No substitute Queen is allowed.
+- **Giant Tower:** client loading still uses the exact build/release-verified 585,484-byte GAME derivative, but Android rendering no longer depends on runtime WebCrypto. The model is grounded from its actual parsed bounds and moved to `(-8,-18)` with entrance at `(-8,-6.8)` so it is clearly ahead/left of the initial player while remaining outside the river/portal line.
+- **Existing AI Shop job audit:** the five-portal world gains **Import last Shop model + test downloads**. It restores only the existing same-device signed Studio receipt, polls that same job and performs GET-only reads of GLB, PBR ZIP, FBX and BLEND. It never prepares/submits/resubmits generation. A valid GLB is added to the meadow with its embedded materials/textures; successful PBR/FBX/BLEND blobs trigger browser download attempts and every format reports its real success/failure.
+- PBR ZIP / FBX / BLEND are **download-verification artifacts only**; Three.js renders the GLB and they are not falsely described as rendered or production-approved.
+- The current Shop screenshot proves the GLB preview works but at least one export request returns `This model/export is not available on the worker yet.`. This repair exposes the exact per-format result in the world; it does not invent a missing Oracle export.
+- No paid generation, checkout, supplier order or MAKE/manufacturing approval is part of this repair.
+- Post-merge main CI run `36188480894`: **SUCCESS**. Production workflow `36188480931`: **SUCCESS**. Cloudflare version `fd8ce5f7-177a-4fee-8813-76bb9afa8982` is live at `https://worldifact.xodobrox.workers.dev`.
+- Build evidence: exact Queen SHA-256 `1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba`, 27,676,800 decoded bytes, 18,076,285 gzip bytes; two bounded raw static parts published for mobile. Production release smoke passed for 16 HTML routes, 41 matching hub assets and 105 original app entries/assets. No paid API call was made.
+- Current-job PBR/FBX/BLEND availability remains **per-job evidence**, not a platform-wide claim. CI cannot read the owner's private browser localStorage receipt; the deployed five-portal action reports that same-device job's exact GET result without generating a replacement.
+- Physical Android visual acceptance remains **UNKNOWN** until the deployed revision is tested on the owner's device.
+
+---
+
 # WORLDIFACT — Giant Tower direct-GLB Android hardening, 25 September 2026
 
-**Status: IMPLEMENTED ON REVIEW BRANCH · MERGE / PRODUCTION DEPLOYMENT PENDING OWNER APPROVAL AFTER GREEN CI.** Issue #97 tracks the second Android visibility repair.
+**Status: LIVE · MERGED · PRODUCTION VERIFIED.** Issue #97 / PR #98 are complete. Reviewed head `8f500700b655e741c126299381a3d696de04b796` passed all five exact-head workflows and was squash-merged as `56ea8b8ecabe8ed67704e0d47cd6d80d6d5231b2`.
 
 - Re-uploaded owner GLB is byte-identical to the previously audited building source: SHA-256 `9c2c61af94243788e1938d99b598f8bfd1281ac710bf41236467db263b5a4e5a`, 23,449,560 bytes.
 - The previous runtime still reconstructed the 585,484-byte GAME derivative in the browser from ten base64/gzip parts. That path depended on browser `DecompressionStream` and multiple asset reads; Android still reported/behaved as if the exterior was unavailable.
@@ -8,7 +26,10 @@
 - Production release smoke now hashes the published `/world-assets/giant-building/giant-tower.glb`, so an HTML fallback, stale file or wrong MIME cannot pass release verification.
 - The landmark is moved from (-30,-24) to (-18,-18), keeping it clear of the portal line while bringing the >50-unit tower into the center-left initial view. Entrance moves consistently to (-18,-6.8).
 - The separate lobby remains explicitly **GAME / GENERATED INTERIOR**. No MAKE/manufacturing or engineering claim changes.
-- No paid generation, checkout or supplier action is part of this repair. Physical Android artistic acceptance remains **UNKNOWN** until the owner tests the deployed revision.
+- No paid generation, checkout or supplier action is part of this repair.
+- Post-merge main CI run `36156105314`: **SUCCESS**. Production workflow `36156105267`: **SUCCESS**. Cloudflare version `1b277d5c-27fd-4b77-8a34-586eb0faddb4` is live at `https://worldifact.xodobrox.workers.dev`.
+- Public release smoke passed for 16 HTML routes, 39 matching hub assets and 105 original app entries/assets, including exact published-byte/MIME verification of `/world-assets/giant-building/giant-tower.glb`. No paid API call was made.
+- Physical Android/WebGL artistic acceptance remains **UNKNOWN** until the owner tests the deployed revision.
 
 ---
 
