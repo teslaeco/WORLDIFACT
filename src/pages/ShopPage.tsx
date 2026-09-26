@@ -194,7 +194,23 @@ export default function ShopPage() {
         const value = await client.poll(selected)
         if (stopped) return
         failures = 0; setJob(value); setError('')
-        if (value.reconciliationRequired) { setNotice(value.detail); return }
+        if (value.reconciliationRequired) {
+          setNotice('The saved receipt is not present on the current Oracle worker. Verifying that no model exists before releasing the reservation…')
+          const reconciled = await client.reconcileMissing(selected)
+          if (stopped) return
+          setJob(reconciled)
+          if (reconciled.state === 'succeeded') { void loadResult(selected, reconciled); return }
+          if (reconciled.state === 'failed' || reconciled.state === 'cancelled') {
+            setSeconds(0)
+            try {
+              client.clearSelection()
+              setSaved(null)
+              setJob(null)
+              setNotice('The missing Oracle job was confirmed absent. Its account allowance or credits were restored and the old receipt was archived. You can generate a new model now.')
+            } catch { setJob(reconciled) }
+            return
+          }
+        }
         if (value.state === 'succeeded') { void loadResult(selected, value); return }
         if (value.state === 'failed' || value.state === 'cancelled') {
           setSeconds(0)
@@ -377,7 +393,7 @@ export default function ShopPage() {
           {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
         </> : saved ? <div className="native-shop-progress" role="status">
           <h2>{job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your SLOW model is ready' : job?.state === 'failed' ? 'Previous model did not finish' : job?.state === 'cancelled' ? 'Previous model was cancelled' : 'Preparing your model…'}</h2>
-          <p>{job?.reconciliationRequired ? job.detail : terminal(job?.state)
+          <p>{job?.reconciliationRequired ? 'WORLDIFACT is checking the same saved receipt against Oracle. If Oracle confirms that this job was never accepted, the reservation is restored automatically and a new model can be started without duplicating generation.' : terminal(job?.state)
             ? 'That job is finished. Your description is preserved; completed owned files remain downloadable for transfer and B2B review.'
             : 'Please keep this page open. Your preview will appear here when it is ready.'}</p>
           {!terminal(job?.state) && !job?.reconciliationRequired && <p>Elapsed: {Math.floor(seconds / 60)}m {seconds % 60}s</p>}
