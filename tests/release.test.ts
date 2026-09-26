@@ -86,11 +86,12 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
 test("release smoke verifies deep links and lazy assets and only sends DEMO without secrets", async (t) => {
   const f = await fixture(t);
   const result = await checkPublishedRelease({ origin, versionId }, f);
-  assert.equal(result.htmlRoutes, 16);
+  assert.equal(result.htmlRoutes, 23);
   assert.equal(result.verifiedAssets, 10);
   assert.equal(result.foundationAssets, 5);
   assert.equal(f.providerCalls(), 0);
-  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg", "/world-assets/giant-building/giant-tower.glb", "/world-assets/forge/rapper-v10.glb", "/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-00.bin", "/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-01.bin"]) {
+  for (const path of ["/world", "/login", "/account", "/account/credits", "/account/reset", "/lab", "/portal/enchanted-ai-shop",
+    "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg", "/world-assets/giant-building/giant-tower.glb", "/world-assets/forge/rapper-v10.glb", "/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-00.bin", "/game-assets/queen-1bbc9311605543b459318f212e791d05fbfa5450820e3433c4145d885ee948ba.glb.part-01.bin"]) {
     assert.ok(f.requests.some(request => new URL(request.url).pathname === path), `${path} must be checked`);
   }
   const posts = f.requests.filter((request) => request.method === "POST");
@@ -189,14 +190,21 @@ test("release smoke rejects a lazy asset silently replaced by HTML or stale Java
   }
 });
 
-test("release smoke accepts authorized READY health while still exercising only explicit DEMO generation", async (t) => {
+test("release smoke accepts authorized READY health only with reviewed Studio/Oracle capability and no paid call", async (t) => {
   const f = await fixture(t);
-  const fetcher = async (url: URL, init: RequestInit) => url.pathname === "/api/health"
-    ? Response.json({ mode: "READY", generationReady: true, publicPilot: true, model: "gpt-6-astra" }) : f.fetcher(url, init);
+  const fetcher = async (url: URL, init: RequestInit) => {
+    if (url.pathname === "/api/health") return Response.json({ mode: "READY", generationReady: true, publicPilot: true, model: "gpt-6-astra" });
+    if (url.pathname === "/api/platform/oracle-worlds") return Response.json({ oracle: "CONNECTOR_READY", connectorVersion: 33, posthocExportRevision: 2, legacyGlbExportRecoveryRevision: 1, worlds: [] });
+    if (url.pathname === "/api/studio/status") return Response.json({ accountRequired: true, ready: true, publicPilot: true, reason: "READY", oracle: "CONNECTOR_READY", photoReady: true, fastReady: true, fastBudgetReady: false, promptMaxLength: 4000, allowance: { used: 50, limit: null, remaining: null, enabled: true, expiresAt: null, unlimited: true } });
+    if (url.pathname === "/api/studio/prepare") return Response.json({ error: "Sign in with your shared WORLDIFACT / Cube Chess account to continue." }, { status: 401 });
+    if (url.pathname === "/api/account/entitlements") return Response.json({ error: "Sign in to view your allowance." }, { status: 401 });
+    return f.fetcher(url, init);
+  };
   const result = await checkPublishedRelease({ origin, versionId }, { ...f, fetcher });
   assert.equal(result.mode, "LIVE");
+  assert.equal(result.studio, "READY_ACCOUNT_GUARDED");
   const posts = f.requests.filter((request) => request.method === "POST");
-  assert.equal(posts.length, 2);
+  assert.equal(posts.length, 2, "stubbed unauthenticated prepare is checked without entering the fixture Worker/provider");
   for (const request of posts) assert.equal((await request.json() as { mode: string }).mode, "demo");
   assert.equal(f.providerCalls(), 0);
 });
