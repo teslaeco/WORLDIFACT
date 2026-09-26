@@ -253,7 +253,10 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         const value = await limitedJson(response, 16_384)
         if (value.id !== auth.id || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new Error('Unconfirmed acceptance')
         return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state']) }, 202)
-      } catch { return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending } }, 202) }
+      } catch (error) {
+        if (error instanceof StudioError) throw error
+        return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending } }, 202)
+      }
     }
     const reconcileMatch = new RegExp(`^/api/studio/jobs/(${UUID})/reconcile-missing$`).exec(url.pathname)
     if (reconcileMatch && request.method === 'POST') {
