@@ -16,7 +16,7 @@ UNIT = "worldifact-export-prepare-" + COMMIT[:12] + ".service"
 
 REMOTE = r"""
 from pathlib import Path
-import json, os, re, subprocess
+import hashlib, json, os, re, subprocess, urllib.request
 commit="81521fa275525b3369e0b876f05c3cfab257321a"
 unit="worldifact-export-prepare-"+commit[:12]+".service"
 job=Path.home()/".local/state/worldifact-export-prepare-launch"/commit
@@ -53,6 +53,34 @@ if rr.is_file() and not rr.is_symlink() and rr.stat().st_size<262144:
     except Exception as exc:
         runner["syntax"]="ERROR"
         runner["errorType"]=type(exc).__name__
+serverPath=Path.home()/"froge-connector/server.py"
+serverSha256=None
+serverState="UNKNOWN"
+if serverPath.is_file() and not serverPath.is_symlink():
+    raw=serverPath.read_bytes()
+    serverSha256=hashlib.sha256(raw).hexdigest()
+    known={
+      "1f09db9835e9ee22361e468d051da7e847dbff36fe7e52a2f2c9c6f6337402b9":"FAST_V33_BASE",
+      "6795c356d67c72f4aed545505772182f907c9a242ad0cf0076689720a386bb14":"FAST_V33_PROJECT_FILES",
+      "aa18c1d081c5e29c2481def9874b46082dbfaf6e58664bb07b1b28fbbea9206a":"FAST_V33_PROJECT_FILES_EXPORT_PREPARE",
+    }
+    serverState=known.get(serverSha256,"UNRECOGNIZED")
+
+health=None
+try:
+    configPath=Path.home()/"froge-connector/state/config.json"
+    config=json.loads(configPath.read_text())
+    token=config.get("token")
+    if isinstance(token,str) and 20<=len(token)<=256:
+        req=urllib.request.Request("http://127.0.0.1:8765/v1/health",
+            headers={"Authorization":"Bearer "+token,"Accept":"application/json"})
+        opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(req,timeout=10) as response:
+            body=json.loads(response.read(32768))
+        health={k:body.get(k) for k in ("ready","provider","model","connectorVersion","projectFilesRevision","posthocExportRevision")}
+except Exception:
+    health={"status":"UNAVAILABLE"}
+
 files=[]
 if job.is_dir() and not job.is_symlink():
     for p in sorted(job.iterdir()):
@@ -68,6 +96,9 @@ out={
  "pendingResult":pendingResult,
  "runner":runner,
  "files":files,
+ "serverSha256":serverSha256,
+ "serverState":serverState,
+ "health":health,
  "journal":journal,
 }
 print(json.dumps(out,indent=2))
