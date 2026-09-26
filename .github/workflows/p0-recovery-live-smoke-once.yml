@@ -1,0 +1,50 @@
+name: P0 recovery live generation and exports once
+
+on:
+  workflow_run:
+    workflows: ["Publish WORLDIFACT and verify OpenAI setup"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worldifact-p0-recovery-live-smoke
+  cancel-in-progress: false
+
+jobs:
+  recovery-smoke:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    environment:
+      name: production
+      url: https://worldifact.xodobrox.workers.dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - name: Gate to the explicit one-time recovery marker
+        id: gate
+        shell: bash
+        run: |
+          git rev-parse --verify HEAD^1 >/dev/null
+          changed="$(git diff --name-only HEAD^1 HEAD --)"
+          if grep -Fxq 'ops/P0_FULL_RECOVERY_SMOKE_20260926' <<< "$changed"; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            echo 'Explicit one-time P0 recovery smoke marker found.'
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            echo 'No P0 recovery smoke marker in this deployment commit; no model request will run.'
+          fi
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 24
+      - name: Generate/resume one deterministic Oracle model and verify four downloads
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/p0-recovery-live-smoke.mjs
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
