@@ -8,7 +8,7 @@ test('Oracle local E2E submits one job, never retries generation and verifies ev
   assert.match(source, /legacyGlbExportRecoveryRevision/)
   assert.match(source, /automaticGenerationRetries":0/)
   assert.match(source, /for name in \("pbr","fbx","blend"\)/)
-  assert.match(source, /"exports\/prepare"\s*,\s*"POST"/)
+  assert.match(source, /\/exports\/prepare"\s*,\s*"POST"/)
   assert.match(source, /E2E_PASS/)
   assert.doesNotMatch(source, /while True/)
 })
