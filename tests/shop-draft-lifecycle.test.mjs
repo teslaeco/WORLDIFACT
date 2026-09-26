@@ -65,6 +65,7 @@ async function harness({ ready = false, state = 'succeeded', astraReady = ready,
     if (path === '/api/health') return Response.json({ generationReady: astraReady })
     if (path === '/api/blueprint' && method === 'POST') return Response.json(fastGeneration)
     if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
+    if (path.endsWith('/reconcile-missing') && method === 'POST') return Response.json({ job: { id: oldId, state: 'failed' }, reconciled: true, generationRequested: false })
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
     return Response.json({ job: { id: path.endsWith(oldId) ? oldId : newId, state, reconciliationRequired, ...(downloadAllowed === undefined ? {} : { downloadAllowed, previewOnly: !downloadAllowed, previewAvailable: downloadAllowed }) } })
@@ -207,13 +208,15 @@ test('completed owned SLOW loads its GLB and exposes transfer downloads without 
   } finally { h.close() }
 })
 
-test('unconfirmed old jobs display review state instead of an endless generation spinner', async () => {
+test('legacy missing pending job self-heals through reconciliation and re-enables new generation', async () => {
   const h = await harness({ ready: true, state: 'pending', reconciliationRequired: true })
   try {
     await h.poll()
-    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Model needs a status review'))
-    assert.equal(h.all().some(node => node.type === 'p' && text(node).startsWith('Elapsed:')), false)
-    assert.equal(h.button('Generate SLOW').props.disabled, true, 'Uncertain jobs must not be silently duplicated')
-    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), undefined, 'confirmed-missing current receipt is archived then released')
+    assert.equal(h.button('Generate SLOW').props.disabled, false)
+    const reconcile = h.calls.filter(call => call.path.endsWith('/reconcile-missing') && call.method === 'POST')
+    assert.equal(reconcile.length, 1)
+    assert.equal(h.calls.filter(call => call.path === '/api/studio/jobs' && call.method === 'POST').length, 0, 'recovery never submits a replacement generation')
+    assert.ok(h.all().some(node => node.props.role === 'status' && /restored/i.test(text(node))))
   } finally { h.close() }
 })
