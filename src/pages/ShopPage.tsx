@@ -332,10 +332,12 @@ export default function ShopPage() {
     if (flags.artifact || !saved || !mayExportCurrentJob(saved.receipt.id, job?.state, preview) || !coordinator.current) return
     flags.artifact = true; setArtifactBusy(true); setError('')
     try {
-      if (format !== 'model') setNotice('Checking the saved Blender job and preparing a missing export if possible. No new AI generation is submitted.')
+      if (format !== 'model') setNotice(format === 'pbr'
+        ? 'Checking the saved model and preparing its texture ZIP (PBR maps when present) if needed. No new AI generation is submitted.'
+        : 'Checking the saved Blender job and preparing a missing export if possible. No new AI generation is submitted.')
       const blob = await coordinator.current.artifact(format, saved)
       download(blob, `WORLDIFACT-${saved.receipt.id}.${format === 'pbr' ? 'textures.zip' : format === 'model' ? 'glb' : format}`)
-      if (mounted.current) setNotice(`${format === 'model' ? 'GLB' : format.toUpperCase()} download started. Use downloaded files for downstream/B2B review; manufacturing readiness still requires separate validation.`)
+      if (mounted.current) setNotice(`${format === 'model' ? 'GLB' : format === 'pbr' ? 'Textures ZIP' : format.toUpperCase()} download started. Use downloaded files for downstream/B2B review; manufacturing readiness still requires separate validation.`)
     }
     catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'This export is not available on the connected worker.') }
     finally { flags.artifact = false; if (mounted.current) setArtifactBusy(false) }
@@ -385,7 +387,7 @@ export default function ShopPage() {
           <div className="native-shop-views">{['front', 'left', 'back', 'face'].map(view => <button key={view} type="button" aria-pressed={sampleView === view} onClick={() => { setSampleView(view); setSampleMissing(false) }}>{view === 'left' ? 'Left side' : view[0].toUpperCase() + view.slice(1)}</button>)}</div>
           <small>Example only. Your own generated preview replaces it after generation succeeds.</small>
         </>}
-        {saved && <div className="native-shop-actions"><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download / prepare PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>Download / prepare FBX</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Download / prepare Blender</button></>}</div>}
+        {saved && <div className="native-shop-actions"><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download / prepare textures ZIP</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>Download / prepare FBX</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Download / prepare Blender</button></>}</div>}
       </div>
       <div className="native-shop-form">
         <span className="eyebrow">CREATE YOUR PRODUCT</span><h1>Describe it.<br />See it in 3D.</h1>
