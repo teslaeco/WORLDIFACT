@@ -158,6 +158,7 @@ export default function StartingWorld({
   const [buildingStatus, setBuildingStatus] = useState("Giant tower: queued");
   const [ownerVehicleStatus, setOwnerVehicleStatus] = useState("Mars solar landship: queued");
   const [forgeNpcStatus, setForgeNpcStatus] = useState("Forge workers: queued");
+  const [fieldMissionStatus, setFieldMissionStatus] = useState("Field missions: preparing…");
   const [insideGiantBuilding, setInsideGiantBuilding] = useState(false);
   const [interaction, setInteraction] = useState("Interact");
   const [hint, setHint] = useState(
@@ -191,6 +192,7 @@ export default function StartingWorld({
       setBuildingStatus("Giant tower: queued");
       setOwnerVehicleStatus("Mars solar landship: queued");
       setForgeNpcStatus("Forge workers: queued");
+      setFieldMissionStatus("Field missions: preparing…");
       setInsideGiantBuilding(false);
     });
     renderer.setSize(host.clientWidth, host.clientHeight);
@@ -262,7 +264,13 @@ export default function StartingWorld({
     const expandedWorld = !lunar && !sea ? createExpandedWorld(mobile) : null;
     if (expandedWorld) scene.add(expandedWorld);
     const forgeNpcs = !lunar && !sea
-      ? createForgeNpcSystem(scene, mobile, groundAt, value => queueMicrotask(() => setForgeNpcStatus(value)))
+      ? createForgeNpcSystem(
+          scene,
+          mobile,
+          groundAt,
+          value => queueMicrotask(() => setForgeNpcStatus(value)),
+          value => queueMicrotask(() => setFieldMissionStatus(value)),
+        )
       : null;
     if (!forgeNpcs) queueMicrotask(() => setForgeNpcStatus("Forge workers are active only in the shared valley world."));
     if (lunar) {
@@ -863,13 +871,16 @@ export default function StartingWorld({
       const nearPortal = controllingDrone || insideBuilding ? undefined : nearestPortal(player, PORTALS, activePortalId);
       const nearBuildingEntrance = !!giantEntrance && !controllingDrone && !insideBuilding && nearGiantBuildingEntrance(player);
       const nearBuildingExit = !!giantInterior && insideBuilding && nearGiantInteriorExit(player);
+      const npcAction = !controllingDrone && !insideBuilding && !ride && equipmentMode === "stowed"
+        ? forgeNpcs?.interactionAt({ x: player.x, z: player.z }) ?? null
+        : null;
       if (boarding) action.current = "";
       if (action.current && !boarding) {
         const a = action.current;
         action.current = "";
         if (waitingForQueen && a !== "reset") {
           setCaptureNotice("The original character is still loading.");
-        } else if (jump.jumps > 0 && (a === "drive" || (a === "interact" && ((near && !nearPortal) || nearBuildingEntrance || nearBuildingExit)))) {
+        } else if (jump.jumps > 0 && (a === "drive" || (a === "interact" && ((near && !nearPortal) || nearBuildingEntrance || nearBuildingExit || npcAction)))) {
           setCaptureNotice("Land before entering a vehicle.");
         } else if (a.startsWith("bucket-") || a === "backhoe-mode") {
           const machine = ride ? backhoes.get(ride) : undefined;
@@ -929,6 +940,9 @@ export default function StartingWorld({
           avatar.setFlightFans(false);
           setEquipmentStatus("stowed");
           waterMode = inRiver(player) ? "swimming" : "land";
+        } else if (a === "interact" && npcAction) {
+          const message = forgeNpcs?.interact({ x: player.x, z: player.z });
+          if (message) setCaptureNotice(message);
         } else if (a === "interact" && nearBuildingExit) {
           insideBuilding = false;
           if (giantInterior) giantInterior.visible = false;
@@ -1149,8 +1163,10 @@ export default function StartingWorld({
           `${worldLabel} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
         );
         setHint(
-          nearBuildingExit
-            ? `${mobile ? "Tap the action button" : "E"} · exit Giant Tower to the meadow`
+          npcAction
+            ? `${mobile ? "Tap the action button" : "E"} · ${npcAction.hint}`
+            : nearBuildingExit
+              ? `${mobile ? "Tap the action button" : "E"} · exit Giant Tower to the meadow`
             : nearBuildingEntrance
               ? `${mobile ? "Tap the action button" : "E"} · enter the enormous Giant Tower`
               : nearPortal
@@ -1169,7 +1185,7 @@ export default function StartingWorld({
                         ? "Walk through the generated GAME lobby · use the glowing EXIT marker to leave"
                         : mobile ? "Left thumb: move · right thumb: look · tap Jump twice for a flip" : "WASD move · Space jump (twice: flip) · G fly/land · I equipment",
         );
-        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearBuildingExit ? "Exit Giant Tower" : nearBuildingEntrance ? "Enter Giant Tower" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? isOwnerVehicle(ride) ? "Exit Mars landship" : "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : isOwnerVehicle(near) ? "Drive Mars landship" : "Drive rover" : "Interact");
+        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : npcAction ? npcAction.label : nearBuildingExit ? "Exit Giant Tower" : nearBuildingEntrance ? "Enter Giant Tower" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? isOwnerVehicle(ride) ? "Exit Mars landship" : "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : isOwnerVehicle(near) ? "Drive Mars landship" : "Drive rover" : "Interact");
       }
       renderer.render(scene, camera);
       if (!contextLost) frame = requestAnimationFrame(animate);
@@ -1251,6 +1267,7 @@ export default function StartingWorld({
         {avatarState === "loading" && <span role="status">{avatarProgressLabel(avatarProgress)}</span>}
         {avatarState === "error" && <span role="alert">The original character could not load. <button type="button" onClick={() => setAvatarAttempt(value => value + 1)}>Retry character</button></span>}
         {textureFailed ? <span role="status">Scenery image unavailable. Movement remains available.</span> : null}
+        <span role="status">{fieldMissionStatus}</span>
         {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
         <span role="status">{buildingStatus}</span>
         <span role="status">{ownerVehicleStatus}</span>
