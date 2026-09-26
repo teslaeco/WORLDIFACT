@@ -139,6 +139,7 @@ export async function checkPublishedRelease(deployment: Deployment,
     { path: "world-assets/polyhedron-led.gltf", types: ["model/gltf+json", "application/json"] },
     { path: "world-assets/polyhedron-led-poster.svg", types: ["image/svg+xml"] },
     { path: "world-assets/giant-building/giant-tower.glb", types: ["model/gltf-binary", "application/octet-stream"] },
+    { path: "world-assets/forge/rapper-v10.glb", types: ["model/gltf-binary", "application/octet-stream"] },
     ...QUEEN_DIRECT_PART_PATHS.map(path => ({ path: path.replace(/^\//, ""), types: ["application/octet-stream"] })),
   ];
   for (const { path, types } of sculptureAssets) {
