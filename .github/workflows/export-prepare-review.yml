@@ -43,6 +43,7 @@ jobs:
         run: |
           python3 -B tools/export_prepare/test_export_prepare.py -v
           python3 -B tools/export_prepare/test_direct_v33_export.py -v
+          python3 -B tools/export_prepare/test_install_direct_v33_export.py -v
       - name: Confirm review did not execute maintenance or AI
         run: |
           test ! -e tools/export_prepare/INSTALL_STATUS.json
