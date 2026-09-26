@@ -107,7 +107,8 @@ async function allowance(env: StudioEnv) {
 async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init: RequestInit = {}) {
   const origin = oracleOrigin(env.ORACLE_ENDPOINT)
   if (!origin || !env.ORACLE_API_TOKEN) throw new StudioError('The existing Oracle connection is not configured.', 503)
-  return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(path.includes('/model') || path.includes('/exports/') ? 180_000 : 25_000),
+  const timeout = path.endsWith('/exports/prepare') ? 330_000 : path.includes('/model') || path.includes('/exports/') ? 180_000 : 25_000
+  return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(timeout),
     headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: path.includes('/model') ? 'model/gltf-binary' : path.includes('/exports/') ? 'application/octet-stream, application/zip' : 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) } })
 }
 async function health(env: StudioEnv, fetcher: typeof fetch) {
