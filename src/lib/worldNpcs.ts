@@ -32,17 +32,36 @@ export type NpcPlan = {
 };
 
 const PLANS: NpcPlan[] = [
-  { id: "forge-planter-east", task: "planting", from: { x: 72, z: -58 }, to: { x: 96, z: -49 }, offset: 0 },
-  { id: "forge-builder-east", task: "building", from: { x: 78, z: 32 }, to: { x: 116, z: 38 }, offset: 4.5 },
-  { id: "forge-carrier-east", task: "carrying", from: { x: 68, z: 19 }, to: { x: 108, z: 30 }, offset: 9 },
-  { id: "forge-planter-west", task: "planting", from: { x: -68, z: 52 }, to: { x: -92, z: 62 }, offset: 2 },
-  { id: "forge-builder-west", task: "building", from: { x: -72, z: -33 }, to: { x: -103, z: -27 }, offset: 7 },
-  { id: "forge-surveyor-west", task: "surveying", from: { x: -82, z: 16 }, to: { x: -116, z: 8 }, offset: 11 },
-  { id: "forge-carrier-west", task: "carrying", from: { x: -61, z: -65 }, to: { x: -97, z: -76 }, offset: 14 },
+  // The first four are deliberately visible/reachable from the central hub on mobile.
+  // Keep them clear of the five portal line at z≈2.7.
+  { id: "forge-planter-east", task: "planting", from: { x: 28, z: -22 }, to: { x: 43, z: -29 }, offset: 0 },
+  { id: "forge-builder-east", task: "building", from: { x: 31, z: 22 }, to: { x: 45, z: 30 }, offset: 4.5 },
+  { id: "forge-carrier-west", task: "carrying", from: { x: -28, z: -23 }, to: { x: -44, z: -30 }, offset: 9 },
+  { id: "forge-planter-west", task: "planting", from: { x: -31, z: 23 }, to: { x: -46, z: 33 }, offset: 2 },
+  // Desktop keeps additional workers deeper in the new biomes.
+  { id: "forge-builder-desert", task: "building", from: { x: 72, z: 38 }, to: { x: 106, z: 44 }, offset: 7 },
+  { id: "forge-surveyor-coast", task: "surveying", from: { x: -74, z: 17 }, to: { x: -108, z: 9 }, offset: 11 },
+  { id: "forge-carrier-coast", task: "carrying", from: { x: -66, z: -60 }, to: { x: -99, z: -72 }, offset: 14 },
 ];
 
 export function forgeNpcPlans(mobile: boolean) {
   return PLANS.slice(0, mobile ? 4 : 7);
+}
+
+function npcLabel(task: NpcTask) {
+  const canvas=document.createElement("canvas"); canvas.width=256; canvas.height=80;
+  const ctx=canvas.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle="rgba(8,20,24,.82)"; ctx.fillRect(0,0,256,80);
+    ctx.strokeStyle="rgba(255,244,199,.9)"; ctx.lineWidth=4; ctx.strokeRect(3,3,250,74);
+    ctx.textAlign="center"; ctx.fillStyle="#fff4c7"; ctx.font="bold 24px sans-serif";
+    ctx.fillText("FIELD NPC",128,31);
+    ctx.fillStyle="#ffffff"; ctx.font="18px sans-serif"; ctx.fillText(task.toUpperCase(),128,58);
+  }
+  const texture=new THREE.CanvasTexture(canvas);
+  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false}));
+  sprite.name="forge-worker-label"; sprite.position.set(0,2.65,0); sprite.scale.set(2.9,.9,1);
+  return sprite;
 }
 
 function material(color: string) {
@@ -130,7 +149,7 @@ export function createForgeNpcSystem(
   const root = new THREE.Group(); root.name = "forge-mpc2-living-workers"; root.userData.provenance = "FORGEMPC2_MIT__CC0_ANATOMY_COMPONENTS";
   const npcs: RuntimeNpc[] = forgeNpcPlans(mobile).map((plan,index) => {
     const npcRoot = new THREE.Group(); npcRoot.name = plan.id; npcRoot.position.set(plan.from.x,groundAt(plan.from.x,plan.from.z),plan.from.z);
-    const visual = fallbackWorker(index), prop = taskProp(plan.task); npcRoot.add(visual,prop); root.add(npcRoot);
+    const visual = fallbackWorker(index), prop = taskProp(plan.task), label = npcLabel(plan.task); npcRoot.add(visual,prop,label); root.add(npcRoot);
     return { plan, root:npcRoot, visual, prop };
   });
   const missionResults = new THREE.Group(); missionResults.name = "field-mission-results"; root.add(missionResults);
@@ -219,7 +238,7 @@ export function createForgeNpcSystem(
       if (onStatus) onStatus("Forge workers: " + npcs.length + " GAME NPCs active with procedural fallback · ForgeMPC2 asset unavailable");
     }
   };
-  const loadTimer = setTimeout(() => { void upgrade(); }, mobile ? 12_000 : 6_000);
+  const loadTimer = setTimeout(() => { void upgrade(); }, mobile ? 3_000 : 2_000);
 
   const update = (elapsed:number, dt:number) => {
     for (const [index,npcItem] of npcs.entries()) {
