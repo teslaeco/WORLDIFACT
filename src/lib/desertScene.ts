@@ -2,13 +2,14 @@ import * as THREE from 'three'
 import { DESERT, type SandField } from './desertTerrain.ts'
 
 /** Leave a real rectangular hole: the meadow plane must not cover excavated sand. */
+export const WORLD_GROUND_HALF = 180;
 export function meadowGroundGeometry() {
   const p:number[]=[],uv:number[]=[]
   const rect=(x0:number,x1:number,z0:number,z1:number)=>{
     for(const [x,z] of [[x0,z0],[x0,z1],[x1,z0],[x1,z0],[x0,z1],[x1,z1]]){p.push(x,0,z);uv.push(x/8,z/8)}
   }
-  rect(-115,DESERT.minX,-115,115);rect(DESERT.maxX,115,-115,115)
-  rect(DESERT.minX,DESERT.maxX,-115,DESERT.minZ);rect(DESERT.minX,DESERT.maxX,DESERT.maxZ,115)
+  rect(-WORLD_GROUND_HALF,DESERT.minX,-WORLD_GROUND_HALF,WORLD_GROUND_HALF);rect(DESERT.maxX,WORLD_GROUND_HALF,-WORLD_GROUND_HALF,WORLD_GROUND_HALF)
+  rect(DESERT.minX,DESERT.maxX,-WORLD_GROUND_HALF,DESERT.minZ);rect(DESERT.minX,DESERT.maxX,DESERT.maxZ,WORLD_GROUND_HALF)
   const geometry=new THREE.BufferGeometry()
   geometry.setAttribute('position',new THREE.Float32BufferAttribute(p,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.computeVertexNormals()
   return geometry

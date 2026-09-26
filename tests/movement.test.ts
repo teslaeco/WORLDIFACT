@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { movePlayer, findRoverExit } from "../src/lib/movement.ts";
+import { movePlayer, findRoverExit, WORLD_MOVE_BOUND } from "../src/lib/movement.ts";
 import { demoBlueprint } from "../src/lib/blueprint.ts";
 const habitat = { ...demoBlueprint().objects[0], x: 0, z: 0, rotation: 0, scale: 1 };
 
@@ -27,10 +27,11 @@ test("an open door permits walking in and out, including rotated buildings", () 
 test("rover collision includes its body radius and cannot use pedestrian doors", () => {
   const result = movePlayer({ x: 0, z: 10 }, { x: 0, z: 0 }, [{ spec: habitat, doorOpen: true }], 2.85);
   assert.ok(result.z >= 5.4 - 0.001);
-  assert.deepEqual(movePlayer({ x: 35, z: 35 }, { x: 100, z: 100 }, [], 3), { x: 39, z: 39 });
+  const bound = WORLD_MOVE_BOUND - 3;
+  assert.deepEqual(movePlayer({ x: 35, z: 35 }, { x: 1000, z: 1000 }, [], 3), { x: bound, z: bound });
 });
 test("rover exit avoids buildings and world edges", () => {
   const exit = findRoverExit({ x: 40, z: 0 }, 0, 1, []);
-  assert.ok(exit && Math.abs(exit.x) <= 41.5 && Math.abs(exit.z) <= 41.5);
+  assert.ok(exit && Math.abs(exit.x) <= WORLD_MOVE_BOUND - 0.5 && Math.abs(exit.z) <= WORLD_MOVE_BOUND - 0.5);
   assert.equal(findRoverExit({ x: 0, z: 0 }, 0, 0.4, [{ spec: { ...habitat, scale: 3 }, doorOpen: false }]), null);
 });

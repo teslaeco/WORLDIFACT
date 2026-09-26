@@ -1,3 +1,20 @@
+# WORLDIFACT — Grand Desert + Mountain Coast + living Forge workers, 26 September 2026
+
+**Status: REBASED ON CURRENT MAIN · EXACT-HEAD CI / MERGE / PRODUCTION DEVICE QA PENDING.** Rebuilt from PR #107 on top of the current main so Oracle maintenance changes remain intact.
+
+- The central five-portal Riverlight meadow remains the hub. Walkable world bounds expand from roughly ±42 to ±174 GAME units and the meadow support plane expands to ±180.
+- **Grand Desert** begins east/right of the hub at X≈52 and extends to X≈174 with a mobile-bounded dune mesh, rocks and an oasis. The existing editable excavation worksite at X 15–40 / Z 14–39 remains separate and functional.
+- **Mountain Coast** begins west/left of the hub at X≈-52 with layered instanced ridges, green forested valleys, a GAME river and a visible western ocean/coast. The ocean is scenery at the far edge; it is not labelled real Earth observation.
+- New terrain and workers are outside the five-portal line and do not replace Giant Tower, spawn or owner vehicles. Camera/fog/world movement limits expand to expose the new biomes.
+- Living NPC plans use finite deterministic GAME loops: planting saplings, carrying material, assembling simple blocks and surveying. Mobile is capped at 4 NPCs; desktop at 7.
+- Pinned ForgeMPC2 candidate: `teslaeco/Froge-MPC-2-test@bac2827fc1ec31e71dc0f5c586df43c507338725` / `public/models/rapper-v10.glb` / Git blob `25d3a7f62fb97844843e3007d498a3d93a927d42` / 10,343,368 bytes. Provenance and licensing are recorded in `ASSET_LICENSES.md`.
+- The Forge GLB is loaded only after core world startup (12 s mobile / 6 s desktop), validated for expected byte length + GLB container and cloned for NPC visuals. Procedural GAME workers remain as a safe fallback if the optional remote asset is unavailable.
+- NPC work loops are fictional GAME activity, not actual B2B labor, manufacturing validation or construction guidance.
+- No paid generation, checkout, supplier order or manufacturing action is part of this feature. Physical Android FPS/visual acceptance and the remote Forge asset's real production fetch remain **UNKNOWN** until post-deploy device QA.
+- Oracle post-hoc export installation remains a separate maintenance blocker; this world expansion does not claim that P0 worker capability is installed.
+
+---
+
 # WORLDIFACT — universal owned downloads + no-AI post-hoc exports, 26 September 2026
 
 **Status: IMPLEMENTED ON REVIEW BRANCH · ORACLE POST-HOC EXPORT PATCH REVIEW/INSTALLATION PENDING.** Issue #104 records the owner-requested download repair.
