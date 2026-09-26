@@ -67,17 +67,11 @@ def active_jobs_snapshot():
     with sqlite3.connect(path.as_uri()+"?mode=ro",uri=True,timeout=8) as db:
         rows=db.execute("SELECT id,state,created,updated FROM jobs WHERE state NOT IN ('succeeded','failed','cancelled') ORDER BY created").fetchall()
     return [{"id":row[0],"state":row[1],"ageSeconds":max(0,int(now-float(row[3])))} for row in rows]
-def wait_idle(max_seconds=1500):
-    started=time.monotonic()
-    while True:
-        jobs=active_jobs_snapshot()
-        if not jobs:
-            return {"phase":"IDLE","activeJobs":[],"paidGenerationRequested":False,"generationRequested":False,
-                    "workerService":service_state("froge-worker.service"),"tunnelService":service_state("froge-tunnel.service")}
-        if time.monotonic()-started>=max_seconds:
-            return {"phase":"ACTIVE_TIMEOUT","activeJobs":jobs[:8],"paidGenerationRequested":False,"generationRequested":False,
-                    "workerService":service_state("froge-worker.service"),"tunnelService":service_state("froge-tunnel.service")}
-        time.sleep(12)
+def queue_status():
+    jobs=active_jobs_snapshot()
+    return {"phase":"IDLE" if not jobs else "ACTIVE","activeJobs":jobs[:8],
+            "paidGenerationRequested":False,"generationRequested":False,
+            "workerService":service_state("froge-worker.service"),"tunnelService":service_state("froge-tunnel.service")}
 def run_installer():
     stage()
     p=subprocess.run(["/usr/bin/python3","-B",str(ROOT/"install_direct_v33_export_v3.py"),"--approve-service-restart"],
@@ -119,7 +113,7 @@ def run_e2e():
 
 try:
     if MODE=="status":result=status()
-    elif MODE=="wait-idle":result=wait_idle()
+    elif MODE=="queue-status":result=queue_status()
     elif MODE=="apply":result=run_installer()
     elif MODE=="e2e-status":result=e2e_status()
     elif MODE=="e2e":result=run_e2e()
