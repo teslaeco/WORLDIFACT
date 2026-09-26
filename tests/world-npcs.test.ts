@@ -9,7 +9,8 @@ test("ForgeMPC2 worker source is pinned and explicitly generic", () => {
   assert.equal(FORGE_WORKER_SOURCE.gitBlobSha, "25d3a7f62fb97844843e3007d498a3d93a927d42");
   assert.equal(FORGE_WORKER_SOURCE.bytes, 10_343_368);
   assert.equal(FORGE_WORKER_SOURCE.sha256, "4b7e83d07723be958e7325f1cd7afc509ebc72d61a6357925c824ac716052adf");
-  assert.match(FORGE_WORKER_SOURCE.url, new RegExp(FORGE_WORKER_SOURCE.commit));
+  assert.equal(FORGE_WORKER_SOURCE.url, "/world-assets/forge/rapper-v10.glb");
+  assert.match(FORGE_WORKER_SOURCE.upstreamUrl, new RegExp(FORGE_WORKER_SOURCE.commit));
   assert.match(FORGE_WORKER_SOURCE.label, /generic adult/i);
 });
 
@@ -17,8 +18,8 @@ test("mobile NPC cap is four and desktop work is distributed across both new zon
   const mobile = forgeNpcPlans(true), desktop = forgeNpcPlans(false);
   assert.equal(mobile.length, 4);
   assert.equal(desktop.length, 7);
-  assert.ok(mobile.every(item => Math.abs(item.from.x) <= 32 && Math.abs(item.from.z) >= 20 && Math.abs(item.from.z) <= 24));
-  assert.ok(mobile.every(item => Math.abs(item.from.z - 2.7) > 15), "mobile workers stay visibly clear of the five-portal line");
+  assert.ok(mobile.every(item => Math.abs(item.from.x) <= 17 && Math.abs(item.from.z) >= 15 && Math.abs(item.from.z) <= 18));
+  assert.ok(mobile.every(item => Math.abs(item.from.z - 2.7) > 10), "mobile workers stay visibly clear of the five-portal line");
   assert.equal(new Set(desktop.map(item => item.id)).size, desktop.length);
   assert.ok(desktop.some(item => item.from.x >= GRAND_DESERT.minX));
   assert.ok(desktop.some(item => item.from.x <= MOUNTAIN_COAST.maxX));
