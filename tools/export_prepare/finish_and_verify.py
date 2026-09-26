@@ -1,5 +1,5 @@
 """Run rollback-safe Oracle export maintenance, then one resumable E2E job."""
-import argparse,json,os,sys
+import argparse,json,os,sys,time
 from pathlib import Path
 HERE=Path(__file__).resolve().parent;sys.path.insert(0,str(HERE))
 import oracle_direct_export_fix as launcher
@@ -13,12 +13,20 @@ def main():
     if not key.is_file() or not os.access(key,os.R_OK):raise RuntimeError("Missing existing OCI Cloud Shell SSH key.")
     package=launcher.package()
     print("Checking Oracle queue. Existing customer/test jobs are never cancelled automatically.",flush=True)
-    idle=launcher.call_remote(key,"wait-idle",package,timeout=1600)
-    print(json.dumps(idle,indent=2))
-    if idle.get("phase")!="IDLE":
-        jobs=idle.get("activeJobs",[])
+    deadline=time.monotonic()+1500
+    last=None
+    while True:
+        queue=launcher.call_remote(key,"queue-status",package,timeout=70)
+        last=queue
+        if queue.get("phase")=="IDLE":
+            print("Oracle queue is IDLE. Continuing with export maintenance.",flush=True)
+            break
+        jobs=queue.get("activeJobs",[])
         summary=", ".join(str(j.get("id","?"))[:8]+":"+str(j.get("state","?"))+" age="+str(j.get("ageSeconds","?"))+"s" for j in jobs if isinstance(j,dict))
-        raise RuntimeError("Oracle still has an active model job after the bounded wait. Nothing was cancelled or changed. "+summary)
+        print("Oracle queue ACTIVE: "+(summary or "unknown active job")+" — waiting 15 s",flush=True)
+        if time.monotonic()>=deadline:
+            raise RuntimeError("Oracle still has an active model job after 25 minutes. Nothing was cancelled or changed. "+summary)
+        time.sleep(15)
     maintenance=launcher.call_remote(key,"apply",package,timeout=380)
     print(json.dumps(maintenance,indent=2))
     if maintenance.get("phase") not in SUCCESS or maintenance.get("posthocExportRevision")!=2 or maintenance.get("legacyGlbExportRecoveryRevision")!=1:
