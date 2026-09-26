@@ -1,3 +1,16 @@
+# WORLDIFACT — Oracle queue heartbeat follow-up, 26 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · CI PENDING · NO JOB CANCELLATION.**
+
+- Latest owner screenshot shows the finisher printed only `Checking Oracle queue...` and then returned to the Cloud Shell prompt without queue JSON or maintenance output.
+- Root cause in our orchestration: the previous implementation held one silent SSH call open for up to 25 minutes while waiting for the active Oracle job. On mobile/Cloud Shell that path is not observable and can terminate without useful progress evidence.
+- The fix replaces the long remote wait with one-shot, read-only `queue-status` checks every 15 seconds from Cloud Shell. Each poll prints sanitized job id prefix, state and seconds since the last database update.
+- The queue read uses SQLite read-only mode and never reads prompts, cancels jobs, changes SQL state, restarts services or submits AI.
+- As soon as the queue reports `IDLE`, the same command proceeds automatically to the reviewed export maintenance and the single resumable E2E job.
+- After 25 minutes of continuous activity it stops unchanged with the last sanitized queue state instead of hanging silently.
+
+---
+
 # WORLDIFACT — Oracle export active-job guard follow-up, 26 September 2026
 
 **Status: IMPLEMENTED ON REVIEW BRANCH · CI PENDING · NO JOB CANCELLATION.**
@@ -98,36 +111,3 @@
 - **Release gate:** production smoke now hashes both Queen static raw parts against the exact build output before a release can pass. No substitute Queen is allowed.
 - **Giant Tower:** client loading still uses the exact build/release-verified 585,484-byte GAME derivative, but Android rendering no longer depends on runtime WebCrypto. The model is grounded from its actual parsed bounds and moved to `(-8,-18)` with entrance at `(-8,-6.8)` so it is clearly ahead/left of the initial player while remaining outside the river/portal line.
 - **Existing AI Shop job audit:** the five-portal world gains **Import last Shop model + test downloads**. It restores only the existing same-device signed Studio receipt, polls that same job and performs GET-only reads of GLB, PBR ZIP, FBX and BLEND. It never prepares/submits/resubmits generation. A valid GLB is added to the meadow with its embedded materials/textures; successful PBR/FBX/BLEND blobs trigger browser download attempts and every format reports its real success/failure.
-- PBR ZIP / FBX / BLEND are **download-verification artifacts only**; Three.js renders the GLB and they are not falsely described as rendered or production-approved.
-- The current Shop screenshot proves the GLB preview works but at least one export request returns `This model/export is not available on the worker yet.`. This repair exposes the exact per-format result in the world; it does not invent a missing Oracle export.
-- No paid generation, checkout, supplier order or MAKE/manufacturing approval is part of this repair. Physical Android visual acceptance remains **UNKNOWN** until the deployed revision is tested on the owner's device.
-
----
-
-# WORLDIFACT — Giant Tower direct-GLB Android hardening, 25 September 2026
-
-**Status: LIVE · MERGED · PRODUCTION VERIFIED.** Issue #97 / PR #98 are complete. Reviewed head `8f500700b655e741c126299381a3d696de04b796` passed all five exact-head workflows and was squash-merged as `56ea8b8ecabe8ed67704e0d47cd6d80d6d5231b2`.
-
-- Re-uploaded owner GLB is byte-identical to the previously audited building source: SHA-256 `9c2c61af94243788e1938d99b598f8bfd1281ac710bf41236467db263b5a4e5a`, 23,449,560 bytes.
-- The previous runtime still reconstructed the 585,484-byte GAME derivative in the browser from ten base64/gzip parts. That path depended on browser `DecompressionStream` and multiple asset reads; Android still reported/behaved as if the exterior was unavailable.
-- Build/test preparation now reconstructs the exact same reviewed derivative once into a single static `giant-tower.glb` (SHA-256 `5cdb61971ce42634acfb3759a73a8ff01f94cb71b18f8feb5df436d754e443d2`). Runtime validates direct HTTP status, exact byte length, GLB header and SHA-256 before parsing.
-- Production release smoke now hashes the published `/world-assets/giant-building/giant-tower.glb`, so an HTML fallback, stale file or wrong MIME cannot pass release verification.
-- The landmark is moved from (-30,-24) to (-18,-18), keeping it clear of the portal line while bringing the >50-unit tower into the center-left initial view. Entrance moves consistently to (-18,-6.8).
-- The separate lobby remains explicitly **GAME / GENERATED INTERIOR**. No MAKE/manufacturing or engineering claim changes.
-- No paid generation, checkout or supplier action is part of this repair.
-- Post-merge main CI run `36156105314`: **SUCCESS**. Production workflow `36156105267`: **SUCCESS**. Cloudflare version `1b277d5c-27fd-4b77-8a34-586eb0faddb4` is live at `https://worldifact.xodobrox.workers.dev`.
-- Public release smoke passed for 16 HTML routes, 39 matching hub assets and 105 original app entries/assets, including exact published-byte/MIME verification of `/world-assets/giant-building/giant-tower.glb`. No paid API call was made.
-- Physical Android/WebGL artistic acceptance remains **UNKNOWN** until the owner tests the deployed revision.
-
----
-
-# WORLDIFACT — Giant Tower load + landship drive + optional Shop size, 25 September 2026
-
-**Status: LIVE · MERGED · PRODUCTION VERIFIED.** Issue #94 / PR #95 are complete. Reviewed head `bcb8b6bfc37b78bc543858b6ad8149d571bbb8c8` passed all five exact-head workflows and was squash-merged as `d1fa57b3487294ff7aad91c79d35bc62acd3f0cf`.
-
-- **VERIFIED root cause in source:** the high-fidelity Giant Tower package/test contains ten parts, but the runtime manifest in `src/lib/giantBuilding.ts` still listed only `part-00` through `part-03`. The decoder therefore could not reconstruct the reviewed 585,484-byte GLB. The runtime manifest now references all ten reviewed parts and a regression asserts the exact first/last entries and unique count.
-- Giant Tower loading now performs one bounded transient retry and reports the actual bounded failure reason before retaining the truthful **GAME / GENERATED INTERIOR** fallback. Queen and portal startup remain independent.
-- The already-visible owner Mars solar landship is now registered after load as a GAME rideable vehicle. Interact/keyboard/mobile joystick can board, drive/steer and exit it. It uses landship-specific seat, exit, footprint/ground sampling and camera scaling; the backhoe controls remain exclusive to the photovoltaic rover/loader.
-- Landship collision now follows its current driven pose instead of remaining at the original spawn. Whole-model GAME motion does not claim a verified source rig or source animation.
-- AI Shop target dimensions are now **opt-in**. Default is no target size: the preview is not rescaled and no 100×100×100 mm target is shown. The user must explicitly check **Specify model dimensions (optional)** before quick-size/X/Y/Z controls appear. Manufacturing/cart pricing accepts `dimensions: null`; exact-size quote logic remains unchanged when enabled.
-- No paid model generation, checkout, supplier order or MAKE/manufacturing approval is part of this repair.
