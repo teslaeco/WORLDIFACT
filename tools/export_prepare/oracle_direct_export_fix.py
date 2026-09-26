@@ -11,7 +11,7 @@ from pathlib import Path
 HOST="141.148.242.30"
 FILES={
     "direct_v33_patch.py":"385811ea2aeb8a817328ffed584ab79e48c10026",
-    "install_direct_v33_export.py":"9112db1be42adb12b1c75adc700776001ee42e8d",
+    "install_direct_v33_export.py":"5f8b3ed18ca72ecbb375e627ba6f0b042044f83e",
 }
 REMOTE=r'''
 import base64,hashlib,json,os,subprocess,sys,tempfile
