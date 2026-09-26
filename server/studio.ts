@@ -240,10 +240,10 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       try {
         const response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: JSON.stringify(oracleStudioPayload(auth.id, input)) })
         if ([400, 409, 422, 429].includes(response.status)) {
-          // These are explicit Oracle rejections, not uncertain transport. The
-          // worker guarantees that a new job is NOT inserted when it returns
-          // busy/validation/rate-limit 4xx, so release the customer reservation
-          // immediately instead of manufacturing a permanent pending receipt.
+          // Oracle's reviewed contract does not insert a NEW job when it
+          // returns these explicit client/busy/rate-limit rejections. Release
+          // the customer's reservation immediately instead of manufacturing a
+          // permanent pending receipt for an ID that does not exist upstream.
           await response.body?.cancel()
           if (user) await settleUserGeneration(env, user.id, auth.id, 'failed')
           const message = response.status === 409
@@ -501,10 +501,10 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       try {
         const response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: JSON.stringify(oracleStudioPayload(auth.id, input)) })
         if ([400, 409, 422, 429].includes(response.status)) {
-          // These are explicit Oracle rejections, not uncertain transport. The
-          // worker guarantees that a new job is NOT inserted when it returns
-          // busy/validation/rate-limit 4xx, so release the customer reservation
-          // immediately instead of manufacturing a permanent pending receipt.
+          // Oracle's reviewed contract does not insert a NEW job when it
+          // returns these explicit client/busy/rate-limit rejections. Release
+          // the customer's reservation immediately instead of manufacturing a
+          // permanent pending receipt for an ID that does not exist upstream.
           await response.body?.cancel()
           if (user) await settleUserGeneration(env, user.id, auth.id, 'failed')
           const message = response.status === 409
@@ -785,10 +785,10 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       try {
         const response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: JSON.stringify(oracleStudioPayload(auth.id, input)) })
         if ([400, 409, 422, 429].includes(response.status)) {
-          // These are explicit Oracle rejections, not uncertain transport. The
-          // worker guarantees that a new job is NOT inserted when it returns
-          // busy/validation/rate-limit 4xx, so release the customer reservation
-          // immediately instead of manufacturing a permanent pending receipt.
+          // Oracle's reviewed contract does not insert a NEW job when it
+          // returns these explicit client/busy/rate-limit rejections. Release
+          // the customer's reservation immediately instead of manufacturing a
+          // permanent pending receipt for an ID that does not exist upstream.
           await response.body?.cancel()
           if (user) await settleUserGeneration(env, user.id, auth.id, 'failed')
           const message = response.status === 409
