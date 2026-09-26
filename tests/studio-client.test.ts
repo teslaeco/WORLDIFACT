@@ -117,3 +117,23 @@ test('missing optional exports prepare once and retry through a separate prepare
     { url: `/api/studio/jobs/${id}/exports/fbx`, method: 'GET', stage: 'prepared' },
   ])
 })
+
+test('legacy missing receipt reconciliation is a dedicated no-generation POST and becomes terminal', async () => {
+  const storage = store()
+  storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: new Date(Date.now() - 181_000).toISOString() }))
+  const calls: { url: string; method: string }[] = []
+  const fake = (async (url: string | URL | Request, init?: RequestInit) => {
+    const target = String(url), method = init?.method ?? 'GET'
+    calls.push({ url: target, method })
+    assert.equal(new Headers(init?.headers).get('X-WORLDIFACT-Job'), receipt.ticket)
+    if (target.endsWith('/reconcile-missing')) return Response.json({ job: { id, state: 'failed' }, reconciled: true, generationRequested: false })
+    throw new Error('Unexpected request: ' + target)
+  }) as typeof fetch
+  const client = new StudioCoordinator(storage, fake)
+  client.restore()
+  const job = await client.reconcileMissing()
+  assert.equal(job.state, 'failed')
+  assert.deepEqual(calls, [{ url: `/api/studio/jobs/${id}/reconcile-missing`, method: 'POST' }])
+  assert.equal((await client.poll()).state, 'failed', 'reconciled terminal state is retained locally without polling Oracle again')
+})
+
