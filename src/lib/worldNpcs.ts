@@ -32,17 +32,42 @@ export type NpcPlan = {
 };
 
 const PLANS: NpcPlan[] = [
-  { id: "forge-planter-east", task: "planting", from: { x: 72, z: -58 }, to: { x: 96, z: -49 }, offset: 0 },
-  { id: "forge-builder-east", task: "building", from: { x: 78, z: 32 }, to: { x: 116, z: 38 }, offset: 4.5 },
-  { id: "forge-carrier-east", task: "carrying", from: { x: 68, z: 19 }, to: { x: 108, z: 30 }, offset: 9 },
-  { id: "forge-planter-west", task: "planting", from: { x: -68, z: 52 }, to: { x: -92, z: 62 }, offset: 2 },
-  { id: "forge-builder-west", task: "building", from: { x: -72, z: -33 }, to: { x: -103, z: -27 }, offset: 7 },
-  { id: "forge-surveyor-west", task: "surveying", from: { x: -82, z: 16 }, to: { x: -116, z: 8 }, offset: 11 },
-  { id: "forge-carrier-west", task: "carrying", from: { x: -61, z: -65 }, to: { x: -97, z: -76 }, offset: 14 },
+  // The first four are deliberately visible/reachable from the central hub on mobile.
+  // Keep them clear of the five portal line at z≈2.7.
+  { id: "forge-planter-east", task: "planting", from: { x: 28, z: -22 }, to: { x: 43, z: -29 }, offset: 0 },
+  { id: "forge-builder-east", task: "building", from: { x: 31, z: 22 }, to: { x: 45, z: 30 }, offset: 4.5 },
+  { id: "forge-carrier-west", task: "carrying", from: { x: -28, z: -23 }, to: { x: -44, z: -30 }, offset: 9 },
+  { id: "forge-planter-west", task: "planting", from: { x: -31, z: 23 }, to: { x: -46, z: 33 }, offset: 2 },
+  // Desktop keeps additional workers deeper in the new biomes.
+  { id: "forge-builder-desert", task: "building", from: { x: 72, z: 38 }, to: { x: 106, z: 44 }, offset: 7 },
+  { id: "forge-surveyor-coast", task: "surveying", from: { x: -74, z: 17 }, to: { x: -108, z: 9 }, offset: 11 },
+  { id: "forge-carrier-coast", task: "carrying", from: { x: -66, z: -60 }, to: { x: -99, z: -72 }, offset: 14 },
 ];
 
 export function forgeNpcPlans(mobile: boolean) {
   return PLANS.slice(0, mobile ? 4 : 7);
+}
+
+function npcMarker(task: NpcTask) {
+  const root = new THREE.Group(); root.name = "forge-worker-visible-marker";
+  const taskColor = task === "planting" ? "#8ee39a" : task === "building" ? "#ffcf72" : task === "carrying" ? "#90caf9" : "#ce93d8";
+  const halo = new THREE.Mesh(
+    new THREE.TorusGeometry(.42,.07,7,18),
+    new THREE.MeshBasicMaterial({ color:taskColor, transparent:true, opacity:.92, depthWrite:false }),
+  );
+  halo.rotation.x=Math.PI/2; halo.position.y=2.62;
+  const diamond = new THREE.Mesh(
+    new THREE.OctahedronGeometry(.19,0),
+    new THREE.MeshBasicMaterial({ color:"#fff4c7", transparent:true, opacity:.96, depthWrite:false }),
+  );
+  diamond.position.y=2.62;
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(.018,.018,.72,6),
+    new THREE.MeshBasicMaterial({ color:taskColor, transparent:true, opacity:.6, depthWrite:false }),
+  );
+  stem.position.y=2.22;
+  root.add(halo,diamond,stem);
+  return root;
 }
 
 function material(color: string) {
@@ -130,7 +155,7 @@ export function createForgeNpcSystem(
   const root = new THREE.Group(); root.name = "forge-mpc2-living-workers"; root.userData.provenance = "FORGEMPC2_MIT__CC0_ANATOMY_COMPONENTS";
   const npcs: RuntimeNpc[] = forgeNpcPlans(mobile).map((plan,index) => {
     const npcRoot = new THREE.Group(); npcRoot.name = plan.id; npcRoot.position.set(plan.from.x,groundAt(plan.from.x,plan.from.z),plan.from.z);
-    const visual = fallbackWorker(index), prop = taskProp(plan.task); npcRoot.add(visual,prop); root.add(npcRoot);
+    const visual = fallbackWorker(index), prop = taskProp(plan.task), marker = npcMarker(plan.task); npcRoot.add(visual,prop,marker); root.add(npcRoot);
     return { plan, root:npcRoot, visual, prop };
   });
   const missionResults = new THREE.Group(); missionResults.name = "field-mission-results"; root.add(missionResults);
@@ -219,7 +244,7 @@ export function createForgeNpcSystem(
       if (onStatus) onStatus("Forge workers: " + npcs.length + " GAME NPCs active with procedural fallback · ForgeMPC2 asset unavailable");
     }
   };
-  const loadTimer = setTimeout(() => { void upgrade(); }, mobile ? 12_000 : 6_000);
+  const loadTimer = setTimeout(() => { void upgrade(); }, mobile ? 3_000 : 2_000);
 
   const update = (elapsed:number, dt:number) => {
     for (const [index,npcItem] of npcs.entries()) {

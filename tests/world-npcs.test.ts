@@ -17,6 +17,8 @@ test("mobile NPC cap is four and desktop work is distributed across both new zon
   const mobile = forgeNpcPlans(true), desktop = forgeNpcPlans(false);
   assert.equal(mobile.length, 4);
   assert.equal(desktop.length, 7);
+  assert.ok(mobile.every(item => Math.abs(item.from.x) <= 32 && Math.abs(item.from.z) >= 20 && Math.abs(item.from.z) <= 24));
+  assert.ok(mobile.every(item => Math.abs(item.from.z - 2.7) > 15), "mobile workers stay visibly clear of the five-portal line");
   assert.equal(new Set(desktop.map(item => item.id)).size, desktop.length);
   assert.ok(desktop.some(item => item.from.x >= GRAND_DESERT.minX));
   assert.ok(desktop.some(item => item.from.x <= MOUNTAIN_COAST.maxX));
