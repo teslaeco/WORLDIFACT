@@ -9,7 +9,7 @@ import {
   type MissionContext,
   type MissionPoint,
   type MissionTask,
-} from "./worldNpcMissions";
+} from "./worldNpcMissions.ts";
 
 export const FORGE_WORKER_SOURCE = Object.freeze({
   repository: "teslaeco/Froge-MPC-2-test",
