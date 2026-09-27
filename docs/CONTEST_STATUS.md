@@ -100,3 +100,11 @@ Owner authorization: implement on a branch, create a PR and merge after green CI
 - STANDARD photo jobs now send a bounded worker-side `agentInstructions` fidelity policy: classify the subject first, ignore portrait-only heuristics for non-human assets, preserve architecture massing/asymmetry/setbacks/terraces, compare silhouette before texture work, and reject generic substitutions.
 - Tests assert the instruction is present only for photo-guided STANDARD jobs and reaches the Oracle `/v1/jobs` payload together with unchanged reference bytes. No model generation or paid provider call is made by these tests.
 
+## 27 September 2026 — portal-world Terrace Tower replacement
+
+- Owner supplied a new replacement building as GLB/FBX plus textures. Canonical inspected GLB: SHA-256 `0321c8f76c84d53a33f6fed20d128cd3460b3e24f87ff4bb36ee92f25cf3a3c6`, 21,047,056 bytes, 110 meshes/nodes, 491,138 vertices, 264,680 triangles, 12 materials, 10 texture images, no animations.
+- This change **supersedes** the 25 September Giant Tower runtime described above. Its ten static base64/gzip transport parts and build-time `giant-tower.glb` reconstruction are retired.
+- The valley runtime now builds a compact GAME exterior from ten irregular floor silhouettes extracted from the new GLB, plus source-inspired pink stone, dark glass, terrace rails, planting and roof equipment. It preserves the replacement building's stacked/offset massing without claiming exact source topology or texture/UV parity.
+- Exterior placement remains in the center-left valley landmark area; the interaction gate moves forward to stay outside the larger new footprint. The separate lobby remains explicitly **GAME / GENERATED INTERIOR**.
+- Release verification no longer expects the retired static Giant Tower GLB. No paid generation, checkout, supplier action or manufacturing claim is part of this replacement.
+
