@@ -1,0 +1,63 @@
+name: Ingest owner portal building once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: worldifact-owner-building-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    environment:
+      name: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact main commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+
+      - name: Gate to explicit one-time marker
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -m -r HEAD)"
+          if printf '%s\n' "$changed" | grep -qx 'ops/INGEST_PORTAL_BUILDING_20260927'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            echo 'Owner portal-building ingestion marker found.'
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            echo 'No new ingestion marker in this commit; no Oracle artifact read.'
+          fi
+
+      - name: Set up Node
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+
+      - name: Retrieve exact existing owner-selected GLB
+        if: steps.gate.outputs.run == 'true'
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: node scripts/ingest-portal-building.mjs
+
+      - name: Commit exact GLB to main
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add public/world-assets/giant-building/giant-tower.glb public/world-assets/giant-building/current.json
+          git diff --cached --exit-code && { echo 'Expected owner building change is missing.'; exit 1; } || true
+          git config user.name 'WORLDIFACT release bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'asset: install owner-selected portal building'
+          git push origin HEAD:main

@@ -1,0 +1,5 @@
+Owner-authorized one-time ingestion of existing generated building job e7e96cc3-8ad6-4ce8-996a-a4292407bc24.
+This marker permits a READ of the existing Oracle artifact and a repository commit only.
+It does not authorize a new AI generation, provider request, payment, credit debit, or regeneration.
+Expected GLB SHA-256: 0321c8f76c84d53a33f6fed20d128cd3460b3e24f87ff4bb36ee92f25cf3a3c6
+Expected bytes: 21047056

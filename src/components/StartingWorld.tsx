@@ -149,7 +149,7 @@ export default function StartingWorld({
   useEffect(() => subscribeAvatarProgress(avatarChoice, setAvatarProgress), [avatarChoice, avatarAttempt]);
   const [textureFailed, setTextureFailed] = useState(false);
   const [sculptureFailed, setSculptureFailed] = useState(false);
-  const [buildingStatus, setBuildingStatus] = useState("Giant tower: queued");
+  const [buildingStatus, setBuildingStatus] = useState("Terrace tower: queued");
   const [ownerVehicleStatus, setOwnerVehicleStatus] = useState("Mars solar landship: queued");
   const [insideGiantBuilding, setInsideGiantBuilding] = useState(false);
   const [interaction, setInteraction] = useState("Interact");
@@ -181,7 +181,7 @@ export default function StartingWorld({
       setDriving(false);
       setTextureFailed(false);
       setSculptureFailed(false);
-      setBuildingStatus("Giant tower: queued");
+      setBuildingStatus("Terrace tower: queued");
       setOwnerVehicleStatus("Mars solar landship: queued");
       setInsideGiantBuilding(false);
     });
@@ -277,16 +277,16 @@ export default function StartingWorld({
     runtimeObjects.current = objects;
     for (const o of objects) scene.add(o.group);
 
-    // The owner's source GLB is represented in-browser by a bounded GAME-optimized
-    // derivative. Its exterior is loaded after the core world/avatar so this
-    // 3D landmark cannot delay the five portals or Queen startup.
+    // The owner's attached terrace-tower GLB is represented by a compact source-derived
+    // GAME exterior. It is added after the core world/avatar so the landmark
+    // cannot delay the five portals or Queen startup.
     const giantEntrance = !lunar && !sea ? createGiantBuildingEntrance() : null;
     const giantInterior = !lunar && !sea ? createGiantBuildingInterior() : null;
     if (giantEntrance) scene.add(giantEntrance);
     if (giantInterior) scene.add(giantInterior);
     let giantBuildingDisposed = false;
     const giantBuildingLoadTimer = giantEntrance ? window.setTimeout(() => {
-      queueMicrotask(() => setBuildingStatus("Giant tower: loading owner model…"));
+      queueMicrotask(() => setBuildingStatus("Terrace tower: building owner-derived exterior…"));
       void (async () => {
         let lastError: unknown;
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -294,24 +294,24 @@ export default function StartingWorld({
             const root = await loadGiantBuilding();
             if (giantBuildingDisposed) { disposeObject(root); return; }
             scene.add(root);
-            queueMicrotask(() => setBuildingStatus("Giant tower: higher-fidelity owner model ready · GAME"));
+            queueMicrotask(() => setBuildingStatus("Terrace tower: owner-derived model ready · GAME"));
             return;
           } catch (error) {
             lastError = error;
             if (attempt === 0 && !giantBuildingDisposed) {
-              queueMicrotask(() => setBuildingStatus("Giant tower: retrying exterior load…"));
+              queueMicrotask(() => setBuildingStatus("Terrace tower: retrying exterior build…"));
               await new Promise(resolve => window.setTimeout(resolve, 850));
             }
           }
         }
-        console.error("[WORLDIFACT Giant Tower]", lastError);
+        console.error("[WORLDIFACT Terrace Tower]", lastError);
         if (!giantBuildingDisposed) {
           const reason = lastError instanceof Error ? lastError.message.replace(/^Giant building GAME /, "").slice(0, 90) : "load failed";
-          queueMicrotask(() => setBuildingStatus(`Giant tower exterior unavailable · ${reason} · generated GAME interior remains accessible`));
+          queueMicrotask(() => setBuildingStatus(`Terrace tower exterior unavailable · ${reason} · generated GAME interior remains accessible`));
         }
       })();
     }, mobile ? 900 : 450) : undefined;
-    if (!giantEntrance) queueMicrotask(() => setBuildingStatus("Giant tower is available in the valley world"));
+    if (!giantEntrance) queueMicrotask(() => setBuildingStatus("Terrace tower is available in the valley world"));
 
     // The owner's second supplied vehicle is a static GAME model until a reviewed
     // rig/drive setup exists. Load it separately so it cannot delay the Queen,
@@ -1092,7 +1092,7 @@ export default function StartingWorld({
                         ? "Walk through the generated GAME lobby · use the glowing EXIT marker to leave"
                         : mobile ? "Left thumb: move · right thumb: look · tap Jump twice for a flip" : "WASD move · Space jump (twice: flip) · G fly/land · I equipment",
         );
-        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearBuildingExit ? "Exit Giant Tower" : nearBuildingEntrance ? "Enter Giant Tower" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? isOwnerVehicle(ride) ? "Exit Mars landship" : "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : isOwnerVehicle(near) ? "Drive Mars landship" : "Drive rover" : "Interact");
+        setInteraction(boarding ? "Entering / leaving vehicle…" : equipmentMode === "drone" ? "Recall fan drone" : equipmentMode === "flight" ? "Land / stow fans" : nearBuildingExit ? "Exit Terrace Tower" : nearBuildingEntrance ? "Enter Terrace Tower" : nearPortal ? `Enter ${nearPortal.shortTitle}` : ride ? isOwnerVehicle(ride) ? "Exit Mars landship" : "Exit rover" : near ? specOf(near).kind === "habitat" ? "Open / close door" : isOwnerVehicle(near) ? "Drive Mars landship" : "Drive rover" : "Interact");
       }
       renderer.render(scene, camera);
       if (!contextLost) frame = requestAnimationFrame(animate);
