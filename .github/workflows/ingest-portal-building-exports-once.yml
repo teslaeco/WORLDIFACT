@@ -1,0 +1,68 @@
+name: Ingest Terrace Tower FBX and textures once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: worldifact-owner-building-exports
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    environment:
+      name: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact main commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+
+      - name: Gate to explicit one-time owner marker
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -m -r HEAD)"
+          if printf '%s\n' "$changed" | grep -qx 'ops/INGEST_PORTAL_BUILDING_EXPORTS_20260927'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            echo 'Exact owner export ingestion marker found.'
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            echo 'No export-ingestion marker in this commit.'
+          fi
+
+      - name: Set up Node
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+
+      - name: Retrieve and verify exact existing FBX and texture ZIP
+        if: steps.gate.outputs.run == 'true'
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: node scripts/ingest-portal-building-exports.mjs
+
+      - name: Commit verified owner assets to main
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -f public/world-assets/giant-building/terrace-tower-e7e96cc3.fbx
+          git add -f public/world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip
+          git add public/world-assets/giant-building/current.json
+          if git diff --cached --quiet; then
+            echo 'Expected exact owner export changes are missing.'
+            exit 1
+          fi
+          git config user.name 'WORLDIFACT release bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'asset: publish exact Terrace Tower FBX and textures'
+          git push origin HEAD:main
