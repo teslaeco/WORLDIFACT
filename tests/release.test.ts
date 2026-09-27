@@ -40,7 +40,6 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
   const dist = await mkdtemp(join(tmpdir(), "worldifact-release-"));
   t.after(() => rm(dist, { recursive: true, force: true }));
   await mkdir(join(dist, "assets"));
-  await mkdir(join(dist, "world-assets", "giant-building"), { recursive: true });
   const files = new Map([
     ["/index.html", '<html><title>WORLDIFACT</title><div id="root"></div><script src="/assets/app.js"></script></html>'],
     ["/assets/app.js", "export const worldifact = true;"],
@@ -49,7 +48,6 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     ["/assets/lake.webp", "RIFF mock texture bytes"],
     ["/world-assets/polyhedron-led.gltf", '{"asset":{"version":"2.0"},"fixture":"bundled original model bytes"}'],
     ["/world-assets/polyhedron-led-poster.svg", '<svg xmlns="http://www.w3.org/2000/svg"><title>Exact model poster fixture</title></svg>'],
-    ["/world-assets/giant-building/giant-tower.glb", "glTF direct Giant Tower fixture"],
     ["/apps/chess/index.html", '<html>Existing chess app<script src="./game.js"></script></html>'],
     ["/apps/chess/guest.html", '<html>Existing guest app<script src="./game.js"></script></html>'],
     ["/apps/chess/game.js", "export const originalChess = true;"],
