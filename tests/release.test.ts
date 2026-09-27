@@ -49,7 +49,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     ["/assets/lake.webp", "RIFF mock texture bytes"],
     ["/world-assets/polyhedron-led.gltf", '{"asset":{"version":"2.0"},"fixture":"bundled original model bytes"}'],
     ["/world-assets/polyhedron-led-poster.svg", '<svg xmlns="http://www.w3.org/2000/svg"><title>Exact model poster fixture</title></svg>'],
-    ["/world-assets/giant-building/giant-tower.glb", Buffer.from("glTF exact-owner-terrace-tower-fixture")],
+    ["/world-assets/giant-building/terrace-tower-e7e96cc3.glb", Buffer.from("glTF exact-owner-terrace-tower-fixture")],
     ["/apps/chess/index.html", '<html>Existing chess app<script src="./game.js"></script></html>'],
     ["/apps/chess/guest.html", '<html>Existing guest app<script src="./game.js"></script></html>'],
     ["/apps/chess/game.js", "export const originalChess = true;"],
@@ -85,7 +85,7 @@ test("release smoke verifies deep links and lazy assets and only sends DEMO with
   assert.equal(result.verifiedAssets, 7);
   assert.equal(result.foundationAssets, 5);
   assert.equal(f.providerCalls(), 0);
-  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg", "/world-assets/giant-building/giant-tower.glb"]) {
+  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg", "/world-assets/giant-building/terrace-tower-e7e96cc3.glb"]) {
     assert.ok(f.requests.some(request => new URL(request.url).pathname === path), `${path} must be checked`);
   }
   const posts = f.requests.filter((request) => request.method === "POST");
@@ -207,7 +207,7 @@ test("release smoke detects a missing panorama served as HTML or a stale image",
 });
 
 test("release requires bundled sculpture and exact Terrace Tower files with exact build bytes and a valid content type", async (t) => {
-  for (const [path, mime] of [["/world-assets/polyhedron-led.gltf", "model/gltf+json"], ["/world-assets/polyhedron-led-poster.svg", "image/svg+xml"], ["/world-assets/giant-building/giant-tower.glb", "model/gltf-binary"]]) {
+  for (const [path, mime] of [["/world-assets/polyhedron-led.gltf", "model/gltf+json"], ["/world-assets/polyhedron-led-poster.svg", "image/svg+xml"], ["/world-assets/giant-building/terrace-tower-e7e96cc3.glb", "model/gltf-binary"]]) {
     for (const variant of ["html", "stale", "wrong-mime", "missing"]) {
       const f = await fixture(t);
       const fetcher = async (url: URL, init: RequestInit) => url.pathname === path

@@ -1,0 +1,17 @@
+Owner-authorized one-time ingestion of the already-generated Terrace Tower exports from Oracle job e7e96cc3-8ad6-4ce8-996a-a4292407bc24.
+
+Allowed actions:
+- READ existing succeeded Oracle FBX export.
+- READ existing succeeded Oracle PBR/textures ZIP export.
+- Verify exact byte lengths and SHA-256 hashes against the owner-uploaded attachments.
+- Commit those exact verified files and update the public asset manifest.
+
+This does NOT authorize a new model generation, regeneration, provider call for generation, payment, credit debit, checkout, supplier order, or substitution.
+
+Expected FBX:
+bytes 10186796
+sha256 cef2704287ebc78e1d6a36fe01fa0f167571909511e922f6618dab1108d884eb
+
+Expected texture ZIP:
+bytes 3673160
+sha256 b6826b0fa9d6cfd72bfbe7733ad66e3b6071833c52346a2367ee4f2fedae49cf

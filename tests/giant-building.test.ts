@@ -31,7 +31,7 @@ test("attached Terrace Tower exact GLB replaces the previous portal-world landma
   assert.equal(GIANT_BUILDING_SOURCE_VERTICES, 491_138);
   assert.equal(GIANT_BUILDING_SOURCE_TRIANGLES, 264_680);
   assert.equal(GIANT_BUILDING_RUNTIME_PROFILE, "owner-exact-glb-v1");
-  assert.equal(GIANT_BUILDING_URL, "/world-assets/giant-building/giant-tower.glb");
+  assert.equal(GIANT_BUILDING_URL, "/world-assets/giant-building/terrace-tower-e7e96cc3.glb");
 });
 
 test("terrace tower remains a large landmark clear of the aligned water portals", () => {
