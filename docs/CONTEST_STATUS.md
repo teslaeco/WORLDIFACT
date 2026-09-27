@@ -116,3 +116,12 @@ Owner authorization: implement on a branch, create a PR and merge after green CI
 - Placement/collision and the separate **GAME / GENERATED INTERIOR** lobby are retained. The runtime scale/position transform is gameplay presentation only and is not an engineering or manufacturing claim.
 - Release smoke now checks the published Terrace Tower binary against the exact build bytes so an HTML fallback, stale file or substitute cannot pass.
 
+## 27 September 2026 — Terrace Tower cache-bust + exact export publication
+
+- Android production evidence showed `exact owner building size mismatch (585484)`: the historical `giant-tower.glb` URL could still return the old 585,484-byte derivative.
+- Runtime now uses immutable `/world-assets/giant-building/terrace-tower-e7e96cc3.glb` and requests it with `cache: no-store`; the exact GLB remains 21,047,056 bytes / SHA-256 `0321c8f76c84d53a33f6fed20d128cd3460b3e24f87ff4bb36ee92f25cf3a3c6`.
+- The existing succeeded Oracle job exports were retrieved without regeneration and verified against the owner's re-uploaded attachments:
+  - FBX: 10,186,796 bytes / `cef2704287ebc78e1d6a36fe01fa0f167571909511e922f6618dab1108d884eb`
+  - texture ZIP: 3,673,160 bytes / `b6826b0fa9d6cfd72bfbe7733ad66e3b6071833c52346a2367ee4f2fedae49cf`
+- Those exact files are committed at cache-busted public paths beside the GLB. No new AI generation or generation-credit spend occurred.
+
