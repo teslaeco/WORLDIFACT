@@ -40,6 +40,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
   const dist = await mkdtemp(join(tmpdir(), "worldifact-release-"));
   t.after(() => rm(dist, { recursive: true, force: true }));
   await mkdir(join(dist, "assets"));
+  await mkdir(join(dist, "world-assets"), { recursive: true });
   const files = new Map([
     ["/index.html", '<html><title>WORLDIFACT</title><div id="root"></div><script src="/assets/app.js"></script></html>'],
     ["/assets/app.js", "export const worldifact = true;"],
