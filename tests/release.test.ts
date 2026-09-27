@@ -41,7 +41,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
   t.after(() => rm(dist, { recursive: true, force: true }));
   await mkdir(join(dist, "assets"));
   await mkdir(join(dist, "world-assets", "giant-building"), { recursive: true });
-  const files = new Map([
+  const files = new Map<string, string | Uint8Array>([
     ["/index.html", '<html><title>WORLDIFACT</title><div id="root"></div><script src="/assets/app.js"></script></html>'],
     ["/assets/app.js", "export const worldifact = true;"],
     ["/assets/app.css", "body { color: white; }"],
