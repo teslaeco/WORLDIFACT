@@ -1,10 +1,26 @@
 {
-  "revision": 2,
-  "installedAt": "2026-09-27T08:46:04.000Z",
+  "revision": 3,
+  "installedAt": "2026-09-27T09:44:52.414Z",
   "source": "OWNER_GENERATED_WORLDIFACT_ORACLE_JOB",
   "jobId": "e7e96cc3-8ad6-4ce8-996a-a4292407bc24",
   "fileName": "WORLDIFACT-e7e96cc3-8ad6-4ce8-996a-a4292407bc24.glb",
   "sha256": "0321c8f76c84d53a33f6fed20d128cd3460b3e24f87ff4bb36ee92f25cf3a3c6",
   "bytes": 21047056,
-  "note": "Exact owner-selected GLB. No new AI generation was requested by ingestion."
+  "note": "Exact owner-selected GLB, FBX and texture ZIP. Existing succeeded job exports only; no new AI generation requested.",
+  "label": "Terrace Tower",
+  "glb": {
+    "path": "/world-assets/giant-building/terrace-tower-e7e96cc3.glb",
+    "bytes": 21047056,
+    "sha256": "0321c8f76c84d53a33f6fed20d128cd3460b3e24f87ff4bb36ee92f25cf3a3c6"
+  },
+  "fbx": {
+    "path": "/world-assets/giant-building/terrace-tower-e7e96cc3.fbx",
+    "bytes": 10186796,
+    "sha256": "cef2704287ebc78e1d6a36fe01fa0f167571909511e922f6618dab1108d884eb"
+  },
+  "textures": {
+    "path": "/world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip",
+    "bytes": 3673160,
+    "sha256": "b6826b0fa9d6cfd72bfbe7733ad66e3b6071833c52346a2367ee4f2fedae49cf"
+  }
 }
