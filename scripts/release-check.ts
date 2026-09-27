@@ -133,11 +133,11 @@ export async function checkPublishedRelease(deployment: Deployment,
     await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
   }
   // The login hero and all five portal frames must come from this release's
-  // bundled original geometry. An HTML fallback/old proxy error is not a model.
+  // bundled original geometry. The terrace tower is now generated in-runtime
+  // from source-derived floor profiles and therefore has no static GLB artifact.
   const sculptureAssets = [
     { path: "world-assets/polyhedron-led.gltf", types: ["model/gltf+json", "application/json"] },
     { path: "world-assets/polyhedron-led-poster.svg", types: ["image/svg+xml"] },
-    { path: "world-assets/giant-building/giant-tower.glb", types: ["model/gltf-binary", "application/octet-stream"] },
   ];
   for (const { path, types } of sculptureAssets) {
     await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
