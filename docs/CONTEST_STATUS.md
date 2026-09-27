@@ -108,3 +108,11 @@ Owner authorization: implement on a branch, create a PR and merge after green CI
 - Exterior placement remains in the center-left valley landmark area; the interaction gate moves forward to stay outside the larger new footprint. The separate lobby remains explicitly **GAME / GENERATED INTERIOR**.
 - Release verification no longer expects the retired static Giant Tower GLB. No paid generation, checkout, supplier action or manufacturing claim is part of this replacement.
 
+## 27 September 2026 — exact Terrace Tower runtime
+
+- The owner-selected GLB `WORLDIFACT-e7e96cc3-8ad6-4ce8-996a-a4292407bc24.glb` was retrieved from the existing succeeded Oracle job without requesting a new AI generation.
+- Ingestion verified exact size **21,047,056 bytes** and SHA-256 `0321c8f76c84d53a33f6fed20d128cd3460b3e24f87ff4bb36ee92f25cf3a3c6`, then committed the exact binary to `public/world-assets/giant-building/giant-tower.glb`.
+- The interim procedural ten-floor approximation is superseded. The portal world now lazy-loads the exact GLB, validates byte length, GLB v2 header and SHA-256 in the browser, then parses the original embedded materials/textures.
+- Placement/collision and the separate **GAME / GENERATED INTERIOR** lobby are retained. The runtime scale/position transform is gameplay presentation only and is not an engineering or manufacturing claim.
+- Release smoke now checks the published Terrace Tower binary against the exact build bytes so an HTML fallback, stale file or substitute cannot pass.
+
