@@ -5,7 +5,7 @@ export const GIANT_BUILDING_SOURCE_BYTES = 21_047_056;
 export const GIANT_BUILDING_SOURCE_VERTICES = 491_138;
 export const GIANT_BUILDING_SOURCE_TRIANGLES = 264_680;
 export const GIANT_BUILDING_RUNTIME_PROFILE = "owner-exact-glb-v1";
-export const GIANT_BUILDING_URL = "/world-assets/giant-building/giant-tower.glb";
+export const GIANT_BUILDING_URL = "/world-assets/giant-building/terrace-tower-e7e96cc3.glb";
 export const GIANT_BUILDING_GAME_SHA256 = GIANT_BUILDING_SOURCE_SHA256;
 export const GIANT_BUILDING_GAME_BYTES = GIANT_BUILDING_SOURCE_BYTES;
 export const GIANT_BUILDING_GAME_TRIANGLES = GIANT_BUILDING_SOURCE_TRIANGLES;
@@ -111,7 +111,7 @@ function hex(bytes: ArrayBuffer) {
 }
 
 export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
-  const response = await fetcher(GIANT_BUILDING_URL, { cache: "force-cache", credentials: "same-origin" });
+  const response = await fetcher(GIANT_BUILDING_URL, { cache: "no-store", credentials: "same-origin" });
   if (!response.ok) throw new Error(`exact owner building unavailable (${response.status})`);
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength !== GIANT_BUILDING_GAME_BYTES) throw new Error(`exact owner building size mismatch (${bytes.byteLength})`);
