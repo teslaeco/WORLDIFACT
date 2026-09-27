@@ -4,8 +4,11 @@ export const GIANT_BUILDING_SOURCE_SHA256 = "0321c8f76c84d53a33f6fed20d128cd3460
 export const GIANT_BUILDING_SOURCE_BYTES = 21_047_056;
 export const GIANT_BUILDING_SOURCE_VERTICES = 491_138;
 export const GIANT_BUILDING_SOURCE_TRIANGLES = 264_680;
-export const GIANT_BUILDING_SOURCE_FLOORS = 10;
-export const GIANT_BUILDING_RUNTIME_PROFILE = "owner-source-footprint-v1";
+export const GIANT_BUILDING_RUNTIME_PROFILE = "owner-exact-glb-v1";
+export const GIANT_BUILDING_URL = "/world-assets/giant-building/giant-tower.glb";
+export const GIANT_BUILDING_GAME_SHA256 = GIANT_BUILDING_SOURCE_SHA256;
+export const GIANT_BUILDING_GAME_BYTES = GIANT_BUILDING_SOURCE_BYTES;
+export const GIANT_BUILDING_GAME_TRIANGLES = GIANT_BUILDING_SOURCE_TRIANGLES;
 
 export const GIANT_BUILDING_POSITION = Object.freeze({ x: -18, z: -18 });
 export const GIANT_BUILDING_SCALE = 5.5;
@@ -17,33 +20,13 @@ export const GIANT_INTERIOR_EXIT = Object.freeze({ x: 0, z: 7.25 });
 export const GIANT_INTERIOR_BOUNDS = Object.freeze({ minX: -10.7, maxX: 10.7, minZ: -7.35, maxZ: 7.35 });
 
 const SOURCE_HALF_X = 2.22 * GIANT_BUILDING_SCALE;
-const SOURCE_HALF_Z = 2.07 * GIANT_BUILDING_SCALE;
+const SOURCE_HALF_Z = 2.21 * GIANT_BUILDING_SCALE;
 export const GIANT_BUILDING_FOOTPRINT = Object.freeze({
   minX: GIANT_BUILDING_POSITION.x - SOURCE_HALF_X,
   maxX: GIANT_BUILDING_POSITION.x + SOURCE_HALF_X,
   minZ: GIANT_BUILDING_POSITION.z - SOURCE_HALF_Z,
   maxZ: GIANT_BUILDING_POSITION.z + SOURCE_HALF_Z,
 });
-
-type FloorProfile = { y0: number; y1: number; points: readonly (readonly [number, number])[] };
-
-/**
- * Source-derived floor silhouettes sampled from the owner's attached GLB.
- * The 21 MB customer file stays outside the public repository; these compact
- * profiles preserve the visible stacked/offset massing for the playable world.
- */
-export const GIANT_BUILDING_FLOORS: readonly FloorProfile[] = Object.freeze([
-  { y0: 0, y1: 0.93, points: [[-1.907, 1.635], [0, 2.14], [1.249, 1.84], [1.848, 1.232], [2.212, -0.13], [1.606, -0.667], [1.697, -1.333], [1.172, -1.954], [0.36, -1.682], [-0.358, -2.064], [-0.632, -1.875], [-1.755, -1.89], [-1.947, -1.039], [-1.816, -0.368], [-2.199, 0.129]] },
-  { y0: 0.93, y1: 1.86, points: [[-1.943, -1.023], [-1.564, -0.29], [-1.806, 0.176], [-1.684, 0.783], [-1.098, 1.857], [1.284, 1.876], [1.648, 1.176], [1.824, -0.081], [1.495, -0.812], [1.604, -1.237], [1.008, -1.61], [-0.312, -1.905], [-1.482, -1.491]] },
-  { y0: 1.86, y1: 2.79, points: [[-1.769, -0.949], [-1.485, -0.524], [-1.819, 0.083], [-1.512, 1.353], [-1.002, 1.857], [-0.495, 1.576], [-0.06, 1.798], [1.261, 1.733], [1.656, 1.017], [1.501, 0.463], [2.002, -0.077], [1.595, -0.5], [1.628, -1.22], [0.848, -1.533], [-1.466, -1.56]] },
-  { y0: 2.79, y1: 3.72, points: [[-1.807, 0.085], [-1.563, 1.294], [-1.222, 1.389], [-0.975, 1.832], [0.651, 1.514], [1.327, 1.675], [1.742, 1.075], [1.532, 0.654], [1.901, -0.099], [1.544, -1.198], [-0.166, -1.924], [-0.632, -1.54], [-1.421, -1.518], [-1.776, -1.017], [-1.459, -0.347]] },
-  { y0: 3.72, y1: 4.65, points: [[-1.946, 0.151], [-1.604, 1.364], [-1.019, 1.745], [1.164, 1.628], [1.806, 1.161], [1.564, 0.411], [1.803, -0.07], [1.597, -1.269], [0.951, -1.646], [0.098, -1.602], [-0.213, -1.897], [-1.475, -1.484], [-1.735, -1.017], [-1.712, -0.025]] },
-  { y0: 4.65, y1: 5.58, points: [[-1.541, -0.405], [-1.897, 0.077], [-1.515, 1.339], [-1.065, 1.934], [-0.433, 1.663], [0.05, 1.917], [0.398, 1.632], [1.261, 1.759], [1.621, 1.027], [1.519, 0.382], [2.003, -0.078], [1.529, -0.82], [1.657, -1.283], [0.898, -1.643], [-1.462, -1.535], [-1.913, -1.036]] },
-  { y0: 5.58, y1: 6.51, points: [[-1.716, -1.009], [-1.596, 1.365], [-0.923, 1.738], [0.73, 1.5], [1.268, 1.637], [1.765, 1.137], [1.487, 0.506], [1.789, -0.112], [1.695, -0.711], [1.55, -1.181], [-0.24, -1.959], [-1.465, -1.484]] },
-  { y0: 6.51, y1: 7.44, points: [[-1.842, 0.085], [-1.508, 1.221], [-0.948, 1.702], [-0.681, 1.576], [-0.06, 1.801], [1.259, 1.67], [1.58, 1.073], [1.5, 0.248], [1.861, -0.128], [1.418, -0.715], [1.496, -1.243], [1.014, -1.623], [-0.191, -1.704], [-1.358, -1.504], [-1.703, -0.989]] },
-  { y0: 7.44, y1: 7.8, points: [[-1.188, 1.386], [0.847, 1.386], [1.254, 1.023], [1.254, -1.144], [0.847, -1.518], [-1.188, -1.518], [-1.54, -1.144], [-1.54, 0.99]] },
-  { y0: 7.8, y1: 9, points: [[-1.411, -1.051], [-1.416, 0.9], [-1.092, 1.27], [0.77, 1.276], [1.15, 0.942], [1.156, -1.04], [0.781, -1.391], [-1.08, -1.396]] },
-]);
 
 function label(text: string, width = 512, height = 128) {
   const browserDocument = (globalThis as unknown as { document?: { createElement: (tagName: "canvas") => any } }).document;
@@ -123,132 +106,45 @@ export function createGiantBuildingInterior() {
   return root;
 }
 
-function shape(points: readonly (readonly [number, number])[]) {
-  const result = new THREE.Shape();
-  const [first, ...rest] = points;
-  result.moveTo(first[0], -first[1]);
-  for (const point of rest) result.lineTo(point[0], -point[1]);
-  result.closePath();
-  return result;
+function hex(bytes: ArrayBuffer) {
+  return Array.from(new Uint8Array(bytes), value => value.toString(16).padStart(2, "0")).join("");
 }
 
-function prism(points: readonly (readonly [number, number])[], y0: number, y1: number, material: THREE.Material, name: string) {
-  const geometry = new THREE.ExtrudeGeometry(shape(points), { depth: Math.max(.01, y1 - y0), bevelEnabled: false, steps: 1, curveSegments: 1 });
-  geometry.rotateX(-Math.PI / 2);
-  geometry.translate(0, y0, 0);
-  geometry.computeVertexNormals();
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = name;
-  mesh.castShadow = true; mesh.receiveShadow = true;
-  return mesh;
-}
-
-function scaledFootprint(points: readonly (readonly [number, number])[], factor: number) {
-  const center = points.reduce((sum, point) => ({ x: sum.x + point[0], z: sum.z + point[1] }), { x: 0, z: 0 });
-  center.x /= points.length; center.z /= points.length;
-  return points.map(point => [center.x + (point[0] - center.x) * factor, center.z + (point[1] - center.z) * factor] as const);
-}
-
-function addFacadeWindows(root: THREE.Group, floor: FloorProfile, floorIndex: number, glass: THREE.Material) {
-  const plane = new THREE.PlaneGeometry(1, 1);
-  const height = Math.max(.18, Math.min(.54, (floor.y1 - floor.y0) * .48));
-  for (let edge = 0; edge < floor.points.length; edge++) {
-    const a = floor.points[edge], b = floor.points[(edge + 1) % floor.points.length];
-    const dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz);
-    if (length < .42) continue;
-    const count = Math.max(1, Math.min(4, Math.floor(length / .55)));
-    const angle = -Math.atan2(dz, dx);
-    const nx = -dz / length, nz = dx / length;
-    for (let windowIndex = 0; windowIndex < count; windowIndex++) {
-      const t = (windowIndex + 1) / (count + 1);
-      const panel = new THREE.Mesh(plane, glass);
-      panel.name = `source-window-${floorIndex}-${edge}-${windowIndex}`;
-      panel.position.set(a[0] + dx * t - nx * .018, floor.y0 + (floor.y1 - floor.y0) * .53, a[1] + dz * t - nz * .018);
-      panel.rotation.y = angle;
-      panel.scale.set(Math.min(.34, length / (count + .7) * .62), height, 1);
-      root.add(panel);
-    }
-  }
-}
-
-function addTerraceDetails(root: THREE.Group, floor: FloorProfile, floorIndex: number, terrace: THREE.Material, rail: THREE.Material, foliage: THREE.Material) {
-  if (floorIndex >= GIANT_BUILDING_FLOORS.length - 2) return;
-  root.add(prism(scaledFootprint(floor.points, 1.035), floor.y1 - .035, floor.y1 + .018, terrace, `terrace-slab-${floorIndex}`));
-  const bar = new THREE.BoxGeometry(1, 1, 1);
-  for (let edge = 0; edge < floor.points.length; edge++) {
-    if ((edge + floorIndex) % 3 === 0) continue;
-    const a = floor.points[edge], b = floor.points[(edge + 1) % floor.points.length];
-    const dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz);
-    if (length < .65) continue;
-    const railing = new THREE.Mesh(bar, rail);
-    railing.name = `terrace-rail-${floorIndex}-${edge}`;
-    railing.position.set((a[0] + b[0]) / 2, floor.y1 + .075, (a[1] + b[1]) / 2);
-    railing.rotation.y = -Math.atan2(dz, dx);
-    railing.scale.set(length * .72, .14, .018);
-    root.add(railing);
-  }
-  const planterGeometry = new THREE.BoxGeometry(.34, .08, .18);
-  const bushGeometry = new THREE.IcosahedronGeometry(.16, 1);
-  for (let plant = 0; plant < 2; plant++) {
-    const p = floor.points[(floorIndex * 3 + plant * Math.max(1, Math.floor(floor.points.length / 2))) % floor.points.length];
-    const planter = new THREE.Mesh(planterGeometry, terrace);
-    planter.position.set(p[0] * .78, floor.y1 + .05, p[1] * .78);
-    planter.scale.set(1.2, 1, 1);
-    const bush = new THREE.Mesh(bushGeometry, foliage);
-    bush.position.set(planter.position.x, floor.y1 + .17, planter.position.z);
-    bush.scale.set(1 + (floorIndex % 3) * .12, .82 + (plant % 2) * .18, 1);
-    planter.castShadow = true; bush.castShadow = true;
-    root.add(planter, bush);
-  }
-}
-
-function createOwnerTerraceTower() {
-  const root = new THREE.Group();
-  root.name = "owner-terrace-tower-game-derivative";
-  const rose = new THREE.MeshStandardMaterial({ color: "#cfaea7", roughness: .72, metalness: .02 });
-  const terrace = new THREE.MeshStandardMaterial({ color: "#8e8580", roughness: .79, metalness: .02 });
-  const glass = new THREE.MeshStandardMaterial({ color: "#173c3d", roughness: .18, metalness: .32, transparent: true, opacity: .86, side: THREE.DoubleSide });
-  const graphite = new THREE.MeshStandardMaterial({ color: "#252b2d", roughness: .34, metalness: .62 });
-  const foliage = new THREE.MeshStandardMaterial({ color: "#416f3e", roughness: .84, metalness: 0 });
-  const equipment = new THREE.MeshStandardMaterial({ color: "#d5d4cf", roughness: .48, metalness: .34 });
-
-  GIANT_BUILDING_FLOORS.forEach((floor, index) => {
-    root.add(prism(floor.points, floor.y0, floor.y1, rose, `owner-source-floor-${index}`));
-    addFacadeWindows(root, floor, index, glass);
-    addTerraceDetails(root, floor, index, terrace, glass, foliage);
-  });
-
-  const top = GIANT_BUILDING_FLOORS.at(-1)!;
-  root.add(prism(scaledFootprint(top.points, 1.015), 8.985, 9.04, graphite, "roof-membrane"));
-  const equipmentA = new THREE.Mesh(new THREE.BoxGeometry(.88, .22, .52), equipment);
-  equipmentA.position.set(-.34, 9.15, .12);
-  const equipmentB = new THREE.Mesh(new THREE.BoxGeometry(.54, .18, .72), equipment);
-  equipmentB.position.set(.42, 9.12, -.28);
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(.035, .045, .56, 8), equipment);
-  mast.position.set(-.1, 9.38, .18);
-  const mastArm = new THREE.Mesh(new THREE.BoxGeometry(.68, .045, .045), equipment);
-  mastArm.position.set(.12, 9.55, .18);
-  root.add(equipmentA, equipmentB, mast, mastArm);
-
+export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
+  const response = await fetcher(GIANT_BUILDING_URL, { cache: "force-cache", credentials: "same-origin" });
+  if (!response.ok) throw new Error(`exact owner building unavailable (${response.status})`);
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength !== GIANT_BUILDING_GAME_BYTES) throw new Error(`exact owner building size mismatch (${bytes.byteLength})`);
+  if (bytes.byteLength < 12) throw new Error("exact owner building GLB is truncated");
+  const header = new DataView(bytes, 0, 12);
+  if (String.fromCharCode(...new Uint8Array(bytes, 0, 4)) !== "glTF" || header.getUint32(4, true) !== 2 || header.getUint32(8, true) !== bytes.byteLength)
+    throw new Error("exact owner building GLB container invalid");
+  if (!globalThis.crypto?.subtle) throw new Error("browser SHA-256 unavailable");
+  const digest = hex(await globalThis.crypto.subtle.digest("SHA-256", bytes));
+  if (digest !== GIANT_BUILDING_GAME_SHA256) throw new Error("exact owner building hash mismatch");
+  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+  const gltf = await new GLTFLoader().parseAsync(bytes, "");
+  const root = gltf.scene;
+  root.name = "owner-terrace-tower-exact-glb";
   root.position.set(GIANT_BUILDING_POSITION.x, .11, GIANT_BUILDING_POSITION.z);
   root.scale.setScalar(GIANT_BUILDING_SCALE);
-  root.userData.provenance = "OWNER_PROVIDED_SOURCE__FOOTPRINT_GAME_DERIVATIVE";
+  root.userData.provenance = "OWNER_PROVIDED_EXACT_GLB";
   root.userData.sourceSha256 = GIANT_BUILDING_SOURCE_SHA256;
+  root.userData.gameSha256 = GIANT_BUILDING_GAME_SHA256;
   root.userData.sourceBytes = GIANT_BUILDING_SOURCE_BYTES;
   root.userData.sourceVertices = GIANT_BUILDING_SOURCE_VERTICES;
   root.userData.sourceTriangles = GIANT_BUILDING_SOURCE_TRIANGLES;
   root.userData.runtimeProfile = GIANT_BUILDING_RUNTIME_PROFILE;
   root.traverse(object => {
-    if (object instanceof THREE.Mesh) {
-      object.castShadow = true;
-      object.receiveShadow = true;
+    if (!(object instanceof THREE.Mesh)) return;
+    object.castShadow = true;
+    object.receiveShadow = true;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (material && "side" in material && material.transparent) material.side = THREE.DoubleSide;
     }
   });
   return root;
-}
-
-export async function loadGiantBuilding() {
-  return createOwnerTerraceTower();
 }
 
 export function nearGiantBuildingEntrance(point: { x: number; z: number }, radius = 4.1) {
