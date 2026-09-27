@@ -41,8 +41,9 @@ The copied Fix ISS simulator credits the NASA / Visualization Technology Applica
 - Owner-supplied replacement sources: `WORLDIFACT-e7e96cc3-8ad6-4ce8-996a-a4292407bc24.glb`, matching FBX, and `WORLDIFACT-e7e96cc3-8ad6-4ce8-996a-a4292407bc24.textures.zip`.
 - GLB SHA-256 `0321c8f76c84d53a33f6fed20d128cd3460b3e24f87ff4bb36ee92f25cf3a3c6`, 21,047,056 bytes; inspected as 110 meshes / 110 nodes, 491,138 vertices, 264,680 triangles, 12 materials, 10 embedded texture images and no animations.
 - Texture package SHA-256 `b6826b0fa9d6cfd72bfbe7733ad66e3b6071833c52346a2367ee4f2fedae49cf`, 3,673,160 bytes. It contains owner-supplied foliage, graphite metal, leaf, equipment, rose limestone, three stone variants, terrace stone and timber textures.
-- The previous Giant Tower runtime package and its ten base64/gzip transport parts are retired from the portal-world release.
-- The playable valley uses a compact GAME derivative reconstructed from ten irregular floor silhouettes extracted from the replacement GLB, with source-inspired pink stone, dark glass, terrace rails, planting and roof equipment. This preserves the new building's stacked/offset massing without claiming byte-identical source topology, texture/UV parity, engineering validation or manufacturing readiness.
+- The previous Giant Tower runtime package, its ten base64/gzip transport parts, and the interim procedural floor-profile derivative are retired from the portal-world release.
+- The playable valley now loads the exact owner-selected GLB, committed at `public/world-assets/giant-building/giant-tower.glb`. Runtime validates its 21,047,056-byte length and SHA-256 before parsing. No new AI generation was requested to ingest it.
+- The exterior is scaled/positioned as a GAME world instance only; no CAD, engineering, structural or manufacturing validation is claimed.
 - The walkable lobby remains original procedural GAME scenery and is explicitly labelled `GAME / GENERATED INTERIOR`; it is not claimed to exist in the supplied source model.
 - These sources were supplied directly by the WORLDIFACT project owner for this integration. This record does not independently establish rights in any embedded third-party design or texture beyond the owner's supplied project rights.
 

@@ -132,12 +132,12 @@ export async function checkPublishedRelease(deployment: Deployment,
     const types = path.endsWith(".webp") ? ["image/webp"] : path.endsWith(".png") ? ["image/png"] : path.endsWith(".css") ? ["text/css"] : ["text/javascript", "application/javascript"];
     await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
   }
-  // The login hero and all five portal frames must come from this release's
-  // bundled original geometry. The terrace tower is now generated in-runtime
-  // from source-derived floor profiles and therefore has no static GLB artifact.
+  // The login hero, all five portal frames and the owner-selected Terrace Tower
+  // must match this exact release. HTML fallbacks, stale files and substitutes fail.
   const sculptureAssets = [
     { path: "world-assets/polyhedron-led.gltf", types: ["model/gltf+json", "application/json"] },
     { path: "world-assets/polyhedron-led-poster.svg", types: ["image/svg+xml"] },
+    { path: "world-assets/giant-building/giant-tower.glb", types: ["model/gltf-binary", "application/octet-stream"] },
   ];
   for (const { path, types } of sculptureAssets) {
     await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
