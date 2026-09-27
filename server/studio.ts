@@ -237,13 +237,24 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       }
       try {
         const response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: JSON.stringify(oracleStudioPayload(auth.id, input)) })
-        if (user && response.status === 409) { await response.body?.cancel(); return json({ job: await accountJob(env, user.id, auth.id, 'pending'), recoveryOnly: true }, 202) }
-        if ([400, 409, 422, 429].includes(response.status)) { await response.body?.cancel(); return json({ job: await accountJob(env, user?.id, auth.id, 'failed') }, 202) }
+        if ([400, 409, 422, 429].includes(response.status)) {
+          await response.body?.cancel()
+          if (user) await settleUserGeneration(env, user.id, auth.id, 'failed')
+          const message = response.status === 409
+            ? 'Oracle is still finishing another model. Your reserved allowance or credits were restored. Try again after the worker is free.'
+            : response.status === 429
+              ? 'Oracle is temporarily rate-limited. Your reserved allowance or credits were restored; try again shortly.'
+              : 'Oracle rejected this model before generation started. Your reserved allowance or credits were restored.'
+          throw new StudioError(message, response.status)
+        }
         if (!response.ok) { await response.body?.cancel(); throw new Error('Unconfirmed acceptance') }
         const value = await limitedJson(response, 16_384)
         if (value.id !== auth.id || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new Error('Unconfirmed acceptance')
         return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state']) }, 202)
-      } catch { return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending } }, 202) }
+      } catch (error) {
+        if (error instanceof StudioError) throw error
+        return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending } }, 202)
+      }
     }
     const match = new RegExp(`^/api/studio/jobs/(${UUID})(?:/(model|exports/(?:pbr|fbx|blend)))?$`).exec(url.pathname)
     if (match && request.method === 'GET') {
@@ -261,11 +272,15 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (response.status === 404) {
         await response.body?.cancel()
         const expired = Date.now() - auth.issued >= 180_000
-        const state = user || !expired ? 'pending' : 'failed'
-        // A missing upstream record does not prove that a paid request failed.
-        // Stop automatic waiting after the recovery window and retain its debit.
-        return json({ job: { id: auth.id, state, detail: user && expired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state],
-          ...(user && expired ? { reconciliationRequired: true, downloadAllowed: false, previewAvailable: false } : {}) } })
+        if (user && expired) {
+          // Oracle has explicitly confirmed that this exact account-bound UUID
+          // does not exist after the recovery window. Release the reservation
+          // instead of trapping the browser forever on a model that was never
+          // accepted upstream.
+          return json({ job: await accountJob(env, user.id, auth.id, 'failed'), reconciledMissing: true })
+        }
+        const state = !user && expired ? 'failed' : 'pending'
+        return json({ job: { id: auth.id, state, detail: JOB_DETAILS[state] } })
       }
       if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
       const value = await limitedJson(response, 16_384)
