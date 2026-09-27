@@ -21,6 +21,20 @@ test('absent or explicit STANDARD retains exact existing canonical input and rec
   assert.equal(oracleStudioPayload('job', fast).generationProfile, FAST_DRAFT_PROFILE)
 })
 
+test('STANDARD photo jobs carry explicit reference-fidelity instructions to the Oracle worker', () => {
+  const bytes = Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217])
+  const standard = validateStudioInput({ ...oldInput, photos: [{ name: 'tower.jpg', view: 'front', dataUrl: 'data:image/jpeg;base64,' + bytes.toString('base64'), textureMaxSize: 2048 }] })
+  const payload = oracleStudioPayload('job', standard)
+  assert.ok('photos' in payload)
+  assert.deepEqual('photos' in payload ? payload.photos : undefined, standard.photos)
+  assert.ok('agentInstructions' in payload)
+  assert.match('agentInstructions' in payload ? payload.agentInstructions || '' : '', /authoritative visual input/i)
+  assert.match('agentInstructions' in payload ? payload.agentInstructions || '' : '', /architecture/i)
+  assert.match('agentInstructions' in payload ? payload.agentInstructions || '' : '', /Never regularize/i)
+  const textOnly = oracleStudioPayload('job', validateStudioInput(oldInput))
+  assert.equal('agentInstructions' in textOnly, false)
+})
+
 test('profile input is explicit and a short prompt cannot silently select FAST', () => {
   assert.equal(generationProfile(undefined), 'standard')
   assert.equal(generationProfile('standard'), 'standard')

@@ -3,6 +3,16 @@
 
 const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for every generated asset:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
 
+export const REFERENCE_FIDELITY_INSTRUCTIONS = `WORLDIFACT REFERENCE-FIDELITY MODE:
+- Treat every attached reference image as authoritative visual input, not decoration. Compare the actual images before the first build.
+- First classify the subject. Apply portrait/anatomy/garment rules only when the subject is a person. For buildings, vehicles, objects or terrain, ignore portrait-specific heuristics that do not apply.
+- Reconstruct the visible silhouette and large-scale geometry before adding materials or small details. Do not replace the subject with a generic procedural substitute.
+- For architecture: preserve the reference height/width ratio, asymmetry, rotations, setbacks, stacked/offset volumes, roof massing, terraces, balconies, major recesses/projections and the approximate placement/rhythm of large window groups. Never regularize an intentionally irregular building into a repeated tower.
+- Use real 3D geometry for defining recesses, projections, terraces and overhangs when they affect the silhouette.
+- Use a review camera close to the primary reference framing. After the first render, compare silhouette and massing first and correct the largest mismatch before spending effort on textures.
+- Additional reference views describe the same object and should constrain side/back geometry. If an unseen surface is not supported by a reference, infer it conservatively instead of redesigning the visible structure.
+- Do not mark the visual result acceptable when the overall silhouette, proportions or defining arrangement are substantially different from the references.`
+
 export const STUDIO_BODY_LIMIT = 9 * 1024 * 1024
 export const STUDIO_MODEL_LIMIT = 48 * 1024 * 1024
 export const STUDIO_POLL_MS = 25_000
@@ -85,7 +95,7 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
     prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + MANUFACTURING_HARD_RULES,
   }
   const instruction = `\n\nWORLDIFACT output: create an editable 3D ${input.purpose} asset with UVs and PBR materials, exported as a self-contained GLB. Reference images describe the same requested object; preserve their visible proportions and colors. Request an upper texture limit of ${input.textureMaxSize}px, never upscale and call that recovered detail. Keep originals; use a game preview below 3 million rendered triangles where practical. Record visual/geometry limitations; MAKE is unapproved. Do not return a brief instead of a model.\n\n${MANUFACTURING_HARD_RULES}`
-  return { id, prompt: input.prompt + instruction, ...(input.photos.length ? { photos: input.photos } : {}) }
+  return { id, prompt: input.prompt + instruction, ...(input.photos.length ? { photos: input.photos, agentInstructions: REFERENCE_FIDELITY_INSTRUCTIONS } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(input)))
