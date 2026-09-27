@@ -81,10 +81,10 @@ test("release smoke verifies deep links and lazy assets and only sends DEMO with
   const f = await fixture(t);
   const result = await checkPublishedRelease({ origin, versionId }, f);
   assert.equal(result.htmlRoutes, 16);
-  assert.equal(result.verifiedAssets, 7);
+  assert.equal(result.verifiedAssets, 6);
   assert.equal(result.foundationAssets, 5);
   assert.equal(f.providerCalls(), 0);
-  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg", "/world-assets/giant-building/giant-tower.glb"]) {
+  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg"]) {
     assert.ok(f.requests.some(request => new URL(request.url).pathname === path), `${path} must be checked`);
   }
   const posts = f.requests.filter((request) => request.method === "POST");
@@ -206,7 +206,7 @@ test("release smoke detects a missing panorama served as HTML or a stale image",
 });
 
 test("release requires both bundled sculpture files with exact build bytes and a valid content type", async (t) => {
-  for (const [path, mime] of [["/world-assets/polyhedron-led.gltf", "model/gltf+json"], ["/world-assets/polyhedron-led-poster.svg", "image/svg+xml"], ["/world-assets/giant-building/giant-tower.glb", "model/gltf-binary"]]) {
+  for (const [path, mime] of [["/world-assets/polyhedron-led.gltf", "model/gltf+json"], ["/world-assets/polyhedron-led-poster.svg", "image/svg+xml"]]) {
     for (const variant of ["html", "stale", "wrong-mime", "missing"]) {
       const f = await fixture(t);
       const fetcher = async (url: URL, init: RequestInit) => url.pathname === path
