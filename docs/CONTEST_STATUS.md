@@ -92,3 +92,11 @@ BLOCKED: exact rim GLB from the comparison was not recovered; screenshots are no
 
 
 Owner authorization: implement on a branch, create a PR and merge after green CI. Baseline main is `76c8f8344cd33e1b0bdc5de32863d2ad26a723c0` / PR #81. The owner rejected PR #81's walking, straight-legged flip, fan embellishments and sparse grass. Earlier synthetic passes are not positive original-model visual acceptance.
+
+## 2026-09-27 — reference-fidelity regression repair
+
+- Android owner evidence showed the same building brief/reference producing a substantially more generic tower despite reference images being attached.
+- The browser→Studio proxy already transports photo bytes and rejects workers that do not advertise photo input; the Sep 27 generation-unblock changes did not alter that payload path.
+- STANDARD photo jobs now send a bounded worker-side `agentInstructions` fidelity policy: classify the subject first, ignore portrait-only heuristics for non-human assets, preserve architecture massing/asymmetry/setbacks/terraces, compare silhouette before texture work, and reject generic substitutions.
+- Tests assert the instruction is present only for photo-guided STANDARD jobs and reaches the Oracle `/v1/jobs` payload together with unchanged reference bytes. No model generation or paid provider call is made by these tests.
+
