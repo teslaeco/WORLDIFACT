@@ -9,7 +9,7 @@ import {
   GIANT_BUILDING_SOURCE_SHA256,
 } from "../src/lib/giantBuilding.ts";
 
-const DIRECT = new URL("../public/world-assets/giant-building/giant-tower.glb", import.meta.url);
+const DIRECT = new URL("../public/world-assets/giant-building/terrace-tower-e7e96cc3.glb", import.meta.url);
 const MANIFEST = new URL("../public/world-assets/giant-building/current.json", import.meta.url);
 
 test("portal-world tower package is the exact owner-selected GLB", () => {
