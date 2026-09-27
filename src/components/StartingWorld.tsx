@@ -810,7 +810,7 @@ export default function StartingWorld({
           else if (a === "bucket-dump") machine.setAction("dump");
           else machine.setAction("carry");
         } else if (a === "fan-drone") {
-          if (insideBuilding) setCaptureNotice("Drone equipment stays stowed inside the Giant Tower.");
+          if (insideBuilding) setCaptureNotice("Drone equipment stays stowed inside the Terrace Tower.");
           else if (ride) setCaptureNotice("Exit the vehicle before deploying the fan drone.");
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-drone");
@@ -829,7 +829,7 @@ export default function StartingWorld({
             }
           }
         } else if (a === "fan-flight") {
-          if (insideBuilding) setCaptureNotice("Flight equipment stays stowed inside the Giant Tower.");
+          if (insideBuilding) setCaptureNotice("Flight equipment stays stowed inside the Terrace Tower.");
           else if (ride) setCaptureNotice("Exit the vehicle before using shoulder flight.");
           else {
             const next = nextEquipmentMode(equipmentMode, "toggle-flight");
@@ -861,7 +861,7 @@ export default function StartingWorld({
           player.set(GIANT_BUILDING_ENTRANCE.x, 2.3, GIANT_BUILDING_ENTRANCE.z + 1.65);
           resetJump(jump); flightHeight = 0; waterMode = "land"; cameraInitialized = false;
           yaw = 0; pitch = -0.16;
-          setCaptureNotice("Back outside the giant tower.");
+          setCaptureNotice("Back outside the terrace tower.");
         } else if (a === "interact" && nearBuildingEntrance) {
           if (ride || equipmentMode !== "stowed") {
             setCaptureNotice("Exit the vehicle and stow flight equipment before entering the tower.");
@@ -874,7 +874,7 @@ export default function StartingWorld({
             player.set(GIANT_INTERIOR_SPAWN.x, 2.3, GIANT_INTERIOR_SPAWN.z);
             resetJump(jump); flightHeight = 0; waterMode = "land"; cameraInitialized = false;
             yaw = Math.PI; pitch = -0.12;
-            setCaptureNotice("Entered Giant Tower · GAME / GENERATED INTERIOR. The owner model exterior is separate.");
+            setCaptureNotice("Entered Terrace Tower · GAME / GENERATED INTERIOR. The owner model exterior is separate.");
           }
         } else if (a === "interact" && nearPortal) {
           enter(nearPortal.id);
@@ -1067,15 +1067,15 @@ export default function StartingWorld({
         hud = now;
         const machine = ride ? backhoes.get(ride) : undefined;
         setVehicleHud({ enabled: machine?.enabled ?? false, ownerVehicle: isOwnerVehicle(ride), tool: machine?.tool ?? "loader", action: machine?.action ?? "carry", load: machine ? Math.round(machine.load.amount * 1000) : 0, capacity: machine ? Math.round(machine.load.capacity * 1000) : 1600, status: machine?.status ?? (isOwnerVehicle(ride) ? "Mars solar landship · GAME drive" : "Ready") });
-        const travelMode = insideBuilding ? "inside giant tower" : controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
+        const travelMode = insideBuilding ? "inside terrace tower" : controllingDrone ? "fan drone" : equipmentMode === "flight" ? "flying" : waterMode === "swimming" || waterMode === "falling" ? "swimming" : ride ? "driving" : "on foot";
         setLocation(
-          `${insideBuilding ? "Giant Tower · GAME interior" : sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
+          `${insideBuilding ? "Terrace Tower · GAME interior" : sceneBlueprint.biome} · ${Math.round(player.x)}, ${Math.round(player.z)} · ${travelMode}`,
         );
         setHint(
           nearBuildingExit
-            ? `${mobile ? "Tap the action button" : "E"} · exit Giant Tower to the meadow`
+            ? `${mobile ? "Tap the action button" : "E"} · exit Terrace Tower to the meadow`
             : nearBuildingEntrance
-              ? `${mobile ? "Tap the action button" : "E"} · enter the enormous Giant Tower`
+              ? `${mobile ? "Tap the action button" : "E"} · enter the enormous Terrace Tower`
               : nearPortal
                 ? `${waterMode === "swimming" || waterMode === "falling" ? "Swim" : "Move"} onto the light to enter ${nearPortal.shortTitle}`
                 : controllingDrone
@@ -1175,7 +1175,7 @@ export default function StartingWorld({
         {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
         <span role="status">{buildingStatus}</span>
         <span role="status">{ownerVehicleStatus}</span>
-        {insideGiantBuilding ? <span>Giant Tower · GAME / GENERATED INTERIOR</span> : null}
+        {insideGiantBuilding ? <span>Terrace Tower · GAME / GENERATED INTERIOR</span> : null}
       </div>
       <label className="avatar-note avatar-picker">Character
         <select value={avatarChoice} onChange={e => setAvatarChoice(e.target.value as AvatarChoice)} aria-label="Choose player character">
