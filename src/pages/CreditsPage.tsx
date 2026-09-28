@@ -6,7 +6,7 @@ import './CreditsPage.css'
 
 type PlanId = 'creator' | 'pro' | 'studio'
 type Balance = { credits: number; generationCost: number; generationCosts?: { sol: number; astra: number }; subscriptionGrant: number; subscription: { active: boolean; plan?: PlanId; expiresAt: string | null }; free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }; billingReview: boolean }
-type PlanOffer = { id: PlanId; name: string; amountCents: number; credits: number; allowedModels: readonly string[]; checkoutReady: boolean }
+type PlanOffer = { id: PlanId; name: string; amountCents: number; credits: number; allowedModels: readonly string[]; checkoutReady: boolean; blockedReason?: string | null }
 type Billing = { checkoutReady: boolean; topupReady: boolean; cardReady: boolean; googlePay: 'eligible_devices' | 'unavailable'; mode: 'test' | 'live' | null; subscriptionInterval: 'month' | null; generationCosts?: { sol: number; astra: number }; plans?: Record<PlanId, PlanOffer> }
 type PayPal = { ready: boolean; mode: 'sandbox' | 'live' | null }
 type Snapshot = { owner: string | null; balance: Balance | null; billing: Billing | null; paypal: PayPal | null }
@@ -163,7 +163,8 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         <div className="credits-price"><div><strong>{price}</strong><b> USD / month</b></div><span>{credits} every confirmed paid month</span></div>
         <ul><li><b>{capacity}</b></li><li>{models}</li><li>{id === 'creator' ? 'Astra is blocked on this plan so a Sol subscription cannot accidentally spend Astra rates.' : 'Astra access is plan-gated and still subject to per-job provider-spend limits.'}</li></ul>
         <label className={selectedPlan === id && purchaseKind === 'subscription' ? 'selected' : ''}><input type="radio" name="subscription-plan" value={id} checked={selectedPlan === id && purchaseKind === 'subscription'} onChange={() => { setSelectedPlan(id); setPurchaseKind('subscription') }} /><span><strong>Select {name}</strong></span></label>
-        <button className="credits-action" disabled={!canBuy || member || billing?.plans?.[id]?.checkoutReady !== true} onClick={() => { setSelectedPlan(id); setPurchaseKind('subscription'); void checkout('card', { kind: 'subscription', plan: id }) }}>{busy === 'card' && selectedPlan === id ? 'Opening secure checkout…' : member ? 'Use Manage subscription below' : `Subscribe ${price} / month`} ↗</button>
+        {billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' && <p className="credits-method-note">ASTRA checkout activates only after the production worker confirms its hard cost guard. No unbounded ASTRA job is sold.</p>}
+        <button className="credits-action" disabled={!canBuy || member || billing?.plans?.[id]?.checkoutReady !== true} onClick={() => { setSelectedPlan(id); setPurchaseKind('subscription'); void checkout('card', { kind: 'subscription', plan: id }) }}>{busy === 'card' && selectedPlan === id ? 'Opening secure checkout…' : member ? 'Use Manage subscription below' : billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' ? 'ASTRA plan · safety activation pending' : `Subscribe ${price} / month`} ↗</button>
       </article>)}
       <article>
         <span className="credits-plan-tag">TOP-UP</span><h2>1,500 extra credits</h2>
