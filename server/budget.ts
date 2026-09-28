@@ -74,9 +74,11 @@ export class GenerationBudget {
         const result = await this.storage.transaction(async storage => {
           await ensurePromoSeed(storage);
           const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0;
+          const revoked = (await storage.get<number>('promo-revoked-jobs')) ?? 0;
           const used = (await storage.get<number>('promo-used-jobs')) ?? 0;
-          if (![funded, used].every(value => Number.isSafeInteger(value) && value >= 0) || used > funded) throw new Error('Invalid promo state');
-          return { funded, used, remaining: funded - used };
+          if (![funded, revoked, used].every(value => Number.isSafeInteger(value) && value >= 0)) throw new Error('Invalid promo state');
+          const effective = Math.max(0, funded - revoked);
+          return { funded, revoked, used, remaining: Math.max(0, effective - used) };
         });
         return reply(result);
       } catch { return reply({ error: 'Promo allowance unavailable' }, 503); }
@@ -92,19 +94,40 @@ export class GenerationBudget {
           await ensurePromoSeed(storage);
           const markerKey = `promo-funded:${input.id}`;
           if (await storage.get<number>(markerKey)) {
-            const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0, used = (await storage.get<number>('promo-used-jobs')) ?? 0;
-            return { funded: false, repeated: true, remaining: Math.max(0, funded - used) };
+            const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0, revoked = (await storage.get<number>('promo-revoked-jobs')) ?? 0, used = (await storage.get<number>('promo-used-jobs')) ?? 0;
+            return { funded: false, repeated: true, remaining: Math.max(0, Math.max(0, funded - revoked) - used) };
           }
           const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0;
           const next = funded + Number(input.jobs);
           if (!Number.isSafeInteger(next) || next > 1_000_000) throw new Error('Promo funding overflow');
           await storage.put('promo-funded-jobs', next);
           await storage.put(markerKey, 1);
-          const used = (await storage.get<number>('promo-used-jobs')) ?? 0;
-          return { funded: true, repeated: false, remaining: Math.max(0, next - used) };
+          const revoked = (await storage.get<number>('promo-revoked-jobs')) ?? 0, used = (await storage.get<number>('promo-used-jobs')) ?? 0;
+          return { funded: true, repeated: false, remaining: Math.max(0, Math.max(0, next - revoked) - used) };
         });
         return reply(result);
       } catch { return reply({ funded: false }, 400); }
+    }
+    if (request.method === 'POST' && path === '/promo-revoke') {
+      try {
+        const text = await request.text();
+        if (text.length > 512) throw new Error('Invalid promo revocation');
+        const input = JSON.parse(text) as { id?: unknown; jobs?: unknown };
+        if (!input || typeof input.id !== 'string' || !/^[A-Za-z0-9_-]{3,200}$/.test(input.id) ||
+            !Number.isSafeInteger(input.jobs) || Number(input.jobs) < 1 || Number(input.jobs) > 10_000) throw new Error('Invalid promo revocation');
+        const result = await this.storage.transaction(async storage => {
+          await ensurePromoSeed(storage);
+          const markerKey = `promo-revoked:${input.id}`;
+          if (await storage.get<number>(markerKey)) return { revoked: false, repeated: true };
+          const revoked = (await storage.get<number>('promo-revoked-jobs')) ?? 0;
+          const next = revoked + Number(input.jobs);
+          if (!Number.isSafeInteger(next) || next > 1_000_000) throw new Error('Promo revocation overflow');
+          await storage.put('promo-revoked-jobs', next);
+          await storage.put(markerKey, 1);
+          return { revoked: true, repeated: false };
+        });
+        return reply(result);
+      } catch { return reply({ revoked: false }, 400); }
     }
     if (request.method === 'POST' && path === '/promo-reserve') {
       try {
@@ -116,15 +139,17 @@ export class GenerationBudget {
           await ensurePromoSeed(storage);
           const markerKey = `promo-job:${input.id}`;
           if (await storage.get<number>(markerKey)) {
-            const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0, used = (await storage.get<number>('promo-used-jobs')) ?? 0;
-            return { allowed: true, repeated: true, remaining: Math.max(0, funded - used) };
+            const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0, revoked = (await storage.get<number>('promo-revoked-jobs')) ?? 0, used = (await storage.get<number>('promo-used-jobs')) ?? 0;
+            return { allowed: true, repeated: true, remaining: Math.max(0, Math.max(0, funded - revoked) - used) };
           }
           const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0;
+          const revoked = (await storage.get<number>('promo-revoked-jobs')) ?? 0;
           const used = (await storage.get<number>('promo-used-jobs')) ?? 0;
-          if (![funded, used].every(value => Number.isSafeInteger(value) && value >= 0) || used >= funded) return { allowed: false, repeated: false, remaining: 0 };
+          const effective = Math.max(0, funded - revoked);
+          if (![funded, revoked, used].every(value => Number.isSafeInteger(value) && value >= 0) || used >= effective) return { allowed: false, repeated: false, remaining: 0 };
           await storage.put('promo-used-jobs', used + 1);
           await storage.put(markerKey, 1);
-          return { allowed: true, repeated: false, remaining: funded - used - 1 };
+          return { allowed: true, repeated: false, remaining: effective - used - 1 };
         });
         return reply(result, result.allowed ? 200 : 429);
       } catch { return reply({ allowed: false }, 400); }
