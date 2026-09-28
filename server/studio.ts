@@ -113,15 +113,14 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
   const response = await oracle(env, '/v1/health', fetcher)
   if (!response.ok) { await response.body?.cancel(); throw new StudioError('The existing worker did not confirm readiness.', 503) }
   const state = await limitedJson(response, 16_384)
-  const compatible = state.ready === true && state.provider === 'openai' && ['gpt-6-sol', 'gpt-6-astra'].includes(String(state.model)) && Number.isSafeInteger(state.connectorVersion) && Number(state.connectorVersion) >= 33
-  const model = compatible ? String(state.model) : null
-  const solReady = compatible && model === 'gpt-6-sol' && supportsFastDraft(state)
-  const astraReady = compatible && model === 'gpt-6-astra'
-  return { ready: compatible, model, solReady, astraReady, photoReady: compatible && state.photoInput === true, fastReady: solReady,
-    fastBudgetReady: solReady && state.fastBudgetRevision === 'sol-usd035-v2' && Number(state.fastBudgetMaxUsd) <= 0.35,
+  const compatible = state.ready === true && state.provider === 'openai' && state.model === 'gpt-6-astra' && Number.isSafeInteger(state.connectorVersion) && Number(state.connectorVersion) >= 33
+  const fastReady = compatible && supportsFastDraft(state)
+  return { ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
+    fastBudgetReady: fastReady && state.fastBudgetRevision === 'fast-usd4-v1' && state.fastBudgetMaxUsd === 4,
     promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
 }
 async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch, input: StudioInput, userId?: string) {
+  if (input.generationProfile === FAST_DRAFT_PROFILE) throw new StudioError('FAST uses the separate GPT-6 Sol blueprint path. The Astra Oracle worker will not accept FAST jobs.', 409)
   const pool = await allowance(env)
   const trial = pool.fastOnly && env.ENABLE_APPROVED_FAST_TEST === 'true'
   if (!trial && (env.ENABLE_STUDIO_JOBS !== 'true' || !budgetSettings(env))) throw new StudioError('Model generation is disabled or its allowance has expired.', 503)
@@ -131,11 +130,9 @@ async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch
       await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Previous-Job') || '', undefined, false, userId)
   } else if (env.PUBLIC_PILOT !== 'true' && !await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) throw new StudioError('This generation window requires owner access.', 401)
   const current = await health(env, fetcher)
-  if (!current.ready) throw new StudioError('The existing OpenAI/Blender worker is not ready.', 503)
-  if (input.generationProfile === FAST_DRAFT_PROFILE && current.model !== 'gpt-6-sol') throw new StudioError('SOL generation is not connected on this worker. WORLDIFACT will not fall back to ASTRA for a free or Creator request.', 503)
-  if (input.generationProfile !== FAST_DRAFT_PROFILE && current.model !== 'gpt-6-astra') throw new StudioError('ASTRA generation requires the verified ASTRA worker.', 503)
-  if (trial && !current.fastBudgetReady) throw new StudioError('The SOL cost guard is not confirmed. No paid request was sent.', 503)
-  if (input.generationProfile === FAST_DRAFT_PROFILE && (!current.fastReady || !current.fastBudgetReady)) throw new StudioError('SOL FAST DRAFT is not fully verified on the worker. No ASTRA fallback was submitted.', 409)
+  if (!current.ready) throw new StudioError('The existing Astra/Blender worker is not ready.', 503)
+  if (trial && !current.fastBudgetReady) throw new StudioError('The approved cost guard is not confirmed. No paid request was sent.', 503)
+  if (input.generationProfile === FAST_DRAFT_PROFILE && (!current.fastReady || !current.fastBudgetReady)) throw new StudioError('FAST DRAFT is not fully verified on the worker. No paid job was submitted; STANDARD remains available.', 409)
   if (input.photos.length && !current.photoReady) throw new StudioError('This worker has not confirmed photo input. Nothing was submitted.', 409)
   if (oracleStudioPayload('', input).prompt.length > current.promptMaxLength) throw new StudioError(`Shorten the description: the worker accepts ${current.promptMaxLength} characters including export instructions.`)
   return { ...current, trial }
@@ -202,7 +199,6 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const authorized = trial || env.PUBLIC_PILOT === 'true' || (secretReady(env) && await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
       const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : (!pool.unlimited && pool.remaining === 0) ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
       return json({ accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
-        model: state?.model ?? null, solReady: state?.solReady === true, astraReady: state?.astraReady === true,
         photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, fastBudgetReady: state?.fastBudgetReady === true,
         fastOnly: trial, promptMaxLength: Math.max(3, (state?.promptMaxLength ?? 2000) - 600), allowance: pool })
     }
