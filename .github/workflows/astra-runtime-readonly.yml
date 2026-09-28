@@ -1,0 +1,29 @@
+name: Verify installed Oracle Astra guard without generation
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/check-astra-runtime.mjs'
+      - '.github/workflows/astra-runtime-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-astra-readonly
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Authenticated read-only guard verification
+        run: node scripts/check-astra-runtime.mjs
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}

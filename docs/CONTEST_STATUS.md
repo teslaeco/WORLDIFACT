@@ -1,34 +1,34 @@
-# WORLDIFACT — Oracle FAST-spend compatibility checkpoint
+# WORLDIFACT — Oracle installed and Stripe catalogue created
 
-Updated 28 September 2026 after the owner's second diagnostic screenshot.
+Updated 28 September 2026 after the owner's 19:04 screenshot.
 
-## VERIFIED from the owner's read-only diagnostic
+## VERIFIED — owner's Oracle installation evidence
 
-Worker and tunnel are active. `codex_runner.py` has valid Python syntax, one Responses URL literal and a `fast_spend` import. It does not import `astra_spend`; `astra_spend.py` is missing. Runner Git blob: `52c9d68d131178f879bedb9dc496c3c08cc2a3cf`. The earlier base-only installer expected the variant before the FAST-spend update and stopped before restarting or changing generator source.
+The screenshot shows installation of the pinned `7dc6d5a04f8a0cfc392124a1e19ddb83aa40de5c` package, recognition of `FAST_V33_WITH_SPEND`, and completion of the offline Codex/Blender verification. Result: `INSTALLED_AND_LOCALLY_VERIFIED`, revision `astra-usd175-v1`, maximum provider reservation USD 1.75/job, `paid_generation_requested=false`, `astra_sales_enabled=false`, and `WORLDIFACT_ASTRA_GUARD_VERIFIED`.
 
-## VERIFIED — exact source reconstruction and tests
+This is evidence supplied by the owner, not a paid live-quality benchmark. The new GET-only workflow checks that same installed guard through the existing authenticated Oracle production connection without exposing its URL/token or starting a model.
 
-Review PR: https://github.com/teslaeco/WORLDIFACT/pull/138
-Tested application/tool commit: `7dc6d5a04f8a0cfc392124a1e19ddb83aa40de5c`.
+## VERIFIED — real Stripe catalogue writes
 
-Dedicated guard run https://github.com/teslaeco/WORLDIFACT/actions/runs/36454576515, job `109037528114`, completed successfully. It reconstructed the entire runner and helper from the pinned Froge source plus the two previously reviewed patches. The runner SHA-256, runner Git blob, fast_preview and fast_spend SHA-256 values exactly match the screenshot. The unchanged install_codex, runtime_check and codex_smoke source hashes match as well. Twenty tests passed without skips or failures, covering source ancestry, preservation of old FAST code, Codex tool namespaces, spending under concurrency, restarts, corrupt state, read-only diagnostics and rollback fixtures. This is not an actual Oracle installation or live model test.
+Direct Stripe connector writes now succeeded in live account `acct_1UIG9ABrIVB6dkxN` under the owner's prior approval. The previous safety-validation block did not recur on the same direct operation; no alternate credential path was used.
 
-The full `Verify WORLDIFACT` workflow for the tested commit also completed successfully in run `36454576498`. FAST installation safety, Cloud Shell launcher and Oracle project-file review workflows passed. The separate existing FAST draft runtime review was still in progress at this checkpoint; no global all-checks claim or production merge is made.
+| Plan | Product | Price | Amount | Monthly credits |
+| --- | --- | --- | --- | --- |
+| Pro ASTRA | `prod_WORLDIFACTProAstra4500V2` | `price_1UKi3GBrIVB6dkxNm66OnDAr` | USD 99.99 | 4,500 |
+| Studio ASTRA | `prod_WORLDIFACTStudioAstra7500V2` | `price_1UKi3UBrIVB6dkxNfojjhJsv` | USD 149.99 | 7,500 |
 
-## Prepared maintenance behavior
+Both prices are recurring monthly, quantity-based licensed prices with the approved product/plan metadata. No customer charge, subscription creation, existing subscription repricing, refund, tax setting or payment link was executed. Existing Creator USD 29.99 and one-time 1,500-credit top-up were left unchanged.
 
-The installer supports the exact existing FAST-spend variant using both fingerprint matching and reversal of only the known patch to the reviewed ancestor. It patches current bytes and preserves older safeguards rather than installing an older generator. A changed or mixed source version still fails closed. Models, server.py, blender_mcp.py, account data and billing flags are not replaced.
+## Implemented for this release
 
-The same pinned launcher performs an idle-job check, private backups, a controlled worker restart, real offline Codex/MCP/Blender fixture verification and authenticated local health checks. Its new token-count path is mocked only in that offline verification process; production protection and the USD 1.75 conservative per-job ceiling remain active. Guard tests use fixtures, not paid OpenAI requests.
+The exact live Pro/Studio price IDs are wired into Worker configuration. Price IDs are public identifiers, not credentials. `ENABLE_ASTRA_PLANS=false` is retained until a separately authorized bounded end-to-end generation test establishes actual output quality within the budget. Current code still enforces plan/credit eligibility and the Oracle runtime enforces its per-job limit. No new single-cash-use pass is claimed.
 
-## Next operator action
+The installed compatibility fix, source-proof tests and read-only inspection from PR #138 are included. No further Oracle installation is requested. Application deployment and independent runtime check remain PENDING until their exact runs finish; passing unit tests are not those production proofs.
 
-From the original OCI Cloud Shell, fetch exactly `7dc6d5a04f8a0cfc392124a1e19ddb83aa40de5c` and run:
+## Remaining release gate
 
-`python3 -B tools/profit_guard/oracle_launch.py --approve-service-restart`
+One authorized SOL and one ASTRA live generation, each with a durable pre-reserved cap, no retry, genuine output checks and evidence. Maximum provider reservation: USD 0.35 SOL + USD 1.75 ASTRA = USD 2.10. This cost has not been incurred here. Paid promotion remains NO-GO until creation, export and payment-to-entitlement behavior have been verified. Previously modelled margins are not guaranteed company net profit.
 
-This is a maintenance installer, not the earlier read-only diagnostic. Do not start it during an active generation; it refuses active jobs. Keep the shell open through the offline verification. A successful result must include `WORLDIFACT_ASTRA_GUARD_VERIFIED`. On STOP, preserve backups and send only the fixed diagnostic, not keys/configuration.
+## History
 
-No paid model calls, actual Oracle installation, Stripe writes, live price changes or application deployment were performed in this turn. Astra commercial activation stays blocked pending actual runtime protection and a separately authorized bounded live quality test. Main/application production is unchanged; this is a tested review-branch installer.
-
-Detailed provenance: [Oracle FAST-spend compatibility](ORACLE_FAST_SPEND_COMPAT_20260928.md). The complete earlier release ledger is preserved in [pre-source-inspection history](history/CONTEST_STATUS_before_SOURCE_INSPECTION_20260928.md). This documentation-only checkpoint does not change the tested installer bytes.
+Earlier deployment and safety records remain in [the preserved release ledger](history/CONTEST_STATUS_before_SOURCE_INSPECTION_20260928.md). [Oracle compatibility notes](ORACLE_FAST_SPEND_COMPAT_20260928.md) document how the installed source was reconstructed and tested. No historical API spending is reimbursed by these guards.
