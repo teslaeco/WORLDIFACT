@@ -239,7 +239,8 @@ export class AccountEntitlements {
         const plan: PlanId | undefined = kind === 'subscription' ? (['creator', 'pro', 'studio'].includes(String(input.plan)) ? input.plan as PlanId : 'creator') : undefined
         return json(await this.storage.transaction(async storage => {
           const previous = await storage.get<Checkout>(`checkout:${kind}`)
-          if (previous && previous.plan === plan && (previous.expiresAt ?? previous.created + DAY) > now) return { ...previous, repeated: true }
+          const previousPlan = previous?.plan ?? (kind === 'subscription' ? 'creator' : undefined)
+          if (previous && previousPlan === plan && (previous.expiresAt ?? previous.created + DAY) > now) return { ...previous, ...(previousPlan ? { plan: previousPlan } : {}), repeated: true }
           const value: Checkout = { id: crypto.randomUUID(), created: now, ...(plan ? { plan } : {}) }
           await storage.put(`checkout:${kind}`, value)
           return { ...value, repeated: false }
@@ -250,7 +251,8 @@ export class AccountEntitlements {
         const plan: PlanId | undefined = input.kind === 'subscription' ? (['creator', 'pro', 'studio'].includes(String(input.plan)) ? input.plan as PlanId : 'creator') : undefined
         return json(await this.storage.transaction(async storage => {
           const previous = await storage.get<Checkout>(`checkout:${input.kind}`)
-          if (!previous || previous.id !== input.id || previous.plan !== plan) return { saved: false }
+          const previousPlan = previous?.plan ?? (input.kind === 'subscription' ? 'creator' : undefined)
+          if (!previous || previous.id !== input.id || previousPlan !== plan) return { saved: false }
           await storage.put(`checkout:${input.kind}`, { ...previous, url: input.url, expiresAt: input.expiresAt, sessionId: input.sessionId }); return { saved: true }
         }))
       }
