@@ -320,7 +320,19 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
   const url = new URL(request.url)
   if (!url.pathname.startsWith('/api/billing/')) return null
   const config = billingConfig(env)
-  if (url.pathname === '/api/billing/status' && request.method === 'GET') return json({ status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED', checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval, subscriptionCredits: MONTHLY_MEMBERSHIP.credits, generationCost: 50, modelsPerSubscriptionGrant: 30, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, subscriptionPrice: MONTHLY_MEMBERSHIP, cardReady: config.topup || config.subscription, googlePay: config.topup || config.subscription ? 'eligible_devices' : 'unavailable', reason: config.topup || config.subscription ? 'Card checkout and eligible Google Pay wallets use Stripe. Credits are granted only after verified payment. Membership costs USD 29.99 per month and requires configured monthly billing.' : 'Card checkout requires payment settings. The USD 29.99 membership also requires an explicitly configured monthly interval.' })
+  if (url.pathname === '/api/billing/status' && request.method === 'GET') return json({
+    status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED',
+    checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval,
+    generationCosts: { sol: 50, astra: 250 }, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK,
+    plans: {
+      creator: { id: 'creator', ...SUBSCRIPTION_PLANS.creator, checkoutReady: config.plans.creator },
+      pro: { id: 'pro', ...SUBSCRIPTION_PLANS.pro, checkoutReady: config.plans.pro },
+      studio: { id: 'studio', ...SUBSCRIPTION_PLANS.studio, checkoutReady: config.plans.studio },
+    },
+    cardReady: config.topup || config.subscription,
+    googlePay: config.topup || config.subscription ? 'eligible_devices' : 'unavailable',
+    reason: config.topup || config.subscription ? 'Card checkout and eligible Google Pay wallets use Stripe. Credits are granted only after verified payment. Existing subscriptions keep their current price until the customer explicitly changes plan.' : 'Card checkout requires payment settings.',
+  })
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405)
   if (!config.ready) return json({ status: 'BLOCKED', error: 'Payments are not configured. No checkout or charge was created.' }, 503)
   try {
@@ -342,44 +354,54 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     if (url.pathname !== '/api/billing/checkout') return json({ error: 'Not found.' }, 404)
     if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
     const input = object(JSON.parse(await boundedText(request, 1024)))
-    if (Object.keys(input).some(key => key !== 'kind') || !['subscription', 'topup'].includes(String(input.kind))) return json({ error: 'Choose subscription or topup.' }, 400)
-    const kind = input.kind as 'subscription' | 'topup', allowance = await entitlementStatus(env, user.id)
+    if (Object.keys(input).some(key => !['kind', 'plan'].includes(key)) || !['subscription', 'topup'].includes(String(input.kind))) return json({ error: 'Choose subscription or topup.' }, 400)
+    const kind = input.kind as 'subscription' | 'topup'
+    const plan: PlanId = kind === 'subscription' && ['creator', 'pro', 'studio'].includes(String(input.plan)) ? input.plan as PlanId : 'creator'
+    const allowance = await entitlementStatus(env, user.id)
     if (allowance.billingReview) return json({ error: 'This billing account requires support review.' }, 409)
-    if (kind === 'subscription' && !config.subscription) return json({ error: 'Subscriptions are unavailable until the billing interval and price are configured.' }, 503)
-    if (kind === 'subscription' && allowance.subscription.active) return json({ error: 'A subscription is already active. Use Manage billing or buy more credits.' }, 409)
+    if (kind === 'subscription' && !config.plans[plan]) return json({ error: 'This subscription plan is not configured yet.' }, 503)
+    if (kind === 'subscription' && allowance.subscription.active) return json({ error: 'A subscription is already active. Use Manage billing to change or cancel it.' }, 409)
     if (kind === 'topup' && !config.topup) return json({ error: 'Credit packs are not configured.' }, 503)
-    const price = await verifiedPrice(env, kind, fetcher), customer = await customerFor(env, user, fetcher)
+    const price = await verifiedPrice(env, kind, fetcher, false, undefined, plan), customer = await customerFor(env, user, fetcher)
     if (kind === 'subscription') {
       const existing = await stripe(env, `/subscriptions?customer=${customer}&status=all&limit=100`, fetcher)
       if (existing.has_more === true || array(existing.data).some(item => !['canceled', 'incomplete_expired'].includes(String(item.status))))
         return json({ error: 'A subscription or payment is already present. Open Manage billing instead of starting another.' }, 409)
     }
-    const attempt = await entitlementCall<{ id: string; created: number; url?: string }>(env, user.id, '/checkout-reserve', { kind })
+    const attempt = await entitlementCall<{ id: string; created: number; url?: string }>(env, user.id, '/checkout-reserve', { kind, ...(kind === 'subscription' ? { plan } : {}) })
     if (attempt.url) return json({ url: attempt.url, mode: config.mode })
+    const offer = kind === 'subscription' ? subscriptionOffer(env, plan) : CREDIT_PACK
     const params = new URLSearchParams({ mode: kind === 'subscription' ? 'subscription' : 'payment', customer,
       'line_items[0][price]': price.id as string, 'line_items[0][quantity]': '1', client_reference_id: user.id,
       'metadata[worldifact_uid]': user.id, 'metadata[worldifact_kind]': kind,
       'metadata[worldifact_checkout_id]': attempt.id,
-      // Stripe-hosted card Checkout presents Google Pay only for eligible devices/accounts.
+      ...(kind === 'subscription' ? { 'metadata[worldifact_plan]': plan } : {}),
       'payment_method_types[0]': 'card', allow_promotion_codes: 'false',
-      // Keep this fixed-USD integration on standard Checkout even if the account defaults to Managed Payments.
       'managed_payments[enabled]': 'false',
       success_url: `${config.origin}/account/credits?billing=processing`, cancel_url: `${config.origin}/account/credits?billing=cancelled`,
     })
-    if (kind === 'subscription') params.set('subscription_data[metadata][worldifact_uid]', user.id)
-    else { params.set('metadata[worldifact_credits]', String(CREDIT_PACK.credits)); params.set('payment_intent_data[metadata][worldifact_uid]', user.id); params.set('payment_intent_data[metadata][worldifact_kind]', 'topup') }
+    if (kind === 'subscription') {
+      params.set('subscription_data[metadata][worldifact_uid]', user.id)
+      params.set('subscription_data[metadata][worldifact_plan]', plan)
+    } else {
+      params.set('metadata[worldifact_credits]', String(CREDIT_PACK.credits))
+      params.set('payment_intent_data[metadata][worldifact_uid]', user.id)
+      params.set('payment_intent_data[metadata][worldifact_kind]', 'topup')
+    }
     const session = await createCheckout(env, fetcher, params, `wf-checkout-${user.id}-${attempt.id}`)
     const checks: [string, boolean][] = [
       ['url', typeof session.url === 'string' && session.url.startsWith('https://checkout.stripe.com/')], ['id', resourceId(session.id, 'cs')],
-      ['expires_at', Number.isSafeInteger(session.expires_at)], ['amount_total', session.amount_total === (kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount)],
+      ['expires_at', Number.isSafeInteger(session.expires_at)], ['amount_total', session.amount_total === (kind === 'subscription' ? offer.amountCents : CREDIT_PACK.amount)],
       ['currency', session.currency === 'usd'], ['mode', session.mode === (kind === 'subscription' ? 'subscription' : 'payment')],
       ['customer', idOf(session.customer) === customer], ['client_reference_id', session.client_reference_id === user.id],
       ['metadata.worldifact_uid', uidFor(session) === user.id], ['metadata.worldifact_kind', object(session.metadata).worldifact_kind === kind],
       ['metadata.worldifact_checkout_id', object(session.metadata).worldifact_checkout_id === attempt.id],
+      ...(kind === 'subscription' ? [['metadata.worldifact_plan', object(session.metadata).worldifact_plan === plan] as [string, boolean]] : []),
     ]
     const fields = checks.filter(([, valid]) => !valid).map(([name]) => name)
     if (fields.length) throw new BillingDiagnosticError('Checkout price or account was not confirmed.', 503, { stage: 'checkout_create', category: 'checkout_validation', fields })
-    await entitlementCall(env, user.id, '/checkout-finish', { kind, id: attempt.id, url: session.url, sessionId: session.id, expiresAt: Number(session.expires_at) * 1000 })
+    await entitlementCall(env, user.id, '/checkout-finish', { kind, ...(kind === 'subscription' ? { plan } : {}), id: attempt.id, url: session.url, sessionId: session.id, expiresAt: Number(session.expires_at) * 1000 })
     return json({ url: session.url, mode: config.mode })
   } catch (error) { return json({ error: error instanceof EntitlementError ? error.message : 'Billing is temporarily unavailable. No account credit was inferred from this response.', ...(error instanceof BillingDiagnosticError ? { diagnostic: error.diagnostic } : {}) }, error instanceof EntitlementError ? error.status : 503) }
 }
+
