@@ -1,9 +1,5 @@
 name: Prepare Stripe prices and webhook
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'ops/pricing-v2-activate.json'
   workflow_dispatch:
     inputs:
       confirmation:
@@ -17,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   setup:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'SETUP')
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'SETUP'
     environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 10

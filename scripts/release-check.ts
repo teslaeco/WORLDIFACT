@@ -36,6 +36,11 @@ export function readDeployment(contents: string): Deployment {
   return { origin: origins[0], versionId: record.version_id };
 }
 
+export function reviewedLiveHealth(health: Record<string, unknown>) {
+  return health.mode === "READY" && health.generationReady === true &&
+    ["gpt-6-sol", "gpt-6-astra"].includes(String(health.model));
+}
+
 async function assetFiles(dist: string, relative = "assets"): Promise<string[]> {
   const files: string[] = [];
   for (const entry of await readdir(join(dist, relative), { withFileTypes: true })) {
@@ -63,8 +68,6 @@ export async function checkPublishedRelease(deployment: Deployment,
     return response;
   };
   const staticResponse = async (path: string, options: RequestInit) => {
-    // Cloudflare canonicalizes file.html and folder/index.html before serving
-    // their original bytes. Permit only those same-origin HTML destinations.
     const original = new URL(path, origin);
     const canonical = original.pathname.endsWith(".html")
       ? original.pathname.replace(/(?:\/index)?\.html$/, "") || "/" : null;
@@ -98,8 +101,7 @@ export async function checkPublishedRelease(deployment: Deployment,
     return value as Record<string, unknown>;
   };
   const matchingAsset = async (path: string, expectedHash: string, types: string[], options: RequestInit = {}) => {
-    // Newly deployed static assets can briefly reach an edge after the Worker.
-    // Retry only idempotent reads, never generation or other POST requests.
+    // Retry idempotent asset reads only, never generation or payment POSTs.
     for (let attempt = 0; ; attempt++) {
       const response = await staticResponse(path, options);
       const mime = response.headers.get("content-type")?.split(";")[0].trim();
@@ -112,9 +114,9 @@ export async function checkPublishedRelease(deployment: Deployment,
   };
   const health = await json(await request("/api/health"), "/api/health");
   const demoHealth = health.mode === "DEMO" && health.generationReady === false && health.model === null;
-  const liveHealth = health.mode === "READY" && health.generationReady === true && health.model === "gpt-6-astra";
+  const liveHealth = reviewedLiveHealth(health);
   requireCheck(demoHealth || liveHealth,
-    "Release health must be either reviewed DEMO or authorized READY gpt-6-astra.");
+    "Release health must be reviewed DEMO or authorized READY gpt-6-sol/gpt-6-astra.");
 
   const expectedHtml = await readFile(join(dist, "index.html"));
   requireCheck(/id=["']root["']/.test(expectedHtml.toString()), "Built app entry point is missing.");
@@ -132,8 +134,6 @@ export async function checkPublishedRelease(deployment: Deployment,
     const types = path.endsWith(".webp") ? ["image/webp"] : path.endsWith(".png") ? ["image/png"] : path.endsWith(".css") ? ["text/css"] : ["text/javascript", "application/javascript"];
     await matchingAsset(`/${path}`, digest(await readFile(join(dist, path))), types);
   }
-  // The login hero, all five portal frames and the owner-selected Terrace Tower
-  // must match this exact release. HTML fallbacks, stale files and substitutes fail.
   const sculptureAssets = [
     { path: "world-assets/polyhedron-led.gltf", types: ["model/gltf+json", "application/json"] },
     { path: "world-assets/polyhedron-led-poster.svg", types: ["image/svg+xml"] },
@@ -166,8 +166,7 @@ export async function checkPublishedRelease(deployment: Deployment,
     }
   }));
   await json(await request("/api/release-check-missing"), "/api/release-check-missing", 404);
-  // Always send explicit DEMO, even when checking a mistakenly enabled deployment.
-  // No provider secret or access token is available to this workflow step.
+  // Always explicit DEMO: never spend on a release smoke test.
   const options = {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: origin },
