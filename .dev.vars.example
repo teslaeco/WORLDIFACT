@@ -34,8 +34,12 @@ STRIPE_WEBHOOK_SECRET=
 STRIPE_TOPUP_PRICE_ID=
 STRIPE_PREVIOUS_TOPUP_PRICE_IDS=
 STRIPE_TOPUP_CREDITS=1500
-# Approved membership: USD 29.99 per month for 1,500 credits. Activation remains separate.
+# Creator SOL: USD 29.99/month for 1,500 credits. Existing live subscribers keep this price.
 STRIPE_SUBSCRIPTION_PRICE_ID=
+# Pro ASTRA: USD 99.99/month for 4,500 credits.
+STRIPE_PRO_PRICE_ID=
+# Studio ASTRA: USD 149.99/month for 7,500 credits.
+STRIPE_STUDIO_PRICE_ID=
 STRIPE_SUBSCRIPTION_INTERVAL=month
 ENABLE_PAYPAL_BILLING=false
 PAYPAL_MODE=sandbox
