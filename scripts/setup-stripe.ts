@@ -176,7 +176,7 @@ export async function setupStripe(env: NodeJS.ProcessEnv, dependencies: Dependen
     if (!item.price) {
       const params = new URLSearchParams({ product: offer.productId, lookup_key: offer.lookupKey, currency: 'usd', unit_amount: String(offer.amount), billing_scheme: 'per_unit', active: 'true', 'expand[]': 'product' });
       if (offer.kind === 'subscription') { params.set('recurring[interval]', 'month'); params.set('recurring[interval_count]', '1'); params.set('recurring[usage_type]', 'licensed'); }
-      addMetadata(params, metadata(accountId, offer.kind));
+      addMetadata(params, metadata(accountId, offer));
       item.price = (await request('/prices', 'price creation', params, `${setupVersion}-${accountId}-${offer.productId}-price`))!;
       validatePrice(item.price, offer, accountId, 'price creation');
     }
