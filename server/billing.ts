@@ -1,5 +1,6 @@
 import { getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts'
 import { ACCOUNT_ID, entitlementCall, entitlementStatus, EntitlementError, type EntitlementEnv } from './entitlements.ts'
+import { PLAN_CATALOG, type PlanId } from './generationEconomics.ts'
 
 export interface BillingEnv extends AccountEnv, EntitlementEnv {
   ENABLE_BILLING?: string
@@ -8,6 +9,8 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID?: string
   STRIPE_MODE?: string
   STRIPE_SUBSCRIPTION_PRICE_ID?: string
+  STRIPE_PRO_PRICE_ID?: string
+  STRIPE_STUDIO_PRICE_ID?: string
   STRIPE_SUBSCRIPTION_INTERVAL?: string
   STRIPE_TOPUP_PRICE_ID?: string
   /** Up to ten previously approved fixed-pack prices, for existing payment settlement and reversals only. */
@@ -22,6 +25,11 @@ export const STRIPE_API_VERSION = '2024-06-20'
 export const STRIPE_CHECKOUT_API_VERSION = '2025-03-31.basil'
 export const CREDIT_PACK = Object.freeze({ amount: 2999, currency: 'USD', credits: 1500, kind: 'one_time' as const })
 export const MONTHLY_MEMBERSHIP = Object.freeze({ amount: CREDIT_PACK.amount, currency: 'USD', credits: 1500, kind: 'subscription' as const, interval: 'month' as const })
+export const SUBSCRIPTION_PLANS = Object.freeze({
+  creator: Object.freeze({ ...PLAN_CATALOG.creator, kind: 'subscription' as const, interval: 'month' as const }),
+  pro: Object.freeze({ ...PLAN_CATALOG.pro, kind: 'subscription' as const, interval: 'month' as const }),
+  studio: Object.freeze({ ...PLAN_CATALOG.studio, kind: 'subscription' as const, interval: 'month' as const }),
+})
 type Json = Record<string, unknown>
 type BillingStage = 'price_read' | 'customer_create' | 'subscription_list' | 'checkout_create' | 'portal_create' | 'other_read'
 type BillingDiagnostic = { stage: BillingStage; category: 'provider_http' | 'provider_timeout' | 'provider_transport' | 'provider_response' | 'mode_mismatch' | 'checkout_validation'; httpStatus?: number; type?: string; code?: string; parameter?: string; fields?: string[] }
@@ -45,6 +53,16 @@ function previousTopupPrices(env: BillingEnv): string[] | null {
   const ids = env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS.split(',').map(value => value.trim())
   return ids.length <= 10 && ids.every(priceId) && new Set(ids).size === ids.length ? ids : null
 }
+function subscriptionPriceId(env: BillingEnv, plan: PlanId) {
+  return plan === 'creator' ? env.STRIPE_SUBSCRIPTION_PRICE_ID : plan === 'pro' ? env.STRIPE_PRO_PRICE_ID : env.STRIPE_STUDIO_PRICE_ID
+}
+function subscriptionOffer(env: BillingEnv, plan: PlanId) {
+  return { ...SUBSCRIPTION_PLANS[plan], priceId: subscriptionPriceId(env, plan) }
+}
+function planForPrice(env: BillingEnv, id: string): PlanId | null {
+  for (const plan of ['creator', 'pro', 'studio'] as const) if (subscriptionPriceId(env, plan) === id) return plan
+  return null
+}
 function billingConfig(env: BillingEnv) {
   let origin: string | null = null
   try { const url = new URL(env.BILLING_PUBLIC_ORIGIN ?? ''); if (url.protocol === 'https:' && url.origin === env.BILLING_PUBLIC_ORIGIN && !url.username && !url.password) origin = url.origin } catch { /* Fail closed. */ }
@@ -53,7 +71,13 @@ function billingConfig(env: BillingEnv) {
   const interval = env.STRIPE_SUBSCRIPTION_INTERVAL === MONTHLY_MEMBERSHIP.interval ? MONTHLY_MEMBERSHIP.interval : null
   const keyMatchesMode = ['sk', 'rk'].some(prefix => env.STRIPE_SECRET_KEY?.trim().startsWith(`${prefix}_${mode}_`))
   const ready = env.ENABLE_BILLING === 'true' && env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true' && !!env.ACCOUNT_ENTITLEMENTS && !!origin && modeValid && ledgerModeMatches && keyMatchesMode && !!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')
-  return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: ready && priceId(env.STRIPE_SUBSCRIPTION_PRICE_ID) && !!interval && resourceId(env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID, 'bpc'), interval, mode: modeValid ? mode : null }
+  const portal = !!interval && resourceId(env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID, 'bpc')
+  const plans = {
+    creator: ready && portal && priceId(env.STRIPE_SUBSCRIPTION_PRICE_ID),
+    pro: ready && portal && priceId(env.STRIPE_PRO_PRICE_ID),
+    studio: ready && portal && priceId(env.STRIPE_STUDIO_PRICE_ID),
+  }
+  return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: plans.creator || plans.pro || plans.studio, plans, interval, mode: modeValid ? mode : null }
 }
 async function boundedText(value: Request | Response, maximum: number) {
   if (Number(value.headers.get('Content-Length')) > maximum) throw new EntitlementError('Billing request is too large.', 413)
@@ -134,13 +158,13 @@ async function customerFor(env: BillingEnv, user: AccountUser, fetcher: typeof f
   if (!saved.saved) throw new EntitlementError('Billing customer could not be linked.')
   return customer.id as string
 }
-async function verifiedPrice(env: BillingEnv, kind: 'subscription' | 'topup', fetcher: typeof fetch, allowArchived = false, settlementPriceId?: string) {
-  const id = settlementPriceId ?? (kind === 'subscription' ? env.STRIPE_SUBSCRIPTION_PRICE_ID : env.STRIPE_TOPUP_PRICE_ID)
+async function verifiedPrice(env: BillingEnv, kind: 'subscription' | 'topup', fetcher: typeof fetch, allowArchived = false, settlementPriceId?: string, plan: PlanId = 'creator') {
+  const offer = kind === 'subscription' ? subscriptionOffer(env, plan) : CREDIT_PACK
+  const id = settlementPriceId ?? (kind === 'subscription' ? subscriptionPriceId(env, plan) : env.STRIPE_TOPUP_PRICE_ID)
   if (!priceId(id)) throw new EntitlementError('This payment option is not configured.')
   const price = await stripe(env, `/prices/${id}`, fetcher)
-  const amount = kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount
-  if (price.id !== id || (!allowArchived && price.active !== true) || price.unit_amount !== amount || price.currency !== 'usd' || (kind === 'subscription' ? price.type !== 'recurring' : price.type !== 'one_time')) throw new EntitlementError(kind === 'subscription' ? 'The configured membership price must be exactly USD 29.99 per month for 1500 credits.' : 'The configured credit pack price must be exactly USD 29.99 for 1500 credits.')
-  // Unknown periods, quantities and tiers are not silently turned into a different offer.
+  const amount = kind === 'subscription' ? offer.amountCents : CREDIT_PACK.amount
+  if (price.id !== id || (!allowArchived && price.active !== true) || price.unit_amount !== amount || price.currency !== 'usd' || (kind === 'subscription' ? price.type !== 'recurring' : price.type !== 'one_time')) throw new EntitlementError(kind === 'subscription' ? 'The configured membership price does not match the approved WORLDIFACT plan.' : 'The configured credit pack price must be exactly USD 29.99 for 1500 credits.')
   if (price.billing_scheme !== 'per_unit' || price.transform_quantity != null || (kind === 'subscription' && (!billingConfig(env).interval || object(price.recurring).interval !== billingConfig(env).interval || object(price.recurring).interval_count !== 1 || object(price.recurring).usage_type !== 'licensed'))) throw new EntitlementError('The configured billing interval needs operator review.')
   return price
 }
@@ -172,11 +196,17 @@ function matchingLines(invoice: Json, price: string | undefined) {
   if (lines.has_more === true) throw new EntitlementError('The subscription invoice requires review.', 502)
   return array(lines.data).filter(line => (idOf(line.price) || idOf(object(object(line.pricing).price_details).price)) === price && line.proration !== true)
 }
-function exactInvoice(env: BillingEnv, invoice: Json) {
-  const lines = matchingLines(invoice, env.STRIPE_SUBSCRIPTION_PRICE_ID)
-  return invoice.paid === true && invoice.status === 'paid' && invoice.amount_paid === MONTHLY_MEMBERSHIP.amount && invoice.total === MONTHLY_MEMBERSHIP.amount && invoice.currency === 'usd'
-    && array(object(invoice.lines).data).length === 1 && lines.length === 1 && lines[0].quantity === 1 && lines[0].amount === MONTHLY_MEMBERSHIP.amount && lines[0].currency === 'usd'
-    && ['subscription_create', 'subscription_cycle'].includes(String(invoice.billing_reason))
+function exactInvoice(env: BillingEnv, invoice: Json): { plan: PlanId; credits: number; amount: number; priceId: string } | null {
+  const all = array(object(invoice.lines).data)
+  if (all.length !== 1) return null
+  const line = all[0], id = idOf(line.price) || idOf(object(object(line.pricing).price_details).price)
+  const plan = planForPrice(env, id)
+  if (!plan) return null
+  const offer = subscriptionOffer(env, plan), lines = matchingLines(invoice, id)
+  if (invoice.paid !== true || invoice.status !== 'paid' || invoice.amount_paid !== offer.amountCents || invoice.total !== offer.amountCents || invoice.currency !== 'usd'
+    || lines.length !== 1 || line.quantity !== 1 || line.amount !== offer.amountCents || line.currency !== 'usd'
+    || !['subscription_create', 'subscription_cycle'].includes(String(invoice.billing_reason))) return null
+  return { plan, credits: offer.credits, amount: offer.amountCents, priceId: id }
 }
 async function checkCustomer(env: BillingEnv, uid: string, value: unknown) {
   const customer = idOf(value)
@@ -189,36 +219,37 @@ async function syncSubscription(env: BillingEnv, subscription: Json, revision: n
   if (!uid || !resourceId(subscription.id, 'sub')) return
   await checkCustomer(env, uid, subscription.customer)
   const items = array(object(subscription.items).data)
-  const item = items.find(item => idOf(item.price) === env.STRIPE_SUBSCRIPTION_PRICE_ID)
-  if (!item || items.length !== 1 || item.quantity !== 1 || object(subscription.items).has_more === true) return
-  const end = Number(item.current_period_end ?? subscription.current_period_end) * 1000
+  if (items.length !== 1 || items[0].quantity !== 1 || object(subscription.items).has_more === true) return
+  const priceIdValue = idOf(items[0].price), plan = planForPrice(env, priceIdValue)
+  if (!plan) return
+  const end = Number(items[0].current_period_end ?? subscription.current_period_end) * 1000
   const invoiceId = idOf(subscription.latest_invoice)
   let paid = false, grantId: string | undefined
-  if (billingConfig(env).subscription && resourceId(invoiceId, 'in') && subscription.status === 'active') {
-    await verifiedPrice(env, 'subscription', fetcher, true)
+  if (billingConfig(env).plans[plan] && resourceId(invoiceId, 'in') && subscription.status === 'active') {
+    await verifiedPrice(env, 'subscription', fetcher, true, priceIdValue, plan)
     const invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher)
-    paid = exactInvoice(env, invoice) && subscriptionOf(invoice) === subscription.id
-    if (paid) {
+    const verified = exactInvoice(env, invoice)
+    paid = !!verified && verified.plan === plan && subscriptionOf(invoice) === subscription.id
+    if (paid && verified) {
       await checkCustomer(env, uid, invoice.customer)
       grantId = invoiceId
-      // Subscription events may beat invoice.paid or arrive after a missed delivery.
-      // The same verified invoice ID is the grant key across both paths.
-      await entitlementCall(env, uid, '/grant', { id: invoiceId, credits: 1500, subscriptionId: subscription.id })
+      await entitlementCall(env, uid, '/grant', { id: invoiceId, credits: verified.credits, subscriptionId: subscription.id })
     }
   }
-  await entitlementCall(env, uid, '/subscription', { id: subscription.id, active: paid && subscription.status === 'active' && Number.isSafeInteger(end), until: Number.isSafeInteger(end) ? end : 0, revision, grantId, terminal: ['canceled', 'incomplete_expired'].includes(String(subscription.status)) })
+  await entitlementCall(env, uid, '/subscription', { id: subscription.id, active: paid && subscription.status === 'active' && Number.isSafeInteger(end), until: Number.isSafeInteger(end) ? end : 0, revision, plan, grantId, terminal: ['canceled', 'incomplete_expired'].includes(String(subscription.status)) })
 }
 async function invoicePaid(env: BillingEnv, invoice: Json, revision: number, fetcher: typeof fetch) {
-  if (!billingConfig(env).subscription || !exactInvoice(env, invoice)) return
-  await verifiedPrice(env, 'subscription', fetcher, true)
+  const verified = exactInvoice(env, invoice)
+  if (!verified || !billingConfig(env).plans[verified.plan]) return
+  await verifiedPrice(env, 'subscription', fetcher, true, verified.priceId, verified.plan)
   const subId = subscriptionOf(invoice)
   if (!resourceId(subId, 'sub') || !resourceId(invoice.id, 'in')) return
   const subscription = await stripe(env, `/subscriptions/${subId}`, fetcher), uid = uidFor(subscription)
   const items = array(object(subscription.items).data)
-  if (!uid || items.length !== 1 || items[0].quantity !== 1 || idOf(items[0].price) !== env.STRIPE_SUBSCRIPTION_PRICE_ID || object(subscription.items).has_more === true) return
+  if (!uid || items.length !== 1 || items[0].quantity !== 1 || idOf(items[0].price) !== verified.priceId || object(subscription.items).has_more === true) return
   await checkCustomer(env, uid, invoice.customer)
   await checkCustomer(env, uid, subscription.customer)
-  await entitlementCall(env, uid, '/grant', { id: invoice.id, credits: 1500, subscriptionId: subId })
+  await entitlementCall(env, uid, '/grant', { id: invoice.id, credits: verified.credits, subscriptionId: subId })
   await syncSubscription(env, subscription, revision, fetcher)
 }
 async function topupSession(env: BillingEnv, session: Json, fetcher: typeof fetch, reverse = false) {
