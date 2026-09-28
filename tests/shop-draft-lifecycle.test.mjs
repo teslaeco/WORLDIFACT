@@ -10,8 +10,8 @@ const oldId = '12345678-1234-4234-8234-123456789abc'
 const newId = '87654321-1234-4234-8234-123456789abc'
 const makeReceipt = id => ({ id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` })
 const fastGeneration = {
-  mode: 'LIVE', provenance: 'GENERATED', requestId: 'req_fast_fixture', model: 'gpt-6-astra',
-  limitation: 'Astra generated a validated specification; visible geometry is a procedural draft.',
+  mode: 'LIVE', provenance: 'GENERATED', requestId: 'req_fast_fixture', model: 'gpt-6-sol',
+  limitation: 'Sol generated a validated specification; visible geometry is a procedural draft.',
   blueprint: { version: 1, title: 'Fast rook draft', biome: 'valley', objects: [
     { id: 'fast-rook', name: 'Fast rook', kind: 'sculpture', x: 0, z: 0, scale: 1, rotation: 0, color: '#557799' },
   ] },
@@ -51,7 +51,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', astraReady = ready, downloadAllowed, reconciliationRequired = false } = {}) {
+async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map([[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
@@ -62,7 +62,7 @@ async function harness({ ready = false, state = 'succeeded', astraReady = ready,
     const path = String(url), method = init.method || 'GET'
     calls.push({ path, method, body: init.body })
     if (path === '/api/studio/status') return Response.json(status)
-    if (path === '/api/health') return Response.json({ generationReady: astraReady })
+    if (path === '/api/health') return Response.json({ generationReady: solReady, model: solReady ? 'gpt-6-sol' : null })
     if (path === '/api/blueprint' && method === 'POST') return Response.json(fastGeneration)
     if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
@@ -119,7 +119,7 @@ async function harness({ ready = false, state = 'succeeded', astraReady = ready,
   }
 }
 
-test('restored completed knight stays editable and unavailable FAST cannot bypass the live Astra gate', async () => {
+test('restored completed knight stays editable and unavailable FAST cannot bypass the live Sol gate', async () => {
   const h = await harness()
   try {
     await h.poll()
@@ -153,7 +153,7 @@ test('an active job can have a next draft, but cannot be replaced or resubmitted
   } finally { h.close() }
 })
 
-test('explicit FAST after completion sends one Astra blueprint POST and never submits an Oracle Studio job', async () => {
+test('explicit FAST after completion sends one Sol blueprint POST and never submits an Oracle Studio job', async () => {
   const h = await harness({ ready: true })
   try {
     await h.poll()
@@ -164,11 +164,11 @@ test('explicit FAST after completion sends one Astra blueprint POST and never su
     const first = h.form().props.onSubmit({ preventDefault() {} })
     const duplicate = h.form().props.onSubmit({ preventDefault() {} })
     await Promise.all([first, duplicate]); await h.settle()
-    const astraPosts = h.calls.filter(c => c.path === '/api/blueprint' && c.method === 'POST')
+    const solPosts = h.calls.filter(c => c.path === '/api/blueprint' && c.method === 'POST')
     const studioPosts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
-    assert.equal(astraPosts.length, 1)
+    assert.equal(solPosts.length, 1)
     assert.equal(studioPosts.length, 0)
-    assert.deepEqual(JSON.parse(astraPosts[0].body), { worldId: 'enchanted-ai-shop', prompt: 'A blue rook in FAST', mode: 'live' })
+    assert.deepEqual(JSON.parse(solPosts[0].body), { worldId: 'enchanted-ai-shop', prompt: 'A blue rook in FAST', mode: 'live' })
     assert.match(h.fastDescription(), /Compact procedural FAST draft/)
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), storedBefore)
     assert.equal(h.archive.get(oldId).sha256, 'original')
