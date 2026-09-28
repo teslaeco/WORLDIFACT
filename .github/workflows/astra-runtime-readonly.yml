@@ -1,3 +1,4 @@
+# Owner installation confirmed on 2026-09-28: astra-usd175-v1. This workflow only reads health.
 name: Verify installed Oracle Astra guard without generation
 on:
   push:
