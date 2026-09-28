@@ -322,7 +322,8 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
   if (url.pathname === '/api/billing/status' && request.method === 'GET') return json({
     status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED',
     checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval,
-    generationCosts: { sol: 50, astra: 250 }, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK,
+    subscriptionCredits: MONTHLY_MEMBERSHIP.credits, generationCost: 50, modelsPerSubscriptionGrant: 30,
+    generationCosts: { sol: 50, astra: 250 }, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, subscriptionPrice: MONTHLY_MEMBERSHIP,
     plans: {
       creator: { id: 'creator', ...SUBSCRIPTION_PLANS.creator, checkoutReady: config.plans.creator },
       pro: { id: 'pro', ...SUBSCRIPTION_PLANS.pro, checkoutReady: config.plans.pro },
@@ -374,14 +375,14 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
       'line_items[0][price]': price.id as string, 'line_items[0][quantity]': '1', client_reference_id: user.id,
       'metadata[worldifact_uid]': user.id, 'metadata[worldifact_kind]': kind,
       'metadata[worldifact_checkout_id]': attempt.id,
-      ...(kind === 'subscription' ? { 'metadata[worldifact_plan]': plan } : {}),
+      ...(kind === 'subscription' && plan !== 'creator' ? { 'metadata[worldifact_plan]': plan } : {}),
       'payment_method_types[0]': 'card', allow_promotion_codes: 'false',
       'managed_payments[enabled]': 'false',
       success_url: `${config.origin}/account/credits?billing=processing`, cancel_url: `${config.origin}/account/credits?billing=cancelled`,
     })
     if (kind === 'subscription') {
       params.set('subscription_data[metadata][worldifact_uid]', user.id)
-      params.set('subscription_data[metadata][worldifact_plan]', plan)
+      if (plan !== 'creator') params.set('subscription_data[metadata][worldifact_plan]', plan)
     } else {
       params.set('metadata[worldifact_credits]', String(CREDIT_PACK.credits))
       params.set('payment_intent_data[metadata][worldifact_uid]', user.id)
@@ -395,7 +396,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
       ['customer', idOf(session.customer) === customer], ['client_reference_id', session.client_reference_id === user.id],
       ['metadata.worldifact_uid', uidFor(session) === user.id], ['metadata.worldifact_kind', object(session.metadata).worldifact_kind === kind],
       ['metadata.worldifact_checkout_id', object(session.metadata).worldifact_checkout_id === attempt.id],
-      ...(kind === 'subscription' ? [['metadata.worldifact_plan', object(session.metadata).worldifact_plan === plan] as [string, boolean]] : []),
+      ...(kind === 'subscription' && plan !== 'creator' ? [['metadata.worldifact_plan', object(session.metadata).worldifact_plan === plan] as [string, boolean]] : []),
     ]
     const fields = checks.filter(([, valid]) => !valid).map(([name]) => name)
     if (fields.length) throw new BillingDiagnosticError('Checkout price or account was not confirmed.', 503, { stage: 'checkout_create', category: 'checkout_validation', fields })
