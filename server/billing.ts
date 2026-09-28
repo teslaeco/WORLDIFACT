@@ -20,6 +20,8 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
   STRIPE_TOPUP_CREDITS?: string
   BILLING_PUBLIC_ORIGIN?: string
   GENERATION_BUDGET?: BudgetNamespace
+  /** Enable only after the Astra Oracle worker enforces the reviewed monetary ceiling. */
+  ENABLE_ASTRA_PLANS?: string
 }
 // Pin billing reads and the configured webhook endpoint independently of Checkout creation.
 export const STRIPE_API_VERSION = '2024-06-20'
@@ -74,12 +76,13 @@ function billingConfig(env: BillingEnv) {
   const keyMatchesMode = ['sk', 'rk'].some(prefix => env.STRIPE_SECRET_KEY?.trim().startsWith(`${prefix}_${mode}_`))
   const ready = env.ENABLE_BILLING === 'true' && env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true' && !!env.ACCOUNT_ENTITLEMENTS && !!origin && modeValid && ledgerModeMatches && keyMatchesMode && !!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')
   const portal = !!interval && resourceId(env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID, 'bpc')
+  const astraSpendGuard = env.ENABLE_ASTRA_PLANS === 'true'
   const plans = {
     creator: ready && portal && priceId(env.STRIPE_SUBSCRIPTION_PRICE_ID),
-    pro: ready && portal && priceId(env.STRIPE_PRO_PRICE_ID),
-    studio: ready && portal && priceId(env.STRIPE_STUDIO_PRICE_ID),
+    pro: ready && portal && astraSpendGuard && priceId(env.STRIPE_PRO_PRICE_ID),
+    studio: ready && portal && astraSpendGuard && priceId(env.STRIPE_STUDIO_PRICE_ID),
   }
-  return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: plans.creator || plans.pro || plans.studio, plans, interval, mode: modeValid ? mode : null }
+  return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: plans.creator || plans.pro || plans.studio, plans, astraSpendGuard, interval, mode: modeValid ? mode : null }
 }
 async function boundedText(value: Request | Response, maximum: number) {
   if (Number(value.headers.get('Content-Length')) > maximum) throw new EntitlementError('Billing request is too large.', 413)
@@ -342,8 +345,8 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     generationCosts: { sol: 50, astra: 250 }, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, subscriptionPrice: MONTHLY_MEMBERSHIP,
     plans: {
       creator: { id: 'creator', ...SUBSCRIPTION_PLANS.creator, checkoutReady: config.plans.creator },
-      pro: { id: 'pro', ...SUBSCRIPTION_PLANS.pro, checkoutReady: config.plans.pro },
-      studio: { id: 'studio', ...SUBSCRIPTION_PLANS.studio, checkoutReady: config.plans.studio },
+      pro: { id: 'pro', ...SUBSCRIPTION_PLANS.pro, checkoutReady: config.plans.pro, blockedReason: config.astraSpendGuard ? null : 'ASTRA_COST_GUARD_REQUIRED' },
+      studio: { id: 'studio', ...SUBSCRIPTION_PLANS.studio, checkoutReady: config.plans.studio, blockedReason: config.astraSpendGuard ? null : 'ASTRA_COST_GUARD_REQUIRED' },
     },
     cardReady: config.topup || config.subscription,
     googlePay: config.topup || config.subscription ? 'eligible_devices' : 'unavailable',
