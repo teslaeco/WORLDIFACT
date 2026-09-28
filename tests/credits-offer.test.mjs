@@ -23,7 +23,7 @@ test('credit page exposes three profitable plans, safe checkout and preserved pa
     assert.match(html, /Pro ASTRA/)
     assert.match(html, /Studio ASTRA/)
     assert.match(html, /1,500 extra credits/)
-    assert.match(html, /PayPal supports one-time top-ups only/)
+    assert.match(html, /Pay once with PayPal/)
     assert.match(html, /<button[^>]*disabled=""[^>]*>Subscribe \$29\.99 \/ month/)
     
     assert.match(html, /<button[^>]*disabled=""[^>]*>Check \$29\.99 USD PayPal payment/)
