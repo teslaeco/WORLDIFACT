@@ -59,7 +59,7 @@ const ok = () =>
   new Response(
     JSON.stringify({
       status: "completed",
-      model: "gpt-6-astra",
+      model: "gpt-6-sol",
       id: "resp_test_stub",
       usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 },
       output: [
@@ -380,8 +380,9 @@ test("live response uses strict Responses format, server-only auth and validates
   const data = (await r.json()) as { mode: string; provenance: string };
   assert.equal(data.mode, "LIVE");
   assert.equal(data.provenance, "GENERATED");
-  assert.equal(body.model, "gpt-6-astra");
+  assert.equal(body.model, "gpt-6-sol");
   assert.equal(body.store, false);
+  assert.equal(body.service_tier, "default");
   assert.equal(body.text.format.strict, true);
   assert.ok(!JSON.stringify(data).includes("test-key"));
 });
@@ -421,7 +422,7 @@ test("refusal and timeout return bounded safe errors", async () => {
         new Response(
           JSON.stringify({
             status: "completed",
-            model: "gpt-6-astra",
+            model: "gpt-6-sol",
             output: [{ content: [{ type: "refusal" }] }],
           }),
         ),
