@@ -9,10 +9,45 @@ permissions:
 jobs:
   guard:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Compile guard, launcher and reviewed installer
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .astra-source
+          persist-credentials: false
+      - name: Reproduce the exact already installed FAST-spend variant
+        run: |
+          python3 -B - <<'PY'
+          import sys, hashlib
+          from pathlib import Path
+          sys.path.insert(0, 'tools/fast_preview')
+          from installed_v33 import installed_server_from_reviewed, stage, INSTALLED
+          from install_spend import changes, EXPECTED
+          original = Path('.astra-review/original'); original.mkdir(parents=True)
+          for name in INSTALLED:
+              source = Path('.astra-source/oracle_connector') / name
+              target = original / name; target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(installed_server_from_reviewed(source.read_bytes()) if name == 'server.py' else source.read_bytes())
+          stage(original, Path('.astra-review/fast-base'))
+          previous = {n: (Path('.astra-review/fast-base/patch')/n).read_bytes() for n in EXPECTED}
+          updated = changes(previous, Path('tools/fast_preview/fast_spend.py').read_bytes())
+          root = Path('.astra-review/installed'); root.mkdir()
+          for name, raw in updated.items():
+              (root/name).write_bytes(raw)
+              print(name, hashlib.sha256(raw).hexdigest())
+          # Verify the unchanged genuine smoke/verifier source identities as well.
+          import install_v33
+          for name, sha in install_v33.VERIFIERS.items():
+              raw = (Path('.astra-source/oracle_connector')/name).read_bytes()
+              assert install_v33.blob_sha(raw) == sha, name
+              print(name, hashlib.sha256(raw).hexdigest())
+          PY
+      - name: Compile guard, launcher and installer
         run: python3 -m py_compile tools/profit_guard/*.py
-      - name: Test concurrent spending, price expiry, replay and rollback with fixtures
+      - name: Test source ancestry, protocol, limits and rollback without paid API
+        env:
+          FAST_INSTALLED_FIXTURE: ${{ github.workspace }}/.astra-review/installed
         run: python3 -B -m unittest discover -s tools/profit_guard -p 'test_*.py' -v

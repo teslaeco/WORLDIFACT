@@ -1,50 +1,34 @@
-# WORLDIFACT — current release status
+# WORLDIFACT — Oracle installed and Stripe catalogue created
 
-Updated 28 September 2026 following the model-selection release.
+Updated 28 September 2026 after the owner's 19:04 screenshot.
 
-## VERIFIED — model selection published
+## VERIFIED — owner's Oracle installation evidence
 
-- PR [#137](https://github.com/teslaeco/WORLDIFACT/pull/137) was squash-merged as `8543665818bc4e3ae03168e11b8306282007f363`.
-- All three PR workflows passed for exact head `e3955970042e120d401a82441e9965153cf34f22`: application verification, the existing FAST worker review and the new ASTRA guard/rollback tests.
-- Production [run 36450294889](https://github.com/teslaeco/WORLDIFACT/actions/runs/36450294889), job `109023021446`, completed successfully, including application tests/build, Worker dry-run, deployment, published HTML/assets/DEMO checks and existing Stripe readiness guards.
-- Public AI Shop: https://worldifact.xodobrox.workers.dev/shop
-- Plans and points: https://worldifact.xodobrox.workers.dev/account/credits
-- The Shop model chooser explicitly labels GPT-6 SOL at 50 points per paid attempt and GPT-6 ASTRA at 250 points. The authenticated notice shows a conditional funded free Sol allowance, point cost and calculated post-reservation balance before the generation button.
-- The notice is a display, not a binding reservation: the server rechecks account allowance and available provider funds. It does not initiate a card payment, subscription, automatic batch or model upgrade.
-- Existing receipt recovery, models, downloads and backend entitlements were preserved. This release changes no live subscription prices or grants.
+The screenshot shows installation of the pinned `7dc6d5a04f8a0cfc392124a1e19ddb83aa40de5c` package, recognition of `FAST_V33_WITH_SPEND`, and completion of the offline Codex/Blender verification. Result: `INSTALLED_AND_LOCALLY_VERIFIED`, revision `astra-usd175-v1`, maximum provider reservation USD 1.75/job, `paid_generation_requested=false`, `astra_sales_enabled=false`, and `WORLDIFACT_ASTRA_GUARD_VERIFIED`.
 
-## Oracle installer — PREPARED, NOT RUN ON THE OWNER VM
+This is evidence supplied by the owner, not a paid live-quality benchmark. The new GET-only workflow checks that same installed guard through the existing authenticated Oracle production connection without exposing its URL/token or starting a model.
 
-The reviewed installer and OCI Cloud Shell launcher are under `tools/profit_guard/`. The launcher uses the owner's existing VM/key and strict SSH verification. The installer supports one exact reviewed v33 runner/helper variant, refuses active jobs or unreviewed source before restarting, backs up touched files, runs the existing offline verification, checks authenticated local health, and rolls back touched files if verification fails.
+## VERIFIED — real Stripe catalogue writes
 
-The ASTRA guard reserves at most USD 1.75 per job before model calls. Funds are persisted outside generated job output directories; failures, restarts and output cleanup cannot reset them. It counts input tokens, restricts model/service tier/tools, lowers maximum output when necessary and requires price review before 28 October 2026. These are conservative reservations, not measured OpenAI invoice amounts or a guarantee of model quality.
+Direct Stripe connector writes now succeeded in live account `acct_1UIG9ABrIVB6dkxN` under the owner's prior approval. The previous safety-validation block did not recur on the same direct operation; no alternate credential path was used.
 
-The installer deliberately does NOT enable `ENABLE_ASTRA_PLANS`, alter billing, delete models or launch a paid model test. A successful `WORLDIFACT_ASTRA_GUARD_VERIFIED` result from the owner's actual VM and a separately authorized bounded live quality test are still required before commercial Astra activation.
+| Plan | Product | Price | Amount | Monthly credits |
+| --- | --- | --- | --- | --- |
+| Pro ASTRA | `prod_WORLDIFACTProAstra4500V2` | `price_1UKi3GBrIVB6dkxNm66OnDAr` | USD 99.99 | 4,500 |
+| Studio ASTRA | `prod_WORLDIFACTStudioAstra7500V2` | `price_1UKi3UBrIVB6dkxNfojjhJsv` | USD 149.99 | 7,500 |
 
-## Existing catalogue and funded limits
+Both prices are recurring monthly, quantity-based licensed prices with the approved product/plan metadata. No customer charge, subscription creation, existing subscription repricing, refund, tax setting or payment link was executed. Existing Creator USD 29.99 and one-time 1,500-credit top-up were left unchanged.
 
-| Offer | USD price | Credits / eligibility | Current status |
-| --- | --- | --- | --- |
-| Free SOL | 0 | Up to two attempts per rolling 24 hours AND funded shared capacity | Sol routing deployed; no paid live test in this release |
-| Creator SOL | 29.99/month | 1,500 credits; 50 per Sol attempt | Existing checkout retained |
-| Pro ASTRA | 99.99/month | 4,500 credits; 50 per Sol or 250 per Astra | Displayed; commercial activation blocked |
-| Studio ASTRA | 149.99/month | 7,500 credits; 50 per Sol or 250 per Astra | Displayed; commercial activation blocked |
-| One-time top-up | 29.99 | 1,500 credits; not standalone Astra access | Existing checkout retained |
+## Implemented for this release
 
-The previously deployed funded free pool, Sol token-cost preflight and separate non-refundable provider reservation ledger remain unchanged. Returning customer points after a failure does not replenish provider funds. The historical unlimited request counter is telemetry, not unlimited funded usage. See the preserved preceding status for the exact prior rollout evidence.
+The exact live Pro/Studio price IDs are wired into Worker configuration. Price IDs are public identifiers, not credentials. `ENABLE_ASTRA_PLANS=false` is retained until a separately authorized bounded end-to-end generation test establishes actual output quality within the budget. Current code still enforces plan/credit eligibility and the Oracle runtime enforces its per-job limit. No new single-cash-use pass is claimed.
 
-## BLOCKED / NOT VERIFIED
+The installed compatibility fix, source-proof tests and read-only inspection from PR #138 are included. No further Oracle installation is requested. Application deployment and independent runtime check remain PENDING until their exact runs finish; passing unit tests are not those production proofs.
 
-- Stripe: the owner reported renewed write permissions and the account list was refreshed. A direct Pro product creation attempt was blocked by OpenAI tool safety validation because the request safety state could not be established. No new product or price was created. This is distinct from the earlier missing product_write permission. No alternate credential or workflow bypass was attempted.
-- `ENABLE_ASTRA_PLANS=false` remains in production. New Pro/Studio sales are not enabled.
-- Individual cash-priced single-generation passes are not implemented. One explicit generation from points is supported; a top-up alone still does not unlock Astra.
-- No paid SOL/ASTRA generation, new payment settlement, actual Oracle installation, or physical Android visual QA was performed by this change.
-- The model chooser described here is in AI Shop; no unsupported claim is made that the Game Lab world-blueprint endpoint now accepts Astra selection.
+## Remaining release gate
 
-## Promotion and economics
+One authorized SOL and one ASTRA live generation, each with a durable pre-reserved cap, no retry, genuine output checks and evidence. Maximum provider reservation: USD 0.35 SOL + USD 1.75 ASTRA = USD 2.10. This cost has not been incurred here. Paid promotion remains NO-GO until creation, export and payment-to-entitlement behavior have been verified. Previously modelled margins are not guaranteed company net profit.
 
-A beta feedback draft and the remaining launch checks are in [the model selection/Oracle runbook](MODEL_SELECTION_ORACLE_20260928.md). No campaign was launched and no advertising money was spent. Verify real generation, exported artifacts, payment settlement and limit behavior before paid promotion. Sol procedural previews must not be advertised as detailed Oracle meshes. Earlier margin figures remain assumption-based contribution margins, not guaranteed company profit after taxes, hosting, refunds and unrelated API activity.
+## History
 
-## Preserved history
-
-The preceding complete release ledger is archived unchanged at [pre-model-selection status](history/CONTEST_STATUS_before_MODEL_SELECTION_20260928.md), including the earlier Sol deployment and links to older contest history. This checkpoint is documentation only and does not alter the verified production code.
+Earlier deployment and safety records remain in [the preserved release ledger](history/CONTEST_STATUS_before_SOURCE_INSPECTION_20260928.md). [Oracle compatibility notes](ORACLE_FAST_SPEND_COMPAT_20260928.md) document how the installed source was reconstructed and tested. No historical API spending is reimbursed by these guards.
