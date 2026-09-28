@@ -1,6 +1,6 @@
 import type { BudgetNamespace } from './budget.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
-import { MODEL_ECONOMICS, modelAllowed, type PlanId } from './generationEconomics.ts'
+import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId } from './generationEconomics.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
@@ -25,7 +25,7 @@ export interface EntitlementStatus {
   credits: number
   generationCost: 50
   generationCosts: { sol: 50; astra: 250 }
-  subscriptionGrant: 1500
+  subscriptionGrant: number
   subscription: { active: boolean; plan: PlanId; expiresAt: string | null }
   free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }
   slowDownloadRequiresSubscription: true
@@ -60,7 +60,7 @@ async function status(storage: EntitlementStorage, now: number): Promise<Entitle
   const [credits, free, subscription, billingHold] = await Promise.all([balance(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
   const plan: PlanId = subscription?.plan ?? 'creator'
   return {
-    credits, generationCost: 50, generationCosts: { sol: 50, astra: 250 }, subscriptionGrant: 1500,
+    credits, generationCost: 50, generationCosts: { sol: 50, astra: 250 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
     subscription: { active: active(subscription, now), plan, expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
     free: { fastRemaining: Math.max(0, 2 - free.fast.length), fastResetAt: free.fast.length ? new Date(Math.min(...free.fast.map(item => item.at)) + DAY).toISOString() : null,
       slowRemaining: 0, slowResetAt: new Date((Math.floor(now / DAY) + 1) * DAY).toISOString() },
