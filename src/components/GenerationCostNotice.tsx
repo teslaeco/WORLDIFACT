@@ -31,11 +31,13 @@ export default function GenerationCostNotice({ model, busy = false }: { model: Q
   const rate = model === 'sol' ? 50 : 250
   return <section className="generation-cost-notice" aria-label="Selected model and cost before generation" aria-live="polite">
     <div><strong>{model === 'sol' ? 'GPT-6 SOL' : 'GPT-6 ASTRA'}</strong><span>{rate} points / paid generation</span></div>
-    <p><b>{loading || busy ? 'Checking current cost…' : quote.points === 0 ? 'This attempt: 0 points, subject to funded free capacity' : quote.points !== null ? `This attempt: ${quote.points} points` : 'Current cost: not yet verified'}</b></p>
-    {quote.after !== null && !busy && <p>Balance after reservation: <strong>{quote.after} points</strong></p>}
-    <p>{quote.message}</p>
-    <p>{model === 'sol' ? 'SOL creates a validated specification with a lightweight procedural preview. It is not the detailed Oracle mesh workflow.' : 'ASTRA uses the separate Oracle/Blender workflow. Available outputs still need quality and manufacturing review.'}</p>
-    <p>Use once from your points. No automatic batch, model upgrade or card charge. Failed attempts may return points, but API safety reserves are not reset.</p>
-    <div><Link to="/account/credits">Plans & one-time prepaid credits →</Link><button type="button" disabled={busy || loading || !user} onClick={() => setRevision(value => value + 1)}>Refresh points</button></div>
+    <p><b>{loading || busy ? 'Checking current cost…' : quote.points === 0 ? 'This attempt: 0 points, subject to funded free capacity' : quote.points !== null ? `This attempt: ${quote.points} points` : 'Current cost: not yet verified'}</b>{quote.after !== null && !busy && <> · Balance after reservation: <strong>{quote.after} points</strong></>}</p>
+    {quote.state === 'blocked' && <p>{quote.message}</p>}
+    <details><summary>Model details and billing</summary>
+      {quote.state !== 'blocked' && <p>{quote.message}</p>}
+      <p>{model === 'sol' ? 'SOL creates a validated specification with a lightweight procedural preview. It is not the detailed Oracle mesh workflow.' : 'ASTRA uses the separate Oracle/Blender workflow. Available outputs still need quality and manufacturing review.'}</p>
+      <p>Use once from your points. No automatic batch, model upgrade or card charge. Failed attempts may return points, but API safety reserves are not reset.</p>
+      <div><Link to="/account/credits">Plans & one-time prepaid credits →</Link><button type="button" disabled={busy || loading || !user} onClick={() => setRevision(value => value + 1)}>Refresh points</button></div>
+    </details>
   </section>
 }

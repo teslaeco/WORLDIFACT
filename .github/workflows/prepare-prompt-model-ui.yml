@@ -19,34 +19,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Apply exact reviewed source edits to the isolated branch
+      - name: Apply exact reviewed layout edit to the isolated branch
         run: node scripts/prepare-prompt-model-ui.mjs
       - run: npm run verify
       - run: npm run deploy:check
-      - name: Commit only tested source changes to this review branch
+      - name: Commit only tested layout changes to this review branch
         run: |
           test "$GITHUB_REF" = refs/heads/fix/prompt-model-controls-20260928
           git diff --check
-          git add src/pages/ShopPage.tsx src/components/AccountStatusBar.tsx src/pages/CreditsPage.tsx tests/shop-render-helper.mjs
-          git -c user.name='WORLDIFACT review' -c user.email='noreply@users.noreply.github.com' commit -m 'Place explicit model dropdown and readable price immediately before prompt'
+          git add src/pages/ShopPage.tsx
+          git -c user.name='WORLDIFACT review' -c user.email='noreply@users.noreply.github.com' commit -m 'Keep model dropdown and compact point quote directly beside the prompt'
           git push origin HEAD:refs/heads/fix/prompt-model-controls-20260928
-  diagnose:
-    runs-on: ubuntu-latest
-    environment: production
-    timeout-minutes: 3
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Inspect the same existing Astra job; no resubmission
-        run: node scripts/read-existing-model-check.mjs
-        env:
-          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
-          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
