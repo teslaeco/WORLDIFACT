@@ -28,7 +28,7 @@ test('login entry offers email, gated Google, truthful future providers and an e
     }
     assert.match(html, /<details class="account-free-note">/)
     assert.match(html, /Creator SOL: \$29\.99\/month/)
-    assert.match(html, /Astra at 250 credits per generation/)
+    assert.match(html, /ASTRA at 250 credits per generation/)
     // An untrusted OAuth query alone must never render a verified success or grant entry.
     const unverified = render('/login?oauth=success&next=https%3A%2F%2Fattacker.invalid')
     assert.doesNotMatch(unverified, /account-phase-success|Signed in\. Opening|Welcome back/)
