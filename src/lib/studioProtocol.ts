@@ -25,7 +25,7 @@ export type StudioPhoto = { name: string; view: PhotoView; dataUrl: string; subj
 export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string }
 export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
-export type StudioStatus = { accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; model?: string | null; solReady?: boolean; astraReady?: boolean; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
+export type StudioStatus = { accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const keys = (value: Record<string, unknown>, names: string[]) => Object.keys(value).every(name => names.includes(name))
 
@@ -35,7 +35,7 @@ export function generationProfile(value: unknown): GenerationProfile {
   throw new Error('Choose STANDARD or the supported FAST DRAFT revision.')
 }
 export function supportsFastDraft(value: unknown): boolean {
-  return record(value) && value.ready === true && value.provider === 'openai' && value.model === 'gpt-6-sol' &&
+  return record(value) && value.ready === true && value.provider === 'openai' && value.model === 'gpt-6-astra' &&
     value.generationProfileRevision === 1 && Array.isArray(value.generationProfiles) && value.generationProfiles.includes(FAST_DRAFT_PROFILE)
 }
 export function jpegSize(bytes: Uint8Array): [number, number] {
