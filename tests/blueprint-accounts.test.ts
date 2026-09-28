@@ -21,8 +21,8 @@ function memory() {
 }
 function fixture() {
   let now = Date.now(), providerCalls = 0, authCalls = 0, fail = false
-  const env: Env = { OPENAI_API_KEY: 'test-only-never-sent-to-real-provider', OPENAI_MODEL: 'gpt-6-astra', ENABLE_PAID_GENERATION: 'true',
-    PUBLIC_PILOT: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', GENERATION_LIMITER: { async limit() { return { success: true } } } }
+  const env: Env = { OPENAI_API_KEY: 'test-only-never-sent-to-real-provider', OPENAI_MODEL: 'gpt-6-astra', OPENAI_FAST_MODEL: 'gpt-6-sol', ENABLE_PAID_GENERATION: 'true',
+    PUBLIC_PILOT: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', FREE_SOL_SEED_JOBS: '100', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', GENERATION_LIMITER: { async limit() { return { success: true } } } }
   const global = memory(), budget = new GenerationBudget({ storage: global.storage as BudgetStorage }, env)
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const objects = new Map<string, AccountEntitlements>()
@@ -40,6 +40,7 @@ function fixture() {
       if (token === 'Bearer bob-token') return Response.json({ id: bob, email: 'bob@example.test' })
       return Response.json({}, { status: 401 })
     }
+    if (path.href === 'https://api.openai.com/v1/responses/input_tokens') return Response.json({ object: 'response.input_tokens', input_tokens: 1000 })
     assert.equal(path.href, 'https://api.openai.com/v1/responses')
     assert.equal(init?.method, 'POST'); providerCalls++
     if (fail) return Response.json({ error: 'Fixture failure only' }, { status: 500 })
