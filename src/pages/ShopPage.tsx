@@ -430,6 +430,8 @@ export default function ShopPage() {
               setProfile(next)
               if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
             }}><option value="standard">GPT-6 ASTRA — 250 points / generation</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>GPT-6 SOL — 50 points / paid generation</option></select>
+          </div>
+          <div className="shop-internal-only" hidden>
             <small>STANDARD remains the detailed Oracle/Blender path. FAST uses the public server-side Sol blueprint path and a local procedural preview; it does not claim an Oracle mesh.</small>
             <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
             <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
