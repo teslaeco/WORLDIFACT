@@ -19,7 +19,7 @@ type Job = { profile: GenerationKind; at: number; cost: number; kind: 'free' | '
 export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string }
 export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; state?: Job['state'] }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
-type Checkout = { id: string; created: number; url?: string; expiresAt?: number; sessionId?: string }
+type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
 type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
 export interface EntitlementStatus {
   credits: number
@@ -236,19 +236,21 @@ export class AccountEntitlements {
       if (path === '/checkout-reserve') {
         if (!['subscription', 'topup'].includes(String(input.kind))) return json({ error: 'Invalid checkout' }, 400)
         const kind = input.kind as string
+        const plan: PlanId | undefined = kind === 'subscription' ? (['creator', 'pro', 'studio'].includes(String(input.plan)) ? input.plan as PlanId : 'creator') : undefined
         return json(await this.storage.transaction(async storage => {
           const previous = await storage.get<Checkout>(`checkout:${kind}`)
-          if (previous && (previous.expiresAt ?? previous.created + DAY) > now) return { ...previous, repeated: true }
-          const value = { id: crypto.randomUUID(), created: now }
+          if (previous && previous.plan === plan && (previous.expiresAt ?? previous.created + DAY) > now) return { ...previous, repeated: true }
+          const value: Checkout = { id: crypto.randomUUID(), created: now, ...(plan ? { plan } : {}) }
           await storage.put(`checkout:${kind}`, value)
           return { ...value, repeated: false }
         }))
       }
       if (path === '/checkout-finish') {
         if (!['subscription', 'topup'].includes(String(input.kind)) || typeof input.id !== 'string' || typeof input.url !== 'string' || !/^https:\/\/checkout\.stripe\.com\//.test(input.url) || !validInteger(input.expiresAt) || (input.expiresAt as number) <= now || typeof input.sessionId !== 'string' || !/^cs_[A-Za-z0-9_]{1,180}$/.test(input.sessionId)) return json({ error: 'Invalid checkout' }, 400)
+        const plan: PlanId | undefined = input.kind === 'subscription' ? (['creator', 'pro', 'studio'].includes(String(input.plan)) ? input.plan as PlanId : 'creator') : undefined
         return json(await this.storage.transaction(async storage => {
           const previous = await storage.get<Checkout>(`checkout:${input.kind}`)
-          if (!previous || previous.id !== input.id) return { saved: false }
+          if (!previous || previous.id !== input.id || previous.plan !== plan) return { saved: false }
           await storage.put(`checkout:${input.kind}`, { ...previous, url: input.url, expiresAt: input.expiresAt, sessionId: input.sessionId }); return { saved: true }
         }))
       }
