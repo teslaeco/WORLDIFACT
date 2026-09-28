@@ -1,3 +1,17 @@
+# WORLDIFACT — user model gallery, 28 September 2026
+
+**Status: IMPLEMENTED ON REVIEW BRANCH · PR #135 DRAFT · CI / MERGE / PRODUCTION DEPLOYMENT PENDING.**
+
+- Added a dedicated `/account/models` gallery and linked it from the signed-in account card, AI Shop navigation and AI Game Lab navigation.
+- AI Shop and AI Game Lab now also render a compact visible gallery so users can reopen recent completed models without hunting through hidden/internal controls.
+- The gallery uses the existing reviewed browser archive: completed GLB files can be previewed in 3D and explicitly downloaded again.
+- Provenance is intentionally explicit: this is a **device-local browser archive**, not cross-device cloud storage. Clearing browser storage can remove it, so users are told to keep file backups.
+- Existing generation, billing, entitlement, Oracle and manufacturing paths are unchanged. This milestone sends no paid model-generation request and performs no production deployment.
+- Focused regression coverage checks that the route and entry points exist and that Preview 3D / Download GLB remain visible.
+- Review: https://github.com/teslaeco/WORLDIFACT/pull/135
+
+---
+
 # WORLDIFACT — stable generation unblock hotfix, 27 September 2026
 
 **Status: IMPLEMENTED ON TOP OF RESTORED 25 SEPTEMBER RELEASE · CI PENDING.**
