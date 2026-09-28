@@ -1,0 +1,38 @@
+name: Prepare multi-model pricing and inclusive draft quality
+on:
+  push:
+    branches: [work/model-quality-pr-20260929]
+    paths:
+      - 'scripts/apply-model-catalog-v3.py'
+      - '.github/workflows/prepare-model-v3.yml'
+permissions:
+  contents: write
+concurrency:
+  group: worldifact-model-quality-v3-review
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/work/model-quality-pr-20260929'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply exact reviewed changes, no provider or billing calls
+        run: python3 -B scripts/apply-model-catalog-v3.py
+      - run: npm run verify
+      - run: npm run deploy:check
+      - name: Commit only tested application changes to this isolated branch
+        run: |
+          test "$GITHUB_REF" = 'refs/heads/work/model-quality-pr-20260929'
+          git config user.name 'WORLDIFACT review'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add server/generationEconomics.ts server/entitlements.ts server/worker.ts src/lib/blueprint.ts src/lib/worldGeometry.ts src/lib/generationQuote.ts src/components/GenerationCostNotice.tsx src/pages/ShopPage.tsx tests/shop-render-helper.mjs tests/shop-draft-lifecycle.test.mjs
+          if ! git diff --cached --quiet; then
+            git commit -m 'Integrate model-scoped points and shared MCC quality after verification'
+            git push origin HEAD:work/model-quality-pr-20260929
+          fi
