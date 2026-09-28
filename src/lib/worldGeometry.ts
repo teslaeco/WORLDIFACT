@@ -1,3 +1,5 @@
+import { createMccBay } from './mccGeometry.ts';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as THREE from "three";
 import { createSolarVehicle } from "./solarVehicle.ts";
 import type { WorldObject } from "./blueprint.ts";
@@ -12,7 +14,7 @@ function box(
   mat: THREE.Material,
 ) {
   const m = new THREE.Mesh(
-    new THREE.BoxGeometry(...(size as [number, number, number])),
+    new RoundedBoxGeometry(...(size as [number, number, number]), 2, Math.min(...size) * .06),
     mat,
   );
   m.position.set(...(pos as [number, number, number]));
@@ -28,6 +30,10 @@ export function createWorldObject(o: WorldObject) {
   g.position.set(o.x, 0, o.z);
   g.rotation.y = (o.rotation * Math.PI) / 180;
   g.scale.setScalar(o.scale);
+  if (o.kind === "mcc-bay") {
+    g.add(createMccBay(o.color));
+    return g;
+  }
   if (o.kind === "rover") {
     const vehicle = createSolarVehicle();
     for (const child of [...vehicle.children]) g.add(child);

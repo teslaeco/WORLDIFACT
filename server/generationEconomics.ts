@@ -1,17 +1,6 @@
-export type GenerationModel = 'sol' | 'astra'
-
-export const MODEL_ECONOMICS = Object.freeze({
-  sol: Object.freeze({
-    model: 'gpt-6-sol',
-    creditsPerGeneration: 50,
-    maxProviderCents: 35,
-  }),
-  astra: Object.freeze({
-    model: 'gpt-6-astra',
-    creditsPerGeneration: 250,
-    maxProviderCents: 175,
-  }),
-} satisfies Record<GenerationModel, { model: string; creditsPerGeneration: number; maxProviderCents: number }>)
+import { MODEL_CATALOG, type GenerationModel } from '../src/lib/modelCatalog.ts'
+export type { GenerationModel } from '../src/lib/modelCatalog.ts'
+export const MODEL_ECONOMICS = MODEL_CATALOG
 
 export const PLAN_RESERVES_BPS = Object.freeze({
   paymentAndFx: 500,
@@ -32,19 +21,19 @@ export const PLAN_CATALOG = Object.freeze({
     name: 'Creator SOL',
     amountCents: 2999,
     credits: 1500,
-    allowedModels: ['sol'] as const,
+    allowedModels: ['sol', 'luna', 'terra'] as const,
   }),
   pro: Object.freeze({
     name: 'Pro ASTRA',
     amountCents: 9999,
     credits: 4500,
-    allowedModels: ['sol', 'astra'] as const,
+    allowedModels: ['sol', 'luna', 'terra', 'astra'] as const,
   }),
   studio: Object.freeze({
     name: 'Studio ASTRA',
     amountCents: 14999,
     credits: 7500,
-    allowedModels: ['sol', 'astra'] as const,
+    allowedModels: ['sol', 'luna', 'terra', 'astra'] as const,
   }),
 })
 

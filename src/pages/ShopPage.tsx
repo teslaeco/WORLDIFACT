@@ -1,3 +1,4 @@
+import { MODEL_CATALOG, type BlueprintModel } from '../lib/modelCatalog'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import OracleModelPreview from '../components/OracleModelPreview'
@@ -78,6 +79,7 @@ export default function ShopPage() {
   const [fastPrompt, setFastPrompt] = useState('')
   const [fastResult, setFastResult] = useState<GenerationResult | null>(null)
   const [solReady, setSolReady] = useState(false)
+  const [budgetModel, setBudgetModel] = useState<BlueprintModel>('sol')
   const fast = profile === FAST_DRAFT_PROFILE
   const fastAvailable = solReady
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
@@ -244,7 +246,7 @@ export default function ShopPage() {
     if (flags.submit || flags.photos || flags.artifact || !previousFinished) return
 
     if (fast) {
-      if (!fastAvailable || photos.length || purpose === 'terrain' || prompt.trim().length < 3 || prompt.length > 2000) return
+      if (!fastAvailable || photos.length > 1 || purpose === 'terrain' || prompt.trim().length < 3 || prompt.length > 2000) return
       flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt('')
       const controller = new AbortController()
       const timeout = window.setTimeout(() => controller.abort(), 40_000)
@@ -253,7 +255,7 @@ export default function ShopPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': crypto.randomUUID() },
           signal: controller.signal,
-          body: JSON.stringify({ worldId: 'enchanted-ai-shop', prompt: prompt.trim(), mode: 'live' }),
+          body: JSON.stringify({ worldId: 'enchanted-ai-shop', prompt: prompt.trim(), mode: 'live', model: MODEL_CATALOG[budgetModel].model, ...(photos[0] ? { image: photos[0].dataUrl } : {}) }),
         })
         const body = await response.json()
         if (!response.ok) {
@@ -261,12 +263,12 @@ export default function ShopPage() {
           throw new Error(body?.error || 'FAST Sol draft could not be generated.')
         }
         const result = validateGenerationResult(body)
-        if (result.mode !== 'LIVE' || result.provenance !== 'GENERATED') throw new Error('FAST did not return verified LIVE Sol evidence.')
+        if (result.mode !== 'LIVE' || result.provenance !== 'GENERATED' || result.model !== MODEL_CATALOG[budgetModel].model) throw new Error('FAST did not return verified LIVE Sol evidence.')
         clearPreview()
         if (mounted.current) {
           setFastPrompt(prompt.trim())
           setFastResult(result)
-          setNotice('FAST · LIVE Sol specification ready. The visible 3D is a lightweight procedural draft, not an Oracle production mesh; use SLOW · QUALITY for the detailed model workflow.')
+          setNotice('FAST · LIVE selected-model specification ready. The visible 3D is a lightweight procedural draft, not an Oracle production mesh; use SLOW · QUALITY for the detailed model workflow.')
         }
       } catch (e) {
         if (mounted.current) setError(e instanceof Error && e.name === 'AbortError' ? 'FAST generation timed out. Your previous preview is unchanged.' : e instanceof Error ? e.message : 'FAST generation failed.')
@@ -312,12 +314,12 @@ export default function ShopPage() {
   }
   const addPhotos = async (files: FileList | null) => {
     const flags = operations.current
-    if (!files || flags.photos || flags.submit || fast) return
-    if (photos.length + files.length > 3) { setError('Use at most three views of the same object.'); return }
+    if (!files || flags.photos || flags.submit) return
+    if (photos.length + files.length > (fast ? 1 : 3)) { setError('Use at most three views of the same object.'); return }
     flags.photos = true; setPhotoBusy(true); setError('')
     try {
       const additions: StudioPhoto[] = [], views = ['front', 'side', 'back'] as const
-      for (const file of Array.from(files)) additions.push(await prepareStudioPhoto(file, textureLimit, views[photos.length + additions.length]))
+      for (const file of Array.from(files)) additions.push(await prepareStudioPhoto(file, fast ? 2048 : textureLimit, views[photos.length + additions.length]))
       if (mounted.current) setPhotos(previous => [...previous, ...additions])
     } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'Photo preparation failed.') }
     finally { flags.photos = false; if (mounted.current) setPhotoBusy(false) }
@@ -357,7 +359,7 @@ export default function ShopPage() {
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
   const canGenerate = !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 &&
-    (fast ? fastAvailable && !photos.length && purpose !== 'terrain' && prompt.length <= 2000
+    (fast ? fastAvailable && photos.length <= 1 && purpose !== 'terrain' && prompt.length <= 2000
       : !!coordinator.current && !!status?.ready && (!photos.length || status.photoReady))
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
   const activeReady = fast ? fastAvailable : status?.ready === true
@@ -371,7 +373,7 @@ export default function ShopPage() {
           <LiveSolPreview result={fastResult} prompt={fastPrompt} />
           <small hidden data-testid="fast-result-description">{fastResult.assetSpec?.summary ?? fastResult.blueprint.title}</small>
           {dimensionsEnabled && <p className="shop-preview-dimensions">FAST draft target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
-          <small>FAST uses a generated Sol specification plus local procedural geometry. For a detailed Oracle/Blender GLB with reference images, use SLOW · QUALITY.</small>
+          <small>FAST uses the selected model’s generated specification plus local procedural geometry. For a detailed Oracle/Blender GLB with reference images, use SLOW · QUALITY.</small>
         </> : demoPrompt ? <>
           <DemoShopPreview prompt={demoPrompt} />
           {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
@@ -414,34 +416,39 @@ export default function ShopPage() {
                 <span>GPT-6 ASTRA · 250 points / generation</span>
                 <span>Full quality workflow · reference images · up to 4K</span>
               </button>
-              <button type="button" className="shop-generation-mode" aria-label="Select GPT-6 Sol, 50 points per paid generation" aria-pressed={fast} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'} onClick={() => { setProfile(FAST_DRAFT_PROFILE); setTextureLimit(2048) }}>
+              <button type="button" className="shop-generation-mode" aria-label="Select GPT-6 Sol, 50 points per paid generation" aria-pressed={fast && budgetModel === 'sol'} disabled={!fastAvailable || photos.length > 1 || purpose === 'terrain'} onClick={() => { setBudgetModel('sol'); setProfile(FAST_DRAFT_PROFILE); setTextureLimit(2048) }}>
                 <strong>FAST · DRAFT</strong>
                 <span>GPT-6 SOL · 50 points / paid generation</span>
-                <span>GPT-6 Sol procedural draft · text-only · usually seconds</span>
+                <span>GPT-6 Sol procedural draft · one reference image</span>
               </button>
             </div>
-            <small>{!fastAvailable ? 'FAST is waiting for the verified GPT-6 Sol worker. SLOW · QUALITY can still use the Oracle/Blender workflow when it is ready.' : photos.length ? 'FAST is text-only in this version. Your reference images are kept for SLOW · QUALITY.' : purpose === 'terrain' ? 'FAST does not support terrain in this Shop revision. Use SLOW · QUALITY.' : fast && prompt.length > 2000 ? 'Shorten FAST text to 2000 characters or switch to SLOW · QUALITY.' : fast ? 'FAST sends one server-side GPT-6 Sol request and builds a lightweight procedural 3D draft from the validated result. Use SLOW · QUALITY for detailed Oracle/Blender output.' : 'SLOW · QUALITY uses the detailed Oracle/Blender workflow. FAST is the lighter Sol procedural draft.'}</small>
+            <small>{!fastAvailable ? 'FAST is waiting for the verified GPT-6 Sol worker. SLOW · QUALITY can still use the Oracle/Blender workflow when it is ready.' : photos.length ? 'Budget mode accepts one reference image. Additional views are retained for SLOW · QUALITY; budget mode uses one selected image.' : purpose === 'terrain' ? 'FAST does not support terrain in this Shop revision. Use SLOW · QUALITY.' : fast && prompt.length > 2000 ? 'Shorten FAST text to 2000 characters or switch to SLOW · QUALITY.' : fast ? 'FAST sends one server-side GPT-6 Sol request and builds a lightweight procedural 3D draft from the validated result. Use SLOW · QUALITY for detailed Oracle/Blender output.' : 'SLOW · QUALITY uses the detailed Oracle/Blender workflow. FAST is the lighter Sol procedural draft.'}</small>
           </fieldset>
           <div className="shop-model-picker" role="group" aria-labelledby="studio-mode-label">
             <label id="studio-mode-label" htmlFor="studio-mode">AI model · Model AI</label>
-            <select id="studio-mode" value={profile} disabled={busy || photoBusy} onChange={e => {
+            <select id="studio-mode" value={fast ? budgetModel === 'sol' ? FAST_DRAFT_PROFILE : budgetModel : 'standard'} disabled={busy || photoBusy} onChange={e => {
+              if (e.target.value === 'luna' || e.target.value === 'terra') {
+                if (!fastAvailable || photos.length > 1 || purpose === 'terrain') return
+                setBudgetModel(e.target.value); setProfile(FAST_DRAFT_PROFILE); setTextureLimit(2048); return
+              }
+              setBudgetModel('sol')
               const next = generationProfile(e.target.value)
-              if (next === FAST_DRAFT_PROFILE && (!fastAvailable || photos.length || purpose === 'terrain')) return
+              if (next === FAST_DRAFT_PROFILE && (!fastAvailable || photos.length > 1 || purpose === 'terrain')) return
               setProfile(next)
               if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
-            }}><option value="standard">GPT-6 ASTRA — 250 points / generation</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>GPT-6 SOL — 50 points / paid generation</option></select>
+            }}><option value="standard">GPT-6 ASTRA — 250 points / generation</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || photos.length > 1 || purpose === 'terrain'}>GPT-6 SOL — 50 points / paid generation</option><option value="luna" disabled={!fastAvailable || photos.length > 1 || purpose === 'terrain'}>GPT-6 LUNA — 5 points / paid generation</option><option value="terra" disabled={!fastAvailable || photos.length > 1 || purpose === 'terrain'}>GPT-5.6 TERRA — 60 points / paid generation</option></select>
           </div>
           <div className="shop-internal-only" hidden>
             <small>STANDARD remains the detailed Oracle/Blender path. FAST uses the public server-side Sol blueprint path and a local procedural preview; it does not claim an Oracle mesh.</small>
             <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
             <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
           </div>
-          <GenerationCostNotice model={fast ? 'sol' : 'astra'} busy={busy} />
+          <GenerationCostNotice model={fast ? budgetModel : 'astra'} busy={busy} />
           <label htmlFor="studio-prompt">Describe your model · Prompt</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={fast ? 2000 : 4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic chess knight with a stable base, smooth material and clean details." required />
-          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
+          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Add one reference image · budget mode' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || photos.length >= (fast ? 1 : 3)} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy} />
-          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D draft · Sol' : 'Generate SLOW model + materials'}</button><small>Free: up to 2 Sol FAST drafts per rolling 24 hours when funded capacity is available. Creator SOL uses 50 credits per Sol generation. Astra uses 250 credits and requires Pro or Studio. There is no free Astra fallback. Manufacturing and delivery are separate.</small>
+          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? `Generate FAST 3D draft · ${MODEL_CATALOG[budgetModel].label}` : 'Generate SLOW model + materials'}</button><small>Free: up to 2 Sol FAST drafts per rolling 24 hours when funded capacity is available. Creator SOL uses 50 credits per Sol generation. Astra uses 250 credits and requires Pro or Studio. There is no free Astra fallback. Manufacturing and delivery are separate.</small>
         </form>
         <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : activeReady ? fast ? 'FAST Sol generation available' : 'SLOW quality generation available' : 'Generation temporarily unavailable'}</strong><p>{activeReady ? fast ? 'FAST creates a generated Sol specification and lightweight procedural 3D draft.' : 'SLOW creates the detailed model through the Oracle/Blender workflow.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>

@@ -1,3 +1,4 @@
+import * as modelCatalog from '../src/lib/modelCatalog.ts'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
@@ -23,6 +24,7 @@ async function loadCostNotice() {
   const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, { module, exports: module.exports, require(id) {
+    if (id === '../lib/modelCatalog') return modelCatalog
     if (id === '../lib/generationQuote') return generationQuote
     if (id === '../lib/account') return { useAccount: () => ({ user: null, loading: true }) }
     if (id.endsWith('.css')) return {}
@@ -63,7 +65,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
   runInNewContext(code, {
     crypto: globalThis.crypto, ...globals, module, exports: module.exports,
     require(id) {
-      const modules = { '../config/portals': portals, '../config/references': references,
+      const modules = { '../lib/modelCatalog': modelCatalog, '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
         '../lib/blueprint': blueprint }

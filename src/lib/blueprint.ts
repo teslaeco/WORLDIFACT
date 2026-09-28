@@ -1,3 +1,4 @@
+import { MODEL_CATALOG } from './modelCatalog.ts';
 export const KINDS = [
   "rover",
   "habitat",
@@ -5,6 +6,7 @@ export const KINDS = [
   "solar-array",
   "rock",
   "sculpture",
+  "mcc-bay",
 ] as const;
 export type AssetKind = (typeof KINDS)[number];
 export interface WorldObject {
@@ -171,7 +173,7 @@ export function validateGenerationResult(value: unknown): GenerationResult {
       !text(value.requestId, 200) || !text(value.limitation, 500)) throw new Error("Invalid generation result");
   validateBlueprint(value.blueprint);
   const demo = value.mode === "DEMO" && value.provenance === "MOCK" && value.model === null;
-  const live = value.mode === "LIVE" && value.provenance === "GENERATED" && ["gpt-6-sol", "gpt-6-astra"].includes(String(value.model));
+  const live = value.mode === "LIVE" && value.provenance === "GENERATED" && Object.values(MODEL_CATALOG).some(model => model.model === value.model);
   if (!demo && !live) throw new Error("Invalid generation provenance");
   if (live && !Object.hasOwn(value, "assetSpec")) throw new Error("LIVE generation requires AssetSpec");
   if (Object.hasOwn(value, "assetSpec")) validateAssetSpec(value.assetSpec);

@@ -168,7 +168,7 @@ test('explicit FAST after completion sends one Sol blueprint POST and never subm
     const studioPosts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
     assert.equal(solPosts.length, 1)
     assert.equal(studioPosts.length, 0)
-    assert.deepEqual(JSON.parse(solPosts[0].body), { worldId: 'enchanted-ai-shop', prompt: 'A blue rook in FAST', mode: 'live' })
+    assert.deepEqual(JSON.parse(solPosts[0].body), { worldId: 'enchanted-ai-shop', prompt: 'A blue rook in FAST', mode: 'live', model: 'gpt-6-sol' })
     assert.match(h.fastDescription(), /Compact procedural FAST draft/)
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), storedBefore)
     assert.equal(h.archive.get(oldId).sha256, 'original')
@@ -185,7 +185,10 @@ test('new reference selection and draft clearing preserve the displayed old mode
     await h.settle()
     assert.ok(h.all().some(n => n.type === 'img' && /Your reference 1/.test(n.props.alt || '')))
     const fastOption = h.all().find(n => n.type === 'option' && n.props.value === FAST_DRAFT_PROFILE)
-    assert.equal(fastOption.props.disabled, true, 'FAST must not silently discard selected photos')
+    assert.equal(fastOption.props.disabled, false, 'Budget mode now supports one reference')
+    h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
+    assert.ok(h.all().some(n => n.type === 'img' && /Your reference 1/.test(n.props.alt || '')), 'Changing model must retain the reference')
+    assert.equal(h.byId('studio-photos').props.disabled, true, 'One-image budget limit stays explicit')
     h.button('Clear next-model draft').props.onClick(); await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, '')
     assert.equal(h.description(), before)
@@ -214,5 +217,25 @@ test('unconfirmed old jobs display review state instead of an endless generation
     assert.equal(h.all().some(node => node.type === 'p' && text(node).startsWith('Elapsed:')), false)
     assert.equal(h.button('Generate SLOW').props.disabled, true, 'Uncertain jobs must not be silently duplicated')
     assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+
+test('one reference is sent to the selected budget model without replacing the original archive', async () => {
+  const h = await harness({ ready: true })
+  try {
+    await h.poll()
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Control cabinet from the supplied reference' } })
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'cabinet.png' }], value: 'cabinet.png' } })
+    await h.settle()
+    h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const posts = h.calls.filter(c => c.path === '/api/blueprint' && c.method === 'POST')
+    assert.equal(posts.length, 1)
+    const body = JSON.parse(posts[0].body)
+    assert.equal(body.image, 'data:image/jpeg;base64,ZmFrZQ==')
+    assert.equal(body.model, 'gpt-6-sol')
+    assert.equal(h.archive.get(oldId).sha256, 'original')
+    assert.equal(h.calls.some(c => c.path === '/api/studio/jobs' && c.method === 'POST'), false)
   } finally { h.close() }
 })
