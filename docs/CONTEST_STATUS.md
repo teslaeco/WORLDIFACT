@@ -1,50 +1,25 @@
-# WORLDIFACT — current release status
+# WORLDIFACT — Oracle source mismatch checkpoint
 
-Updated 28 September 2026 following the model-selection release.
+Updated 28 September 2026 after the owner's Oracle Cloud Shell screenshot.
 
-## VERIFIED — model selection published
+## VERIFIED from the screenshot and installer source
 
-- PR [#137](https://github.com/teslaeco/WORLDIFACT/pull/137) was squash-merged as `8543665818bc4e3ae03168e11b8306282007f363`.
-- All three PR workflows passed for exact head `e3955970042e120d401a82441e9965153cf34f22`: application verification, the existing FAST worker review and the new ASTRA guard/rollback tests.
-- Production [run 36450294889](https://github.com/teslaeco/WORLDIFACT/actions/runs/36450294889), job `109023021446`, completed successfully, including application tests/build, Worker dry-run, deployment, published HTML/assets/DEMO checks and existing Stripe readiness guards.
-- Public AI Shop: https://worldifact.xodobrox.workers.dev/shop
-- Plans and points: https://worldifact.xodobrox.workers.dev/account/credits
-- The Shop model chooser explicitly labels GPT-6 SOL at 50 points per paid attempt and GPT-6 ASTRA at 250 points. The authenticated notice shows a conditional funded free Sol allowance, point cost and calculated post-reservation balance before the generation button.
-- The notice is a display, not a binding reservation: the server rechecks account allowance and available provider funds. It does not initiate a card payment, subscription, automatic batch or model upgrade.
-- Existing receipt recovery, models, downloads and backend entitlements were preserved. This release changes no live subscription prices or grants.
+The owner ran the opt-in installer pinned to `8543665818bc4e3ae03168e11b8306282007f363`. OCI lookup and verified SSH reached the VM. The installer then returned:
 
-## Oracle installer — PREPARED, NOT RUN ON THE OWNER VM
+`STOP: Unreviewed installed source: codex_runner.py. No service stopped.`
 
-The reviewed installer and OCI Cloud Shell launcher are under `tools/profit_guard/`. The launcher uses the owner's existing VM/key and strict SSH verification. The installer supports one exact reviewed v33 runner/helper variant, refuses active jobs or unreviewed source before restarting, backs up touched files, runs the existing offline verification, checks authenticated local health, and rolls back touched files if verification fails.
+The current installer checks the runner's exact SHA-256 before restarting the worker or writing generator source. The screenshot shows a preflight stop, not successful installation or a completed rollback. Public installer staging may have occurred, but no generator-source update or worker restart was performed by this failed attempt. The printed backup-workspace name alone does not establish that a backup was created.
 
-The ASTRA guard reserves at most USD 1.75 per job before model calls. Funds are persisted outside generated job output directories; failures, restarts and output cleanup cannot reset them. It counts input tokens, restricts model/service tier/tools, lowers maximum output when necessary and requires price review before 28 October 2026. These are conservative reservations, not measured OpenAI invoice amounts or a guarantee of model quality.
+The actual installed runner fingerprint and the cause of the difference remain UNKNOWN. No allowed hash was changed, and no unreviewed runner was forced through installation.
 
-The installer deliberately does NOT enable `ENABLE_ASTRA_PLANS`, alter billing, delete models or launch a paid model test. A successful `WORLDIFACT_ASTRA_GUARD_VERIFIED` result from the owner's actual VM and a separately authorized bounded live quality test are still required before commercial Astra activation.
+## Prepared read-only next step — branch only
 
-## Existing catalogue and funded limits
+`tools/profit_guard/inspect_oracle.py` reuses the existing OCI lookup and strict SSH helper. It reads bounded regular source files, calculates SHA-256 and Git blob fingerprints, checks import markers with AST without executing the source, and reads worker/tunnel ActiveState. It does not read provider configuration, print file contents or keys, upload files to the VM, restart services or call an AI model. The compact output is restricted to fixed labels, booleans, hashes and service states.
 
-| Offer | USD price | Credits / eligibility | Current status |
-| --- | --- | --- | --- |
-| Free SOL | 0 | Up to two attempts per rolling 24 hours AND funded shared capacity | Sol routing deployed; no paid live test in this release |
-| Creator SOL | 29.99/month | 1,500 credits; 50 per Sol attempt | Existing checkout retained |
-| Pro ASTRA | 99.99/month | 4,500 credits; 50 per Sol or 250 per Astra | Displayed; commercial activation blocked |
-| Studio ASTRA | 149.99/month | 7,500 credits; 50 per Sol or 250 per Astra | Displayed; commercial activation blocked |
-| One-time top-up | 29.99 | 1,500 credits; not standalone Astra access | Existing checkout retained |
+Five local fixture tests passed: source fingerprinting without execution/modification, symlink refusal, newline-only diagnostic, output allow-list validation, and strict SSH/OCI routing. These are not tests on the owner's actual VM. Run the pinned diagnostic once from the original OCI Cloud Shell and return only its sanitized report. Its outcome identifies the source to audit; it does not authorize installing a patch or changing the expected hash.
 
-The previously deployed funded free pool, Sol token-cost preflight and separate non-refundable provider reservation ledger remain unchanged. Returning customer points after a failure does not replenish provider funds. The historical unlimited request counter is telemetry, not unlimited funded usage. See the preserved preceding status for the exact prior rollout evidence.
+## Deployment and billing unchanged
 
-## BLOCKED / NOT VERIFIED
+This diagnostic branch changes no production app, billing configuration, model allow-list, job records or installed Oracle guard. PR #137's previous successful model-chooser deployment remains the last verified application release. Astra commercial activation remains blocked until its actual installed-source guard and bounded generation are verified. Do not advertise new Stripe catalogue objects or completed Oracle installation.
 
-- Stripe: the owner reported renewed write permissions and the account list was refreshed. A direct Pro product creation attempt was blocked by OpenAI tool safety validation because the request safety state could not be established. No new product or price was created. This is distinct from the earlier missing product_write permission. No alternate credential or workflow bypass was attempted.
-- `ENABLE_ASTRA_PLANS=false` remains in production. New Pro/Studio sales are not enabled.
-- Individual cash-priced single-generation passes are not implemented. One explicit generation from points is supported; a top-up alone still does not unlock Astra.
-- No paid SOL/ASTRA generation, new payment settlement, actual Oracle installation, or physical Android visual QA was performed by this change.
-- The model chooser described here is in AI Shop; no unsupported claim is made that the Game Lab world-blueprint endpoint now accepts Astra selection.
-
-## Promotion and economics
-
-A beta feedback draft and the remaining launch checks are in [the model selection/Oracle runbook](MODEL_SELECTION_ORACLE_20260928.md). No campaign was launched and no advertising money was spent. Verify real generation, exported artifacts, payment settlement and limit behavior before paid promotion. Sol procedural previews must not be advertised as detailed Oracle meshes. Earlier margin figures remain assumption-based contribution margins, not guaranteed company profit after taxes, hosting, refunds and unrelated API activity.
-
-## Preserved history
-
-The preceding complete release ledger is archived unchanged at [pre-model-selection status](history/CONTEST_STATUS_before_MODEL_SELECTION_20260928.md), including the earlier Sol deployment and links to older contest history. This checkpoint is documentation only and does not alter the verified production code.
+The complete preceding status is preserved unchanged in [the previous checkpoint](history/CONTEST_STATUS_before_SOURCE_INSPECTION_20260928.md), including production release and earlier history links.
