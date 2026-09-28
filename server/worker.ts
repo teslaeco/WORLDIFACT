@@ -175,11 +175,13 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   catch { return json({ error: "Generation limit service unavailable.", requestId }, 503); }
   const model = fastModel;
   if (model !== "gpt-6-sol") return json({ error: "FAST model requires review.", requestId }, 503);
+  let customerGenerationKind: 'free' | 'credits' | null = null;
   if (account) {
     try {
       const reservation = await reserveUserGeneration(env, account.id, requestId, 'fast');
       if (reservation.repeated) return json({ error: 'This generation request was already processed. No second model or charge was started.', requestId }, 409);
       if (!reservation.allowed) return json({ error: reservation.reason === 'CREDITS_EXHAUSTED' ? 'Your credits have run out. Open your account to top up.' : 'Your generation allowance has been used. Check your account for the next reset.', requestId }, 429);
+      customerGenerationKind = reservation.kind ?? null;
     } catch { return json({ error: 'Your generation allowance could not be checked. No model was requested.', requestId }, 503); }
   }
   let generationCompleted = false;
@@ -192,6 +194,25 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     if (reservation.status === 429) { await finishUser(false); return json({ error: "Preview generation allowance has ended. DEMO is still available.", requestId }, 429); }
     if (!reservation.ok || (await reservation.json() as { allowed?: boolean }).allowed !== true) { await finishUser(false); return json({ error: "Generation allowance is unavailable.", requestId }, 503); }
   } catch { await finishUser(false).catch(() => {}); return json({ error: "Generation allowance is unavailable.", requestId }, 503); }
+  if (customerGenerationKind === 'free') {
+    try {
+      const promo = env.GENERATION_BUDGET!.get(env.GENERATION_BUDGET!.idFromName("worldifact-free-sol-promo-v1"));
+      const response = await promo.fetch(new Request("https://budget.internal/promo-reserve", {
+        method: "POST", body: JSON.stringify({ id: requestId }), signal: AbortSignal.timeout(5000),
+      }));
+      if (response.status === 429) {
+        await finishUser(false);
+        return json({ error: "The funded free Sol pool is used for now. DEMO is still available and no Astra request was started.", requestId }, 429);
+      }
+      if (!response.ok || (await response.json() as { allowed?: boolean }).allowed !== true) {
+        await finishUser(false);
+        return json({ error: "The funded free Sol allowance is unavailable. No paid provider request was started.", requestId }, 503);
+      }
+    } catch {
+      await finishUser(false).catch(() => {});
+      return json({ error: "The funded free Sol allowance is unavailable. No paid provider request was started.", requestId }, 503);
+    }
+  }
   try {
     const content: Record<string, unknown>[] = [{ type: "input_text", text: input.prompt }];
     if (input.image) content.push({ type: "input_image", image_url: input.image, detail: "low" });
