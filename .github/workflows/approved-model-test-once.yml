@@ -1,0 +1,42 @@
+name: Approved one SOL and one ASTRA live test — maximum USD 2.10
+on:
+  push:
+    branches: ['ops/sol-astra-approved-test-20260928']
+    paths: ['ops/APPROVED_MODEL_TEST_20260928.json']
+permissions:
+  contents: write
+concurrency:
+  group: worldifact-approved-model-test-20260928
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.ref == 'refs/heads/ops/sol-astra-approved-test-20260928' && github.run_attempt == 1
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Validate one-off claim and bounded artifact reads without network
+        run: node --experimental-strip-types --test tests/approved-model-test.test.mjs
+      - name: Run the owner-approved bounded model attempts, no retry
+        run: node --experimental-strip-types scripts/approved-model-test.mjs
+        env:
+          WORLDIFACT_PAID_TEST_APPROVAL: SOL035_ASTRA175_ONCE
+          GITHUB_TOKEN: ${{ github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: worldifact-approved-model-test-evidence
+          path: model-test-evidence/
+          if-no-files-found: ignore
+          retention-days: 3
