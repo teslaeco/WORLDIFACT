@@ -93,6 +93,7 @@ export default function AccountPage() {
           <h2 id="account-title">Welcome back,<br />{account.user.displayName || 'explorer'}.</h2>
           <p className="account-card-copy">Your worlds are ready when you are.</p>
           <button className="account-primary" disabled={phase !== 'idle'} onClick={enter}>{phase === 'success' ? 'Opening your world…' : 'Enter the world'} <span aria-hidden="true">↗</span></button>
+          <Link className="account-secondary" to="/account/models">My 3D models</Link>
           <Link className="account-secondary" to="/account/credits">View credits & membership</Link>
           <button className="account-text-button" disabled={phase !== 'idle'} onClick={() => void account.signOut().catch(e => setError(String(e.message)))}>Sign out</button>
         </> : <>
