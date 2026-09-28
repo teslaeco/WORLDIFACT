@@ -2,6 +2,8 @@ export interface BudgetEnv {
   GENERATION_REQUEST_LIMIT?: string;
   GENERATION_EXPIRES_AT?: string;
   ENABLE_APPROVED_FAST_TEST?: string;
+  /** One-time seed backed by already-verified revenue; applied once in Durable Object storage. */
+  FREE_SOL_SEED_JOBS?: string;
 }
 export interface BudgetStorage {
   get<T>(key: string): Promise<T | undefined>;
@@ -57,6 +59,77 @@ export class GenerationBudget {
           enabled: !!settings, expiresAt: settings ? new Date(settings.expiresAt).toISOString() : null, fastOnly: !!trial });
       } catch { return reply({ error: 'Allowance unavailable' }, 503); }
     }
+    const promoSeed = () => {
+      const value = Number(this.env.FREE_SOL_SEED_JOBS ?? '0');
+      return Number.isSafeInteger(value) && value >= 0 && value <= 10_000 ? value : 0;
+    };
+    const ensurePromoSeed = async (storage: BudgetStorage) => {
+      if (await storage.get<number>('promo-seed-applied')) return;
+      const seed = promoSeed();
+      if (seed) await storage.put('promo-funded-jobs', ((await storage.get<number>('promo-funded-jobs')) ?? 0) + seed);
+      await storage.put('promo-seed-applied', 1);
+    };
+    if (request.method === 'GET' && path === '/promo-status') {
+      try {
+        const result = await this.storage.transaction(async storage => {
+          await ensurePromoSeed(storage);
+          const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0;
+          const used = (await storage.get<number>('promo-used-jobs')) ?? 0;
+          if (![funded, used].every(value => Number.isSafeInteger(value) && value >= 0) || used > funded) throw new Error('Invalid promo state');
+          return { funded, used, remaining: funded - used };
+        });
+        return reply(result);
+      } catch { return reply({ error: 'Promo allowance unavailable' }, 503); }
+    }
+    if (request.method === 'POST' && path === '/promo-fund') {
+      try {
+        const text = await request.text();
+        if (text.length > 512) throw new Error('Invalid promo funding');
+        const input = JSON.parse(text) as { id?: unknown; jobs?: unknown };
+        if (!input || typeof input.id !== 'string' || !/^[A-Za-z0-9_-]{3,200}$/.test(input.id) ||
+            !Number.isSafeInteger(input.jobs) || Number(input.jobs) < 1 || Number(input.jobs) > 10_000) throw new Error('Invalid promo funding');
+        const result = await this.storage.transaction(async storage => {
+          await ensurePromoSeed(storage);
+          const markerKey = `promo-funded:${input.id}`;
+          if (await storage.get<number>(markerKey)) {
+            const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0, used = (await storage.get<number>('promo-used-jobs')) ?? 0;
+            return { funded: false, repeated: true, remaining: Math.max(0, funded - used) };
+          }
+          const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0;
+          const next = funded + Number(input.jobs);
+          if (!Number.isSafeInteger(next) || next > 1_000_000) throw new Error('Promo funding overflow');
+          await storage.put('promo-funded-jobs', next);
+          await storage.put(markerKey, 1);
+          const used = (await storage.get<number>('promo-used-jobs')) ?? 0;
+          return { funded: true, repeated: false, remaining: Math.max(0, next - used) };
+        });
+        return reply(result);
+      } catch { return reply({ funded: false }, 400); }
+    }
+    if (request.method === 'POST' && path === '/promo-reserve') {
+      try {
+        const text = await request.text();
+        if (text.length > 256) throw new Error('Invalid promo reservation');
+        const input = JSON.parse(text) as { id?: unknown };
+        if (!input || typeof input.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(input.id)) throw new Error('Invalid promo reservation');
+        const result = await this.storage.transaction(async storage => {
+          await ensurePromoSeed(storage);
+          const markerKey = `promo-job:${input.id}`;
+          if (await storage.get<number>(markerKey)) {
+            const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0, used = (await storage.get<number>('promo-used-jobs')) ?? 0;
+            return { allowed: true, repeated: true, remaining: Math.max(0, funded - used) };
+          }
+          const funded = (await storage.get<number>('promo-funded-jobs')) ?? 0;
+          const used = (await storage.get<number>('promo-used-jobs')) ?? 0;
+          if (![funded, used].every(value => Number.isSafeInteger(value) && value >= 0) || used >= funded) return { allowed: false, repeated: false, remaining: 0 };
+          await storage.put('promo-used-jobs', used + 1);
+          await storage.put(markerKey, 1);
+          return { allowed: true, repeated: false, remaining: funded - used - 1 };
+        });
+        return reply(result, result.allowed ? 200 : 429);
+      } catch { return reply({ allowed: false }, 400); }
+    }
+
     // This is an INTERNAL Durable Object route. The public Worker separately
     // authenticates the installer and confirms the installed monetary guard.
     if (request.method === 'POST' && path === '/activate-approved-fast') {
