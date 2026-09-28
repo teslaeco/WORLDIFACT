@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readBillingSecrets, uploadBillingSecrets, type BillingSecrets } from './connect-billing.ts';
 import { CREDIT_PACK, STRIPE_API_VERSION } from '../server/billing.ts';
+import { PLAN_CATALOG } from '../server/generationEconomics.ts';
 
 const origin = 'https://worldifact.xodobrox.workers.dev';
 const webhookUrl = `${origin}/api/billing/webhook`;
@@ -15,8 +16,10 @@ const events = [
   'charge.refunded', 'charge.dispute.created', 'charge.dispute.updated',
 ] as const;
 const offers = [
-  { kind: 'subscription', productId: 'prod_WORLDIFACTMembership1500V1', lookupKey: 'worldifact_membership_1500_usd_2999_month_v1', name: 'WORLDIFACT Membership — 1500 credits' },
-  { kind: 'topup', productId: 'prod_WORLDIFACTTopup1500V1', lookupKey: 'worldifact_topup_1500_usd_2999_v1', name: 'WORLDIFACT Top-up — 1500 credits' },
+  { kind: 'subscription', plan: 'creator', productId: 'prod_WORLDIFACTMembership1500V1', lookupKey: 'worldifact_membership_1500_usd_2999_month_v1', name: 'WORLDIFACT Membership — 1500 credits', amount: PLAN_CATALOG.creator.amountCents, credits: PLAN_CATALOG.creator.credits },
+  { kind: 'subscription', plan: 'pro', productId: 'prod_WORLDIFACTProAstra4500V2', lookupKey: 'worldifact_pro_astra_4500_usd_9999_month_v2', name: 'WORLDIFACT Pro ASTRA — 4500 credits', amount: PLAN_CATALOG.pro.amountCents, credits: PLAN_CATALOG.pro.credits },
+  { kind: 'subscription', plan: 'studio', productId: 'prod_WORLDIFACTStudioAstra7500V2', lookupKey: 'worldifact_studio_astra_7500_usd_14999_month_v2', name: 'WORLDIFACT Studio ASTRA — 7500 credits', amount: PLAN_CATALOG.studio.amountCents, credits: PLAN_CATALOG.studio.credits },
+  { kind: 'topup', plan: null, productId: 'prod_WORLDIFACTTopup1500V1', lookupKey: 'worldifact_topup_1500_usd_2999_v1', name: 'WORLDIFACT Top-up — 1500 credits', amount: CREDIT_PACK.amount, credits: CREDIT_PACK.credits },
 ] as const;
 type Offer = typeof offers[number];
 type Json = Record<string, unknown>;
@@ -27,7 +30,7 @@ function fail(stage: Stage, reason: string): never { throw new StripeSetupError(
 const object = (value: unknown): Json => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Json : {};
 const validId = (value: unknown, prefix: string): value is string => typeof value === 'string' && new RegExp(`^${prefix}_[A-Za-z0-9]{1,180}$`).test(value);
 const validSecret = (value: unknown): value is string => typeof value === 'string' && /^whsec_[A-Za-z0-9_]{16,256}$/.test(value);
-const metadata = (account: string, kind: string) => ({ worldifact_setup: setupVersion, worldifact_account: account, worldifact_kind: kind, worldifact_credits: String(CREDIT_PACK.credits) });
+const metadata = (account: string, offer: Offer) => ({ worldifact_setup: setupVersion, worldifact_account: account, worldifact_kind: offer.kind, worldifact_credits: String(offer.credits), ...(offer.plan ? { worldifact_plan: offer.plan } : {}) });
 const matchesMetadata = (value: unknown, expected: Record<string, string>) => Object.entries(expected).every(([key, content]) => object(value)[key] === content);
 const addMetadata = (params: URLSearchParams, values: Record<string, string>) => { for (const [key, value] of Object.entries(values)) params.set(`metadata[${key}]`, value); };
 
@@ -56,16 +59,16 @@ async function readJson(response: Response, stage: Stage): Promise<Json> {
 }
 
 function validateProduct(product: Json, offer: Offer, account: string, stage: Stage) {
-  if (product.object !== 'product' || product.id !== offer.productId || product.livemode !== true || product.active !== true || product.name !== offer.name || product.shippable !== false || !matchesMetadata(product.metadata, metadata(account, offer.kind))) {
+  if (product.object !== 'product' || product.id !== offer.productId || product.livemode !== true || product.active !== true || product.name !== offer.name || product.shippable !== false || !matchesMetadata(product.metadata, metadata(account, offer))) {
     fail(stage, 'An existing or returned product does not match the approved offer. No existing product was changed.');
   }
 }
 
 function validatePrice(price: Json, offer: Offer, account: string, stage: Stage) {
   const recurring = object(price.recurring);
-  if (price.object !== 'price' || !validId(price.id, 'price') || price.livemode !== true || price.active !== true || price.lookup_key !== offer.lookupKey || price.unit_amount !== CREDIT_PACK.amount || price.unit_amount_decimal !== String(CREDIT_PACK.amount) || price.currency !== 'usd' || price.billing_scheme !== 'per_unit' || price.transform_quantity != null || price.custom_unit_amount != null || price.tiers_mode != null || !matchesMetadata(price.metadata, metadata(account, offer.kind)) ||
+  if (price.object !== 'price' || !validId(price.id, 'price') || price.livemode !== true || price.active !== true || price.lookup_key !== offer.lookupKey || price.unit_amount !== offer.amount || price.unit_amount_decimal !== String(offer.amount) || price.currency !== 'usd' || price.billing_scheme !== 'per_unit' || price.transform_quantity != null || price.custom_unit_amount != null || price.tiers_mode != null || !matchesMetadata(price.metadata, metadata(account, offer)) ||
     (offer.kind === 'subscription' ? price.type !== 'recurring' || recurring.interval !== 'month' || recurring.interval_count !== 1 || recurring.usage_type !== 'licensed' || recurring.trial_period_days != null : price.type !== 'one_time' || price.recurring != null)) {
-    fail(stage, 'An existing or returned price does not match USD 29.99 for 1500 credits. No existing price was changed.');
+    fail(stage, 'An existing or returned price does not match the approved WORLDIFACT offer. No existing price was changed.');
   }
   validateProduct(object(price.product), offer, account, stage);
 }
@@ -109,7 +112,7 @@ export async function setupStripe(env: NodeJS.ProcessEnv, dependencies: Dependen
   const account = (await request('/account', 'account'))!;
   if (account.object !== 'account' || !validId(account.id, 'acct') || account.charges_enabled !== true) fail('account', 'The live account is not ready to accept payments. Finish its Stripe requirements first.');
   const accountId = account.id;
-  const webhookMetadata = metadata(accountId, 'billing');
+  const webhookMetadata = { worldifact_setup: setupVersion, worldifact_account: accountId, worldifact_kind: 'billing', worldifact_credits: '0' };
   const webhookIdempotencyKey = `${setupVersion}-${accountId}-webhook`;
   const webhookParams = new URLSearchParams({ url: webhookUrl, api_version: STRIPE_API_VERSION, connect: 'false', description: 'WORLDIFACT billing' });
   for (const event of events) webhookParams.append('enabled_events[]', event);
@@ -166,15 +169,15 @@ export async function setupStripe(env: NodeJS.ProcessEnv, dependencies: Dependen
     const { offer } = item;
     if (!item.product) {
       const params = new URLSearchParams({ id: offer.productId, name: offer.name, active: 'true', shippable: 'false' });
-      addMetadata(params, metadata(accountId, offer.kind));
-      item.product = (await request('/products', 'product creation', params, `${setupVersion}-${accountId}-${offer.kind}-product`))!;
+      addMetadata(params, metadata(accountId, offer));
+      item.product = (await request('/products', 'product creation', params, `${setupVersion}-${accountId}-${offer.productId}-product`))!;
       validateProduct(item.product, offer, accountId, 'product creation');
     }
     if (!item.price) {
-      const params = new URLSearchParams({ product: offer.productId, lookup_key: offer.lookupKey, currency: 'usd', unit_amount: String(CREDIT_PACK.amount), billing_scheme: 'per_unit', active: 'true', 'expand[]': 'product' });
+      const params = new URLSearchParams({ product: offer.productId, lookup_key: offer.lookupKey, currency: 'usd', unit_amount: String(offer.amount), billing_scheme: 'per_unit', active: 'true', 'expand[]': 'product' });
       if (offer.kind === 'subscription') { params.set('recurring[interval]', 'month'); params.set('recurring[interval_count]', '1'); params.set('recurring[usage_type]', 'licensed'); }
       addMetadata(params, metadata(accountId, offer.kind));
-      item.price = (await request('/prices', 'price creation', params, `${setupVersion}-${accountId}-${offer.kind}-price`))!;
+      item.price = (await request('/prices', 'price creation', params, `${setupVersion}-${accountId}-${offer.productId}-price`))!;
       validatePrice(item.price, offer, accountId, 'price creation');
     }
   }
@@ -194,11 +197,13 @@ export async function setupStripe(env: NodeJS.ProcessEnv, dependencies: Dependen
     STRIPE_SECRET_KEY: key,
     STRIPE_WEBHOOK_SECRET: signingSecret,
     STRIPE_SUBSCRIPTION_PRICE_ID: prepared[0].price!.id as string,
-    STRIPE_TOPUP_PRICE_ID: prepared[1].price!.id as string,
+    STRIPE_PRO_PRICE_ID: prepared[1].price!.id as string,
+    STRIPE_STUDIO_PRICE_ID: prepared[2].price!.id as string,
+    STRIPE_TOPUP_PRICE_ID: prepared[3].price!.id as string,
     STRIPE_CONFIG_SOURCE: 'github',
   })!;
   try { await upload(payload); } catch { fail('secret synchronization', 'Cloudflare did not confirm synchronization. Rerun this same setup within 23 hours; no secret value is printed.'); }
-  return { status: 'configured_without_checkout_activation', subscriptionPriceId: payload.STRIPE_SUBSCRIPTION_PRICE_ID, topupPriceId: payload.STRIPE_TOPUP_PRICE_ID, webhookId: endpoint.id as string, payoutsEnabled: account.payouts_enabled === true };
+  return { status: 'configured_without_checkout_activation', creatorPriceId: payload.STRIPE_SUBSCRIPTION_PRICE_ID, proPriceId: payload.STRIPE_PRO_PRICE_ID, studioPriceId: payload.STRIPE_STUDIO_PRICE_ID, topupPriceId: payload.STRIPE_TOPUP_PRICE_ID, webhookId: endpoint.id as string, payoutsEnabled: account.payouts_enabled === true };
 }
 
 export function stripeSetupErrorMessage(error: unknown) {
