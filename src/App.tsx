@@ -12,6 +12,7 @@ const WorkbenchPage = lazy(async () => import('./pages/WorkbenchPage'))
 const ControlPage = lazy(async () => import('./pages/ControlPage'))
 const AccountPage = lazy(async () => import('./pages/AccountPage'))
 const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
+const ModelsPage = lazy(async () => import('./pages/ModelsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
 function AvatarPreload() {
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/login" element={<AccountPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/account/credits" element={<CreditsPage />} />
+        <Route path="/account/models" element={<ModelsPage />} />
         <Route path="/account/reset" element={<ResetPasswordPage />} />
         <Route path="/control" element={<ControlPage />} />
         <Route path="/portal/:portalId" element={<PortalPage />} />
@@ -53,6 +55,7 @@ export default function App() {
       </Routes>
       <nav className="legal-nav" aria-label="Project information">
         <Link to="/login">Account</Link>
+        <Link to="/account/models">My models</Link>
         <a href="/blog/astra-vs-meshy-rim/">Astra vs Meshy: rim case study</a>
         <Link to="/control">Platform connections</Link>
         <Link to="/privacy">Privacy and data</Link>
