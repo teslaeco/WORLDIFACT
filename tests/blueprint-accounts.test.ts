@@ -93,8 +93,8 @@ test('a repeated Blueprint request UUID cannot duplicate a provider request or a
 
 test('Blueprint namespaces client IDs so another user cannot preclaim a supplied Studio receipt UUID', async () => {
   const f = fixture(), studioId = crypto.randomUUID()
-  await entitlementCall(f.env, alice, '/grant', { id: 'in_pro_fixture', credits: 4500, subscriptionId: 'sub_pro_fixture' })
-  await entitlementCall(f.env, alice, '/subscription', { id: 'sub_pro_fixture', until: Date.now() + 86_400_000, active: true, revision: 1, plan: 'pro', grantId: 'in_pro_fixture' })
+  await entitlementCall(f.env, alice, '/grant', { id: 'in_pro_fixture', credits: 4500, subscriptionId: 'sub_ProFixture' })
+  await entitlementCall(f.env, alice, '/subscription', { id: 'sub_ProFixture', until: Date.now() + 86_400_000, active: true, revision: 1, plan: 'pro', grantId: 'in_pro_fixture' })
   await reserveUserGeneration(f.env, alice, studioId, 'slow')
   await settleUserGeneration(f.env, alice, studioId, 'completed')
   assert.equal((await userJobAccess(f.env, alice, studioId)).owned, true)
