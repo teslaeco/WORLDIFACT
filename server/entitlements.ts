@@ -1,5 +1,6 @@
 import type { BudgetNamespace } from './budget.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
+import { MODEL_ECONOMICS, modelAllowed, type PlanId } from './generationEconomics.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
@@ -13,7 +14,7 @@ export interface EntitlementStorage {
 }
 export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
-type Subscription = { id: string; until: number; active: boolean; revision: number; grantId?: string; terminal?: boolean }
+type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
 type Job = { profile: GenerationKind; at: number; cost: number; kind: 'free' | 'credits'; state: 'reserved' | 'completed' | 'failed' }
 export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string }
 export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; state?: Job['state'] }
@@ -23,8 +24,9 @@ type PayPalCheckout = { id: string; created: number; orderId?: string; url?: str
 export interface EntitlementStatus {
   credits: number
   generationCost: 50
+  generationCosts: { sol: 50; astra: 250 }
   subscriptionGrant: 1500
-  subscription: { active: boolean; expiresAt: string | null }
+  subscription: { active: boolean; plan: PlanId; expiresAt: string | null }
   free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }
   slowDownloadRequiresSubscription: true
   billingReview: boolean
@@ -56,11 +58,12 @@ async function usage(storage: EntitlementStorage, now: number) {
 }
 async function status(storage: EntitlementStorage, now: number): Promise<EntitlementStatus> {
   const [credits, free, subscription, billingHold] = await Promise.all([balance(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
+  const plan: PlanId = subscription?.plan ?? 'creator'
   return {
-    credits, generationCost: 50, subscriptionGrant: 1500,
-    subscription: { active: active(subscription, now), expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
+    credits, generationCost: 50, generationCosts: { sol: 50, astra: 250 }, subscriptionGrant: 1500,
+    subscription: { active: active(subscription, now), plan, expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
     free: { fastRemaining: Math.max(0, 2 - free.fast.length), fastResetAt: free.fast.length ? new Date(Math.min(...free.fast.map(item => item.at)) + DAY).toISOString() : null,
-      slowRemaining: Math.max(0, 1 - free.slow.length), slowResetAt: new Date((Math.floor(now / DAY) + 1) * DAY).toISOString() },
+      slowRemaining: 0, slowResetAt: new Date((Math.floor(now / DAY) + 1) * DAY).toISOString() },
     slowDownloadRequiresSubscription: true, billingReview: credits < 0 || billingHold === true,
   }
 }
@@ -90,13 +93,19 @@ export class AccountEntitlements {
             : { allowed: existing.state !== 'failed', repeated: true, cost: existing.cost, kind: existing.kind, ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
           const credits = await balance(storage), subscription = await storage.get<Subscription>('subscription')
           if (credits < 0 || await storage.get<boolean>('billingHold') === true) return { allowed: false, reason: 'BILLING_REVIEW_REQUIRED' }
-          const paid = active(subscription, now) || credits > 0
-          if (paid && credits < 50) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
+          const subscriptionActive = active(subscription, now)
+          const plan: PlanId = subscriptionActive ? subscription?.plan ?? 'creator' : 'creator'
+          const model = profile === 'fast' ? 'sol' : 'astra'
+          const cost = MODEL_ECONOMICS[model].creditsPerGeneration
+          if (model === 'astra' && (!subscriptionActive || !modelAllowed(plan, 'astra'))) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
+          const paid = subscriptionActive || credits > 0
+          if (paid && credits < cost) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
           const free = await usage(storage, now)
-          if (!paid && free[profile].length >= (profile === 'fast' ? 2 : 1)) return { allowed: false, reason: profile === 'fast' ? 'FAST_DAILY_LIMIT' : 'SLOW_DAILY_LIMIT' }
-          const job: Job = { profile, at: now, cost: paid ? 50 : 0, kind: paid ? 'credits' : 'free', state: 'reserved' }
-          if (paid) await storage.put('balance', credits - 50)
-          else { free[profile].push({ id, at: now }); await storage.put('usage', free) }
+          if (!paid && profile === 'slow') return { allowed: false, reason: 'FREE_SOL_ONLY' }
+          if (!paid && free.fast.length >= 2) return { allowed: false, reason: 'FAST_DAILY_LIMIT' }
+          const job: Job = { profile, at: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', state: 'reserved' }
+          if (paid) await storage.put('balance', credits - cost)
+          else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
           await storage.put(`job:${id}`, job)
           return { allowed: true, repeated: false, cost: job.cost, kind: job.kind }
         })
@@ -170,7 +179,8 @@ export class AccountEntitlements {
       }
       if (path === '/subscription') {
         if (typeof input.id !== 'string' || !/^sub_[A-Za-z0-9]{1,180}$/.test(input.id) || !validInteger(input.until) || (input.until as number) < 0 || !validInteger(input.revision) || typeof input.active !== 'boolean') return json({ error: 'Invalid subscription' }, 400)
-        const next: Subscription = { id: input.id, until: input.until as number, active: input.active, revision: input.revision as number, terminal: input.terminal === true, ...(typeof input.grantId === 'string' ? { grantId: input.grantId } : {}) }
+        const plan: PlanId = ['creator', 'pro', 'studio'].includes(String(input.plan)) ? input.plan as PlanId : 'creator'
+        const next: Subscription = { id: input.id, until: input.until as number, active: input.active, revision: input.revision as number, plan, terminal: input.terminal === true, ...(typeof input.grantId === 'string' ? { grantId: input.grantId } : {}) }
         return json(await this.storage.transaction(async storage => {
           const previous = await storage.get<Subscription>('subscription')
           if (previous && previous.id !== next.id && !next.active) return { updated: false }
