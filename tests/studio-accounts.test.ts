@@ -56,8 +56,8 @@ function fixture() {
   }), env, fetcher)
   const prepare = async () => await (await call('/api/studio/prepare', 'POST', input)).json() as { id: string; ticket: string }
   const subscribe = async () => {
-    await entitlementCall(env, alice, '/grant', { id: 'in_subscription', credits: 1500, subscriptionId: 'sub_test' })
-    await entitlementCall(env, alice, '/subscription', { id: 'sub_test', until: Date.now() + 86400000, active: true, revision: 1, grantId: 'in_subscription' })
+    await entitlementCall(env, alice, '/grant', { id: 'in_subscription', credits: 4500, subscriptionId: 'sub_test' })
+    await entitlementCall(env, alice, '/subscription', { id: 'sub_test', until: Date.now() + 86400000, active: true, revision: 1, plan: 'pro', grantId: 'in_subscription' })
   }
   return { env, call, prepare, subscribe, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
     busy: () => { busy = true }, lose: () => { loss = true; status404 = true } }
@@ -69,6 +69,7 @@ test('account-bound prepared receipts cannot be submitted or read by another use
   const receipt = await f.prepare()
   assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket, 'bob')).status, 401)
   assert.equal(f.posts(), 0)
+  await f.subscribe()
   assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).status, 202)
   // Even a deliberately preclaimed UUID in another namespace cannot turn a
   // shared/stolen ticket into that user's receipt. The HMAC itself binds uid.
@@ -78,31 +79,25 @@ test('account-bound prepared receipts cannot be submitted or read by another use
   assert.equal((await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket, 'bob')).status, 401)
 })
 
-test('free SLOW completion preserves the job but never transfers GLB or texture bytes', async () => {
+test('free accounts cannot start ASTRA SLOW jobs or transfer artifacts', async () => {
   const f = fixture(), receipt = await f.prepare()
-  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
-  const response = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
-  const { job } = await response.json() as { job: StudioJob }
-  assert.equal(job.state, 'succeeded'); assert.equal(job.downloadAllowed, false); assert.equal(job.previewOnly, true); assert.equal(job.previewAvailable, false)
-  for (const path of ['model', 'exports/pbr', 'exports/fbx', 'exports/blend']) assert.equal((await f.call(`/api/studio/jobs/${receipt.id}/${path}`, 'GET', undefined, receipt.ticket)).status, 403)
+  const response = await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  assert.equal(response.status, 429)
+  assert.equal(f.posts(), 0)
   assert.equal(f.artifacts(), 0)
-  const next = await f.prepare()
-  assert.equal((await f.call('/api/studio/jobs', 'POST', input, next.ticket)).status, 429)
-  assert.equal(f.posts(), 1)
-  await f.subscribe()
-  const unlocked = await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket)
-  assert.equal(unlocked.status, 200); assert.equal((await unlocked.arrayBuffer()).byteLength, 24)
-  assert.equal((await entitlementStatus(f.env, alice)).credits, 1500, 'Downloading an already generated model does not debit another generation')
+  const status = await entitlementStatus(f.env, alice)
+  assert.equal(status.subscription.active, false)
+  assert.equal(status.credits, 0)
 })
 
 test('concurrent repeated SLOW submission debits 50 once; confirmed failure refunds once', async () => {
   const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
   const replies = await Promise.all(Array.from({ length: 5 }, () => f.call('/api/studio/jobs', 'POST', input, receipt.ticket)))
   assert.ok(replies.every(response => response.status === 202)); assert.equal(f.posts(), 1)
-  assert.equal((await entitlementStatus(f.env, alice)).credits, 1450)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
   f.fail()
   await Promise.all([f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket), f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)])
-  assert.equal((await entitlementStatus(f.env, alice)).credits, 1500)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
 })
 
 test('an unknown acceptance stays pending briefly, then an explicit Oracle 404 releases the stale reservation', async () => {
@@ -111,13 +106,13 @@ test('an unknown acceptance stays pending briefly, then an explicit Oracle 404 r
   await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
   const { job } = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
   assert.equal(job.state, 'pending'); assert.equal(f.posts(), 1)
-  assert.equal((await entitlementStatus(f.env, alice)).credits, 1450)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
   const now = Date.now
   try {
     Date.now = () => now() + 181_000
     const review = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob; reconciledMissing?: boolean }
     assert.equal(review.job.state, 'failed'); assert.equal(review.reconciledMissing, true)
-    assert.equal((await entitlementStatus(f.env, alice)).credits, 1500)
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
     assert.equal(f.posts(), 1, 'recovery never submits another Oracle job')
   } finally { Date.now = now }
 })
@@ -130,7 +125,7 @@ test('a server budget rejection refunds the customer reservation before any Orac
       : Response.json({ allowed: false }, { status: 429 })
   } }) }
   assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).status, 429)
-  assert.equal(f.posts(), 0); assert.equal((await entitlementStatus(f.env, alice)).credits, 1500)
+  assert.equal(f.posts(), 0); assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
 })
 
 test('Oracle busy 409 restores customer credits immediately instead of creating a fake pending receipt', async () => {
@@ -140,6 +135,6 @@ test('Oracle busy 409 restores customer credits immediately instead of creating 
   const value = await response.json() as { error: string }
   assert.match(value.error, /finishing another model/i)
   assert.equal(f.posts(), 1)
-  assert.equal((await entitlementStatus(f.env, alice)).credits, 1500)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
 })
 
