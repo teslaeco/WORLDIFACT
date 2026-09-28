@@ -16,7 +16,21 @@ import * as draft from '../src/lib/studioDraft.ts'
 import * as glb from '../src/lib/glb.ts'
 import * as shopManufacturing from '../src/lib/shopManufacturing.ts'
 import * as blueprint from '../src/lib/blueprint.ts'
+import * as generationQuote from '../src/lib/generationQuote.ts'
 
+async function loadCostNotice() {
+  const url = new URL('../src/components/GenerationCostNotice.tsx', import.meta.url)
+  const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
+  const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
+  runInNewContext(code, { module, exports: module.exports, require(id) {
+    if (id === '../lib/generationQuote') return generationQuote
+    if (id === '../lib/account') return { useAccount: () => ({ user: null, loading: true }) }
+    if (id.endsWith('.css')) return {}
+    if (['react', 'react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
+    throw new Error(`Unexpected cost notice dependency: ${id}`)
+  } }, { filename: url.pathname, timeout: 1000 })
+  return module.exports
+}
 async function loadShopManufacturingOptions(react) {
   const url = new URL('../src/components/ShopManufacturingOptions.tsx', import.meta.url)
   const source = await readFile(url, 'utf8')
@@ -39,12 +53,12 @@ async function loadShopManufacturingOptions(react) {
   return module.exports
 }
 
-// Compile the actual checked-in component. Optional adapters isolate browser
-// storage, timers and server responses for lifecycle tests; no UI stub is used.
+// Compile actual checked-in components. Adapters isolate storage, timers and
+// account reads for lifecycle tests; cost calculation and markup are real.
 export async function loadShopComponent({ react = React, adapters = {}, globals = {} } = {}) {
   const url = new URL('../src/pages/ShopPage.tsx', import.meta.url)
   const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
-  const shopOptions = await loadShopManufacturingOptions(react)
+  const shopOptions = await loadShopManufacturingOptions(react), costNotice = await loadCostNotice()
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, {
     crypto: globalThis.crypto, ...globals, module, exports: module.exports,
@@ -55,8 +69,9 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
         '../lib/blueprint': blueprint }
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions
+      if (id === '../components/GenerationCostNotice') return costNotice
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
-      if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt, mode }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': mode || 'demo' }, mode === 'live-fast' ? 'LIVE Astra procedural 3D draft' : 'DEMO local 3D preview') }
+      if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt, mode }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': mode || 'demo' }, mode === 'live-fast' ? 'LIVE Sol procedural 3D draft' : 'DEMO local 3D preview') }
       if (id === '../components/ProjectAttachmentPicker') return { __esModule: true, default: ({ scope }) => React.createElement('section', { 'data-project-attachments': scope }, 'LOCAL REFERENCE project files') }
       if (id === '../components/StudioGallery') return { __esModule: true, default: () => React.createElement('section', { 'data-studio-gallery': 'device-archive' }, 'Your model gallery') }
       if (id.endsWith('.css')) return {}
