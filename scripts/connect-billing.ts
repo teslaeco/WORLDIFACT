@@ -2,7 +2,7 @@ import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from 'node:child_p
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const stripeNames = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_SUBSCRIPTION_PRICE_ID', 'STRIPE_TOPUP_PRICE_ID'] as const;
+const stripeNames = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_SUBSCRIPTION_PRICE_ID', 'STRIPE_PRO_PRICE_ID', 'STRIPE_STUDIO_PRICE_ID', 'STRIPE_TOPUP_PRICE_ID'] as const;
 const paypalNames = ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_WEBHOOK_ID', 'PAYPAL_MERCHANT_ID'] as const;
 const inputNames = [...stripeNames, ...paypalNames, 'STRIPE_PREVIOUS_TOPUP_PRICE_IDS'] as const;
 export type BillingSecrets = Record<string, string>;
@@ -34,6 +34,8 @@ export function readBillingSecrets(env: NodeJS.ProcessEnv): BillingSecrets | nul
       ['STRIPE_SECRET_KEY', /^(?:sk|rk)_live_[A-Za-z0-9_]{16,256}$/.test(payload.STRIPE_SECRET_KEY)],
       ['STRIPE_WEBHOOK_SECRET', /^whsec_[A-Za-z0-9_]{16,256}$/.test(payload.STRIPE_WEBHOOK_SECRET)],
       ['STRIPE_SUBSCRIPTION_PRICE_ID', priceId(payload.STRIPE_SUBSCRIPTION_PRICE_ID)],
+      ['STRIPE_PRO_PRICE_ID', priceId(payload.STRIPE_PRO_PRICE_ID)],
+      ['STRIPE_STUDIO_PRICE_ID', priceId(payload.STRIPE_STUDIO_PRICE_ID)],
       ['STRIPE_TOPUP_PRICE_ID', priceId(payload.STRIPE_TOPUP_PRICE_ID)],
     ] as const) if (!valid) fail(`Invalid ${name}. Check its production dashboard value; values are never logged.`);
     const previous = env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS;
