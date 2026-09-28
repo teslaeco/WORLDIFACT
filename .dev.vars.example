@@ -43,6 +43,8 @@ STRIPE_PRO_PRICE_ID=
 # Studio ASTRA: USD 149.99/month for 7,500 credits.
 STRIPE_STUDIO_PRICE_ID=
 STRIPE_SUBSCRIPTION_INTERVAL=month
+# Keep false until the Oracle Astra worker has the reviewed hard monetary job guard.
+ENABLE_ASTRA_PLANS=false
 ENABLE_PAYPAL_BILLING=false
 PAYPAL_MODE=sandbox
 # REST app credentials; the supplied HostedButtons SDK client ID is not a REST secret.
