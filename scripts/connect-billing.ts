@@ -2,9 +2,10 @@ import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from 'node:child_p
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const stripeNames = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_SUBSCRIPTION_PRICE_ID', 'STRIPE_PRO_PRICE_ID', 'STRIPE_STUDIO_PRICE_ID', 'STRIPE_TOPUP_PRICE_ID'] as const;
+const stripeNames = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_SUBSCRIPTION_PRICE_ID', 'STRIPE_TOPUP_PRICE_ID'] as const;
+const optionalStripePriceNames = ['STRIPE_PRO_PRICE_ID', 'STRIPE_STUDIO_PRICE_ID'] as const;
 const paypalNames = ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_WEBHOOK_ID', 'PAYPAL_MERCHANT_ID'] as const;
-const inputNames = [...stripeNames, ...paypalNames, 'STRIPE_PREVIOUS_TOPUP_PRICE_IDS'] as const;
+const inputNames = [...stripeNames, ...optionalStripePriceNames, ...paypalNames, 'STRIPE_PREVIOUS_TOPUP_PRICE_IDS'] as const;
 export type BillingSecrets = Record<string, string>;
 type SecretRunner = (command: string, args: string[], options: SpawnSyncOptionsWithStringEncoding & { input: string; env: NodeJS.ProcessEnv }) => { status: number | null; error?: Error; stderr?: string };
 class BillingSetupError extends Error {}
@@ -16,7 +17,7 @@ export function readBillingSecrets(env: NodeJS.ProcessEnv): BillingSecrets | nul
   const payload: BillingSecrets = {};
   const source = env.STRIPE_CONFIG_SOURCE || 'github';
   if (source !== 'github' && source !== 'cloudflare') fail('Invalid STRIPE_CONFIG_SOURCE. Use github or cloudflare.');
-  if (source === 'cloudflare' && [...stripeNames.slice(1), 'STRIPE_PREVIOUS_TOPUP_PRICE_IDS'].some(name => !!env[name])) {
+  if (source === 'cloudflare' && [...stripeNames.slice(1), ...optionalStripePriceNames, 'STRIPE_PREVIOUS_TOPUP_PRICE_IDS'].some(name => !!env[name])) {
     fail('Conflicting Stripe configuration: cloudflare mode preserves Worker settings. Remove the companion Stripe GitHub secrets or choose github mode with a complete group.');
   }
   for (const names of [stripeNames, paypalNames]) {
@@ -34,10 +35,12 @@ export function readBillingSecrets(env: NodeJS.ProcessEnv): BillingSecrets | nul
       ['STRIPE_SECRET_KEY', /^(?:sk|rk)_live_[A-Za-z0-9_]{16,256}$/.test(payload.STRIPE_SECRET_KEY)],
       ['STRIPE_WEBHOOK_SECRET', /^whsec_[A-Za-z0-9_]{16,256}$/.test(payload.STRIPE_WEBHOOK_SECRET)],
       ['STRIPE_SUBSCRIPTION_PRICE_ID', priceId(payload.STRIPE_SUBSCRIPTION_PRICE_ID)],
-      ['STRIPE_PRO_PRICE_ID', priceId(payload.STRIPE_PRO_PRICE_ID)],
-      ['STRIPE_STUDIO_PRICE_ID', priceId(payload.STRIPE_STUDIO_PRICE_ID)],
       ['STRIPE_TOPUP_PRICE_ID', priceId(payload.STRIPE_TOPUP_PRICE_ID)],
     ] as const) if (!valid) fail(`Invalid ${name}. Check its production dashboard value; values are never logged.`);
+    for (const name of optionalStripePriceNames) if (env[name]) {
+      if (!priceId(env[name]!)) fail(`Invalid ${name}. Check its production dashboard value; values are never logged.`);
+      payload[name] = env[name]!;
+    }
     const previous = env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS;
     if (previous) {
       const ids = previous.split(',').map(value => value.trim());
