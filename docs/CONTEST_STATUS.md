@@ -1,3 +1,20 @@
+# WORLDIFACT — profitable Sol/Astra pricing guard, 28 September 2026
+
+**Status: IMPLEMENTED ON PR #136 · CI PENDING · PRODUCTION NOT YET MERGED.**
+
+- Owner approved the pricing change and production rollout.
+- Creator SOL remains USD 29.99/month for 1,500 credits and uses GPT-6 Sol at 50 credits per generation.
+- Pro ASTRA is prepared at USD 99.99/month for 4,500 credits; Studio ASTRA at USD 149.99/month for 7,500 credits. Astra costs 250 credits per generation.
+- Existing USD 29.99 subscribers are not silently repriced.
+- FREE is Sol-only and has no Astra fallback. The free Sol pool is funded from verified revenue and starts with ten jobs backed by the already verified existing subscription payment.
+- The direct Sol path counts exact input tokens before generation and rejects requests above its monetary ceiling before the paid Responses call.
+- Pro/Studio checkout is **BLOCKED** unless `ENABLE_ASTRA_PLANS=true`. Production keeps it false until the Oracle Astra worker has a reviewed hard monetary job guard.
+- Stripe v2 product/price creation is prepared as an idempotent post-merge workflow. Creating those price objects does not activate Astra checkout.
+- Refund/dispute handling revokes the associated credit grant and reduces future free-promo funding.
+- No paid AI generation was executed while implementing or testing this milestone.
+
+---
+
 # WORLDIFACT — SOL / ASTRA profit guard, 28 September 2026
 
 **Status: REVIEW BRANCH ONLY · NO LIVE BILLING OR PRODUCTION CHANGE.**
