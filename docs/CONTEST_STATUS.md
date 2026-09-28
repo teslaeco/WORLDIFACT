@@ -1,6 +1,6 @@
 # WORLDIFACT — user model gallery, 28 September 2026
 
-**Status: IMPLEMENTED ON REVIEW BRANCH · PR #135 DRAFT · CI / MERGE / PRODUCTION DEPLOYMENT PENDING.**
+**Status: LIVE · MERGED · PRODUCTION VERIFIED.**
 
 - Added a dedicated `/account/models` gallery and linked it from the signed-in account card, AI Shop navigation and AI Game Lab navigation.
 - AI Shop and AI Game Lab now also render a compact visible gallery so users can reopen recent completed models without hunting through hidden/internal controls.
@@ -8,7 +8,9 @@
 - Provenance is intentionally explicit: this is a **device-local browser archive**, not cross-device cloud storage. Clearing browser storage can remove it, so users are told to keep file backups.
 - Existing generation, billing, entitlement, Oracle and manufacturing paths are unchanged. This milestone sends no paid model-generation request and performs no production deployment.
 - Focused regression coverage checks that the route and entry points exist and that Preview 3D / Download GLB remain visible.
-- Review: https://github.com/teslaeco/WORLDIFACT/pull/135
+- PR #135 passed all review workflows and was squash-merged as `8594b9fa81b2364ab64dbfd4480e7f2361b09a73`.
+- Production workflow `36391603852` completed successfully. Cloudflare version `91a2fdcb-b938-4547-8841-7e9c9ff5a93b` is live at `https://worldifact.xodobrox.workers.dev`.
+- Direct gallery route: `https://worldifact.xodobrox.workers.dev/account/models`.
 
 ---
 
