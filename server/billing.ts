@@ -1,6 +1,7 @@
 import { getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts'
 import { ACCOUNT_ID, entitlementCall, entitlementStatus, EntitlementError, type EntitlementEnv } from './entitlements.ts'
-import { PLAN_CATALOG, type PlanId } from './generationEconomics.ts'
+import { PLAN_CATALOG, planEconomics, type PlanId } from './generationEconomics.ts'
+import type { BudgetNamespace } from './budget.ts'
 
 export interface BillingEnv extends AccountEnv, EntitlementEnv {
   ENABLE_BILLING?: string
@@ -18,6 +19,7 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
   /** Legacy setting; the approved credit pack is fixed in server code. */
   STRIPE_TOPUP_CREDITS?: string
   BILLING_PUBLIC_ORIGIN?: string
+  GENERATION_BUDGET?: BudgetNamespace
 }
 // Pin billing reads and the configured webhook endpoint independently of Checkout creation.
 export const STRIPE_API_VERSION = '2024-06-20'
@@ -149,6 +151,15 @@ async function createCheckout(env: BillingEnv, fetcher: typeof fetch, params: UR
     }
   }
 }
+async function adjustFreeSolPromo(env: BillingEnv, id: string, jobs: number, reverse = false) {
+  if (!env.GENERATION_BUDGET || !Number.isSafeInteger(jobs) || jobs < 1) return
+  try {
+    const budget = env.GENERATION_BUDGET.get(env.GENERATION_BUDGET.idFromName('worldifact-free-sol-promo-v1'))
+    await budget.fetch(new Request(`https://budget.internal/${reverse ? 'promo-revoke' : 'promo-fund'}`, {
+      method: 'POST', body: JSON.stringify({ id, jobs }), signal: AbortSignal.timeout(5000),
+    }))
+  } catch { /* Cost safety fails closed: missing promo funding only reduces future free capacity. */ }
+}
 async function customerFor(env: BillingEnv, user: AccountUser, fetcher: typeof fetch) {
   const stored = await entitlementCall<{ customer: string | null }>(env, user.id, '/billing')
   if (stored.customer) return stored.customer
@@ -232,7 +243,8 @@ async function syncSubscription(env: BillingEnv, subscription: Json, revision: n
     if (paid && verified) {
       await checkCustomer(env, uid, invoice.customer)
       grantId = invoiceId
-      await entitlementCall(env, uid, '/grant', { id: invoiceId, credits: verified.credits, subscriptionId: subscription.id })
+      const grant = await entitlementCall<{ granted: boolean }>(env, uid, '/grant', { id: invoiceId, credits: verified.credits, subscriptionId: subscription.id })
+      if (grant.granted) await adjustFreeSolPromo(env, invoiceId, planEconomics(plan).fundedFreeSolJobs)
     }
   }
   await entitlementCall(env, uid, '/subscription', { id: subscription.id, active: paid && subscription.status === 'active' && Number.isSafeInteger(end), until: Number.isSafeInteger(end) ? end : 0, revision, plan, grantId, terminal: ['canceled', 'incomplete_expired'].includes(String(subscription.status)) })
@@ -248,7 +260,8 @@ async function invoicePaid(env: BillingEnv, invoice: Json, revision: number, fet
   if (!uid || items.length !== 1 || items[0].quantity !== 1 || idOf(items[0].price) !== verified.priceId || object(subscription.items).has_more === true) return
   await checkCustomer(env, uid, invoice.customer)
   await checkCustomer(env, uid, subscription.customer)
-  await entitlementCall(env, uid, '/grant', { id: invoice.id, credits: verified.credits, subscriptionId: subId })
+  const grant = await entitlementCall<{ granted: boolean }>(env, uid, '/grant', { id: invoice.id, credits: verified.credits, subscriptionId: subId })
+  if (grant.granted) await adjustFreeSolPromo(env, invoice.id as string, planEconomics(verified.plan).fundedFreeSolJobs)
   await syncSubscription(env, subscription, revision, fetcher)
 }
 async function topupSession(env: BillingEnv, session: Json, fetcher: typeof fetch, reverse = false) {
@@ -263,7 +276,9 @@ async function topupSession(env: BillingEnv, session: Json, fetcher: typeof fetc
   // New purchases use only the current price. Settlement and reversals can retain an explicitly
   // allowlisted historical price, but still require its authoritative fixed USD 29.99 pack details.
   await verifiedPrice(env, 'topup', fetcher, true, actualPriceId)
-  await entitlementCall(env, uid, reverse ? '/revoke' : '/grant', { id: paymentId, credits: CREDIT_PACK.credits })
+  const grant = await entitlementCall<{ granted?: boolean; revoked?: boolean }>(env, uid, reverse ? '/revoke' : '/grant', { id: paymentId, credits: CREDIT_PACK.credits })
+  if (!reverse && grant.granted) await adjustFreeSolPromo(env, paymentId, planEconomics('creator').fundedFreeSolJobs)
+  if (reverse && grant.revoked) await adjustFreeSolPromo(env, paymentId, planEconomics('creator').fundedFreeSolJobs, true)
   await clearCheckout(env, uid, session)
 }
 async function clearCheckout(env: BillingEnv, uid: string, session: Json) {
@@ -276,14 +291,15 @@ async function reverseCharge(env: BillingEnv, charge: Json, fetcher: typeof fetc
   if (!(Number(charge.amount_refunded) > 0 || charge.disputed === true)) return
   const invoiceId = idOf(charge.invoice)
   if (resourceId(invoiceId, 'in')) {
-    const invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher), subId = subscriptionOf(invoice)
-    if (!resourceId(subId, 'sub') || matchingLines(invoice, env.STRIPE_SUBSCRIPTION_PRICE_ID).length !== 1) return
+    const invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher), subId = subscriptionOf(invoice), verified = exactInvoice(env, invoice)
+    if (!resourceId(subId, 'sub') || !verified) return
     const subscription = await stripe(env, `/subscriptions/${subId}`, fetcher), uid = uidFor(subscription)
     if (!uid) return
     await checkCustomer(env, uid, charge.customer)
     await checkCustomer(env, uid, invoice.customer)
     await checkCustomer(env, uid, subscription.customer)
-    await entitlementCall(env, uid, '/revoke', { id: invoiceId, credits: 1500 })
+    const reversal = await entitlementCall<{ revoked: boolean }>(env, uid, '/revoke', { id: invoiceId, credits: verified.credits })
+    if (reversal.revoked) await adjustFreeSolPromo(env, invoiceId, planEconomics(verified.plan).fundedFreeSolJobs, true)
     return
   }
   const paymentId = idOf(charge.payment_intent)
