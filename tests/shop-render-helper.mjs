@@ -58,6 +58,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
       if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt, mode }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': mode || 'demo' }, mode === 'live-fast' ? 'LIVE Astra procedural 3D draft' : 'DEMO local 3D preview') }
       if (id === '../components/ProjectAttachmentPicker') return { __esModule: true, default: ({ scope }) => React.createElement('section', { 'data-project-attachments': scope }, 'LOCAL REFERENCE project files') }
+      if (id === '../components/StudioGallery') return { __esModule: true, default: () => React.createElement('section', { 'data-studio-gallery': 'device-archive' }, 'Your model gallery') }
       if (id.endsWith('.css')) return {}
       if (id === 'react') return react
       if (['react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
