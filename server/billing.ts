@@ -159,11 +159,10 @@ async function customerFor(env: BillingEnv, user: AccountUser, fetcher: typeof f
   return customer.id as string
 }
 async function verifiedPrice(env: BillingEnv, kind: 'subscription' | 'topup', fetcher: typeof fetch, allowArchived = false, settlementPriceId?: string, plan: PlanId = 'creator') {
-  const offer = kind === 'subscription' ? subscriptionOffer(env, plan) : CREDIT_PACK
   const id = settlementPriceId ?? (kind === 'subscription' ? subscriptionPriceId(env, plan) : env.STRIPE_TOPUP_PRICE_ID)
   if (!priceId(id)) throw new EntitlementError('This payment option is not configured.')
   const price = await stripe(env, `/prices/${id}`, fetcher)
-  const amount = kind === 'subscription' ? offer.amountCents : CREDIT_PACK.amount
+  const amount = kind === 'subscription' ? subscriptionOffer(env, plan).amountCents : CREDIT_PACK.amount
   if (price.id !== id || (!allowArchived && price.active !== true) || price.unit_amount !== amount || price.currency !== 'usd' || (kind === 'subscription' ? price.type !== 'recurring' : price.type !== 'one_time')) throw new EntitlementError(kind === 'subscription' ? 'The configured membership price does not match the approved WORLDIFACT plan.' : 'The configured credit pack price must be exactly USD 29.99 for 1500 credits.')
   if (price.billing_scheme !== 'per_unit' || price.transform_quantity != null || (kind === 'subscription' && (!billingConfig(env).interval || object(price.recurring).interval !== billingConfig(env).interval || object(price.recurring).interval_count !== 1 || object(price.recurring).usage_type !== 'licensed'))) throw new EntitlementError('The configured billing interval needs operator review.')
   return price
@@ -370,7 +369,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     }
     const attempt = await entitlementCall<{ id: string; created: number; url?: string }>(env, user.id, '/checkout-reserve', { kind, ...(kind === 'subscription' ? { plan } : {}) })
     if (attempt.url) return json({ url: attempt.url, mode: config.mode })
-    const offer = kind === 'subscription' ? subscriptionOffer(env, plan) : CREDIT_PACK
+    const checkoutAmount = kind === 'subscription' ? subscriptionOffer(env, plan).amountCents : CREDIT_PACK.amount
     const params = new URLSearchParams({ mode: kind === 'subscription' ? 'subscription' : 'payment', customer,
       'line_items[0][price]': price.id as string, 'line_items[0][quantity]': '1', client_reference_id: user.id,
       'metadata[worldifact_uid]': user.id, 'metadata[worldifact_kind]': kind,
@@ -391,7 +390,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     const session = await createCheckout(env, fetcher, params, `wf-checkout-${user.id}-${attempt.id}`)
     const checks: [string, boolean][] = [
       ['url', typeof session.url === 'string' && session.url.startsWith('https://checkout.stripe.com/')], ['id', resourceId(session.id, 'cs')],
-      ['expires_at', Number.isSafeInteger(session.expires_at)], ['amount_total', session.amount_total === (kind === 'subscription' ? offer.amountCents : CREDIT_PACK.amount)],
+      ['expires_at', Number.isSafeInteger(session.expires_at)], ['amount_total', session.amount_total === checkoutAmount],
       ['currency', session.currency === 'usd'], ['mode', session.mode === (kind === 'subscription' ? 'subscription' : 'payment')],
       ['customer', idOf(session.customer) === customer], ['client_reference_id', session.client_reference_id === user.id],
       ['metadata.worldifact_uid', uidFor(session) === user.id], ['metadata.worldifact_kind', object(session.metadata).worldifact_kind === kind],
