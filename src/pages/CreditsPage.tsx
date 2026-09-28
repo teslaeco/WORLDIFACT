@@ -71,7 +71,6 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
   const canBuy = !!user && !!balance && !balance.billingReview && !checking && !loading && !busy
   const canBuyPack = canBuy && (member || understandsPack) && search.get('paypal') !== 'return'
   const membershipReady = billing?.plans?.[selectedPlan]?.checkoutReady === true && billing.subscriptionInterval === 'month'
-  const recurring = purchaseKind === 'subscription'
   const paypalReturn = search.get('paypal') === 'return'
   const orderId = search.get('token') ?? ''
   const validOrder = /^[A-Z0-9]{10,36}$/.test(orderId)
