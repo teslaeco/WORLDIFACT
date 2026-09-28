@@ -1,37 +1,52 @@
-# WORLDIFACT — prompt model controls and the authorized live-test result
+# WORLDIFACT — prompt model controls DEPLOYED; Astra sales still blocked
 
-Updated 28 September 2026. This is a review-branch checkpoint; deployment is not yet claimed.
+Updated 28 September 2026 after the explicitly approved live test and completed UI deployment. This checkpoint supersedes the pending-deployment notes in the earlier release candidate.
 
-## Owner authorization
+## VERIFIED — published model selector and cost notice
 
-The user requested an unmistakable AI-model selector next to the prompt, authorized the previously quoted one SOL attempt (USD 0.35 maximum provider reservation) and one ASTRA job (USD 1.75), and requested paid-plan activation and deployment. The total test authorization was USD 2.10 with no automatic retries. Existing customer subscriptions, credit balances and card charges were not changed by the owner test.
+PR [#139](https://github.com/teslaeco/WORLDIFACT/pull/139) was merged as `3a9128b09dca7deb4971cce296b12ffbe89418f6` after all five exact-head PR workflows passed for `b3760bd48b3c307a3b0ed98a6d893b184855bd6e`.
 
-## VERIFIED — the authorized test actually ran, without retry
+Production [run 36473395121](https://github.com/teslaeco/WORLDIFACT/actions/runs/36473395121), job `109100977649`, completed successfully for that merge. It ran application verification/build, Worker dry-run, existing secret synchronization, an unpaid Creator checkout open/expire check, actual Cloudflare publication, published HTML/assets/no-cost DEMO checks and payment login/origin/signature checks. No payment was settled by these deployment checks.
 
-[Run 36471162273](https://github.com/teslaeco/WORLDIFACT/actions/runs/36471162273), job `109093469571`, ran the reviewed script at `f61ef0503d88e29bc822b5ba0420f8dbe6ddb4cd` at 19:17–19:18 UTC and finished with failure. The permanent Git ref `worldifact-model-check-20260928-2100-v1` claimed this approval before provider work. It must not be deleted or renamed to rerun the paid test.
+Public Shop: https://worldifact.xodobrox.workers.dev/shop
+Plans: https://worldifact.xodobrox.workers.dev/account/credits
 
-- SOL: the test did not confirm a usable export and reported `TEST_FAILED_NO_RETRY`. The initial script did not persist the provider result before exporting, so its report is insufficient to claim a successful live SOL deliverable or precise token cost. A subsequent deterministic, no-API export test independently found `document is not defined` in Node's browser-dependent glTF image export path. This is a test-environment limitation, not proof that the browser SOL service failed. No second SOL call was made.
-- ASTRA: exactly one Oracle job was submitted, `ac718eb5-2c54-47b1-ae67-722ad296ff10`. It transitioned from queued to failed. A subsequent authenticated GET of that same job in [run 36471870199](https://github.com/teslaeco/WORLDIFACT/actions/runs/36471870199), job `109095860631`, confirmed: `Codex: stream disconnected before completion: Incomplete response returned, reason: max_output_tokens`. The response was truncated before the complete model workflow finished. No replacement job or increased cost ceiling was attempted.
-- Evidence artifact: `worldifact-approved-model-test-evidence`, artifact ID `10991846065`. It contains the failed-test report, not completed models. Actual billed USD is UNKNOWN; the USD 2.10 figure is the approved combined maximum reservation, not a measured invoice.
+The visible form now has a native `AI model · Model AI` dropdown, a compact readable cost notice, then the prompt input. Options identify GPT-6 SOL at 50 points per paid generation and GPT-6 ASTRA at 250. Essential cost/remaining-balance/blocking messages stay visible; long explanations are collapsed. Advanced internal selectors no longer separate the model dropdown from the prompt. Light-on-dark text contrast is checked numerically, and the form is placed before the preview through 1024px layouts. Physical Android visual QA was not performed.
 
-These were real backend/provider attempts, not a customer checkout or physical Android browser test. The SOL test used the production handler with an isolated owner-test quota; ASTRA used the authenticated existing Oracle pipeline. Neither debited the user's displayed 900 customer points.
+The release also replaces raw credit-refresh AbortSignal errors with a readable message, gives the active Creator card a working route to existing subscription management, distinguishes per-model point capacity, and constructs the SOL preview/download from the actual returned blueprint rather than an unrelated prompt-keyword demo. That output remains explicitly procedural GAME geometry, not a detailed Oracle mesh or manufacturing-approved asset.
 
-## Implemented UI corrections
+## VERIFIED — the authorized live test ran ONCE and did not pass
 
-- A visible native AI-model dropdown immediately before the cost notice and prompt: GPT-6 SOL at 50 points per paid attempt, GPT-6 ASTRA at 250. Existing FAST/SLOW cards remain, but no hidden control is required to select the model.
-- The price notice now uses high-contrast light text on a dark panel with explicit descendant styles. The form is placed before the preview through 1024px-wide layouts, including Android desktop-site viewports.
-- The active Creator card can open existing subscription management instead of being an inert button. This does not enable a chargeable upgrade; the current Stripe portal only manages cancellation/payment details.
-- Credit refresh timeouts show a plain message rather than raw AbortSignal errors. The balance explanation distinguishes SOL/Astra attempts and the separate remaining provider budget.
-- SOL preview/download now builds the actual returned blueprint and exports the same displayed GLB. It no longer shows an unrelated prompt-keyword demo under a live-generated label. Geometry remains explicitly procedural GAME output, not a detailed Oracle mesh or approved MAKE asset.
+The owner authorized one SOL attempt with a USD 0.35 maximum provider reservation and one ASTRA job with USD 1.75, total USD 2.10, without automatic retries. [Run 36471162273](https://github.com/teslaeco/WORLDIFACT/actions/runs/36471162273), job `109093469571`, executed the reviewed script at `f61ef0503d88e29bc822b5ba0420f8dbe6ddb4cd` at 19:17–19:18 UTC and ended in failure.
 
-The isolated preparation workflow [36471870199](https://github.com/teslaeco/WORLDIFACT/actions/runs/36471870199), job `109095860894`, passed application verification and Worker dry-run before committing the exact four UI edits as `61a02a137a455d74221a6c6ba45f6d96b89b9c3f`. Final exact-head PR verification and production publication remain pending.
+The permanent Git ref `worldifact-model-check-20260928-2100-v1` claimed this approval before provider work. It must not be deleted, reset or renamed to repeat the test.
 
-## Release decision
+### SOL
 
-GO for the tested model-selector, contrast, truthful preview/export and timeout-message corrections after exact-head CI. NO-GO for new Pro/Studio sales: the requested live test exposed an actual Astra generation failure. `ENABLE_ASTRA_PLANS=false` is preserved; existing Creator/top-up payment settings and all customer balances are unchanged. Activating sales now would charge customers for a workflow that this test did not complete.
+The test reported `TEST_FAILED_NO_RETRY` without a confirmed export. Its initial script persisted the provider result only after export; the report therefore cannot establish a successful live SOL deliverable or exact token cost. A subsequent deterministic no-API export diagnostic reproduced `document is not defined` in Node's browser-dependent glTF image export. This is a test-environment limitation, not proof that the browser SOL service failed. No second SOL provider request was started.
 
-Next engineering work is to tune Astra output/reasoning allocation inside the existing USD 1.75 ceiling, preserving the persistent budget and previous fixes; add an offline end-to-end export test with proper texture support; and persist successful provider evidence before export in any future approved test. A new paid attempt needs its own explicit approval. No background work or repeat test is scheduled here.
+### ASTRA
 
-## Preserved prior evidence
+Exactly one existing Oracle job was submitted: `ac718eb5-2c54-47b1-ae67-722ad296ff10`. It transitioned from queued to failed. A later GET-only read of that same job in [run 36471870199](https://github.com/teslaeco/WORLDIFACT/actions/runs/36471870199), job `109095860631`, confirmed:
 
-The already installed Oracle guard and live Stripe product/price IDs remain documented in [the preceding verified release](history/CONTEST_STATUS_before_APPROVED_TEST_20260928.md). The guard's installation is not the current blocker; completion of a real model within the selected output budget is. Earlier contribution-margin projections remain assumptions, not guaranteed company net profit.
+`Codex: stream disconnected before completion: Incomplete response returned, reason: max_output_tokens`
+
+No replacement job, increased price ceiling or automatic retry was performed. The guard was already installed and verified; the failure concerns completing the real model workflow within the current output allocation, not missing Stripe products.
+
+The evidence artifact is `worldifact-approved-model-test-evidence`, artifact ID `10991846065`; it contains the failed-test report, not finished models. Actual billed USD is UNKNOWN. USD 2.10 is the approved combined maximum reservation, not an invoice measurement.
+
+These were backend/provider tests, not a paid customer checkout or physical Android session. SOL used the production handler with an isolated owner quota; ASTRA used the authenticated existing Oracle pipeline. They did not debit the user's displayed 900 customer points or charge a customer card.
+
+## Payment state and release decision
+
+Existing Creator USD 29.99/month and the USD 29.99 one-time 1,500-credit top-up remain configured; no existing subscriber was repriced. Real Pro USD 99.99 and Studio USD 149.99 price IDs remain connected in Worker configuration, but `ENABLE_ASTRA_PLANS=false` is unchanged. Pro/Studio purchasing is NOT enabled after the failed generation test. The UI now explains that live generation/export validation is pending instead of incorrectly saying the Oracle guard has not been installed.
+
+The existing Stripe portal is for cancellation/payment details. This release does not implement a chargeable prorated upgrade or an individual cash-priced Astra pass. A top-up alone still does not unlock Astra. No new customer subscription or settlement was made here.
+
+GO: tested and deployed UI corrections. NO-GO: new Astra sales and paid promotion until a usable model/export is verified. Full failure and correction requirements are tracked in [issue #140](https://github.com/teslaeco/WORLDIFACT/issues/140).
+
+## Remaining work
+
+Review the actual Astra reasoning/output allocation and per-job reservation behavior without removing the USD 1.75 cap or resetting uncertain spent funds. Reproduce the full contract/build/review/finish progression offline; correct headless texture export and persist provider evidence before export in future test tooling. A further paid attempt requires separate explicit approval. No repeat test or background job has been scheduled.
+
+The preceding installed-Oracle/Stripe evidence remains unchanged in [the prior verified ledger](history/CONTEST_STATUS_before_APPROVED_TEST_20260928.md). Earlier contribution margins are assumptions, not guaranteed net profit after hosting, taxes, refunds and unrelated API use. This final update is documentation only and does not change the completed deployment or billing flags.
