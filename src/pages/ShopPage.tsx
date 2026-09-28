@@ -35,13 +35,6 @@ function download(blob: Blob, name: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 type Preview = StudioPreviewIdentity & { blob: Blob; url: string; warning: string }
-async function checkAstraReady(fetcher: typeof fetch = fetch) {
-  const response = await fetcher('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
-  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return false
-  const value = await response.json() as { generationReady?: unknown }
-  return value.generationReady === true
-}
-
 /** Draft inputs are separate from the immutable submitted job and its result. */
 export default function ShopPage() {
   const coordinator = useRef<StudioCoordinator | null>(null)
@@ -75,9 +68,8 @@ export default function ShopPage() {
   const [demoPrompt, setDemoPrompt] = useState('')
   const [fastPrompt, setFastPrompt] = useState('')
   const [fastResult, setFastResult] = useState<GenerationResult | null>(null)
-  const [astraReady, setAstraReady] = useState(false)
   const fast = profile === FAST_DRAFT_PROFILE
-  const fastAvailable = astraReady
+  const fastAvailable = status?.solReady === true && status?.fastBudgetReady === true
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
 
   const clearPreview = () => {
@@ -121,13 +113,10 @@ export default function ShopPage() {
     const flags = operations.current
     if (flags.status) return
     flags.status = true; setChecking(true)
-    const [studioCheck, astraCheck] = await Promise.allSettled([checkStudio(fetch, owner), checkAstraReady(fetch)])
+    const studioCheck = await Promise.allSettled([checkStudio(fetch, owner)]).then(results => results[0])
     if (mounted.current) {
-      if (studioCheck.status === 'fulfilled') applyStatus(studioCheck.value)
-      else setStatus(null)
-      setAstraReady(astraCheck.status === 'fulfilled' && astraCheck.value)
-      if (studioCheck.status === 'fulfilled' || (astraCheck.status === 'fulfilled' && astraCheck.value)) setError('')
-      else setError('Generation services are temporarily unavailable. Your draft is preserved.')
+      if (studioCheck.status === 'fulfilled') { applyStatus(studioCheck.value); setError('') }
+      else { setStatus(null); setError('Generation services are temporarily unavailable. Your draft is preserved.') }
     }
     flags.status = false
     if (mounted.current) setChecking(false)
@@ -397,9 +386,9 @@ export default function ShopPage() {
       </div>
       <div className="native-shop-form">
         <span className="eyebrow">CREATE YOUR PRODUCT</span><h1>Describe it.<br />See it in 3D.</h1>
-        <p>Describe your object and optionally add up to three reference images. The account plan includes 2 free FAST generations per 24 hours and 1 free SLOW generation per day.</p>
+        <p>Describe your object and optionally add up to three reference images. Free accounts can use up to 2 Sol FAST drafts per rolling 24 hours when funded capacity and the verified Sol worker are available. Astra requires Pro or Studio.</p>
         {status && !status.accountRequired && <small>Account limits are awaiting server activation. The existing experimental generation window remains in effect.</small>}
-        <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'You can describe your next model while the current preview stays unchanged.' : 'You can prepare the next idea while the current model is being completed.' : 'Free FAST includes downloads. SLOW downloads require an active subscription.'}</p>
+        <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'You can describe your next model while the current preview stays unchanged.' : 'You can prepare the next idea while the current model is being completed.' : 'Free Sol FAST includes downloads. Astra generation requires Pro or Studio and costs 250 credits.'}</p>
         <button type="button" data-testid="clear-studio-draft" disabled={busy || photoBusy} onClick={clearDraft}>Clear description</button>
         <button type="button" className="shop-internal-only" hidden disabled={busy || photoBusy} onClick={clearDraft}>Clear next-model draft</button>
         <form onSubmit={generate} aria-describedby="studio-draft-help">
@@ -412,10 +401,10 @@ export default function ShopPage() {
               </button>
               <button type="button" className="shop-generation-mode" aria-pressed={fast} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'} onClick={() => { setProfile(FAST_DRAFT_PROFILE); setTextureLimit(2048) }}>
                 <strong>FAST · DRAFT</strong>
-                <span>GPT-6 Astra procedural draft · text-only · usually seconds</span>
+                <span>GPT-6 Sol procedural draft · text-only · usually seconds</span>
               </button>
             </div>
-            <small>{!fastAvailable ? 'FAST is waiting for the public GPT-6 Astra LIVE service. SLOW · QUALITY can still use the Oracle/Blender workflow when it is ready.' : photos.length ? 'FAST is text-only in this version. Your reference images are kept for SLOW · QUALITY.' : purpose === 'terrain' ? 'FAST does not support terrain in this Shop revision. Use SLOW · QUALITY.' : fast && prompt.length > 2000 ? 'Shorten FAST text to 2000 characters or switch to SLOW · QUALITY.' : fast ? 'FAST sends one server-side GPT-6 Astra request and builds a lightweight procedural 3D draft from the validated result. Use SLOW · QUALITY for detailed Oracle/Blender output.' : 'SLOW · QUALITY uses the detailed Oracle/Blender workflow. FAST is the lighter Astra procedural draft.'}</small>
+            <small>{!fastAvailable ? 'FAST is waiting for the verified GPT-6 Sol worker. SLOW · QUALITY can still use the Oracle/Blender workflow when it is ready.' : photos.length ? 'FAST is text-only in this version. Your reference images are kept for SLOW · QUALITY.' : purpose === 'terrain' ? 'FAST does not support terrain in this Shop revision. Use SLOW · QUALITY.' : fast && prompt.length > 2000 ? 'Shorten FAST text to 2000 characters or switch to SLOW · QUALITY.' : fast ? 'FAST sends one server-side GPT-6 Sol request and builds a lightweight procedural 3D draft from the validated result. Use SLOW · QUALITY for detailed Oracle/Blender output.' : 'SLOW · QUALITY uses the detailed Oracle/Blender workflow. FAST is the lighter Sol procedural draft.'}</small>
           </fieldset>
           <div className="shop-internal-only" hidden>
             <label htmlFor="studio-mode">Generation mode</label>
@@ -433,9 +422,9 @@ export default function ShopPage() {
           <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy} />
-          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D draft · Astra' : 'Generate SLOW model + materials'}</button><small>Free limits: 2 FAST per rolling 24 hours; 1 SLOW per UTC day. A subscription adds 1,500 credits; credit generations cost 50 each (30 generations). Subscription is required for SLOW downloads. Manufacturing and delivery are separate.</small>
+          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D draft · Sol' : 'Generate SLOW model + materials'}</button><small>Free: up to 2 Sol FAST drafts per rolling 24 hours when funded capacity is available. Creator SOL uses 50 credits per Sol generation. Astra uses 250 credits and requires Pro or Studio. There is no free Astra fallback. Manufacturing and delivery are separate.</small>
         </form>
-        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : activeReady ? fast ? 'FAST Astra generation available' : 'SLOW quality generation available' : 'Generation temporarily unavailable'}</strong><p>{activeReady ? fast ? 'FAST creates a generated Astra specification and lightweight procedural 3D draft.' : 'SLOW creates the detailed model through the Oracle/Blender workflow.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
+        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : activeReady ? fast ? 'FAST Sol generation available' : 'SLOW quality generation available' : 'Generation temporarily unavailable'}</strong><p>{activeReady ? fast ? 'FAST creates a generated Sol specification and lightweight procedural 3D draft.' : 'SLOW creates the detailed model through the Oracle/Blender workflow.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}
         {error && <p className="native-shop-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
