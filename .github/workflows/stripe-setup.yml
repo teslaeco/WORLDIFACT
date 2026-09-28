@@ -1,9 +1,13 @@
 name: Prepare Stripe prices and webhook
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/pricing-v2-activate.json'
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type SETUP to prepare live USD 29.99 offers without accepting payments
+        description: Type SETUP to prepare the approved Creator/Pro/Studio live offers
         required: true
         type: string
 permissions:
@@ -13,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   setup:
-    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'SETUP'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'SETUP')
     environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -48,7 +52,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Prepare live offers and save credentials directly to Cloudflare
+      - name: Prepare approved live price objects and save IDs directly to Cloudflare
         run: node scripts/setup-stripe.ts
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
