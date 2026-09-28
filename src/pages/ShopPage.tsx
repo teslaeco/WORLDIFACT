@@ -35,6 +35,13 @@ function download(blob: Blob, name: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 type Preview = StudioPreviewIdentity & { blob: Blob; url: string; warning: string }
+async function checkSolReady(fetcher: typeof fetch = fetch) {
+  const response = await fetcher('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
+  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return false
+  const value = await response.json() as { generationReady?: unknown; model?: unknown }
+  return value.generationReady === true && value.model === 'gpt-6-sol'
+}
+
 /** Draft inputs are separate from the immutable submitted job and its result. */
 export default function ShopPage() {
   const coordinator = useRef<StudioCoordinator | null>(null)
@@ -68,8 +75,9 @@ export default function ShopPage() {
   const [demoPrompt, setDemoPrompt] = useState('')
   const [fastPrompt, setFastPrompt] = useState('')
   const [fastResult, setFastResult] = useState<GenerationResult | null>(null)
+  const [solReady, setSolReady] = useState(false)
   const fast = profile === FAST_DRAFT_PROFILE
-  const fastAvailable = status?.solReady === true && status?.fastBudgetReady === true
+  const fastAvailable = solReady
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
 
   const clearPreview = () => {
@@ -113,10 +121,13 @@ export default function ShopPage() {
     const flags = operations.current
     if (flags.status) return
     flags.status = true; setChecking(true)
-    const studioCheck = await Promise.allSettled([checkStudio(fetch, owner)]).then(results => results[0])
+    const [studioCheck, solCheck] = await Promise.allSettled([checkStudio(fetch, owner), checkSolReady(fetch)])
     if (mounted.current) {
-      if (studioCheck.status === 'fulfilled') { applyStatus(studioCheck.value); setError('') }
-      else { setStatus(null); setError('Generation services are temporarily unavailable. Your draft is preserved.') }
+      if (studioCheck.status === 'fulfilled') applyStatus(studioCheck.value)
+      else setStatus(null)
+      setSolReady(solCheck.status === 'fulfilled' && solCheck.value)
+      if (studioCheck.status === 'fulfilled' || (solCheck.status === 'fulfilled' && solCheck.value)) setError('')
+      else setError('Generation services are temporarily unavailable. Your draft is preserved.')
     }
     flags.status = false
     if (mounted.current) setChecking(false)
@@ -140,12 +151,12 @@ export default function ShopPage() {
       setError(e instanceof Error ? e.message : 'Recovery storage is unavailable. Generation is paused.')
     }
     flags.status = true; setChecking(true)
-    Promise.allSettled([checkStudio(), checkAstraReady()]).then(([studioCheck, astraCheck]) => {
+    Promise.allSettled([checkStudio(), checkSolReady()]).then(([studioCheck, solCheck]) => {
       if (closed) return
       if (studioCheck.status === 'fulfilled') applyStatus(studioCheck.value)
       else setStatus(null)
-      setAstraReady(astraCheck.status === 'fulfilled' && astraCheck.value)
-      if (studioCheck.status === 'rejected' && !(astraCheck.status === 'fulfilled' && astraCheck.value))
+      setSolReady(solCheck.status === 'fulfilled' && solCheck.value)
+      if (studioCheck.status === 'rejected' && !(solCheck.status === 'fulfilled' && solCheck.value))
         setError('The generation services are unavailable. You can still prepare your description and use the local DEMO preview.')
     }).finally(() => { if (!closed) { flags.status = false; setChecking(false) } })
     listStudioModels().then(value => { if (!closed) setArchive(value) }).catch(() => {})
@@ -244,16 +255,16 @@ export default function ShopPage() {
         })
         const body = await response.json()
         if (!response.ok) {
-          if ([429, 503].includes(response.status)) setAstraReady(false)
-          throw new Error(body?.error || 'FAST Astra draft could not be generated.')
+          if ([429, 503].includes(response.status)) setSolReady(false)
+          throw new Error(body?.error || 'FAST Sol draft could not be generated.')
         }
         const result = validateGenerationResult(body)
-        if (result.mode !== 'LIVE' || result.provenance !== 'GENERATED') throw new Error('FAST did not return verified LIVE Astra evidence.')
+        if (result.mode !== 'LIVE' || result.provenance !== 'GENERATED') throw new Error('FAST did not return verified LIVE Sol evidence.')
         clearPreview()
         if (mounted.current) {
           setFastPrompt(prompt.trim())
           setFastResult(result)
-          setNotice('FAST · LIVE Astra specification ready. The visible 3D is a lightweight procedural draft, not an Oracle production mesh; use SLOW · QUALITY for the detailed model workflow.')
+          setNotice('FAST · LIVE Sol specification ready. The visible 3D is a lightweight procedural draft, not an Oracle production mesh; use SLOW · QUALITY for the detailed model workflow.')
         }
       } catch (e) {
         if (mounted.current) setError(e instanceof Error && e.name === 'AbortError' ? 'FAST generation timed out. Your previous preview is unchanged.' : e instanceof Error ? e.message : 'FAST generation failed.')
@@ -295,7 +306,7 @@ export default function ShopPage() {
     setFastPrompt('')
     setDemoPrompt(value)
     setError('')
-    setNotice('DEMO · MOCK local procedural preview. No GPT-6 Astra, Oracle or paid generation request was made.')
+    setNotice('DEMO · MOCK local procedural preview. No OpenAI, Oracle or paid generation request was made.')
   }
   const addPhotos = async (files: FileList | null) => {
     const flags = operations.current
