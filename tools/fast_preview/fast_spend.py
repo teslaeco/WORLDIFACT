@@ -1,11 +1,13 @@
-"""FAST SOL monetary guard. ASTRA is never an automatic fallback.
+"""FAST-only monetary guard. STANDARD remains unchanged.
 
 Reserve conservative worst-case API cost BEFORE the generation request. Never
-refund a reservation on disconnect/restart. One SOL job is capped at USD0.35.
-Rates rechecked 2026-09-28 against the official GPT-6 Sol model page.
-The reservation deliberately rounds above Sol long-context + regional pricing:
-USD6/M input-equivalent and USD17/M output. Requests that cannot fit inside the
-cap are rejected before the provider call. Force standard service tier.
+refund a reservation on disconnect/restart. One job is capped at USD4, inside
+the owner's USD5 API-test approval. Rates checked 2026-09-17 against:
+https://developers.openai.com/api/docs/models/gpt-6-astra
+https://developers.openai.com/api/docs/guides/token-counting
+Use the official input-token counter on the same input/tools, then reserve
+long-context cache-write input ($25/M) and output ($75/M). Force standard
+service tier. Local tools only; no paid hosted tools, images or hidden history.
 """
 import fcntl
 import json
@@ -15,9 +17,9 @@ import tempfile
 import time
 import urllib.request
 
-REVISION = 'sol-usd035-v2'
-CEILING_MICRO_USD = 350_000
-VALID_UNTIL = 1793155200  # 2026-10-28 00:00:00 UTC: recheck prices before extending.
+REVISION = 'fast-usd4-v1'
+CEILING_MICRO_USD = 4_000_000
+VALID_UNTIL = 1789714800  # 2026-09-18 07:00:00 UTC: recheck prices afterwards.
 
 class SpendError(ValueError):
     pass
@@ -43,7 +45,7 @@ def check_tools(tools):
             raise SpendError('Hosted or remote tools are outside this test budget.')
 
 def count_payload(payload):
-    if payload.get('model') != 'gpt-6-sol': raise SpendError('FAST must use GPT-6 Sol; ASTRA fallback is forbidden.')
+    if payload.get('model') != 'gpt-6-astra': raise SpendError('Unreviewed model price.')
     if any(payload.get(key) is not None for key in ('previous_response_id', 'conversation', 'prompt')):
         raise SpendError('Hidden history is not allowed in the bounded test.')
     if payload.get('background'): raise SpendError('Background provider work is not enabled.')
@@ -75,9 +77,9 @@ def reserve(folder, counted_input, max_output, now=None):
     if (time.time() if now is None else now) >= VALID_UNTIL: raise SpendError('Test price review expired.')
     if type(counted_input) is not int or not 0 <= counted_input <= 1_050_000 or type(max_output) is not int or not 1 <= max_output <= 8192:
         raise SpendError('Unbounded token request.')
-    # 2,048 extra tokens reserve framing/protocol headroom. Integer micro-USD
-    # rates round above current Sol long-context + regional pricing.
-    worst = (counted_input + 2048) * 6 + max_output * 17
+    # 2,048 extra tokens reserve framing/protocol headroom. Use higher long
+    # context/cache-write prices even for uncached short requests; no refunds.
+    worst = (counted_input + 2048) * 25 + max_output * 75
     folder = Path(folder)
     lockpath, path = folder / 'fast-spend.lock', folder / 'fast-spend.json'
     for p in (folder, lockpath, path):
