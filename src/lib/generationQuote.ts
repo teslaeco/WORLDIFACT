@@ -15,7 +15,7 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
   if (model === 'astra') {
     const plans = object(object(billing).plans), pro = object(plans.pro), studio = object(plans.studio)
     if (pro.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' || studio.blockedReason === 'ASTRA_COST_GUARD_REQUIRED')
-      return { state: 'blocked', points, after: null, message: 'ASTRA commercial activation is pending the verified Oracle cost guard. No automatic SOL substitution.' }
+      return { state: 'blocked', points, after: null, message: 'ASTRA purchasing is paused until live generation and export validation passes. No payment or automatic SOL substitution.' }
     if (!subscription.active || !['pro', 'studio'].includes(String(subscription.plan)))
       return { state: 'blocked', points, after: null, message: 'ASTRA currently requires an active Pro or Studio plan. A one-time top-up alone does not unlock ASTRA.' }
     if (object(plans[String(subscription.plan)]).checkoutReady !== true)
