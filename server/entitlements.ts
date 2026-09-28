@@ -49,6 +49,28 @@ async function balance(storage: EntitlementStorage) {
   if (!validInteger(value)) throw new Error('Invalid balance')
   return value
 }
+
+// Separate from customer credits: a failed job may refund credits, never API spend.
+// Initialize once from remaining legacy credits; all later funding is in the same
+// transaction as a verified grant. These cents reserve worst-case provider cost,
+// not measured invoices. No restart, date rollover or credit refund replenishes them.
+const PROVIDER_BUDGET = 'provider-budget-cents:v1'
+async function providerBudget(storage: EntitlementStorage, legacyCredits: number) {
+  const stored = await storage.get<number>(PROVIDER_BUDGET)
+  if (stored !== undefined) {
+    if (!Number.isSafeInteger(stored)) throw new Error('Invalid provider budget')
+    return stored
+  }
+  const initial = Math.floor(Math.max(0, legacyCredits) * 7 / 10)
+  if (!Number.isSafeInteger(initial)) throw new Error('Invalid provider budget')
+  await storage.put(PROVIDER_BUDGET, initial)
+  return initial
+}
+async function changeProviderBudget(storage: EntitlementStorage, legacyCredits: number, deltaCents: number) {
+  const next = await providerBudget(storage, legacyCredits) + deltaCents
+  if (!Number.isSafeInteger(next)) throw new Error('Invalid provider budget')
+  await storage.put(PROVIDER_BUDGET, next)
+}
 async function usage(storage: EntitlementStorage, now: number) {
   const value = await storage.get<{ fast: Usage[]; slow: Usage[] }>('usage') ?? { fast: [], slow: [] }
   return {
@@ -103,6 +125,12 @@ export class AccountEntitlements {
           const free = await usage(storage, now)
           if (!paid && profile === 'slow') return { allowed: false, reason: 'FREE_SOL_ONLY' }
           if (!paid && free.fast.length >= 2) return { allowed: false, reason: 'FAST_DAILY_LIMIT' }
+          if (paid) {
+            const remaining = await providerBudget(storage, credits)
+            const ceiling = MODEL_ECONOMICS[model].maxProviderCents
+            if (remaining < ceiling) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
+            await storage.put(PROVIDER_BUDGET, remaining - ceiling)
+          }
           const job: Job = { profile, at: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', state: 'reserved' }
           if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
@@ -152,8 +180,10 @@ export class AccountEntitlements {
           const prior = await storage.get<Grant>(`grant:${id}`)
           // A reversal received before its original grant is a tombstone, never a new credit grant.
           if (prior) return { granted: false, repeated: true, revoked: prior.revoked > 0 }
-          const next = await balance(storage) + credits
+          const previousBalance = await balance(storage)
+          const next = previousBalance + credits
           if (!Number.isSafeInteger(next)) throw new Error('Invalid balance')
+          await changeProviderBudget(storage, previousBalance, Math.floor(credits * 7 / 10))
           await storage.put('balance', next)
           await storage.put(`grant:${id}`, { credits, revoked: 0, ...(typeof input.subscriptionId === 'string' ? { subscriptionId: input.subscriptionId } : {}) })
           return { granted: true, repeated: false, revoked: false }
@@ -168,7 +198,9 @@ export class AccountEntitlements {
           if (!grant) { await storage.put(`grant:${id}`, { credits: 0, revoked: credits }); return { revoked: true, repeated: false } }
           const target = Math.min(grant.credits, credits), difference = Math.max(0, target - grant.revoked)
           if (!difference) return { revoked: false, repeated: true }
-          await storage.put('balance', await balance(storage) - difference)
+          const previousBalance = await balance(storage)
+          await changeProviderBudget(storage, previousBalance, -Math.ceil(difference * 7 / 10))
+          await storage.put('balance', previousBalance - difference)
           await storage.put(`grant:${id}`, { ...grant, revoked: target })
           if (grant.subscriptionId) {
             const subscription = await storage.get<Subscription>('subscription')
