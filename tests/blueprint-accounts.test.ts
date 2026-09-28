@@ -43,7 +43,7 @@ function fixture() {
     assert.equal(path.href, 'https://api.openai.com/v1/responses')
     assert.equal(init?.method, 'POST'); providerCalls++
     if (fail) return Response.json({ error: 'Fixture failure only' }, { status: 500 })
-    return Response.json({ id: 'resp_test_fixture', status: 'completed', model: 'gpt-6-astra', output: [{ content: [{ type: 'output_text', text: JSON.stringify(demoBlueprint('A silver research tower')) }] }] })
+    return Response.json({ id: 'resp_test_fixture', status: 'completed', model: 'gpt-6-sol', output: [{ content: [{ type: 'output_text', text: JSON.stringify(demoBlueprint('A silver research tower')) }] }] })
   }) as typeof fetch
   const call = (requestId: string = crypto.randomUUID(), user: 'alice' | 'bob' | null = 'alice', input = body) => handle(new Request(origin + '/api/blueprint', {
     method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': requestId, ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) }, body: JSON.stringify(input),
@@ -92,6 +92,8 @@ test('a repeated Blueprint request UUID cannot duplicate a provider request or a
 
 test('Blueprint namespaces client IDs so another user cannot preclaim a supplied Studio receipt UUID', async () => {
   const f = fixture(), studioId = crypto.randomUUID()
+  await entitlementCall(f.env, alice, '/grant', { id: 'in_pro_fixture', credits: 4500, subscriptionId: 'sub_pro_fixture' })
+  await entitlementCall(f.env, alice, '/subscription', { id: 'sub_pro_fixture', until: Date.now() + 86_400_000, active: true, revision: 1, plan: 'pro', grantId: 'in_pro_fixture' })
   await reserveUserGeneration(f.env, alice, studioId, 'slow')
   await settleUserGeneration(f.env, alice, studioId, 'completed')
   assert.equal((await userJobAccess(f.env, alice, studioId)).owned, true)
