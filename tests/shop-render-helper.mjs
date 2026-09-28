@@ -70,6 +70,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions
       if (id === '../components/GenerationCostNotice') return costNotice
+      if (id === '../components/LiveSolPreview') return { __esModule: true, default: ({ prompt }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': 'live-fast' }, 'LIVE Sol blueprint-derived GLB') }
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
       if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt, mode }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': mode || 'demo' }, mode === 'live-fast' ? 'LIVE Sol procedural 3D draft' : 'DEMO local 3D preview') }
       if (id === '../components/ProjectAttachmentPicker') return { __esModule: true, default: ({ scope }) => React.createElement('section', { 'data-project-attachments': scope }, 'LOCAL REFERENCE project files') }

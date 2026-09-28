@@ -36,7 +36,7 @@ function AccountStatusContent({ signedIn, loading }: { signedIn: boolean; loadin
         const next = await fetchAccountBalance(controller.signal)
         if (!closed) { setBalance(next); setError('') }
       } catch (e) {
-        if (!closed) { setBalance(null); setError(e instanceof Error ? e.message : 'Your credits are temporarily unavailable.') }
+        if (!closed) { setBalance(null); setError(e instanceof Error && ['AbortError', 'TimeoutError'].includes(e.name) ? 'Credit refresh timed out. Your balance has not been changed. Tap Refresh.' : 'Your credits are temporarily unavailable. Tap Refresh.') }
       } finally { clearTimeout(timeout); running = false; schedule() }
     }
     const onVisible = () => { if (document.visibilityState === 'visible') void refresh() }
