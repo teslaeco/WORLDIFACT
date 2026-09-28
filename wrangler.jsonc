@@ -11,6 +11,7 @@
   },
   "vars": {
     "OPENAI_MODEL": "gpt-6-astra",
+    "OPENAI_FAST_MODEL": "gpt-6-sol",
     "ENABLE_PAID_GENERATION": "false",
     "PUBLIC_PILOT": "false",
     "ENABLE_ORACLE_JOBS": "false",
