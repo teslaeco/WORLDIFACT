@@ -30,7 +30,7 @@ function fail(stage: Stage, reason: string): never { throw new StripeSetupError(
 const object = (value: unknown): Json => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Json : {};
 const validId = (value: unknown, prefix: string): value is string => typeof value === 'string' && new RegExp(`^${prefix}_[A-Za-z0-9]{1,180}$`).test(value);
 const validSecret = (value: unknown): value is string => typeof value === 'string' && /^whsec_[A-Za-z0-9_]{16,256}$/.test(value);
-const metadata = (account: string, offer: Offer) => ({ worldifact_setup: setupVersion, worldifact_account: account, worldifact_kind: offer.kind, worldifact_credits: String(offer.credits), ...(offer.plan ? { worldifact_plan: offer.plan } : {}) });
+const metadata = (account: string, offer: Offer) => ({ worldifact_setup: setupVersion, worldifact_account: account, worldifact_kind: offer.kind, worldifact_credits: String(offer.credits), ...(offer.plan && offer.plan !== 'creator' ? { worldifact_plan: offer.plan } : {}) });
 const matchesMetadata = (value: unknown, expected: Record<string, string>) => Object.entries(expected).every(([key, content]) => object(value)[key] === content);
 const addMetadata = (params: URLSearchParams, values: Record<string, string>) => { for (const [key, value] of Object.entries(values)) params.set(`metadata[${key}]`, value); };
 
