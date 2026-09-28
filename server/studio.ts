@@ -120,6 +120,7 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
     promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
 }
 async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch, input: StudioInput, userId?: string) {
+  if (input.generationProfile === FAST_DRAFT_PROFILE) throw new StudioError('FAST uses the separate GPT-6 Sol blueprint path. The Astra Oracle worker will not accept FAST jobs.', 409)
   const pool = await allowance(env)
   const trial = pool.fastOnly && env.ENABLE_APPROVED_FAST_TEST === 'true'
   if (!trial && (env.ENABLE_STUDIO_JOBS !== 'true' || !budgetSettings(env))) throw new StudioError('Model generation is disabled or its allowance has expired.', 503)

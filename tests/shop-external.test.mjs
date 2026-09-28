@@ -43,7 +43,7 @@ test('unavailable generation is customer-friendly and does not expose quota diag
   assert.match(html, /Generation temporarily unavailable/)
   assert.match(html, /Preview DEMO · no API cost/)
   assert.match(html, /local DEMO preview/)
-  assert.match(html, /Free FAST includes downloads/)
+  assert.match(html, /Free Sol FAST includes downloads/)
   assert.match(html, /Experimental beta/)
   assert.doesNotMatch(html, /blocked by the exhausted pilot quota/)
 })
@@ -72,7 +72,7 @@ test('mobile layout keeps creation controls first and internal archive out of si
   assert.match(html, /SLOW model downloads require an active subscription/)
 })
 
-test('restored SLOW jobs recover automatically while customer FAST uses the separate Astra draft path', async () => {
+test('restored SLOW jobs recover automatically while customer FAST uses the separate Sol draft path', async () => {
   const source = await readFile(new URL('../src/pages/ShopPage.tsx', import.meta.url), 'utf8')
   const preview = await readFile(new URL('../src/components/DemoShopPreview.tsx', import.meta.url), 'utf8')
   assert.match(source, /Previous model did not finish/)

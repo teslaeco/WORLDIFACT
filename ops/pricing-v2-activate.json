@@ -1,0 +1,29 @@
+{
+  "pricingRevision": "sol-astra-v2",
+  "ownerApproval": true,
+  "approvedAt": "2026-09-28",
+  "creator": {
+    "usdMonthly": 29.99,
+    "credits": 1500,
+    "model": "gpt-6-sol"
+  },
+  "pro": {
+    "usdMonthly": 99.99,
+    "credits": 4500,
+    "models": [
+      "gpt-6-sol",
+      "gpt-6-astra"
+    ],
+    "checkoutGate": "ENABLE_ASTRA_PLANS"
+  },
+  "studio": {
+    "usdMonthly": 149.99,
+    "credits": 7500,
+    "models": [
+      "gpt-6-sol",
+      "gpt-6-astra"
+    ],
+    "checkoutGate": "ENABLE_ASTRA_PLANS"
+  },
+  "note": "Creating Stripe price objects does not enable Astra checkout until the production Astra spend guard is verified."
+}

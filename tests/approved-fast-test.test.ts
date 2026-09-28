@@ -76,17 +76,13 @@ test('unexpected or missing historical counter cannot receive a fresh budget', a
   const f=fixture();f.values.clear();f.cap();assert.equal((await f.activate()).status,409)
 })
 
-test('approved mode requires FAST and an existing signed receipt; only one upstream job starts', async t => {
+test('legacy approved Oracle FAST cannot bypass the new Sol/Astra split', async t => {
   t.mock.method(Date, 'now', () => Date.parse('2026-09-17T16:00:00Z'))
   const f=fixture();f.cap();await f.activate()
-  assert.equal((await f.call('/api/studio/prepare',fast)).status,401)
   const headers={'X-WORLDIFACT-Previous-Job':await oldReceipt(f.env)}
+  assert.equal((await f.call('/api/studio/prepare',fast)).status,409)
+  assert.equal((await f.call('/api/studio/prepare',fast,headers)).status,409)
   assert.equal((await f.call('/api/studio/prepare',{...fast,generationProfile:'standard'},headers)).status,409)
-  const prepared=await (await f.call('/api/studio/prepare',fast,headers)).json() as {ticket:string}
-  const submitHeaders={...headers,'X-WORLDIFACT-Job':prepared.ticket}
-  assert.equal((await f.call('/api/studio/jobs',fast,submitHeaders)).status,202)
-  assert.equal((await f.call('/api/studio/jobs',fast,submitHeaders)).status,202)
-  assert.equal(f.posts(),1);assert.equal(f.values.get('reserved-attempts'),7)
-  const status=await (await f.call('/api/studio/status')).json() as {reason:string;ready:boolean}
-  assert.equal(status.ready,false);assert.equal(status.reason,'ALLOWANCE_EXHAUSTED')
+  assert.equal(f.posts(),0)
+  assert.equal(f.values.get('reserved-attempts'),6)
 })

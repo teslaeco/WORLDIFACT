@@ -21,8 +21,8 @@ function memory() {
 }
 function fixture() {
   let now = Date.now(), providerCalls = 0, authCalls = 0, fail = false
-  const env: Env = { OPENAI_API_KEY: 'test-only-never-sent-to-real-provider', OPENAI_MODEL: 'gpt-6-astra', ENABLE_PAID_GENERATION: 'true',
-    PUBLIC_PILOT: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', GENERATION_LIMITER: { async limit() { return { success: true } } } }
+  const env: Env = { OPENAI_API_KEY: 'test-only-never-sent-to-real-provider', OPENAI_MODEL: 'gpt-6-astra', OPENAI_FAST_MODEL: 'gpt-6-sol', ENABLE_PAID_GENERATION: 'true',
+    PUBLIC_PILOT: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', FREE_SOL_SEED_JOBS: '100', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', GENERATION_LIMITER: { async limit() { return { success: true } } } }
   const global = memory(), budget = new GenerationBudget({ storage: global.storage as BudgetStorage }, env)
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const objects = new Map<string, AccountEntitlements>()
@@ -40,10 +40,11 @@ function fixture() {
       if (token === 'Bearer bob-token') return Response.json({ id: bob, email: 'bob@example.test' })
       return Response.json({}, { status: 401 })
     }
+    if (path.href === 'https://api.openai.com/v1/responses/input_tokens') return Response.json({ object: 'response.input_tokens', input_tokens: 1000 })
     assert.equal(path.href, 'https://api.openai.com/v1/responses')
     assert.equal(init?.method, 'POST'); providerCalls++
     if (fail) return Response.json({ error: 'Fixture failure only' }, { status: 500 })
-    return Response.json({ id: 'resp_test_fixture', status: 'completed', model: 'gpt-6-astra', output: [{ content: [{ type: 'output_text', text: JSON.stringify(demoBlueprint('A silver research tower')) }] }] })
+    return Response.json({ id: 'resp_test_fixture', status: 'completed', model: 'gpt-6-sol', output: [{ content: [{ type: 'output_text', text: JSON.stringify(demoBlueprint('A silver research tower')) }] }] })
   }) as typeof fetch
   const call = (requestId: string = crypto.randomUUID(), user: 'alice' | 'bob' | null = 'alice', input = body) => handle(new Request(origin + '/api/blueprint', {
     method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': requestId, ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) }, body: JSON.stringify(input),
@@ -92,6 +93,8 @@ test('a repeated Blueprint request UUID cannot duplicate a provider request or a
 
 test('Blueprint namespaces client IDs so another user cannot preclaim a supplied Studio receipt UUID', async () => {
   const f = fixture(), studioId = crypto.randomUUID()
+  await entitlementCall(f.env, alice, '/grant', { id: 'in_pro_fixture', credits: 4500, subscriptionId: 'sub_ProFixture' })
+  await entitlementCall(f.env, alice, '/subscription', { id: 'sub_ProFixture', until: Date.now() + 86_400_000, active: true, revision: 1, plan: 'pro', grantId: 'in_pro_fixture' })
   await reserveUserGeneration(f.env, alice, studioId, 'slow')
   await settleUserGeneration(f.env, alice, studioId, 'completed')
   assert.equal((await userJobAccess(f.env, alice, studioId)).owned, true)

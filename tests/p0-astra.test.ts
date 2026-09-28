@@ -7,6 +7,7 @@ const ACCESS = 'p0-preview-access-code-with-more-than-32-characters'
 const liveEnv = {
   OPENAI_API_KEY: 'test-key-not-real',
   OPENAI_MODEL: 'gpt-6-astra',
+  OPENAI_FAST_MODEL: 'gpt-6-sol',
   ENABLE_PAID_GENERATION: 'true',
   GENERATION_ACCESS_TOKEN: ACCESS,
   GENERATION_REQUEST_LIMIT: '1',
@@ -21,11 +22,13 @@ const liveEnv = {
 }
 const combinedProvider = (blueprint = demoBlueprint('moon workshop')) => {
   const assetSpec = assetSpecForBlueprint(blueprint)
-  return (async (_url: unknown, _init: RequestInit | undefined) => new Response(JSON.stringify({
-    status: 'completed', model: 'gpt-6-astra', id: 'resp_p0_stub',
-    usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 },
-    output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint, assetSpec }) }] }],
-  }))) as typeof fetch
+  return (async (url: unknown, _init: RequestInit | undefined) => String(url).endsWith('/v1/responses/input_tokens')
+    ? Response.json({ object: 'response.input_tokens', input_tokens: 1000 })
+    : new Response(JSON.stringify({
+      status: 'completed', model: 'gpt-6-sol', id: 'resp_p0_stub',
+      usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 },
+      output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint, assetSpec }) }] }],
+    }))) as typeof fetch
 }
 
 test('AssetSpec keeps GAME separate from validation-required MAKE', () => {
@@ -37,19 +40,20 @@ test('AssetSpec keeps GAME separate from validation-required MAKE', () => {
   assert.throws(() => validateAssetSpec({ ...spec, make: { ...spec.make, validationStatus: 'approved' } }))
 })
 
-test('strict Astra schema requires both WorldBlueprint and AssetSpec', () => {
+test('strict generation schema requires both WorldBlueprint and AssetSpec', () => {
   assert.deepEqual(astraGenerationSchema.required, ['blueprint', 'assetSpec'])
   assert.equal(astraGenerationSchema.additionalProperties, false)
 })
 
-test('simulated LIVE Astra result returns validated blueprint and AssetSpec', async () => {
+test('simulated LIVE Sol FAST result returns validated blueprint and AssetSpec', async () => {
   let sent: any
   const blueprint = demoBlueprint('moon workshop')
   const assetSpec = assetSpecForBlueprint(blueprint)
-  const provider = (async (_url: unknown, init: RequestInit | undefined) => {
+  const provider = (async (url: unknown, init: RequestInit | undefined) => {
+    if (String(url).endsWith('/v1/responses/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 1000 })
     sent = JSON.parse(String(init?.body))
     return new Response(JSON.stringify({
-      status: 'completed', model: 'gpt-6-astra', id: 'resp_p0_stub',
+      status: 'completed', model: 'gpt-6-sol', id: 'resp_p0_stub',
       usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 },
       output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint, assetSpec }) }] }],
     }))
@@ -64,7 +68,7 @@ test('simulated LIVE Astra result returns validated blueprint and AssetSpec', as
   assert.equal(result.mode, 'LIVE')
   assert.equal(result.provenance, 'GENERATED')
   assert.equal(result.assetSpec?.make.validationStatus, 'validation-required')
-  assert.equal(sent.model, 'gpt-6-astra')
+  assert.equal(sent.model, 'gpt-6-sol')
   assert.deepEqual(sent.text.format.schema.required, ['blueprint', 'assetSpec'])
 })
 

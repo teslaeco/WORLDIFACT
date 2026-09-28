@@ -1,3 +1,34 @@
+# WORLDIFACT — profitable Sol/Astra pricing guard, 28 September 2026
+
+**Status: IMPLEMENTED ON PR #136 · CI PENDING · PRODUCTION NOT YET MERGED.**
+
+- Owner approved the pricing change and production rollout.
+- Creator SOL remains USD 29.99/month for 1,500 credits and uses GPT-6 Sol at 50 credits per generation.
+- Pro ASTRA is prepared at USD 99.99/month for 4,500 credits; Studio ASTRA at USD 149.99/month for 7,500 credits. Astra costs 250 credits per generation.
+- Existing USD 29.99 subscribers are not silently repriced.
+- FREE is Sol-only and has no Astra fallback. The free Sol pool is funded from verified revenue and starts with ten jobs backed by the already verified existing subscription payment.
+- The direct Sol path counts exact input tokens before generation and rejects requests above its monetary ceiling before the paid Responses call.
+- Pro/Studio checkout is **BLOCKED** unless `ENABLE_ASTRA_PLANS=true`. Production keeps it false until the Oracle Astra worker has a reviewed hard monetary job guard.
+- Stripe v2 product/price creation is prepared as an idempotent post-merge workflow. Creating those price objects does not activate Astra checkout.
+- Refund/dispute handling revokes the associated credit grant and reduces future free-promo funding.
+- No paid AI generation was executed while implementing or testing this milestone.
+
+---
+
+# WORLDIFACT — SOL / ASTRA profit guard, 28 September 2026
+
+**Status: REVIEW BRANCH ONLY · NO LIVE BILLING OR PRODUCTION CHANGE.**
+
+- Added executable economics for a SOL-first free/Creator path and separately priced ASTRA Pro/Studio access.
+- Proposed paid catalogue: Creator SOL USD 29.99 / 1,500 credits; Pro ASTRA USD 99.99 / 4,500 credits; Studio ASTRA USD 149.99 / 7,500 credits.
+- Proposed model charge: SOL 50 credits with USD 0.35 provider ceiling; ASTRA 250 credits with USD 1.75 provider ceiling. The 5x credit/cost ratio matches the current 5x Standard token-price ratio.
+- Every paid tier reserves 5% payment/FX, 15% infrastructure, 5% free promotional generation and 5% refunds/risk. Executable invariants require at least 30% worst-case operating margin after the provider reserve.
+- Free LIVE SOL is designed to consume only a revenue-funded promotional pool; when that pool is empty, the explicit no-cost DEMO path must be used.
+- Runtime routing, permanent provider-spend reservations, Stripe price creation/migration, Oracle worker changes, merge and production deployment are still **BLOCKED pending implementation/CI and owner GO**.
+- Detailed design: `docs/PROFIT_GUARD_20260928.md`.
+
+---
+
 # WORLDIFACT — user model gallery, 28 September 2026
 
 **Status: LIVE · MERGED · PRODUCTION VERIFIED.**

@@ -4,8 +4,10 @@ import { accountRequest, useAccount, type AccountUser } from '../lib/account'
 import { paymentErrorMessage } from '../lib/paymentError'
 import './CreditsPage.css'
 
-type Balance = { credits: number; generationCost: number; subscriptionGrant: number; subscription: { active: boolean; expiresAt: string | null }; free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }; billingReview: boolean }
-type Billing = { checkoutReady: boolean; topupReady: boolean; cardReady: boolean; googlePay: 'eligible_devices' | 'unavailable'; mode: 'test' | 'live' | null; subscriptionInterval: 'month' | null }
+type PlanId = 'creator' | 'pro' | 'studio'
+type Balance = { credits: number; generationCost: number; generationCosts?: { sol: number; astra: number }; subscriptionGrant: number; subscription: { active: boolean; plan?: PlanId; expiresAt: string | null }; free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }; billingReview: boolean }
+type PlanOffer = { id: PlanId; name: string; amountCents: number; credits: number; allowedModels: readonly string[]; checkoutReady: boolean; blockedReason?: string | null }
+type Billing = { checkoutReady: boolean; topupReady: boolean; cardReady: boolean; googlePay: 'eligible_devices' | 'unavailable'; mode: 'test' | 'live' | null; subscriptionInterval: 'month' | null; generationCosts?: { sol: number; astra: number }; plans?: Record<PlanId, PlanOffer> }
 type PayPal = { ready: boolean; mode: 'sandbox' | 'live' | null }
 type Snapshot = { owner: string | null; balance: Balance | null; billing: Billing | null; paypal: PayPal | null }
 type PaymentAction = 'card' | 'google' | 'paypal' | 'portal' | 'capture'
@@ -36,6 +38,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
   const [notice, setNotice] = useState<PaymentNotice>(null)
   const [understandsPack, setUnderstandsPack] = useState(false)
   const [purchaseKind, setPurchaseKind] = useState<'subscription' | 'topup'>('subscription')
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>('creator')
   const loadVersion = useRef(0), actionVersion = useRef(0), actionLock = useRef(false)
   // Results are scoped to their account, including the first render after signing out.
   const current = snapshot?.owner === owner ? snapshot : null
@@ -67,23 +70,25 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
   const member = balance?.subscription.active === true
   const canBuy = !!user && !!balance && !balance.billingReview && !checking && !loading && !busy
   const canBuyPack = canBuy && (member || understandsPack) && search.get('paypal') !== 'return'
-  const membershipReady = billing?.checkoutReady === true && billing.subscriptionInterval === 'month'
-  const recurring = purchaseKind === 'subscription'
-  const selectedReady = recurring ? membershipReady : billing?.topupReady === true
-  const selectedCanBuy = recurring ? canBuy && !member && search.get('paypal') !== 'return' : canBuyPack
+  const membershipReady = billing?.plans?.[selectedPlan]?.checkoutReady === true && billing.subscriptionInterval === 'month'
   const paypalReturn = search.get('paypal') === 'return'
   const orderId = search.get('token') ?? ''
   const validOrder = /^[A-Z0-9]{10,36}$/.test(orderId)
   const cancelled = search.get('paypal') === 'cancel' || search.get('paypal') === 'cancelled' || search.get('billing') === 'cancelled'
 
-  async function checkout(action: Exclude<PaymentAction, 'capture'>) {
-    if (actionLock.current || !canBuy || (action !== 'portal' && !selectedCanBuy)) return
-    if ((action === 'paypal' && (recurring || !paypal?.ready)) || (['card', 'google'].includes(action) && !selectedReady)) return
+  async function checkout(action: Exclude<PaymentAction, 'capture'>, choice?: { kind?: 'subscription' | 'topup'; plan?: PlanId }) {
+    const checkoutKind = choice?.kind ?? purchaseKind
+    const checkoutPlan = choice?.plan ?? selectedPlan
+    const checkoutRecurring = checkoutKind === 'subscription'
+    const checkoutReady = checkoutRecurring ? billing?.plans?.[checkoutPlan]?.checkoutReady === true : billing?.topupReady === true
+    const checkoutCanBuy = checkoutRecurring ? canBuy && !member && search.get('paypal') !== 'return' : canBuyPack
+    if (actionLock.current || !canBuy || (action !== 'portal' && !checkoutCanBuy)) return
+    if ((action === 'paypal' && (checkoutRecurring || !paypal?.ready)) || (['card', 'google'].includes(action) && action !== 'portal' && !checkoutReady)) return
     actionLock.current = true
     const version = ++actionVersion.current
     setBusy(action); setError(''); setNotice(null)
     try {
-      const result = await accountRequest(action === 'paypal' ? '/api/billing/paypal/order' : action === 'portal' ? '/api/billing/portal' : '/api/billing/checkout', action === 'paypal' || action === 'portal' ? {} : { kind: purchaseKind })
+      const result = await accountRequest(action === 'paypal' ? '/api/billing/paypal/order' : action === 'portal' ? '/api/billing/portal' : '/api/billing/checkout', action === 'paypal' || action === 'portal' ? {} : { kind: checkoutKind, ...(checkoutKind === 'subscription' ? { plan: checkoutPlan } : {}) })
       if (version !== actionVersion.current) return
       if (action === 'paypal' && result.status) {
         if (result.status === 'COMPLETED' && result.credited === true) setNotice({ tone: 'success', text: 'Your previous PayPal payment is confirmed and its 1,500-credit purchase has been applied. No new checkout was opened.' })
@@ -130,7 +135,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
 
   return <main className="credits-page">
     <header><Link to="/" className="credits-wordmark">WORLDIFAKT</Link><Link to={user ? '/account' : signInHref}>{user ? user.displayName : 'Sign in'} ↗</Link></header>
-    <section className="credits-heading"><span>MAKE ROOM FOR YOUR NEXT IDEA</span><h1>More worlds.<br /><em>More possibilities.</em></h1><p>Start for free. Choose 1,500 credits for $29.99 USD when you’re ready to create more.</p></section>
+    <section className="credits-heading"><span>CHOOSE QUALITY · KEEP COSTS CONTROLLED</span><h1>Sol for speed.<br /><em>Astra when quality matters.</em></h1><p>Free and Creator use GPT-6 Sol. Pro and Studio unlock GPT-6 Astra with higher credit cost and hard provider-spend guards.</p></section>
     {user && balance && <section className="credits-balance" aria-label="Your account balance">
       <div><span>YOUR CREDITS</span><strong>{balance.credits.toLocaleString()}</strong><small>{Math.floor(Math.max(0, balance.credits) / 50)} credit-funded generations available</small></div>
       <div><span>MEMBERSHIP</span><strong>{member ? 'Active' : 'Free'}</strong><small>{balance.subscription.expiresAt ? `Current period ends ${new Date(balance.subscription.expiresAt).toLocaleDateString()}` : 'Daily free generations included'}</small></div>
@@ -147,36 +152,32 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
     {(billing?.mode === 'test' || paypal?.mode === 'sandbox') && <p className="credits-pending" role="status">{billing?.mode === 'test' ? 'Card / Google Pay checkout is in test mode. ' : ''}{paypal?.mode === 'sandbox' ? 'PayPal checkout is in sandbox mode. ' : ''}Test payments are not real purchases.</p>}
     {balance?.billingReview && <p className="credits-error" role="alert">Purchasing is paused while your payment history is reviewed.</p>}
     <section className="credits-plans" aria-label="Generation plans">
-      <article><span className="credits-plan-tag">EXPLORE</span><h2>Free</h2><div className="credits-price"><strong>$0</strong><span>Get to know your creative tools.</span></div><ul><li><b>2 FAST generations</b> in every rolling 24 hours</li><li>Download your FAST 3D drafts</li><li><b>1 SLOW generation</b> per UTC calendar day</li><li>SLOW downloads require active membership</li></ul>{balance && <div className="credits-remaining">Available now: {balance.free.fastRemaining} FAST · {balance.free.slowRemaining} SLOW</div>}<Link className="credits-action secondary" to={user ? '/shop' : signInHref}>{user ? 'Create a model' : 'Create a free account'} ↗</Link></article>
-      <article className="credits-featured">
-        <span className="credits-plan-tag">YOUR NEXT 30 CREATIONS</span>
-        <h2>1,500 credits</h2>
-        <div className="credits-price"><div><strong>$29.99</strong><b>USD{recurring ? ' / month' : ''}</b></div><span>{recurring ? 'Monthly membership · renews until cancelled' : 'One-time top-up · no automatic renewal'}</span></div>
-        <fieldset className="credits-purchase-choice" disabled={!!busy}>
-          <legend>Choose how you purchase</legend>
-          <label className={recurring ? 'selected' : ''}><input type="radio" name="purchase-kind" value="subscription" checked={recurring} onChange={() => setPurchaseKind('subscription')} /><span><strong>Monthly membership</strong><small>Credits every paid month + SLOW downloads</small></span></label>
-          <label className={!recurring ? 'selected' : ''}><input type="radio" name="purchase-kind" value="topup" checked={!recurring} onChange={() => setPurchaseKind('topup')} /><span><strong>One-time top-up</strong><small>Extra credits only · same $29.99 price</small></span></label>
-        </fieldset>
-        <div className="credits-math"><strong>30</strong><span>generations with available textures<br />50 credits per generation</span></div>
-        <ul><li>Use credits for FAST or SLOW generation</li><li>1,500 credits {recurring ? 'after every confirmed monthly payment' : 'after a confirmed one-time payment'}</li><li>{recurring ? 'Download completed SLOW models and their available textures' : 'Add more credits whenever you need them'}</li></ul>
-        <div className="credits-access-note" id="credits-access-note">
-          <strong>{recurring ? 'Monthly membership includes SLOW downloads.' : 'A one-time top-up adds credits only.'}</strong>
-          <p>{recurring ? 'You pay $29.99 USD each month until you cancel. Every paid month adds 1,500 credits and gives you active membership.' : 'This payment does not activate or extend membership. FAST downloads are included; SLOW downloads still require a separate active membership.'}</p>
-          {!recurring && !member && <label><input type="checkbox" checked={understandsPack} disabled={!user || !!busy} onChange={event => setUnderstandsPack(event.target.checked)} /><span>I understand that a one-time top-up does not unlock SLOW downloads.</span></label>}
-        </div>
-        {recurring && member && <p className="credits-membership-state">Your membership is active. Select a one-time top-up if you need extra credits.</p>}
-        {!checking && !(recurring ? membershipReady : billing?.topupReady || paypal?.ready) && <p className="credits-method-note" role="status">{recurring ? 'Monthly membership checkout is not available yet.' : 'One-time top-up checkout is not available yet.'}</p>}
-        <div className="credits-payment-options" aria-describedby="credits-access-note">
-          <button className="credits-action" disabled={!selectedCanBuy || !selectedReady || (!recurring && !billing?.cardReady)} onClick={() => void checkout('card')}>{busy === 'card' ? 'Opening secure checkout…' : recurring ? 'Subscribe for $29.99 / month by card' : 'Pay $29.99 once by card'} ↗</button>
-          <button className="credits-action secondary" disabled={!selectedCanBuy || !selectedReady || billing?.googlePay !== 'eligible_devices'} onClick={() => void checkout('google')}>{busy === 'google' ? 'Opening secure checkout…' : 'Google Pay via checkout'} ↗</button>
-          {!recurring && <button className="credits-action credits-paypal" disabled={!canBuyPack || !paypal?.ready} onClick={() => void checkout('paypal')}>{busy === 'paypal' ? 'Opening PayPal…' : 'Pay $29.99 once with PayPal'} ↗</button>}
-        </div>
-        <p className="credits-method-note">Google Pay appears on supported devices and browsers; card payment is also available in secure checkout. PayPal supports one-time top-ups only.</p>
-        {user && member && billing?.checkoutReady && <button className="credits-manage" disabled={!canBuy} onClick={() => void checkout('portal')}>{busy === 'portal' ? 'Opening account…' : 'Manage subscription'}</button>}
+      <article><span className="credits-plan-tag">EXPLORE</span><h2>Free SOL</h2><div className="credits-price"><strong>$0</strong><span>Try WORLDIFACT without exposing the platform to Astra costs.</span></div><ul><li><b>2 SOL FAST generations</b> in every rolling 24 hours when funded SOL capacity is available</li><li>FAST draft downloads included</li><li><b>No free Astra fallback</b> — if SOL capacity is unavailable, no expensive Astra request is silently charged</li></ul>{balance && <div className="credits-remaining">Available now: {balance.free.fastRemaining} SOL FAST</div>}<Link className="credits-action secondary" to={user ? '/shop' : signInHref}>{user ? 'Create with SOL' : 'Create a free account'} ↗</Link></article>
+      {([
+        ['creator','Creator SOL','$29.99','1,500 credits','30 SOL generations','SOL only · 50 credits / generation'],
+        ['pro','Pro ASTRA','$99.99','4,500 credits','90 SOL or 18 ASTRA generations','SOL 50 credits · ASTRA 250 credits'],
+        ['studio','Studio ASTRA','$149.99','7,500 credits','150 SOL or 30 ASTRA generations','SOL 50 credits · ASTRA 250 credits'],
+      ] as const).map(([id,name,price,credits,capacity,models]) => <article key={id} className={selectedPlan === id && purchaseKind === 'subscription' ? 'credits-featured' : ''}>
+        <span className="credits-plan-tag">{id === 'creator' ? 'CREATOR' : id === 'pro' ? 'PRO' : 'STUDIO'}</span>
+        <h2>{name}</h2>
+        <div className="credits-price"><div><strong>{price}</strong><b> USD / month</b></div><span>{credits} every confirmed paid month</span></div>
+        <ul><li><b>{capacity}</b></li><li>{models}</li><li>{id === 'creator' ? 'Astra is blocked on this plan so a Sol subscription cannot accidentally spend Astra rates.' : 'Astra access is plan-gated and still subject to per-job provider-spend limits.'}</li></ul>
+        <label className={selectedPlan === id && purchaseKind === 'subscription' ? 'selected' : ''}><input type="radio" name="subscription-plan" value={id} checked={selectedPlan === id && purchaseKind === 'subscription'} onChange={() => { setSelectedPlan(id); setPurchaseKind('subscription') }} /><span><strong>Select {name}</strong></span></label>
+        {billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' && <p className="credits-method-note">ASTRA checkout activates only after the production worker confirms its hard cost guard. No unbounded ASTRA job is sold.</p>}
+        <button className="credits-action" disabled={!canBuy || member || billing?.plans?.[id]?.checkoutReady !== true} onClick={() => { setSelectedPlan(id); setPurchaseKind('subscription'); void checkout('card', { kind: 'subscription', plan: id }) }}>{busy === 'card' && selectedPlan === id ? 'Opening secure checkout…' : member ? 'Use Manage subscription below' : billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' ? 'ASTRA plan · safety activation pending' : `Subscribe ${price} / month`} ↗</button>
+      </article>)}
+      <article>
+        <span className="credits-plan-tag">TOP-UP</span><h2>1,500 extra credits</h2>
+        <div className="credits-price"><div><strong>$29.99</strong><b> USD once</b></div><span>No automatic renewal</span></div>
+        <ul><li>30 extra SOL generations</li><li>On active Pro/Studio, the same credits may fund up to 6 ASTRA generations</li><li>Top-up alone does not unlock ASTRA or membership-only access</li></ul>
+        {!member && <label><input type="checkbox" checked={understandsPack} disabled={!user || !!busy} onChange={event => setUnderstandsPack(event.target.checked)} /><span>I understand this adds credits only and does not unlock ASTRA.</span></label>}
+        <button className="credits-action secondary" disabled={!canBuyPack || !billing?.topupReady} onClick={() => { setPurchaseKind('topup'); void checkout('card', { kind: 'topup' }) }}>{busy === 'card' && purchaseKind === 'topup' ? 'Opening secure checkout…' : 'Buy $29.99 top-up'} ↗</button>
+        <button className="credits-action credits-paypal" disabled={!canBuyPack || !paypal?.ready} onClick={() => { setPurchaseKind('topup'); void checkout('paypal', { kind: 'topup' }) }}>{busy === 'paypal' ? 'Opening PayPal…' : 'Pay once with PayPal'} ↗</button>
       </article>
+      {user && member && billing?.checkoutReady && <article><span className="credits-plan-tag">ACTIVE</span><h2>{balance?.subscription.plan ? `Current plan: ${balance.subscription.plan.toUpperCase()}` : 'Manage membership'}</h2><p>Existing subscribers keep their current price until they explicitly change plan. Use Stripe billing management to cancel or update payment details.</p><button className="credits-manage" disabled={!canBuy} onClick={() => void checkout('portal')}>{busy === 'portal' ? 'Opening account…' : 'Manage subscription'}</button></article>}
     </section>
     <section className="credits-trust" aria-label="Payment privacy"><strong>Secure checkout. Private payment details.</strong><p>Card and wallet details are entered with the payment provider. WORLDIFAKT does not collect your full card number or display the seller’s bank account details.</p></section>
-    <p className="credits-footnote">FAST creates an Astra-guided procedural draft. SLOW uses the detailed model pipeline; texture availability depends on the generated result. The current free SLOW result is retained on the server; its image preview is not yet available. A GAME model still needs separate validation for physical manufacturing.</p>
+    <p className="credits-footnote">FAST is the SOL path. Detailed ASTRA generation is reserved for Pro and Studio and costs 250 credits per generation. WORLDIFACT never silently falls back from SOL to ASTRA when the cheaper route is unavailable. A GAME model still needs separate validation for physical manufacturing.</p>
     <footer><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/world">Back to the portals →</Link></footer>
   </main>
 }

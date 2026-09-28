@@ -1,6 +1,8 @@
 # Local server only. Copy to .dev.vars, which is ignored by git.
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-6-astra
+# FAST/free/Creator blueprint path. Do not change to Astra as a fallback.
+OPENAI_FAST_MODEL=gpt-6-sol
 # Enable only after the owner approves paid API use and a hard request ceiling/expiry.
 ENABLE_PAID_GENERATION=false
 # Contest pilot: when true, no login/access code is required, so keep a tiny global Durable Object ceiling and short expiry.
@@ -34,9 +36,15 @@ STRIPE_WEBHOOK_SECRET=
 STRIPE_TOPUP_PRICE_ID=
 STRIPE_PREVIOUS_TOPUP_PRICE_IDS=
 STRIPE_TOPUP_CREDITS=1500
-# Approved membership: USD 29.99 per month for 1,500 credits. Activation remains separate.
+# Creator SOL: USD 29.99/month for 1,500 credits. Existing live subscribers keep this price.
 STRIPE_SUBSCRIPTION_PRICE_ID=
+# Pro ASTRA: USD 99.99/month for 4,500 credits.
+STRIPE_PRO_PRICE_ID=
+# Studio ASTRA: USD 149.99/month for 7,500 credits.
+STRIPE_STUDIO_PRICE_ID=
 STRIPE_SUBSCRIPTION_INTERVAL=month
+# Keep false until the Oracle Astra worker has the reviewed hard monetary job guard.
+ENABLE_ASTRA_PLANS=false
 ENABLE_PAYPAL_BILLING=false
 PAYPAL_MODE=sandbox
 # REST app credentials; the supplied HostedButtons SDK client ID is not a REST secret.

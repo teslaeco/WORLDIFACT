@@ -63,7 +63,8 @@ function fixture(expectedKey = key) {
     } else if (url.pathname === '/v1/prices') {
       assert.equal(params.get('expand[]'), 'product');
       const kind = metadata.worldifact_kind;
-      response = { object: 'price', id: `price_${kind}2999`, active: params.get('active') === 'true', livemode: true, product: products.get(params.get('product')!), lookup_key: params.get('lookup_key'), unit_amount: Number(params.get('unit_amount')), unit_amount_decimal: params.get('unit_amount'), currency: params.get('currency'), billing_scheme: params.get('billing_scheme'), transform_quantity: null, custom_unit_amount: null, tiers_mode: null, type: kind === 'subscription' ? 'recurring' : 'one_time', recurring: kind === 'subscription' ? { interval: params.get('recurring[interval]'), interval_count: Number(params.get('recurring[interval_count]')), usage_type: params.get('recurring[usage_type]'), trial_period_days: null } : null, metadata };
+      const label = kind === 'topup' ? 'topup' : (metadata.worldifact_plan || 'creator');
+      response = { object: 'price', id: `price_${label}${params.get('unit_amount')}`, active: params.get('active') === 'true', livemode: true, product: products.get(params.get('product')!), lookup_key: params.get('lookup_key'), unit_amount: Number(params.get('unit_amount')), unit_amount_decimal: params.get('unit_amount'), currency: params.get('currency'), billing_scheme: params.get('billing_scheme'), transform_quantity: null, custom_unit_amount: null, tiers_mode: null, type: kind === 'subscription' ? 'recurring' : 'one_time', recurring: kind === 'subscription' ? { interval: params.get('recurring[interval]'), interval_count: Number(params.get('recurring[interval_count]')), usage_type: params.get('recurring[usage_type]'), trial_period_days: null } : null, metadata };
       prices.set(response.lookup_key as string, response);
     } else if (url.pathname === '/v1/webhook_endpoints') {
       assert.equal(params.get('connect'), 'false');
@@ -83,22 +84,28 @@ function fixture(expectedKey = key) {
   return { state, products, prices, endpoints, cached, calls, uploads, dependencies, posts, run: (extra: NodeJS.ProcessEnv = {}) => setupStripe({ ...env, STRIPE_SECRET_KEY: expectedKey, ...extra }, dependencies) };
 }
 
-test('Stripe preparation creates exactly two fixed offers and one account webhook, storing secrets only in the server payload', async () => {
+test('Stripe preparation creates Creator, Pro, Studio and top-up offers plus one account webhook', async () => {
   const f = fixture();
   const result = await f.run();
-  assert.equal(f.products.size, 2);
-  assert.equal(f.prices.size, 2);
+  assert.equal(f.products.size, 4);
+  assert.equal(f.prices.size, 4);
   assert.equal(f.endpoints.length, 1);
-  assert.equal(f.posts().length, 5);
-  assert.deepEqual(result, { status: 'configured_without_checkout_activation', subscriptionPriceId: 'price_subscription2999', topupPriceId: 'price_topup2999', webhookId: 'we_SetupEndpoint', payoutsEnabled: true });
-  assert.deepEqual(f.uploads, [{ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: webhookSecret, STRIPE_SUBSCRIPTION_PRICE_ID: 'price_subscription2999', STRIPE_TOPUP_PRICE_ID: 'price_topup2999', STRIPE_MODE: 'live', STRIPE_SUBSCRIPTION_INTERVAL: 'month', ACCOUNT_LEDGER_MODE: 'live', BILLING_PUBLIC_ORIGIN: 'https://worldifact.xodobrox.workers.dev' }]);
+  assert.equal(f.posts().length, 9);
+  assert.deepEqual(result, { status: 'configured_without_checkout_activation', creatorPriceId: 'price_creator2999', proPriceId: 'price_pro9999', studioPriceId: 'price_studio14999', topupPriceId: 'price_topup2999', webhookId: 'we_SetupEndpoint', payoutsEnabled: true });
+  assert.deepEqual(f.uploads, [{ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: webhookSecret, STRIPE_SUBSCRIPTION_PRICE_ID: 'price_creator2999', STRIPE_PRO_PRICE_ID: 'price_pro9999', STRIPE_STUDIO_PRICE_ID: 'price_studio14999', STRIPE_TOPUP_PRICE_ID: 'price_topup2999', STRIPE_MODE: 'live', STRIPE_SUBSCRIPTION_INTERVAL: 'month', ACCOUNT_LEDGER_MODE: 'live', BILLING_PUBLIC_ORIGIN: 'https://worldifact.xodobrox.workers.dev' }]);
   const endpoint = f.endpoints[0];
   assert.equal(endpoint.url, webhookUrl);
   assert.deepEqual(endpoint.enabled_events, ['invoice.paid', 'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted', 'checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.expired', 'charge.refunded', 'charge.dispute.created', 'charge.dispute.updated']);
-  for (const price of f.prices.values()) {
-    assert.equal(price.unit_amount, 2999);
+  const expected = new Map([
+    ['worldifact_membership_1500_usd_2999_month_v1', [2999, '1500']],
+    ['worldifact_pro_astra_4500_usd_9999_month_v2', [9999, '4500']],
+    ['worldifact_studio_astra_7500_usd_14999_month_v2', [14999, '7500']],
+    ['worldifact_topup_1500_usd_2999_v1', [2999, '1500']],
+  ]);
+  for (const [lookup, price] of f.prices) {
+    assert.equal(price.unit_amount, expected.get(lookup)?.[0]);
     assert.equal(price.currency, 'usd');
-    assert.equal(asObject(price.metadata).worldifact_credits, '1500');
+    assert.equal(asObject(price.metadata).worldifact_credits, expected.get(lookup)?.[1]);
   }
   const publicOutput = JSON.stringify(result);
   for (const privateValue of [key, webhookSecret, 'never-log@example.test', 'acct_TestMerchant']) assert.ok(!publicOutput.includes(privateValue));
@@ -121,8 +128,8 @@ test('an interrupted secret upload resumes inside the idempotency window without
   f.state.now += 60 * 60 * 1000;
   f.calls.length = 0;
   await f.run();
-  assert.equal(f.products.size, 2);
-  assert.equal(f.prices.size, 2);
+  assert.equal(f.products.size, 4);
+  assert.equal(f.prices.size, 4);
   assert.equal(f.endpoints.length, 1);
   assert.deepEqual(f.posts().map(call => call.path), ['/v1/webhook_endpoints']);
   assert.equal(f.uploads[0].STRIPE_WEBHOOK_SECRET, webhookSecret);

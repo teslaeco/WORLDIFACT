@@ -117,16 +117,10 @@ test('FAST profile support without the reviewed budget guard still fails closed 
   assert.equal(posts, 0)
 })
 
-test('capability is rechecked before reservation and the receipt cannot switch between profiles', async () => {
+test('Oracle FAST remains blocked even when legacy capability reappears; Sol uses the separate blueprint path', async () => {
   const f = fixture(), fast = { ...oldInput, generationProfile: FAST_DRAFT_PROFILE }
   f.setCapable(true)
-  const prepared = await (await f.request('/api/studio/prepare', fast)).json() as { ticket: string }
-  assert.equal((await f.request('/api/studio/jobs', oldInput, prepared.ticket)).status, 409)
-  f.setCapable(false)
-  assert.equal((await f.request('/api/studio/jobs', fast, prepared.ticket)).status, 409)
+  const preparedResponse = await f.request('/api/studio/prepare', fast)
+  assert.equal(preparedResponse.status, 409)
   assert.deepEqual(f.counts(), { reservations: 0, posts: 0 })
-  f.setCapable(true)
-  assert.equal((await f.request('/api/studio/jobs', fast, prepared.ticket)).status, 202)
-  assert.deepEqual(f.counts(), { reservations: 1, posts: 1 })
-  // This is a fixture allowance only. Production counters and credits untouched.
 })

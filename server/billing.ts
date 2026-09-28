@@ -1,5 +1,7 @@
 import { getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts'
 import { ACCOUNT_ID, entitlementCall, entitlementStatus, EntitlementError, type EntitlementEnv } from './entitlements.ts'
+import { PLAN_CATALOG, planEconomics, type PlanId } from './generationEconomics.ts'
+import type { BudgetNamespace } from './budget.ts'
 
 export interface BillingEnv extends AccountEnv, EntitlementEnv {
   ENABLE_BILLING?: string
@@ -8,6 +10,8 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID?: string
   STRIPE_MODE?: string
   STRIPE_SUBSCRIPTION_PRICE_ID?: string
+  STRIPE_PRO_PRICE_ID?: string
+  STRIPE_STUDIO_PRICE_ID?: string
   STRIPE_SUBSCRIPTION_INTERVAL?: string
   STRIPE_TOPUP_PRICE_ID?: string
   /** Up to ten previously approved fixed-pack prices, for existing payment settlement and reversals only. */
@@ -15,6 +19,9 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
   /** Legacy setting; the approved credit pack is fixed in server code. */
   STRIPE_TOPUP_CREDITS?: string
   BILLING_PUBLIC_ORIGIN?: string
+  GENERATION_BUDGET?: BudgetNamespace
+  /** Enable only after the Astra Oracle worker enforces the reviewed monetary ceiling. */
+  ENABLE_ASTRA_PLANS?: string
 }
 // Pin billing reads and the configured webhook endpoint independently of Checkout creation.
 export const STRIPE_API_VERSION = '2024-06-20'
@@ -22,6 +29,11 @@ export const STRIPE_API_VERSION = '2024-06-20'
 export const STRIPE_CHECKOUT_API_VERSION = '2025-03-31.basil'
 export const CREDIT_PACK = Object.freeze({ amount: 2999, currency: 'USD', credits: 1500, kind: 'one_time' as const })
 export const MONTHLY_MEMBERSHIP = Object.freeze({ amount: CREDIT_PACK.amount, currency: 'USD', credits: 1500, kind: 'subscription' as const, interval: 'month' as const })
+export const SUBSCRIPTION_PLANS = Object.freeze({
+  creator: Object.freeze({ ...PLAN_CATALOG.creator, kind: 'subscription' as const, interval: 'month' as const }),
+  pro: Object.freeze({ ...PLAN_CATALOG.pro, kind: 'subscription' as const, interval: 'month' as const }),
+  studio: Object.freeze({ ...PLAN_CATALOG.studio, kind: 'subscription' as const, interval: 'month' as const }),
+})
 type Json = Record<string, unknown>
 type BillingStage = 'price_read' | 'customer_create' | 'subscription_list' | 'checkout_create' | 'portal_create' | 'other_read'
 type BillingDiagnostic = { stage: BillingStage; category: 'provider_http' | 'provider_timeout' | 'provider_transport' | 'provider_response' | 'mode_mismatch' | 'checkout_validation'; httpStatus?: number; type?: string; code?: string; parameter?: string; fields?: string[] }
@@ -45,6 +57,16 @@ function previousTopupPrices(env: BillingEnv): string[] | null {
   const ids = env.STRIPE_PREVIOUS_TOPUP_PRICE_IDS.split(',').map(value => value.trim())
   return ids.length <= 10 && ids.every(priceId) && new Set(ids).size === ids.length ? ids : null
 }
+function subscriptionPriceId(env: BillingEnv, plan: PlanId) {
+  return plan === 'creator' ? env.STRIPE_SUBSCRIPTION_PRICE_ID : plan === 'pro' ? env.STRIPE_PRO_PRICE_ID : env.STRIPE_STUDIO_PRICE_ID
+}
+function subscriptionOffer(env: BillingEnv, plan: PlanId) {
+  return { ...SUBSCRIPTION_PLANS[plan], priceId: subscriptionPriceId(env, plan) }
+}
+function planForPrice(env: BillingEnv, id: string): PlanId | null {
+  for (const plan of ['creator', 'pro', 'studio'] as const) if (subscriptionPriceId(env, plan) === id) return plan
+  return null
+}
 function billingConfig(env: BillingEnv) {
   let origin: string | null = null
   try { const url = new URL(env.BILLING_PUBLIC_ORIGIN ?? ''); if (url.protocol === 'https:' && url.origin === env.BILLING_PUBLIC_ORIGIN && !url.username && !url.password) origin = url.origin } catch { /* Fail closed. */ }
@@ -53,7 +75,14 @@ function billingConfig(env: BillingEnv) {
   const interval = env.STRIPE_SUBSCRIPTION_INTERVAL === MONTHLY_MEMBERSHIP.interval ? MONTHLY_MEMBERSHIP.interval : null
   const keyMatchesMode = ['sk', 'rk'].some(prefix => env.STRIPE_SECRET_KEY?.trim().startsWith(`${prefix}_${mode}_`))
   const ready = env.ENABLE_BILLING === 'true' && env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true' && !!env.ACCOUNT_ENTITLEMENTS && !!origin && modeValid && ledgerModeMatches && keyMatchesMode && !!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')
-  return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: ready && priceId(env.STRIPE_SUBSCRIPTION_PRICE_ID) && !!interval && resourceId(env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID, 'bpc'), interval, mode: modeValid ? mode : null }
+  const portal = !!interval && resourceId(env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID, 'bpc')
+  const astraSpendGuard = env.ENABLE_ASTRA_PLANS === 'true'
+  const plans = {
+    creator: ready && portal && priceId(env.STRIPE_SUBSCRIPTION_PRICE_ID),
+    pro: ready && portal && astraSpendGuard && priceId(env.STRIPE_PRO_PRICE_ID),
+    studio: ready && portal && astraSpendGuard && priceId(env.STRIPE_STUDIO_PRICE_ID),
+  }
+  return { ready, origin, topup: ready && priceId(env.STRIPE_TOPUP_PRICE_ID) && previousTopupPrices(env) !== null, subscription: plans.creator || plans.pro || plans.studio, plans, astraSpendGuard, interval, mode: modeValid ? mode : null }
 }
 async function boundedText(value: Request | Response, maximum: number) {
   if (Number(value.headers.get('Content-Length')) > maximum) throw new EntitlementError('Billing request is too large.', 413)
@@ -125,6 +154,15 @@ async function createCheckout(env: BillingEnv, fetcher: typeof fetch, params: UR
     }
   }
 }
+async function adjustFreeSolPromo(env: BillingEnv, id: string, jobs: number, reverse = false) {
+  if (!env.GENERATION_BUDGET || !Number.isSafeInteger(jobs) || jobs < 1) return
+  try {
+    const budget = env.GENERATION_BUDGET.get(env.GENERATION_BUDGET.idFromName('worldifact-free-sol-promo-v1'))
+    await budget.fetch(new Request(`https://budget.internal/${reverse ? 'promo-revoke' : 'promo-fund'}`, {
+      method: 'POST', body: JSON.stringify({ id, jobs }), signal: AbortSignal.timeout(5000),
+    }))
+  } catch { /* Cost safety fails closed: missing promo funding only reduces future free capacity. */ }
+}
 async function customerFor(env: BillingEnv, user: AccountUser, fetcher: typeof fetch) {
   const stored = await entitlementCall<{ customer: string | null }>(env, user.id, '/billing')
   if (stored.customer) return stored.customer
@@ -134,13 +172,12 @@ async function customerFor(env: BillingEnv, user: AccountUser, fetcher: typeof f
   if (!saved.saved) throw new EntitlementError('Billing customer could not be linked.')
   return customer.id as string
 }
-async function verifiedPrice(env: BillingEnv, kind: 'subscription' | 'topup', fetcher: typeof fetch, allowArchived = false, settlementPriceId?: string) {
-  const id = settlementPriceId ?? (kind === 'subscription' ? env.STRIPE_SUBSCRIPTION_PRICE_ID : env.STRIPE_TOPUP_PRICE_ID)
+async function verifiedPrice(env: BillingEnv, kind: 'subscription' | 'topup', fetcher: typeof fetch, allowArchived = false, settlementPriceId?: string, plan: PlanId = 'creator') {
+  const id = settlementPriceId ?? (kind === 'subscription' ? subscriptionPriceId(env, plan) : env.STRIPE_TOPUP_PRICE_ID)
   if (!priceId(id)) throw new EntitlementError('This payment option is not configured.')
   const price = await stripe(env, `/prices/${id}`, fetcher)
-  const amount = kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount
-  if (price.id !== id || (!allowArchived && price.active !== true) || price.unit_amount !== amount || price.currency !== 'usd' || (kind === 'subscription' ? price.type !== 'recurring' : price.type !== 'one_time')) throw new EntitlementError(kind === 'subscription' ? 'The configured membership price must be exactly USD 29.99 per month for 1500 credits.' : 'The configured credit pack price must be exactly USD 29.99 for 1500 credits.')
-  // Unknown periods, quantities and tiers are not silently turned into a different offer.
+  const amount = kind === 'subscription' ? subscriptionOffer(env, plan).amountCents : CREDIT_PACK.amount
+  if (price.id !== id || (!allowArchived && price.active !== true) || price.unit_amount !== amount || price.currency !== 'usd' || (kind === 'subscription' ? price.type !== 'recurring' : price.type !== 'one_time')) throw new EntitlementError(kind === 'subscription' ? 'The configured membership price does not match the approved WORLDIFACT plan.' : 'The configured credit pack price must be exactly USD 29.99 for 1500 credits.')
   if (price.billing_scheme !== 'per_unit' || price.transform_quantity != null || (kind === 'subscription' && (!billingConfig(env).interval || object(price.recurring).interval !== billingConfig(env).interval || object(price.recurring).interval_count !== 1 || object(price.recurring).usage_type !== 'licensed'))) throw new EntitlementError('The configured billing interval needs operator review.')
   return price
 }
@@ -172,11 +209,17 @@ function matchingLines(invoice: Json, price: string | undefined) {
   if (lines.has_more === true) throw new EntitlementError('The subscription invoice requires review.', 502)
   return array(lines.data).filter(line => (idOf(line.price) || idOf(object(object(line.pricing).price_details).price)) === price && line.proration !== true)
 }
-function exactInvoice(env: BillingEnv, invoice: Json) {
-  const lines = matchingLines(invoice, env.STRIPE_SUBSCRIPTION_PRICE_ID)
-  return invoice.paid === true && invoice.status === 'paid' && invoice.amount_paid === MONTHLY_MEMBERSHIP.amount && invoice.total === MONTHLY_MEMBERSHIP.amount && invoice.currency === 'usd'
-    && array(object(invoice.lines).data).length === 1 && lines.length === 1 && lines[0].quantity === 1 && lines[0].amount === MONTHLY_MEMBERSHIP.amount && lines[0].currency === 'usd'
-    && ['subscription_create', 'subscription_cycle'].includes(String(invoice.billing_reason))
+function exactInvoice(env: BillingEnv, invoice: Json): { plan: PlanId; credits: number; amount: number; priceId: string } | null {
+  const all = array(object(invoice.lines).data)
+  if (all.length !== 1) return null
+  const line = all[0], id = idOf(line.price) || idOf(object(object(line.pricing).price_details).price)
+  const plan = planForPrice(env, id)
+  if (!plan) return null
+  const offer = subscriptionOffer(env, plan), lines = matchingLines(invoice, id)
+  if (invoice.paid !== true || invoice.status !== 'paid' || invoice.amount_paid !== offer.amountCents || invoice.total !== offer.amountCents || invoice.currency !== 'usd'
+    || lines.length !== 1 || line.quantity !== 1 || line.amount !== offer.amountCents || line.currency !== 'usd'
+    || !['subscription_create', 'subscription_cycle'].includes(String(invoice.billing_reason))) return null
+  return { plan, credits: offer.credits, amount: offer.amountCents, priceId: id }
 }
 async function checkCustomer(env: BillingEnv, uid: string, value: unknown) {
   const customer = idOf(value)
@@ -189,36 +232,39 @@ async function syncSubscription(env: BillingEnv, subscription: Json, revision: n
   if (!uid || !resourceId(subscription.id, 'sub')) return
   await checkCustomer(env, uid, subscription.customer)
   const items = array(object(subscription.items).data)
-  const item = items.find(item => idOf(item.price) === env.STRIPE_SUBSCRIPTION_PRICE_ID)
-  if (!item || items.length !== 1 || item.quantity !== 1 || object(subscription.items).has_more === true) return
-  const end = Number(item.current_period_end ?? subscription.current_period_end) * 1000
+  if (items.length !== 1 || items[0].quantity !== 1 || object(subscription.items).has_more === true) return
+  const priceIdValue = idOf(items[0].price), plan = planForPrice(env, priceIdValue)
+  if (!plan) return
+  const end = Number(items[0].current_period_end ?? subscription.current_period_end) * 1000
   const invoiceId = idOf(subscription.latest_invoice)
   let paid = false, grantId: string | undefined
-  if (billingConfig(env).subscription && resourceId(invoiceId, 'in') && subscription.status === 'active') {
-    await verifiedPrice(env, 'subscription', fetcher, true)
+  if (billingConfig(env).plans[plan] && resourceId(invoiceId, 'in') && subscription.status === 'active') {
+    await verifiedPrice(env, 'subscription', fetcher, true, priceIdValue, plan)
     const invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher)
-    paid = exactInvoice(env, invoice) && subscriptionOf(invoice) === subscription.id
-    if (paid) {
+    const verified = exactInvoice(env, invoice)
+    paid = !!verified && verified.plan === plan && subscriptionOf(invoice) === subscription.id
+    if (paid && verified) {
       await checkCustomer(env, uid, invoice.customer)
       grantId = invoiceId
-      // Subscription events may beat invoice.paid or arrive after a missed delivery.
-      // The same verified invoice ID is the grant key across both paths.
-      await entitlementCall(env, uid, '/grant', { id: invoiceId, credits: 1500, subscriptionId: subscription.id })
+      const grant = await entitlementCall<{ granted: boolean }>(env, uid, '/grant', { id: invoiceId, credits: verified.credits, subscriptionId: subscription.id })
+      if (grant.granted) await adjustFreeSolPromo(env, invoiceId, planEconomics(plan).fundedFreeSolJobs)
     }
   }
-  await entitlementCall(env, uid, '/subscription', { id: subscription.id, active: paid && subscription.status === 'active' && Number.isSafeInteger(end), until: Number.isSafeInteger(end) ? end : 0, revision, grantId, terminal: ['canceled', 'incomplete_expired'].includes(String(subscription.status)) })
+  await entitlementCall(env, uid, '/subscription', { id: subscription.id, active: paid && subscription.status === 'active' && Number.isSafeInteger(end), until: Number.isSafeInteger(end) ? end : 0, revision, plan, grantId, terminal: ['canceled', 'incomplete_expired'].includes(String(subscription.status)) })
 }
 async function invoicePaid(env: BillingEnv, invoice: Json, revision: number, fetcher: typeof fetch) {
-  if (!billingConfig(env).subscription || !exactInvoice(env, invoice)) return
-  await verifiedPrice(env, 'subscription', fetcher, true)
+  const verified = exactInvoice(env, invoice)
+  if (!verified || !billingConfig(env).plans[verified.plan]) return
+  await verifiedPrice(env, 'subscription', fetcher, true, verified.priceId, verified.plan)
   const subId = subscriptionOf(invoice)
   if (!resourceId(subId, 'sub') || !resourceId(invoice.id, 'in')) return
   const subscription = await stripe(env, `/subscriptions/${subId}`, fetcher), uid = uidFor(subscription)
   const items = array(object(subscription.items).data)
-  if (!uid || items.length !== 1 || items[0].quantity !== 1 || idOf(items[0].price) !== env.STRIPE_SUBSCRIPTION_PRICE_ID || object(subscription.items).has_more === true) return
+  if (!uid || items.length !== 1 || items[0].quantity !== 1 || idOf(items[0].price) !== verified.priceId || object(subscription.items).has_more === true) return
   await checkCustomer(env, uid, invoice.customer)
   await checkCustomer(env, uid, subscription.customer)
-  await entitlementCall(env, uid, '/grant', { id: invoice.id, credits: 1500, subscriptionId: subId })
+  const grant = await entitlementCall<{ granted: boolean }>(env, uid, '/grant', { id: invoice.id, credits: verified.credits, subscriptionId: subId })
+  if (grant.granted) await adjustFreeSolPromo(env, invoice.id as string, planEconomics(verified.plan).fundedFreeSolJobs)
   await syncSubscription(env, subscription, revision, fetcher)
 }
 async function topupSession(env: BillingEnv, session: Json, fetcher: typeof fetch, reverse = false) {
@@ -233,7 +279,9 @@ async function topupSession(env: BillingEnv, session: Json, fetcher: typeof fetc
   // New purchases use only the current price. Settlement and reversals can retain an explicitly
   // allowlisted historical price, but still require its authoritative fixed USD 29.99 pack details.
   await verifiedPrice(env, 'topup', fetcher, true, actualPriceId)
-  await entitlementCall(env, uid, reverse ? '/revoke' : '/grant', { id: paymentId, credits: CREDIT_PACK.credits })
+  const grant = await entitlementCall<{ granted?: boolean; revoked?: boolean }>(env, uid, reverse ? '/revoke' : '/grant', { id: paymentId, credits: CREDIT_PACK.credits })
+  if (!reverse && grant.granted) await adjustFreeSolPromo(env, paymentId, planEconomics('creator').fundedFreeSolJobs)
+  if (reverse && grant.revoked) await adjustFreeSolPromo(env, paymentId, planEconomics('creator').fundedFreeSolJobs, true)
   await clearCheckout(env, uid, session)
 }
 async function clearCheckout(env: BillingEnv, uid: string, session: Json) {
@@ -246,14 +294,15 @@ async function reverseCharge(env: BillingEnv, charge: Json, fetcher: typeof fetc
   if (!(Number(charge.amount_refunded) > 0 || charge.disputed === true)) return
   const invoiceId = idOf(charge.invoice)
   if (resourceId(invoiceId, 'in')) {
-    const invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher), subId = subscriptionOf(invoice)
-    if (!resourceId(subId, 'sub') || matchingLines(invoice, env.STRIPE_SUBSCRIPTION_PRICE_ID).length !== 1) return
+    const invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher), subId = subscriptionOf(invoice), verified = exactInvoice(env, invoice)
+    if (!resourceId(subId, 'sub') || !verified) return
     const subscription = await stripe(env, `/subscriptions/${subId}`, fetcher), uid = uidFor(subscription)
     if (!uid) return
     await checkCustomer(env, uid, charge.customer)
     await checkCustomer(env, uid, invoice.customer)
     await checkCustomer(env, uid, subscription.customer)
-    await entitlementCall(env, uid, '/revoke', { id: invoiceId, credits: 1500 })
+    const reversal = await entitlementCall<{ revoked: boolean }>(env, uid, '/revoke', { id: invoiceId, credits: verified.credits })
+    if (reversal.revoked) await adjustFreeSolPromo(env, invoiceId, planEconomics(verified.plan).fundedFreeSolJobs, true)
     return
   }
   const paymentId = idOf(charge.payment_intent)
@@ -289,7 +338,20 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
   const url = new URL(request.url)
   if (!url.pathname.startsWith('/api/billing/')) return null
   const config = billingConfig(env)
-  if (url.pathname === '/api/billing/status' && request.method === 'GET') return json({ status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED', checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval, subscriptionCredits: MONTHLY_MEMBERSHIP.credits, generationCost: 50, modelsPerSubscriptionGrant: 30, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, subscriptionPrice: MONTHLY_MEMBERSHIP, cardReady: config.topup || config.subscription, googlePay: config.topup || config.subscription ? 'eligible_devices' : 'unavailable', reason: config.topup || config.subscription ? 'Card checkout and eligible Google Pay wallets use Stripe. Credits are granted only after verified payment. Membership costs USD 29.99 per month and requires configured monthly billing.' : 'Card checkout requires payment settings. The USD 29.99 membership also requires an explicitly configured monthly interval.' })
+  if (url.pathname === '/api/billing/status' && request.method === 'GET') return json({
+    status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED',
+    checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval,
+    subscriptionCredits: MONTHLY_MEMBERSHIP.credits, generationCost: 50, modelsPerSubscriptionGrant: 30,
+    generationCosts: { sol: 50, astra: 250 }, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, subscriptionPrice: MONTHLY_MEMBERSHIP,
+    plans: {
+      creator: { id: 'creator', ...SUBSCRIPTION_PLANS.creator, checkoutReady: config.plans.creator },
+      pro: { id: 'pro', ...SUBSCRIPTION_PLANS.pro, checkoutReady: config.plans.pro, blockedReason: config.astraSpendGuard ? null : 'ASTRA_COST_GUARD_REQUIRED' },
+      studio: { id: 'studio', ...SUBSCRIPTION_PLANS.studio, checkoutReady: config.plans.studio, blockedReason: config.astraSpendGuard ? null : 'ASTRA_COST_GUARD_REQUIRED' },
+    },
+    cardReady: config.topup || config.subscription,
+    googlePay: config.topup || config.subscription ? 'eligible_devices' : 'unavailable',
+    reason: config.topup || config.subscription ? 'Card checkout and eligible Google Pay wallets use Stripe. Credits are granted only after verified payment. Existing subscriptions keep their current price until the customer explicitly changes plan.' : 'Card checkout requires payment settings.',
+  })
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405)
   if (!config.ready) return json({ status: 'BLOCKED', error: 'Payments are not configured. No checkout or charge was created.' }, 503)
   try {
@@ -311,44 +373,54 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     if (url.pathname !== '/api/billing/checkout') return json({ error: 'Not found.' }, 404)
     if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
     const input = object(JSON.parse(await boundedText(request, 1024)))
-    if (Object.keys(input).some(key => key !== 'kind') || !['subscription', 'topup'].includes(String(input.kind))) return json({ error: 'Choose subscription or topup.' }, 400)
-    const kind = input.kind as 'subscription' | 'topup', allowance = await entitlementStatus(env, user.id)
+    if (Object.keys(input).some(key => !['kind', 'plan'].includes(key)) || !['subscription', 'topup'].includes(String(input.kind))) return json({ error: 'Choose subscription or topup.' }, 400)
+    const kind = input.kind as 'subscription' | 'topup'
+    const plan: PlanId = kind === 'subscription' && ['creator', 'pro', 'studio'].includes(String(input.plan)) ? input.plan as PlanId : 'creator'
+    const allowance = await entitlementStatus(env, user.id)
     if (allowance.billingReview) return json({ error: 'This billing account requires support review.' }, 409)
-    if (kind === 'subscription' && !config.subscription) return json({ error: 'Subscriptions are unavailable until the billing interval and price are configured.' }, 503)
-    if (kind === 'subscription' && allowance.subscription.active) return json({ error: 'A subscription is already active. Use Manage billing or buy more credits.' }, 409)
+    if (kind === 'subscription' && !config.plans[plan]) return json({ error: 'This subscription plan is not configured yet.' }, 503)
+    if (kind === 'subscription' && allowance.subscription.active) return json({ error: 'A subscription is already active. Use Manage billing to change or cancel it.' }, 409)
     if (kind === 'topup' && !config.topup) return json({ error: 'Credit packs are not configured.' }, 503)
-    const price = await verifiedPrice(env, kind, fetcher), customer = await customerFor(env, user, fetcher)
+    const price = await verifiedPrice(env, kind, fetcher, false, undefined, plan), customer = await customerFor(env, user, fetcher)
     if (kind === 'subscription') {
       const existing = await stripe(env, `/subscriptions?customer=${customer}&status=all&limit=100`, fetcher)
       if (existing.has_more === true || array(existing.data).some(item => !['canceled', 'incomplete_expired'].includes(String(item.status))))
         return json({ error: 'A subscription or payment is already present. Open Manage billing instead of starting another.' }, 409)
     }
-    const attempt = await entitlementCall<{ id: string; created: number; url?: string }>(env, user.id, '/checkout-reserve', { kind })
+    const attempt = await entitlementCall<{ id: string; created: number; url?: string }>(env, user.id, '/checkout-reserve', { kind, ...(kind === 'subscription' ? { plan } : {}) })
     if (attempt.url) return json({ url: attempt.url, mode: config.mode })
+    const checkoutAmount = kind === 'subscription' ? subscriptionOffer(env, plan).amountCents : CREDIT_PACK.amount
     const params = new URLSearchParams({ mode: kind === 'subscription' ? 'subscription' : 'payment', customer,
       'line_items[0][price]': price.id as string, 'line_items[0][quantity]': '1', client_reference_id: user.id,
       'metadata[worldifact_uid]': user.id, 'metadata[worldifact_kind]': kind,
       'metadata[worldifact_checkout_id]': attempt.id,
-      // Stripe-hosted card Checkout presents Google Pay only for eligible devices/accounts.
+      ...(kind === 'subscription' && plan !== 'creator' ? { 'metadata[worldifact_plan]': plan } : {}),
       'payment_method_types[0]': 'card', allow_promotion_codes: 'false',
-      // Keep this fixed-USD integration on standard Checkout even if the account defaults to Managed Payments.
       'managed_payments[enabled]': 'false',
       success_url: `${config.origin}/account/credits?billing=processing`, cancel_url: `${config.origin}/account/credits?billing=cancelled`,
     })
-    if (kind === 'subscription') params.set('subscription_data[metadata][worldifact_uid]', user.id)
-    else { params.set('metadata[worldifact_credits]', String(CREDIT_PACK.credits)); params.set('payment_intent_data[metadata][worldifact_uid]', user.id); params.set('payment_intent_data[metadata][worldifact_kind]', 'topup') }
+    if (kind === 'subscription') {
+      params.set('subscription_data[metadata][worldifact_uid]', user.id)
+      if (plan !== 'creator') params.set('subscription_data[metadata][worldifact_plan]', plan)
+    } else {
+      params.set('metadata[worldifact_credits]', String(CREDIT_PACK.credits))
+      params.set('payment_intent_data[metadata][worldifact_uid]', user.id)
+      params.set('payment_intent_data[metadata][worldifact_kind]', 'topup')
+    }
     const session = await createCheckout(env, fetcher, params, `wf-checkout-${user.id}-${attempt.id}`)
     const checks: [string, boolean][] = [
       ['url', typeof session.url === 'string' && session.url.startsWith('https://checkout.stripe.com/')], ['id', resourceId(session.id, 'cs')],
-      ['expires_at', Number.isSafeInteger(session.expires_at)], ['amount_total', session.amount_total === (kind === 'subscription' ? MONTHLY_MEMBERSHIP.amount : CREDIT_PACK.amount)],
+      ['expires_at', Number.isSafeInteger(session.expires_at)], ['amount_total', session.amount_total === checkoutAmount],
       ['currency', session.currency === 'usd'], ['mode', session.mode === (kind === 'subscription' ? 'subscription' : 'payment')],
       ['customer', idOf(session.customer) === customer], ['client_reference_id', session.client_reference_id === user.id],
       ['metadata.worldifact_uid', uidFor(session) === user.id], ['metadata.worldifact_kind', object(session.metadata).worldifact_kind === kind],
       ['metadata.worldifact_checkout_id', object(session.metadata).worldifact_checkout_id === attempt.id],
+      ...(kind === 'subscription' && plan !== 'creator' ? [['metadata.worldifact_plan', object(session.metadata).worldifact_plan === plan] as [string, boolean]] : []),
     ]
     const fields = checks.filter(([, valid]) => !valid).map(([name]) => name)
     if (fields.length) throw new BillingDiagnosticError('Checkout price or account was not confirmed.', 503, { stage: 'checkout_create', category: 'checkout_validation', fields })
-    await entitlementCall(env, user.id, '/checkout-finish', { kind, id: attempt.id, url: session.url, sessionId: session.id, expiresAt: Number(session.expires_at) * 1000 })
+    await entitlementCall(env, user.id, '/checkout-finish', { kind, ...(kind === 'subscription' ? { plan } : {}), id: attempt.id, url: session.url, sessionId: session.id, expiresAt: Number(session.expires_at) * 1000 })
     return json({ url: session.url, mode: config.mode })
   } catch (error) { return json({ error: error instanceof EntitlementError ? error.message : 'Billing is temporarily unavailable. No account credit was inferred from this response.', ...(error instanceof BillingDiagnosticError ? { diagnostic: error.diagnostic } : {}) }, error instanceof EntitlementError ? error.status : 503) }
 }
+

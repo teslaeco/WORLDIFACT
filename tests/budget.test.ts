@@ -96,7 +96,10 @@ test("invalid access and missing budget do not consume allowance or call the pro
 test("provider failures still consume the global ceiling; no automatic retries", async () => {
   const env = configured();
   let calls = 0;
-  const provider = (async () => { calls++; return new Response("upstream-secret", { status: 500 }); }) as typeof fetch;
+  const provider = (async (url: string | URL | Request) => {
+    if (String(url).endsWith("/v1/responses/input_tokens")) return Response.json({ object: "response.input_tokens", input_tokens: 1000 });
+    calls++; return new Response("upstream-secret", { status: 500 });
+  }) as typeof fetch;
   assert.equal((await handle(blueprintRequest(), env, provider)).status, 502);
   assert.equal((await handle(blueprintRequest(), env, provider)).status, 502);
   const blocked = await handle(blueprintRequest(), env, provider);
@@ -129,7 +132,7 @@ test("health advertises LIVE with null remaining in ongoing unlimited mode", asy
   const health = await response.json() as { mode: string; generationReady: boolean; model: string | null; allowance: { remaining: null; unlimited: boolean } };
   assert.equal(health.mode, "READY");
   assert.equal(health.generationReady, true);
-  assert.equal(health.model, "gpt-6-astra");
+  assert.equal(health.model, "gpt-6-sol");
   assert.equal(health.allowance.remaining, null);
   assert.equal(health.allowance.unlimited, true);
 });
@@ -149,11 +152,13 @@ test("health stops advertising LIVE when the persistent allowance is exhausted",
 
 test("generation details identify exact content and usage without persisting access secrets", async () => {
   const blueprint = demoBlueprint("moon village");
-  const provider = (async () => Response.json({
-    status: "completed", model: "gpt-6-astra", id: "resp_fixture_123",
-    usage: { input_tokens: 25, output_tokens: 50, total_tokens: 75 },
-    output: [{ content: [{ type: "output_text", text: JSON.stringify(blueprint) }] }],
-  })) as typeof fetch;
+  const provider = (async (url: string | URL | Request) => String(url).endsWith("/v1/responses/input_tokens")
+    ? Response.json({ object: "response.input_tokens", input_tokens: 1000 })
+    : Response.json({
+      status: "completed", model: "gpt-6-sol", id: "resp_fixture_123",
+      usage: { input_tokens: 25, output_tokens: 50, total_tokens: 75 },
+      output: [{ content: [{ type: "output_text", text: JSON.stringify(blueprint) }] }],
+    })) as typeof fetch;
   const response = await handle(blueprintRequest(), configured(), provider);
   assert.equal(response.status, 200);
   const data = validateGenerationResult(await response.json());
