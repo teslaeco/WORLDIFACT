@@ -4,6 +4,7 @@ on:
     branches: [work/model-quality-pr-20260929]
     paths:
       - 'scripts/apply-model-catalog-v3.py'
+      - 'scripts/refine-model-v3.py'
       - '.github/workflows/prepare-model-v3.yml'
 permissions:
   contents: write
@@ -23,7 +24,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply exact reviewed changes, no provider or billing calls
-        run: python3 -B scripts/apply-model-catalog-v3.py
+        run: |
+          python3 -B scripts/apply-model-catalog-v3.py
+          python3 -B scripts/refine-model-v3.py
       - run: npm run verify
       - run: npm run deploy:check
       - name: Commit only tested application changes to this isolated branch
