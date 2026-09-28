@@ -79,14 +79,19 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
   const validOrder = /^[A-Z0-9]{10,36}$/.test(orderId)
   const cancelled = search.get('paypal') === 'cancel' || search.get('paypal') === 'cancelled' || search.get('billing') === 'cancelled'
 
-  async function checkout(action: Exclude<PaymentAction, 'capture'>) {
-    if (actionLock.current || !canBuy || (action !== 'portal' && !selectedCanBuy)) return
-    if ((action === 'paypal' && (recurring || !paypal?.ready)) || (['card', 'google'].includes(action) && !selectedReady)) return
+  async function checkout(action: Exclude<PaymentAction, 'capture'>, choice?: { kind?: 'subscription' | 'topup'; plan?: PlanId }) {
+    const checkoutKind = choice?.kind ?? purchaseKind
+    const checkoutPlan = choice?.plan ?? selectedPlan
+    const checkoutRecurring = checkoutKind === 'subscription'
+    const checkoutReady = checkoutRecurring ? billing?.plans?.[checkoutPlan]?.checkoutReady === true : billing?.topupReady === true
+    const checkoutCanBuy = checkoutRecurring ? canBuy && !member && search.get('paypal') !== 'return' : canBuyPack
+    if (actionLock.current || !canBuy || (action !== 'portal' && !checkoutCanBuy)) return
+    if ((action === 'paypal' && (checkoutRecurring || !paypal?.ready)) || (['card', 'google'].includes(action) && action !== 'portal' && !checkoutReady)) return
     actionLock.current = true
     const version = ++actionVersion.current
     setBusy(action); setError(''); setNotice(null)
     try {
-      const result = await accountRequest(action === 'paypal' ? '/api/billing/paypal/order' : action === 'portal' ? '/api/billing/portal' : '/api/billing/checkout', action === 'paypal' || action === 'portal' ? {} : { kind: purchaseKind, ...(purchaseKind === 'subscription' ? { plan: selectedPlan } : {}) })
+      const result = await accountRequest(action === 'paypal' ? '/api/billing/paypal/order' : action === 'portal' ? '/api/billing/portal' : '/api/billing/checkout', action === 'paypal' || action === 'portal' ? {} : { kind: checkoutKind, ...(checkoutKind === 'subscription' ? { plan: checkoutPlan } : {}) })
       if (version !== actionVersion.current) return
       if (action === 'paypal' && result.status) {
         if (result.status === 'COMPLETED' && result.credited === true) setNotice({ tone: 'success', text: 'Your previous PayPal payment is confirmed and its 1,500-credit purchase has been applied. No new checkout was opened.' })
@@ -161,15 +166,15 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         <div className="credits-price"><div><strong>{price}</strong><b> USD / month</b></div><span>{credits} every confirmed paid month</span></div>
         <ul><li><b>{capacity}</b></li><li>{models}</li><li>{id === 'creator' ? 'Astra is blocked on this plan so a Sol subscription cannot accidentally spend Astra rates.' : 'Astra access is plan-gated and still subject to per-job provider-spend limits.'}</li></ul>
         <label className={selectedPlan === id && purchaseKind === 'subscription' ? 'selected' : ''}><input type="radio" name="subscription-plan" value={id} checked={selectedPlan === id && purchaseKind === 'subscription'} onChange={() => { setSelectedPlan(id); setPurchaseKind('subscription') }} /><span><strong>Select {name}</strong></span></label>
-        <button className="credits-action" disabled={!canBuy || member || billing?.plans?.[id]?.checkoutReady !== true} onClick={() => { setSelectedPlan(id); setPurchaseKind('subscription'); queueMicrotask(() => void checkout('card')) }}>{busy === 'card' && selectedPlan === id ? 'Opening secure checkout…' : member ? 'Use Manage subscription below' : `Subscribe ${price} / month`} ↗</button>
+        <button className="credits-action" disabled={!canBuy || member || billing?.plans?.[id]?.checkoutReady !== true} onClick={() => { setSelectedPlan(id); setPurchaseKind('subscription'); void checkout('card', { kind: 'subscription', plan: id }) }}>{busy === 'card' && selectedPlan === id ? 'Opening secure checkout…' : member ? 'Use Manage subscription below' : `Subscribe ${price} / month`} ↗</button>
       </article>)}
       <article>
         <span className="credits-plan-tag">TOP-UP</span><h2>1,500 extra credits</h2>
         <div className="credits-price"><div><strong>$29.99</strong><b> USD once</b></div><span>No automatic renewal</span></div>
         <ul><li>30 extra SOL generations</li><li>On active Pro/Studio, the same credits may fund up to 6 ASTRA generations</li><li>Top-up alone does not unlock ASTRA or membership-only access</li></ul>
         {!member && <label><input type="checkbox" checked={understandsPack} disabled={!user || !!busy} onChange={event => setUnderstandsPack(event.target.checked)} /><span>I understand this adds credits only and does not unlock ASTRA.</span></label>}
-        <button className="credits-action secondary" disabled={!canBuyPack || !billing?.topupReady} onClick={() => { setPurchaseKind('topup'); queueMicrotask(() => void checkout('card')) }}>{busy === 'card' && purchaseKind === 'topup' ? 'Opening secure checkout…' : 'Buy $29.99 top-up'} ↗</button>
-        <button className="credits-action credits-paypal" disabled={!canBuyPack || !paypal?.ready} onClick={() => { setPurchaseKind('topup'); queueMicrotask(() => void checkout('paypal')) }}>{busy === 'paypal' ? 'Opening PayPal…' : 'Pay once with PayPal'} ↗</button>
+        <button className="credits-action secondary" disabled={!canBuyPack || !billing?.topupReady} onClick={() => { setPurchaseKind('topup'); void checkout('card', { kind: 'topup' }) }}>{busy === 'card' && purchaseKind === 'topup' ? 'Opening secure checkout…' : 'Buy $29.99 top-up'} ↗</button>
+        <button className="credits-action credits-paypal" disabled={!canBuyPack || !paypal?.ready} onClick={() => { setPurchaseKind('topup'); void checkout('paypal', { kind: 'topup' }) }}>{busy === 'paypal' ? 'Opening PayPal…' : 'Pay once with PayPal'} ↗</button>
       </article>
       {user && member && billing?.checkoutReady && <article><span className="credits-plan-tag">ACTIVE</span><h2>{balance?.subscription.plan ? `Current plan: ${balance.subscription.plan.toUpperCase()}` : 'Manage membership'}</h2><p>Existing subscribers keep their current price until they explicitly change plan. Use Stripe billing management to cancel or update payment details.</p><button className="credits-manage" disabled={!canBuy} onClick={() => void checkout('portal')}>{busy === 'portal' ? 'Opening account…' : 'Manage subscription'}</button></article>}
     </section>
