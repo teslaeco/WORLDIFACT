@@ -197,7 +197,13 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     text: { format: { type: "json_schema", name: "worldifact_generation", strict: true, schema: astraGenerationSchema } },
   };
   try {
-    const counterPayload = { ...responseRequestBody };
+    const counterPayload = {
+      model: responseRequestBody.model,
+      instructions: responseRequestBody.instructions,
+      input: responseRequestBody.input,
+      text: responseRequestBody.text,
+      reasoning: responseRequestBody.reasoning,
+    };
     const count = await fetcher("https://api.openai.com/v1/responses/input_tokens", {
       method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(12000), body: JSON.stringify(counterPayload),
