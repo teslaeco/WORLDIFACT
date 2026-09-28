@@ -5,6 +5,7 @@ import DemoShopPreview from '../components/DemoShopPreview'
 import ShopManufacturingOptions from '../components/ShopManufacturingOptions'
 import ProjectAttachmentPicker from '../components/ProjectAttachmentPicker'
 import StudioGallery from '../components/StudioGallery'
+import GenerationCostNotice from '../components/GenerationCostNotice'
 import { PORTALS } from '../config/portals'
 import { REFERENCE_LINKS } from '../config/references'
 import { StudioCoordinator, checkStudio, type SavedStudioJob } from '../lib/studioClient'
@@ -369,7 +370,7 @@ export default function ShopPage() {
           <DemoShopPreview prompt={fastPrompt} mode="live-fast" allowDownload />
           <small hidden data-testid="fast-result-description">{fastResult.assetSpec?.summary ?? fastResult.blueprint.title}</small>
           {dimensionsEnabled && <p className="shop-preview-dimensions">FAST draft target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
-          <small>FAST uses a generated Astra specification plus local procedural geometry. For a detailed Oracle/Blender GLB with reference images, use SLOW · QUALITY.</small>
+          <small>FAST uses a generated Sol specification plus local procedural geometry. For a detailed Oracle/Blender GLB with reference images, use SLOW · QUALITY.</small>
         </> : demoPrompt ? <>
           <DemoShopPreview prompt={demoPrompt} />
           {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
@@ -405,13 +406,16 @@ export default function ShopPage() {
         <form onSubmit={generate} aria-describedby="studio-draft-help">
           <fieldset className="shop-generation-modes" disabled={busy || photoBusy}>
             <legend>Choose generation mode</legend>
+            <p>Choose the AI model before generating. One click starts one job; the selected model is never upgraded automatically.</p>
             <div className="shop-generation-mode-grid">
-              <button type="button" className="shop-generation-mode" aria-pressed={!fast} onClick={() => { setProfile('standard'); if (textureLimit === 2048) setTextureLimit(4096) }}>
+              <button type="button" className="shop-generation-mode" aria-label="Select GPT-6 Astra, 250 points per generation" aria-pressed={!fast} onClick={() => { setProfile('standard'); if (textureLimit === 2048) setTextureLimit(4096) }}>
                 <strong>SLOW · QUALITY</strong>
+                <span>GPT-6 ASTRA · 250 points / generation</span>
                 <span>Full quality workflow · reference images · up to 4K</span>
               </button>
-              <button type="button" className="shop-generation-mode" aria-pressed={fast} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'} onClick={() => { setProfile(FAST_DRAFT_PROFILE); setTextureLimit(2048) }}>
+              <button type="button" className="shop-generation-mode" aria-label="Select GPT-6 Sol, 50 points per paid generation" aria-pressed={fast} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'} onClick={() => { setProfile(FAST_DRAFT_PROFILE); setTextureLimit(2048) }}>
                 <strong>FAST · DRAFT</strong>
+                <span>GPT-6 SOL · 50 points / paid generation</span>
                 <span>GPT-6 Sol procedural draft · text-only · usually seconds</span>
               </button>
             </div>
@@ -424,8 +428,8 @@ export default function ShopPage() {
               if (next === FAST_DRAFT_PROFILE && (!fastAvailable || photos.length || purpose === 'terrain')) return
               setProfile(next)
               if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
-            }}><option value="standard">STANDARD · current quality workflow</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>FAST DRAFT · Astra procedural</option></select>
-            <small>STANDARD remains the detailed Oracle/Blender path. FAST uses the public server-side Astra blueprint path and a local procedural preview; it does not claim an Oracle mesh.</small>
+            }}><option value="standard">STANDARD · GPT-6 Astra · 250 points</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>FAST DRAFT · GPT-6 Sol · 50 points</option></select>
+            <small>STANDARD remains the detailed Oracle/Blender path. FAST uses the public server-side Sol blueprint path and a local procedural preview; it does not claim an Oracle mesh.</small>
             <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
             <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
           </div>
@@ -433,6 +437,7 @@ export default function ShopPage() {
           <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy} />
+          <GenerationCostNotice model={fast ? 'sol' : 'astra'} busy={busy} />
           <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? 'Generate FAST 3D draft · Sol' : 'Generate SLOW model + materials'}</button><small>Free: up to 2 Sol FAST drafts per rolling 24 hours when funded capacity is available. Creator SOL uses 50 credits per Sol generation. Astra uses 250 credits and requires Pro or Studio. There is no free Astra fallback. Manufacturing and delivery are separate.</small>
         </form>
         <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : activeReady ? fast ? 'FAST Sol generation available' : 'SLOW quality generation available' : 'Generation temporarily unavailable'}</strong><p>{activeReady ? fast ? 'FAST creates a generated Sol specification and lightweight procedural 3D draft.' : 'SLOW creates the detailed model through the Oracle/Blender workflow.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
