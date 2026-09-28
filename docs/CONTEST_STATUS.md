@@ -1,3 +1,17 @@
+# WORLDIFACT — SOL / ASTRA profit guard, 28 September 2026
+
+**Status: REVIEW BRANCH ONLY · NO LIVE BILLING OR PRODUCTION CHANGE.**
+
+- Added executable economics for a SOL-first free/Creator path and separately priced ASTRA Pro/Studio access.
+- Proposed paid catalogue: Creator SOL USD 29.99 / 1,500 credits; Pro ASTRA USD 99.99 / 4,500 credits; Studio ASTRA USD 149.99 / 7,500 credits.
+- Proposed model charge: SOL 50 credits with USD 0.35 provider ceiling; ASTRA 250 credits with USD 1.75 provider ceiling. The 5x credit/cost ratio matches the current 5x Standard token-price ratio.
+- Every paid tier reserves 5% payment/FX, 15% infrastructure, 5% free promotional generation and 5% refunds/risk. Executable invariants require at least 30% worst-case operating margin after the provider reserve.
+- Free LIVE SOL is designed to consume only a revenue-funded promotional pool; when that pool is empty, the explicit no-cost DEMO path must be used.
+- Runtime routing, permanent provider-spend reservations, Stripe price creation/migration, Oracle worker changes, merge and production deployment are still **BLOCKED pending implementation/CI and owner GO**.
+- Detailed design: `docs/PROFIT_GUARD_20260928.md`.
+
+---
+
 # WORLDIFACT — user model gallery, 28 September 2026
 
 **Status: LIVE · MERGED · PRODUCTION VERIFIED.**
