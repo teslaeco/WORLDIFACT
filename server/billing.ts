@@ -392,7 +392,16 @@ async function recoverBilling(request: Request, env: BillingEnv, user: AccountUs
   const open = array(subscriptions.data).filter(item => !['canceled', 'incomplete_expired'].includes(String(item.status)))
   const review = () => json({ state: 'review', canManage: true, canRetry: false })
   if (subscriptions.has_more === true || open.length > 1) return review()
-  if (!open.length) return json({ state: 'none', canManage: true, canRetry: false })
+  if (!open.length) {
+    // Reconcile terminal state too, so a delayed deletion/expiry webhook cannot leave
+    // a phantom active membership blocking a legitimate new checkout.
+    for (const terminal of array(subscriptions.data)) {
+      if (terminal.livemode !== (env.STRIPE_MODE === 'live') || !resourceId(terminal.id, 'sub')
+        || uidFor(terminal) !== user.id || idOf(terminal.customer) !== stored.customer) return review()
+      await syncSubscription(env, terminal, Math.floor(Date.now() / 1000) * 1000, fetcher)
+    }
+    return json({ state: 'none', canManage: true, canRetry: false })
+  }
   const subscription = open[0], items = array(object(subscription.items).data)
   const currentPlan = planForPrice(env, idOf(items[0]?.price))
   if (subscription.livemode !== (env.STRIPE_MODE === 'live') || !resourceId(subscription.id, 'sub')
@@ -496,7 +505,16 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
       const invoiceId=idOf(subscription.latest_invoice)
       if (!resourceId(invoiceId,'in')) return json({error:'Latest paid invoice could not be verified.'},409)
       const invoice=await stripe(env,`/invoices/${invoiceId}`,fetcher)
-      if (!exactInvoice(env,invoice)||subscriptionOf(invoice)!==subscription.id) return json({error:'Settle the outstanding invoice before changing plan.'},409)
+      if (subscriptionOf(invoice)!==subscription.id || idOf(invoice.customer)!==stored.customer) return json({error:'The billing account could not be confirmed.'},409)
+      const paidInvoice = exactInvoice(env, invoice)
+      if (!paidInvoice || paidInvoice.plan !== source) {
+        // Stripe voids an expired pending-upgrade invoice. It cannot be paid, and
+        // must not permanently prevent a fresh, explicitly confirmed plan change.
+        if (invoice.status !== 'void' || invoice.billing_reason !== 'subscription_update') return json({error:'Settle the outstanding invoice before changing plan.'},409)
+        await syncSubscription(env, subscription, Math.floor(Date.now() / 1000) * 1000, fetcher)
+        const recovered = await entitlementStatus(env, user.id)
+        if (!recovered.subscription.active || recovered.subscription.plan !== source || recovered.billingReview) return json({error:'The current paid subscription period could not be verified.'},409)
+      }
       const params=new URLSearchParams({customer:stored.customer,configuration:configuration!,return_url:`${config.origin}/account/credits`,
         'flow_data[type]':'subscription_update_confirm','flow_data[subscription_update_confirm][subscription]':String(subscription.id),
         'flow_data[subscription_update_confirm][items][0][id]':String(items[0].id),'flow_data[subscription_update_confirm][items][0][price]':String(price.id),
