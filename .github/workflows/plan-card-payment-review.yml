@@ -1,0 +1,35 @@
+name: Prepare and verify direct plan-card payments
+on:
+  push:
+    branches: ['fix/plan-card-payment-flow-20260929']
+    paths: ['scripts/prepare-plan-card-payments.py', '.github/workflows/plan-card-payment-review.yml']
+permissions:
+  contents: write
+concurrency:
+  group: worldifact-plan-card-payment-review
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply exact reviewed changes on isolated branch
+        run: python3 scripts/prepare-plan-card-payments.py
+      - run: npm ci
+      - name: Verify application and synthetic payment regressions
+        run: npm run verify
+      - name: Verify Worker packaging without deployment
+        run: npm run deploy:check
+      - name: Commit verified source only to review branch
+        run: |
+          test "$GITHUB_REF" = refs/heads/fix/plan-card-payment-flow-20260929
+          git diff --check
+          git add server/billing.ts src/pages/CreditsPage.tsx src/components/BillingRecovery.tsx src/lib/paymentError.ts src/lib/planPayment.ts tests/billing-recovery.test.ts tests/plan-payment-ui.test.ts docs/CONTEST_STATUS.md
+          git -c user.name='WORLDIFACT review' -c user.email='noreply@users.noreply.github.com' commit -m 'Route plan cards to the correct payment and move card management below offers'
+          git push origin HEAD:refs/heads/fix/plan-card-payment-flow-20260929
+          printf 'Verified application, synthetic billing cases and Worker packaging. No production deployment or customer charge.\n' >> "$GITHUB_STEP_SUMMARY"
