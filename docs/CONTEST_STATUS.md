@@ -1,4 +1,14 @@
-# WORLDIFACT — editor deployed; Oracle output-policy installation reported successful
+# WORLDIFACT — Pro/Studio billing UI fix prepared; Astra sales gate unchanged
+
+Updated 29 September 2026 after direct live Stripe catalogue verification and the owner's billing-page report. The deployed production release remains unchanged until an explicitly approved merge/deployment.
+
+## BILLING UI FIX — branch prepared, no customer charge
+
+Direct read-only verification of the owner's live Stripe account confirms the intended recurring prices already exist and are active: Pro ASTRA `price_1UKi3GBrIVB6dkxNm66OnDAr` at USD 99.99/month for 4,500 credits and Studio ASTRA `price_1UKi3UBrIVB6dkxNfojjhJsv` at USD 149.99/month for 7,500 credits. No duplicate Stripe products or prices were created.
+
+The application currently maps both live price IDs correctly, but production keeps `ENABLE_ASTRA_PLANS=false`. That is the direct reason Pro/Studio report `checkoutReady=false`: checkout is deliberately coupled to the Astra commercial activation gate. Paid generation is also still disabled in the deployed Worker configuration, so enabling customer checkout before the bounded live generation/export acceptance test would allow a customer to pay for a plan whose premium generation path is not yet verified.
+
+On branch `fix/pro-studio-billing-ui-20260929`, the plan selector UI no longer renders radio circles. Hovering a Creator/Pro/Studio card highlights it; clicking the card only selects/highlights the plan; the separate subscription button remains the only purchase action. Keyboard card selection is retained. This branch does not enable sales, charge a customer, modify a subscription, reprice an existing subscriber or deploy production.
 
 Updated 29 September 2026 after the owner's 07:28 Oracle Cloud Shell screenshot. The application release remains `8ef7936ffc47b072e3c2e5e550622d0188a036ca`. This checkpoint changes documentation only.
 
