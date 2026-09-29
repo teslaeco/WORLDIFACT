@@ -260,7 +260,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   }
   try {
     const upstream = await fetcher("https://api.openai.com/v1/responses", {
-      method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(30000),
+      method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(selectedModel === 'astra' ? 60_000 : 30_000),
       body: JSON.stringify(responseRequestBody),
     });
     if (!upstream.ok) return json({ error: upstream.status === 429 ? "AI service is busy. Try again later." : "AI service could not complete the request.", requestId }, upstream.status === 429 ? 429 : 502);
