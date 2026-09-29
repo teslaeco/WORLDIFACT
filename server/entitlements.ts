@@ -1,6 +1,6 @@
 import type { BudgetNamespace } from './budget.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
-import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId } from './generationEconomics.ts'
+import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId, type GenerationModel } from './generationEconomics.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
@@ -15,7 +15,7 @@ export interface EntitlementStorage {
 export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
-type Job = { profile: GenerationKind; at: number; cost: number; kind: 'free' | 'credits'; state: 'reserved' | 'completed' | 'failed' }
+type Job = { model?: GenerationModel; profile: GenerationKind; at: number; cost: number; kind: 'free' | 'credits'; state: 'reserved' | 'completed' | 'failed' }
 export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string }
 export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; state?: Job['state'] }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
@@ -24,7 +24,7 @@ type PayPalCheckout = { id: string; created: number; orderId?: string; url?: str
 export interface EntitlementStatus {
   credits: number
   generationCost: 50
-  generationCosts: { sol: 50; astra: 250 }
+  generationCosts: { sol: 50; astra: 250; luna?: 15 }
   subscriptionGrant: number
   subscription: { active: boolean; plan: PlanId; expiresAt: string | null }
   free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }
@@ -82,7 +82,7 @@ async function status(storage: EntitlementStorage, now: number): Promise<Entitle
   const [credits, free, subscription, billingHold] = await Promise.all([balance(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
   const plan: PlanId = subscription?.plan ?? 'creator'
   return {
-    credits, generationCost: 50, generationCosts: { sol: 50, astra: 250 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
+    credits, generationCost: 50, generationCosts: { sol: 50, astra: 250, luna: 15 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
     subscription: { active: active(subscription, now), plan, expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
     free: { fastRemaining: Math.max(0, 2 - free.fast.length), fastResetAt: free.fast.length ? new Date(Math.min(...free.fast.map(item => item.at)) + DAY).toISOString() : null,
       slowRemaining: 0, slowResetAt: new Date((Math.floor(now / DAY) + 1) * DAY).toISOString() },
@@ -108,8 +108,12 @@ export class AccountEntitlements {
       if (path === '/reserve') {
         if (typeof input.id !== 'string' || !JOB_ID.test(input.id) || !['fast', 'slow'].includes(String(input.profile))) return json({ error: 'Invalid generation' }, 400)
         const id = input.id, profile = input.profile as GenerationKind
+        const requestedModel = input.model ?? (profile === 'fast' ? 'sol' : 'astra')
+        if (!['luna', 'sol', 'astra'].includes(String(requestedModel)) || (profile === 'slow') !== (requestedModel === 'astra')) return json({ error: 'Invalid model for generation route' }, 400)
+        const selectedModel = requestedModel as GenerationModel
         const result = await this.storage.transaction(async storage => {
           const existing = await storage.get<Job>(`job:${id}`)
+          if (existing && existing.profile === profile && (existing.model ?? (existing.profile === 'fast' ? 'sol' : 'astra')) !== selectedModel) return { allowed: false, reason: 'JOB_MODEL_MISMATCH' }
           if (existing) return existing.profile !== profile
             ? { allowed: false, reason: 'JOB_PROFILE_MISMATCH' }
             : { allowed: existing.state !== 'failed', repeated: true, cost: existing.cost, kind: existing.kind, ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
@@ -117,7 +121,7 @@ export class AccountEntitlements {
           if (credits < 0 || await storage.get<boolean>('billingHold') === true) return { allowed: false, reason: 'BILLING_REVIEW_REQUIRED' }
           const subscriptionActive = active(subscription, now)
           const plan: PlanId = subscriptionActive ? subscription?.plan ?? 'creator' : 'creator'
-          const model = profile === 'fast' ? 'sol' : 'astra'
+          const model = selectedModel
           const cost = MODEL_ECONOMICS[model].creditsPerGeneration
           if (model === 'astra' && (!subscriptionActive || !modelAllowed(plan, 'astra'))) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
           const paid = subscriptionActive || credits > 0
@@ -131,7 +135,7 @@ export class AccountEntitlements {
             if (remaining < ceiling) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
             await storage.put(PROVIDER_BUDGET, remaining - ceiling)
           }
-          const job: Job = { profile, at: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', state: 'reserved' }
+          const job: Job = { ...(model === 'luna' ? { model } : {}), profile, at: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', state: 'reserved' }
           if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
           await storage.put(`job:${id}`, job)
@@ -317,7 +321,7 @@ export async function entitlementCall<T>(env: EntitlementEnv, userId: string, pa
   return response.json() as Promise<T>
 }
 export const entitlementStatus = (env: EntitlementEnv, userId: string) => entitlementCall<EntitlementStatus>(env, userId, '/status')
-export const reserveUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind) => entitlementCall<Reservation>(env, userId, '/reserve', { id: jobId, profile })
+export const reserveUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel) => entitlementCall<Reservation>(env, userId, '/reserve', { id: jobId, profile, ...(model ? { model } : {}) })
 export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, state: 'completed' | 'failed') => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state })
 export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<JobAccess>(env, userId, '/job', { id: jobId })
 export async function entitlementApi(request: Request, env: AccountEnv & EntitlementEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {

@@ -1,9 +1,12 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { createMccCabinet } from "./mccCabinet.ts";
+import { paintedMetal } from "./qualityMaterials.ts";
 import { createSolarVehicle } from "./solarVehicle.ts";
 import type { WorldObject } from "./blueprint.ts";
 
 function material(color: string, metalness = 0, roughness = 0.7) {
-  return new THREE.MeshStandardMaterial({ color, metalness, roughness });
+  const mat = paintedMetal(color); mat.metalness = metalness; mat.roughness = roughness; return mat;
 }
 function box(
   g: THREE.Group,
@@ -12,7 +15,7 @@ function box(
   mat: THREE.Material,
 ) {
   const m = new THREE.Mesh(
-    new THREE.BoxGeometry(...(size as [number, number, number])),
+    new RoundedBoxGeometry(size[0], size[1], size[2], 1, Math.min(...size) * 0.06),
     mat,
   );
   m.position.set(...(pos as [number, number, number]));
@@ -28,6 +31,9 @@ export function createWorldObject(o: WorldObject) {
   g.position.set(o.x, 0, o.z);
   g.rotation.y = (o.rotation * Math.PI) / 180;
   g.scale.setScalar(o.scale);
+  if (o.kind === "mcc-cabinet") {
+    const cabinet = createMccCabinet(o.color); g.add(cabinet); return g;
+  }
   if (o.kind === "rover") {
     const vehicle = createSolarVehicle();
     for (const child of [...vehicle.children]) g.add(child);

@@ -42,7 +42,7 @@ export function exportProceduralGlb(root: THREE.Object3D): ArrayBuffer {
     const out=doc.materials.length;doc.materials.push({name:m.name,pbrMetallicRoughness:pbr,doubleSided:m.side===THREE.DoubleSide,emissiveFactor:m.emissive.toArray().map(v=>Math.min(1,v*m.emissiveIntensity)),...(m.transparent?{alphaMode:'BLEND'}:{})});materials.set(m,out);return out
   }
   root.updateMatrixWorld(true)
-  root.traverse(o=> {if(!(o instanceof THREE.Mesh)||!o.visible)return;if(o.isSkinnedMesh||o instanceof THREE.InstancedMesh||Array.isArray(o.material))throw new Error('Use a bounded static mesh before export')
+  root.traverse(o=> {if(!(o instanceof THREE.Mesh)||!o.visible)return;if(o instanceof THREE.SkinnedMesh||o instanceof THREE.InstancedMesh||Array.isArray(o.material))throw new Error('Use a bounded static mesh before export')
     const geometry=o.geometry,position=geometry.getAttribute('position');if(!position||position.count<3)throw new Error('Empty geometry');const count=geometry.index?.count??position.count;triangles+=Math.floor(count/3);if(triangles>3_000_000||doc.nodes.length>=5000)throw new Error('Procedural geometry limit exceeded')
     if(geometry.index)for(let i=0;i<geometry.index.count;i++)if(geometry.index.getX(i)>=position.count)throw new Error('Index outside vertex buffer')
     const attributes:Json={POSITION:accessor(position)};const normal=geometry.getAttribute('normal'),uv=geometry.getAttribute('uv');if(normal)attributes.NORMAL=accessor(normal);if(uv)attributes.TEXCOORD_0=accessor(uv)

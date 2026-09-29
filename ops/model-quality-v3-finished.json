@@ -1,0 +1,13 @@
+{
+  "revision": "model-quality-v3-finish",
+  "files": [
+    "server/billing.ts",
+    "src/components/AccountStatusBar.tsx",
+    "src/pages/CreditsPage.tsx",
+    "src/pages/InfoPage.tsx",
+    "src/pages/ShopPage.tsx",
+    "tests/shop-draft-lifecycle.test.mjs",
+    "tests/shop-external.test.mjs"
+  ],
+  "paidRequests": 0
+}

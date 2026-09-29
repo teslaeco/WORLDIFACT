@@ -1,0 +1,18 @@
+{
+  "revision": "model-quality-v3",
+  "changed": [
+    "server/entitlements.ts",
+    "server/worker.ts",
+    "src/lib/blueprint.ts",
+    "src/lib/worldGeometry.ts",
+    "src/lib/blueprintExport.ts",
+    "src/components/LiveSolPreview.tsx",
+    "src/pages/ShopPage.tsx",
+    "src/components/GenerationCostNotice.tsx",
+    "src/components/P0GameLab.tsx",
+    "src/pages/CreditsPage.tsx",
+    "src/App.tsx",
+    "src/lib/proceduralGlb.ts"
+  ],
+  "paidModelRequests": 0
+}

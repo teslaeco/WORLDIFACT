@@ -11,6 +11,9 @@ import { createWorldObject, disposeObject } from '../lib/worldGeometry'
 import { DEMO_EXAMPLES } from '../lib/demoExamples'
 import { REFERENCE_LINKS } from '../config/references'
 import ProjectAttachmentPicker from './ProjectAttachmentPicker'
+import GenerationCostNotice from './GenerationCostNotice'
+import { MODEL_CATALOG, type DraftModel } from '../lib/modelCatalog'
+import { exportProceduralGlb } from '../lib/proceduralGlb'
 
 const MAX_REFERENCE_BYTES = 6 * 1024 * 1024
 function download(data: Blob, name: string) {
@@ -27,6 +30,7 @@ function WorldBlueprintLab() {
   const [blueprint, setBlueprint] = useState<WorldBlueprint>(() => meadowBlueprint())
   const [result, setResult] = useState<GenerationResult | null>(null)
   const [health, setHealth] = useState<Health>({})
+  const [selectedModel, setSelectedModel] = useState<DraftModel>('sol')
   const [prompt, setPrompt] = useState('Design a solar exploration workshop with a rover beside a restored forest.')
   const [image, setImage] = useState<string | null>(null)
   const [accessCode, setAccessCode] = useState('')
@@ -75,13 +79,14 @@ function WorldBlueprintLab() {
         if (accessCode.trim().length < 32) throw new Error('Enter the preview access code.')
         headers['X-WORLDIFACT-Access'] = accessCode.trim()
       }
-      const response = await fetch('/api/blueprint', { method: 'POST', headers, signal: controller.signal, body: JSON.stringify({ worldId: 'ai-game-lab', prompt, image, mode: 'live' }) })
+      const response = await fetch('/api/blueprint', { method: 'POST', headers, signal: controller.signal, body: JSON.stringify({ worldId: 'ai-game-lab', prompt, image, mode: 'live', model: selectedModel }) })
       const body = await response.json()
       if (!response.ok) {
         if (response.status === 429 || response.status === 503) setHealth(value => ({ ...value, generationReady: false, model: null }))
         throw new Error(body.error || 'Astra generation failed; the previous scene is unchanged.')
       }
       const validated = validateGenerationResult(body)
+      if (validated.model !== MODEL_CATALOG[selectedModel].model) throw new Error('The selected model was not honored. No replacement request was made.')
       if (validated.mode !== 'LIVE' || validated.provenance !== 'GENERATED') throw new Error('The server did not return verified LIVE evidence.')
       setBlueprint(validated.blueprint); setResult(validated)
       try { saveArchive(validated) } catch { /* Explicit portable exports remain available. */ }
@@ -95,17 +100,16 @@ function WorldBlueprintLab() {
 
   async function exportGameGlb() {
     try {
-      const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js')
       const scene = new Group(); scene.name = blueprint.title
       scene.userData = { target: 'GAME', provenance: result?.provenance ?? 'MOCK', manufacturing: 'NOT_VALIDATED' }
       for (const object of blueprint.objects) scene.add(createWorldObject(object))
-      try { const output = await new GLTFExporter().parseAsync(scene, { binary: true }); download(new Blob([output as ArrayBuffer], { type: 'model/gltf-binary' }), 'WORLDIFACT-GAME-procedural.glb') }
+      try { const output = exportProceduralGlb(scene); download(new Blob([output as ArrayBuffer], { type: 'model/gltf-binary' }), 'WORLDIFACT-GAME-procedural.glb') }
       finally { disposeObject(scene) }
     } catch { setError('GAME GLB export failed; the generated scene is still available.') }
   }
   const spec = result?.assetSpec, live = result?.mode === 'LIVE' && result.provenance === 'GENERATED'
   return <div className="studio">
-    <div className="studio-heading"><div><span className="eyebrow">AI GAME LAB · WORLD BLUEPRINTS</span><h1>Ideas become playable worlds.</h1></div><span className="pill">{health.generationReady ? 'Astra blueprint ready' : 'Local scene demo available'}</span></div>
+    <div className="studio-heading"><div><span className="eyebrow">AI GAME LAB · WORLD BLUEPRINTS</span><h1>Ideas become playable worlds.</h1></div><span className="pill">{health.generationReady ? `${MODEL_CATALOG[selectedModel].label} blueprint ready` : 'Local scene demo available'}</span></div>
     <nav className="world-tabs" aria-label="AI Game Lab views">
       <span className="active" aria-current="page">World scene</span>
       <Link to="/shop">3D models + textures →</Link>
@@ -125,6 +129,8 @@ function WorldBlueprintLab() {
       </div>
       <aside className="creator-panel">
         <span className="eyebrow">WORLD INPUT</span>
+        <label>AI model<select value={selectedModel} disabled={busy} onChange={e => { if (e.target.value === "astra") navigate("/shop"); else setSelectedModel(e.target.value as DraftModel) }}><option value="luna">GPT-6 LUNA — 15 points</option><option value="sol">GPT-6 SOL — 50 points</option><option value="astra">GPT-6 ASTRA — 250 points · open detailed Studio</option></select></label>
+        <GenerationCostNotice model={selectedModel} busy={busy} />
         <label>Prompt<textarea rows={6} maxLength={2000} value={prompt} disabled={busy} onChange={e => setPrompt(e.target.value)} /></label>
         <div className="prompt-presets" aria-label="No-cost demo examples">{DEMO_EXAMPLES.map(example => <button key={example.id} type="button" disabled={busy} onClick={() => generateDemo(example.prompt)}>{example.label}</button>)}</div>
         <label>Reference image · optional · max 6 MB<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
@@ -133,7 +139,7 @@ function WorldBlueprintLab() {
         {!health.generationReady && image && <small>The no-cost scene demo uses text only. LIVE image analysis starts only when the reviewed Astra generation gate is enabled.</small>}
         <ProjectAttachmentPicker scope="game-lab" disabled={busy} />
         {health.accessRequired && <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /></label>}
-        <button className="primary" disabled={busy || prompt.trim().length < 3} onClick={generatePrimary}>{busy ? `Astra working · ${seconds}s` : health.generationReady ? 'Generate world blueprint · Astra' : 'Generate DEMO world · no API cost'}</button>
+        <button className="primary" disabled={busy || prompt.trim().length < 3} onClick={generatePrimary}>{busy ? `${MODEL_CATALOG[selectedModel].label} working · ${seconds}s` : health.generationReady ? `Generate world blueprint · ${MODEL_CATALOG[selectedModel].label}` : 'Generate DEMO world · no API cost'}</button>
         <button disabled={busy} onClick={() => generateDemo()}>Refresh DEMO locally</button>
         <Link to="/shop" className="button-link">Create a 3D model + textures →</Link>
         {busy && <button onClick={() => abort.current?.abort()}>Stop waiting in this browser</button>}

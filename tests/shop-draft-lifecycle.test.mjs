@@ -160,7 +160,7 @@ test('explicit FAST after completion sends one Sol blueprint POST and never subm
     const storedBefore = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
     h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook in FAST' } })
     h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
-    assert.equal(h.button('Generate FAST').props.disabled, false)
+    assert.equal(h.button('Generate GPT-6 Sol').props.disabled, false)
     const first = h.form().props.onSubmit({ preventDefault() {} })
     const duplicate = h.form().props.onSubmit({ preventDefault() {} })
     await Promise.all([first, duplicate]); await h.settle()

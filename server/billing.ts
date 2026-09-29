@@ -342,7 +342,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED',
     checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval,
     subscriptionCredits: MONTHLY_MEMBERSHIP.credits, generationCost: 50, modelsPerSubscriptionGrant: 30,
-    generationCosts: { sol: 50, astra: 250 }, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, subscriptionPrice: MONTHLY_MEMBERSHIP,
+    generationCosts: { sol: 50, astra: 250, luna: 15 }, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, subscriptionPrice: MONTHLY_MEMBERSHIP,
     plans: {
       creator: { id: 'creator', ...SUBSCRIPTION_PLANS.creator, checkoutReady: config.plans.creator },
       pro: { id: 'pro', ...SUBSCRIPTION_PLANS.pro, checkoutReady: config.plans.pro, blockedReason: config.astraSpendGuard ? null : 'ASTRA_COST_GUARD_REQUIRED' },

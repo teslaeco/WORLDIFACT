@@ -68,7 +68,7 @@ function AccountStatusContent({ signedIn, loading }: { signedIn: boolean; loadin
         <Link to={signedIn ? '/account/credits' : signIn} className="account-status-credits" aria-live="polite">
           <span>Credits</span><strong>{loading ? 'Checking…' : !signedIn ? 'Sign in' : balance ? balance.credits.toLocaleString() : error ? 'Unavailable' : 'Checking…'}</strong>
         </Link>
-        {signedIn && balance && <span className="account-status-free">Free SOL: <b>{balance.fastRemaining} FAST</b></span>}
+        {signedIn && balance && <span className="account-status-free">Free drafts: <b>{balance.fastRemaining} FAST</b></span>}
         {signedIn && <button type="button" className="account-status-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Refresh credit balance">Refresh</button>}
       </div>
     </div>

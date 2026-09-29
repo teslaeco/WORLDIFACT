@@ -57,6 +57,7 @@ export default function App() {
         <Link to="/login">Account</Link>
         <Link to="/account/models">My models</Link>
         <a href="/blog/astra-vs-meshy-rim/">Astra vs Meshy: rim case study</a>
+        <a href="/compare/mcc/">MCC cabinet: Astra and Meshy evidence</a>
         <Link to="/control">Platform connections</Link>
         <Link to="/privacy">Privacy and data</Link>
         <Link to="/terms">Preview terms</Link>

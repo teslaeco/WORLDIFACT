@@ -18,13 +18,14 @@ export default function LiveSolPreview({ result, prompt }: { result: GenerationR
     return () => { closed = true; if (url) URL.revokeObjectURL(url) }
   }, [result])
   const current = preview?.result === result ? preview : null
-  return <div className="live-sol-preview" aria-label="SOL generated blueprint preview">
-    {current?.url ? <OracleModelPreview url={current.url} label="SOL blueprint-derived 3D model" customerMode />
-      : <p role="status">{current?.error || 'Building the 3D preview from the returned SOL specification…'}</p>}
-    <p><strong>LIVE SOL specification · procedural GAME geometry</strong></p>
+  const name = result.model === 'gpt-6-luna' ? 'LUNA' : 'SOL'
+  return <div className="live-sol-preview" aria-label={`${name} generated blueprint preview`}>
+    {current?.url ? <OracleModelPreview url={current.url} label={`${name} blueprint-derived 3D model`} customerMode />
+      : <p role="status">{current?.error || `Building the 3D preview from the returned ${name} specification…`}</p>}
+    <p><strong>LIVE {name} specification · procedural GAME geometry</strong></p>
     <p>{result.assetSpec?.summary || result.blueprint.title}</p>
     <small>The preview and downloaded GLB use the same AI-returned objects, colors and placements. This is not a detailed Oracle mesh or a manufacturing-approved file.</small>
-    {current?.url && <a className="native-shop-back" href={current.url} download="WORLDIFACT-SOL-generated-blueprint.glb">Download this SOL model · GLB</a>}
+    {current?.url && <a className="native-shop-back" href={current.url} download={`WORLDIFACT-${name}-generated-blueprint.glb`}>Download this {name} model · GLB</a>}
     <details><summary>Submitted description</summary><p>{prompt}</p></details>
   </div>
 }
