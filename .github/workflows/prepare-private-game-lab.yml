@@ -29,7 +29,8 @@ jobs:
       - name: Verify complete application with zero paid model requests
         run: |
           if ! npm run verify > /tmp/world-verify.log 2>&1; then
-            tail -n 180 /tmp/world-verify.log
+            grep -E '✖|tests |pass |fail |error TS' /tmp/world-verify.log || true
+            tail -n 100 /tmp/world-verify.log
             exit 1
           fi
           grep -E 'tests |pass |fail |built in|PASS:' /tmp/world-verify.log

@@ -22,7 +22,7 @@ edit('tests/contest-finish.test.mjs','contest portal generators are expanded by 
 edit('tests/contest-finish.test.mjs','  assert.match(source, /<details open className="portal-generator-drawer portal-page">/)','  assert.doesNotMatch(source, /<details open className="portal-generator-drawer portal-page">/)')
 edit('tests/portal-entry.test.mjs','direct PortalPage Shop renders the real native generation form, Astra surface and WORLDIFACT return','direct PortalPage Shop preserves its real model form without the removed world-blueprint duplicate')
 edit('tests/portal-entry.test.mjs','  assert.match(html, /data-world="enchanted-ai-shop"/)','  assert.doesNotMatch(html, /data-world="enchanted-ai-shop"/)\n  assert.match(html, /AI model · Model AI/)')
-edit('tests/shop-render-helper.mjs',"      if (id === 'react') return react", "      if (id === 'react-router-dom' && adapters[id]) return { ...localRequire(id), ...adapters[id] }\n      if (id === 'react') return react")
+edit('tests/shop-render-helper.mjs',"      if (id.endsWith('.css')) return {}\n      if (id === 'react') return react", "      if (id.endsWith('.css')) return {}\n      if (id === 'react-router-dom' && adapters[id]) return { ...localRequire(id), ...adapters[id] }\n      if (id === 'react') return react")
 edit('tests/shop-draft-lifecycle.test.mjs',"reconciliationRequired = false } = {})", "reconciliationRequired = false, withExistingJob = true, characterPrompt = '' } = {})")
 edit('tests/shop-draft-lifecycle.test.mjs',"new Map([[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]])", "new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])")
 edit('tests/shop-draft-lifecycle.test.mjs',"const Component = await loadShopComponent({ react: hookReact, globals, adapters: {", "const Component = await loadShopComponent({ react: hookReact, globals, adapters: {\n    'react-router-dom': { useLocation: () => ({ pathname: '/shop', state: characterPrompt ? { worldPrompt: characterPrompt } : null }) },")
@@ -43,6 +43,4 @@ test('private character brief fills an empty Shop draft without a generation, an
   } finally { recovered.close() }
 })
 ''')
-# Improve failure summaries without hiding any failed assertion or allowing a failed build.
-f=Path('.github/workflows/prepare-private-game-lab.yml');s=f.read_text();s=s.replace('            tail -n 180 /tmp/world-verify.log', "            grep -E '✖|tests |pass |fail |error TS' /tmp/world-verify.log || true\n            tail -n 110 /tmp/world-verify.log");f.write_text(s)
 marker.write_text('{"typedFixturesAndUpdatedOwnerRequirements":true}\n')
