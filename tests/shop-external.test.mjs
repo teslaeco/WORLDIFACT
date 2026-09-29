@@ -43,7 +43,7 @@ test('unavailable generation is customer-friendly and does not expose quota diag
   assert.match(html, /Generation temporarily unavailable/)
   assert.match(html, /Preview DEMO · no API cost/)
   assert.match(html, /local DEMO preview/)
-  assert.match(html, /Free Sol FAST includes downloads/)
+  assert.match(html, /Eligible free Sol or Luna drafts include GLB downloads/)
   assert.match(html, /Experimental beta/)
   assert.doesNotMatch(html, /blocked by the exhausted pilot quota/)
 })
