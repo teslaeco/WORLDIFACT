@@ -1,0 +1,10 @@
+{
+  "approval": "Owner explicitly authorized completion of Pro/Studio activation and the required bounded live Astra validation on 2026-09-29.",
+  "path": "direct-worldifact-blueprint",
+  "maximum_provider_reservation_usd": 1.75,
+  "generation_requests": 1,
+  "retries": 0,
+  "stripe_customer_charge": false,
+  "purpose": "Validate the exact single-call GPT-6 Astra Worker path before enabling Pro/Studio sales.",
+  "oracle_multi_call_generation": false
+}
