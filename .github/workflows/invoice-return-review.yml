@@ -1,0 +1,43 @@
+name: Prepare and verify invoice return (no paid calls)
+on:
+  push:
+    branches: ['fix/billing-return-seller-20260930']
+    paths: ['scripts/prepare-invoice-return-ui.py', '.github/workflows/invoice-return-review.yml']
+permissions:
+  contents: write
+concurrency:
+  group: worldifact-invoice-return-review
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply reviewed invoice-return source on isolated branch
+        run: |
+          python3 scripts/prepare-invoice-return-ui.py
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ['src/lib/planPayment.ts', 'src/components/BillingRecovery.tsx']:
+              p = Path(name)
+              p.write_text(p.read_text().replace("from './invoicePayment'", "from './invoicePayment.ts'").replace("from '../lib/invoicePayment'", "from '../lib/invoicePayment.ts'"))
+          p = Path('src/pages/InvoicePaymentPage.tsx')
+          p.write_text(p.read_text().replace('useEffect, useRef, useState', 'useEffect, useRef, useState, type FormEvent').replace('React.FormEvent', 'FormEvent'))
+          PY
+      - run: npm ci
+      - name: Application and synthetic invoice/return tests
+        run: npm run verify
+      - name: Worker packaging only
+        run: npm run deploy:check
+      - name: Commit verified changes to review branch only
+        run: |
+          test "$GITHUB_REF" = refs/heads/fix/billing-return-seller-20260930
+          git diff --check
+          git add server/billing.ts src/lib/invoicePayment.ts src/lib/stripeInvoiceForm.ts src/lib/planPayment.ts src/components/BillingRecovery.tsx src/pages/InvoicePaymentPage.tsx src/App.tsx tests/billing-recovery.test.ts tests/invoice-return.test.ts docs/CONTEST_STATUS.md
+          git -c user.name='WORLDIFACT review' -c user.email='noreply@users.noreply.github.com' commit -m 'Add gated same-invoice Stripe form and verified automatic home return'
+          git push origin HEAD:refs/heads/fix/billing-return-seller-20260930
