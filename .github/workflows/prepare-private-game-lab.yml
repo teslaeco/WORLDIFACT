@@ -1,0 +1,43 @@
+name: Integrate private Game Lab safely
+on:
+  push:
+    branches: ['feat/private-game-lab-20260929']
+permissions:
+  contents: write
+concurrency:
+  group: private-game-lab-integration
+  cancel-in-progress: false
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/private-game-lab-20260929
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply guarded integration only in the review branch
+        run: |
+          python3 scripts/integrate-private-game-lab.py
+          python3 scripts/finish-private-game-lab.py
+      - name: Verify complete application with zero paid model requests
+        run: |
+          if ! npm run verify > /tmp/world-verify.log 2>&1; then
+            tail -n 180 /tmp/world-verify.log
+            exit 1
+          fi
+          grep -E 'tests |pass |fail |built in|PASS:' /tmp/world-verify.log
+      - run: npm run deploy:check
+      - name: Commit only tested review-branch changes
+        run: |
+          git config user.name 'WORLDIFACT review'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add src server tests docs ops/private-game-lab-integrated.json ops/private-game-lab-finished.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Integrate private editor and guarded Creator Astra allowance'
+            git push origin HEAD:feat/private-game-lab-20260929
+          fi
