@@ -13,7 +13,7 @@ test('native Shop presents a customer creation flow with cart and no visible eng
   assert.match(html, /id="studio-photos"/)
   assert.match(html, /ASTRA · QUALITY BLUEPRINT/)
   assert.match(html, /FAST · DRAFT/)
-  assert.match(html, /Generate SLOW model \+ materials/)
+  assert.match(html, /Generate GPT-6 Astra blueprint · 250 points/)
   assert.match(html, /CUSTOMIZE &amp; ORDER/)
   assert.match(html, /Cart/)
   assert.match(html, /Specify model dimensions \(optional\)/)
