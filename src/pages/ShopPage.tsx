@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { MODEL_CATALOG, type DraftModel } from '../lib/modelCatalog'
+import { MODEL_CATALOG, type DraftModel, type GenerationModel } from '../lib/modelCatalog'
 import OracleModelPreview from '../components/OracleModelPreview'
 import DemoShopPreview from '../components/DemoShopPreview'
 import ShopManufacturingOptions from '../components/ShopManufacturingOptions'
@@ -18,7 +18,7 @@ import { canSubmitNewDraft } from '../lib/studioDraft'
 import { inspectGLB } from '../lib/glb'
 import { DEFAULT_DIMENSIONS_MM, type ClientDimensions } from '../lib/shopManufacturing'
 import { validateGenerationResult, type GenerationResult } from '../lib/blueprint'
-import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, validateStudioInput, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
+import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
 import './ShopPage.css'
 
 const EXAMPLE_ORIGIN = 'https://forge-studio-public.terraformingplanet.chatgpt.site'
@@ -38,11 +38,14 @@ function download(blob: Blob, name: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 type Preview = StudioPreviewIdentity & { blob: Blob; url: string; warning: string }
-async function checkSolReady(fetcher: typeof fetch = fetch) {
+async function checkGenerationReady(fetcher: typeof fetch = fetch) {
   const response = await fetcher('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
-  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return false
-  const value = await response.json() as { generationReady?: unknown; model?: unknown }
-  return value.generationReady === true && value.model === 'gpt-6-sol'
+  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return { sol: false, astra: false }
+  const value = await response.json() as { generationReady?: unknown; model?: unknown; qualityModel?: unknown; astraBlueprintReady?: unknown }
+  return {
+    sol: value.generationReady === true && value.model === 'gpt-6-sol',
+    astra: value.generationReady === true && value.qualityModel === 'gpt-6-astra' && value.astraBlueprintReady === true,
+  }
 }
 
 /** Draft inputs are separate from the immutable submitted job and its result. */
@@ -82,6 +85,7 @@ export default function ShopPage() {
   const [fastPrompt, setFastPrompt] = useState('')
   const [fastResult, setFastResult] = useState<GenerationResult | null>(null)
   const [solReady, setSolReady] = useState(false)
+  const [astraReady, setAstraReady] = useState(false)
   const fast = profile === FAST_DRAFT_PROFILE
   const fastAvailable = solReady
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
@@ -127,12 +131,13 @@ export default function ShopPage() {
     const flags = operations.current
     if (flags.status) return
     flags.status = true; setChecking(true)
-    const [studioCheck, solCheck] = await Promise.allSettled([checkStudio(fetch, owner), checkSolReady(fetch)])
+    const [studioCheck, generationCheck] = await Promise.allSettled([checkStudio(fetch, owner), checkGenerationReady(fetch)])
     if (mounted.current) {
       if (studioCheck.status === 'fulfilled') applyStatus(studioCheck.value)
       else setStatus(null)
-      setSolReady(solCheck.status === 'fulfilled' && solCheck.value)
-      if (studioCheck.status === 'fulfilled' || (solCheck.status === 'fulfilled' && solCheck.value)) setError('')
+      if (generationCheck.status === 'fulfilled') { setSolReady(generationCheck.value.sol); setAstraReady(generationCheck.value.astra) }
+      else { setSolReady(false); setAstraReady(false) }
+      if (studioCheck.status === 'fulfilled' || (generationCheck.status === 'fulfilled' && (generationCheck.value.sol || generationCheck.value.astra))) setError('')
       else setError('Generation services are temporarily unavailable. Your draft is preserved.')
     }
     flags.status = false
@@ -158,12 +163,13 @@ export default function ShopPage() {
       setError(e instanceof Error ? e.message : 'Recovery storage is unavailable. Generation is paused.')
     }
     flags.status = true; setChecking(true)
-    Promise.allSettled([checkStudio(), checkSolReady()]).then(([studioCheck, solCheck]) => {
+    Promise.allSettled([checkStudio(), checkGenerationReady()]).then(([studioCheck, generationCheck]) => {
       if (closed) return
       if (studioCheck.status === 'fulfilled') applyStatus(studioCheck.value)
       else setStatus(null)
-      setSolReady(solCheck.status === 'fulfilled' && solCheck.value)
-      if (studioCheck.status === 'rejected' && !(solCheck.status === 'fulfilled' && solCheck.value))
+      if (generationCheck.status === 'fulfilled') { setSolReady(generationCheck.value.sol); setAstraReady(generationCheck.value.astra) }
+      else { setSolReady(false); setAstraReady(false) }
+      if (studioCheck.status === 'rejected' && !(generationCheck.status === 'fulfilled' && (generationCheck.value.sol || generationCheck.value.astra)))
         setError('The generation services are unavailable. You can still prepare your description and use the local DEMO preview.')
     }).finally(() => { if (!closed) { flags.status = false; setChecking(false) } })
     listStudioModels().then(value => { if (!closed) setArchive(value) }).catch(() => {})
@@ -245,67 +251,54 @@ export default function ShopPage() {
 
   const generate = async (event: React.FormEvent) => {
     event.preventDefault()
-    const flags = operations.current, client = coordinator.current
+    const flags = operations.current
     if (flags.submit || flags.photos || flags.artifact || !previousFinished) return
 
-    if (fast) {
-      if (!fastAvailable || photos.length || purpose === 'terrain' || prompt.trim().length < 3 || prompt.length > 2000) return
-      flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt('')
-      const controller = new AbortController()
-      const timeout = window.setTimeout(() => controller.abort(), 40_000)
-      try {
-        const response = await fetch('/api/blueprint', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': crypto.randomUUID() },
-          signal: controller.signal,
-          body: JSON.stringify({ worldId: 'enchanted-ai-shop', prompt: prompt.trim(), mode: 'live', ...(cheapModel === 'luna' ? { model: cheapModel } : {}) }),
-        })
-        const body = await response.json()
-        if (!response.ok) {
-          if ([429, 503].includes(response.status)) setSolReady(false)
-          throw new Error(body?.error || 'The selected model draft could not be generated.')
-        }
-        const result = validateGenerationResult(body)
-        if (result.model !== MODEL_CATALOG[cheapModel].model) throw new Error('The provider did not honor your selected model. No replacement request was sent.')
-        if (result.mode !== 'LIVE' || result.provenance !== 'GENERATED') throw new Error('FAST did not return verified LIVE model evidence.')
-        clearPreview()
-        if (mounted.current) {
-          setFastPrompt(prompt.trim())
-          setFastResult(result)
-          setNotice('FAST · selected-model specification ready. The visible 3D is a lightweight procedural draft, not an Oracle production mesh; use SLOW · QUALITY for the detailed model workflow.')
-        }
-      } catch (e) {
-        if (mounted.current) setError(e instanceof Error && e.name === 'AbortError' ? 'FAST generation timed out. Your previous preview is unchanged.' : e instanceof Error ? e.message : 'FAST generation failed.')
-      } finally {
-        window.clearTimeout(timeout)
-        flags.submit = false
-        if (mounted.current) setBusy(false)
-      }
-      return
-    }
-
-    if (!status?.ready || !client || (photos.length && !status.photoReady)) return
-    flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt(''); setFastResult(null); setFastPrompt('')
+    const selectedModel: GenerationModel = fast ? cheapModel : 'astra'
+    const selectedReady = selectedModel === 'astra' ? astraReady : solReady
+    if (!selectedReady || prompt.trim().length < 3 || prompt.length > 2000 || (selectedModel !== 'astra' && photos.length) || photos.length > 1) return
+    flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt('')
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), selectedModel === 'astra' ? 70_000 : 45_000)
     try {
-      const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt, purpose, textureMaxSize: textureLimit, photos })
-      const value = await client.start(input, record => {
-        if (mounted.current) {
-          clearPreview(); setSaved(record)
-          setJob({ id: record.receipt.id, state: 'pending', detail: JOB_DETAILS.pending })
+      const response = await fetch('/api/blueprint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': crypto.randomUUID() },
+        signal: controller.signal,
+        body: JSON.stringify({
+          worldId: 'enchanted-ai-shop',
+          prompt: prompt.trim(),
+          mode: 'live',
+          model: selectedModel,
+          ...(selectedModel === 'astra' && photos[0] ? { image: photos[0].dataUrl } : {}),
+        }),
+      })
+      const body = await response.json()
+      if (!response.ok) {
+        if ([429, 503].includes(response.status)) {
+          if (selectedModel === 'astra') setAstraReady(false)
+          else setSolReady(false)
         }
-      }, owner, true)
-      if (mounted.current) setJob(value)
-    } catch (e) {
-      if (mounted.current) {
-        const message = e instanceof Error ? e.message : 'Could not prepare the job. Inputs and the previous result are preserved.'
-        setError(message)
-        if (/allowance|exhausted|unavailable/i.test(message) && prompt.trim().length >= 3) {
-          setDemoPrompt(prompt.trim())
-          setNotice('LIVE detailed 3D generation is unavailable, so a clearly labelled local DEMO preview is shown instead. No second paid request was made.')
-        }
+        throw new Error(body?.error || `${MODEL_CATALOG[selectedModel].label} could not generate this blueprint.`)
       }
+      const result = validateGenerationResult(body)
+      if (result.model !== MODEL_CATALOG[selectedModel].model) throw new Error('The provider did not honor your selected model. No replacement request was sent.')
+      if (result.mode !== 'LIVE' || result.provenance !== 'GENERATED') throw new Error('The selected model did not return verified LIVE evidence.')
+      clearPreview()
+      if (mounted.current) {
+        setFastPrompt(prompt.trim())
+        setFastResult(result)
+        setNotice(selectedModel === 'astra'
+          ? 'GPT-6 ASTRA blueprint/specification ready. The downloadable GLB is generated locally from the validated Astra result. Detailed multi-call Oracle/Blender mesh generation remains a separate beta path.'
+          : `${MODEL_CATALOG[selectedModel].label} specification ready. The visible 3D is a lightweight procedural draft.`)
+      }
+    } catch (e) {
+      if (mounted.current) setError(e instanceof Error && e.name === 'AbortError' ? `${MODEL_CATALOG[selectedModel].label} generation timed out. Your previous preview is unchanged.` : e instanceof Error ? e.message : 'Generation failed.')
+    } finally {
+      window.clearTimeout(timeout)
+      flags.submit = false
+      if (mounted.current) setBusy(false)
     }
-    finally { flags.submit = false; if (mounted.current) setBusy(false) }
   }
   const previewDemo = () => {
     const value = prompt.trim()
@@ -319,7 +312,7 @@ export default function ShopPage() {
   const addPhotos = async (files: FileList | null) => {
     const flags = operations.current
     if (!files || flags.photos || flags.submit || fast) return
-    if (photos.length + files.length > 3) { setError('Use at most three views of the same object.'); return }
+    if (photos.length + files.length > 1) { setError('Use one reference image for the bounded ASTRA blueprint path.'); return }
     flags.photos = true; setPhotoBusy(true); setError('')
     try {
       const additions: StudioPhoto[] = [], views = ['front', 'side', 'back'] as const
@@ -362,11 +355,10 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 &&
-    (fast ? fastAvailable && !photos.length && purpose !== 'terrain' && prompt.length <= 2000
-      : !!coordinator.current && !!status?.ready && (!photos.length || status.photoReady))
+  const canGenerate = !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= 2000 &&
+    (fast ? fastAvailable && !photos.length && purpose !== 'terrain' : astraReady && photos.length <= 1)
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
-  const activeReady = fast ? fastAvailable : status?.ready === true
+  const activeReady = fast ? fastAvailable : astraReady
 
   return <main className="portal-page native-shop">
     <header className="native-shop-nav"><Link to="/world" className="native-shop-back">← Back to WORLDIFAKT</Link><strong>AI Shop</strong><Link to="/account/models">My models</Link><Link to="/account/credits">Account & credits</Link><nav aria-label="World portals">{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></header>
@@ -405,7 +397,7 @@ export default function ShopPage() {
       </div>
       <div className="native-shop-form">
         <span className="eyebrow">CREATE YOUR PRODUCT</span><h1>Describe it.<br />See it in 3D.</h1><p><a href="/compare/mcc/">See the real MCC cabinet comparison: WORLDIFACT and Meshy →</a></p>
-        <p>Describe your object and optionally add up to three reference images. Free accounts can share up to 2 Sol or Luna drafts per rolling 24 hours when funded capacity is available. Astra requires eligible membership and verified runtime activation.</p>
+        <p>Describe your object and optionally add one reference image. Free accounts can share up to 2 Sol or Luna drafts per rolling 24 hours when funded capacity is available. Paid Astra uses one bounded server-side call and requires eligible membership.</p>
         {status && !status.accountRequired && <small>Account limits are awaiting server activation. The existing experimental generation window remains in effect.</small>}
         <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'You can describe your next model while the current preview stays unchanged.' : 'You can prepare the next idea while the current model is being completed.' : 'Eligible free Sol or Luna drafts include GLB downloads. Astra costs 250 points on eligible Creator, Pro and Studio accounts after verified runtime activation.'}</p>
         <button type="button" data-testid="clear-studio-draft" disabled={busy || photoBusy} onClick={clearDraft}>Clear description</button>
@@ -416,9 +408,9 @@ export default function ShopPage() {
             <p>Choose the AI model before generating. One click starts one job; the selected model is never upgraded automatically.</p>
             <div className="shop-generation-mode-grid">
               <button type="button" className="shop-generation-mode" aria-label="Select GPT-6 Astra, 250 points per generation" aria-pressed={!fast} onClick={() => { setProfile('standard'); if (textureLimit === 2048) setTextureLimit(4096) }}>
-                <strong>SLOW · QUALITY</strong>
+                <strong>ASTRA · QUALITY BLUEPRINT</strong>
                 <span>GPT-6 ASTRA · 250 points / generation</span>
-                <span>Full quality workflow · reference images · up to 4K</span>
+                <span>Single bounded Astra call · 1 reference image · procedural GAME GLB</span>
               </button>
               <button type="button" className="shop-generation-mode" aria-label="Select GPT-6 Sol, 50 points per paid generation" aria-pressed={fast} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'} onClick={() => { setProfile(FAST_DRAFT_PROFILE); setTextureLimit(2048) }}>
                 <strong>FAST · DRAFT</strong>
@@ -426,7 +418,7 @@ export default function ShopPage() {
                 <span>GPT-6 Sol procedural draft · text-only · usually seconds</span>
               </button>
             </div>
-            <small>{!fastAvailable ? 'FAST is waiting for the verified GPT-6 Sol worker. SLOW · QUALITY can still use the Oracle/Blender workflow when it is ready.' : photos.length ? 'FAST is text-only in this version. Your reference images are kept for SLOW · QUALITY.' : purpose === 'terrain' ? 'FAST does not support terrain in this Shop revision. Use SLOW · QUALITY.' : fast && prompt.length > 2000 ? 'Shorten FAST text to 2000 characters or switch to SLOW · QUALITY.' : fast ? 'FAST sends one server-side GPT-6 Sol request and builds a lightweight procedural 3D draft from the validated result. Use SLOW · QUALITY for detailed Oracle/Blender output.' : 'SLOW · QUALITY uses the detailed Oracle/Blender workflow. FAST is the lighter Sol procedural draft.'}</small>
+            <small>{!fastAvailable ? 'FAST is waiting for the verified GPT-6 Sol worker. ASTRA blueprint availability is checked separately.' : photos.length ? 'FAST is text-only in this version. Your reference images are kept for SLOW · QUALITY.' : purpose === 'terrain' ? 'FAST does not support terrain in this Shop revision. Use ASTRA · QUALITY BLUEPRINT.' : fast && prompt.length > 2000 ? 'Shorten FAST text to 2000 characters or switch to ASTRA · QUALITY BLUEPRINT.' : fast ? 'FAST sends one server-side GPT-6 Sol request and builds a lightweight procedural 3D draft from the validated result. Use ASTRA · QUALITY BLUEPRINT for the premium specification path.' : 'ASTRA creates the premium validated blueprint/spec in one bounded provider call. The downloadable GAME GLB is procedural; the separate multi-call Oracle/Blender mesh workflow remains beta.'}</small>
           </fieldset>
           <div className="shop-model-picker" role="group" aria-labelledby="studio-mode-label">
             <label id="studio-mode-label" htmlFor="studio-mode">AI model · Model AI</label>
@@ -436,21 +428,21 @@ export default function ShopPage() {
               if (next === FAST_DRAFT_PROFILE && (!fastAvailable || photos.length || purpose === 'terrain')) return
               setProfile(next)
               if (next === FAST_DRAFT_PROFILE) setTextureLimit(2048)
-            }}><option value="standard">GPT-6 ASTRA — 250 points / generation</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>GPT-6 SOL — 50 points / paid generation</option><option value="luna" disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>GPT-6 LUNA — 15 points / paid generation</option></select>
+            }}><option value="standard">GPT-6 ASTRA — 250 points · bounded blueprint</option><option value={FAST_DRAFT_PROFILE} disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>GPT-6 SOL — 50 points / paid generation</option><option value="luna" disabled={!fastAvailable || !!photos.length || purpose === 'terrain'}>GPT-6 LUNA — 15 points / paid generation</option></select>
           </div>
           <div className="shop-internal-only" hidden>
-            <small>STANDARD remains the detailed Oracle/Blender path. FAST uses the public server-side Sol blueprint path and a local procedural preview; it does not claim an Oracle mesh.</small>
+            <small>ASTRA standard selection uses the bounded server-side blueprint/spec path. Historical Oracle/Blender receipts remain recoverable, but new multi-call Oracle mesh jobs are not started from this customer form.</small>
             <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
             <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
           </div>
           <GenerationCostNotice model={fast ? cheapModel : 'astra'} busy={busy} />
-          <label htmlFor="studio-prompt">Describe your model · Prompt</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={fast ? 2000 : 4000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic chess knight with a stable base, smooth material and clean details." required />
-          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
+          <label htmlFor="studio-prompt">Describe your model · Prompt</label><textarea ref={promptInput} id="studio-prompt" value={prompt} maxLength={2000} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a realistic chess knight with a stable base, smooth material and clean details." required />
+          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add one ASTRA reference image · JPG / PNG / WebP · ${photos.length}/1`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 1} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>ASTRA blueprint accepts one reference image in this release. Sol/Luna remain text-only.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy} />
-          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? `Generate ${MODEL_CATALOG[cheapModel].label} draft · ${MODEL_CATALOG[cheapModel].creditsPerGeneration} points or funded free allowance` : 'Generate SLOW model + materials'}</button><small>Free: up to 2 shared Sol/Luna drafts per rolling 24 hours when funded capacity is available. Paid Luna uses 15 points, Sol 50 and Astra 250. Astra requires eligible membership and verified runtime activation. There is no free Astra fallback. Manufacturing and delivery are separate.</small>
+          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? `Generate ${MODEL_CATALOG[cheapModel].label} draft · ${MODEL_CATALOG[cheapModel].creditsPerGeneration} points or funded free allowance` : 'Generate GPT-6 Astra blueprint · 250 points'}</button><small>Free: up to 2 shared Sol/Luna drafts per rolling 24 hours when funded capacity is available. Paid Luna uses 15 points, Sol 50 and Astra 250. Astra requires eligible membership and verified runtime activation. There is no free Astra fallback. Manufacturing and delivery are separate.</small>
         </form>
-        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : activeReady ? fast ? 'FAST Sol generation available' : 'SLOW quality generation available' : 'Generation temporarily unavailable'}</strong><p>{activeReady ? fast ? 'FAST creates a generated Sol specification and lightweight procedural 3D draft.' : 'SLOW creates the detailed model through the Oracle/Blender workflow.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
+        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : activeReady ? fast ? 'FAST Sol generation available' : 'ASTRA blueprint generation available' : 'Generation temporarily unavailable'}</strong><p>{activeReady ? fast ? 'FAST creates a generated Sol specification and lightweight procedural 3D draft.' : 'ASTRA creates a validated premium specification and a procedural downloadable GAME GLB in one bounded call.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}
         {error && <p className="native-shop-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}

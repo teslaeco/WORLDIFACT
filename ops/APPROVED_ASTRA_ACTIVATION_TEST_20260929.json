@@ -1,0 +1,8 @@
+{
+  "approval": "Owner explicitly approved exactly one live GPT-6 Astra activation test on 2026-09-29.",
+  "maximum_provider_reservation_usd": 1.75,
+  "retries": 0,
+  "customer_charge": false,
+  "purpose": "Validate one real Astra generation and downloaded GLB before enabling Pro/Studio subscriptions.",
+  "approved_follow_up": "If and only if this test passes, enable paid generation and Pro/Studio sales, merge, deploy, then verify hosted checkout without submitting payment."
+}

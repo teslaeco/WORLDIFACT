@@ -22,7 +22,10 @@
 .credits-signin .credits-action{width:auto;min-width:230px}
 .credits-plans{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.35fr);max-width:1100px;margin:30px auto;gap:22px;align-items:start}
 .credits-plans article{min-width:0;background:linear-gradient(135deg,#152033ee,#0b1423);border:1px solid #8bbfe841;border-radius:18px;padding:28px;display:flex;flex-direction:column}
-.credits-plans .credits-featured{border-color:#6cdcc891;background:linear-gradient(145deg,#173d43,#112133 65%);box-shadow:0 0 50px #45cfc816}
+.credits-plans .credits-selectable-plan{cursor:pointer;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease}
+.credits-plans .credits-selectable-plan:hover{border-color:#6cdcc891;background:linear-gradient(145deg,#17333c,#101f31 65%);box-shadow:0 0 36px #45cfc812}
+.credits-plans .credits-selectable-plan:focus-visible{outline:3px solid #a5f2dc;outline-offset:4px}
+.credits-plans .credits-featured{border-color:#6cdcc8d1;background:linear-gradient(145deg,#173d43,#112133 65%);box-shadow:0 0 50px #45cfc824}
 .credits-plans h2{font-size:26px;font-weight:600;letter-spacing:-.03em;margin:18px 0 18px}
 .credits-plans p{font-size:15px;color:#b5ccdd;line-height:1.6}
 .credits-plans ul{list-style:none;margin:22px 0 30px;padding:0;display:grid;gap:17px;color:#b8ccdc;font-size:15px;line-height:1.6;flex:1}

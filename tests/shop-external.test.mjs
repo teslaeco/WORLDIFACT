@@ -11,9 +11,9 @@ test('native Shop presents a customer creation flow with cart and no visible eng
   for (const portal of PORTALS) assert.ok(html.includes(`href="${portal.route}"`))
   assert.match(html, /id="studio-prompt"/)
   assert.match(html, /id="studio-photos"/)
-  assert.match(html, /SLOW · QUALITY/)
+  assert.match(html, /ASTRA · QUALITY BLUEPRINT/)
   assert.match(html, /FAST · DRAFT/)
-  assert.match(html, /Generate SLOW model \+ materials/)
+  assert.match(html, /Generate GPT-6 Astra blueprint · 250 points/)
   assert.match(html, /CUSTOMIZE &amp; ORDER/)
   assert.match(html, /Cart/)
   assert.match(html, /Specify model dimensions \(optional\)/)
@@ -72,7 +72,7 @@ test('mobile layout keeps creation controls first and internal archive out of si
   assert.match(html, /SLOW model downloads require an active subscription/)
 })
 
-test('restored SLOW jobs recover automatically while customer FAST uses the separate Sol draft path', async () => {
+test('historical Oracle jobs recover while new Astra and FAST generation use blueprint paths', async () => {
   const source = await readFile(new URL('../src/pages/ShopPage.tsx', import.meta.url), 'utf8')
   const preview = await readFile(new URL('../src/components/DemoShopPreview.tsx', import.meta.url), 'utf8')
   assert.match(source, /Previous model did not finish/)

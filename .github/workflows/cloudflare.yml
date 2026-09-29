@@ -110,6 +110,10 @@ jobs:
           JS
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      - name: Verify Pro and Studio Stripe checkouts can open and expire without charge
+        run: node --experimental-strip-types scripts/check-stripe-astra-checkouts.ts
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
       - name: Deploy reviewed WORLDIFACT release
         run: npx wrangler deploy --config "${{ steps.mode.outputs.config }}"
         env:
@@ -152,6 +156,10 @@ jobs:
           assert.equal(status.cardReady, true);
           assert.equal(status.topupReady, true);
           assert.equal(status.checkoutReady, true);
+          assert.equal(status.plans?.pro?.checkoutReady, true);
+          assert.equal(status.plans?.studio?.checkoutReady, true);
+          assert.equal(status.plans?.pro?.amountCents, 9999);
+          assert.equal(status.plans?.studio?.amountCents, 14999);
           assert.equal(status.googlePay, 'eligible_devices');
           assert.deepEqual(status.price, { amount: 2999, currency: 'USD', credits: 1500, kind: 'one_time' });
           assert.deepEqual(status.subscriptionPrice, { amount: 2999, currency: 'USD', credits: 1500, kind: 'subscription', interval: 'month' });

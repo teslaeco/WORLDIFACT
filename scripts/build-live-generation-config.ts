@@ -11,6 +11,7 @@ export function buildLiveGenerationConfig(base: WranglerConfig): WranglerConfig 
     base.vars.ENABLE_PAID_GENERATION !== 'false' ||
     base.vars.PUBLIC_PILOT !== 'false' ||
     base.vars.ENABLE_ORACLE_JOBS !== 'false' ||
+    base.vars.ENABLE_ASTRA_PLANS !== 'false' ||
     base.vars.GENERATION_REQUEST_LIMIT !== '0' ||
     base.vars.GENERATION_EXPIRES_AT !== ''
   ) fail('Ongoing LIVE config must be generated from the reviewed disabled production base.')
@@ -20,8 +21,9 @@ export function buildLiveGenerationConfig(base: WranglerConfig): WranglerConfig 
     ...base.vars,
     ENABLE_PAID_GENERATION: 'true',
     PUBLIC_PILOT: 'true',
-    ENABLE_ORACLE_JOBS: 'true',
-    ENABLE_STUDIO_JOBS: 'true',
+    ENABLE_ORACLE_JOBS: 'false',
+    ENABLE_STUDIO_JOBS: 'false',
+    ENABLE_ASTRA_PLANS: 'true',
     ENABLE_APPROVED_FAST_TEST: 'false',
     GENERATION_REQUEST_LIMIT: 'unlimited',
     GENERATION_EXPIRES_AT: '',

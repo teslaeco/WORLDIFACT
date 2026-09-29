@@ -158,13 +158,28 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         ['creator','Creator SOL','$29.99','1,500 credits','2 ASTRA + 20 SOL, or up to 6 ASTRA attempts after activation','LUNA 15 · SOL 50 · ASTRA 250 credits'],
         ['pro','Pro ASTRA','$99.99','4,500 credits','90 SOL, 300 LUNA or 18 ASTRA generations','LUNA 15 · SOL 50 · ASTRA 250 credits'],
         ['studio','Studio ASTRA','$149.99','7,500 credits','150 SOL, 500 LUNA or 30 ASTRA generations','LUNA 15 · SOL 50 · ASTRA 250 credits'],
-      ] as const).map(([id,name,price,credits,capacity,models]) => <article key={id} className={selectedPlan === id && purchaseKind === 'subscription' ? 'credits-featured' : ''}>
+      ] as const).map(([id,name,price,credits,capacity,models]) => <article
+        key={id}
+        className={`credits-selectable-plan${selectedPlan === id && purchaseKind === 'subscription' ? ' credits-featured' : ''}`}
+        tabIndex={0}
+        aria-label={`Select ${name} plan`}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest('button,a')) return
+          setSelectedPlan(id)
+          setPurchaseKind('subscription')
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || !['Enter', ' '].includes(event.key)) return
+          event.preventDefault()
+          setSelectedPlan(id)
+          setPurchaseKind('subscription')
+        }}
+      >
         <span className="credits-plan-tag">{id === 'creator' ? 'CREATOR' : id === 'pro' ? 'PRO' : 'STUDIO'}</span>
         <h2>{name}</h2>
         {id === 'creator' && billing?.plans?.pro?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' && <p className="credits-method-note">Creator ASTRA access is prepared, but is not live until the updated generator passes its end-to-end test. Luna and Sol remain separate available paths.</p>}
         <div className="credits-price"><div><strong>{price}</strong><b> USD / month</b></div><span>{credits} every confirmed paid month</span></div>
         <ul><li><b>{capacity}</b></li><li>{models}</li><li>{id === 'creator' ? 'Creator can try Astra after runtime activation: budget 500 of the included points for two attempts; maximum six Astra attempts per paid period. These are not extra credits or guaranteed successful outputs.' : 'Astra access is plan-gated and still subject to per-job provider-spend limits.'}</li></ul>
-        <label className={selectedPlan === id && purchaseKind === 'subscription' ? 'selected' : ''}><input type="radio" name="subscription-plan" value={id} checked={selectedPlan === id && purchaseKind === 'subscription'} onChange={() => { setSelectedPlan(id); setPurchaseKind('subscription') }} /><span><strong>Select {name}</strong></span></label>
         {billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' && <p className="credits-method-note">ASTRA purchasing is temporarily paused while the live generation and export check is completed. No payment will be taken for an unavailable plan.</p>}
         <button className="credits-action" disabled={busy!==null || (member && (balance?.subscription.plan??'creator')===id ? !canManage : !canBuy || billing?.plans?.[id]?.checkoutReady!==true || member && billing?.planChangeReady!==true)} onClick={() => { setSelectedPlan(id); setPurchaseKind('subscription'); void checkout(member ? (balance?.subscription.plan??'creator')===id ? 'portal' : 'change' : 'card', {kind:'subscription',plan:id}) }}>{busy ? 'Opening secure billing…' : member && (balance?.subscription.plan??'creator')===id ? 'Manage current subscription ↗' : billing?.plans?.[id]?.checkoutReady===false ? 'Temporarily unavailable · no charge' : member ? `Review change to ${name} ↗` : `Subscribe ${price} / month ↗`}</button>
       </article>)}

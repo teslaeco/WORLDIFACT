@@ -75,7 +75,7 @@ test('direct PortalPage Shop preserves its real model form without the removed w
   assert.match(html, /AI model · Model AI/)
   assert.match(html, /Back to WORLDIFAKT/)
   assert.match(html, /id="studio-prompt"/)
-  assert.match(html, /Generate SLOW model/)
+  assert.match(html, /Generate GPT-6 Astra blueprint/)
   assert.match(html, /target="_blank"/)
   assert.doesNotMatch(html, /<iframe|target="_(top|self|parent)"|3D result appears here|FORGE-projekt/)
 })

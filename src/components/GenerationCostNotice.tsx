@@ -35,7 +35,7 @@ export default function GenerationCostNotice({ model, busy = false }: { model: Q
     {quote.state === 'blocked' && <p>{quote.message}</p>}
     <details><summary>Model details and billing</summary>
       {quote.state !== 'blocked' && <p>{quote.message}</p>}
-      <p>{model !== 'astra' ? 'The selected model creates a validated specification with a lightweight procedural preview. It is not the detailed Oracle mesh workflow.' : 'ASTRA uses the separate Oracle/Blender workflow. Available outputs still need quality and manufacturing review.'}</p>
+      <p>{model !== 'astra' ? 'The selected model creates a validated specification with a lightweight procedural preview. It is not the detailed Oracle mesh workflow.' : 'ASTRA uses one bounded server-side call to create a validated blueprint/specification and a locally derived procedural GAME GLB. The separate multi-call Oracle/Blender mesh workflow remains beta. MAKE still requires validation.'}</p>
       <p>Use once from your points. No automatic batch, model upgrade or card charge. Failed attempts may return points, but API safety reserves are not reset.</p>
       <div><Link to="/account/credits">Plans & one-time prepaid credits →</Link><button type="button" disabled={busy || loading || !user} onClick={() => setRevision(value => value + 1)}>Refresh points</button></div>
     </details>

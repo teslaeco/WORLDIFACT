@@ -19,7 +19,7 @@ import {
   validateBlueprint,
 } from "../src/lib/blueprint.ts";
 import { budgetSettings } from "./budget.ts";
-import { draftModel, draftReservationMicroUsd, MODEL_CATALOG } from "../src/lib/modelCatalog.ts";
+import { blueprintModel, blueprintReservationMicroUsd, MODEL_CATALOG, type BlueprintModel } from "../src/lib/modelCatalog.ts";
 import type { BudgetEnv, BudgetNamespace } from "./budget.ts";
 export { GenerationBudget } from "./budget.ts";
 export interface Env extends BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv {
@@ -137,7 +137,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     }
     const generationReady = generationConfigured && allowance?.enabled === true && (allowance.unlimited === true || (allowance.remaining ?? 0) > 0);
     return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady && !publicPilot,
-      publicPilot: generationReady && publicPilot, model: generationReady ? fastModel : null, qualityModel: generationReady ? configuredModel : null, draftModels: generationReady ? ["sol", "luna"] : [], maxReferenceImageMb: 6,
+      publicPilot: generationReady && publicPilot, model: generationReady ? fastModel : null, qualityModel: generationReady ? configuredModel : null, draftModels: generationReady ? ["sol", "luna"] : [], astraBlueprintReady: generationReady && env.ENABLE_ASTRA_PLANS === "true", maxReferenceImageMb: 6,
       allowance });
   }
   if (url.pathname !== "/api/blueprint") return url.pathname.startsWith("/api/") ? json({ error: "Not found" }, 404) : (env.ASSETS?.fetch(request) ?? new Response("Not found", { status: 404 }));
@@ -153,9 +153,9 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   const requestedWorld = input.worldId === undefined ? "ai-game-lab" : input.worldId;
   if (typeof requestedWorld !== "string" || !ORACLE_WORLD_IDS.includes(requestedWorld as PortalId))
     return json({ error: "Use one of the five supported WORLDIFACT portal IDs." }, 400);
-  let selectedDraft: "sol" | "luna";
-  try { selectedDraft = draftModel(input.model); }
-  catch { return json({ error: "Choose Luna or Sol for a procedural draft. Astra uses the separate Studio route." }, 400); }
+  let selectedModel: BlueprintModel;
+  try { selectedModel = blueprintModel(input.model); }
+  catch { return json({ error: "Choose Luna, Sol or Astra." }, 400); }
   const worldId = requestedWorld as PortalId;
   const suppliedRequestId = request.headers.get('X-WORLDIFACT-Request');
   if (suppliedRequestId && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(suppliedRequestId))
@@ -180,12 +180,13 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (!publicPilot && !(await validAccess(request, env.GENERATION_ACCESS_TOKEN!))) return json({ error: "A valid preview access code is required.", requestId }, 401);
   try { const { success } = await env.GENERATION_LIMITER!.limit({ key: request.headers.get("CF-Connecting-IP") || "unknown-client" }); if (!success) return json({ error: "Generation limit reached. Please try again later.", requestId }, 429); }
   catch { return json({ error: "Generation limit service unavailable.", requestId }, 503); }
-  const model = MODEL_CATALOG[selectedDraft].model;
-  if (!["gpt-6-sol", "gpt-6-luna"].includes(model)) return json({ error: "FAST model requires review.", requestId }, 503);
+  const model = MODEL_CATALOG[selectedModel].model;
+  if (!["gpt-6-sol", "gpt-6-luna", "gpt-6-astra"].includes(model)) return json({ error: "Selected model requires review.", requestId }, 503);
+  if (selectedModel === "astra" && env.ENABLE_ASTRA_PLANS !== "true") return json({ error: "ASTRA is not commercially enabled yet.", requestId }, 503);
   let customerGenerationKind: 'free' | 'credits' | null = null;
   if (account) {
     try {
-      const reservation = await reserveUserGeneration(env, account.id, requestId, 'fast', selectedDraft);
+      const reservation = await reserveUserGeneration(env, account.id, requestId, selectedModel === 'astra' ? 'slow' : 'fast', selectedModel);
       if (reservation.repeated) return json({ error: 'This generation request was already processed. No second model or charge was started.', requestId }, 409);
       if (!reservation.allowed) return json({ error: reservation.reason === 'CREDITS_EXHAUSTED' ? 'Your credits have run out. Open your account to top up.' : 'Your generation allowance has been used. Check your account for the next reset.', requestId }, 429);
       customerGenerationKind = reservation.kind ?? null;
@@ -221,11 +222,11 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     if (inputTokens < 0) { await finishUser(false); return json({ error: "Cost preflight returned invalid usage. No generation request was sent.", requestId }, 503); }
     // Conservative Standard Sol reservation: $5/M input + $17/M output, above current
     // long-context rates and regional uplift. This intentionally reserves more than list price.
-    const worstMicroUsd = draftReservationMicroUsd(selectedDraft, inputTokens);
-    const ceilingMicroUsd = Math.min(customerGenerationKind === 'free' ? 150_000 : 350_000, MODEL_CATALOG[selectedDraft].maxProviderCents * 10_000);
+    const worstMicroUsd = blueprintReservationMicroUsd(selectedModel, inputTokens);
+    const ceilingMicroUsd = customerGenerationKind === 'free' ? 150_000 : MODEL_CATALOG[selectedModel].maxProviderCents * 10_000;
     if (worstMicroUsd > ceilingMicroUsd) {
       await finishUser(false);
-      return json({ error: "This request exceeds the selected Sol cost guard. Reduce reference complexity or prompt size.", requestId }, 413);
+      return json({ error: `This request exceeds the selected ${MODEL_CATALOG[selectedModel].label} cost guard. Reduce reference complexity or prompt size.`, requestId }, 413);
     }
   } catch {
     await finishUser(false).catch(() => {});
@@ -259,7 +260,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   }
   try {
     const upstream = await fetcher("https://api.openai.com/v1/responses", {
-      method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(30000),
+      method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(selectedModel === 'astra' ? 60_000 : 30_000),
       body: JSON.stringify(responseRequestBody),
     });
     if (!upstream.ok) return json({ error: upstream.status === 429 ? "AI service is busy. Try again later." : "AI service could not complete the request.", requestId }, upstream.status === 429 ? 429 : 502);
@@ -282,7 +283,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     await finishUser(true);
     generationCompleted = true;
     return json({ mode: "LIVE", provenance: "GENERATED", blueprint, assetSpec, requestId, model, ...(evidence ? { evidence } : {}),
-      limitation: `${MODEL_CATALOG[selectedDraft].label} created a validated WorldBlueprint and AssetSpec for the FAST path. The scene change is real, but GAME uses procedural preview geometry and MAKE remains validation-required; no production file, quote or order was generated.` });
+      limitation: `${MODEL_CATALOG[selectedModel].label} created a validated WorldBlueprint and AssetSpec in one bounded provider call. The scene change is real and the downloadable GAME GLB is derived locally from that specification; it is not a detailed Oracle/Blender mesh. MAKE remains validation-required; no quote, order or production approval was generated.` });
   } catch (e) {
     return json({ error: e instanceof Error && ["TimeoutError", "AbortError"].includes(e.name) ? "Generation timed out. Previous scene is unchanged." : "Invalid AI result. Previous scene is unchanged.", requestId }, 502);
   } finally {
