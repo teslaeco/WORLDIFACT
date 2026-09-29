@@ -21,14 +21,14 @@ function memory() {
 }
 function fixture() {
   let now = Date.now(), providerCalls = 0, authCalls = 0, fail = false
-  const env: Env = { OPENAI_API_KEY: 'test-only-never-sent-to-real-provider', OPENAI_MODEL: 'gpt-6-astra', OPENAI_FAST_MODEL: 'gpt-6-sol', ENABLE_PAID_GENERATION: 'true',
+  const env: Env = { OPENAI_API_KEY: 'test-only-never-sent-to-real-provider', OPENAI_MODEL: 'gpt-6-astra', OPENAI_FAST_MODEL: 'gpt-6-sol', ENABLE_PAID_GENERATION: 'true', ENABLE_ASTRA_PLANS: 'true',
     PUBLIC_PILOT: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', FREE_SOL_SEED_JOBS: '100', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', GENERATION_LIMITER: { async limit() { return { success: true } } } }
   const global = memory(), budget = new GenerationBudget({ storage: global.storage as BudgetStorage }, env)
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const objects = new Map<string, AccountEntitlements>()
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) {
     const key = String(id)
-    if (!objects.has(key)) objects.set(key, new AccountEntitlements({ storage: memory().storage }, {}, () => now))
+    if (!objects.has(key)) objects.set(key, new AccountEntitlements({ storage: memory().storage }, env, () => now))
     return objects.get(key)!
   } }
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -44,7 +44,8 @@ function fixture() {
     assert.equal(path.href, 'https://api.openai.com/v1/responses')
     assert.equal(init?.method, 'POST'); providerCalls++
     if (fail) return Response.json({ error: 'Fixture failure only' }, { status: 500 })
-    return Response.json({ id: 'resp_test_fixture', status: 'completed', model: 'gpt-6-sol', output: [{ content: [{ type: 'output_text', text: JSON.stringify(demoBlueprint('A silver research tower')) }] }] })
+    const requestBody = JSON.parse(String(init?.body)) as { model?: string }
+    return Response.json({ id: 'resp_test_fixture', status: 'completed', model: requestBody.model, output: [{ content: [{ type: 'output_text', text: JSON.stringify(demoBlueprint('A silver research tower')) }] }] })
   }) as typeof fetch
   const call = (requestId: string = crypto.randomUUID(), user: 'alice' | 'bob' | null = 'alice', input = body) => handle(new Request(origin + '/api/blueprint', {
     method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': requestId, ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) }, body: JSON.stringify(input),
@@ -89,6 +90,19 @@ test('a repeated Blueprint request UUID cannot duplicate a provider request or a
   assert.equal((await f.call(requestId, 'alice', { ...body, prompt: 'Changed prompt under the same request UUID' })).status, 409)
   assert.equal((await f.call('malformed-client-id')).status, 400)
   assert.equal(f.providerCalls(), 1); assert.equal((await entitlementStatus(f.env, alice)).credits, 1450)
+})
+
+test('paid Pro account can use the single-call Astra blueprint path while free accounts cannot', async () => {
+  const f = fixture()
+  const freeAttempt = await f.call(crypto.randomUUID(), 'alice', { ...body, model: 'astra' })
+  assert.equal(freeAttempt.status, 429); assert.equal(f.providerCalls(), 0)
+  await entitlementCall(f.env, alice, '/grant', { id: 'in_astra_blueprint', credits: 4500, subscriptionId: 'sub_AstraBlueprint' })
+  await entitlementCall(f.env, alice, '/subscription', { id: 'sub_AstraBlueprint', until: Date.now() + 86_400_000, active: true, revision: 1, plan: 'pro', grantId: 'in_astra_blueprint' })
+  const response = await f.call(crypto.randomUUID(), 'alice', { ...body, model: 'astra' })
+  const result = await response.json() as { model?: string; provenance?: string }
+  assert.equal(response.status, 200); assert.equal(result.model, 'gpt-6-astra'); assert.equal(result.provenance, 'GENERATED')
+  assert.equal(f.providerCalls(), 1)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
 })
 
 test('Blueprint namespaces client IDs so another user cannot preclaim a supplied Studio receipt UUID', async () => {
