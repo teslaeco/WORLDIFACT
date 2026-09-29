@@ -1,23 +1,28 @@
-# WORLDIFACT — private Game Lab implementation checkpoint
+# WORLDIFACT — private Game Lab release candidate
 
-29 September 2026. Owner asked to restart the interrupted task: private world editor, empty meadow/river, onboarding, local tools/assistant, gallery placement, Shop cleanup and affordable Creator Astra access. Baseline main: `311f2cef78dd0ed743cbdacd44346579fb08e27d`.
+29 September 2026. Owner authorized implementation, testing and deployment of private Game Lab, cleanup of the red-marked Shop duplicate, and economically guarded Astra eligibility for the USD29.99 Creator plan. Baseline main: `311f2cef78dd0ed743cbdacd44346579fb08e27d`.
 
-## Implemented on the review branch — verification pending
+## Implemented and tested, NOT yet published
 
-- New `/lab` and `/builder` editor with an empty original meadow/river, star-themed welcome, exactly 18 polygon-face rotating jewel and a name/character modal.
-- Server-owned private world manifests using the existing authenticated account Durable Object; strict field/size limits, eight worlds, revision conflicts and deletion tombstones. No owner ID is accepted from the client.
-- Local controls: marker placement, imported or owned gallery GLB, move/scale/rotate/elevate, mountain/valley terrain stamps, day/stars, undo/redo, play mode and jump/sprint/proximity interaction buttons. Five-step tutorial.
-- Model bytes remain owner-namespaced on this device; manifests are saved to the account. No cross-device GLB storage or multiplayer claim.
-- Local command assistant requires preview and Apply and incurs zero model requests. Optional single Luna/Sol object proposal uses the existing metered backend and explicit cost display; no autonomous loop. Codex/MCP brief export does not start an external agent.
-- Removed only the secondary world-blueprint drawer under AI Shop; the actual model generator, main portal world and other portals are preserved.
-- Creator still costs USD29.99 and grants 1,500 points. Prepared eligibility for 250-point Astra attempts, capped at six per paid period and gated by the existing runtime activation. Recommend two Astra attempts (500 existing points) plus twenty Sol attempts (1,000 points), not extra bonus credits or guaranteed results. Provider reserve remains USD10.50 maximum for that grant.
+Preparation run https://github.com/teslaeco/WORLDIFACT/actions/runs/36513546778 (job `109230751874`) completed the full application verification and Worker dry-run successfully and committed the integrated result as `9e2a33af73f3bbf0c9fd639827b8a24815a8f420`. The previous run had 525 tests with two legacy expectations tied to the old requested behavior; those expectations were updated while keeping all new runtime gating and dollar-budget assertions. The exact release PR must still pass its own checks after removal of temporary integration scripts.
 
-## Safety and limits
+Implemented:
+- `/lab` and `/builder` now mount a private editor instead of the shared portal meadow. The world starts with only original ground/grass and a continuous animated river. A star-themed New Game wizard captures the world name and character appearance/outfit/hair/style/text/colors, with a rotating exactly 18-face polyhedron. Character preview is local, not paid AI.
+- Server-side world manifests are isolated in the authenticated account's existing Durable Object. Client owner overrides are rejected. Save revisions detect concurrent changes; deletions retain tombstones. Tests cover Alice/Bob isolation, CSRF, missing auth, size limits and stale writes.
+- Point marking, placement, scale/rotation/elevation, local terrain hills/valleys, day/stars, undo/redo, keyboard/touch play controls and a five-step tutorial. Interaction currently reports a nearby object; complete game scripting/multiplayer/publishing are not claimed.
+- Account-owned generation gallery filtering and explicit self-contained GLB import. Original models are not altered. World manifests save to the account, while imported model bytes remain in owner-namespaced IndexedDB on this device. Limits: eight worlds, 48 objects, 64 terrain stamps, four imported models per scene, 12 files/150 MB per device library.
+- Local rules-based assistant previews typed edits and requires Apply, at zero model cost. Optional Luna/Sol object proposals use the existing metered API once, with no automatic retry/upgrade or autonomous external agent. A data-only Codex/MCP brief export is available; no authenticated Codex CLI or external Forge agent was started.
+- Only the duplicate world-blueprint drawer beneath AI Shop is removed. Its real asset generator, previous receipts and main portal world remain. Character-brief handoff cannot overwrite a recovered job.
+- Creator keeps USD29.99/month and 1,500 points. Prepared Astra eligibility at 250 points, maximum six attempts per confirmed paid period, with runtime activation still required. Recommended allocation: two Astra attempts plus twenty Sol attempts, not two unfunded bonuses or guaranteed successful outputs. Provider reserve remains USD10.50 (2×1.75 + 20×0.35 = 6×1.75). Refunds/top-ups/invoice replay do not reset the attempt cap or spent provider reserves.
 
-No new paid generation, Stripe charge, price mutation or Oracle installation was requested during implementation. The existing `ENABLE_ASTRA_PLANS=false` flag remains. A tested web release cannot be relabelled as a successful Oracle live-quality test.
+## Cost and honesty boundaries
 
-No actual Codex CLI tool was available after connector/runtime discovery; implementation is carried out through GitHub tools and CI. ForgeMCP MIT was read; no third-party assets were copied or unbounded remote MCP agent activated. This editor is an owned single-user prototype, not a complete production game engine.
+Entering, naming, saving, placing existing models, sculpting and local commands perform no model API requests. Hosting and storage are still real costs. The selected paid model is shown before an optional request. No paid generation, Stripe charge, subscription repricing or Oracle installation was performed in this task.
 
-Run full verification, owner-isolation/concurrency/security tests, Creator budget tests, exact jewel topology test and Worker dry-run before any merge. No physical Android/desktop visual result or FPS is inferred from those tests. The prior browser automation safety block is respected.
+`ENABLE_ASTRA_PLANS=false` remains unchanged. Creator Astra is eligible in tested code but NOT live until the outstanding Oracle output-policy installation and newly authorized end-to-end test succeed. The exhausted prior USD2.10 test approval was not reused. Existing Pro/Studio sales are not enabled by this release.
 
-Details: [PRIVATE_GAME_LAB.md](PRIVATE_GAME_LAB.md). Executable work specification: [CODEX_TASK_PRIVATE_GAME_LAB_20260929.md](CODEX_TASK_PRIVATE_GAME_LAB_20260929.md). Previous release ledger preserved unchanged in [history](history/CONTEST_STATUS_before_PRIVATE_GAME_LAB_20260929.md).
+ForgeMCP's MIT license was reviewed, but no source or model assets were copied and no remote MCP process was activated. Implementation used the connected GitHub tools and repository CI, not a fabricated Codex session. Browser security restrictions were not bypassed; renderer build/SSR and geometry tests do not prove real Android visual quality or FPS.
+
+Read-only post-deployment workflow verifies exact editor bundle hashes, public route HTML, denial of unauthenticated/cross-origin private-world reads and the unchanged public model-point catalogue. It performs no account write or paid generation; results will be recorded only after actual publication.
+
+Details: [PRIVATE_GAME_LAB.md](PRIVATE_GAME_LAB.md). Executed work specification: [CODEX_TASK_PRIVATE_GAME_LAB_20260929.md](CODEX_TASK_PRIVATE_GAME_LAB_20260929.md). Prior release ledger preserved unchanged in [history](history/CONTEST_STATUS_before_PRIVATE_GAME_LAB_20260929.md).
