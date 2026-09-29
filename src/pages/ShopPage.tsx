@@ -18,7 +18,7 @@ import { canSubmitNewDraft } from '../lib/studioDraft'
 import { inspectGLB } from '../lib/glb'
 import { DEFAULT_DIMENSIONS_MM, type ClientDimensions } from '../lib/shopManufacturing'
 import { validateGenerationResult, type GenerationResult } from '../lib/blueprint'
-import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, validateStudioInput, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
+import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
 import './ShopPage.css'
 
 const EXAMPLE_ORIGIN = 'https://forge-studio-public.terraformingplanet.chatgpt.site'
@@ -251,7 +251,7 @@ export default function ShopPage() {
 
   const generate = async (event: React.FormEvent) => {
     event.preventDefault()
-    const flags = operations.current, client = coordinator.current
+    const flags = operations.current
     if (flags.submit || flags.photos || flags.artifact || !previousFinished) return
 
     const selectedModel: GenerationModel = fast ? cheapModel : 'astra'
