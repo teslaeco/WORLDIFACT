@@ -24,6 +24,7 @@ jobs:
         run: |
           python3 scripts/integrate-private-game-lab.py
           python3 scripts/finish-private-game-lab.py
+          python3 scripts/harden-private-game-lab.py
       - name: Verify complete application with zero paid model requests
         run: |
           if ! npm run verify > /tmp/world-verify.log 2>&1; then
@@ -36,7 +37,7 @@ jobs:
         run: |
           git config user.name 'WORLDIFACT review'
           git config user.email 'noreply@users.noreply.github.com'
-          git add src server tests docs ops/private-game-lab-integrated.json ops/private-game-lab-finished.json
+          git add src server tests docs ops/private-game-lab-integrated.json ops/private-game-lab-finished.json ops/private-game-lab-hardened.json
           if ! git diff --cached --quiet; then
             git commit -m 'Integrate private editor and guarded Creator Astra allowance'
             git push origin HEAD:feat/private-game-lab-20260929
