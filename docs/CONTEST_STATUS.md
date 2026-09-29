@@ -1,3 +1,13 @@
+# 29 September 2026 — direct plan-card payments (review branch)
+
+The owner requested that the existing Creator/Pro/Studio cards open the appropriate payment directly and that card management move BELOW the unchanged pricing grid. The cards, keyboard activation and CTA now use one authenticated plan-payment resolver. It resumes a verified unpaid invoice for the selected plan, opens a new Checkout only when no subscription is outstanding, and opens Stripe confirmation on the existing subscription for a different upgrade. A different fully unpaid pending upgrade may be reviewed in Stripe only after revalidating ownership, item, price, full invoice and the paid base period. This code never pays, voids or cancels an invoice/subscription itself. Stripe retains final customer confirmation. Partial/ambiguous/renewal payments are not silently replaced or redirected to the wrong plan.
+
+The ledger already adds verified invoice grants. Added regression cases explicitly cover 605 + 4,500 = 5,105 and 605 + 7,500 = 8,105, repeated refreshes, incomplete purchases, expired upgrades, reuse, holds, foreign ownership and invalid destinations. Credit/price/budget/generation configuration is unchanged. Existing paid base access is preserved. Payment methods and billing, including Change card, are below the offers.
+
+Browser Back from a cached Stripe navigation clears only the stale UI action lock and refreshes account state; it does not repeat a payment request. A listener test covers this lifecycle and cleanup. Two existing fixture assertions were aligned with explicit Stripe livemode and the added destination field; their payment safety assertions remain unchanged. Validation results belong to the exact-head preparation/PR checks. This source entry is NOT proof of publication. Production merge/deployment awaits owner confirmation; no real customer payment was executed. Separately, the connected Stripe API accepted creation of a Studio subscription_update_confirm session while Pro was pending; that proves session creation only, NOT a completed customer payment. No customer identifiers or session URLs are committed.
+
+---
+
 # 29 September 2026 — payment recovery review
 
 The owner requested recovery after a card-funds failure and self-service card changes. This patch adds an authenticated, same-origin recovery panel and endpoint. Retry opens the existing verified Stripe-hosted invoice; card changes use the existing configured Stripe portal. No new subscription or direct card charge is created by recovery. Pending upgrades preserve only a verified, already-paid current-plan period. Grant IDs remain idempotent and reversal checks remain effective.

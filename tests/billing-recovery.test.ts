@@ -10,7 +10,7 @@ function fixture() {
   const map = new Map<string, unknown>([['balance', 605], ['customer', customer], ['grant:in_Base', { credits: 1500, revoked: 0, subscriptionId: subId }], ['subscription', { id: subId, plan: 'creator', until: end * 1000, active: false, revision: 1 }]])
   const storage: EntitlementStorage = { async get<T>(key: string) { return map.get(key) as T | undefined }, async put(key, value) { map.set(key, value) }, async transaction(fn) { return fn(storage) } }
   const env: BillingEnv = { ENABLE_BILLING: 'true', ENABLE_ASTRA_PLANS: 'true', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', ACCOUNT_LEDGER_MODE: 'sandbox', STRIPE_SECRET_KEY: 'sk_test_fixture_local', STRIPE_WEBHOOK_SECRET: 'whsec_fixture', STRIPE_MODE: 'test', STRIPE_SUBSCRIPTION_PRICE_ID: 'price_Creator', STRIPE_PRO_PRICE_ID: 'price_Pro', STRIPE_STUDIO_PRICE_ID: 'price_Studio', STRIPE_SUBSCRIPTION_INTERVAL: 'month', STRIPE_TOPUP_PRICE_ID: 'price_Topup', STRIPE_BILLING_PORTAL_CONFIGURATION_ID: 'bpc_Management', STRIPE_PLAN_CHANGE_CONFIGURATION_ID: 'bpc_Changes', BILLING_PUBLIC_ORIGIN: 'https://worldifact.test', ACCOUNT_LIMITER: { async limit() { return { success: true } } }, ACCOUNT_ENTITLEMENTS: { idFromName: n => n, get: () => ({ fetch: r => new AccountEntitlements({ storage }, env).fetch(r) }) } }
-  const subscription: Json = { id: subId, customer, livemode: false, status: 'active', metadata: { worldifact_uid: uid }, current_period_end: end, items: { data: [{ id: 'si_Recovery', quantity: 1, price: 'price_Creator' }] }, latest_invoice: 'in_Upgrade', pending_update: { subscription_items: [{ quantity: 1, price: { id: 'price_Pro' } }] } }
+  const subscription: Json = { id: subId, customer, livemode: false, status: 'active', metadata: { worldifact_uid: uid }, current_period_end: end, items: { data: [{ id: 'si_Recovery', quantity: 1, price: 'price_Creator' }] }, latest_invoice: 'in_Upgrade', pending_update: { subscription_items: [{ id: 'si_Recovery', quantity: 1, price: { id: 'price_Pro' } }] } }
   const base: Json = { id: 'in_Base', customer, subscription: subId, livemode: false, paid: true, status: 'paid', amount_paid: 2999, amount_due: 2999, amount_remaining: 0, total: 2999, currency: 'usd', billing_reason: 'subscription_create', lines: { data: [{ price: 'price_Creator', quantity: 1, amount: 2999, currency: 'usd', period: { start: now - 86400, end } }] } }
   const invoice: Json = { id: 'in_Upgrade', customer, subscription: subId, livemode: false, paid: false, status: 'open', amount_paid: 0, amount_due: 9999, amount_remaining: 9999, total: 9999, currency: 'usd', billing_reason: 'subscription_update', hosted_invoice_url: 'https://invoice.stripe.com/i/fixture', lines: { data: [{ price: 'price_Pro', quantity: 1, amount: 9999, currency: 'usd', period: { start: now, end: end + 86400 } }] } }
   const state = { subscriptions: [subscription], more: false, history: [base], authenticated: true, portalUrl: 'https://billing.stripe.com/p/session/fixture' }
@@ -22,7 +22,13 @@ function fixture() {
     if (url.includes('/v1/invoices?')) return Response.json({ data: state.history, has_more: false })
     if (url.endsWith('/v1/invoices/in_Upgrade')) return Response.json(invoice)
     if (url.endsWith('/v1/invoices/in_Base')) return Response.json(base)
-    if (url.includes('/v1/prices/')) { const id = url.split('/').pop()!; return Response.json({ id, livemode: false, active: true, unit_amount: id === 'price_Creator' ? 2999 : 9999, currency: 'usd', type: 'recurring', billing_scheme: 'per_unit', recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' } }) }
+    if (url.includes('/v1/prices/')) { const id = url.split('/').pop()!; return Response.json({ id, livemode: false, active: true, unit_amount: id === 'price_Creator' ? 2999 : id === 'price_Studio' ? 14999 : 9999, currency: 'usd', type: 'recurring', billing_scheme: 'per_unit', recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' } }) }
+    if (url.endsWith('/v1/checkout/sessions')) {
+      const body = new URLSearchParams(String(init?.body)), plan = body.get('metadata[worldifact_plan]') ?? 'creator'
+      return Response.json({ id: 'cs_Fresh', livemode: false, url: 'https://checkout.stripe.com/c/pay/fixture', status: 'open', payment_status: 'unpaid', expires_at: now + 3600,
+        amount_total: plan === 'studio' ? 14999 : plan === 'pro' ? 9999 : 2999, currency: 'usd', mode: 'subscription', customer,
+        client_reference_id: uid, metadata: { worldifact_uid: uid, worldifact_kind: 'subscription', worldifact_plan: plan, worldifact_checkout_id: body.get('metadata[worldifact_checkout_id]') } })
+    }
     if (url.endsWith('/v1/billing_portal/sessions')) { const body = new URLSearchParams(String(init?.body)); return Response.json({ id: 'bps_Recovery', livemode: false, customer: { id: customer }, configuration: { id: body.get('configuration') }, url: state.portalUrl }) }
     throw new Error('Unexpected provider operation ' + method + ' ' + url)
   }) as typeof fetch
@@ -169,4 +175,101 @@ test('terminal Stripe state clears a phantom active membership after a missed we
     assert.equal((await entitlementStatus(f.env, uid)).subscription.active, false)
     assert.equal(f.map.get('balance'), 605); assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
   }
+})
+
+
+const choosePlan = (f: ReturnType<typeof fixture>, plan: string) => f.call('status', { plan }, 'https://worldifact.test', '/api/billing/plan-payment')
+test('plan card resumes the same failed Pro payment directly, including stale Free UI state', async () => {
+  const f = fixture()
+  for (let i = 0; i < 3; i++) {
+    const r = await choosePlan(f, 'pro'), body = await r!.json() as Json
+    assert.equal(r?.status, 200); assert.equal(body.destination, 'invoice'); assert.equal(body.url, f.invoice.hosted_invoice_url)
+  }
+  assert.equal(f.map.get('balance'), 605); assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+})
+test('Studio card with a failed Pro upgrade opens Studio confirmation on the SAME subscription', async () => {
+  const f = fixture(), beforeInvoice = structuredClone(f.invoice), beforePending = structuredClone(f.subscription.pending_update)
+  const r = await choosePlan(f, 'studio'), body = await r!.json() as Json
+  assert.equal(r?.status, 200); assert.equal(body.destination, 'portal'); assert.equal(body.requiresConfirmation, true)
+  const writes = f.calls.filter(c => c.method === 'POST'); assert.equal(writes.length, 1)
+  assert.match(writes[0].url, /billing_portal\/sessions$/)
+  const params = new URLSearchParams(writes[0].body)
+  assert.equal(params.get('flow_data[type]'), 'subscription_update_confirm')
+  assert.equal(params.get('flow_data[subscription_update_confirm][subscription]'), subId)
+  assert.equal(params.get('flow_data[subscription_update_confirm][items][0][price]'), 'price_Studio')
+  assert.deepEqual(f.invoice, beforeInvoice); assert.deepEqual(f.subscription.pending_update, beforePending); assert.equal(f.map.get('balance'), 605)
+})
+test('Studio card retries a failed Studio invoice instead of presenting Pro payment', async () => {
+  const f = fixture(); f.subscription.pending_update.subscription_items[0].price.id = 'price_Studio'
+  f.invoice.lines.data[0].price = 'price_Studio'; f.invoice.lines.data[0].amount = 14999
+  Object.assign(f.invoice, { total: 14999, amount_due: 14999, amount_remaining: 14999 })
+  const r = await choosePlan(f, 'studio'), body = await r!.json() as Json
+  assert.equal(r?.status, 200); assert.equal(body.destination, 'invoice'); assert.equal(body.amountCents, 14999)
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+})
+test('Pro and Studio paid grants add to 605 once; revisiting the same plan never purchases again', async () => {
+  for (const [plan, price, amount, credits] of [['pro', 'price_Pro', 9999, 4500], ['studio', 'price_Studio', 14999, 7500]] as const) {
+    const f = fixture(); f.subscription.pending_update = null; f.subscription.items.data[0].price = price
+    f.invoice.lines.data[0].price = price; f.invoice.lines.data[0].amount = amount
+    Object.assign(f.invoice, { paid: true, status: 'paid', amount_paid: amount, total: amount, amount_due: amount, amount_remaining: 0 })
+    for (let i = 0; i < 2; i++) {
+      const r = await choosePlan(f, plan), body = await r!.json() as Json
+      assert.equal(r?.status, 200); assert.equal(body.destination, 'portal')
+      assert.equal((await entitlementStatus(f.env, uid)).credits, 605 + credits)
+    }
+    assert.equal(f.calls.filter(c => c.method === 'POST').every(c => c.url.endsWith('/billing_portal/sessions')), true)
+  }
+})
+test('expired unpaid upgrade opens a fresh customer confirmation, not a stale invoice', async () => {
+  const f = fixture(); f.subscription.pending_update = null; f.invoice.status = 'void'; f.invoice.amount_remaining = 0
+  const r = await choosePlan(f, 'pro'), body = await r!.json() as Json
+  assert.equal(r?.status, 200); assert.equal(body.destination, 'portal'); assert.equal(f.map.get('balance'), 605)
+})
+test('no open subscription opens and reuses a single new checkout for the requested plan', async () => {
+  const f = fixture(); f.state.subscriptions = []; f.map.delete('subscription')
+  for (let i = 0; i < 2; i++) {
+    const r = await choosePlan(f, 'studio'), body = await r!.json() as Json
+    assert.equal(r?.status, 200); assert.equal(body.destination, 'checkout'); assert.equal(body.url, 'https://checkout.stripe.com/c/pay/fixture')
+  }
+  const writes = f.calls.filter(c => c.method === 'POST'); assert.equal(writes.length, 1)
+  assert.equal(new URLSearchParams(writes[0].body).get('line_items[0][price]'), 'price_Studio'); assert.equal(f.map.get('balance'), 605)
+})
+test('an incomplete first subscription resumes payment even without paid membership', async () => {
+  const f = fixture(); f.subscription.status = 'incomplete'; f.subscription.pending_update = null
+  f.subscription.items.data[0].price = 'price_Pro'; f.invoice.billing_reason = 'subscription_create'; f.state.history = []
+  const r = await choosePlan(f, 'pro'), body = await r!.json() as Json
+  assert.equal(r?.status, 200); assert.equal(body.destination, 'invoice'); assert.equal(f.map.get('balance'), 605)
+  const other = await choosePlan(f, 'studio'), otherBody = await other!.json() as Json
+  assert.equal(other?.status, 200); assert.equal(otherBody.state, 'payment_required_other'); assert.equal(otherBody.url, undefined)
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+})
+test('billing hold, foreign ownership and duplicate subscriptions do not become new payments', async () => {
+  for (const change of ['hold', 'foreign', 'multiple']) {
+    const f = fixture()
+    if (change === 'hold') f.map.set('billingHold', true)
+    if (change === 'foreign') f.subscription.customer = 'cus_Other'
+    if (change === 'multiple') f.state.subscriptions.push(structuredClone(f.subscription))
+    const r = await choosePlan(f, 'pro'), body = await r!.json() as Json
+    assert.equal(body.state, 'review'); assert.equal(body.url, undefined); assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+  }
+})
+test('changing a pending plan rejects partial payment, wrong item, proration and scheduled changes', async () => {
+  for (const change of ['partial', 'item', 'proration', 'schedule', 'cancel']) {
+    const f = fixture()
+    if (change === 'partial') { f.invoice.amount_paid = 100; f.invoice.amount_remaining = 9899 }
+    if (change === 'item') f.subscription.pending_update.subscription_items[0].id = 'si_Other'
+    if (change === 'proration') f.invoice.lines.data[0].proration = true
+    if (change === 'schedule') f.subscription.schedule = 'sub_sched_Fixture'
+    if (change === 'cancel') f.subscription.cancel_at_period_end = true
+    const r = await choosePlan(f, 'studio'), body = await r!.json() as Json
+    assert.equal(body.url, undefined); assert.equal(f.calls.filter(c => c.method === 'POST').length, 0); assert.equal(f.map.get('balance'), 605)
+  }
+})
+test('plan action validates identity, origin, target and body before Stripe operations', async () => {
+  const f = fixture()
+  assert.equal((await choosePlan(f, 'enterprise'))?.status, 400)
+  assert.equal((await f.call('status', { plan: 'pro', customer: 'cus_Other' }, 'https://worldifact.test', '/api/billing/plan-payment'))?.status, 400)
+  assert.equal((await f.call('status', { plan: 'pro' }, 'https://evil.test', '/api/billing/plan-payment'))?.status, 403)
+  f.state.authenticated = false; assert.equal((await choosePlan(f, 'pro'))?.status, 401)
+  assert.equal(f.calls.filter(c => c.url.includes('api.stripe.com')).length, 0)
 })
