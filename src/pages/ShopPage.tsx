@@ -259,7 +259,7 @@ export default function ShopPage() {
     if (!selectedReady || prompt.trim().length < 3 || prompt.length > 2000 || (selectedModel !== 'astra' && photos.length) || photos.length > 1) return
     flags.submit = true; setBusy(true); setError(''); setNotice(''); setDemoPrompt('')
     const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 45_000)
+    const timeout = window.setTimeout(() => controller.abort(), selectedModel === 'astra' ? 70_000 : 45_000)
     try {
       const response = await fetch('/api/blueprint', {
         method: 'POST',
