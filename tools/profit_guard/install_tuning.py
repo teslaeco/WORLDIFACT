@@ -39,7 +39,9 @@ def original_variant(originals):
 def changes(originals, policy_bytes):
     original_variant(originals)
     runner = previous.once(originals['codex_runner.py'].decode(), 'import astra_spend\n', 'import astra_spend_v2\n')
-    runner = previous.once(runner, "payload['reasoning']={**payload.get('reasoning',{}),'effort':'high'}", "payload['reasoning']={**payload.get('reasoning',{}),'effort':'low'}")
+    # The reviewed v33 FAST patch already made this conditional. Preserve FAST
+    # low reasoning while changing the detailed path from high to low as well.
+    runner = previous.once(runner, "payload['reasoning']={**payload.get('reasoning',{}),'effort':'low' if outer.fast_limits['fast'] else 'high'}", "payload['reasoning']={**payload.get('reasoning',{}),'effort':'low'}")
     runner = previous.once(runner, "'model_reasoning_effort':'high'", "'model_reasoning_effort':'low'")
     runner = previous.once(runner, 'astra_spend.protect(outer.folder, payload, headers)', 'astra_reservation = astra_spend_v2.protect(outer.folder, payload, headers)')
     runner = previous.once(runner, 'except astra_spend.SpendError:', 'except astra_spend_v2.SpendError:')
