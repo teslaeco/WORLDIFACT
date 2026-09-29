@@ -39,10 +39,10 @@ def original_variant(originals):
 def changes(originals, policy_bytes):
     original_variant(originals)
     runner = previous.once(originals['codex_runner.py'].decode(), 'import astra_spend\n', 'import astra_spend_v2\n')
-    # The reviewed v33 FAST patch already made this conditional. Preserve FAST
-    # low reasoning while changing the detailed path from high to low as well.
+    # Both reviewed FAST patches use conditional reasoning. Preserve their low
+    # setting and change the detailed path to low, without altering FAST quotas.
     runner = previous.once(runner, "payload['reasoning']={**payload.get('reasoning',{}),'effort':'low' if outer.fast_limits['fast'] else 'high'}", "payload['reasoning']={**payload.get('reasoning',{}),'effort':'low'}")
-    runner = previous.once(runner, "'model_reasoning_effort':'high'", "'model_reasoning_effort':'low'")
+    runner = previous.once(runner, "'model_reasoning_effort':'low' if fast_preview.read_profile(folder)==fast_preview.PROFILE else 'high'", "'model_reasoning_effort':'low'")
     runner = previous.once(runner, 'astra_spend.protect(outer.folder, payload, headers)', 'astra_reservation = astra_spend_v2.protect(outer.folder, payload, headers)')
     runner = previous.once(runner, 'except astra_spend.SpendError:', 'except astra_spend_v2.SpendError:')
     event = "                                        event=json.loads(line[5:]);value=event.get('response') or {}\n"
@@ -96,8 +96,6 @@ class Operations(previous.Operations):
 
     def verify(self, workspace):
         old = previous.OFFLINE_CHECK
-        # Fixture token counts belong only in this isolated verification process.
-        # Real protect/reserve remains active; production source has no fake usage.
         previous.OFFLINE_CHECK = old.replace('import astra_spend\n', 'import astra_spend_v2 as astra_spend\n')
         try:
             super().verify(workspace)
