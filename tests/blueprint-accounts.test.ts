@@ -7,7 +7,7 @@ import { demoBlueprint } from '../src/lib/blueprint.ts'
 
 const origin = 'https://worldifact.test'
 const alice = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', bob = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-const body = { worldId: 'ai-game-lab', prompt: 'A silver research tower and moss garden', mode: 'live' }
+const body: { worldId: string; prompt: string; mode: string; model?: 'sol' | 'luna' | 'astra' } = { worldId: 'ai-game-lab', prompt: 'A silver research tower and moss garden', mode: 'live' }
 function memory() {
   const values = new Map<string, unknown>(); let queue: Promise<unknown> = Promise.resolve()
   const storage: EntitlementStorage = {
