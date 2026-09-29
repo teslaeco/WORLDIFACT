@@ -5,6 +5,7 @@ const json=(v:unknown,status=200)=>Response.json(v,{status,headers:{'Cache-Contr
 export async function privateWorldApi(request:Request,env:AccountEnv&EntitlementEnv,fetcher:typeof fetch=fetch):Promise<Response|null>{
   const url=new URL(request.url)
   if(url.pathname!=='/api/worlds'&&!url.pathname.startsWith('/api/worlds/'))return null
+  if(request.headers.get('Sec-Fetch-Site')==='cross-site')return json({error:'Same-origin world access required.'},403)
   if(url.search)return json({error:'Query-based owner selection is not supported.'},400)
   const suffix=url.pathname.slice('/api/worlds'.length).replace(/^\//,'')
   const action=!suffix?(request.method==='GET'?'list':request.method==='POST'?'save':null):suffix==='library'?(request.method==='POST'?'library':null):WORLD_ID.test(suffix)?({GET:'read',PUT:'save',DELETE:'remove'} as Record<string,string>)[request.method]:null

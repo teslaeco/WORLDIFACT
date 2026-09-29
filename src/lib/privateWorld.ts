@@ -2,7 +2,7 @@ export const WORLD_SCHEMA = 1 as const
 export const WORLD_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 export const WORLD_LIMITS = Object.freeze({ worlds: 8, entities: 48, terrain: 64, bytes: 65536, radius: 42 })
 export type WorldControl = 'jump' | 'sprint' | 'interact'
-export type EntityKind = 'tree' | 'rock' | 'cabin' | 'lamp' | 'crate' | 'asset'
+export type EntityKind = 'tree' | 'rock' | 'cabin' | 'lamp' | 'crate' | 'asset' | 'rover' | 'habitat' | 'solar-array' | 'sculpture' | 'mcc-cabinet'
 export type WorldEntity = { id: string; kind: EntityKind; name: string; x: number; z: number; elevation: number; scale: number; rotation: number; color: string; assetId: string | null }
 export type TerrainEdit = { id: string; x: number; z: number; radius: number; strength: number }
 export type WorldCharacter = { description: string; outfit: string; hair: string; style: string; label: string; hairColor: string; outfitColor: string }
@@ -24,11 +24,12 @@ export function validatePrivateWorld(input: unknown): PrivateWorld {
   if (!Array.isArray(v.entities) || v.entities.length > WORLD_LIMITS.entities || !Array.isArray(v.terrain) || v.terrain.length > WORLD_LIMITS.terrain || !Array.isArray(v.controls) || v.controls.length > 3) throw new Error('World complexity limit reached.')
   const entities: WorldEntity[] = v.entities.map(raw => {
     const e = record(raw); keys(e, ['id','kind','name','x','z','elevation','scale','rotation','color','assetId'])
-    if (!['tree','rock','cabin','lamp','crate','asset'].includes(String(e.kind))) throw new Error('Unsupported object kind.')
+    if (!['tree','rock','cabin','lamp','crate','asset','rover','habitat','solar-array','sculpture','mcc-cabinet'].includes(String(e.kind))) throw new Error('Unsupported object kind.')
     if ((e.kind === 'asset') !== (typeof e.assetId === 'string')) throw new Error('Invalid model reference.')
     if (e.kind !== 'asset' && e.assetId !== null) throw new Error('Unexpected model reference.')
     return { id: id(e.id), kind: e.kind as EntityKind, name: text(e.name, 100, 1), x: num(e.x,-40,40), z: num(e.z,-40,40), elevation: num(e.elevation,0,20), scale: num(e.scale,0.1,8), rotation: num(e.rotation,-360,360), color: color(e.color), assetId: e.kind === 'asset' ? id(e.assetId) : null }
   })
+  if (entities.filter(e=>e.kind==='asset').length>4 || entities.filter(e=>e.kind==='mcc-cabinet').length>2) throw new Error('Interactive limit: four imported models and two detailed MCC kits per world. Keep larger scenes as separate worlds.')
   const terrain = v.terrain.map(raw => { const t = record(raw); keys(t,['id','x','z','radius','strength']); return { id: id(t.id), x: num(t.x,-40,40), z: num(t.z,-40,40), radius: num(t.radius,1,16), strength: num(t.strength,-8,8) } })
   if (new Set(entities.map(e => e.id)).size !== entities.length || new Set(terrain.map(t => t.id)).size !== terrain.length) throw new Error('Duplicate world object identifier.')
   const controls = v.controls.map(value => { if (!['jump','sprint','interact'].includes(String(value))) throw new Error('Unsupported game control.'); return value as WorldControl })

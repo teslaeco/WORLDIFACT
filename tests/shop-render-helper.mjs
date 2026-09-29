@@ -78,6 +78,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       if (id === '../components/ProjectAttachmentPicker') return { __esModule: true, default: ({ scope }) => React.createElement('section', { 'data-project-attachments': scope }, 'LOCAL REFERENCE project files') }
       if (id === '../components/StudioGallery') return { __esModule: true, default: () => React.createElement('section', { 'data-studio-gallery': 'device-archive' }, 'Your model gallery') }
       if (id.endsWith('.css')) return {}
+      if (id === 'react-router-dom' && adapters[id]) return { ...localRequire(id), ...adapters[id] }
       if (id === 'react') return react
       if (['react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
       throw new Error(`Unexpected Shop dependency: ${id}`)

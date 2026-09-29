@@ -4,6 +4,8 @@ import { blankWorld, validatePrivateWorld, newEntity, parseWorldCommand, applyWo
 import { privateWorldApi } from '../server/privateWorldApi.ts'
 import { privateWorldStore } from '../server/privateWorldStore.ts'
 import { AccountEntitlements, type EntitlementStorage } from '../server/entitlements.ts'
+type WorldReply = { ok: boolean; code: number; revision: number; ids: string[]; document: ReturnType<typeof blankWorld>; worlds: { id: string }[] }
+const readReply = (response: Response) => response.json() as Promise<WorldReply>
 const alice = '11111111-1111-4111-8111-111111111111', bob = '22222222-2222-4222-8222-222222222222'
 function store() {
   const map = new Map<string, unknown>()
@@ -15,7 +17,7 @@ function store() {
   }
   return { map, storage }
 }
-const call = async (storage: EntitlementStorage, input: unknown) => (await privateWorldStore(new Request('https://internal/private-worlds', { method: 'POST', body: JSON.stringify(input) }), storage, 1790640000000)).json()
+const call = async (storage: EntitlementStorage, input: unknown) => (await privateWorldStore(new Request('https://internal/private-worlds', { method: 'POST', body: JSON.stringify(input) }), storage, 1790640000000)).json() as Promise<WorldReply>
 test('a new world is empty meadow/river; strict validation rejects scripts, URLs and excess complexity', () => {
   const w = validatePrivateWorld(blankWorld())
   assert.equal(w.entities.length, 0); assert.equal(w.terrain.length, 0); assert.equal(w.night, false)
@@ -91,8 +93,8 @@ test('Alice and Bob cannot read or overwrite each other’s worlds through copie
   assert.equal((await f.request('/api/worlds', 'POST', { document: w, expectedRevision: 0 }))!.status, 200)
   assert.equal((await f.request('/api/worlds/' + w.id, 'GET', undefined, 'bob'))!.status, 404)
   assert.equal((await f.request('/api/worlds/' + w.id, 'PUT', { document: { ...w, name: 'hacked' }, expectedRevision: 1 }, 'bob'))!.status, 409)
-  assert.equal((await (await f.request('/api/worlds/' + w.id))!.json()).document.name, 'Alice private')
-  assert.equal((await (await f.request('/api/worlds', 'GET', undefined, 'bob'))!.json()).worlds.length, 0)
+  assert.equal((await readReply((await f.request('/api/worlds/' + w.id))!)).document.name, 'Alice private')
+  assert.equal((await readReply((await f.request('/api/worlds', 'GET', undefined, 'bob'))!)).worlds.length, 0)
   assert.equal(f.stores.size, 2)
 })
 test('owner overrides, CSRF, missing auth, oversize and arbitrary queries fail without writes', async () => {

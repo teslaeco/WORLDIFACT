@@ -120,7 +120,7 @@ export default function AccountPage() {
         </>}
         {notice && <p role="status" className="account-notice">{notice}</p>}
         {error && <p role="alert" className="account-error">{error}</p>}
-        <details className="account-free-note"><summary>Start creating for free <span aria-hidden="true">+</span></summary><p>Up to 2 SOL FAST drafts per rolling 24h when funded free capacity is available.<br />Free accounts never fall back to the more expensive ASTRA model.</p><p>Creator SOL: $29.99/month · 1,500 credits.<br />Pro and Studio plans unlock ASTRA at 250 credits per generation.</p><Link to="/account/credits">Compare plans →</Link></details>
+        <details className="account-free-note"><summary>Start creating for free <span aria-hidden="true">+</span></summary><p>Up to 2 SOL FAST drafts per rolling 24h when funded free capacity is available.<br />Free accounts never fall back to the more expensive ASTRA model.</p><p>Creator SOL: $29.99/month · 1,500 credits.<br />Creator, Pro and Studio prepare ASTRA at 250 credits per attempt after runtime activation.</p><Link to="/account/credits">Compare plans →</Link></details>
       </section>
     </div>
     <BrandShowcase />

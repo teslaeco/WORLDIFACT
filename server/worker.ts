@@ -8,6 +8,7 @@ import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } fro
 import { entitlementApi, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
 import { billingApi, type BillingEnv } from './billing.ts';
 import { paypalApi, type PayPalEnv } from './paypal.ts';
+import { privateWorldApi } from './privateWorldApi.ts';
 import { decorApi } from './decor.ts';
 export { AccountEntitlements } from './entitlements.ts';
 import {
@@ -83,6 +84,8 @@ function validImage(value: unknown) {
 }
 export async function handle(request: Request, env: Env = {}, fetcher: typeof fetch = fetch, context?: AvatarContext): Promise<Response> {
   const url = new URL(request.url);
+  const privateWorld = await privateWorldApi(request, env, fetcher);
+  if (privateWorld) return privateWorld;
   const decor = await decorApi(request, fetcher);
   if (decor) return decor;
   const entitlements = await entitlementApi(request, env, fetcher);

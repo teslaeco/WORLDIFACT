@@ -51,9 +51,9 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false } = {}) {
+async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, characterPrompt = '' } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
-  const storeData = new Map([[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]])
+  const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
   const status = { ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
@@ -91,6 +91,7 @@ async function harness({ ready = false, state = 'succeeded', solReady = ready, d
   const globals = { fetch: fetcher, URL, Blob, AbortSignal, AbortController, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
     window: { localStorage: storage, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: () => {} } }
   const Component = await loadShopComponent({ react: hookReact, globals, adapters: {
+    'react-router-dom': { useLocation: () => ({ pathname: '/shop', state: characterPrompt ? { worldPrompt: characterPrompt } : null }) },
     '../lib/studioClient': { ...clientModule, StudioCoordinator: class extends clientModule.StudioCoordinator { constructor(store) { super(store, fetcher) } }, checkStudio: () => clientModule.checkStudio(fetcher) },
     '../lib/studioArchive': {
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
@@ -215,4 +216,19 @@ test('unconfirmed old jobs display review state instead of an endless generation
     assert.equal(h.button('Generate SLOW').props.disabled, true, 'Uncertain jobs must not be silently duplicated')
     assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
   } finally { h.close() }
+})
+
+
+test('private character brief fills an empty Shop draft without a generation, and never overwrites a recovered job', async () => {
+  const characterPrompt = 'A silver-haired explorer with a teal jacket'
+  const fresh = await harness({ withExistingJob: false, characterPrompt })
+  try {
+    assert.equal(fresh.byId('studio-prompt').props.value, characterPrompt)
+    assert.equal(fresh.calls.filter(call => call.method === 'POST').length, 0)
+  } finally { fresh.close() }
+  const recovered = await harness({ characterPrompt })
+  try {
+    assert.equal(recovered.byId('studio-prompt').props.value, 'Original brown chess knight')
+    assert.equal(recovered.calls.filter(call => call.method === 'POST').length, 0)
+  } finally { recovered.close() }
 })

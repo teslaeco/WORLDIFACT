@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { createWorldObject } from '../lib/worldGeometry'
+import type { AssetKind } from '../lib/blueprint'
 import { loadWorldAsset } from '../lib/privateWorldAssets'
 import { inspectGLB } from '../lib/glb'
 import { riverCenter, terrainHeight, type PrivateWorld, type WorldEntity } from '../lib/privateWorld'
@@ -10,6 +12,7 @@ type Point = {x:number;z:number}
 export type WorldCanvasProps = { owner:string|null; world:PrivateWorld; playing:boolean; selected:string|null; point:Point; onPick:(point:Point,entityId:string|null)=>void; onMessage:(message:string)=>void }
 function release(root:THREE.Object3D){const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>(),textures=new Set<THREE.Texture>();root.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.Points||o instanceof THREE.LineSegments){geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);for(const value of Object.values(m))if(value instanceof THREE.Texture)textures.add(value)}}});textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());geometries.forEach(g=>g.dispose())}
 function primitive(e:WorldEntity):THREE.Group{
+  if(['rover','habitat','solar-array','sculpture','mcc-cabinet'].includes(e.kind)) return createWorldObject({...e,kind:e.kind as AssetKind,x:0,z:0,scale:1,rotation:0})
   const root=new THREE.Group(), paint=new THREE.MeshStandardMaterial({color:e.color,roughness:.8}), timber=new THREE.MeshStandardMaterial({color:'#805a39',roughness:.92})
   const add=(geometry:THREE.BufferGeometry,material:THREE.Material,x=0,y=0,z=0)=>{const m=new THREE.Mesh(geometry,material);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;root.add(m);return m}
   if(e.kind==='tree'){add(new THREE.CylinderGeometry(.18,.32,2.7,7),timber,0,1.35);for(let i=0;i<3;i++)add(new THREE.IcosahedronGeometry(1.35-i*.2,1),paint,(i%2-.5)*.55,2.6+i*.55,0)}
@@ -64,7 +67,7 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
         let group:THREE.Group
         const asset=e.assetId?cached.get(e.assetId):null
         if(asset){group=asset.clone(true);group.userData.sharedAsset=true}
-        else{group=primitive(e);if(e.kind==='asset'){group.name='Model awaiting device file';group.children.forEach(o=>{if(o instanceof THREE.Mesh)o.material=new THREE.MeshBasicMaterial({color:'#798a93',wireframe:true})})}}
+        else{group=primitive(e);if(e.kind==='asset'){group.name='Model awaiting device file';group.children.forEach(o=>{if(o instanceof THREE.Mesh){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();o.material=new THREE.MeshBasicMaterial({color:'#798a93',wireframe:true})}})}}
         group.position.set(e.x,terrainHeight(e.x,e.z,world.terrain)+e.elevation,e.z);group.scale.multiplyScalar(e.scale);group.rotation.y=e.rotation*Math.PI/180;group.userData.entityId=e.id;items.add(group)
         if(e.assetId&&!asset&&!pending.has(e.assetId)&&latest.current.owner&&assetCount<=4){
           const assetId=e.assetId,owner=latest.current.owner;pending.add(assetId)
