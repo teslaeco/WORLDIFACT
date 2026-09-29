@@ -17,6 +17,7 @@ import * as glb from '../src/lib/glb.ts'
 import * as shopManufacturing from '../src/lib/shopManufacturing.ts'
 import * as blueprint from '../src/lib/blueprint.ts'
 import * as generationQuote from '../src/lib/generationQuote.ts'
+import * as modelCatalog from '../src/lib/modelCatalog.ts'
 
 async function loadCostNotice() {
   const url = new URL('../src/components/GenerationCostNotice.tsx', import.meta.url)
@@ -24,6 +25,7 @@ async function loadCostNotice() {
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, { module, exports: module.exports, require(id) {
     if (id === '../lib/generationQuote') return generationQuote
+    if (id === '../lib/modelCatalog') return modelCatalog
     if (id === '../lib/account') return { useAccount: () => ({ user: null, loading: true }) }
     if (id.endsWith('.css')) return {}
     if (['react', 'react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
@@ -66,7 +68,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       const modules = { '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
-        '../lib/blueprint': blueprint }
+        '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog }
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions
       if (id === '../components/GenerationCostNotice') return costNotice
