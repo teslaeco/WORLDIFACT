@@ -18,4 +18,5 @@ if start>=0:
     s=s[:start]+"  if(c.label&&labelTexture){const texture=labelTexture(c.label);if(texture)part(new THREE.PlaneGeometry(.39,.1),new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false}),0,1.23,.232)}\n"+s[end:]
     p.write_text(s)
 replace_once('src/components/PrivateWorldCanvas.tsx','function avatar(world:PrivateWorld){return createCharacterPreview(world.character)}',"function avatar(world:PrivateWorld){return createCharacterPreview(world.character,text=>{const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const ctx=canvas.getContext('2d');if(!ctx)return null;ctx.clearRect(0,0,512,128);ctx.fillStyle='#f5f7ec';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px sans-serif';ctx.fillText(text,256,64,480);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;return texture})}")
-print('Selection syntax, pending checkout labels and DOM-free character geometry verified.')
+replace_once('src/lib/editorTools.ts','&&/river|rzek/.test(s)','&&/river|rze[kc]/.test(s)')
+print('Selection syntax, pending checkout labels, Polish river inflection and DOM-free character geometry verified.')

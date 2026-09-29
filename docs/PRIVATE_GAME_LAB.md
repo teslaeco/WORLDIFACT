@@ -1,39 +1,35 @@
-# Private Game Lab — account-owned world prototype
+# Private Game Lab — editing, characters and cost controls
 
-## Included
+## Selection and movement
 
-A new original editor replaces the portal-map view at `/lab` and `/builder`. The main portal world stays at `/world`. Shop retains its main asset generator; the duplicate footer world generator is removed.
+At `/lab` or `/builder`, tap an object or select it from **Scene objects**. Choose **Move**, **Rotate** or **Scale**, then drag the handle. **Snap** controls placement spacing; **Move to marker**, **Focus selection**, **Duplicate** and **Place on ground** work without an AI call. One completed gesture becomes one undo entry. Cancelled gestures and stale selections do not change the saved world.
 
-New users see a star-themed welcome and an 18-face octagonal antiprism (16 triangle faces and two octagonal caps). Naming a world and describing a character creates no AI call. The editable scene starts with only ground, grass and the river. The local character is a placeholder, not an AI-generated reconstruction; the saved brief can be handed to AI Shop without submitting a job.
+The editor keeps the main portal world separate. World names, terrain, object placement, sky and controls belong to the logged-in account. Saving remains revision checked; another tab cannot silently overwrite a newer save.
 
-Local editing: terrain raycast point, model placement, X/Z/elevation/scale/rotation inspector, mountain/valley stamps, undo/redo, day/stars, game control toggles and play test. Jump, sprint and proximity interaction work in the test scene with keyboard and touch controls. Interaction currently reports the nearby object; full scripted actions, multiplayer, publishing standalone games, combat and animation retargeting are not claimed.
+## Models and practical limits
 
-The five-step guide covers world/character setup, explicit model generation, gallery insertion, terrain/controls and playing/saving/exporting.
+The old four-imported-model, two-MCC and 48-object placement caps are removed. Rendering is resource-budgeted: detailed meshes use a two-million-triangle/1,800-draw-call budget; imported file caching is bounded to 96 MB. When files are absent, still loading or too costly, lightweight placeholders keep their saved placement. Original models are never deleted or downsampled by this behavior.
 
-## Storage and isolation
+World manifests are capped at 96 KiB and 4,096 records as a protocol safety ceiling; the byte limit normally comes first. There are eight worlds per account and at most 128 terrain edits. These storage/security limits are not a claim of unlimited hardware. The device library no longer has a 12-file cap; its total is bounded to 350 MB with a 50 MB maximum per self-contained GLB. Layouts save to the account, but model files remain in owner-namespaced storage on the current device. Keep original-file backups.
 
-`/api/worlds` verifies the existing Supabase access cookie and derives the account Durable Object identity. It never trusts a client owner field. The internal world namespace is separate from billing and jobs. Saves use an expected revision; conflicts preserve the unsaved draft. Deletions keep a revision tombstone. Limits are eight worlds, 48 placed objects, 64 terrain stamps and 64 KiB per manifest. Auto-save is delayed after edits and stops after errors rather than retrying in a loop. Existing financial records are not migrated or modified by scene saves.
+## Character
 
-World manifests are private server records. Embedded GLB files are stored in owner-namespaced IndexedDB, up to 12 files/150 MB per device library, 50 MB per file and four imported model placements per scene. They do NOT sync as model bytes across devices. Other users' manifests are inaccessible through the API. Like other browser storage, files are not protected against an administrator of the same device or developer-tools access.
+Creating a world now shows a procedural character immediately in both Edit and Play. Supported body, clothing, hair and color presets are generated locally for zero AI points; the character is not advertised as a detailed AI reconstruction. **Focus character** makes it easier to find.
 
-The legacy gallery itself is a device archive. The editor only lists matching completed jobs after a server ownership/download check. An unassigned historical file must be explicitly imported by its owner rather than silently claimed. Only local validated GLB buffers reach the loader; arbitrary external resource URLs are rejected.
+In the **Character** panel, choose an existing library GLB or explicitly request one detailed Astra job through the established Studio/Oracle/Codex/Blender MCP pipeline. The request is account-metered and still requires the Astra runtime gate. Creating the world does not itself buy a generation. Per-account/per-world receipts recover the same job after interruption; a completed GLB is validated and saved before adoption. A result cannot silently replace a changed character description. A static GLB is not automatically rigged; embedded animations are used only where present.
 
-## Cost model
+## Assistant and Codex
 
-Entering, creating/naming, saving, importing/placing existing GLB, sculpting, changing sky and local control commands do not call a model and consume zero AI points. Normal hosting/storage request charges still exist; this is not a zero-total-cost guarantee.
+Local commands remain free, reviewed typed edits. The command “Przesuń drzewa by nie stały na rzece” offers to move intersecting starter trees clear of the river, while keeping the other objects unchanged. Apply is explicit and stale proposals must be regenerated.
 
-The local assistant is an explicit rules-based command helper. Its preview requires Apply. It is not advertised as a connected Codex agent. Optional AI object planning calls the existing Luna/Sol endpoint once, with existing price/entitlement/provider budget limits. Changes made while AI is pending invalidate automatic application. No remote MCP process, third-party endpoint, shell execution or unattended agent loop is enabled.
+A Codex/MCP instruction is generated from the world, selected object and request. Use **Show generated task**, **Copy Codex instruction** or **Download task**. It is a scoped task, not a hidden remote agent. Opening the original Forge Studio does not transfer this private scene, cookies or API credentials. The actual detailed character job uses the existing guarded production pipeline when enabled; no new uncapped multi-agent runtime has been introduced.
 
-## Creator membership Astra policy
+## Subscription management
 
-Same USD29.99 subscription and 1,500 points. The recommended mix is TWO Astra attempts (500 points) plus TWENTY Sol attempts (1,000 points). Alternatively, six Astra attempts consume all 1,500 points. The conservative provider reserve remains USD10.50: 2×1.75 + 20×0.35 = 10.50, identical to 6×1.75. This is an allocation inside the existing grant, NOT two bonus generations, not a promise of successful generation, and not guaranteed net company profit.
+The existing Stripe portal still manages payment methods and cancellation. A separate change-plan route opens customer confirmation for an existing subscription rather than creating a duplicate. It rejects unknown targets, unpaid/pending billing state and paused generation plans. A complete paid full-price invoice is required before granting an upgraded pack. Customer confirmation is not simulated by this app.
 
-Creator's six-attempt maximum is per confirmed subscription period; a top-up, repeated invoice/webhook, failed attempt or point refund does not reset it. The production commercial safety flag still gates access. Until the existing updated Oracle pipeline has a successful authorized live test, UI must describe Creator Astra as pending activation, not a working included service.
+Astra sales and Creator Astra access remain pending the actual Oracle output-policy update and a successful bounded live generation/export test. The previous USD2.10 test authorization is not reused. No paid provider request or customer charge is made merely by opening this editor or a billing confirmation page.
 
-## Sources and integration review
+## Verification boundary
 
-Official OpenAI model and Codex noninteractive documentation re-opened 29 September 2026. No API key was fetched or placed in frontend code. ForgeMCP's MIT license was reviewed; this release copies no Forge source or model assets and starts no remote agents. A JSON brief export is provided for future guarded Codex/MCP use, without claiming execution.
-
-## Testing boundaries
-
-Unit/integration tests must cover owner isolation, CSRF, unsafe fields, concurrency, deletion tombstones, financial cap/replays/refunds, local commands and the exact polyhedron face count. Renderer code supports context-loss notice and teardown; no successful Android visual test is inferred from a build or numeric geometry test. Actual production publication must be recorded separately in CONTEST_STATUS.
+Automated tests cover account isolation, finite transforms, original preservation, larger scenes, terrain-relative placement, resource limits, character geometry/binding, real component server rendering and mocked Stripe confirmation flows. These do not establish visual performance on a physical Android device or success of a real paid character generation. Production release evidence belongs in `CONTEST_STATUS.md`.
