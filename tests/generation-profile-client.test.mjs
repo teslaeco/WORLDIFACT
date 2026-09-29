@@ -50,7 +50,7 @@ test('actual Shop initial render exposes Astra blueprint and keeps FAST gated un
   assert.match(html, /aria-pressed="true"[^>]*><strong>ASTRA · QUALITY BLUEPRINT/s)
   assert.match(html, /aria-pressed="false"[^>]*disabled=""[^>]*><strong>FAST · DRAFT/s)
   assert.match(html, /FAST is waiting for the verified GPT-6 Sol worker/)
-  assert.match(html, /Generate SLOW model \+ materials/)
+  assert.match(html, /Generate GPT-6 Astra blueprint · 250 points/)
   assert.match(html, /Back to WORLDIFAKT/)
   assert.match(html, /GPT-6 Sol procedural draft/)
   assert.doesNotMatch(html, /<iframe|target="_top"|FAST guaranteed/)
