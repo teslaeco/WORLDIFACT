@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { accountRequest, useAccount, type AccountUser } from '../lib/account'
 import { paymentErrorMessage } from '../lib/paymentError'
+import BillingRecovery from '../components/BillingRecovery'
 import './CreditsPage.css'
 
 type PlanId = 'creator' | 'pro' | 'studio'
@@ -142,6 +143,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
       <div><span>MEMBERSHIP</span><strong>{member ? 'Active' : 'Free'}</strong><small>{balance.subscription.expiresAt ? `Current period ends ${new Date(balance.subscription.expiresAt).toLocaleDateString()}` : 'Daily free generations included'}</small></div>
       <button onClick={() => { setError(''); setChecking(true); void refresh() }} disabled={!!busy || checking}>{checking ? 'Refreshing…' : 'Refresh balance'}</button>
     </section>}
+    <BillingRecovery enabled={!!user && !loading} onRefresh={refresh} />
     {!loading && !user && <div className="credits-signin"><div><strong>Your ideas, one account.</strong><p>Sign in before purchasing. Confirmed credits go to your WORLDIFAKT account.</p></div><Link className="credits-action secondary" to={signInHref}>Sign in or create an account ↗</Link></div>}
     {error && <div className="credits-error" role="alert"><p>{error}</p>{!busy && <button className="credits-manage" disabled={checking} onClick={() => { setError(''); setChecking(true); void refresh() }}>Recheck account and payment options</button>}</div>}
     {notice && <p className={`credits-pending ${notice.tone === 'success' ? 'credits-success' : ''}`} role="status">{notice.text}</p>}
