@@ -1,3 +1,11 @@
+# 29 September 2026 — payment recovery review
+
+The owner requested recovery after a card-funds failure and self-service card changes. This patch adds an authenticated, same-origin recovery panel and endpoint. Retry opens the existing verified Stripe-hosted invoice; card changes use the existing configured Stripe portal. No new subscription or direct card charge is created by recovery. Pending upgrades preserve only a verified, already-paid current-plan period. Grant IDs remain idempotent and reversal checks remain effective.
+
+Validation and publication status are recorded in the payment-recovery pull request and its exact-head Actions runs. This source edit alone is NOT deployment evidence. Tests use synthetic accounts and provider fixtures; customer invoice URLs, emails, IDs and payment details are not published. Existing prices, credit rates, provider budgets and generator activation are unchanged.
+
+---
+
 # WORLDIFACT — Pro/Studio LIVE; bounded Astra blueprint path verified
 
 Updated 29 September 2026 after successful direct Astra acceptance, PR #144 merge and production deployment.
