@@ -1,0 +1,37 @@
+name: Prepare private Game Lab and verify without paid AI
+on:
+  push:
+    branches: ['feat/personal-game-lab-20260929']
+permissions:
+  contents: write
+concurrency:
+  group: personal-game-lab-preparation
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/personal-game-lab-20260929
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: python3 scripts/integrate-personal-game-lab.py
+      - name: Verify application and ownership regression tests
+        run: |
+          if ! npm run verify > /tmp/game-lab-review.log 2>&1; then tail -n 170 /tmp/game-lab-review.log; exit 1; fi
+          grep -E 'tests |pass |fail |PASS:|built in' /tmp/game-lab-review.log
+      - run: npm run deploy:check
+      - name: Commit only passing integration on the isolated branch
+        run: |
+          git config user.name 'WORLDIFACT integration'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add src server tests docs ops/personal-game-lab-integrated.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Integrate account-isolated game worlds, local tools and Creator Astra allowance'
+            git push origin HEAD:feat/personal-game-lab-20260929
+          fi
