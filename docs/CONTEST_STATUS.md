@@ -1,6 +1,36 @@
-# WORLDIFACT — Pro/Studio billing UI fix prepared; Astra sales gate unchanged
+# WORLDIFACT — Pro/Studio LIVE; bounded Astra blueprint path verified
 
-Updated 29 September 2026 after direct live Stripe catalogue verification and the owner's billing-page report. The deployed production release remains unchanged until an explicitly approved merge/deployment.
+Updated 29 September 2026 after successful direct Astra acceptance, PR #144 merge and production deployment.
+
+## VERIFIED — Pro/Studio commercial activation is LIVE
+
+PR [#144](https://github.com/teslaeco/WORLDIFACT/pull/144) merged as `e5115cfba63ade7933c10bf5964e3bbefd64bb78` after the exact head `590b834d32a8dc7584a5b4f53a1320b7c4a67bce` passed all five pull-request workflows.
+
+The owner-approved direct Astra acceptance [run 36531481407](https://github.com/teslaeco/WORLDIFACT/actions/runs/36531481407) completed successfully with exactly one GPT-6 Astra generation call and one input-token preflight, no retry and no customer charge. The verified response used 643 input tokens and 578 output tokens; the conservative reviewed upper-cost calculation was USD 0.040792, below the unchanged USD 1.75 per-attempt ceiling. The returned blueprint exported locally to a valid procedural GAME GLB with 188 triangles, 2 meshes, 2 materials and 87,592 bytes. This validates the bounded direct Astra blueprint/spec path; it does not validate the separate multi-call Oracle/Blender mesh workflow.
+
+Production [run 36531758464](https://github.com/teslaeco/WORLDIFACT/actions/runs/36531758464) completed successfully and deployed Cloudflare version `6d499ab2-dfbf-45e1-8e10-74d8bdfc3441` at https://worldifact.xodobrox.workers.dev . The deployed LIVE configuration has:
+
+- `ENABLE_ASTRA_PLANS=true`
+- `ENABLE_PAID_GENERATION=true`
+- `PUBLIC_PILOT=true`
+- `ENABLE_ORACLE_JOBS=false`
+- `ENABLE_STUDIO_JOBS=false`
+- `GENERATION_REQUEST_LIMIT=unlimited`
+- `STRIPE_PRO_PRICE_ID=price_1UKi3GBrIVB6dkxNm66OnDAr`
+- `STRIPE_STUDIO_PRICE_ID=price_1UKi3UBrIVB6dkxNfojjhJsv`
+
+The deployment verified LIVE Stripe checkout creation and immediate expiration without payment for both paid Astra plans:
+
+- Pro ASTRA — USD 99.99/month — 4,500 credits — checkout verified without charge.
+- Studio ASTRA — USD 149.99/month — 7,500 credits — checkout verified without charge.
+
+Post-deploy billing verification confirmed `plans.pro.checkoutReady=true`, `plans.studio.checkoutReady=true`, live mode, card readiness and eligible-device Google Pay readiness. No customer card was charged by these probes.
+
+The pricing UI no longer uses radio-dot selectors. Hover highlights the whole plan card; clicking the card selects/highlights it, and the separate subscription button remains the purchase action.
+
+The old multi-call Oracle/Blender customer submission path remains deliberately disabled because its acceptance run hit the Astra per-job budget guard before a second provider call. Historical receipts/artifacts remain recoverable. New premium customer Astra generation uses the verified bounded direct blueprint/spec path with 250-point entitlement checks; MAKE remains validation-required.
+
+---
 
 ## 29 September 2026 — Astra activation acceptance and direct fallback
 
@@ -8,15 +38,15 @@ The owner explicitly authorized one bounded live Astra acceptance job with a max
 
 To avoid selling a subscription whose premium route depends on that failed multi-call workflow, this branch now prepares a separate bounded Astra blueprint path inside the WORLDIFACT Worker. It uses the verified `gpt-6-astra` model with low reasoning, strict structured output, server-side input-token preflight, a USD1.75 maximum provider ceiling, account entitlements, 250-point reservation, rate limiting and idempotency. It returns a validated WorldBlueprint/AssetSpec and a procedural GAME GLB derived locally from the Astra result. It does **not** claim to be the detailed Oracle/Blender mesh workflow; MAKE remains validation-required. The multi-call Oracle path stays beta until its per-turn budget behavior is corrected.
 
-Commercial activation remains pending exact-head CI plus one live acceptance of this direct bounded path. Stripe Pro/Studio prices remain the already verified live objects; no duplicate price/product was created.
+**SUPERSEDED by the VERIFIED LIVE section above.** The direct bounded Astra acceptance passed, the exact-head CI passed, PR #144 merged and Pro/Studio commercial activation is live. No duplicate Stripe product or price was created.
 
-## BILLING UI FIX — branch prepared, no customer charge
+## HISTORICAL CHECKPOINT — billing UI fix before activation
 
 Direct read-only verification of the owner's live Stripe account confirms the intended recurring prices already exist and are active: Pro ASTRA `price_1UKi3GBrIVB6dkxNm66OnDAr` at USD 99.99/month for 4,500 credits and Studio ASTRA `price_1UKi3UBrIVB6dkxNfojjhJsv` at USD 149.99/month for 7,500 credits. No duplicate Stripe products or prices were created.
 
-The application currently maps both live price IDs correctly, but production keeps `ENABLE_ASTRA_PLANS=false`. That is the direct reason Pro/Studio report `checkoutReady=false`: checkout is deliberately coupled to the Astra commercial activation gate. Paid generation is also still disabled in the deployed Worker configuration, so enabling customer checkout before the bounded live generation/export acceptance test would allow a customer to pay for a plan whose premium generation path is not yet verified.
+**SUPERSEDED.** At this historical checkpoint production still had `ENABLE_ASTRA_PLANS=false`. The later verified deployment now has `ENABLE_ASTRA_PLANS=true` and the direct bounded Astra path is live.
 
-On branch `fix/pro-studio-billing-ui-20260929`, the plan selector UI no longer renders radio circles. Hovering a Creator/Pro/Studio card highlights it; clicking the card only selects/highlights the plan; the separate subscription button remains the only purchase action. Keyboard card selection is retained. This branch does not enable sales, charge a customer, modify a subscription, reprice an existing subscriber or deploy production.
+That branch introduced the plan-card interaction now deployed in production: no radio circles, hover highlights the card, clicking selects/highlights it, and the separate subscription button remains the purchase action. Keyboard card selection is retained.
 
 Updated 29 September 2026 after the owner's 07:28 Oracle Cloud Shell screenshot. The application release remains `8ef7936ffc47b072e3c2e5e550622d0188a036ca`. This checkpoint changes documentation only.
 
@@ -67,17 +97,17 @@ A procedural character now appears in Edit and Play with supported clothing, hai
 
 The assistant generates a scoped Codex instruction from the current private world, selection and command, with Show/Copy/Download controls. The Polish request to move trees off the river offers a zero-API proposal followed by explicit Apply. This is a local guarded editing/task workflow, not an autonomous remote multi-agent session. The original Forge Studio link does not transfer credentials or private files.
 
-## Stripe — management fixed; commercial activation not performed
+## HISTORICAL CHECKPOINT — Stripe management before commercial activation
 
 The existing non-default portal configuration `bpc_1UKstUBrIVB6dkxN5vfrUDa4`, created before the earlier interruption, was reread rather than duplicated in the editor release. The default portal remains cancellation and payment-method management. A separate guarded change-plan endpoint opens explicit customer confirmation for an existing subscription and checks target price, customer/item identity and a settled invoice. It rejects duplicate/pending/unpaid states and paused products. It does not itself change a subscription or charge a card. Full-price paid upgrade invoices use the existing idempotent grant path.
 
 Creator and top-up checkout configuration are retained; no current subscriber was repriced. The previous deployment's unpaid Creator checkout open/expire check passed. Real customer upgrades were not executed during the editor release or this screenshot follow-up.
 
-The last verified deployment has **`ENABLE_ASTRA_PLANS=false`**. This conversation has not changed that gate; the owner's updater explicitly reports `sales_enabled=false`. Do not advertise Pro/Studio selling or Creator Astra use as active without a fresh verified activation. The installation blocker is now owner-confirmed complete; the separately approved live quality/export test and commercial activation remain pending.
+**SUPERSEDED by the VERIFIED LIVE section above.** The current verified deployment has `ENABLE_ASTRA_PLANS=true`; Pro/Studio checkout readiness passed in production.
 
-## Next bounded acceptance test — approval pending
+## Historical acceptance plan — completed/superseded
 
-Proposed scope: exactly one new Astra job with the existing USD1.75 maximum provider-spend reservation, no automatic job retry, no second Sol/Luna run, no customer subscription mutation and no customer card charge. Check the current runtime policy, preserve the job/response evidence, download the resulting GLB and validate its completeness/materials. Passing an installer or simulated response alone does not pass this acceptance gate. Provider reservation is a cost ceiling, not an assertion of measured invoice cost or guaranteed profit.
+The original multi-call Oracle acceptance failed safely and was not retried. A separate direct bounded Astra acceptance then passed with one provider generation call and a valid procedural GLB, as recorded in the VERIFIED LIVE section above. The USD1.75 amount remains a provider-safety ceiling, not an invoice guarantee or profit claim.
 
 ## Test and privacy boundaries
 
