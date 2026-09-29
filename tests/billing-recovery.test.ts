@@ -9,7 +9,7 @@ function fixture() {
   const now = Math.floor(Date.now() / 1000), end = now + 86400
   const map = new Map<string, unknown>([['balance', 605], ['customer', customer], ['grant:in_Base', { credits: 1500, revoked: 0, subscriptionId: subId }], ['subscription', { id: subId, plan: 'creator', until: end * 1000, active: false, revision: 1 }]])
   const storage: EntitlementStorage = { async get<T>(key: string) { return map.get(key) as T | undefined }, async put(key, value) { map.set(key, value) }, async transaction(fn) { return fn(storage) } }
-  const env: BillingEnv = { ENABLE_BILLING: 'true', ENABLE_ASTRA_PLANS: 'true', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', ACCOUNT_LEDGER_MODE: 'sandbox', STRIPE_SECRET_KEY: 'sk_test_fixture_local', STRIPE_WEBHOOK_SECRET: 'whsec_fixture', STRIPE_MODE: 'test', STRIPE_SUBSCRIPTION_PRICE_ID: 'price_Creator', STRIPE_PRO_PRICE_ID: 'price_Pro', STRIPE_STUDIO_PRICE_ID: 'price_Studio', STRIPE_SUBSCRIPTION_INTERVAL: 'month', STRIPE_TOPUP_PRICE_ID: 'price_Topup', STRIPE_BILLING_PORTAL_CONFIGURATION_ID: 'bpc_Management', BILLING_PUBLIC_ORIGIN: 'https://worldifact.test', ACCOUNT_LIMITER: { async limit() { return { success: true } } }, ACCOUNT_ENTITLEMENTS: { idFromName: n => n, get: () => ({ fetch: r => new AccountEntitlements({ storage }, env).fetch(r) }) } }
+  const env: BillingEnv = { ENABLE_BILLING: 'true', ENABLE_ASTRA_PLANS: 'true', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', ACCOUNT_LEDGER_MODE: 'sandbox', STRIPE_SECRET_KEY: 'sk_test_fixture_local', STRIPE_WEBHOOK_SECRET: 'whsec_fixture', STRIPE_MODE: 'test', STRIPE_SUBSCRIPTION_PRICE_ID: 'price_Creator', STRIPE_PRO_PRICE_ID: 'price_Pro', STRIPE_STUDIO_PRICE_ID: 'price_Studio', STRIPE_SUBSCRIPTION_INTERVAL: 'month', STRIPE_TOPUP_PRICE_ID: 'price_Topup', STRIPE_BILLING_PORTAL_CONFIGURATION_ID: 'bpc_Management', STRIPE_PLAN_CHANGE_CONFIGURATION_ID: 'bpc_Changes', BILLING_PUBLIC_ORIGIN: 'https://worldifact.test', ACCOUNT_LIMITER: { async limit() { return { success: true } } }, ACCOUNT_ENTITLEMENTS: { idFromName: n => n, get: () => ({ fetch: r => new AccountEntitlements({ storage }, env).fetch(r) }) } }
   const subscription: Json = { id: subId, customer, livemode: false, status: 'active', metadata: { worldifact_uid: uid }, current_period_end: end, items: { data: [{ id: 'si_Recovery', quantity: 1, price: 'price_Creator' }] }, latest_invoice: 'in_Upgrade', pending_update: { subscription_items: [{ quantity: 1, price: { id: 'price_Pro' } }] } }
   const base: Json = { id: 'in_Base', customer, subscription: subId, livemode: false, paid: true, status: 'paid', amount_paid: 2999, amount_due: 2999, amount_remaining: 0, total: 2999, currency: 'usd', billing_reason: 'subscription_create', lines: { data: [{ price: 'price_Creator', quantity: 1, amount: 2999, currency: 'usd', period: { start: now - 86400, end } }] } }
   const invoice: Json = { id: 'in_Upgrade', customer, subscription: subId, livemode: false, paid: false, status: 'open', amount_paid: 0, amount_due: 9999, amount_remaining: 9999, total: 9999, currency: 'usd', billing_reason: 'subscription_update', hosted_invoice_url: 'https://invoice.stripe.com/i/fixture', lines: { data: [{ price: 'price_Pro', quantity: 1, amount: 9999, currency: 'usd', period: { start: now, end: end + 86400 } }] } }
@@ -26,7 +26,7 @@ function fixture() {
     if (url.endsWith('/v1/billing_portal/sessions')) { const body = new URLSearchParams(String(init?.body)); return Response.json({ id: 'bps_Recovery', livemode: false, customer: { id: customer }, configuration: { id: body.get('configuration') }, url: state.portalUrl }) }
     throw new Error('Unexpected provider operation ' + method + ' ' + url)
   }) as typeof fetch
-  const call = (action = 'status', body: Json = { action }, origin = 'https://worldifact.test') => billingApi(new Request('https://worldifact.test/api/billing/recovery', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin, Cookie: '__Host-worldifact-access=fixture-token' }, body: JSON.stringify(body) }), env, fetcher)
+  const call = (action = 'status', body: Json = { action }, origin = 'https://worldifact.test', path = '/api/billing/recovery') => billingApi(new Request('https://worldifact.test' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin, Cookie: '__Host-worldifact-access=fixture-token' }, body: JSON.stringify(body) }), env, fetcher)
   return { map, env, calls, subscription, base, invoice, state, call }
 }
 
@@ -131,4 +131,42 @@ test('recovery without a linked customer does not create a customer, checkout or
   const body = await (await f.call())!.json() as Json
   assert.equal(body.state, 'none'); assert.equal(body.canManage, false)
   assert.equal(f.calls.filter(c => c.url.includes('api.stripe.com')).length, 0)
+})
+
+
+test('an expired void upgrade can be reviewed again for the SAME paid subscription', async () => {
+  const f = fixture(); f.invoice.status = 'void'; f.invoice.amount_remaining = 0; f.subscription.pending_update = null
+  await f.call()
+  const response = await f.call('status', { plan: 'pro' }, 'https://worldifact.test', '/api/billing/change-plan')
+  assert.equal(response?.status, 200)
+  const writes = f.calls.filter(c => c.method === 'POST')
+  assert.equal(writes.length, 1); assert.match(writes[0].url, /billing_portal\/sessions$/)
+  const body = new URLSearchParams(writes[0].body)
+  assert.equal(body.get('flow_data[type]'), 'subscription_update_confirm')
+  assert.equal(body.get('flow_data[subscription_update_confirm][subscription]'), subId)
+  assert.equal(body.get('flow_data[subscription_update_confirm][items][0][price]'), 'price_Pro')
+  assert.equal(f.map.get('balance'), 605)
+})
+test('an open unpaid upgrade still cannot open a second plan-change confirmation', async () => {
+  const f = fixture(); await f.call(); f.subscription.pending_update = null
+  const response = await f.call('status', { plan: 'pro' }, 'https://worldifact.test', '/api/billing/change-plan')
+  assert.equal(response?.status, 409); assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+})
+test('void invoice alone cannot authorize a plan change from a stale active ledger', async () => {
+  const f = fixture(); f.invoice.status = 'void'; f.invoice.amount_remaining = 0; f.subscription.pending_update = null; f.state.history = []
+  const previous = f.map.get('subscription') as Json
+  f.map.set('subscription', { ...previous, active: true, grantId: 'in_Base' })
+  const response = await f.call('status', { plan: 'pro' }, 'https://worldifact.test', '/api/billing/change-plan')
+  assert.equal(response?.status, 409); assert.equal((await entitlementStatus(f.env, uid)).subscription.active, false)
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+})
+test('terminal Stripe state clears a phantom active membership after a missed webhook', async () => {
+  for (const status of ['canceled', 'incomplete_expired']) {
+    const f = fixture(); f.subscription.status = status
+    const previous = f.map.get('subscription') as Json
+    f.map.set('subscription', { ...previous, active: true, grantId: 'in_Base' })
+    const response = await f.call(); assert.equal(response?.status, 200)
+    assert.equal((await entitlementStatus(f.env, uid)).subscription.active, false)
+    assert.equal(f.map.get('balance'), 605); assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+  }
 })
