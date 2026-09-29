@@ -2,7 +2,7 @@ name: Prepare and verify direct plan-card payments
 on:
   push:
     branches: ['fix/plan-card-payment-flow-20260929']
-    paths: ['scripts/prepare-plan-card-payments.py', '.github/workflows/plan-card-payment-review.yml']
+    paths: ['scripts/prepare-plan-card-payments.py', 'scripts/complete-plan-card-review.py', '.github/workflows/plan-card-payment-review.yml']
 permissions:
   contents: write
 concurrency:
@@ -19,7 +19,9 @@ jobs:
           node-version: 24
           cache: npm
       - name: Apply exact reviewed changes on isolated branch
-        run: python3 scripts/prepare-plan-card-payments.py
+        run: |
+          python3 scripts/prepare-plan-card-payments.py
+          python3 scripts/complete-plan-card-review.py
       - run: npm ci
       - name: Verify application and synthetic payment regressions
         run: npm run verify
@@ -29,7 +31,7 @@ jobs:
         run: |
           test "$GITHUB_REF" = refs/heads/fix/plan-card-payment-flow-20260929
           git diff --check
-          git add server/billing.ts src/pages/CreditsPage.tsx src/components/BillingRecovery.tsx src/lib/paymentError.ts src/lib/planPayment.ts tests/billing-recovery.test.ts tests/plan-payment-ui.test.ts docs/CONTEST_STATUS.md
+          git add server/billing.ts src/pages/CreditsPage.tsx src/components/BillingRecovery.tsx src/lib/paymentError.ts src/lib/planPayment.ts tests/billing-recovery.test.ts tests/plan-payment-ui.test.ts tests/editor-polish-billing.test.ts tests/entitlements.test.ts docs/CONTEST_STATUS.md
           git -c user.name='WORLDIFACT review' -c user.email='noreply@users.noreply.github.com' commit -m 'Route plan cards to the correct payment and move card management below offers'
           git push origin HEAD:refs/heads/fix/plan-card-payment-flow-20260929
           printf 'Verified application, synthetic billing cases and Worker packaging. No production deployment or customer charge.\n' >> "$GITHUB_STEP_SUMMARY"
