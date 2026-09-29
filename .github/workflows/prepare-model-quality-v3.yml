@@ -21,14 +21,24 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply exact-context changes, no model or payment calls
-        run: python3 scripts/apply-model-quality-v3.py
-      - run: npm run verify
+        run: |
+          python3 scripts/apply-model-quality-v3.py
+          python3 scripts/finish-model-quality-v3.py
+      - name: Verify the complete application
+        run: |
+          if ! npm run verify > /tmp/worldifact-verify.log 2>&1; then
+            tail -n 130 /tmp/worldifact-verify.log
+            exit 1
+          fi
+          grep -E 'tests |pass |fail |MCC QUALITY|built in|PASS:' /tmp/worldifact-verify.log
       - run: npm run deploy:check
+      - name: Report dependency audit without changing package versions
+        run: npm audit --omit=dev || true
       - name: Save only tested changes to the same isolated branch
         run: |
           git config user.name 'WORLDIFACT code review'
           git config user.email 'noreply@users.noreply.github.com'
-          git add src server tests public docs ops/model-quality-v3-applied.json
+          git add src server tests public docs ops/model-quality-v3-applied.json ops/model-quality-v3-finished.json
           if ! git diff --cached --quiet; then
             git commit -m 'Integrate explicit Luna/Sol routing and improved free-quality assets'
             git push origin HEAD:feat/affordable-models-mcc-20260929
