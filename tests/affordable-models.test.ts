@@ -29,7 +29,7 @@ test('approved model prices are tiered but every mix fits the reserved provider 
   assert.equal(MODEL_CATALOG.luna.creditsPerGeneration,15);assert.equal(MODEL_CATALOG.sol.creditsPerGeneration,50);assert.equal(MODEL_CATALOG.astra.creditsPerGeneration,250)
   for(const model of Object.values(MODEL_CATALOG))assert.ok(model.maxProviderCents/model.creditsPerGeneration<=0.7)
   for(const plan of ['creator','pro','studio'] as const)assert.ok(planEconomics(plan).marginBps>=3000)
-  assert.equal(modelAllowed('creator','luna'),true);assert.equal(modelAllowed('creator','astra'),false)
+  assert.equal(modelAllowed('creator','luna'),true);assert.equal(modelAllowed('creator','astra'),true)
   assert.equal(providerReserveCents(1500),1050);assert.throws(()=>draftModel('terra'));assert.throws(()=>draftModel('astra'))
 })
 test('Luna quotes are visible, server-priced and conditional free quota is shared',()=>{

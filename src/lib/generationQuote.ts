@@ -15,8 +15,10 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
     const plans = object(object(billing).plans), pro = object(plans.pro), studio = object(plans.studio)
     if (pro.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' || studio.blockedReason === 'ASTRA_COST_GUARD_REQUIRED')
       return { state: 'blocked', points, after: null, message: 'ASTRA sales await a successful live generation/export test. The Oracle guard is installed; no automatic model substitution.' }
-    if (!subscription.active || !['pro', 'studio'].includes(String(subscription.plan)))
-      return { state: 'blocked', points, after: null, message: 'ASTRA requires an active Pro or Studio plan. A top-up alone does not unlock ASTRA.' }
+    if (!subscription.active || !['creator', 'pro', 'studio'].includes(String(subscription.plan)))
+      return { state: 'blocked', points, after: null, message: 'ASTRA requires an active Creator, Pro or Studio plan. A top-up alone does not unlock ASTRA.' }
+    if (subscription.plan === 'creator' && (object(value.creatorAstra).active !== true || !integer(object(value.creatorAstra).remaining) || Number(object(value.creatorAstra).remaining) < 1))
+      return { state: 'blocked', points, after: null, message: 'Creator ASTRA needs active runtime verification and an unused monthly slot (up to six). Two attempts use 500 of your existing points, not bonus credits.' }
     if (object(plans[String(subscription.plan)]).checkoutReady !== true)
       return { state: 'blocked', points, after: null, message: 'ASTRA availability could not be verified. Your points are unchanged.' }
   }

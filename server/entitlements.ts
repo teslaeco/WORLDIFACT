@@ -1,3 +1,4 @@
+import { privateWorldStore } from './privateWorldStore.ts'
 import type { BudgetNamespace } from './budget.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId, type GenerationModel } from './generationEconomics.ts'
@@ -30,6 +31,7 @@ export interface EntitlementStatus {
   free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }
   slowDownloadRequiresSubscription: true
   billingReview: boolean
+  creatorAstra: { active: boolean; remaining: number; maximum: 6; recommended: 2; pointsForTwo: 500 }
 }
 export const ACCOUNT_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 const JOB_ID = ACCOUNT_ID
@@ -78,10 +80,14 @@ async function usage(storage: EntitlementStorage, now: number) {
     slow: value.slow.filter(item => Math.floor(item.at / DAY) === Math.floor(now / DAY)),
   }
 }
-async function status(storage: EntitlementStorage, now: number): Promise<EntitlementStatus> {
+async function status(storage: EntitlementStorage, now: number, astraEnabled = false): Promise<EntitlementStatus> {
   const [credits, free, subscription, billingHold] = await Promise.all([balance(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
   const plan: PlanId = subscription?.plan ?? 'creator'
+  const period = subscription?.grantId ?? `${subscription?.id ?? 'none'}:${subscription?.until ?? 0}`
+  const used = await storage.get<number>(`creator-astra:${period}`) ?? 0
+  if (!Number.isSafeInteger(used) || used < 0) throw new Error('Invalid Astra period quota')
   return {
+    creatorAstra: { active: astraEnabled && active(subscription, now), remaining: Math.max(0, 6 - used), maximum: 6, recommended: 2, pointsForTwo: 500 },
     credits, generationCost: 50, generationCosts: { sol: 50, astra: 250, luna: 15 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
     subscription: { active: active(subscription, now), plan, expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
     free: { fastRemaining: Math.max(0, 2 - free.fast.length), fastResetAt: free.fast.length ? new Date(Math.min(...free.fast.map(item => item.at)) + DAY).toISOString() : null,
@@ -94,11 +100,13 @@ async function status(storage: EntitlementStorage, now: number): Promise<Entitle
 export class AccountEntitlements {
   private storage: EntitlementStorage
   private now: () => number
-  constructor(state: { storage: EntitlementStorage }, _env: unknown = {}, now = Date.now) { this.storage = state.storage; this.now = now }
+  private astraEnabled: boolean
+  constructor(state: { storage: EntitlementStorage }, env: unknown = {}, now = Date.now) { this.storage = state.storage; this.now = now; this.astraEnabled = !!env && typeof env === 'object' && (env as { ENABLE_ASTRA_PLANS?: string }).ENABLE_ASTRA_PLANS === 'true' }
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname, now = this.now()
     try {
-      if (path === '/status' && request.method === 'GET') return json(await this.storage.transaction(storage => status(storage, now)))
+      if (path === '/private-worlds' && request.method === 'POST') return privateWorldStore(request, this.storage, now)
+      if (path === '/status' && request.method === 'GET') return json(await this.storage.transaction(storage => status(storage, now, this.astraEnabled)))
       if (path === '/billing' && request.method === 'GET') return json({ customer: await this.storage.get<string>('customer') ?? null })
       if (request.method !== 'POST') return json({ error: 'Not found' }, 404)
       const raw = await request.text()
@@ -124,6 +132,11 @@ export class AccountEntitlements {
           const model = selectedModel
           const cost = MODEL_ECONOMICS[model].creditsPerGeneration
           if (model === 'astra' && (!subscriptionActive || !modelAllowed(plan, 'astra'))) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
+          const creatorAstra = model === 'astra' && plan === 'creator'
+          const period = subscription?.grantId ?? `${subscription?.id ?? 'none'}:${subscription?.until ?? 0}`
+          const used = creatorAstra ? await storage.get<number>(`creator-astra:${period}`) ?? 0 : 0
+          if (creatorAstra && !this.astraEnabled) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
+          if (creatorAstra && (!Number.isSafeInteger(used) || used < 0 || used >= 6)) return { allowed: false, reason: 'CREATOR_ASTRA_PERIOD_LIMIT' }
           const paid = subscriptionActive || credits > 0
           if (paid && credits < cost) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
           const free = await usage(storage, now)
@@ -138,6 +151,7 @@ export class AccountEntitlements {
           const job: Job = { ...(model === 'luna' ? { model } : {}), profile, at: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', state: 'reserved' }
           if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
+          if (creatorAstra) await storage.put(`creator-astra:${period}`, used + 1)
           await storage.put(`job:${id}`, job)
           return { allowed: true, repeated: false, cost: job.cost, kind: job.kind }
         })

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { MODEL_CATALOG, type DraftModel } from '../lib/modelCatalog'
 import OracleModelPreview from '../components/OracleModelPreview'
 import DemoShopPreview from '../components/DemoShopPreview'
@@ -47,6 +47,8 @@ async function checkSolReady(fetcher: typeof fetch = fetch) {
 
 /** Draft inputs are separate from the immutable submitted job and its result. */
 export default function ShopPage() {
+  const location = useLocation()
+  const pendingCharacter = useRef(typeof location.state?.worldPrompt === 'string' && location.state.worldPrompt.length <= 2000 ? location.state.worldPrompt : '')
   const coordinator = useRef<StudioCoordinator | null>(null)
   const mounted = useRef(false), epoch = useRef(0), objectUrl = useRef('')
   const promptInput = useRef<HTMLTextAreaElement>(null)
@@ -144,6 +146,7 @@ export default function ShopPage() {
       const client = new StudioCoordinator(window.localStorage)
       const restored = client.restore()
       coordinator.current = client
+      if (!restored && pendingCharacter.current) { setPrompt(pendingCharacter.current); setNotice('Character brief copied from your private world. Review model and points before generating.'); pendingCharacter.current = '' }
       if (restored) {
         setSaved(restored); setPrompt(restored.prompt)
         setProfile(restored.generationProfile || 'standard')
@@ -402,9 +405,9 @@ export default function ShopPage() {
       </div>
       <div className="native-shop-form">
         <span className="eyebrow">CREATE YOUR PRODUCT</span><h1>Describe it.<br />See it in 3D.</h1><p><a href="/compare/mcc/">See the real MCC cabinet comparison: WORLDIFACT and Meshy →</a></p>
-        <p>Describe your object and optionally add up to three reference images. Free accounts can share up to 2 Sol or Luna drafts per rolling 24 hours when funded capacity is available. Astra requires Pro or Studio.</p>
+        <p>Describe your object and optionally add up to three reference images. Free accounts can share up to 2 Sol or Luna drafts per rolling 24 hours when funded capacity is available. Astra requires eligible membership and verified runtime activation.</p>
         {status && !status.accountRequired && <small>Account limits are awaiting server activation. The existing experimental generation window remains in effect.</small>}
-        <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'You can describe your next model while the current preview stays unchanged.' : 'You can prepare the next idea while the current model is being completed.' : 'Eligible free Sol or Luna drafts include GLB downloads. Astra requires Pro or Studio and costs 250 points.'}</p>
+        <p id="studio-draft-help" role="status">{saved ? previousFinished ? 'You can describe your next model while the current preview stays unchanged.' : 'You can prepare the next idea while the current model is being completed.' : 'Eligible free Sol or Luna drafts include GLB downloads. Astra costs 250 points on eligible Creator, Pro and Studio accounts after verified runtime activation.'}</p>
         <button type="button" data-testid="clear-studio-draft" disabled={busy || photoBusy} onClick={clearDraft}>Clear description</button>
         <button type="button" className="shop-internal-only" hidden disabled={busy || photoBusy} onClick={clearDraft}>Clear next-model draft</button>
         <form onSubmit={generate} aria-describedby="studio-draft-help">
@@ -445,7 +448,7 @@ export default function ShopPage() {
           <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add reference images · JPG / PNG / WebP · ${photos.length}/3`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= 3} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Use up to three views of the same object.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy} />
-          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? `Generate ${MODEL_CATALOG[cheapModel].label} draft · ${MODEL_CATALOG[cheapModel].creditsPerGeneration} points or funded free allowance` : 'Generate SLOW model + materials'}</button><small>Free: up to 2 shared Sol/Luna drafts per rolling 24 hours when funded capacity is available. Paid Luna uses 15 points, Sol 50 and Astra 250. Astra requires Pro or Studio. There is no free Astra fallback. Manufacturing and delivery are separate.</small>
+          <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Creating your model…' : fast ? `Generate ${MODEL_CATALOG[cheapModel].label} draft · ${MODEL_CATALOG[cheapModel].creditsPerGeneration} points or funded free allowance` : 'Generate SLOW model + materials'}</button><small>Free: up to 2 shared Sol/Luna drafts per rolling 24 hours when funded capacity is available. Paid Luna uses 15 points, Sol 50 and Astra 250. Astra requires eligible membership and verified runtime activation. There is no free Astra fallback. Manufacturing and delivery are separate.</small>
         </form>
         <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : activeReady ? fast ? 'FAST Sol generation available' : 'SLOW quality generation available' : 'Generation temporarily unavailable'}</strong><p>{activeReady ? fast ? 'FAST creates a generated Sol specification and lightweight procedural 3D draft.' : 'SLOW creates the detailed model through the Oracle/Blender workflow.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>

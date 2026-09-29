@@ -4,7 +4,7 @@ export const MODEL_ECONOMICS = MODEL_CATALOG
 export const PLAN_RESERVES_BPS = Object.freeze({ paymentAndFx: 500, infrastructure: 1500, freePromotion: 500, refundsAndRisk: 500, minimumProfit: 3000 })
 export const FREE_PROMO_POLICY = Object.freeze({ model: 'sol' as const, allowedModels: ['sol', 'luna'] as const, maxProviderCents: 15, paidTierFallback: 'demo' as const })
 export const PLAN_CATALOG = Object.freeze({
-  creator: Object.freeze({ name: 'Creator SOL', amountCents: 2999, credits: 1500, allowedModels: ['sol', 'luna'] as const }),
+  creator: Object.freeze({ name: 'Creator SOL', amountCents: 2999, credits: 1500, allowedModels: ['sol', 'luna', 'astra'] as const }),
   pro: Object.freeze({ name: 'Pro ASTRA', amountCents: 9999, credits: 4500, allowedModels: ['sol', 'luna', 'astra'] as const }),
   studio: Object.freeze({ name: 'Studio ASTRA', amountCents: 14999, credits: 7500, allowedModels: ['sol', 'luna', 'astra'] as const }),
 })

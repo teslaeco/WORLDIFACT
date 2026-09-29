@@ -23,9 +23,9 @@ test('provider reserve is identical per credit regardless of allowed model mix',
   assert.equal(providerReserveCents(7500), 5250)
 })
 
-test('Creator remains SOL-only while Astra is reserved for higher paid plans', () => {
+test('Creator catalogue includes Astra without increasing its provider reserve; runtime gating is tested separately', () => {
   assert.equal(modelAllowed('creator', 'sol'), true)
-  assert.equal(modelAllowed('creator', 'astra'), false)
+  assert.equal(modelAllowed('creator', 'astra'), true)
   assert.equal(modelAllowed('pro', 'astra'), true)
   assert.equal(modelAllowed('studio', 'astra'), true)
 })

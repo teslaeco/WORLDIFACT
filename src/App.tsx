@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import LoadingFallback from './components/LoadingFallback'
 import AccountStatusBar from './components/AccountStatusBar'
 import { useAccount } from './lib/account'
 import { clearAvatarAssets, loadAvatarBytes } from './lib/avatarAsset'
 
+const PrivateGameLab = lazy(async () => import('./pages/PrivateGameLab'))
 const HomePage = lazy(async () => import('./pages/HomePage'))
 const PortalPage = lazy(async () => import('./pages/PortalPage'))
 const InfoPage = lazy(async () => import('./pages/InfoPage'))
@@ -16,13 +17,14 @@ const ModelsPage = lazy(async () => import('./pages/ModelsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
 function AvatarPreload() {
+  const { pathname } = useLocation()
   const { user } = useAccount()
   // Use the login transition to prepare the exact original, not a low-detail copy.
   useEffect(() => {
     clearAvatarAssets()
-    if (user) void loadAvatarBytes('queen').catch(() => { /* The world offers explicit retry. */ })
+    if (user && pathname === '/world') void loadAvatarBytes('queen').catch(() => { /* The world offers explicit retry. */ })
     return clearAvatarAssets
-  }, [user?.id])
+  }, [user?.id, pathname])
   return null
 }
 
@@ -46,8 +48,8 @@ export default function App() {
           <Route key={path} path={path} element={<PortalPage />} />
         ))}
         <Route path="/chess/shop" element={<Navigate to="/shop" replace />} />
-        <Route path="/lab" element={<WorkbenchPage kind="builder" />} />
-        <Route path="/builder" element={<WorkbenchPage kind="builder" />} />
+        <Route path="/lab" element={<PrivateGameLab />} />
+        <Route path="/builder" element={<PrivateGameLab />} />
         <Route path="/make" element={<WorkbenchPage kind="make" />} />
         <Route path="/privacy" element={<InfoPage kind="privacy" />} />
         <Route path="/terms" element={<InfoPage kind="terms" />} />
