@@ -1,0 +1,45 @@
+name: Integrate editor polish in review branch
+on:
+  push:
+    branches: [feat/editor-polish-resume-20260929]
+    paths:
+      - 'scripts/integrate-editor-polish.py'
+      - 'src/lib/editorTools.ts'
+      - 'src/lib/editorTransforms.ts'
+      - 'src/lib/previewBudget.ts'
+      - 'src/lib/characterPreview.ts'
+      - 'src/components/World*.tsx'
+      - 'src/pages/EditorPolish.css'
+      - 'tests/editor-polish*'
+      - '.github/workflows/prepare-editor-polish.yml'
+permissions:
+  contents: write
+concurrency:
+  group: editor-polish-review
+  cancel-in-progress: false
+jobs:
+  integrate:
+    if: github.ref == 'refs/heads/feat/editor-polish-resume-20260929'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply exact-base integration in the review branch only
+        run: python3 scripts/integrate-editor-polish.py
+      - name: Verify without a paid provider call
+        run: npm run verify
+      - run: npm run deploy:check
+      - name: Save only verified integration, never deploy
+        run: |
+          git config user.name 'WORLDIFACT review'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add src server tests wrangler.jsonc ops/editor-polish-integrated.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Integrate tested editor transforms, visible character and explicit billing routes'
+            git push origin HEAD:feat/editor-polish-resume-20260929
+          fi
