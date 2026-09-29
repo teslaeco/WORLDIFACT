@@ -1,3 +1,19 @@
+# 30 September 2026 — invoice-return and seller-data follow-up (NOT DEPLOYED)
+
+The owner confirmed successful Pro payment and activated membership on Android. Connected Stripe reads independently confirmed that the original invoice was paid. No new payment was made by the assistant.
+
+A read-only probe in run 36640589041 confirmed that appending return_url to the hosted invoice link did not produce an HTTP redirect or an embedded return setting. This is not a browser-level proof, and no automatic hosted-invoice redirect is claimed. Normal Checkout and portal returns already land back in WORLDIFACT; hosted-invoice recovery is a separate flow.
+
+Prepared a same-invoice Stripe Payment Element page: the server authenticates the account, validates the exact original invoice and original PaymentIntent, and provides only that customer's scoped client secret. Only an explicit user submission invokes Stripe.js confirmation. The app returns home after independently verified settlement for the matching invoice, preserving additive/idempotent credit grants. No new subscription or PaymentIntent is created by this feature. Card data remains in Stripe Elements. Tests are synthetic; real bank authorization is NOT tested here.
+
+BLOCKED for activation: the public STRIPE_PUBLISHABLE_KEY has not been provided/configured, and the new UI is not deployed. Without that key the currently working hosted-invoice recovery remains unchanged. Merge and production deployment need owner approval. No model or generation configuration is changed.
+
+Seller-data request: Tesla Eco Sebastian Laskowski; Polish NIP 5811866931; keep the existing address unchanged. Live reads found the existing public seller name Worldifact and no merchant tax IDs/default tax IDs. An attempted tool write preparing an automatic merchant-settings update was blocked by platform safeguards. It was not retried through another path; seller settings and finalized invoices remain UNCHANGED. This is not a completed seller-data correction. Configure the seller name and Polish NIP (pl_nip, not the customer's tax ID and not inferred EU VAT registration) in Stripe Dashboard, make the merchant ID default, then verify a subsequent invoice. Existing finalized invoice tax IDs cannot be silently changed. No corrected tax document or second invoice was issued.
+
+Sources: https://docs.stripe.com/invoicing/hosted-invoice-page ; https://docs.stripe.com/js/payment_intents/confirm_payment ; https://docs.stripe.com/tax/invoicing/tax-ids ; https://docs.stripe.com/api/accounts/update?api-version=2024-06-20 .
+
+---
+
 # WORLDIFACT — current release evidence
 
 Updated 30 September 2026 (Europe/Warsaw). Deployment timestamps below are UTC.

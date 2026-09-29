@@ -20,6 +20,7 @@ function fixture() {
     if (url.endsWith('/auth/v1/user')) return state.authenticated ? Response.json({ id: uid, email: 'fixture@example.test', user_metadata: { name: 'Fixture' } }) : Response.json({}, { status: 401 })
     if (url.includes('/v1/subscriptions?')) return Response.json({ data: state.subscriptions, has_more: state.more })
     if (url.includes('/v1/invoices?')) return Response.json({ data: state.history, has_more: false })
+    if (url.includes('/v1/invoices/in_Upgrade?')) return Response.json(invoice)
     if (url.endsWith('/v1/invoices/in_Upgrade')) return Response.json(invoice)
     if (url.endsWith('/v1/invoices/in_Base')) return Response.json(base)
     if (url.includes('/v1/prices/')) { const id = url.split('/').pop()!; return Response.json({ id, livemode: false, active: true, unit_amount: id === 'price_Creator' ? 2999 : id === 'price_Studio' ? 14999 : 9999, currency: 'usd', type: 'recurring', billing_scheme: 'per_unit', recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' } }) }
@@ -271,5 +272,63 @@ test('plan action validates identity, origin, target and body before Stripe oper
   assert.equal((await f.call('status', { plan: 'pro', customer: 'cus_Other' }, 'https://worldifact.test', '/api/billing/plan-payment'))?.status, 400)
   assert.equal((await f.call('status', { plan: 'pro' }, 'https://evil.test', '/api/billing/plan-payment'))?.status, 403)
   f.state.authenticated = false; assert.equal((await choosePlan(f, 'pro'))?.status, 401)
+  assert.equal(f.calls.filter(c => c.url.includes('api.stripe.com')).length, 0)
+})
+
+
+function formFixture() {
+  const f = fixture(); f.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_invoice_form_fixture'
+  f.invoice.payment_intent = { id: 'pi_Original', invoice: 'in_Upgrade', livemode: false, customer, amount: 9999, currency: 'usd', status: 'requires_payment_method', payment_method_types: ['card'], client_secret: 'pi_Original_secret_fixture' }
+  return f
+}
+const form = (f: ReturnType<typeof fixture>, body: Json = { plan: 'pro', action: 'prepare' }) => f.call('status', body, 'https://worldifact.test', '/api/billing/invoice-payment')
+test('configured invoice form receives only the original owned PaymentIntent with no Stripe writes', async () => {
+  const f = formFixture(), response = await form(f), body = await response!.json() as Json
+  assert.equal(response?.status, 200); assert.equal(body.phase, 'payment_required'); assert.equal(body.clientSecret, 'pi_Original_secret_fixture'); assert.equal(body.publishableKey, f.env.STRIPE_PUBLISHABLE_KEY)
+  assert.equal(body.invoiceId, 'in_Upgrade'); assert.equal(f.map.get('balance'), 605); assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+  const status = await (await form(f, { plan: 'pro', action: 'status', invoiceId: 'in_Upgrade' }))!.json() as Json
+  assert.equal(status.clientSecret, undefined); assert.equal(status.publishableKey, undefined)
+})
+test('invoice payment rejects foreign intent, amount, mode, partial payment and unsupported methods', async () => {
+  for (const change of ['customer', 'amount', 'mode', 'partial', 'method', 'secret', 'invoice']) {
+    const f = formFixture(), pi = f.invoice.payment_intent
+    if (change === 'customer') pi.customer = 'cus_Other'
+    if (change === 'amount') pi.amount = 1
+    if (change === 'mode') pi.livemode = true
+    if (change === 'partial') { f.invoice.amount_paid = 100; f.invoice.amount_remaining = 9899 }
+    if (change === 'method') pi.payment_method_types = ['us_bank_account']
+    if (change === 'secret') pi.client_secret = 'pi_Other_secret_fixture'
+    if (change === 'invoice') pi.invoice = 'in_Other'
+    const body = await (await form(f))!.json() as Json
+    assert.equal(body.clientSecret, undefined); assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+  }
+})
+test('missing or wrong-mode public key preserves working hosted invoice recovery', async () => {
+  for (const key of [undefined, 'pk_live_fixture_wrong_mode_123', 'sk_test_not_publishable']) {
+    const f = formFixture(); f.env.STRIPE_PUBLISHABLE_KEY = key
+    const body = await (await f.call('retry'))!.json() as Json
+    assert.equal(body.destination, 'invoice'); assert.equal(body.url, f.invoice.hosted_invoice_url)
+    assert.equal((await (await form(f))!.json() as Json).phase, 'hosted_only')
+  }
+})
+test('configured matching plan card opens only the same-origin invoice form', async () => {
+  const f = formFixture(), body = await (await choosePlan(f, 'pro'))!.json() as Json
+  assert.equal(body.destination, 'worldifact'); assert.equal(body.url, '/account/payment?plan=pro'); assert.equal(body.clientSecret, undefined)
+})
+test('payment return requires the matching paid invoice and adds the grant once', async () => {
+  const f = formFixture()
+  assert.notEqual((await (await form(f, { plan: 'pro', action: 'status', invoiceId: 'in_Upgrade' }))!.json() as Json).phase, 'confirmed')
+  f.subscription.pending_update = null; f.subscription.items.data[0].price = 'price_Pro'
+  Object.assign(f.invoice, { paid: true, status: 'paid', amount_paid: 9999, amount_remaining: 0 })
+  for (let i = 0; i < 2; i++) assert.equal((await (await form(f, { plan: 'pro', action: 'status', invoiceId: 'in_Upgrade' }))!.json() as Json).phase, 'confirmed')
+  assert.equal(f.map.get('balance'), 5105)
+  assert.equal((await (await form(f, { plan: 'pro', action: 'status', invoiceId: 'in_Other' }))!.json() as Json).phase, 'review')
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+})
+test('invoice form refuses extra client fields, foreign origins and unsigned users', async () => {
+  const f = formFixture()
+  assert.equal((await form(f, { plan: 'pro', action: 'prepare', customer }))?.status, 400)
+  assert.equal((await f.call('status', { plan: 'pro', action: 'prepare' }, 'https://evil.test', '/api/billing/invoice-payment'))?.status, 403)
+  f.state.authenticated = false; assert.equal((await form(f))?.status, 401)
   assert.equal(f.calls.filter(c => c.url.includes('api.stripe.com')).length, 0)
 })

@@ -1,3 +1,4 @@
+import { invoiceFormAddress } from '../lib/invoicePayment.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { accountRequest } from '../lib/account'
 import './BillingRecovery.css'
@@ -6,6 +7,7 @@ type Recovery = { state: 'none' | 'review' | 'payment_required' | 'active' | 'pr
 type Action = 'status' | 'retry' | 'card' | 'manage'
 
 export function recoveryAddress(value: unknown, destination: unknown) {
+  const local = invoiceFormAddress(value, destination); if (local) return local
   if (typeof value !== 'string' || !['invoice', 'portal'].includes(String(destination))) throw new Error('Unverified billing destination')
   const url = new URL(value), host = destination === 'invoice' ? 'invoice.stripe.com' : 'billing.stripe.com'
   if (url.protocol !== 'https:' || url.hostname !== host || url.username || url.password || url.port || url.hash) throw new Error('Unverified billing destination')
