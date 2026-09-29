@@ -1,3 +1,4 @@
+import { invoiceReturnSearch } from './invoicePayment.ts'
 /** Keep post-login navigation on a known first-party page. Never forward arbitrary URLs. */
 export function safeAccountDestination(value: unknown): string {
   if (typeof value !== 'string' || value.length > 1024 || !value.startsWith('/') || value.startsWith('//') || value.includes('\\') || [...value].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return '/world'
@@ -5,6 +6,10 @@ export function safeAccountDestination(value: unknown): string {
     const url = new URL(value, 'https://worldifact.invalid')
     if (url.origin !== 'https://worldifact.invalid' || url.username || url.password) return '/world'
     if (url.pathname === '/world') return '/world'
+    if (url.pathname === '/account/payment') {
+      const target = invoiceReturnSearch(url.search)
+      return target ? '/account/payment' + target.cleanSearch : '/account/credits'
+    }
     if (url.pathname !== '/account/credits') return '/world'
     const query = new URLSearchParams()
     const paypal = url.searchParams.get('paypal')

@@ -15,3 +15,15 @@ export function verifiedInvoiceReturn(result: Record<string, unknown>, plan: Inv
   return result.phase === 'confirmed' && result.plan === plan && typeof result.invoiceId === 'string'
     && /^in_[A-Za-z0-9_]{1,180}$/.test(result.invoiceId) && (!invoiceId || result.invoiceId === invoiceId)
 }
+
+/** Bounded read-only settlement polling. It never calls Stripe confirmation or grants credits. */
+export async function waitForInvoiceConfirmation(read: () => Promise<Record<string, unknown>>, plan: InvoicePlan, invoiceId: string,
+  alive: () => boolean, wait: () => Promise<void> = () => new Promise(resolve => setTimeout(resolve, 3000))): Promise<boolean> {
+  for (let attempt = 0; attempt < 6 && alive(); attempt++) {
+    if (attempt) { await wait(); if (!alive()) return false }
+    const result = await read()
+    if (!alive()) return false
+    if (verifiedInvoiceReturn(result, plan, invoiceId)) return true
+  }
+  return false
+}

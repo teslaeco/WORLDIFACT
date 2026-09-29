@@ -13,14 +13,14 @@ function fixture() {
   const subscription: Json = { id: subId, customer, livemode: false, status: 'active', metadata: { worldifact_uid: uid }, current_period_end: end, items: { data: [{ id: 'si_Recovery', quantity: 1, price: 'price_Creator' }] }, latest_invoice: 'in_Upgrade', pending_update: { subscription_items: [{ id: 'si_Recovery', quantity: 1, price: { id: 'price_Pro' } }] } }
   const base: Json = { id: 'in_Base', customer, subscription: subId, livemode: false, paid: true, status: 'paid', amount_paid: 2999, amount_due: 2999, amount_remaining: 0, total: 2999, currency: 'usd', billing_reason: 'subscription_create', lines: { data: [{ price: 'price_Creator', quantity: 1, amount: 2999, currency: 'usd', period: { start: now - 86400, end } }] } }
   const invoice: Json = { id: 'in_Upgrade', customer, subscription: subId, livemode: false, paid: false, status: 'open', amount_paid: 0, amount_due: 9999, amount_remaining: 9999, total: 9999, currency: 'usd', billing_reason: 'subscription_update', hosted_invoice_url: 'https://invoice.stripe.com/i/fixture', lines: { data: [{ price: 'price_Pro', quantity: 1, amount: 9999, currency: 'usd', period: { start: now, end: end + 86400 } }] } }
-  const state = { subscriptions: [subscription], more: false, history: [base], authenticated: true, portalUrl: 'https://billing.stripe.com/p/session/fixture' }
+  const state = { expandedInvoice: null as Json | null, subscriptions: [subscription], more: false, history: [base], authenticated: true, portalUrl: 'https://billing.stripe.com/p/session/fixture' }
   const calls: { url: string; method: string; body: string }[] = []
   const fetcher = (async (input: unknown, init?: RequestInit) => {
     const url = String(input), method = init?.method ?? 'GET'; calls.push({ url, method, body: String(init?.body ?? '') })
     if (url.endsWith('/auth/v1/user')) return state.authenticated ? Response.json({ id: uid, email: 'fixture@example.test', user_metadata: { name: 'Fixture' } }) : Response.json({}, { status: 401 })
     if (url.includes('/v1/subscriptions?')) return Response.json({ data: state.subscriptions, has_more: state.more })
     if (url.includes('/v1/invoices?')) return Response.json({ data: state.history, has_more: false })
-    if (url.includes('/v1/invoices/in_Upgrade?')) return Response.json(invoice)
+    if (url.includes('/v1/invoices/in_Upgrade?')) return Response.json(state.expandedInvoice ?? invoice)
     if (url.endsWith('/v1/invoices/in_Upgrade')) return Response.json(invoice)
     if (url.endsWith('/v1/invoices/in_Base')) return Response.json(base)
     if (url.includes('/v1/prices/')) { const id = url.split('/').pop()!; return Response.json({ id, livemode: false, active: true, unit_amount: id === 'price_Creator' ? 2999 : id === 'price_Studio' ? 14999 : 9999, currency: 'usd', type: 'recurring', billing_scheme: 'per_unit', recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' } }) }
@@ -331,4 +331,11 @@ test('invoice form refuses extra client fields, foreign origins and unsigned use
   assert.equal((await f.call('status', { plan: 'pro', action: 'prepare' }, 'https://evil.test', '/api/billing/invoice-payment'))?.status, 403)
   f.state.authenticated = false; assert.equal((await form(f))?.status, 401)
   assert.equal(f.calls.filter(c => c.url.includes('api.stripe.com')).length, 0)
+})
+
+test('invoice preparation rejects a changed subscription parent on the second authoritative read', async () => {
+  const f = formFixture()
+  f.state.expandedInvoice = { ...structuredClone(f.invoice), subscription: 'sub_Other' }
+  const body = await (await form(f))!.json() as Json
+  assert.equal(body.clientSecret, undefined); assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
 })

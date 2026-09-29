@@ -1,6 +1,7 @@
+import { safeAccountDestination } from '../src/lib/accountDestination.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { invoiceFormAddress, invoiceReturnSearch, verifiedInvoiceReturn } from '../src/lib/invoicePayment.ts'
+import { invoiceFormAddress, invoiceReturnSearch, verifiedInvoiceReturn, waitForInvoiceConfirmation } from '../src/lib/invoicePayment.ts'
 
 test('invoice form accepts only a fixed same-origin route and known plan', () => {
   assert.equal(invoiceFormAddress('/account/payment?plan=pro', 'worldifact'), '/account/payment?plan=pro')
@@ -15,4 +16,21 @@ test('only a server-confirmed matching invoice authorizes the automatic home ret
   const paid = { phase: 'confirmed', plan: 'pro', invoiceId: 'in_Owned' }
   assert.equal(verifiedInvoiceReturn(paid, 'pro', 'in_Owned'), true)
   for (const change of [{ phase: 'payment_required' }, { phase: 'processing' }, { plan: 'studio' }, { invoiceId: 'in_Other' }, { invoiceId: null }]) assert.equal(verifiedInvoiceReturn({ ...paid, ...change }, 'pro', 'in_Owned'), false)
+})
+
+test('sign-in preserves only the intended invoice return, never a client secret or external redirect', () => {
+  assert.equal(safeAccountDestination('/account/payment?plan=pro&invoice=in_Owned&payment_intent_client_secret=private&next=https://evil.test'), '/account/payment?plan=pro&invoice=in_Owned')
+  assert.equal(safeAccountDestination('/account/payment?plan=invalid'), '/account/credits')
+})
+test('settlement polling waits for the matching invoice and stops after six reads', async () => {
+  let calls = 0
+  assert.equal(await waitForInvoiceConfirmation(async () => ++calls === 3 ? { phase: 'confirmed', plan: 'pro', invoiceId: 'in_Owned' } : { phase: 'processing' }, 'pro', 'in_Owned', () => true, async () => {}), true)
+  assert.equal(calls, 3); calls = 0
+  assert.equal(await waitForInvoiceConfirmation(async () => { calls++; return { phase: 'confirmed', plan: 'studio', invoiceId: 'in_Other' } }, 'pro', 'in_Owned', () => true, async () => {}), false)
+  assert.equal(calls, 6)
+})
+test('leaving the payment screen discards a late settlement and stops polling', async () => {
+  let active = true, calls = 0
+  assert.equal(await waitForInvoiceConfirmation(async () => { calls++; active = false; return { phase: 'confirmed', plan: 'pro', invoiceId: 'in_Owned' } }, 'pro', 'in_Owned', () => active, async () => {}), false)
+  assert.equal(calls, 1)
 })

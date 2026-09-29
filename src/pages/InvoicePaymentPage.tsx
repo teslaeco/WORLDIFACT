@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { accountRequest, useAccount } from '../lib/account'
-import { invoiceReturnSearch, verifiedInvoiceReturn } from '../lib/invoicePayment'
+import { invoiceReturnSearch, verifiedInvoiceReturn, waitForInvoiceConfirmation } from '../lib/invoicePayment'
 import { loadInvoiceStripe, type StripeInstance } from '../lib/stripeInvoiceForm'
 import './CreditsPage.css'
 
@@ -10,7 +10,7 @@ export default function InvoicePaymentPage() {
   const target = invoiceReturnSearch(location.search)
   // Drop Stripe redirect parameters and all untrusted fields before loading Stripe.js.
   useEffect(() => {
-    if (target) window.history.replaceState(null, '', '/account/payment' + target.cleanSearch)
+    window.history.replaceState(null, '', '/account/payment' + (target?.cleanSearch ?? ''))
   }, [target?.cleanSearch])
   if (loading) return <main className="credits-page"><p>Checking your account…</p></main>
   if (!target) return <main className="credits-page"><p>Invalid payment return. No payment was started.</p><Link to="/account/credits">Back to billing</Link></main>
@@ -29,6 +29,11 @@ function InvoiceForm({ target }: { target: NonNullable<ReturnType<typeof invoice
         const result = await accountRequest('/api/billing/invoice-payment', { plan: target.plan, action: 'prepare', ...(target.invoiceId ? { invoiceId: target.invoiceId } : {}) })
         if (disposed) return
         if (verifiedInvoiceReturn(result, target.plan, target.invoiceId)) { window.location.replace('/?billing=processing'); return }
+        if (target.invoiceId && result.phase !== 'payment_required') {
+          const confirmed = await waitForInvoiceConfirmation(() => accountRequest('/api/billing/invoice-payment', { plan: target.plan, action: 'status', invoiceId: target.invoiceId }), target.plan, target.invoiceId, () => !disposed)
+          if (disposed) return
+          if (confirmed) { window.location.replace('/?billing=processing'); return }
+        }
         if (result.phase !== 'payment_required') { setMessage(result.phase === 'hosted_only' ? 'The in-app payment form is not activated yet. Use the existing secure invoice payment from billing.' : 'This invoice changed or needs review. Your existing credits are unchanged.'); return }
         if (typeof result.clientSecret !== 'string' || typeof result.publishableKey !== 'string' || typeof result.invoiceId !== 'string' || !Number.isSafeInteger(result.amountCents) || result.amountCents <= 0) throw new Error('Invalid payment context')
         const factory = await loadInvoiceStripe(); if (disposed || !mount.current) return
@@ -59,9 +64,10 @@ function InvoiceForm({ target }: { target: NonNullable<ReturnType<typeof invoice
       const result = await current.stripe.confirmPayment({ elements: current.elements, confirmParams: { return_url: returnUrl.href }, redirect: 'if_required' })
       if (!alive.current) return
       if (result.error) { setMessage('Payment was not confirmed. Check your card or bank authorization, then try again.'); return }
-      const confirmed = await accountRequest('/api/billing/invoice-payment', { plan: target.plan, action: 'status', invoiceId: current.invoiceId })
+      setReady(false); setMessage('Payment submitted. Checking confirmation before returning to WORLDIFACT…')
+      const confirmed = await waitForInvoiceConfirmation(() => accountRequest('/api/billing/invoice-payment', { plan: target.plan, action: 'status', invoiceId: current.invoiceId }), target.plan, current.invoiceId, () => alive.current)
       if (!alive.current) return
-      if (verifiedInvoiceReturn(confirmed, target.plan, current.invoiceId)) window.location.replace('/?billing=processing')
+      if (confirmed) window.location.replace('/?billing=processing')
       else { setReady(false); setMessage('Stripe is still confirming the payment. Do not pay again. Choose Check payment status to return after confirmation.') }
     } catch { if (alive.current) { setReady(false); setMessage('Payment status is uncertain. Do not pay again. Check payment status or return to billing. Your existing points have not been replaced.') } }
     finally { lock.current = false; if (alive.current) setBusy(false) }

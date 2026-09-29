@@ -434,7 +434,7 @@ async function recoverBilling(request: Request, env: BillingEnv, user: AccountUs
       || !Number.isSafeInteger(invoice.amount_paid) || Number(invoice.amount_paid) < 0 || Number(invoice.amount_paid) >= amount) return review()
     // Validate before displaying a retry action; re-read all state on the eventual button click.
     const address = recoveryUrl(invoice.hosted_invoice_url, 'invoice.stripe.com')
-    const response = { invoiceId, state: 'payment_required', canManage: true, canRetry: true, amountCents: invoice.amount_remaining,
+    const response = { invoiceId, subscriptionId: subscription.id, state: 'payment_required', canManage: true, canRetry: true, amountCents: invoice.amount_remaining,
       currency: 'USD', plan: invoicePlan, pendingChange: !!subscription.pending_update, activePlan: allowance.subscription.active ? allowance.subscription.plan : null }
     if (action === 'retry') return json({ ...response, url: invoiceFormKey(env) ? `/account/payment?plan=${invoicePlan}` : address, destination: invoiceFormKey(env) ? 'worldifact' : 'invoice', requiresConfirmation: true })
     return json(response)
@@ -472,7 +472,7 @@ async function invoicePayment(request: Request, env: BillingEnv, user: AccountUs
   const invoice = await stripe(env, `/invoices/${recovery.invoiceId}?expand[]=payment_intent`, fetcher)
   const pi = object(invoice.payment_intent), lines = array(object(invoice.lines).data), line = lines[0], offer = subscriptionOffer(env, plan)
   // Re-read after recovery to detect an invoice changed or settled between requests.
-  if (invoice.id !== recovery.invoiceId || idOf(invoice.customer) !== stored.customer || invoice.status !== 'open'
+  if (invoice.id !== recovery.invoiceId || subscriptionOf(invoice) !== recovery.subscriptionId || idOf(invoice.customer) !== stored.customer || invoice.status !== 'open'
     || invoice.paid !== false || invoice.amount_paid !== 0 || invoice.amount_remaining !== offer.amountCents
     || invoice.amount_due !== offer.amountCents || invoice.total !== offer.amountCents || invoice.currency !== 'usd'
     || lines.length !== 1 || object(invoice.lines).has_more === true || line.quantity !== 1 || line.proration === true
