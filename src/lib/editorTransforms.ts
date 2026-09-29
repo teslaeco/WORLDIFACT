@@ -28,7 +28,7 @@ export function attachEditorTransforms(camera:THREE.Camera,element:HTMLElement,s
     if(!object||state.playing||mode==='select'){control.detach();return}
     if(control.object!==object)control.attach(object)
     control.setMode(mode==='move'?'translate':mode);control.showX=mode!=='rotate';control.showY=true;control.showZ=mode!=='rotate'
-    control.setTranslationSnap(state.snap||null);control.setRotationSnap(state.snap?Math.PI/12:null);control.setScaleSnap(state.snap?.valueOf()? .1:null)
+    control.setTranslationSnap(state.snap||null);control.setRotationSnap(state.snap?Math.PI/12:null);control.setScaleSnap(state.snap ? .1 : null)
   }
   return {update,beforeRebuild:()=>{if(active)cancel();control.detach()},consumePick:()=>{const value=used;used=false;return value},dispose:()=>{cancel();control.removeEventListener('mouseDown',begin);control.removeEventListener('objectChange',changed);control.removeEventListener('mouseUp',end);element.removeEventListener('pointercancel',cancel);window.removeEventListener('blur',cancel);control.dispose();scene.remove(helper)}}
 }

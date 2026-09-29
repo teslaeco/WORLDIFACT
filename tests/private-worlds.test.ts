@@ -58,8 +58,9 @@ test('storage limits keep eight prior worlds intact; geometry limits reject over
   const more = blankWorld()
   assert.equal((await call(storage, { action: 'save', id: more.id, document: more, expectedRevision: 0 })).code, 409)
   assert.equal((await call(storage, { action: 'list' })).worlds.length, 8)
-  assert.throws(() => validatePrivateWorld({ ...more, entities: Array.from({ length: 49 }, () => newEntity('tree', 0, 0)) }))
-  assert.throws(() => validatePrivateWorld({ ...more, entities: Array.from({ length: 5 }, () => newEntity('asset', 0, 0, crypto.randomUUID())) }))
+  assert.equal(validatePrivateWorld({ ...more, entities: Array.from({ length: 49 }, () => newEntity('tree', 0, 0)) }).entities.length, 49)
+  assert.equal(validatePrivateWorld({ ...more, entities: Array.from({ length: 5 }, () => newEntity('asset', 0, 0, crypto.randomUUID())) }).entities.length, 5)
+  assert.throws(()=>validatePrivateWorld({...more,entities:Array.from({length:4097},()=>newEntity('tree',0,0))}))
 })
 function fixture() {
   const stores = new Map<string, ReturnType<typeof store>>()
@@ -103,7 +104,7 @@ test('owner overrides, CSRF, missing auth, oversize and arbitrary queries fail w
   assert.equal((await f.request('/api/worlds', 'POST', { document: w, expectedRevision: 0 }, 'alice', { Origin: 'https://evil.test' }))!.status, 403)
   assert.equal((await f.request('/api/worlds', 'GET', undefined, ''))!.status, 401)
   assert.equal((await f.request('/api/worlds?owner=' + alice))!.status, 400)
-  assert.equal((await f.request('/api/worlds', 'POST', { document: { ...w, name: 'x'.repeat(70000) }, expectedRevision: 0 }))!.status, 413)
+  assert.equal((await f.request('/api/worlds', 'POST', { document: { ...w, name: 'x'.repeat(110000) }, expectedRevision: 0 }))!.status, 413)
   assert.equal(f.stores.size, 0)
 })
 test('generation gallery exposes only owned, complete and currently downloadable models', async () => {

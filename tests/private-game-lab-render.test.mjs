@@ -7,6 +7,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import ts from 'typescript'
+import * as tools from '../src/lib/editorTools.ts'
 import * as world from '../src/lib/privateWorld.ts'
 import * as crystal from '../src/lib/crystal18.ts'
 import * as models from '../src/lib/modelCatalog.ts'
@@ -31,6 +32,10 @@ test('real editor onboarding has named world, real 18-face jewel and no shared p
     react: { ...React, lazy: () => () => React.createElement('div', { 'data-renderer-not-exercised': true }) },
     '../lib/account': { useAccount: () => ({ user: null, loading: false }) },
     '../lib/privateWorld': world,
+    '../lib/editorTools': tools,
+    '../components/WorldSelectionToolbar': { __esModule: true, default: () => React.createElement('section',null,'Transform controls') },
+    '../components/WorldCharacterStudio': { __esModule: true, default: forbidden },
+    '../components/WorldCodexPanel': { __esModule: true, default: forbidden },
     '../lib/privateWorldAssets': { listWorldAssets: forbidden, storeWorldAsset: forbidden },
     '../lib/studioArchive': { listStudioModels: forbidden, readStudioModel: forbidden },
     '../components/EighteenCrystal': { __esModule: true, default: Eighteen },

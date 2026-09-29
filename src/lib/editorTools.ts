@@ -42,7 +42,7 @@ export function moveTreesFromRiver(world:PrivateWorld):PrivateWorld {
   return validatePrivateWorld({...world,entities})
 }
 export function normalizedCommand(text:string){return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ł/g,'l').trim()}
-export function isMoveTreesCommand(text:string){const s=normalizedCommand(text);return s.length<=500&&/^(move|przesun|usun z rzeki|przenies)/.test(s)&&/tree|drzew/.test(s)&&/river|rzek/.test(s)}
+export function isMoveTreesCommand(text:string){const s=normalizedCommand(text);return s.length<=500&&/^(move|przesun|usun z rzeki|przenies)/.test(s)&&/tree|drzew/.test(s)&&/river|rze[kc]/.test(s)}
 export function codexWorldTask(world:PrivateWorld, request:string, selectedId:string|null):string {
   const doc=validatePrivateWorld(world)
   const selected=doc.entities.find(e=>e.id===selectedId)??null

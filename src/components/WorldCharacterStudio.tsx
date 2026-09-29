@@ -18,9 +18,10 @@ export default function WorldCharacterStudio(p:Props){
   const latest=useRef(p);latest.current=p
   const client=useRef<StudioCoordinator|null>(null),alive=useRef(false),lock=useRef(false)
   const [saved,setSaved]=useState<SavedStudioJob|null>(null),[job,setJob]=useState<StudioJob|null>(null),[busy,setBusy]=useState(false),[retry,setRetry]=useState(0),[error,setError]=useState(''),[notice,setNotice]=useState(''),[quote,setQuote]=useState<GenerationQuote|null>(null),[files,setFiles]=useState<WorldAsset[]>([])
-  const binding=useRef({worldId:p.world.id,characterSnapshot:JSON.stringify(p.world.character)})
+  const binding=useRef({worldId:p.world.id,characterSnapshot:''})
+  const bindingKey=`worldifact-character-binding:v1:${p.owner}:${p.world.id}`
   async function refresh(){try{const [a,b]=await Promise.all([fetch('/api/account/entitlements',{cache:'no-store',signal:AbortSignal.timeout(15000)}),fetch('/api/billing/status',{cache:'no-store',signal:AbortSignal.timeout(15000)})]);if(!a.ok||!b.ok)throw new Error('Account availability could not be confirmed.');const q=quoteGeneration('astra',await a.json(),await b.json(),true);if(alive.current)setQuote(q)}catch{if(alive.current)setQuote(null)}}
-  useEffect(()=>{alive.current=true;let closed=false;try{client.current=new StudioCoordinator(characterReceiptStore(window.localStorage,p.owner,p.world.id));const restored=client.current.restore();setSaved(restored);if(restored)setNotice('An existing character job was recovered. Checking it does not buy another generation.')}catch(e){setError(e instanceof Error?e.message:'Recovery storage is unavailable.')}
+  useEffect(()=>{alive.current=true;let closed=false;try{client.current=new StudioCoordinator(characterReceiptStore(window.localStorage,p.owner,p.world.id));const restored=client.current.restore();setSaved(restored);if(restored){try{const b=JSON.parse(window.localStorage.getItem(bindingKey)??'null');if(b?.jobId===restored.receipt.id&&b.worldId===p.world.id&&typeof b.characterSnapshot==='string')binding.current=b}catch{/* No speculative automatic adoption. */}}if(restored)setNotice('An existing character job was recovered. Checking it does not buy another generation.')}catch(e){setError(e instanceof Error?e.message:'Recovery storage is unavailable.')}
     void refresh();void listWorldAssets(p.owner).then(v=>{if(!closed)setFiles(v)}).catch(()=>{})
     return()=>{closed=true;alive.current=false;client.current=null}
     // Component is keyed by owner and world; recovery never submits a model request.
@@ -30,10 +31,10 @@ export default function WorldCharacterStudio(p:Props){
     if(lock.current||!client.current)return
     if(value.downloadAllowed===false){setNotice('The completed character is preserved. This account cannot download it yet.');return}
     lock.current=true;setBusy(true)
-    const actor=p.owner,id=p.world.id,api=client.current
+    const actor=p.owner,id=p.world.id,api=client.current,captured={...binding.current}
     try{const blob=await api.artifact('model',record);const asset=await storeWorldAsset(actor,'Character · '+p.world.name,blob);await saveStudioModel(record,blob)
       if(!alive.current||latest.current.owner!==actor||latest.current.world.id!==id)return
-      setFiles(await listWorldAssets(actor));setNotice('The actual generated GLB is in your library. Original files are preserved.');latest.current.onReady(binding.current.worldId,binding.current.characterSnapshot,asset)
+      setFiles(await listWorldAssets(actor));setNotice('The actual generated GLB is in your library. Original files are preserved.');latest.current.onReady(captured.worldId,captured.characterSnapshot,asset)
     }catch(e){if(alive.current)setError(e instanceof Error?e.message:'The model could not be loaded. Recover this same job; do not generate again.')}
     finally{lock.current=false;if(alive.current)setBusy(false)}
   }
@@ -53,7 +54,7 @@ export default function WorldCharacterStudio(p:Props){
     if(p.disabled||lock.current||!client.current||(saved&&!terminal(job?.state))||quote?.state!=='credits')return
     lock.current=true;setBusy(true);setError('');const api=client.current,id=p.world.id,actor=p.owner
     binding.current={worldId:id,characterSnapshot:JSON.stringify(p.world.character)}
-    try{const input=validateStudioInput({worldId:'ai-game-lab',prompt:characterGenerationPrompt(p.world),purpose:'game',textureMaxSize:4096,photos:[]});const result=await api.start(input,record=>{if(alive.current&&latest.current.world.id===id&&latest.current.owner===actor){setSaved(record);setJob(null)}},'',true);if(alive.current)setJob(result)}
+    try{const input=validateStudioInput({worldId:'ai-game-lab',prompt:characterGenerationPrompt(p.world),purpose:'game',textureMaxSize:4096,photos:[]});const result=await api.start(input,record=>{if(alive.current&&latest.current.world.id===id&&latest.current.owner===actor){window.localStorage.setItem(bindingKey,JSON.stringify({...binding.current,jobId:record.receipt.id}));setSaved(record);setJob(null)}},'',true);if(alive.current)setJob(result)}
     catch(e){if(alive.current)setError(e instanceof Error?e.message:'Generation did not confirm; recover the saved receipt.')}
     finally{lock.current=false;if(alive.current){setBusy(false);void refresh()}}
   }

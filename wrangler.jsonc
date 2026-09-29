@@ -14,6 +14,7 @@
     "OPENAI_FAST_MODEL": "gpt-6-sol",
     "FREE_SOL_SEED_JOBS": "10",
     "ENABLE_ASTRA_PLANS": "false",
+    "STRIPE_PLAN_CHANGE_CONFIGURATION_ID": "bpc_1UKstUBrIVB6dkxN5vfrUDa4",
     "STRIPE_PRO_PRICE_ID": "price_1UKi3GBrIVB6dkxNm66OnDAr",
     "STRIPE_STUDIO_PRICE_ID": "price_1UKi3UBrIVB6dkxNfojjhJsv",
     "ENABLE_PAID_GENERATION": "false",

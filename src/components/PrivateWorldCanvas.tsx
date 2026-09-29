@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import { attachEditorTransforms } from '../lib/editorTransforms'
+import { createCharacterPreview } from '../lib/characterPreview'
+import { fitsPreview, sumPreview, type PreviewCost } from '../lib/previewBudget'
+import type { EntityTransform, TransformMode } from '../lib/editorTools'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { createWorldObject } from '../lib/worldGeometry'
@@ -9,7 +14,7 @@ import { inspectGLB } from '../lib/glb'
 import { riverCenter, terrainHeight, type PrivateWorld, type WorldEntity } from '../lib/privateWorld'
 
 type Point = {x:number;z:number}
-export type WorldCanvasProps = { owner:string|null; world:PrivateWorld; playing:boolean; selected:string|null; point:Point; onPick:(point:Point,entityId:string|null)=>void; onMessage:(message:string)=>void }
+export type WorldCanvasProps = { owner:string|null; world:PrivateWorld; playing:boolean; selected:string|null; point:Point; onPick:(point:Point,entityId:string|null)=>void; onMessage:(message:string)=>void; transformMode?:TransformMode; snap?:number; focusVersion?:number; focusCharacterVersion?:number; onTransform?:(id:string,value:EntityTransform)=>void }
 function release(root:THREE.Object3D){const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>(),textures=new Set<THREE.Texture>();root.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.Points||o instanceof THREE.LineSegments){geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);for(const value of Object.values(m))if(value instanceof THREE.Texture)textures.add(value)}}});textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());geometries.forEach(g=>g.dispose())}
 function primitive(e:WorldEntity):THREE.Group{
   if(['rover','habitat','solar-array','sculpture','mcc-cabinet'].includes(e.kind)) return createWorldObject({...e,kind:e.kind as AssetKind,x:0,z:0,scale:1,rotation:0})
@@ -22,7 +27,7 @@ function primitive(e:WorldEntity):THREE.Group{
   else{add(new THREE.BoxGeometry(1.6,1.6,1.6),paint,0,.8);timber.dispose()}
   return root
 }
-function avatar(world:PrivateWorld){const root=new THREE.Group();const cloth=new THREE.MeshStandardMaterial({color:world.character.outfitColor,roughness:.75}),hair=new THREE.MeshStandardMaterial({color:world.character.hairColor,roughness:.8}),skin=new THREE.MeshStandardMaterial({color:'#c6916e',roughness:.8});const part=(g:THREE.BufferGeometry,m:THREE.Material,x:number,y:number,z=0)=>{const p=new THREE.Mesh(g,m);p.position.set(x,y,z);p.castShadow=true;root.add(p);return p};part(new THREE.CapsuleGeometry(.24,.45,4,8),cloth,0,1.05);part(new THREE.SphereGeometry(.23,16,12),skin,0,1.73);part(new THREE.SphereGeometry(.24,12,8,0,Math.PI*2,0,Math.PI*.52),hair,0,1.77);part(new THREE.CapsuleGeometry(.09,.38,3,7),cloth,-.14,.4);part(new THREE.CapsuleGeometry(.09,.38,3,7),cloth,.14,.4);part(new THREE.CapsuleGeometry(.07,.32,3,7),skin,-.34,1.02);part(new THREE.CapsuleGeometry(.07,.32,3,7),skin,.34,1.02);return root}
+function avatar(world:PrivateWorld){return createCharacterPreview(world.character,text=>{const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const ctx=canvas.getContext('2d');if(!ctx)return null;ctx.clearRect(0,0,512,128);ctx.fillStyle='#f5f7ec';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px sans-serif';ctx.fillText(text,256,64,480);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;return texture})}
 export default function PrivateWorldCanvas(props:WorldCanvasProps){
   const container=useRef<HTMLDivElement>(null),latest=useRef(props),draw=useRef<((world:PrivateWorld)=>void)|null>(null),keys=useRef(new Set<string>())
   const [error,setError]=useState('')
@@ -55,38 +60,59 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
     const selection=new THREE.Box3Helper(new THREE.Box3(),new THREE.Color('#ffe7a1'));selection.visible=false;scene.add(selection)
     const items=new THREE.Group();scene.add(items)
     let player=avatar(latest.current.world);const playerAt=new THREE.Vector3(-8,0,10);scene.add(player);player.visible=false
-    const cached=new Map<string,THREE.Group>(),pending=new Set<string>();let previousCharacter=''
+    const cached=new Map<string,THREE.Group>(),pending=new Set<string>(),assetCosts=new Map<string,PreviewCost>();let loadedBytes=0,inflightBytes=0,previousCharacter='',terrainSignature='',lastFocus=-1,lastCharacterFocus=-1
+    let mixer:THREE.AnimationMixer|null=null
+    const transforms=attachEditorTransforms(camera,renderer.domElement,scene,items,orbit,()=>latest.current)
+    const focus=(object:THREE.Object3D)=>{const box=new THREE.Box3().setFromObject(object),center=box.getCenter(new THREE.Vector3()),span=Math.max(4,box.getSize(new THREE.Vector3()).length()*1.4);orbit.target.copy(center);camera.position.copy(center).add(new THREE.Vector3(span*.65,span*.55,span));orbit.update()}
+    const costOf=(object:THREE.Object3D):PreviewCost=>{let triangles=0,draws=0;object.traverse(o=>{if(o instanceof THREE.Mesh){triangles+=Math.floor((o.geometry.index?.count??o.geometry.attributes.position?.count??0)/3)*(o instanceof THREE.InstancedMesh?o.count:1);draws+=Math.max(1,o.geometry.groups.length)}});return {triangles,draws,bytes:0}}
+    const disposePlayer=()=>{mixer?.stopAllAction();mixer=null;scene.remove(player);if(!player.userData.sharedAsset)release(player)}
     const rebuild=(world:PrivateWorld)=>{
       if(!alive)return
       scene.background=new THREE.Color(world.night?'#090f26':'#b8d8e9');scene.fog=new THREE.Fog(world.night?'#101d35':'#badadf',45,125);hemi.intensity=world.night?.55:2;sun.intensity=world.night?.3:2.5;sky.visible=world.night;waterMat.uniforms.night.value=world.night?1:0
+      const terrainKey=JSON.stringify(world.terrain);if(terrainKey!==terrainSignature){terrainSignature=terrainKey;
       const p=earthGeo.attributes.position;const c=new THREE.Color();for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),y=terrainHeight(x,z,world.terrain);p.setY(i,y);const bank=Math.abs(x-riverCenter(z));c.set(bank<3.7?'#9b9874':y>7?'#93a58a':'#5c9855');c.multiplyScalar(.94+.06*Math.sin(x*2.3+z*.7));c.toArray(colors,i*3)}p.needsUpdate=true;earthGeo.attributes.color.needsUpdate=true;earthGeo.computeVertexNormals();earthGeo.computeBoundingSphere()
       const dummy=new THREE.Object3D();for(let i=0;i<patches.length;i++){const {x,z}=patches[i];const wet=Math.abs(x-riverCenter(z))<3.4;dummy.position.set(x,terrainHeight(x,z,world.terrain),z);dummy.scale.setScalar(wet?0:.55+(i%9)/9);dummy.rotation.y=i*2.4;dummy.updateMatrix();grass.setMatrixAt(i,dummy.matrix)}grass.instanceMatrix.needsUpdate=true
-      for(const child of [...items.children]){items.remove(child);if(!child.userData.sharedAsset)release(child)}
-      const assetCount=world.entities.filter(e=>e.kind==='asset').length
-      for(const e of world.entities){
-        let group:THREE.Group
-        const asset=e.assetId?cached.get(e.assetId):null
-        if(asset){group=asset.clone(true);group.userData.sharedAsset=true}
-        else{group=primitive(e);if(e.kind==='asset'){group.name='Model awaiting device file';group.children.forEach(o=>{if(o instanceof THREE.Mesh){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();o.material=new THREE.MeshBasicMaterial({color:'#798a93',wireframe:true})}})}}
-        group.position.set(e.x,terrainHeight(e.x,e.z,world.terrain)+e.elevation,e.z);group.scale.multiplyScalar(e.scale);group.rotation.y=e.rotation*Math.PI/180;group.userData.entityId=e.id;items.add(group)
-        if(e.assetId&&!asset&&!pending.has(e.assetId)&&latest.current.owner&&assetCount<=4){
-          const assetId=e.assetId,owner=latest.current.owner;pending.add(assetId)
-          void loadWorldAsset(owner,assetId).then(b=>b.arrayBuffer()).then(async bytes=>{
-            const info=inspectGLB(bytes);if(info.renderedTriangles>750000)throw new Error('This model is too complex for the four-model interactive editor. Keep the original and use a lighter GAME copy.')
-            const manager=new THREE.LoadingManager();manager.setURLModifier(url=>{if(url.startsWith('blob:')||url.startsWith('data:'))return url;throw new Error('Only embedded model resources are supported.')})
-            const gltf=await new GLTFLoader(manager).parseAsync(bytes,'')
-            if(!alive||latest.current.owner!==owner){release(gltf.scene);return}
-            const box=new THREE.Box3().setFromObject(gltf.scene),size=box.getSize(new THREE.Vector3());const extent=Math.max(size.x,size.y,size.z);if(!Number.isFinite(extent)||extent<=0||extent>1e6){release(gltf.scene);throw new Error('Invalid model dimensions.')}
-            const center=box.getCenter(new THREE.Vector3()),root=new THREE.Group();gltf.scene.position.sub(new THREE.Vector3(center.x,box.min.y,center.z));root.add(gltf.scene);root.scale.setScalar(3/extent);cached.set(assetId,root);rebuild(latest.current.world)
-          }).catch(e=>{if(alive)latest.current.onMessage(e instanceof Error?e.message:'Model is not available on this device.')})
-        }
       }
-      const character=JSON.stringify(world.character);if(character!==previousCharacter){scene.remove(player);release(player);player=avatar(world);scene.add(player);previousCharacter=character}
+      transforms.beforeRebuild()
+      for(const child of [...items.children]){items.remove(child);if(!child.userData.sharedAsset)release(child)}
+      let previewCost:PreviewCost={triangles:0,draws:0,bytes:0},proxyCount=0
+      const ordered=[...world.entities].sort((a,b)=>Number(b.id===latest.current.selected)-Number(a.id===latest.current.selected))
+      for(const e of ordered){
+        let group:THREE.Group
+        const knownAsset=e.assetId?cached.get(e.assetId):null
+        const asset=knownAsset&&fitsPreview(previewCost,assetCosts.get(e.assetId!)??{triangles:0,draws:0,bytes:0})?knownAsset:null
+        if(asset){group=cloneSkeleton(asset) as THREE.Group;group.userData.sharedAsset=true}
+        else{group=primitive(e.kind==='mcc-cabinet'&&!fitsPreview(previewCost,{triangles:30000,draws:500,bytes:0})?{...e,kind:'crate'}:e);if(e.kind==='asset'){group.name='Model awaiting device file';group.children.forEach(o=>{if(o instanceof THREE.Mesh){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();o.material=new THREE.MeshBasicMaterial({color:'#798a93',wireframe:true})}})}}
+        const currentCost=costOf(group);if(!fitsPreview(previewCost,currentCost)){if(!group.userData.sharedAsset)release(group);group=primitive({...e,kind:'asset'});group.name='Resource-budget proxy';proxyCount++}else previewCost=sumPreview(previewCost,currentCost)
+        if(e.kind==='asset'&&!asset)proxyCount++
+        group.userData.editorBaseScale=group.scale.x
+        group.position.set(e.x,terrainHeight(e.x,e.z,world.terrain)+e.elevation,e.z);group.scale.multiplyScalar(e.scale);group.rotation.y=e.rotation*Math.PI/180;group.userData.entityId=e.id;items.add(group)
+        if(e.assetId&&!knownAsset&&!pending.has(e.assetId)&&latest.current.owner)queueAsset(e.assetId,latest.current.owner)
+      }
+      if(world.character.assetId&&!cached.has(world.character.assetId)&&!pending.has(world.character.assetId)&&latest.current.owner)queueAsset(world.character.assetId,latest.current.owner)
+      if(proxyCount)latest.current.onMessage(`${proxyCount} object(s) use lightweight previews while files load or the rendering budget is full. All placements are saved; the old four-model limit is removed.`)
+
+      const character=JSON.stringify(world.character)+(world.character.assetId&&cached.has(world.character.assetId)?':loaded':'');if(character!==previousCharacter){disposePlayer();const asset=world.character.assetId?cached.get(world.character.assetId):null;if(asset){player=cloneSkeleton(asset) as THREE.Group;player.scale.multiplyScalar(.64);player.userData.sharedAsset=true;const clips=asset.animations;if(clips.length){mixer=new THREE.AnimationMixer(player);const clip=clips.find(c=>/walk|run|idle/i.test(c.name))??clips[0];mixer.clipAction(clip).play()}}else player=avatar(world);scene.add(player);player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,world.terrain),playerAt.z);player.visible=true;previousCharacter=character}
+      transforms.update()
+
+    }
+    const queued:{id:string;owner:string}[]=[];let loadingAssets=0
+    function queueAsset(id:string,owner:string){pending.add(id);queued.push({id,owner});pumpAssets()}
+    function pumpAssets(){if(!alive||loadingAssets>=2||!queued.length)return;const item=queued.shift()!;loadingAssets++;let reserved=0
+      void loadWorldAsset(item.owner,item.id).then(async blob=>{if(!alive)throw new Error('Editor closed.');reserved=blob.size;inflightBytes+=reserved;if(loadedBytes+inflightBytes>96_000_000)throw new Error('Loaded model files reached the 96 MB interactive budget; placements and originals are preserved.');return blob.arrayBuffer()}).then(async bytes=>{
+        const info=inspectGLB(bytes);if(info.renderedTriangles>2_000_000)throw new Error('Use an optimized GAME copy under two million triangles for this interactive preview; the original is preserved.')
+        const manager=new THREE.LoadingManager();manager.setURLModifier(url=>{if(url.startsWith('blob:')||url.startsWith('data:'))return url;throw new Error('Only embedded model resources are supported.')})
+        const gltf=await new GLTFLoader(manager).parseAsync(bytes,'');if(!alive||latest.current.owner!==item.owner){release(gltf.scene);return}
+        const box=new THREE.Box3().setFromObject(gltf.scene),size=box.getSize(new THREE.Vector3()),extent=Math.max(size.x,size.y,size.z)
+        if(!Number.isFinite(extent)||extent<=0||extent>1e6){release(gltf.scene);throw new Error('Invalid model dimensions.')}
+        const center=box.getCenter(new THREE.Vector3()),root=new THREE.Group();gltf.scene.position.sub(new THREE.Vector3(center.x,box.min.y,center.z));root.add(gltf.scene);root.scale.setScalar(3/extent);root.animations=gltf.animations;cached.set(item.id,root);assetCosts.set(item.id,costOf(root));loadedBytes+=bytes.byteLength
+        rebuild(latest.current.world)
+      }).catch(e=>{if(alive)latest.current.onMessage(e instanceof Error?e.message:'Model preview unavailable. The original and placement remain.')}).finally(()=>{inflightBytes-=reserved;loadingAssets--;pumpAssets()});pumpAssets()
     }
     draw.current=rebuild;rebuild(latest.current.world)
     const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();let down={x:0,y:0}
     const pointerDown=(e:PointerEvent)=>{down={x:e.clientX,y:e.clientY}}
-    const pick=(e:PointerEvent)=>{if(latest.current.playing||Math.hypot(e.clientX-down.x,e.clientY-down.y)>6)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);const hits=ray.intersectObjects([items,earth],true);if(!hits.length)return;const h=hits[0];let o:THREE.Object3D|null=h.object;let id:string|null=null;while(o){if(o.userData.entityId){id=String(o.userData.entityId);break}o=o.parent}latest.current.onPick({x:Math.max(-40,Math.min(40,h.point.x)),z:Math.max(-40,Math.min(40,h.point.z))},id)}
+    const pick=(e:PointerEvent)=>{if(transforms.consumePick())return;if(latest.current.playing||Math.hypot(e.clientX-down.x,e.clientY-down.y)>6)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);const hits=ray.intersectObjects([items,earth],true);if(!hits.length)return;const h=hits[0];let o:THREE.Object3D|null=h.object;let id:string|null=null;while(o){if(o.userData.entityId){id=String(o.userData.entityId);break}o=o.parent}latest.current.onPick({x:Math.max(-40,Math.min(40,h.point.x)),z:Math.max(-40,Math.min(40,h.point.z))},id)}
     const downKey=(event:KeyboardEvent)=>{if(!latest.current.playing||(event.target instanceof HTMLElement&&/INPUT|TEXTAREA|SELECT/.test(event.target.tagName)))return;if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','KeyE'].includes(event.code)){event.preventDefault();keys.current.add(event.code)}}
     const upKey=(event:KeyboardEvent)=>keys.current.delete(event.code);const blur=()=>keys.current.clear()
     const lost=(e:Event)=>{e.preventDefault();cancelAnimationFrame(raf);setError('3D context paused. Save your work, then reload this page to restore the preview.')}
@@ -95,16 +121,19 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
     const animate=(now:number)=>{if(!alive)return;raf=requestAnimationFrame(animate);if(document.hidden||now-frame<32)return;const dt=Math.min(.05,(now-last)/1000||.016);last=now;frame=now;clock+=dt;const w=latest.current.world;waterMat.uniforms.time.value=clock
       marker.visible=!latest.current.playing;marker.position.set(latest.current.point.x,terrainHeight(latest.current.point.x,latest.current.point.z,w.terrain)+.08,latest.current.point.z)
       const chosen=items.children.find(c=>c.userData.entityId===latest.current.selected);selection.visible=!!chosen&&!latest.current.playing;if(chosen)selection.box.setFromObject(chosen)
-      player.visible=latest.current.playing
-      if(latest.current.playing){const k=keys.current,forward=(k.has('KeyW')||k.has('ArrowUp')?1:0)-(k.has('KeyS')||k.has('ArrowDown')?1:0),side=(k.has('KeyD')||k.has('ArrowRight')?1:0)-(k.has('KeyA')||k.has('ArrowLeft')?1:0);const speed=w.controls.includes('sprint')&&k.has('ShiftLeft')?8:4;const ahead=new THREE.Vector3().subVectors(orbit.target,camera.position).setY(0).normalize(),right=new THREE.Vector3(-ahead.z,0,ahead.x);const move=ahead.multiplyScalar(forward).add(right.multiplyScalar(side));if(move.lengthSq()>0){move.normalize().multiplyScalar(speed*dt);const old=playerAt.clone();playerAt.x=Math.max(-39,Math.min(39,playerAt.x+move.x));playerAt.z=Math.max(-39,Math.min(39,playerAt.z+move.z));const delta=playerAt.clone().sub(old);camera.position.add(delta);orbit.target.add(delta);player.rotation.y=Math.atan2(move.x,move.z);player.children.slice(3,7).forEach((part,i)=>{part.rotation.x=Math.sin(clock*9+i%2*Math.PI)*.4})}else player.children.slice(3,7).forEach(p=>{p.rotation.x=0})
+      player.visible=true
+      if((latest.current.focusVersion??0)!==lastFocus){lastFocus=latest.current.focusVersion??0;if(chosen&&lastFocus>0)focus(chosen)}
+      if((latest.current.focusCharacterVersion??0)!==lastCharacterFocus){lastCharacterFocus=latest.current.focusCharacterVersion??0;if(lastCharacterFocus>0)focus(player)}
+      transforms.update()
+      if(latest.current.playing){const k=keys.current,forward=(k.has('KeyW')||k.has('ArrowUp')?1:0)-(k.has('KeyS')||k.has('ArrowDown')?1:0),side=(k.has('KeyD')||k.has('ArrowRight')?1:0)-(k.has('KeyA')||k.has('ArrowLeft')?1:0);const speed=w.controls.includes('sprint')&&k.has('ShiftLeft')?8:4;const ahead=new THREE.Vector3().subVectors(orbit.target,camera.position).setY(0).normalize(),right=new THREE.Vector3(-ahead.z,0,ahead.x);const move=ahead.multiplyScalar(forward).add(right.multiplyScalar(side));if(move.lengthSq()>0){move.normalize().multiplyScalar(speed*dt);const old=playerAt.clone();playerAt.x=Math.max(-39,Math.min(39,playerAt.x+move.x));playerAt.z=Math.max(-39,Math.min(39,playerAt.z+move.z));const delta=playerAt.clone().sub(old);camera.position.add(delta);orbit.target.add(delta);player.rotation.y=Math.atan2(move.x,move.z);(player.userData.previewLimbs as THREE.Object3D[]|undefined)?.forEach((part,i)=>{part.rotation.x=Math.sin(clock*9+i%2*Math.PI)*.4});mixer?.update(dt)}else{(player.userData.previewLimbs as THREE.Object3D[]|undefined)?.forEach(p=>{p.rotation.x=0});mixer?.update(dt)}
         if(w.controls.includes('jump')&&k.has('Space')&&jump<=0){vertical=5.8;k.delete('Space')}vertical-=14*dt;jump=Math.max(0,jump+vertical*dt);if(jump===0)vertical=0;player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,w.terrain)+jump,playerAt.z)
         if(w.controls.includes('interact')&&k.has('KeyE')&&!interact){const near=w.entities.find(e=>Math.hypot(e.x-playerAt.x,e.z-playerAt.z)<4);latest.current.onMessage(near?`Interacting with ${near.name}. Add further behavior in a future scripted build.`:'Move within four meters of an object to interact.');interact=true}if(!k.has('KeyE'))interact=false
-      }else{keys.current.clear();jump=0}
+      }else{keys.current.clear();jump=0;player.position.y=terrainHeight(playerAt.x,playerAt.z,w.terrain);mixer?.update(dt)}
       orbit.update();renderer.render(scene,camera)
     };raf=requestAnimationFrame(animate)
-    return()=>{alive=false;cancelAnimationFrame(raf);draw.current=null;observer.disconnect();window.removeEventListener('keydown',downKey);window.removeEventListener('keyup',upKey);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',pointerDown);renderer.domElement.removeEventListener('pointerup',pick);renderer.domElement.removeEventListener('webglcontextlost',lost);orbit.dispose();for(const child of [...items.children])if(child.userData.sharedAsset)items.remove(child);release(scene);cached.forEach(release);renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();keys.current.clear()}
+    return()=>{alive=false;cancelAnimationFrame(raf);draw.current=null;observer.disconnect();window.removeEventListener('keydown',downKey);window.removeEventListener('keyup',upKey);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',pointerDown);renderer.domElement.removeEventListener('pointerup',pick);renderer.domElement.removeEventListener('webglcontextlost',lost);transforms.dispose();orbit.dispose();if(player.userData.sharedAsset)scene.remove(player);for(const child of [...items.children])if(child.userData.sharedAsset)items.remove(child);release(scene);cached.forEach(release);renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();keys.current.clear()}
   },[props.owner])
   useEffect(()=>{draw.current?.(props.world)},[props.world])
   const hold=(key:string)=>({onPointerDown:(e:React.PointerEvent<HTMLButtonElement>)=>{e.currentTarget.setPointerCapture(e.pointerId);keys.current.add(key)},onPointerUp:()=>keys.current.delete(key),onPointerCancel:()=>keys.current.delete(key),onLostPointerCapture:()=>keys.current.delete(key)})
-  return <div className="private-canvas-shell"><div ref={container} className="private-canvas"/>{error&&<p className="private-canvas-error" role="alert">{error}</p>}{!props.playing&&<div className="private-canvas-hint">Drag to orbit · pinch to zoom · tap to mark a point</div>}{props.playing&&<div className="private-game-controls"><div className="private-move-pad"><button aria-label="Move forward" {...hold('KeyW')}>↑</button><button aria-label="Move left" {...hold('KeyA')}>←</button><button aria-label="Move back" {...hold('KeyS')}>↓</button><button aria-label="Move right" {...hold('KeyD')}>→</button></div><div>{props.world.controls.includes('jump')&&<button {...hold('Space')}>Jump</button>}{props.world.controls.includes('sprint')&&<button {...hold('ShiftLeft')}>Sprint</button>}{props.world.controls.includes('interact')&&<button {...hold('KeyE')}>Interact</button>}</div></div>}</div>
+  return <div className="private-canvas-shell"><div ref={container} className="private-canvas"/>{error&&<p className="private-canvas-error" role="alert">{error}</p>}{!props.playing&&<div className="private-canvas-hint">Tap to select · Move/Rotate/Scale handles edit objects · drag empty space to orbit</div>}{props.playing&&<div className="private-game-controls"><div className="private-move-pad"><button aria-label="Move forward" {...hold('KeyW')}>↑</button><button aria-label="Move left" {...hold('KeyA')}>←</button><button aria-label="Move back" {...hold('KeyS')}>↓</button><button aria-label="Move right" {...hold('KeyD')}>→</button></div><div>{props.world.controls.includes('jump')&&<button {...hold('Space')}>Jump</button>}{props.world.controls.includes('sprint')&&<button {...hold('ShiftLeft')}>Sprint</button>}{props.world.controls.includes('interact')&&<button {...hold('KeyE')}>Interact</button>}</div></div>}</div>
 }

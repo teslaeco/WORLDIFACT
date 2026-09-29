@@ -3,7 +3,7 @@ import type { WorldCharacter } from './privateWorld.ts'
 import { normalizedCommand } from './editorTools.ts'
 
 /** Immediate, explicitly procedural character. Never claimed as a paid AI model. */
-export function createCharacterPreview(c:WorldCharacter):THREE.Group {
+export function createCharacterPreview(c:WorldCharacter,labelTexture?:(text:string)=>THREE.Texture|null):THREE.Group {
   const root=new THREE.Group();root.name='Procedural character preview'
   const text=normalizedCommand([c.description,c.outfit,c.hair,c.style].join(' '))
   const slim=/slim|szczupl|smukl/.test(text),broad=/broad|muscular|muskul|szerok/.test(text),width=slim?.85:broad?1.2:1
@@ -28,9 +28,7 @@ export function createCharacterPreview(c:WorldCharacter):THREE.Group {
   }
   if(dress)part(new THREE.CylinderGeometry(.24*width,.43*width,.58,20),cloth,0,.76)
   if(/hat|cap|czapk|kapel/.test(text)){part(new THREE.CylinderGeometry(.25,.25,.14,18),cloth,0,1.99);part(new THREE.CylinderGeometry(.34,.34,.025,18),cloth,0,1.93)}
-  if(c.label&&typeof document!=='undefined'){
-    const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const ctx=canvas.getContext('2d')
-    if(ctx){ctx.clearRect(0,0,512,128);ctx.fillStyle='#f5f7ec';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px sans-serif';ctx.fillText(c.label,256,64,480);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;part(new THREE.PlaneGeometry(.39,.1),new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false}),0,1.23,.232)}
-  }
+  if(c.label&&labelTexture){const texture=labelTexture(c.label);if(texture)part(new THREE.PlaneGeometry(.39,.1),new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false}),0,1.23,.232)}
+
   root.userData.previewLimbs=limbs;root.userData.provenance='PROCEDURAL_PREVIEW';return root
 }
