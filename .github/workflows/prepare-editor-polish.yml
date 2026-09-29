@@ -3,7 +3,7 @@ on:
   push:
     branches: [feat/editor-polish-resume-20260929]
     paths:
-      - 'scripts/integrate-editor-polish.py'
+      - 'scripts/*editor-polish*.py'
       - 'src/lib/editorTools.ts'
       - 'src/lib/editorTransforms.ts'
       - 'src/lib/previewBudget.ts'
@@ -30,7 +30,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply exact-base integration in the review branch only
-        run: python3 scripts/integrate-editor-polish.py
+        run: |
+          python3 scripts/integrate-editor-polish.py
+          python3 scripts/fix-editor-polish-integration.py
       - name: Verify without a paid provider call
         run: npm run verify
       - run: npm run deploy:check
