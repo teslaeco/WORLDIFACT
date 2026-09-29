@@ -1,0 +1,7 @@
+{
+  "reviewDate": "2026-09-29",
+  "source": "User-supplied screenshots; publication explicitly requested by the owner",
+  "transform": "Crop to model viewport, WebP quality 72; no sharpening, geometry edits, enhancement or AI retouching",
+  "worldifact-detail.webp": {"original": "Screenshot_20260928-132622.png", "originalSha256": "49dc5c278850cfc850320b037d23085b6b36e6297334b863a9bb121ea4ca02b6", "crop": [36,413,426,695], "width":390, "height":282, "sha256":"c43c752b4e1ac6039643d2a6d579222667a3d5971436580479f9213387cb4a41"},
+  "meshy-detail.webp": {"original": "Screenshot_20260929-010541.png", "originalSha256":"9b79d80a69efd0da7de7c3fac898f4a8401f18d9df1df0d4ab3402d66d0636a1", "crop":[326,700,710,1044], "width":384, "height":344, "sha256":"5d91348ec3c09aa2322c6995cca2640b8a708e4cef0d4f54803783d0fe536d05"}
+}

@@ -1,0 +1,35 @@
+name: Integrate and verify affordable model quality
+on:
+  push:
+    branches: ['feat/affordable-models-mcc-20260929']
+permissions:
+  contents: write
+concurrency:
+  group: affordable-model-quality-preparation
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/affordable-models-mcc-20260929
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply exact-context changes, no model or payment calls
+        run: python3 scripts/apply-model-quality-v3.py
+      - run: npm run verify
+      - run: npm run deploy:check
+      - name: Save only tested changes to the same isolated branch
+        run: |
+          git config user.name 'WORLDIFACT code review'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add src server tests public docs ops/model-quality-v3-applied.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Integrate explicit Luna/Sol routing and improved free-quality assets'
+            git push origin HEAD:feat/affordable-models-mcc-20260929
+          fi
