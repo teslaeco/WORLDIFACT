@@ -2,6 +2,14 @@
 
 Updated 29 September 2026 after direct live Stripe catalogue verification and the owner's billing-page report. The deployed production release remains unchanged until an explicitly approved merge/deployment.
 
+## 29 September 2026 — Astra activation acceptance and direct fallback
+
+The owner explicitly authorized one bounded live Astra acceptance job with a maximum provider reservation of USD 1.75 and zero automatic retries. Run [36529056866](https://github.com/teslaeco/WORLDIFACT/actions/runs/36529056866) passed application verification and submitted exactly one Oracle job, then stopped without retry when the job failed. Read-only follow-up run [36529452731](https://github.com/teslaeco/WORLDIFACT/actions/runs/36529452731) fetched that same job only. The authenticated runtime still reported GPT-6 Astra, connector v33 and the USD1.75 guard. The sanitized failure detail was: `ASTRA budget guard stopped before another API call. Keep this job; do not auto-retry.` No second provider generation was requested and Pro/Studio sales were not activated from that failed acceptance.
+
+To avoid selling a subscription whose premium route depends on that failed multi-call workflow, this branch now prepares a separate bounded Astra blueprint path inside the WORLDIFACT Worker. It uses the verified `gpt-6-astra` model with low reasoning, strict structured output, server-side input-token preflight, a USD1.75 maximum provider ceiling, account entitlements, 250-point reservation, rate limiting and idempotency. It returns a validated WorldBlueprint/AssetSpec and a procedural GAME GLB derived locally from the Astra result. It does **not** claim to be the detailed Oracle/Blender mesh workflow; MAKE remains validation-required. The multi-call Oracle path stays beta until its per-turn budget behavior is corrected.
+
+Commercial activation remains pending exact-head CI plus one live acceptance of this direct bounded path. Stripe Pro/Studio prices remain the already verified live objects; no duplicate price/product was created.
+
 ## BILLING UI FIX — branch prepared, no customer charge
 
 Direct read-only verification of the owner's live Stripe account confirms the intended recurring prices already exist and are active: Pro ASTRA `price_1UKi3GBrIVB6dkxNm66OnDAr` at USD 99.99/month for 4,500 credits and Studio ASTRA `price_1UKi3UBrIVB6dkxNfojjhJsv` at USD 149.99/month for 7,500 credits. No duplicate Stripe products or prices were created.
