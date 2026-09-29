@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { accountRequest, useAccount, type AccountUser } from '../lib/account'
 import { paymentErrorMessage } from '../lib/paymentError'
 import BillingRecovery from '../components/BillingRecovery'
+import { onCachedBillingReturn, planPaymentAddress, planPaymentNotice } from '../lib/planPayment'
 import './CreditsPage.css'
 
 type PlanId = 'creator' | 'pro' | 'studio'
@@ -11,7 +12,7 @@ type PlanOffer = { id: PlanId; name: string; amountCents: number; credits: numbe
 type Billing = { portalReady?: boolean; planChangeReady?: boolean; checkoutReady: boolean; topupReady: boolean; cardReady: boolean; googlePay: 'eligible_devices' | 'unavailable'; mode: 'test' | 'live' | null; subscriptionInterval: 'month' | null; generationCosts?: { sol: number; astra: number }; plans?: Record<PlanId, PlanOffer> }
 type PayPal = { ready: boolean; mode: 'sandbox' | 'live' | null }
 type Snapshot = { owner: string | null; balance: Balance | null; billing: Billing | null; paypal: PayPal | null }
-type PaymentAction = 'card' | 'google' | 'paypal' | 'portal' | 'change' | 'capture'
+type PaymentAction = 'plan' | 'card' | 'google' | 'paypal' | 'portal' | 'change' | 'capture'
 type PaymentNotice = { tone: 'success' | 'pending'; text: string } | null
 
 function checkoutAddress(value: unknown, provider: 'stripe' | 'paypal' | 'portal') {
@@ -68,6 +69,15 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
   // eslint-disable-next-line react/set-state-in-effect
   useEffect(() => { void refresh(); return cancelRequests }, [refresh, cancelRequests])
 
+  useEffect(() => onCachedBillingReturn(window, () => {
+    actionVersion.current++
+    actionLock.current = false
+    setBusy(null)
+    setError('')
+    setChecking(true)
+    void refresh()
+  }), [refresh])
+
   const member = balance?.subscription.active === true
   const canManage = !!user && !loading && !busy
   const canBuy = !!user && !!balance && !balance.billingReview && !checking && !loading && !busy
@@ -78,19 +88,32 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
   const validOrder = /^[A-Z0-9]{10,36}$/.test(orderId)
   const cancelled = search.get('paypal') === 'cancel' || search.get('paypal') === 'cancelled' || search.get('billing') === 'cancelled'
 
+  function canOpenPlan(id: PlanId) {
+    if (!user || !balance || checking || loading || busy) return false
+    if (member && (balance.subscription.plan ?? 'creator') === id) return billing?.portalReady === true
+    return !balance.billingReview && billing?.plans?.[id]?.checkoutReady === true
+  }
+
+  function openPlan(id: PlanId) {
+    if (!canOpenPlan(id)) return
+    setSelectedPlan(id)
+    setPurchaseKind('subscription')
+    void checkout('plan', { kind: 'subscription', plan: id })
+  }
+
   async function checkout(action: Exclude<PaymentAction, 'capture'>, choice?: { kind?: 'subscription' | 'topup'; plan?: PlanId }) {
     const checkoutKind = choice?.kind ?? purchaseKind
     const checkoutPlan = choice?.plan ?? selectedPlan
     const checkoutRecurring = checkoutKind === 'subscription'
     const checkoutReady = checkoutRecurring ? billing?.plans?.[checkoutPlan]?.checkoutReady === true : billing?.topupReady === true
     const checkoutCanBuy = checkoutRecurring ? canBuy && !member && search.get('paypal') !== 'return' : canBuyPack
-    if (actionLock.current || (action === 'portal' ? !canManage : action === 'change' ? !canBuy || !member || !billing?.planChangeReady || !checkoutReady : !canBuy || !checkoutCanBuy)) return
+    if (actionLock.current || (action === 'plan' ? !canOpenPlan(checkoutPlan) : action === 'portal' ? !canManage : action === 'change' ? !canBuy || !member || !billing?.planChangeReady || !checkoutReady : !canBuy || !checkoutCanBuy)) return
     if ((action === 'paypal' && (checkoutRecurring || !paypal?.ready)) || (['card', 'google'].includes(action) && action !== 'portal' && !checkoutReady)) return
     actionLock.current = true
     const version = ++actionVersion.current
     setBusy(action); setError(''); setNotice(null)
     try {
-      const result = await accountRequest(action === 'paypal' ? '/api/billing/paypal/order' : action === 'portal' ? '/api/billing/portal' : action === 'change' ? '/api/billing/change-plan' : '/api/billing/checkout', action === 'paypal' || action === 'portal' ? {} : action === 'change' ? { plan: checkoutPlan } : { kind: checkoutKind, ...(checkoutKind === 'subscription' ? { plan: checkoutPlan } : {}) })
+      const result = await accountRequest(action === 'plan' ? '/api/billing/plan-payment' : action === 'paypal' ? '/api/billing/paypal/order' : action === 'portal' ? '/api/billing/portal' : action === 'change' ? '/api/billing/change-plan' : '/api/billing/checkout', action === 'paypal' || action === 'portal' ? {} : action === 'change' || action === 'plan' ? { plan: checkoutPlan } : { kind: checkoutKind, ...(checkoutKind === 'subscription' ? { plan: checkoutPlan } : {}) })
       if (version !== actionVersion.current) return
       if (action === 'paypal' && result.status) {
         if (result.status === 'COMPLETED' && result.credited === true) setNotice({ tone: 'success', text: 'Your previous PayPal payment is confirmed and its 1,500-credit purchase has been applied. No new checkout was opened.' })
@@ -99,6 +122,17 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         else throw new Error('Payment could not be confirmed.')
         await refresh()
         if (version === actionVersion.current) { setBusy(null); actionLock.current = false }
+        return
+      }
+      if (action === 'plan') {
+        const text = planPaymentNotice(result.state)
+        if (text) {
+          setNotice({ tone: 'pending', text })
+          await refresh()
+          if (version === actionVersion.current) { setBusy(null); actionLock.current = false }
+          return
+        }
+        window.location.assign(planPaymentAddress(result.url, result.destination))
         return
       }
       window.location.assign(checkoutAddress(result.url, action === 'paypal' ? 'paypal' : action === 'portal' || action === 'change' ? 'portal' : 'stripe'))
@@ -143,7 +177,6 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
       <div><span>MEMBERSHIP</span><strong>{member ? 'Active' : 'Free'}</strong><small>{balance.subscription.expiresAt ? `Current period ends ${new Date(balance.subscription.expiresAt).toLocaleDateString()}` : 'Daily free generations included'}</small></div>
       <button onClick={() => { setError(''); setChecking(true); void refresh() }} disabled={!!busy || checking}>{checking ? 'Refreshing…' : 'Refresh balance'}</button>
     </section>}
-    <BillingRecovery enabled={!!user && !loading} onRefresh={refresh} />
     {!loading && !user && <div className="credits-signin"><div><strong>Your ideas, one account.</strong><p>Sign in before purchasing. Confirmed credits go to your WORLDIFAKT account.</p></div><Link className="credits-action secondary" to={signInHref}>Sign in or create an account ↗</Link></div>}
     {error && <div className="credits-error" role="alert"><p>{error}</p>{!busy && <button className="credits-manage" disabled={checking} onClick={() => { setError(''); setChecking(true); void refresh() }}>Recheck account and payment options</button>}</div>}
     {notice && <p className={`credits-pending ${notice.tone === 'success' ? 'credits-success' : ''}`} role="status">{notice.text}</p>}
@@ -163,18 +196,17 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
       ] as const).map(([id,name,price,credits,capacity,models]) => <article
         key={id}
         className={`credits-selectable-plan${selectedPlan === id && purchaseKind === 'subscription' ? ' credits-featured' : ''}`}
-        tabIndex={0}
-        aria-label={`Select ${name} plan`}
+        tabIndex={canOpenPlan(id) ? 0 : -1}
+        aria-label={`Open secure billing for ${name}`}
+        aria-disabled={!canOpenPlan(id)}
         onClick={(event) => {
           if ((event.target as HTMLElement).closest('button,a')) return
-          setSelectedPlan(id)
-          setPurchaseKind('subscription')
+          openPlan(id)
         }}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget || !['Enter', ' '].includes(event.key)) return
           event.preventDefault()
-          setSelectedPlan(id)
-          setPurchaseKind('subscription')
+          openPlan(id)
         }}
       >
         <span className="credits-plan-tag">{id === 'creator' ? 'CREATOR' : id === 'pro' ? 'PRO' : 'STUDIO'}</span>
@@ -183,7 +215,8 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         <div className="credits-price"><div><strong>{price}</strong><b> USD / month</b></div><span>{credits} every confirmed paid month</span></div>
         <ul><li><b>{capacity}</b></li><li>{models}</li><li>{id === 'creator' ? 'Creator can try Astra after runtime activation: budget 500 of the included points for two attempts; maximum six Astra attempts per paid period. These are not extra credits or guaranteed successful outputs.' : 'Astra access is plan-gated and still subject to per-job provider-spend limits.'}</li></ul>
         {billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' && <p className="credits-method-note">ASTRA purchasing is temporarily paused while the live generation and export check is completed. No payment will be taken for an unavailable plan.</p>}
-        <button className="credits-action" disabled={busy!==null || (member && (balance?.subscription.plan??'creator')===id ? !canManage : !canBuy || billing?.plans?.[id]?.checkoutReady!==true || member && billing?.planChangeReady!==true)} onClick={() => { setSelectedPlan(id); setPurchaseKind('subscription'); void checkout(member ? (balance?.subscription.plan??'creator')===id ? 'portal' : 'change' : 'card', {kind:'subscription',plan:id}) }}>{busy ? 'Opening secure billing…' : member && (balance?.subscription.plan??'creator')===id ? 'Manage current subscription ↗' : billing?.plans?.[id]?.checkoutReady===false ? 'Temporarily unavailable · no charge' : member ? `Review change to ${name} ↗` : `Subscribe ${price} / month ↗`}</button>
+        <p className="credits-method-note">Confirmed plan credits are added to your existing balance, never substituted for it. Opening payment does not add credits.</p>
+        <button className="credits-action" disabled={!canOpenPlan(id)} onClick={() => openPlan(id)}>{busy === 'plan' && selectedPlan === id ? 'Opening secure payment…' : member && (balance?.subscription.plan??'creator')===id ? 'Manage current subscription ↗' : billing?.plans?.[id]?.checkoutReady===false ? 'Temporarily unavailable · no charge' : `Subscribe ${price} / month ↗`}</button>
       </article>)}
       <article>
         <span className="credits-plan-tag">TOP-UP</span><h2>1,500 extra credits</h2>
@@ -195,6 +228,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
       </article>
       {user && member && billing?.checkoutReady && <article><span className="credits-plan-tag">ACTIVE</span><h2>{balance?.subscription.plan ? `Current plan: ${balance.subscription.plan.toUpperCase()}` : 'Manage membership'}</h2><p>Existing subscribers keep their current price until they explicitly change plan. Use Stripe billing management to cancel or update payment details.</p><button className="credits-manage" disabled={!canManage} onClick={() => void checkout('portal')}>{busy === 'portal' ? 'Opening account…' : 'Manage subscription'}</button></article>}
     </section>
+    <BillingRecovery enabled={!!user && !loading} onRefresh={refresh} />
     <section className="credits-trust" aria-label="Payment privacy"><strong>Secure checkout. Private payment details.</strong><p>Card and wallet details are entered with the payment provider. WORLDIFAKT does not collect your full card number or display the seller’s bank account details.</p></section>
     <p className="credits-footnote">FAST is the SOL path. Detailed ASTRA generation costs 250 credits per attempt on eligible Creator, Pro and Studio accounts after runtime activation. The existing 1,500-credit Creator grant can fund two Astra attempts plus twenty Sol attempts, not thirty Sol plus free Astra. WORLDIFACT never silently falls back from SOL to ASTRA when the cheaper route is unavailable. A GAME model still needs separate validation for physical manufacturing.</p>
     <footer><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/world">Back to the portals →</Link></footer>

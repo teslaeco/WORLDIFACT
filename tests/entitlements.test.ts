@@ -434,7 +434,7 @@ test('first-time monthly checkout creates and binds the customer before returnin
   const f = freshCheckoutFixture()
   const response = await billingApi(checkoutRequest('subscription'), f.env, f.fetcher)
   assert.equal(response?.status, 200)
-  assert.deepEqual(await response!.json(), { url: 'https://checkout.stripe.com/c/pay/new_fixture', mode: 'test' })
+  assert.deepEqual(await response!.json(), { url: 'https://checkout.stripe.com/c/pay/new_fixture', destination: 'checkout', mode: 'test' })
   assert.deepEqual(await entitlementCall(f.env, USER, '/billing'), { customer: 'cus_NewCustomer' })
   const customer = f.calls.find(call => call.path === '/v1/customers')!
   assert.equal(customer.params.get('email'), 'player@example.test')
