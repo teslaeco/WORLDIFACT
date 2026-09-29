@@ -1,0 +1,41 @@
+name: One Astra activation test — max USD 1.75
+on:
+  push:
+    branches: ['fix/pro-studio-billing-ui-20260929']
+    paths: ['ops/APPROVED_ASTRA_ACTIVATION_TEST_20260929.json']
+permissions:
+  contents: write
+concurrency:
+  group: worldifact-astra-activation-test-20260929
+  cancel-in-progress: false
+jobs:
+  test:
+    if: github.ref == 'refs/heads/fix/pro-studio-billing-ui-20260929' && github.run_attempt == 1
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify application before paid test
+        run: npm run verify
+      - name: Run exactly one owner-approved Astra job, no retry
+        run: node --experimental-strip-types scripts/astra-activation-test-once.mjs
+        env:
+          WORLDIFACT_ASTRA_ACTIVATION_APPROVAL: ASTRA175_ACTIVATION_ONCE
+          GITHUB_TOKEN: ${{ github.token }}
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: worldifact-astra-activation-evidence
+          path: astra-activation-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
