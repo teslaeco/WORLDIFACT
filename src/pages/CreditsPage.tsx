@@ -7,10 +7,10 @@ import './CreditsPage.css'
 type PlanId = 'creator' | 'pro' | 'studio'
 type Balance = { credits: number; generationCost: number; generationCosts?: { sol: number; astra: number }; subscriptionGrant: number; subscription: { active: boolean; plan?: PlanId; expiresAt: string | null }; free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }; billingReview: boolean }
 type PlanOffer = { id: PlanId; name: string; amountCents: number; credits: number; allowedModels: readonly string[]; checkoutReady: boolean; blockedReason?: string | null }
-type Billing = { checkoutReady: boolean; topupReady: boolean; cardReady: boolean; googlePay: 'eligible_devices' | 'unavailable'; mode: 'test' | 'live' | null; subscriptionInterval: 'month' | null; generationCosts?: { sol: number; astra: number }; plans?: Record<PlanId, PlanOffer> }
+type Billing = { portalReady?: boolean; planChangeReady?: boolean; checkoutReady: boolean; topupReady: boolean; cardReady: boolean; googlePay: 'eligible_devices' | 'unavailable'; mode: 'test' | 'live' | null; subscriptionInterval: 'month' | null; generationCosts?: { sol: number; astra: number }; plans?: Record<PlanId, PlanOffer> }
 type PayPal = { ready: boolean; mode: 'sandbox' | 'live' | null }
 type Snapshot = { owner: string | null; balance: Balance | null; billing: Billing | null; paypal: PayPal | null }
-type PaymentAction = 'card' | 'google' | 'paypal' | 'portal' | 'capture'
+type PaymentAction = 'card' | 'google' | 'paypal' | 'portal' | 'change' | 'capture'
 type PaymentNotice = { tone: 'success' | 'pending'; text: string } | null
 
 function checkoutAddress(value: unknown, provider: 'stripe' | 'paypal' | 'portal') {
@@ -68,6 +68,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
   useEffect(() => { void refresh(); return cancelRequests }, [refresh, cancelRequests])
 
   const member = balance?.subscription.active === true
+  const canManage = !!user && !loading && !busy
   const canBuy = !!user && !!balance && !balance.billingReview && !checking && !loading && !busy
   const canBuyPack = canBuy && (member || understandsPack) && search.get('paypal') !== 'return'
   const membershipReady = billing?.plans?.[selectedPlan]?.checkoutReady === true && billing.subscriptionInterval === 'month'
@@ -82,13 +83,13 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
     const checkoutRecurring = checkoutKind === 'subscription'
     const checkoutReady = checkoutRecurring ? billing?.plans?.[checkoutPlan]?.checkoutReady === true : billing?.topupReady === true
     const checkoutCanBuy = checkoutRecurring ? canBuy && !member && search.get('paypal') !== 'return' : canBuyPack
-    if (actionLock.current || !canBuy || (action !== 'portal' && !checkoutCanBuy)) return
+    if (actionLock.current || (action === 'portal' ? !canManage : action === 'change' ? !canBuy || !member || !billing?.planChangeReady || !checkoutReady : !canBuy || !checkoutCanBuy)) return
     if ((action === 'paypal' && (checkoutRecurring || !paypal?.ready)) || (['card', 'google'].includes(action) && action !== 'portal' && !checkoutReady)) return
     actionLock.current = true
     const version = ++actionVersion.current
     setBusy(action); setError(''); setNotice(null)
     try {
-      const result = await accountRequest(action === 'paypal' ? '/api/billing/paypal/order' : action === 'portal' ? '/api/billing/portal' : '/api/billing/checkout', action === 'paypal' || action === 'portal' ? {} : { kind: checkoutKind, ...(checkoutKind === 'subscription' ? { plan: checkoutPlan } : {}) })
+      const result = await accountRequest(action === 'paypal' ? '/api/billing/paypal/order' : action === 'portal' ? '/api/billing/portal' : action === 'change' ? '/api/billing/change-plan' : '/api/billing/checkout', action === 'paypal' || action === 'portal' ? {} : action === 'change' ? { plan: checkoutPlan } : { kind: checkoutKind, ...(checkoutKind === 'subscription' ? { plan: checkoutPlan } : {}) })
       if (version !== actionVersion.current) return
       if (action === 'paypal' && result.status) {
         if (result.status === 'COMPLETED' && result.credited === true) setNotice({ tone: 'success', text: 'Your previous PayPal payment is confirmed and its 1,500-credit purchase has been applied. No new checkout was opened.' })
@@ -99,7 +100,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         if (version === actionVersion.current) { setBusy(null); actionLock.current = false }
         return
       }
-      window.location.assign(checkoutAddress(result.url, action === 'paypal' ? 'paypal' : action === 'portal' ? 'portal' : 'stripe'))
+      window.location.assign(checkoutAddress(result.url, action === 'paypal' ? 'paypal' : action === 'portal' || action === 'change' ? 'portal' : 'stripe'))
     } catch (error) {
       if (version !== actionVersion.current) return
       setError(paymentErrorMessage(error))
@@ -165,7 +166,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         <ul><li><b>{capacity}</b></li><li>{models}</li><li>{id === 'creator' ? 'Creator can try Astra after runtime activation: budget 500 of the included points for two attempts; maximum six Astra attempts per paid period. These are not extra credits or guaranteed successful outputs.' : 'Astra access is plan-gated and still subject to per-job provider-spend limits.'}</li></ul>
         <label className={selectedPlan === id && purchaseKind === 'subscription' ? 'selected' : ''}><input type="radio" name="subscription-plan" value={id} checked={selectedPlan === id && purchaseKind === 'subscription'} onChange={() => { setSelectedPlan(id); setPurchaseKind('subscription') }} /><span><strong>Select {name}</strong></span></label>
         {billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' && <p className="credits-method-note">ASTRA purchasing is temporarily paused while the live generation and export check is completed. No payment will be taken for an unavailable plan.</p>}
-        <button className="credits-action" disabled={!canBuy || (id !== 'creator' && billing?.plans?.[id]?.checkoutReady !== true) || (!member && billing?.plans?.[id]?.checkoutReady !== true)} onClick={() => { setSelectedPlan(id); setPurchaseKind('subscription'); void checkout(member ? 'portal' : 'card', { kind: 'subscription', plan: id }) }}>{busy === 'card' && selectedPlan === id ? 'Opening secure checkout…' : member ? 'Manage current subscription' : billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' ? 'ASTRA plan · safety activation pending' : `Subscribe ${price} / month`} ↗</button>
+        <button className="credits-action" disabled={busy!==null || (member && (balance?.subscription.plan??'creator')===id ? !canManage : !canBuy || billing?.plans?.[id]?.checkoutReady!==true || member && billing?.planChangeReady!==true)} onClick={() => { setSelectedPlan(id); setPurchaseKind('subscription'); void checkout(member ? (balance?.subscription.plan??'creator')===id ? 'portal' : 'change' : 'card', {kind:'subscription',plan:id}) }}>{busy ? 'Opening secure billing…' : member && (balance?.subscription.plan??'creator')===id ? 'Manage current subscription ↗' : billing?.plans?.[id]?.checkoutReady===false ? 'Temporarily unavailable · no charge' : member ? `Review change to ${name} ↗` : `Subscribe ${price} / month ↗`}</button>
       </article>)}
       <article>
         <span className="credits-plan-tag">TOP-UP</span><h2>1,500 extra credits</h2>
@@ -175,7 +176,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         <button className="credits-action secondary" disabled={!canBuyPack || !billing?.topupReady} onClick={() => { setPurchaseKind('topup'); void checkout('card', { kind: 'topup' }) }}>{busy === 'card' && purchaseKind === 'topup' ? 'Opening secure checkout…' : 'Buy $29.99 top-up'} ↗</button>
         <button className="credits-action credits-paypal" disabled={!canBuyPack || !paypal?.ready} onClick={() => { setPurchaseKind('topup'); void checkout('paypal', { kind: 'topup' }) }}>{busy === 'paypal' ? 'Opening PayPal…' : 'Pay once with PayPal'} ↗</button>
       </article>
-      {user && member && billing?.checkoutReady && <article><span className="credits-plan-tag">ACTIVE</span><h2>{balance?.subscription.plan ? `Current plan: ${balance.subscription.plan.toUpperCase()}` : 'Manage membership'}</h2><p>Existing subscribers keep their current price until they explicitly change plan. Use Stripe billing management to cancel or update payment details.</p><button className="credits-manage" disabled={!canBuy} onClick={() => void checkout('portal')}>{busy === 'portal' ? 'Opening account…' : 'Manage subscription'}</button></article>}
+      {user && member && billing?.checkoutReady && <article><span className="credits-plan-tag">ACTIVE</span><h2>{balance?.subscription.plan ? `Current plan: ${balance.subscription.plan.toUpperCase()}` : 'Manage membership'}</h2><p>Existing subscribers keep their current price until they explicitly change plan. Use Stripe billing management to cancel or update payment details.</p><button className="credits-manage" disabled={!canManage} onClick={() => void checkout('portal')}>{busy === 'portal' ? 'Opening account…' : 'Manage subscription'}</button></article>}
     </section>
     <section className="credits-trust" aria-label="Payment privacy"><strong>Secure checkout. Private payment details.</strong><p>Card and wallet details are entered with the payment provider. WORLDIFAKT does not collect your full card number or display the seller’s bank account details.</p></section>
     <p className="credits-footnote">FAST is the SOL path. Detailed ASTRA generation costs 250 credits per attempt on eligible Creator, Pro and Studio accounts after runtime activation. The existing 1,500-credit Creator grant can fund two Astra attempts plus twenty Sol attempts, not thirty Sol plus free Astra. WORLDIFACT never silently falls back from SOL to ASTRA when the cheaper route is unavailable. A GAME model still needs separate validation for physical manufacturing.</p>

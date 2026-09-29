@@ -38,8 +38,8 @@ export async function storeWorldAsset(owner: string, name: string, blob: Blob): 
         const owned = (read.result as WorldAsset[]).filter(v => v.owner === owner.toLowerCase())
         const previous = owned.find(v => v.sha256 === sha256)
         if (previous) { stored = previous; return }
-        if (owned.length >= 12 || owned.reduce((n, e) => n + e.bytes, 0) + blob.size > 150_000_000) {
-          failure = new Error('Device library limit: 12 models / 150 MB. Originals remain in your gallery.'); tx.abort(); return
+        if (owned.reduce((n, e) => n + e.bytes, 0) + blob.size > 350_000_000) {
+          failure = new Error('This device library reached its 350 MB storage budget. No per-model count limit; originals remain in your gallery.'); tx.abort(); return
         }
         metadata.add({ ...item, key: key(owner, item.id) }); tx.objectStore('blobs').add(blob, key(owner, item.id))
       }
