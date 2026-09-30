@@ -1,51 +1,42 @@
-# WORLDIFACT — current release evidence
+# WORLDIFACT — generation restoration remains open
 
-Updated 30 September 2026. All timestamps below are UTC.
+Updated 30 September 2026. Owner instruction: restore generation while preserving all new payments. This branch is based on production source `673be0cecd83ebb5959770fe90716cd2485369e5`; it is not a full rollback.
 
-## VERIFIED — actual Astra/Blender routing restored and published
+## VERIFIED — preservation boundary
 
-The owner requested a working detailed character route after PR150 left that workflow blocked and authorized repair, merge and deployment after green checks. [PR #153](https://github.com/teslaeco/WORLDIFACT/pull/153) passed all six exact-head workflows at `f9c26e1ab70666d4395ec8654e92a3e01c49396c`, including [Verify WORLDIFACT 36717479887](https://github.com/teslaeco/WORLDIFACT/actions/runs/36717479887). It merged as `110055288c6508322afd4bb05ffd6c86b8cfc198` at 2026-09-30T12:54:06Z.
+No files in `server/`, `src/`, `.github/`, `config/` or `public/` are changed. No payment product, price, subscription, checkout, webhook, entitlement balance, generation-credit rate, credential, database or deployed environment is changed. This code update is limited to the Oracle guard helper, its opt-in maintenance installer, regression tests and this evidence record.
 
-[Production publication 36717823536](https://github.com/teslaeco/WORLDIFACT/actions/runs/36717823536), deploy job `109895052089`, completed successfully. This first functional publication of PR153 produced Cloudflare version `b47e9061-4b61-463d-967f-6d8949fc677a` at 12:55:50Z. These identifiers record that observed release, not an assertion that no later documentation publication can produce another version.
+The existing deployment workflow publishes Cloudflare application code, not the installed Python process on Oracle. Merging this branch alone must NOT be reported as restoring the model worker. Do not perform a cosmetic application deployment and claim the Oracle fix is live.
 
-Public Shop: https://worldifact.xodobrox.workers.dev/shop
+## VERIFIED — a concrete accounting defect; full incident cause remains UNKNOWN
 
-At 12:55:59Z the public `/api/studio/status` check confirmed `ready=true`, `detailedReady=true`, `costGuardReady=true`, `outputPolicyReady=true`, `photoReady=true`, `detailedReferenceLimit=4` and `accountRequired=true`. An unauthenticated preparation request was rejected with HTTP401 before any model job. Deployed configuration has `ENABLE_STUDIO_JOBS=true` and `ENABLE_ORACLE_JOBS=false`. This is verified routing/readiness, not evidence of a newly generated realistic character.
+The existing `astra_spend_v2.settle_completed` ignores `usage.input_tokens_details` and prices every completed input token at 14 micro-USD. It therefore fails to release the unused part of the conservative hold when the authenticated provider response confirms discounted cache reads. This can prematurely stop multi-step generation, but the owner's screenshots do not include cached-token counts and do not prove cache hits in those failed jobs. Failed model-building arguments and the generic guard error still require actual job evidence.
 
-## VERIFIED — root causes and implemented repair
+Official sources reopened on 30 September:
+- [Astra model and pricing](https://developers.openai.com/api/docs/models/gpt-6-astra): Standard short input $10/M, cache reads $1/M, writes $12.50/M, output $50/M; long-context boundary 272K.
+- [API pricing](https://developers.openai.com/api/docs/pricing): 10% regional-processing uplift.
+- [Cache usage fields](https://developers.openai.com/api/docs/guides/prompt-caching): `cached_tokens` and `cache_write_tokens` in input-token details.
 
-The Shop previously selected `/api/blueprint` even for detailed characters, while the existing signed `/api/studio` route remained disabled. A bounded blueprint provides supported procedural scene objects, not the requested reference character. The installed Oracle photo protocol accepts four images and `side`, not the UI's `left`/`right` labels. Appending fixed instructions to long user prompts could also exceed Oracle's 5,000-character limit.
+## IMPLEMENTED — same cap, evidence-based settlement
 
-Detailed requests now use the real StudioCoordinator -> account-bound signed Studio endpoint -> existing Oracle/Codex -> Blender path. They do not use a blueprint substitute. One to four reference images are supported, including the owner's three views; four are not compulsory. All accepted image bytes are sent. Left/right map to the compatible upstream side enum while the original ordered labels travel in agentInstructions. The complete user prompt, up to 4,000 characters, fits because fixed manufacturing/reference instructions travel separately. The distinct procedural concept path retains its six-image capability and must not be confused with the four-image mesh path.
+Preflight still reserves all input plus 2,048 tokens of headroom at the unchanged worst-case 14 micro-USD/token. Output remains bounded at 16,000 tokens and 55 micro-USD/token. The total USD1.75 per-job cap, expiry, model, reasoning policy and Standard service tier are unchanged.
 
-Current runtime proof is required before a new detailed job: the unchanged USD1.75 per-job guard, input-token preflight and low-reasoning/reconciled v2 output policy. Restoration changes only the account-bound Studio flag, not anonymous Oracle access, credit prices, customer quotas or provider-spend limits. Production rechecks the installed proof before publication and checks deployed readiness afterward without creating a model.
+Only a completed response from the existing authenticated same-request stream can release unused funds. Complete, valid cache details price confirmed reads at a conservative 2 micro-USD/token (above $1.10/M including regional uplift). All other input, including cache writes, stays at 14. Missing or partial details use the old conservative bound; malformed, contradictory, incomplete, wrong-model or wrong-tier responses preserve the original hold. Duplicate completions cannot release funds twice. Historical completed entries and unknown legacy reservations are never recalculated or reset.
 
-The existing signed receipt, single reservation and recovery survive duplicate clicks and lost connections. Newly completed jobs require an actual nonempty material-bearing GLB structure before completed settlement. Missing/invalid output fails and returns the customer reservation once; uncertain reads retain recovery. Structural inspection does not establish facial similarity, photorealism, texture quality or manufacturing approval. Safe cost-limit messages do not expose private upstream text. Mobile layout constrains form and preview widths instead of hiding overflowing controls; physical Android interaction remains unverified.
+`install_cache_accounting.py` defaults to PLAN ONLY. Explicit maintenance checks exact reviewed source ancestry and the old helper blob, verifies current receipts/services and an empty job queue, backs up touched files, replaces only the helper and its hash receipt, runs the genuine offline Codex/MCP/Blender verifier with provider fixtures, then checks the local authenticated `astraCacheAccounting=astra-confirmed-cache-v1` marker. A failed check rolls back the touched helper/receipts. It does not cancel jobs, invoke a paid model, change customer billing or raise limits.
 
-## VERIFIED — tests and production evidence
+## TESTED / awaiting exact-head CI
 
-The final release passed **613 tests, 613 passed, zero failed, zero skipped**, plus TypeScript, build, real local HTTP smoke, foundation packaging and Worker deployment dry-run. Existing findings remain: 27 lint warnings, zero lint errors, and three dependency advisories (two moderate, one high). No forced dependency update was included.
+Local Python regression suite: 56 tests collected, 51 passed, five exact-source fixture tests skipped because that fixture is reconstructed in the existing dedicated GitHub workflow. The 27 new locally runnable cache/update tests passed. The existing CI must run all 56 with that fixture, plus `npm run verify` and `npm run deploy:check` on the final branch head. No tests were removed or weakened.
 
-Automated regressions exercise the real Shop submission handler and signed Studio/account state machines with deterministic provider fixtures. They cover four image payloads, long intact prompts, correct route selection, incompatible labels, missing/stale monetary proof, one-time250-point reservation, failed-output settlement, cost-limit errors and recovery. Fixtures are not live AI generation evidence. Earlier preparation failures exposed strict typing and a trailing-whitespace fixture mismatch; both were corrected without skipping tests or weakening behavior checks.
+A synthetic six-step usage scenario completes its reservation/settlement sequence under the unchanged cap when confirmed cache hits are present. The no-cache scenario still stops at the cap. This is an accounting regression, NOT live AI evidence, a reconstruction of the owner's jobs or proof of character quality.
 
-At 12:55:58Z the public no-cost release smoke passed for 16 HTML routes, 52 matching hub assets, 105 original application entries/assets, API404, explicit DEMO generation and origin rejection. The new detailed-route readiness/HTTP401 guard check passed at 12:55:59Z. Payment readiness/security checks passed. Existing deployment probes created and immediately expired isolated unpaid Stripe sessions; no customer card was charged and no purchase or historical credit correction was completed.
+## BLOCKED / not performed
 
-## VERIFIED — existing installed runtime policy
+The current Remote Desktop Commander read still returns no connected devices. No Oracle runtime installation, restart, new paid generation, historical refund or balance correction was executed. The helper must be installed and its runtime marker observed through an authorized working execution connection before calling it deployed. Then a separately approved bounded generation must deliver an actual reviewed GLB before reporting successful character restoration. No new ChatGPT subscription is required for this code change; ChatGPT and API billing are separate.
 
-Initial [audit 36713365291](https://github.com/teslaeco/WORLDIFACT/actions/runs/36713365291) found the OpenAI / gpt-6-astra / connector33 runtime and the earlier failed cost-guard activation job; that job was not retried.
+Release decision: NO-GO for claiming restored production generation. Code/installer candidate exists; new payment settings are preserved. Do not ask the owner to keep paying for blind retries.
 
-Extended [audit 36714798184](https://github.com/teslaeco/WORLDIFACT/actions/runs/36714798184), [preparation 36717085333](https://github.com/teslaeco/WORLDIFACT/actions/runs/36717085333), and the production preflight at12:55:32Z confirmed the already installed `astra-low-reconciled-v2` policy, low reasoning, 16,000 maximum output tokens, authenticated completed-usage settlement, reference input and existing USD1.75 cap. No blind reinstallation, provider-budget reset or cap increase was performed.
+## Preserved release evidence
 
-## UNKNOWN / not completed
-
-No new paid character generation or visual-quality trial was executed by this repair. The requested character's appearance, reference fidelity and successful new export remain unverified. A structurally valid model can still be visually inadequate; do not advertise realistic quality from health status or unit tests. Existing cost limits can still reject a job that exceeds its approved budget.
-
-Historical customer reimbursements have not been performed. Identify actual account/job ledger entries before correcting credits; do not infer a duplicate bank-card charge from screenshots. No customer balance was arbitrarily changed. New failure-settlement behavior is not evidence that previous deductions have been returned.
-
-Release decision: **GO — actual signed detailed route restored and production readiness verified. UNKNOWN — successful new character generation and visual quality. Historical refund remains unresolved.**
-
-## Preserved earlier evidence
-
-The complete prior status ledger is retained byte-for-byte in [CONTEST_STATUS_ARCHIVE_20260930_BEFORE_DETAILED_RESTORE.md](CONTEST_STATUS_ARCHIVE_20260930_BEFORE_DETAILED_RESTORE.md), Git blob `7261825dd4121170b4ec43c96ee65b46d31284c3`. It includes PR150 safety changes, PR148 payments, earlier archive links, warnings and unperformed refunds. Its disabled-route statements describe the earlier release and are superseded by the observed PR153 routing publication above.
-
-The current production workflow also runs on documentation pushes to main. A documentation-only follow-up can republish unchanged application code; it must not be described as incapable of creating another deployment version.
+The complete previous PR153/154 record remains at [the immutable pre-change status](https://github.com/teslaeco/WORLDIFACT/blob/673be0cecd83ebb5959770fe90716cd2485369e5/docs/CONTEST_STATUS.md), original Git blob `b19650def2d2f36d4e1b35acb31ec1b6e6611980`. It records 613 application tests and the successful routing/readiness publication, not a successful later character. Earlier archives linked from that record are unchanged. PR155 remains a separate diagnostic draft; its private-job counts are not exposed by this repair.
