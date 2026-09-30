@@ -1,54 +1,41 @@
 # WORLDIFACT — generation restoration remains open
 
-Updated 30 September 2026. Owner instruction: restore generation while preserving all new payments. [PR156](https://github.com/teslaeco/WORLDIFACT/pull/156) is based on production source `673be0cecd83ebb5959770fe90716cd2485369e5`; it is not a full rollback.
+Updated 30 September 2026. The owner requested one command to install the prepared generator correction while retaining all new payments. [PR156](https://github.com/teslaeco/WORLDIFACT/pull/156) remains a scoped candidate, not a full rollback or a completed live character.
 
-## VERIFIED — preservation boundary
+## IMPLEMENTED — one-command Cloud Shell entry point
 
-The GitHub PR changed-file listing contains exactly five files: this evidence record, `tools/profit_guard/astra_spend_v2.py`, `install_cache_accounting.py`, `test_cache_accounting.py` and `test_cache_install.py`.
+`tools/profit_guard/oracle_cache_launch.py`, implementation head `c8586f17818f5c0e949c40f553316899a709121b`, is standalone and needs no Commander process. It uses the original OCI Cloud Shell CLI, existing SSH key and mandatory known-host verification to resolve the running `froge-blender` VM in eu-amsterdam-1. It does not look for generation files in Cloud Shell.
 
-No files in `server/`, `src/`, `.github/`, `config/` or `public/` are changed. No payment product, price, subscription, checkout, webhook, entitlement balance, generation-credit rate, credential, database or deployed environment was changed. This code update is limited to the Oracle guard helper, its opt-in maintenance installer, regression tests and this record.
+The launcher pins the complete ten-file public installer dependency set to `2ec02e9484a313bc40c0dcd9117a778fb1784696`. Every source file is size-bounded, compared against its Git blob identity and syntax-checked before SSH upload; the receiver rechecks those bytes. No key contents, user prompts, photos, payment settings or original models are uploaded. No Node/npm installation is performed. The outer launcher SHA256 is `3945205719c302d0e92a1f4f6df0e1cc56e422533a4830640adcf2c5d3e839bf` and its Git blob is `3238cf10b6d927cb9cde2373ac6daf924ce397f9`; the connector readback matches the locally tested bytes.
 
-The existing deployment workflow publishes Cloudflare application code, not the installed Python process on Oracle. Merging this branch alone must NOT be reported as restoring the model worker. Do not perform a cosmetic application deployment and claim the Oracle fix is live.
+Default invocation is PLAN ONLY. The owner-approved `--approve-service-restart` runs the existing exact-ancestry, idle-only cache installer on the actual generator VM. It checks current sources and queue, creates private backups, changes only the output-policy helper/hash receipt, performs the genuine offline Codex/MCP/Blender check, restarts the worker and verifies authenticated local readiness. Active jobs are not cancelled. Verification failure invokes the installer's scoped rollback; unknown/recovery-required outcomes never print success. The installation status marker is `WORLDIFACT_CACHE_FIX_INSTALLED`, not a claim of a generated character. The console must remain open during this maintenance.
 
-## VERIFIED — a concrete accounting defect; full incident cause remains UNKNOWN
+The launcher has no model request, no customer refund, no budget reset and no Stripe/PayPal mutation. It cannot resolve an unrelated model-building failure merely by changing cache accounting.
 
-The existing `astra_spend_v2.settle_completed` ignores `usage.input_tokens_details` and prices every completed input token at 14 micro-USD. It therefore fails to release the unused part of the conservative hold when the authenticated provider response confirms discounted cache reads. This can prematurely stop multi-step generation, but the owner's screenshots do not include cached-token counts and do not prove cache hits in those failed jobs. Failed model-building arguments and the generic guard error still require actual job evidence.
+## VERIFIED — preservation boundary and existing implementation
 
-Official sources reopened on 30 September:
-- [Astra model and pricing](https://developers.openai.com/api/docs/models/gpt-6-astra): Standard short input $10/M, cache reads $1/M, writes $12.50/M, output $50/M; long-context boundary 272K.
-- [API pricing](https://developers.openai.com/api/docs/pricing): 10% regional-processing uplift.
-- [Cache usage fields](https://developers.openai.com/api/docs/guides/prompt-caching): `cached_tokens` and `cache_write_tokens` in input-token details.
+Changes are restricted to `tools/profit_guard/` and this record. Frontend/server payment code, checkout, prices, subscriptions, credit rates, customer balances, deployment configuration and original assets are unchanged. The USD1.75 per-job cap, low reasoning, model, service tier, token ceilings and review expiry are unchanged.
 
-## IMPLEMENTED — same cap, evidence-based settlement
+The prepared v2 helper accounts for complete, valid, provider-confirmed cache reads only on the same authenticated completed response. Unknown/partial usage uses the original conservative bound; malformed or incomplete results preserve the full hold. Historical completed holds and uncertain legacy entries are immutable. No cache hit is assumed during preflight. This addresses a concrete possible premature-stop mechanism, but the owner's earlier screenshots do not establish cached-token usage or the original build failure.
 
-Preflight still reserves all input plus 2,048 tokens of headroom at the unchanged worst-case 14 micro-USD/token. Output remains bounded at 16,000 tokens and 55 micro-USD/token. The total USD1.75 per-job cap, expiry, model, reasoning policy and Standard service tier are unchanged.
+Official sources and the complete accounting rationale, unchanged rates, maintenance/rollback restrictions and earlier evidence remain preserved in [the previous PR156 status](https://github.com/teslaeco/WORLDIFACT/blob/2ec02e9484a313bc40c0dcd9117a778fb1784696/docs/CONTEST_STATUS.md), original blob `349fa9adb7ec2348b7614181501bd9f6b0328ab9`. No new model/pricing assumption is introduced by this launcher.
 
-Only a completed response from the existing authenticated same-request stream can release unused funds. Complete, valid cache details price confirmed reads at a conservative 2 micro-USD/token (above $1.10/M including regional uplift). All other input, including cache writes, stays at 14. Missing or partial details use the old conservative bound; malformed, contradictory, incomplete, wrong-model or wrong-tier responses preserve the original hold. Duplicate completions cannot release funds twice. Historical completed entries and unknown legacy reservations are never recalculated or reset.
+## VERIFIED — testing, not production installation
 
-`install_cache_accounting.py` defaults to PLAN ONLY. Explicit maintenance checks exact reviewed source ancestry and the old helper blob, verifies current receipts/services and an empty job queue, backs up touched files, replaces only the helper and its hash receipt, runs the genuine offline Codex/MCP/Blender verifier with provider fixtures, then checks the local authenticated `astraCacheAccounting=astra-confirmed-cache-v1` marker. A failed check rolls back the touched helper/receipts. It does not cancel jobs, invoke a paid model, change customer billing or raise limits. The installer has not been executed on Oracle.
+The unchanged installer/accounting implementation at `5e5a98e1df0922191e62b72c7c5bae49caef9145` passed all six workflows: [56 guard tests](https://github.com/teslaeco/WORLDIFACT/actions/runs/36773686202) and [613 application tests, typecheck, build, HTTP smoke and packaging](https://github.com/teslaeco/WORLDIFACT/actions/runs/36773686033). No tests failed or were skipped in those CI runs. Existing 27 lint warnings and three dependency advisories remain.
 
-## VERIFIED — exact implementation-head CI
+The new launcher passed 16 deterministic local tests without OCI/SSH access. A seventeenth CI test verifies every real dependency against the pinned manifest and launches the isolated installer in PLAN ONLY, checking for missing imports without modifying a VM. [Guard CI 36775875347](https://github.com/teslaeco/WORLDIFACT/actions/runs/36775875347), job110093509831, passed at head `c8586f17818f5c0e949c40f553316899a709121b`, including source reconstruction, compilation and test discovery. An initial transfer introduced a missing parenthesis in a test fixture; it was corrected to the locally passing bytes. Nothing was deployed from the failing test revision.
 
-All six PR workflows passed for implementation head `5e5a98e1df0922191e62b72c7c5bae49caef9145` (GitHub test merge `0c1b280c8898dd63d624a63e6ccd3dc71591083b`):
-
-- [Astra guard verification 36773686202](https://github.com/teslaeco/WORLDIFACT/actions/runs/36773686202), job110086145850: **56 tests passed, zero failed, zero skipped**, including exact installed-source ancestry reconstruction from the pinned private reference. The earlier local five skips are resolved in this CI result.
-- [Verify WORLDIFACT 36773686033](https://github.com/teslaeco/WORLDIFACT/actions/runs/36773686033), job110086144980: **613 application tests passed, zero failed, zero skipped**, TypeScript, build, local HTTP smoke, foundation assembly and Worker deployment dry-run passed.
-- The four existing FAST installation/worker/launcher and Oracle project-file review workflows also passed. No new privileged workflow was created.
-
-The actual application test log includes payment recovery, preserved active subscriptions, additive/idempotent grants, checkout reuse, webhooks and generation reservation tests. Those tests use deterministic fixtures, not customer card charges or a successful new AI model. Existing findings remain: 27 lint warnings and three dependency advisories (two moderate, one high); no forced dependency upgrade was made.
-
-At 20:36:46Z the existing read-only CI service probe received HTTP200 and READY from production Studio and Oracle health, without credentials, model downloads or generation POSTs. This shows the service was responding, not that its later modeling steps work or that this helper is installed.
-
-A synthetic six-step usage scenario completes its reservation/settlement sequence under the unchanged cap when confirmed cache hits are present. The no-cache scenario still stops at the cap. This is an accounting regression, NOT live AI evidence, a reconstruction of the owner's jobs or proof of character quality.
-
-This documentation-only follow-up does not change the verified implementation. Its checks must not be conflated with an Oracle installation or a production character test.
+Full application verification on this final implementation head is still being observed at the time of this documentation write. Do not conflate earlier green tests with a new head or a production model. This documentation follow-up does not change launcher/installer bytes.
 
 ## BLOCKED / not performed
 
-The current Remote Desktop Commander read still returns no connected devices. No Oracle runtime installation, restart, new paid generation, historical refund or balance correction was executed. The helper must be installed and its runtime marker observed through an authorized working execution connection before calling it deployed. Then a separately approved bounded generation must deliver an actual reviewed GLB before reporting successful character restoration. No new ChatGPT subscription is required for this code change; ChatGPT and API billing are separate.
+No Oracle installation or service restart was executed by the assistant in this turn. The user must run the single approved entry point in their existing Cloud Shell because the prior conversation tool connection did not expose a device. The actual command result must be observed before describing the helper as installed. No extra cloud resource is purchased. No paid generation or historical customer credit correction was performed.
 
-Release decision: **NO-GO for claiming restored production generation.** The scoped implementation and installer passed CI; new payment settings are preserved. PR156 remains draft because Oracle installation and an actual model result are unverified. Do not ask the owner to keep paying for blind retries.
+A future completed character must still have its real GLB/export and visual fidelity reviewed. A ready service, passing tests or a successful cache-helper installation alone does not prove that outcome. Cloudflare deployment alone does not update Oracle Python files, so this branch is not merged merely to produce another website release.
 
-## Preserved release evidence
+Release decision: the single-command entry point is prepared; NO-GO for claiming that production character generation is already restored. New payment settings remain preserved.
 
-The complete previous PR153/154 record remains at [the immutable pre-change status](https://github.com/teslaeco/WORLDIFACT/blob/673be0cecd83ebb5959770fe90716cd2485369e5/docs/CONTEST_STATUS.md), original Git blob `b19650def2d2f36d4e1b35acb31ec1b6e6611980`. It records 613 application tests and the successful routing/readiness publication, not a successful later character. Earlier archives linked from that record are unchanged. PR155 remains a separate diagnostic draft; its private-job counts are not exposed by this repair.
+## Earlier release record
+
+The prior PR153/154 routing/readiness release and its linked historical archives remain at [the immutable production-source status](https://github.com/teslaeco/WORLDIFACT/blob/673be0cecd83ebb5959770fe90716cd2485369e5/docs/CONTEST_STATUS.md), blob `b19650def2d2f36d4e1b35acb31ec1b6e6611980`. PR155 is a separate diagnostic draft. Neither historical readiness nor the old billing evidence is silently relabelled as a successful new character.
