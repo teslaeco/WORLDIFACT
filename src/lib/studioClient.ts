@@ -28,7 +28,9 @@ export function parseStudioJob(value: unknown, id: string): StudioJob {
   if (!object(value) || !object(value.job) || value.job.id !== id || typeof value.job.state !== 'string' || !Object.hasOwn(JOB_DETAILS, value.job.state)) throw new Error('The response does not belong to the current model. The previous model will not be substituted.')
   const state = value.job.state as StudioJob['state']
   const reconciliationRequired = state === 'pending' && value.job.reconciliationRequired === true
-  return { id, state, detail: reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state],
+  const failureCode = state === 'failed' && ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT'].includes(String(value.job.failureCode)) ? value.job.failureCode as StudioJob['failureCode'] : undefined
+  const failureDetail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit. Reserved customer points were returned; no automatic retry.' : failureCode === 'INVALID_MODEL_OUTPUT' ? 'No valid model was delivered. Reserved customer points were returned; no procedural replacement.' : undefined
+  return { id, state, detail: failureDetail || (reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state]), ...(failureCode ? { failureCode } : {}),
     ...(reconciliationRequired ? { reconciliationRequired: true } : {}),
     ...(typeof value.job.downloadAllowed === 'boolean' ? { downloadAllowed: value.job.downloadAllowed } : {}),
     ...(typeof value.job.previewOnly === 'boolean' ? { previewOnly: value.job.previewOnly } : {}),

@@ -24,8 +24,8 @@ export type TextureLimit = 2048 | 4096 | 8192
 export type StudioPhoto = { name: string; view: PhotoView; dataUrl: string; subject?: string; textureMaxSize: TextureLimit }
 export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string }
-export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
-export type StudioStatus = { accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
+export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: 'ASTRA_COST_LIMIT' | 'INVALID_MODEL_OUTPUT'; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
+export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const keys = (value: Record<string, unknown>, names: string[]) => Object.keys(value).every(name => names.includes(name))
 
@@ -94,8 +94,14 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
     id, generationProfile: FAST_DRAFT_PROFILE,
     prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + MANUFACTURING_HARD_RULES,
   }
-  const instruction = `\n\nWORLDIFACT output: create an editable 3D ${input.purpose} asset with UVs and PBR materials, exported as a self-contained GLB. Reference images describe the same requested object; preserve their visible proportions and colors. Request an upper texture limit of ${input.textureMaxSize}px, never upscale and call that recovered detail. Keep originals; use a game preview below 3 million rendered triangles where practical. Record visual/geometry limitations; MAKE is unapproved. Do not return a brief instead of a model.\n\n${MANUFACTURING_HARD_RULES}`
-  return { id, prompt: input.prompt + instruction, ...(input.photos.length ? { photos: input.photos, agentInstructions: REFERENCE_FIDELITY_INSTRUCTIONS } : {}) }
+  const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${input.purpose}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use a compact batched Blender script and verify the exported file. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; report open/non-manifold geometry, intersections, thin walls and fragile joints; never claim manufacturing approval.`
+  // The installed v33 photo contract accepts `side`, not `left`/`right`.
+  // Keep image bytes, names and subject identity intact; preserve exact side
+  // labels in ordered agent metadata rather than sending a rejected enum.
+  const photos = input.photos.map(photo => photo.view === 'left' || photo.view === 'right' ? { ...photo, view: 'side' as const } : photo)
+  const viewLabels = input.photos.some(photo => photo.view === 'left' || photo.view === 'right')
+    ? '\n\nOriginal reference view labels (in input order): ' + input.photos.map((photo, index) => `Reference ${index + 1}: ${photo.view}`).join('; ') + '. Side views still describe the same subject.' : ''
+  return { id, prompt: input.prompt + instruction, agentInstructions: MANUFACTURING_HARD_RULES + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + viewLabels, ...(photos.length ? { photos } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(input)))

@@ -32,7 +32,8 @@ test('STANDARD photo jobs carry explicit reference-fidelity instructions to the 
   assert.match('agentInstructions' in payload ? payload.agentInstructions || '' : '', /architecture/i)
   assert.match('agentInstructions' in payload ? payload.agentInstructions || '' : '', /Never regularize/i)
   const textOnly = oracleStudioPayload('job', validateStudioInput(oldInput))
-  assert.equal('agentInstructions' in textOnly, false)
+  assert.ok('agentInstructions' in textOnly)
+  assert.match(textOnly.agentInstructions, /manufacturing hard rules/)
 })
 
 test('profile input is explicit and a short prompt cannot silently select FAST', () => {

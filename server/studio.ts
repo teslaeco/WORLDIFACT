@@ -1,3 +1,5 @@
+import { inspectGLB } from '../src/lib/glb.ts'
+import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
@@ -51,12 +53,39 @@ async function accountAccess(env: StudioEnv, userId: string | undefined, id: str
   if (!access.owned) throw new StudioError('This model belongs to a different account or has no account receipt.', 403)
   return access
 }
-async function accountJob(env: StudioEnv, userId: string | undefined, id: string, state: StudioJob['state']): Promise<StudioJob> {
+const outputChecks = new Map<string, Promise<'valid' | 'invalid'>>()
+async function validateCompletedModel(env: StudioEnv, userId: string, id: string, fetcher: typeof fetch) {
+  const key = `${userId}:${id}`
+  const existing = outputChecks.get(key)
+  if (existing) return existing
+  // Coalesce same-job polling. This is a byte/structure check, not perceptual QA.
+  if (outputChecks.size >= 1) throw new StudioError('Model verification is busy. Recover the same job; do not generate again.', 503)
+  const check = (async (): Promise<'valid' | 'invalid'> => {
+    let response: Response
+    try { response = await modelOrExport(env, id, 'model', fetcher) }
+    catch (e) { if (e instanceof StudioError && [404, 413, 502].includes(e.status)) return 'invalid'; throw e }
+    const bytes = await response.arrayBuffer() // Interrupted reads are uncertain, not an automatic refund.
+    try {
+      const model = inspectGLB(bytes)
+      return model.meshCount > 0 && model.triangles > 0 && model.renderedTriangles > 0 && model.materialCount > 0 ? 'valid' : 'invalid'
+    } catch { return 'invalid' }
+  })()
+  outputChecks.set(key, check)
+  try { return await check } finally { if (outputChecks.get(key) === check) outputChecks.delete(key) }
+}
+async function accountJob(env: StudioEnv, userId: string | undefined, id: string, state: StudioJob['state'], fetcher: typeof fetch = fetch, failureCode?: StudioJob['failureCode']): Promise<StudioJob> {
   if (!userId) return { id, state, detail: JOB_DETAILS[state] }
+  const previous = await accountAccess(env, userId, id)
+  if (previous?.state === 'failed') state = 'failed'
+  if (state === 'succeeded' && previous?.state === 'reserved') {
+    if (await validateCompletedModel(env, userId, id, fetcher) !== 'valid') { state = 'failed'; failureCode = 'INVALID_MODEL_OUTPUT' }
+  }
   if (state === 'succeeded') await settleUserGeneration(env, userId, id, 'completed')
   if (state === 'failed' || state === 'cancelled') await settleUserGeneration(env, userId, id, 'failed')
   const access = await accountAccess(env, userId, id)
-  return { id, state, detail: JOB_DETAILS[state], downloadAllowed: access!.downloadAllowed,
+  const detail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit before completing the model. Reserved customer points were returned; no automatic retry.'
+    : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The worker did not deliver a valid nonempty model. Reserved customer points were returned; no replacement was generated.' : JOB_DETAILS[state]
+  return { id, state, detail, ...(failureCode ? { failureCode } : {}), downloadAllowed: access!.downloadAllowed,
     previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed }
 }
 async function limitedJson(response: Request | Response, limit: number) {
@@ -115,7 +144,7 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
   const state = await limitedJson(response, 16_384)
   const compatible = state.ready === true && state.provider === 'openai' && state.model === 'gpt-6-astra' && Number.isSafeInteger(state.connectorVersion) && Number(state.connectorVersion) >= 33
   const fastReady = compatible && supportsFastDraft(state)
-  return { ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
+  return { ...detailedRuntime(state), ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
     fastBudgetReady: fastReady && state.fastBudgetRevision === 'fast-usd4-v1' && state.fastBudgetMaxUsd === 4,
     promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
 }
@@ -131,6 +160,8 @@ async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch
   } else if (env.PUBLIC_PILOT !== 'true' && !await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) throw new StudioError('This generation window requires owner access.', 401)
   const current = await health(env, fetcher)
   if (!current.ready) throw new StudioError('The existing Astra/Blender worker is not ready.', 503)
+  if (accountPolicy(env) && !current.costGuardReady) throw new StudioError('The detailed worker did not confirm the current Astra cost guard. No points were reserved.', 503)
+  if (accountPolicy(env) && !current.outputPolicyReady) throw new StudioError('The detailed worker requires the reviewed Astra output policy. No points were reserved.', 503)
   if (trial && !current.fastBudgetReady) throw new StudioError('The approved cost guard is not confirmed. No paid request was sent.', 503)
   if (input.generationProfile === FAST_DRAFT_PROFILE && (!current.fastReady || !current.fastBudgetReady)) throw new StudioError('FAST DRAFT is not fully verified on the worker. No paid job was submitted; STANDARD remains available.', 409)
   if (input.photos.length && !current.photoReady) throw new StudioError('This worker has not confirmed photo input. Nothing was submitted.', 409)
@@ -197,10 +228,10 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const trial = pool?.fastOnly === true && env.ENABLE_APPROVED_FAST_TEST === 'true'
       const enabled = trial || (env.ENABLE_STUDIO_JOBS === 'true' && !!budgetSettings(env))
       const authorized = trial || env.PUBLIC_PILOT === 'true' || (secretReady(env) && await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
-      const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : (!pool.unlimited && pool.remaining === 0) ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
-      return json({ accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
+      const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : (!pool.unlimited && pool.remaining === 0) ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : accountPolicy(env) && !state.costGuardReady ? 'ASTRA_COST_GUARD_REQUIRED' : accountPolicy(env) && !state.outputPolicyReady ? 'ASTRA_OUTPUT_POLICY_REQUIRED' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
+      return json({ detailedReady: reason === 'READY' && state?.costGuardReady === true && state?.outputPolicyReady === true, detailedReferenceLimit: DETAILED_REFERENCE_LIMIT, costGuardReady: state?.costGuardReady === true, outputPolicyReady: state?.outputPolicyReady === true, accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
         photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, fastBudgetReady: state?.fastBudgetReady === true,
-        fastOnly: trial, promptMaxLength: Math.max(3, (state?.promptMaxLength ?? 2000) - 600), allowance: pool })
+        fastOnly: trial, promptMaxLength: Math.min(4000, Math.max(3, (state?.promptMaxLength ?? 2000) - oracleStudioPayload('', { worldId: 'enchanted-ai-shop', prompt: '', purpose: 'figurine', textureMaxSize: 4096, photos: [] }).prompt.length)), allowance: pool })
     }
     if (!secretReady(env)) throw new StudioError('The job receipt service is not configured.', 503)
     if (url.pathname === '/api/studio/prepare' && request.method === 'POST') {
@@ -251,7 +282,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (!response.ok) { await response.body?.cancel(); throw new Error('Unconfirmed acceptance') }
         const value = await limitedJson(response, 16_384)
         if (value.id !== auth.id || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new Error('Unconfirmed acceptance')
-        return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state']) }, 202)
+        return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state'], fetcher, value.state === 'failed' && typeof value.detail === 'string' && /astra budget guard|WORLDIFACT_ASTRA_COST_GUARD|astra job budget exhausted/i.test(value.detail) ? 'ASTRA_COST_LIMIT' : undefined) }, 202)
       } catch (error) {
         if (error instanceof StudioError) throw error
         return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending } }, 202)
@@ -282,7 +313,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
       const value = await limitedJson(response, 16_384)
       if (((user || value.id !== undefined) && value.id !== auth.id) || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new StudioError('The worker returned an invalid job status.', 502)
-      return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state']) })
+      return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state'], fetcher, value.state === 'failed' && typeof value.detail === 'string' && /astra budget guard|WORLDIFACT_ASTRA_COST_GUARD|astra job budget exhausted/i.test(value.detail) ? 'ASTRA_COST_LIMIT' : undefined) })
     }
     return json({ error: 'Studio route or method not found.' }, 404)
   } catch (e) {

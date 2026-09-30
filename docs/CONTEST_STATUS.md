@@ -2,7 +2,23 @@
 
 Updated 30 September 2026. Deployment timestamps below are UTC.
 
-## VERIFIED — PR #150 safety repair merged and deployed
+## 30 September follow-up — actual Astra/Blender route repair in review
+
+Owner reported that PR150 still prevents the requested character model. PR150 was a safety hotfix, not a restoration of the detailed pipeline. This follow-up changes the actual Shop submission route, not just its error text. It is NOT deployed yet.
+
+Read-only production audit [36713365291](https://github.com/teslaeco/WORLDIFACT/actions/runs/36713365291) confirms the existing Oracle endpoint responds as OpenAI / gpt-6-astra / connector 33 with an installed USD1.75 per-job guard. The known earlier activation job remains failed at its cost guard; no new generation was requested. The public Studio gate remains disabled. Historical output-policy installer evidence already exists; installation is not assumed missing merely because the simpler diagnostic omits that field.
+
+Implemented on the repair branch: detailed requests use the real signed StudioCoordinator -> /api/studio -> Oracle/Codex -> Blender path, never a procedural blueprint substitute. The detailed contract supports 1–4 ordered references, including the owner's three views, with no compulsory four-photo minimum. The full 4,000-character prompt is preserved while fixed instructions move to agentInstructions so the upstream 5,000-character prompt ceiling is not exceeded. Existing recovery/account pricing and provider-spend caps remain unchanged.
+
+Readiness now requires the authenticated current USD1.75 guard AND the installed low-reasoning/reconciled output policy. Pending successful jobs undergo a bounded nonempty/material-bearing GLB structural check before credit settlement. Structural validation is not facial similarity, photorealism or manufacturing approval. Missing/invalid outputs refund the single customer reservation; uncertain transport retains recovery instead of generating again. Known cost-limit failures have fixed useful messages, without arbitrary upstream details. Mobile form widths are bounded rather than hiding overflowing controls.
+
+Extended authenticated audit [36714798184](https://github.com/teslaeco/WORLDIFACT/actions/runs/36714798184) at 12:27 UTC confirms the low-reasoning/reconciled v2 policy is already installed, with the unchanged USD1.75 cap, 16,000-token output maximum and photo support. No reinstall or paid trial is needed merely to establish that configuration. The source adapter maps left/right to the installed side enum while carrying the original ordered view labels in agentInstructions; bytes and signed input identity remain intact.
+
+The owner-requested release restores only the account-bound Studio flag after another current read-only runtime check. Anonymous Oracle writes, credit prices and provider budgets stay unchanged. Publication verifies the deployed status and anonymous-request rejection without a generation. This is routing availability, not successful live character-quality evidence.
+
+Targeted local regression tests currently pass; full exact-head CI, current extended runtime evidence and release decision remain pending. No new paid test, historical refund or budget reset has been performed. An independently observed successful new character generation remains unverified.
+
+## HISTORICAL VERIFIED — PR #150 safety repair merged and deployed
 
 The owner authorized repair, merge and deployment only after green exact-head checks. [PR #150](https://github.com/teslaeco/WORLDIFACT/pull/150) was reviewed at `829a295fdec6b3bb1834e1c7ab66d6b25ddae914` and merged as `d3a7dd53783035eb1d8ea839a9460987b0202d4e`. All five standard PR workflows passed. The executable acceptance task is recorded in [CODEX_P0_GENERATION_REPAIR_20260930.md](CODEX_P0_GENERATION_REPAIR_20260930.md); implementation was performed directly through the repository tools, not an unverified Codex execution integration.
 
