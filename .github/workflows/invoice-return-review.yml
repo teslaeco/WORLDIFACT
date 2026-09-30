@@ -1,0 +1,50 @@
+name: Prepare and verify invoice return (no paid calls)
+on:
+  push:
+    branches: ['fix/billing-return-seller-20260930']
+    paths: ['scripts/finish-invoice-return-ui.py', '.github/workflows/invoice-return-review.yml']
+permissions:
+  contents: write
+concurrency:
+  group: worldifact-invoice-return-review
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply exact hardening to previously verified invoice-return source
+        run: |
+          test -f src/pages/InvoicePaymentPage.tsx
+          python3 scripts/finish-invoice-return-ui.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tests/billing-recovery.test.ts')
+          s = p.read_text()
+          replacements = [
+              ("const state = { subscriptions: [subscription],", "const state = { expandedInvoice: null as Json | null, subscriptions: [subscription],"),
+              ("if (url.includes('/v1/invoices/in_Upgrade?')) return Response.json(invoice)", "if (url.includes('/v1/invoices/in_Upgrade?')) return Response.json(state.expandedInvoice ?? invoice)"),
+              ("const f = formFixture(); let reads = 0\n  Object.defineProperty(f.invoice, 'subscription', { get() { return ++reads > 3 ? 'sub_Other' : subId }, configurable: true })", "const f = formFixture()\n  f.state.expandedInvoice = { ...structuredClone(f.invoice), subscription: 'sub_Other' }")
+          ]
+          for before, after in replacements:
+              if s.count(before) != 1: raise RuntimeError('Unexpected fixture baseline')
+              s = s.replace(before, after, 1)
+          p.write_text(s)
+          PY
+      - run: npm ci
+      - name: Application and synthetic invoice/return tests
+        run: npm run verify
+      - name: Worker packaging only
+        run: npm run deploy:check
+      - name: Commit verified changes to review branch only
+        run: |
+          test "$GITHUB_REF" = refs/heads/fix/billing-return-seller-20260930
+          git diff --check
+          git add server/billing.ts src/lib/invoicePayment.ts src/lib/accountDestination.ts src/pages/InvoicePaymentPage.tsx tests/billing-recovery.test.ts tests/invoice-return.test.ts docs/CONTEST_STATUS.md
+          git -c user.name='WORLDIFACT review' -c user.email='noreply@users.noreply.github.com' commit -m 'Verify delayed invoice settlement and preserve safe sign-in return'
+          git push origin HEAD:refs/heads/fix/billing-return-seller-20260930

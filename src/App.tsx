@@ -13,6 +13,7 @@ const WorkbenchPage = lazy(async () => import('./pages/WorkbenchPage'))
 const ControlPage = lazy(async () => import('./pages/ControlPage'))
 const AccountPage = lazy(async () => import('./pages/AccountPage'))
 const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
+const InvoicePaymentPage = lazy(async () => import('./pages/InvoicePaymentPage'))
 const ModelsPage = lazy(async () => import('./pages/ModelsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/login" element={<AccountPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/account/credits" element={<CreditsPage />} />
+        <Route path="/account/payment" element={<InvoicePaymentPage />} />
         <Route path="/account/models" element={<ModelsPage />} />
         <Route path="/account/reset" element={<ResetPasswordPage />} />
         <Route path="/control" element={<ControlPage />} />

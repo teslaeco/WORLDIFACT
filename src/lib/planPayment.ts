@@ -1,5 +1,7 @@
+import { invoiceFormAddress } from './invoicePayment.ts'
 /** Provider destinations are allowlisted; a plan card only opens customer confirmation. */
 export function planPaymentAddress(value: unknown, destination: unknown): string {
+  const local = invoiceFormAddress(value, destination); if (local) return local
   const hosts: Record<string, string> = { invoice: 'invoice.stripe.com', portal: 'billing.stripe.com', checkout: 'checkout.stripe.com' }
   if (typeof value !== 'string' || typeof destination !== 'string' || !Object.hasOwn(hosts, destination)) throw new Error('Unverified payment destination.')
   const url = new URL(value)

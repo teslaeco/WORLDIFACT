@@ -6,6 +6,8 @@ import type { BudgetNamespace } from './budget.ts'
 export interface BillingEnv extends AccountEnv, EntitlementEnv {
   ENABLE_BILLING?: string
   STRIPE_SECRET_KEY?: string
+  /** Public Stripe.js key. Optional; hosted invoice recovery remains intact until configured. */
+  STRIPE_PUBLISHABLE_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID?: string
   STRIPE_PLAN_CHANGE_CONFIGURATION_ID?: string
@@ -432,14 +434,61 @@ async function recoverBilling(request: Request, env: BillingEnv, user: AccountUs
       || !Number.isSafeInteger(invoice.amount_paid) || Number(invoice.amount_paid) < 0 || Number(invoice.amount_paid) >= amount) return review()
     // Validate before displaying a retry action; re-read all state on the eventual button click.
     const address = recoveryUrl(invoice.hosted_invoice_url, 'invoice.stripe.com')
-    const response = { state: 'payment_required', canManage: true, canRetry: true, amountCents: invoice.amount_remaining,
+    const response = { invoiceId, subscriptionId: subscription.id, state: 'payment_required', canManage: true, canRetry: true, amountCents: invoice.amount_remaining,
       currency: 'USD', plan: invoicePlan, pendingChange: !!subscription.pending_update, activePlan: allowance.subscription.active ? allowance.subscription.plan : null }
-    if (action === 'retry') return json({ ...response, url: address, destination: 'invoice', requiresConfirmation: true })
+    if (action === 'retry') return json({ ...response, url: invoiceFormKey(env) ? `/account/payment?plan=${invoicePlan}` : address, destination: invoiceFormKey(env) ? 'worldifact' : 'invoice', requiresConfirmation: true })
     return json(response)
   }
   // Paid, void, expired and processing invoices never open another charge or a stale link.
   return json({ state: allowance.subscription.active ? 'active' : 'processing', canManage: true, canRetry: false,
+    paidInvoiceId: exactInvoice(env, invoice) ? invoiceId : null,
     activePlan: allowance.subscription.active ? allowance.subscription.plan : null })
+}
+
+function invoiceFormKey(env: BillingEnv): string | null {
+  const key = env.STRIPE_PUBLISHABLE_KEY?.trim() ?? ''
+  return new RegExp(`^pk_${env.STRIPE_MODE}_[A-Za-z0-9_]{12,200}$`).test(key) ? key : null
+}
+
+/** Read the ORIGINAL invoice PaymentIntent. This route never creates/confirms/pays a charge. */
+async function invoicePayment(request: Request, env: BillingEnv, user: AccountUser, fetcher: typeof fetch) {
+  if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
+  const input = object(JSON.parse(await boundedText(request, 1024)))
+  if (Object.keys(input).some(k => !['plan', 'action', 'invoiceId'].includes(k)) || typeof input.plan !== 'string'
+    || !['creator', 'pro', 'studio'].includes(input.plan) || !['prepare', 'status'].includes(String(input.action))
+    || input.invoiceId !== undefined && !resourceId(input.invoiceId, 'in')) return json({ error: 'Invalid payment request.' }, 400)
+  const plan = input.plan as PlanId
+  const headers = new Headers(request.headers); headers.delete('Content-Length')
+  const recovered = await recoverBilling(new Request(request.url, { method: 'POST', headers, body: JSON.stringify({ action: 'status' }) }), env, user, fetcher)
+  if (!recovered.ok) return recovered
+  const recovery = object(await recovered.json())
+  if (recovery.state === 'active' && recovery.activePlan === plan && resourceId(recovery.paidInvoiceId, 'in')
+    && (!input.invoiceId || input.invoiceId === recovery.paidInvoiceId)) return json({ phase: 'confirmed', invoiceId: recovery.paidInvoiceId, plan })
+  if (recovery.state !== 'payment_required' || recovery.plan !== plan || !resourceId(recovery.invoiceId, 'in')
+    || input.invoiceId && input.invoiceId !== recovery.invoiceId) return json({ phase: 'review' })
+  const key = invoiceFormKey(env)
+  if (!key) return json({ phase: 'hosted_only' })
+  const stored = await entitlementCall<{ customer: string | null }>(env, user.id, '/billing')
+  const invoice = await stripe(env, `/invoices/${recovery.invoiceId}?expand[]=payment_intent`, fetcher)
+  const pi = object(invoice.payment_intent), lines = array(object(invoice.lines).data), line = lines[0], offer = subscriptionOffer(env, plan)
+  // Re-read after recovery to detect an invoice changed or settled between requests.
+  if (invoice.id !== recovery.invoiceId || subscriptionOf(invoice) !== recovery.subscriptionId || idOf(invoice.customer) !== stored.customer || invoice.status !== 'open'
+    || invoice.paid !== false || invoice.amount_paid !== 0 || invoice.amount_remaining !== offer.amountCents
+    || invoice.amount_due !== offer.amountCents || invoice.total !== offer.amountCents || invoice.currency !== 'usd'
+    || lines.length !== 1 || object(invoice.lines).has_more === true || line.quantity !== 1 || line.proration === true
+    || line.amount !== offer.amountCents || line.currency !== 'usd'
+    || (idOf(line.price) || idOf(object(object(line.pricing).price_details).price)) !== subscriptionPriceId(env, plan)
+    || !resourceId(pi.id, 'pi') || pi.livemode !== (env.STRIPE_MODE === 'live') || idOf(pi.customer) !== stored.customer
+    || pi.amount !== offer.amountCents || pi.currency !== 'usd' || !Array.isArray(pi.payment_method_types)
+    || pi.payment_method_types.length !== 1 || pi.payment_method_types[0] !== 'card'
+    || pi.invoice !== undefined && idOf(pi.invoice) !== invoice.id
+    || !['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(String(pi.status))) return json({ phase: 'review' })
+  const result = { phase: 'payment_required', invoiceId: invoice.id, plan, amountCents: offer.amountCents, currency: 'USD' }
+  if (input.action === 'status') return json(result)
+  if (typeof pi.client_secret !== 'string' || !pi.client_secret.startsWith(`${pi.id}_secret_`) || pi.client_secret.length > 300) return json({ phase: 'review' })
+  // This is a customer-scoped PaymentIntent client secret, not the backend API key.
+  // Send it only to the verified account over this authenticated, no-store endpoint.
+  return json({ ...result, publishableKey: key, clientSecret: pi.client_secret })
 }
 
 export async function billingApi(request: Request, env: BillingEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
@@ -448,6 +497,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
   const config = billingConfig(env)
   if (url.pathname === '/api/billing/status' && request.method === 'GET') return json({
     status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED',
+    invoicePaymentReady: config.ready && !!invoiceFormKey(env),
     portalReady: config.ready && resourceId(env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID, 'bpc'),
     planChangeReady: config.astraSpendGuard && resourceId(env.STRIPE_PLAN_CHANGE_CONFIGURATION_ID, 'bpc'),
     checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval,
@@ -471,6 +521,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     if (!user) return json({ error: 'Sign in before opening billing.' }, 401)
     const limiter = env.ACCOUNT_LIMITER ?? env.GENERATION_LIMITER
     if (!limiter || !(await limiter.limit({ key: `billing:${user.id}` })).success) return json({ error: 'Billing request limit reached.' }, limiter ? 429 : 503)
+    if (url.pathname === '/api/billing/invoice-payment') return await invoicePayment(request, env, user, fetcher)
     // One authenticated plan-card action, independent of stale frontend membership state.
     // Recover an existing payment first; never create a second subscription to bypass it.
     let planRecovery: Json | null = null

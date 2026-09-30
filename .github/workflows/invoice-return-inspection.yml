@@ -1,0 +1,24 @@
+name: Inspect invoice return and seller settings (read only)
+on:
+  push:
+    branches: ['fix/billing-return-seller-20260930']
+    paths: ['scripts/inspect-invoice-return.mjs', '.github/workflows/invoice-return-inspection.yml']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-invoice-return-inspection
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Read settings and owner paid invoice; no billing or account mutation
+        run: node scripts/inspect-invoice-return.mjs
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
