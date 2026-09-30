@@ -33,6 +33,10 @@ jobs:
           echo "a02b0e9a4a46a00889f9425d4afaa2b062ff5aa567d5f4461c2a501bab3451ba  $RUNNER_TEMP/detailed.patch" | sha256sum --check
           git apply --check "$RUNNER_TEMP/detailed.patch"
           git apply "$RUNNER_TEMP/detailed.patch"
+          gh api repos/teslaeco/WORLDIFACT/git/blobs/3e5ae5aefbd42697b353d875332d296a3882dfb1 --jq .content | base64 --decode | gzip -dc > "$RUNNER_TEMP/detailed-followup.patch"
+          echo "3e974a750bb269cbce7eb0ca73b8697780f5c7e75482da0855026e4717572207  $RUNNER_TEMP/detailed-followup.patch" | sha256sum --check
+          git apply --check "$RUNNER_TEMP/detailed-followup.patch"
+          git apply "$RUNNER_TEMP/detailed-followup.patch"
           git diff --check
       - run: npm ci
       - name: Verify complete application without paid generation
@@ -58,7 +62,7 @@ jobs:
           set -euo pipefail
           git config user.name 'WORLDIFACT repair automation'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add server/studio.ts src/components/GenerationCostNotice.tsx src/lib/studioClient.ts src/lib/studioProtocol.ts src/lib/detailedStudio.ts src/pages/ShopPage.css src/pages/ShopPage.tsx tests/generation-profile.test.ts tests/shop-draft-lifecycle.test.mjs tests/shop-render-helper.mjs tests/shop-manufacturing.test.ts tests/studio-accounts.test.ts tests/detailed-studio-fixture.ts tests/detailed-studio.test.ts scripts/check-detailed-studio-runtime.mjs docs/CONTEST_STATUS.md
+          git add server/studio.ts src/components/GenerationCostNotice.tsx src/lib/studioClient.ts src/lib/studioProtocol.ts src/lib/detailedStudio.ts src/pages/ShopPage.css src/pages/ShopPage.tsx tests/generation-profile.test.ts tests/shop-draft-lifecycle.test.mjs tests/shop-render-helper.mjs tests/shop-manufacturing.test.ts tests/studio-accounts.test.ts tests/detailed-studio-fixture.ts tests/detailed-studio.test.ts scripts/check-detailed-studio-runtime.mjs scripts/restore-detailed-studio-config.mjs tests/detailed-studio-release.test.mjs docs/CONTEST_STATUS.md
           git diff --cached --check
           git commit -m 'fix: route reference characters through signed Astra Blender jobs'
           git push origin HEAD:fix/restore-detailed-studio-20260930
@@ -78,7 +82,14 @@ jobs:
         with:
           node-version: 24
       - name: Extended current runtime read only
-        run: node scripts/check-detailed-studio-runtime.mjs
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {checkDetailedRuntime} from './scripts/check-detailed-studio-runtime.mjs';
+          const evidence=await checkDetailedRuntime(process.env);
+          console.log(JSON.stringify(evidence,null,2));
+          assert.equal(evidence.verifiedForGuardedRouting,true,'Existing detailed runtime must confirm the unchanged cost and output guards.');
+          JS
         env:
           ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
           ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
