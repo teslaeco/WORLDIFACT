@@ -76,7 +76,7 @@ class LaunchTests(unittest.TestCase):
 
     def test_oci_lookup_rejects_missing_duplicate_nonjson_and_failed_results(self):
         for stdout,code in [('[]',0),('["a","b"]',0),('[1]',0),('broken',0),('["one"]',1),('x'*65537,0)]:
-            with self.subTest(code=code,size=len(stdout)), patch.object(launch.subprocess,'run',return_value=types.SimpleNamespace(returncode=code,stdout=stdout,stderr='PRIVATE_TEST_CANARY'):
+            with self.subTest(code=code,size=len(stdout)), patch.object(launch.subprocess,'run',return_value=types.SimpleNamespace(returncode=code,stdout=stdout,stderr='PRIVATE_TEST_CANARY')):
                 with self.assertRaises(launch.LaunchError) as result: launch.lookup(['oci','test'])
                 self.assertNotIn('PRIVATE_TEST_CANARY',str(result.exception))
 
