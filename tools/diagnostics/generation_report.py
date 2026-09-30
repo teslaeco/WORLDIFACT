@@ -24,7 +24,7 @@ CODES = {'WORLDIFACT_ASTRA_COST_GUARD', 'FORGE_JOB_BUDGET', 'FORGE_UNCERTAIN_USA
          'credit_balance_exhausted', 'organization_spend_limit_exceeded',
          'project_spend_limit_exceeded', 'organization_usage_limit_exceeded'}
 TOOLS = {'get_modeling_contract', 'get_current_model', 'build_model', 'edit_model',
-         'render_model', 'review_model', 'finish_model'}
+         'render_model', 'review_model', 'inspect_render', 'finish_model'}
 ARTIFACTS = ('model.glb', 'model.blend', 'model.fbx', 'scene.json', 'model.froge-scene.json')
 
 
@@ -122,6 +122,73 @@ def artifact_info(path):
         return {'status': 'UNAVAILABLE'}
 
 
+# The worker emits started AND completed/failed rows for one tool invocation.
+# Count those events separately; never turn two rows into two API/tool calls.
+TOOL_STATES = {'started', 'completed', 'failed'}
+ERROR_PREFIXES = {
+    'ANATOMY_VALIDATION:': 'ANATOMY_VALIDATION',
+    'CONFLICT:': 'REVISION_CONFLICT',
+    'Nieprawidlowe argumenty MCP; wymagane pola:': 'MCP_ARGUMENT_SCHEMA_ERROR',
+    'Nieznane narzedzie MCP.': 'UNKNOWN_MCP_TOOL',
+    'ReferenceError:': 'REFERENCE_ERROR',
+    'TypeError:': 'TYPE_ERROR',
+    'SyntaxError:': 'SYNTAX_ERROR',
+    'KeyError:': 'KEY_ERROR',
+    'AttributeError:': 'ATTRIBUTE_ERROR',
+    'ValueError:': 'VALUE_ERROR',
+    'TimeoutError:': 'TIMEOUT_ERROR',
+}
+
+
+def error_category(value):
+    """Recognize fixed worker prefixes only. Never echo exception text or paths."""
+    if value is None:
+        return 'NOT_RECORDED'
+    if not isinstance(value, str):
+        return 'UNCLASSIFIED_RECORDED_ERROR'
+    prefix = value[:200].lstrip()
+    for pattern, category in ERROR_PREFIXES.items():
+        if prefix.startswith(pattern):
+            return category
+    return 'UNCLASSIFIED_RECORDED_ERROR'
+
+
+def tool_summary(value):
+    """Describe the retained event window, not completed models or paid calls.
+
+    totals are worker-recorded metadata; no value is inferred from absent rows.
+    A failed event without a start may be argument validation or a truncated log.
+    """
+    if not isinstance(value, dict) or not isinstance(value.get('calls'), list):
+        return {'status': 'UNAVAILABLE'}
+    source = value['calls']
+    counts, events, invalid = {}, [], 0
+    for item in source[-500:]:
+        if not isinstance(item, dict):
+            invalid += 1
+            continue
+        tool = item.get('tool')
+        tool = tool if isinstance(tool, str) and tool in TOOLS else 'OTHER'
+        state = item.get('status')
+        state = state if isinstance(state, str) and state in TOOL_STATES else 'unknown'
+        count = counts.setdefault(tool, {'started': 0, 'completed': 0, 'failed': 0, 'unknown': 0})
+        count[state] += 1
+        events.append({'tool': tool, 'state': state,
+                       'revision': number(item.get('revision'), 1_000_000),
+                       'buildAttempts': number(item.get('build_attempts'), 1_000_000),
+                       'attempt': number(item.get('attempt'), 1_000_000),
+                       'errorCategory': error_category(item.get('error'))})
+    return {'status': 'RECORDED_EVENT_WINDOW_NOT_INVOCATION_COUNT',
+            'eventsByTool': counts, 'retainedEventRows': len(source),
+            'inspectedEventRows': min(len(source), 500), 'invalidInspectedRows': invalid,
+            'workerRecordedTerminalCalls': number(value.get('total_calls'), 1_000_000),
+            'workerRecordedFailures': number(value.get('failures'), 1_000_000),
+            'workerRecordedBuildAttempts': number(value.get('build_attempts'), 1_000_000),
+            'workerRecordedRevision': number(value.get('revision'), 1_000_000),
+            'recentEvents': events[-12:],
+            'limitation': 'Events are not API calls. A start does not prove a successful build. Missing earlier events and absent metadata remain unknown.'}
+
+
 def inspect_job(root, folder):
     usage = optional(folder / 'agent-usage.json')
     usage = usage if isinstance(usage, dict) else {}
@@ -131,16 +198,7 @@ def inspect_job(root, folder):
     key = hashlib.sha256(str(safe(folder).resolve(strict=True)).encode()).hexdigest()
     ledger = optional(root / 'state/worldifact-astra-budgets' / key / '.worldifact-astra-spend.json', 16384)
     trace = optional(folder / 'agent-tools.json')
-    calls = trace.get('calls') if isinstance(trace, dict) else None
-    tool_counts = None
-    if isinstance(calls, list):
-        tool_counts = {}
-        for call in calls[:500]:
-            if not isinstance(call, dict):
-                continue
-            tool = call.get('tool')
-            tool = tool if isinstance(tool, str) and tool in TOOLS else 'OTHER'
-            tool_counts[tool] = tool_counts.get(tool, 0) + 1
+    tools = tool_summary(trace)
     photos = optional(folder / 'reference-photos.json', 160_000)
     return {'jobId': folder.name, 'errorCode': code,
             'guardSubreason': 'NOT_RECORDED_BY_INSTALLED_GENERIC_GUARD' if code == 'WORLDIFACT_ASTRA_COST_GUARD' else 'NOT_APPLICABLE',
@@ -150,7 +208,10 @@ def inspect_job(root, folder):
             'unknownUsage': usage.get('unknown_usage') if type(usage.get('unknown_usage')) is bool else None,
             'finished': usage.get('completed') if type(usage.get('completed')) is bool else None,
             'referenceCount': len(photos) if isinstance(photos, list) and len(photos) <= 6 else None,
-            'budget': budget_summary(ledger), 'toolCalls': tool_counts,
+            'budget': budget_summary(ledger),
+            'toolCalls': ({tool: sum(counts.values()) for tool, counts in tools['eventsByTool'].items()}
+                          if 'eventsByTool' in tools else None),
+            'toolCallsMeaning': 'LEGACY_EVENT_ROW_COUNTS_NOT_INVOCATIONS', 'toolTrace': tools,
             'artifacts': {name: artifact_info(folder / name) for name in ARTIFACTS}}
 
 
