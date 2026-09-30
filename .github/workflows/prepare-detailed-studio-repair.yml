@@ -37,6 +37,15 @@ jobs:
           echo "3e974a750bb269cbce7eb0ca73b8697780f5c7e75482da0855026e4717572207  $RUNNER_TEMP/detailed-followup.patch" | sha256sum --check
           git apply --check "$RUNNER_TEMP/detailed-followup.patch"
           git apply "$RUNNER_TEMP/detailed-followup.patch"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tests/shop-draft-lifecycle.test.mjs')
+          s=p.read_text()
+          old="('Recreate this adult silver-haired woman, no orb. ' + 'outfit '.repeat(550)).slice(0,3500)"
+          new="('Recreate this adult silver-haired woman, no orb. ' + 'outfit '.repeat(550)).slice(0,3499) + '.'"
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          PY
           git diff --check
       - run: npm ci
       - name: Verify complete application without paid generation
