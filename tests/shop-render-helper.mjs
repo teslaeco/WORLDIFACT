@@ -1,3 +1,4 @@
+import * as detailedStudio from '../src/lib/detailedStudio.ts'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
@@ -67,7 +68,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
   runInNewContext(code, {
     crypto: globalThis.crypto, ...globals, module, exports: module.exports,
     require(id) {
-      const modules = { '../config/portals': portals, '../config/references': references,
+      const modules = { '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
         '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }

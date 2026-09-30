@@ -1,3 +1,4 @@
+import { detailedHealthFixture, detailedGLBFixture } from './detailed-studio-fixture.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
@@ -25,6 +26,7 @@ function fixture() {
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const users = new Map<string, AccountEntitlements>()
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() })); return users.get(key)! } }
+  let runtimeOverrides: Record<string, unknown> = {}, invalidModel = false, failureDetail = '', lastPayload: Record<string, any> | null = null
   let posts = 0, artifacts = 0, loss = false, busy = false, state: StudioJob['state'] = 'succeeded', status404 = false
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname
@@ -34,21 +36,21 @@ function fixture() {
       if (token === 'Bearer bob-token') return Response.json({ id: bob, email: 'bob@example.test' })
       return Response.json({}, { status: 401 })
     }
-    if (path === '/v1/health') return Response.json({ ready: true, provider: 'openai', model: 'gpt-6-astra', connectorVersion: 33, promptMaxLength: 5000 })
+    if (path === '/v1/health') return Response.json({ ...detailedHealthFixture, ...runtimeOverrides })
     if (path === '/v1/jobs') {
       posts++
+      lastPayload = JSON.parse(String(init?.body))
       if (loss) throw new Error('Unconfirmed transport acceptance')
       if (busy) return Response.json({ error: 'Serwer wykonuje poprzedni model. Poczekaj na wynik.' }, { status: 409 })
       return Response.json({ id: JSON.parse(String(init?.body)).id, state: 'building' })
     }
     if (/\/model$|\/exports\//.test(path)) {
       artifacts++
-      const bytes = new Uint8Array(24), view = new DataView(bytes.buffer)
-      view.setUint32(0, 0x46546c67, true); view.setUint32(4, 2, true); view.setUint32(8, 24, true)
-      return new Response(bytes, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': '24' } })
+      const bytes = invalidModel ? new Uint8Array(24) : detailedGLBFixture()
+      return new Response(bytes, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(bytes.length) } })
     }
     if (status404) return Response.json({}, { status: 404 })
-    return Response.json({ id: path.split('/').pop(), state })
+    return Response.json({ id: path.split('/').pop(), state, detail: failureDetail })
   }) as typeof fetch
   const call = (path: string, method = 'GET', body?: unknown, ticket?: string, user: 'alice' | 'bob' | null = 'alice') => studioApi(new Request(origin + path, {
     method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(ticket ? { 'X-WORLDIFACT-Job': ticket } : {}), ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) },
@@ -59,7 +61,7 @@ function fixture() {
     await entitlementCall(env, alice, '/grant', { id: 'in_subscription', credits: 4500, subscriptionId: 'sub_test' })
     await entitlementCall(env, alice, '/subscription', { id: 'sub_test', until: Date.now() + 86400000, active: true, revision: 1, plan: 'pro', grantId: 'in_subscription' })
   }
-  return { env, call, prepare, subscribe, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
+  return { env, call, prepare, subscribe, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
     busy: () => { busy = true }, lose: () => { loss = true; status404 = true } }
 }
 
@@ -90,7 +92,7 @@ test('free accounts cannot start ASTRA SLOW jobs or transfer artifacts', async (
   assert.equal(status.credits, 0)
 })
 
-test('concurrent repeated SLOW submission debits 50 once; confirmed failure refunds once', async () => {
+test('concurrent repeated SLOW submission debits 250 once; confirmed failure refunds once', async () => {
   const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
   const replies = await Promise.all(Array.from({ length: 5 }, () => f.call('/api/studio/jobs', 'POST', input, receipt.ticket)))
   assert.ok(replies.every(response => response.status === 202)); assert.equal(f.posts(), 1)
@@ -138,3 +140,57 @@ test('Oracle busy 409 restores customer credits immediately instead of creating 
   assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
 })
 
+
+
+test('four references and a complete 4,000-character character brief reach Oracle, followed by one model-validated settlement', async () => {
+  const f=fixture();await f.subscribe()
+  const jpeg='data:image/jpeg;base64,'+Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64')
+  const prompt=('An adult woman with silver hair, preserve references, no orb. '+'outfit '.repeat(600)).slice(0,4000)
+  const request={...input,prompt,photos:['front','left','right','back'].map((view,i)=>({name:`view-${i}.jpg`,view,dataUrl:jpeg,textureMaxSize:4096}))}
+  const prep=await f.call('/api/studio/prepare','POST',request);assert.equal(prep.status,200)
+  const receipt=await prep.json() as {id:string;ticket:string}
+  const replies=await Promise.all(Array.from({length:4},()=>f.call('/api/studio/jobs','POST',request,receipt.ticket)))
+  assert.ok(replies.every(r=>r.status===202));assert.equal(f.posts(),1)
+  assert.ok(f.sent()!.prompt.startsWith(prompt));assert.ok(f.sent()!.prompt.length<=5000)
+  assert.deepEqual(f.sent()!.photos,request.photos.map(photo => photo.view === 'left' || photo.view === 'right' ? {...photo,view:'side'} : photo))
+  assert.deepEqual(request.photos.map(photo=>photo.view),['front','left','right','back'],'Original signed input and its view labels are unchanged')
+  assert.match(f.sent()!.agentInstructions,/Reference 1: front; Reference 2: left; Reference 3: right; Reference 4: back/)
+  assert.ok(f.sent()!.agentInstructions.length <= 12000,'Installed agent instruction limit')
+  assert.match(f.sent()!.agentInstructions,/authoritative visual input/)
+  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+  const result=await (await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)).json() as {job:StudioJob}
+  assert.equal(result.job.state,'succeeded');assert.equal(f.artifacts(),1)
+  await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)
+  assert.equal(f.artifacts(),1,'A verified terminal job does not redownload its model on every poll')
+  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+})
+
+test('missing, stale or changed monetary/output-policy evidence blocks before any point reservation', async () => {
+  for(const changed of [{astraBudgetRevision:undefined},{astraBudgetMaxUsd:4},{astraBudgetExpiry:1},{codexReady:false},
+    {astraOutputPolicy:undefined},{astraReasoningEffort:'high'},{astraUsageSettlement:'estimated'},{astraMaxOutputTokens:96000}]) {
+    const f=fixture();await f.subscribe();f.setHealth(changed)
+    const status=await (await f.call('/api/studio/status')).json() as {detailedReady:boolean;reason:string}
+    assert.equal(status.detailedReady,false);assert.match(status.reason,/ASTRA_/)
+    assert.equal((await f.call('/api/studio/prepare','POST',input)).status,503)
+    assert.equal(f.posts(),0);assert.equal((await entitlementStatus(f.env,alice)).credits,4500)
+  }
+})
+
+test('a succeeded status without a valid actual model refunds once and cannot later be charged again', async () => {
+  const f=fixture();await f.subscribe();const receipt=await f.prepare();f.invalid()
+  await f.call('/api/studio/jobs','POST',input,receipt.ticket)
+  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+  const result=await (await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)).json() as {job:StudioJob}
+  assert.equal(result.job.state,'failed');assert.equal(result.job.failureCode,'INVALID_MODEL_OUTPUT')
+  assert.equal(result.job.downloadAllowed,false);assert.equal((await entitlementStatus(f.env,alice)).credits,4500)
+  await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)
+  assert.equal((await entitlementStatus(f.env,alice)).credits,4500);assert.equal(f.posts(),1)
+})
+
+test('cost-limit failure returns points and a fixed customer message, never private upstream details', async () => {
+  const f=fixture();await f.subscribe();const receipt=await f.prepare()
+  await f.call('/api/studio/jobs','POST',input,receipt.ticket);f.costFailure()
+  const response=await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket), body=await response.text()
+  assert.match(body,/ASTRA_COST_LIMIT/);assert.doesNotMatch(body,/PRIVATE_KEY/)
+  assert.equal((await entitlementStatus(f.env,alice)).credits,4500);assert.equal(f.posts(),1)
+})

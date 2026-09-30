@@ -52,13 +52,13 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, characterPrompt = '' } = {}) {
+async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, characterPrompt = '', detailedReady = false } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
-  const status = { ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
-    reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000 }
+  const status = { detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
+    reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000, detailedReferenceLimit: 4 }
   const fetcher = async (url, init = {}) => {
     const path = String(url), method = init.method || 'GET'
     calls.push({ path, method, body: init.body })
@@ -240,7 +240,7 @@ test('private character brief fills an empty Shop draft without a generation, an
 })
 
 
-test('Shop keeps 3,500 characters and four views, and blocks detailed characters without a POST', async () => {
+test('Shop retains 3,500 characters and four views when the detailed worker is unavailable without a paid POST', async () => {
   const h = await harness({ ready: true, withExistingJob: false })
   try {
     const brief = ('Create a realistic adult heroine with silver hair. ' + 'outfit '.repeat(550)).slice(0,3500)
@@ -250,8 +250,8 @@ test('Shop keeps 3,500 characters and four views, and blocks detailed characters
     assert.equal(h.byId('studio-prompt').props.value, brief)
     assert.equal(h.byId('studio-prompt').props.maxLength, undefined, 'No silent text truncation')
     assert.equal(h.all().filter(n=>n.type==='img' && /Your reference/.test(n.props.alt||'')).length,4)
-    assert.equal(h.byId('studio-photos').props.disabled,false,'There is still room for two optional views')
-    assert.equal(h.button('Generate GPT-6 Astra blueprint').props.disabled,true)
+    assert.equal(h.byId('studio-photos').props.disabled,true,'Four detailed views are retained; extra images are not silently omitted')
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled,true)
     await h.form().props.onSubmit({preventDefault(){}});await h.settle()
     assert.equal(h.calls.filter(c=>c.method==='POST').length,0)
   } finally { h.close() }
@@ -270,5 +270,28 @@ test('Shop transmits all four explicitly accepted procedural reference views in 
     assert.equal(posts.length,1)
     assert.deepEqual(JSON.parse(posts[0].body).references.map(p=>p.view),['front','left','right','back'])
     assert.match(h.fastDescription(),/Compact procedural FAST draft/)
+  } finally {h.close()}
+})
+
+
+test('a real character request selects the signed Studio route, keeps all views and never calls blueprint', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, state: 'building' })
+  try {
+    const prompt = ('Recreate this adult silver-haired woman, no orb. ' + 'outfit '.repeat(550)).slice(0,3499) + '.'
+    h.byId('studio-prompt').props.onChange({ target: { value: prompt } })
+    h.byId('studio-photos').props.onChange({ target: { files: Array.from({length:4},(_,i)=>({name:`view-${i}.jpg`})), value:'views' } })
+    await h.settle()
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled,false)
+    const first=h.form().props.onSubmit({preventDefault(){}}), duplicate=h.form().props.onSubmit({preventDefault(){}})
+    await Promise.all([first,duplicate]);await h.settle()
+    const posts=h.calls.filter(c=>c.path==='/api/studio/jobs' && c.method==='POST')
+    assert.equal(posts.length,1)
+    const submitted=JSON.parse(posts[0].body)
+    assert.equal(submitted.prompt,prompt)
+    assert.deepEqual(submitted.photos.map(p=>p.view),['front','left','right','back'])
+    assert.equal(submitted.generationProfile,undefined)
+    assert.equal(h.calls.filter(c=>c.path==='/api/blueprint').length,0)
+    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id,newId)
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled,true)
   } finally {h.close()}
 })
