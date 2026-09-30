@@ -15,9 +15,10 @@ test('native Chromium reproduces the old invocation error and accepts the repair
   const compile = name => ts.transpileModule(readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText.replace(/^export /gm, '')
-  const protocol = compile('studioProtocol'), draft = compile('studioDraft')
-  const client = compile('studioClient').replace(/^import .+ from ['"]\.\/(?:studioProtocol|studioDraft)\.ts['"];?\s*$/gm, '')
-  assert.doesNotMatch(protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
+  const detailed = compile('detailedMesh')
+  const protocol = compile('studioProtocol').replace(/^import .+ from ['"]\.\/detailedMesh\.ts['"];?\s*$/gm, ''), draft = compile('studioDraft')
+  const client = compile('studioClient').replace(/^import .+ from ['"]\.\/(?:studioProtocol|studioDraft|detailedMesh)\.ts['"];?\s*$/gm, '')
+  assert.doesNotMatch(detailed + protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
   const exercise = `
 (async () => {
   const result = document.getElementById('result');
@@ -51,10 +52,11 @@ test('native Chromium reproduces the old invocation error and accepts the repair
     globalThis.fetch = fixtureFetch;
     try {
       const current = new StudioCoordinator(store);
-      const input = { worldId: 'enchanted-ai-shop', prompt: 'Create a princess figurine', purpose: 'figurine', textureMaxSize: 4096, photos: [] };
+      const input = { worldId: 'enchanted-ai-shop', prompt: 'Create a princess figurine', purpose: 'figurine', textureMaxSize: 4096, photos: [], deliveryProfile: DETAILED_MESH_PROFILE };
       check((await current.start(input, () => {})).state === 'building', 'Submission returned a false pending result');
       const restored = new StudioCoordinator(store);
       check(restored.restore().receipt.id === id, 'Reload changed the job');
+      check(restored.current.deliveryProfile === DETAILED_MESH_PROFILE, 'Reload lost the detailed model profile');
       check((await restored.poll()).state === 'succeeded', 'Native status fetch failed');
       for (const format of ['model', 'pbr', 'fbx', 'blend']) check((await restored.artifact(format)).size === 3, 'Native artifact fetch failed: ' + format);
       check(calls.length === 7, 'Unexpected initial request count');
@@ -68,7 +70,7 @@ test('native Chromium reproduces the old invocation error and accepts the repair
     } finally { globalThis.fetch = nativeFetch; }
   } catch (error) { result.textContent = 'FAIL: ' + error.message; }
 })();`
-  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + protocol + '\n' + draft + '\n' + client + '\n' + exercise + '</script>'
+  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + detailed + '\n' + protocol + '\n' + draft + '\n' + client + '\n' + exercise + '</script>'
   const profile = mkdtempSync(join(tmpdir(), 'worldifact-native-fetch-'))
   try {
     const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking', '--no-first-run', '--no-default-browser-check',

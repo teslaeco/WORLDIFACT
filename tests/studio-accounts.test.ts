@@ -1,3 +1,4 @@
+import { reviewedOracleHealth } from './fixtures/detailedOracle.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
@@ -34,7 +35,7 @@ function fixture() {
       if (token === 'Bearer bob-token') return Response.json({ id: bob, email: 'bob@example.test' })
       return Response.json({}, { status: 401 })
     }
-    if (path === '/v1/health') return Response.json({ ready: true, provider: 'openai', model: 'gpt-6-astra', connectorVersion: 33, promptMaxLength: 5000 })
+    if (path === '/v1/health') return Response.json(reviewedOracleHealth)
     if (path === '/v1/jobs') {
       posts++
       if (loss) throw new Error('Unconfirmed transport acceptance')
@@ -90,7 +91,7 @@ test('free accounts cannot start ASTRA SLOW jobs or transfer artifacts', async (
   assert.equal(status.credits, 0)
 })
 
-test('concurrent repeated SLOW submission debits 50 once; confirmed failure refunds once', async () => {
+test('concurrent repeated SLOW submission debits 250 once; confirmed failure refunds once', async () => {
   const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
   const replies = await Promise.all(Array.from({ length: 5 }, () => f.call('/api/studio/jobs', 'POST', input, receipt.ticket)))
   assert.ok(replies.every(response => response.status === 202)); assert.equal(f.posts(), 1)

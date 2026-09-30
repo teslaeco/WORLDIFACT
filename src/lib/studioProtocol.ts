@@ -1,4 +1,5 @@
 // WORLDIFACT adapter to the existing Froge /v1/jobs contract; no new AI provider.
+import { DETAILED_MESH_PROFILE, DETAILED_MESH_PHOTOS } from './detailedMesh.ts'
 // Reviewed reference: Froge-MPC-2-test @ d3f61b842dcfeda2ed794210caafc391919a75be.
 
 const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for every generated asset:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
@@ -22,10 +23,10 @@ export const PHOTO_VIEWS = ['front', 'three_quarter', 'side', 'left', 'right', '
 export type PhotoView = typeof PHOTO_VIEWS[number]
 export type TextureLimit = 2048 | 4096 | 8192
 export type StudioPhoto = { name: string; view: PhotoView; dataUrl: string; subject?: string; textureMaxSize: TextureLimit }
-export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE }
+export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE; deliveryProfile?: typeof DETAILED_MESH_PROFILE }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string }
 export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
-export type StudioStatus = { accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
+export type StudioStatus = { detailedMeshReady?: boolean; detailedMeshProfile?: typeof DETAILED_MESH_PROFILE; detailedMeshMaxPhotos?: number; detailedMeshPromptLimit?: number; detailedMeshReason?: string; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const keys = (value: Record<string, unknown>, names: string[]) => Object.keys(value).every(name => names.includes(name))
 
@@ -58,15 +59,17 @@ export function jpegSize(bytes: Uint8Array): [number, number] {
   throw new Error('Reference JPEG dimensions could not be read.')
 }
 export function validateStudioInput(value: unknown): StudioInput {
-  if (!record(value) || !keys(value, ['worldId', 'prompt', 'purpose', 'textureMaxSize', 'photos', 'generationProfile']) ||
+  if (!record(value) || !keys(value, ['worldId', 'prompt', 'purpose', 'textureMaxSize', 'photos', 'generationProfile', 'deliveryProfile']) ||
     typeof value.worldId !== 'string' || !['enchanted-ai-shop', 'ai-game-lab'].includes(value.worldId) ||
     typeof value.prompt !== 'string' || value.prompt.trim().length < 3 || value.prompt.length > 4000 ||
     typeof value.purpose !== 'string' || !['game', 'figurine', 'terrain', 'object'].includes(value.purpose) ||
     typeof value.textureMaxSize !== 'number' || ![2048, 4096, 8192].includes(value.textureMaxSize))
     throw new Error('Enter a 3–4000 character description, a supported purpose and a texture-size limit.')
   const profile = generationProfile(value.generationProfile)
+  if (value.deliveryProfile !== undefined && value.deliveryProfile !== DETAILED_MESH_PROFILE) throw new Error('Unknown detailed model delivery profile.')
+  if (value.deliveryProfile !== undefined && profile !== 'standard') throw new Error('Detailed reference models require Astra, not the FAST draft route.')
   const source = value.photos === undefined ? [] : value.photos
-  if (!Array.isArray(source) || source.length > 4) throw new Error('Use at most four reference photos.')
+  if (!Array.isArray(source) || source.length > DETAILED_MESH_PHOTOS) throw new Error('Use at most four reference photos.')
   if (profile === FAST_DRAFT_PROFILE && (source.length > 0 || value.textureMaxSize !== 2048 || value.purpose === 'terrain'))
     throw new Error('FAST v1 supports one text-only object and a 2K texture ceiling. Use STANDARD for photos, terrain or larger textures.')
   let totalBytes = 0, totalPixels = 0
@@ -87,7 +90,8 @@ export function validateStudioInput(value: unknown): StudioInput {
   })
   // Missing/explicit STANDARD must keep old canonical bytes and receipt hashes.
   return { worldId: value.worldId as StudioInput['worldId'], prompt: value.prompt.trim(), purpose: value.purpose as StudioInput['purpose'], textureMaxSize: value.textureMaxSize as TextureLimit, photos,
-    ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
+    ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}),
+    ...(value.deliveryProfile === DETAILED_MESH_PROFILE ? { deliveryProfile: DETAILED_MESH_PROFILE } : {}) }
 }
 export function oracleStudioPayload(id: string, input: StudioInput) {
   if (input.generationProfile === FAST_DRAFT_PROFILE) return {
@@ -95,6 +99,16 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
     prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + MANUFACTURING_HARD_RULES,
   }
   const instruction = `\n\nWORLDIFACT output: create an editable 3D ${input.purpose} asset with UVs and PBR materials, exported as a self-contained GLB. Reference images describe the same requested object; preserve their visible proportions and colors. Request an upper texture limit of ${input.textureMaxSize}px, never upscale and call that recovered detail. Keep originals; use a game preview below 3 million rendered triangles where practical. Record visual/geometry limitations; MAKE is unapproved. Do not return a brief instead of a model.\n\n${MANUFACTURING_HARD_RULES}`
+  if (input.deliveryProfile === DETAILED_MESH_PROFILE) {
+    // The installed worker limits prompt to 5,000 and agentInstructions to 12,000
+    // UTF-16 units. Keep the full user brief out of the boilerplate budget.
+    // v33 accepts 'side', not 'left'/'right'; retain the exact side in the agent
+    // instructions and in the signed input digest without dropping any image.
+    const viewPlan = input.photos.map((photo, i) => `Reference ${i + 1}: ${photo.view}.`).join('\n')
+    const photos = input.photos.map(photo => ({ ...photo, view: photo.view === 'left' || photo.view === 'right' ? 'side' as const : photo.view }))
+    return { id, prompt: input.prompt, ...(photos.length ? { photos } : {}),
+      agentInstructions: `${instruction}\n\n${REFERENCE_FIDELITY_INSTRUCTIONS}\n\nOriginal ordered views (same subject, not extra people):\n${viewPlan}` }
+  }
   return { id, prompt: input.prompt + instruction, ...(input.photos.length ? { photos: input.photos, agentInstructions: REFERENCE_FIDELITY_INSTRUCTIONS } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {

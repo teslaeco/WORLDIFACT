@@ -1,3 +1,4 @@
+import { detailedRuntimeSafe, DETAILED_MESH_PROFILE, DETAILED_MESH_PHOTOS, DETAILED_MESH_PROMPT_LIMIT } from '../src/lib/detailedMesh.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
@@ -115,7 +116,7 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
   const state = await limitedJson(response, 16_384)
   const compatible = state.ready === true && state.provider === 'openai' && state.model === 'gpt-6-astra' && Number.isSafeInteger(state.connectorVersion) && Number(state.connectorVersion) >= 33
   const fastReady = compatible && supportsFastDraft(state)
-  return { ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
+  return { ready: compatible, detailedGuard: detailedRuntimeSafe(state), photoReady: compatible && state.photoInput === true, fastReady,
     fastBudgetReady: fastReady && state.fastBudgetRevision === 'fast-usd4-v1' && state.fastBudgetMaxUsd === 4,
     promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
 }
@@ -131,6 +132,7 @@ async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch
   } else if (env.PUBLIC_PILOT !== 'true' && !await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) throw new StudioError('This generation window requires owner access.', 401)
   const current = await health(env, fetcher)
   if (!current.ready) throw new StudioError('The existing Astra/Blender worker is not ready.', 503)
+  if ((accountPolicy(env) || input.deliveryProfile === DETAILED_MESH_PROFILE) && !current.detailedGuard) throw new StudioError('The detailed model worker has not confirmed its current Astra cost and output policy. No points were reserved and no model was submitted.', 503)
   if (trial && !current.fastBudgetReady) throw new StudioError('The approved cost guard is not confirmed. No paid request was sent.', 503)
   if (input.generationProfile === FAST_DRAFT_PROFILE && (!current.fastReady || !current.fastBudgetReady)) throw new StudioError('FAST DRAFT is not fully verified on the worker. No paid job was submitted; STANDARD remains available.', 409)
   if (input.photos.length && !current.photoReady) throw new StudioError('This worker has not confirmed photo input. Nothing was submitted.', 409)
@@ -198,7 +200,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const enabled = trial || (env.ENABLE_STUDIO_JOBS === 'true' && !!budgetSettings(env))
       const authorized = trial || env.PUBLIC_PILOT === 'true' || (secretReady(env) && await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
       const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : (!pool.unlimited && pool.remaining === 0) ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
-      return json({ accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
+      return json({ detailedMeshReady: reason === 'READY' && state?.detailedGuard === true, detailedMeshProfile: DETAILED_MESH_PROFILE, detailedMeshMaxPhotos: DETAILED_MESH_PHOTOS, detailedMeshPromptLimit: DETAILED_MESH_PROMPT_LIMIT, detailedMeshReason: reason !== 'READY' ? reason : state?.detailedGuard ? 'READY' : 'COST_OR_OUTPUT_POLICY_UNVERIFIED', accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
         photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, fastBudgetReady: state?.fastBudgetReady === true,
         fastOnly: trial, promptMaxLength: Math.max(3, (state?.promptMaxLength ?? 2000) - 600), allowance: pool })
     }
@@ -219,7 +221,13 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (Date.now() - auth.issued > 30 * 60_000) throw new StudioError('This unsubmitted receipt expired. Review your inputs before preparing another.', 409)
       const input = await inputFrom(request)
       if (await boundInputDigest(input, user?.id) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
-      const checked = await preflight(request, env, fetcher, input, user?.id)
+      let checked: Awaited<ReturnType<typeof preflight>>
+      try { checked = await preflight(request, env, fetcher, input, user?.id) }
+      catch (error) {
+        // This branch is strictly before customer/global reservations and Oracle
+        // submission. A changed runtime guard is definitive, not lost acceptance.
+        return json({ error: error instanceof StudioError ? error.message : 'Detailed model preflight is unavailable. No points were reserved and no model was submitted.', noCharge: true }, error instanceof StudioError ? error.status : 503)
+      }
       if (user) {
         const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow')
         if (!userReservation.allowed) throw new StudioError('Your free allowance is used and you do not have enough credits. View your account for limits and top-ups.', 429)

@@ -1,3 +1,5 @@
+import { DETAILED_MESH_PROFILE } from '../src/lib/detailedMesh.ts'
+import { referenceJpeg } from './fixtures/detailedOracle.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { setImmediate as nextTick } from 'node:timers/promises'
@@ -52,12 +54,12 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, characterPrompt = '' } = {}) {
+async function harness({ detailedReady = false, photoReady = true, ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, characterPrompt = '' } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
-  const status = { ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
+  const status = { ready, detailedMeshReady: detailedReady, detailedMeshProfile: DETAILED_MESH_PROFILE, detailedMeshMaxPhotos: 4, detailedMeshPromptLimit: 4000, fastReady: true, fastBudgetReady: false, photoReady, oracle: 'CONNECTOR_READY', publicPilot: true,
     reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000 }
   const fetcher = async (url, init = {}) => {
     const path = String(url), method = init.method || 'GET'
@@ -103,7 +105,7 @@ async function harness({ ready = false, state = 'succeeded', solReady = ready, d
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
       saveStudioModel: async saved => { if (!archive.has(saved.receipt.id)) archive.set(saved.receipt.id, { id: saved.receipt.id, prompt: saved.prompt, savedAt: saved.startedAt, byteLength: blob.size, sha256: 'new-fixture', review: 'UNREVIEWED' }); return archive.get(saved.receipt.id) },
     },
-    '../lib/studioPhotos': { prepareStudioPhoto: async (file, size, view) => ({ name: file.name, view, dataUrl: 'data:image/jpeg;base64,/9j/2Q==', textureMaxSize: size }) },
+    '../lib/studioPhotos': { prepareStudioPhoto: async (file, size, view) => ({ name: file.name, view, dataUrl: referenceJpeg, textureMaxSize: size }) },
   } })
   const settle = async () => {
     for (let i = 0; i < 24; i++) {
@@ -251,7 +253,7 @@ test('Shop keeps 3,500 characters and four views, and blocks detailed characters
     assert.equal(h.byId('studio-prompt').props.maxLength, undefined, 'No silent text truncation')
     assert.equal(h.all().filter(n=>n.type==='img' && /Your reference/.test(n.props.alt||'')).length,4)
     assert.equal(h.byId('studio-photos').props.disabled,false,'There is still room for two optional views')
-    assert.equal(h.button('Generate GPT-6 Astra blueprint').props.disabled,true)
+    assert.equal(h.button('Generate GPT-6 Astra 3D model').props.disabled,true)
     await h.form().props.onSubmit({preventDefault(){}});await h.settle()
     assert.equal(h.calls.filter(c=>c.method==='POST').length,0)
   } finally { h.close() }
@@ -271,4 +273,43 @@ test('Shop transmits all four explicitly accepted procedural reference views in 
     assert.deepEqual(JSON.parse(posts[0].body).references.map(p=>p.view),['front','left','right','back'])
     assert.match(h.fastDescription(),/Compact procedural FAST draft/)
   } finally {h.close()}
+})
+
+for (const count of [3, 4]) test(`Shop routes ${count} character references to one actual Studio job, never Blueprint`, async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
+  try {
+    const prompt = ('Create an adult heroine from all attached views. ' + 'outfit '.repeat(600)).slice(0, 3005)
+    h.byId('studio-prompt').props.onChange({ target: { value: prompt } })
+    h.byId('studio-photos').props.onChange({ target: { files: Array.from({ length: count }, (_, i) => ({ name: `view-${i}.jpg` })), value: 'views' } })
+    await h.settle()
+    assert.equal(h.button('Generate GPT-6 Astra 3D model').props.disabled, false)
+    const first = h.form().props.onSubmit({ preventDefault() {} })
+    const repeated = h.form().props.onSubmit({ preventDefault() {} })
+    await Promise.all([first, repeated]); await h.settle()
+    assert.equal(h.calls.filter(c => c.path === '/api/blueprint').length, 0)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/prepare').length, 1)
+    const submissions = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
+    assert.equal(submissions.length, 1)
+    const submitted = JSON.parse(submissions[0].body)
+    assert.equal(submitted.prompt, prompt); assert.equal(submitted.photos.length, count)
+    assert.equal(submitted.deliveryProfile, DETAILED_MESH_PROFILE)
+    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).deliveryProfile, DETAILED_MESH_PROFILE)
+    assert.equal(h.button('Generate GPT-6 Astra 3D model').props.disabled, true, 'Never replace an in-flight job')
+    await h.poll()
+    assert.equal(h.calls.filter(c => c.path.endsWith('/model')).length, 1)
+    assert.match(h.description(), /adult heroine/)
+    assert.equal(h.archive.size, 2, 'Existing archived original is retained')
+  } finally { h.close() }
+})
+for (const change of ['legacy-ready-only', 'photo-disabled', 'five-photos']) test(`Shop cannot bypass ${change} by a direct form submission`, async () => {
+  const h = await harness({ ready: true, detailedReady: change !== 'legacy-ready-only', photoReady: change !== 'photo-disabled', withExistingJob: false })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A detailed adult heroine' } })
+    h.byId('studio-photos').props.onChange({ target: { files: Array.from({ length: change === 'five-photos' ? 5 : 3 }, (_, i) => ({ name: `view-${i}.jpg` })), value: 'views' } })
+    await h.settle()
+    assert.equal(h.button('Generate GPT-6 Astra 3D model').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    assert.equal(h.all().filter(n => n.type === 'img' && /Your reference/.test(n.props.alt || '')).length, change === 'five-photos' ? 5 : 3)
+  } finally { h.close() }
 })

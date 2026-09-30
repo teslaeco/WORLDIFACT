@@ -2,6 +2,20 @@
 
 Updated 30 September 2026. Deployment timestamps below are UTC.
 
+## IN REVIEW — detailed Shop routing repair, not activated
+
+The owner reported that PR #150 still blocks their character request. That release prevented an unsupported paid substitute; it did not restore detailed model generation. Work on `fix/restore-detailed-shop-20260930` now reconnects the customer form to the existing signed Oracle/Blender job lifecycle instead of passing character requests to `/api/blueprint`.
+
+Read-only [diagnostic run 36710424306](https://github.com/teslaeco/WORLDIFACT/actions/runs/36710424306), runtime job `109870626250`, at 2026-09-30T11:44:59Z verified the existing Oracle worker is ready, uses `gpt-6-astra`, accepts photos, and confirms both `astra-usd175-v1` (USD 1.75 per job) and `astra-low-reconciled-v2` (low reasoning, 16,000 output-token ceiling, authenticated completed-usage settlement). The public Studio gate is still disabled. This health read made zero generation calls and does not prove a successful new model or visual fidelity.
+
+The repaired code uses the versioned `reference-mesh-v1` contract: retain the complete 4,000-character user prompt; move export/fidelity/manufacturing instructions into the existing `agentInstructions` field; pass all accepted reference images. The installed Oracle protocol supports at most four JPEG references and calls either side `side`, not `left`/`right`. The adapter preserves the original side labels in ordered instructions and the signed input hash. Six references remain supported only by the separate procedural concept path; extra detailed references are retained and rejected explicitly, never dropped.
+
+New detailed submissions require exact monetary and output-policy health evidence, checked both before receipt preparation and before reservation. A guard change after preparation returns a definitive no-charge failure, not an endless pending attempt. The actual Studio coordinator preserves the receipt before the sole job POST, recovers by GET, and loads the returned original GLB. No new endpoint pretends a specification is a character mesh. Payment configuration, old receipts, original assets, credit prices and provider-spend safeguards remain unchanged.
+
+Local targeted protocol/Worker/account/UI regressions passed 44/44 with no skipped tests; TypeScript passed. Full local verification was blocked by DNS while obtaining the pinned ISS dependency, and the separate native Chromium regression timed out locally. Existing full CI must pass on the exact review head; these local limits are not a reason to skip CI tests.
+
+**NO-GO for live activation:** this change does not enable `ENABLE_STUDIO_JOBS`, change production, launch a paid model test or refund historical deductions. The previous one-off paid tests are not reusable authorizations. A new bounded real-model trial requires explicit approval and successful artifact review before claiming the detailed generation incident resolved. Repository and mocked integration work are not that evidence.
+
 ## VERIFIED — PR #150 safety repair merged and deployed
 
 The owner authorized repair, merge and deployment only after green exact-head checks. [PR #150](https://github.com/teslaeco/WORLDIFACT/pull/150) was reviewed at `829a295fdec6b3bb1834e1c7ab66d6b25ddae914` and merged as `d3a7dd53783035eb1d8ea839a9460987b0202d4e`. All five standard PR workflows passed. The executable acceptance task is recorded in [CODEX_P0_GENERATION_REPAIR_20260930.md](CODEX_P0_GENERATION_REPAIR_20260930.md); implementation was performed directly through the repository tools, not an unverified Codex execution integration.
