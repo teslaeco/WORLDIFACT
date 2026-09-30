@@ -1,0 +1,44 @@
+name: Detailed Studio read-only incident audit
+on:
+  push:
+    branches: ['fix/restore-detailed-studio-20260930']
+    paths: ['.github/workflows/detailed-studio-audit-once.yml']
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: git archive --format=tar.gz --output=worldifact-current-source.tar.gz HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: detailed-studio-source
+          path: worldifact-current-source.tar.gz
+          retention-days: 1
+  runtime:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Read installed monetary guard only
+        run: node scripts/check-astra-runtime.mjs
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - name: Read previously approved existing failed activation job only
+        run: node scripts/inspect-astra-activation-job.mjs
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - name: Read public service status without submission
+        run: |
+          node --input-type=module <<'JS'
+          import { inspectWorldifactServices } from './scripts/check-froge-external.mjs';
+          console.log(JSON.stringify({checkedAt:new Date().toISOString(),services:await inspectWorldifactServices(),paidGenerationRequested:false},null,2));
+          JS
