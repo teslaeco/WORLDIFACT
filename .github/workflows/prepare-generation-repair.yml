@@ -1,0 +1,53 @@
+name: Prepare generation safety repair
+on:
+  push:
+    branches: ['fix/astra-reference-billing-20260930']
+    paths: ['.github/workflows/prepare-generation-repair.yml']
+permissions:
+  contents: write
+concurrency:
+  group: generation-incident-repair
+  cancel-in-progress: false
+jobs:
+  repair:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/fix/astra-reference-billing-20260930'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Reconstruct integrity-checked source patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > "$RUNNER_TEMP/generation-repair.gz"
+          for blob in 9c17b0c0e5cfaff49c1d6645c691f39c2b60eea8 8cfb563f992859688f49aa44caa5a2ae4c34e3cd f45be691db558b5f946e892147292893e22e79bb; do
+            gh api "repos/teslaeco/WORLDIFACT/git/blobs/$blob" --jq .content | base64 --decode >> "$RUNNER_TEMP/generation-repair.gz"
+          done
+          gzip -dc "$RUNNER_TEMP/generation-repair.gz" > "$RUNNER_TEMP/generation-repair.patch"
+          echo "0e658238714d8ca943af834cc83ad098f2be46b93b92cc2b0d141eeacadf7af2  $RUNNER_TEMP/generation-repair.patch" | sha256sum --check
+          git apply --check "$RUNNER_TEMP/generation-repair.patch"
+          git apply "$RUNNER_TEMP/generation-repair.patch"
+          git diff --check
+      - run: npm ci
+      - name: Full no-spend verification
+        run: npm run verify
+      - uses: ./.github/actions/foundations
+      - run: npm run deploy:check
+      - name: Commit tested implementation on isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'WORLDIFACT repair automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add server/entitlements.ts server/worker.ts src/components/LiveSolPreview.tsx src/lib/blueprint.ts src/lib/blueprintClient.ts src/lib/blueprintRequest.ts src/lib/studioProtocol.ts src/pages/ShopPage.tsx tests/blueprint-accounts.test.ts tests/blueprint-repair.test.ts tests/shop-draft-lifecycle.test.mjs tests/shop-render-helper.mjs docs/CONTEST_STATUS.md
+          git rm .github/workflows/generation-repair-snapshot.yml .github/workflows/prepare-generation-repair.yml
+          git diff --cached --check
+          git commit -m 'fix: prevent paid character substitutes and recover generation safely'
+          git push origin HEAD:fix/astra-reference-billing-20260930
+          echo "Verified implementation commit: $(git rev-parse HEAD)"
