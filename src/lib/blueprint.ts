@@ -51,6 +51,7 @@ export interface GenerationResult {
   model: string | null;
   limitation: string;
   evidence?: GenerationEvidence;
+  delivery?: { kind: "procedural-blueprint"; referenceCount: number; fallbackUsed: false };
 }
 export interface GenerationEvidence {
   providerResponseId: string;
@@ -168,7 +169,7 @@ export function validateAssetSpec(value: unknown): AssetSpec {
   return value as unknown as AssetSpec;
 }
 export function validateGenerationResult(value: unknown): GenerationResult {
-  if (!record(value) || !exact(value, ["mode", "provenance", "blueprint", ...(Object.hasOwn(value, "assetSpec") ? ["assetSpec"] : []), "requestId", "model", "limitation", ...(Object.hasOwn(value, "evidence") ? ["evidence"] : [])]) ||
+  if (!record(value) || !exact(value, ["mode", "provenance", "blueprint", ...(Object.hasOwn(value, "assetSpec") ? ["assetSpec"] : []), "requestId", "model", "limitation", ...(Object.hasOwn(value, "evidence") ? ["evidence"] : []), ...(Object.hasOwn(value, "delivery") ? ["delivery"] : [])]) ||
       !text(value.requestId, 200) || !text(value.limitation, 500)) throw new Error("Invalid generation result");
   validateBlueprint(value.blueprint);
   const demo = value.mode === "DEMO" && value.provenance === "MOCK" && value.model === null;
@@ -176,6 +177,10 @@ export function validateGenerationResult(value: unknown): GenerationResult {
   if (!demo && !live) throw new Error("Invalid generation provenance");
   if (live && !Object.hasOwn(value, "assetSpec")) throw new Error("LIVE generation requires AssetSpec");
   if (Object.hasOwn(value, "assetSpec")) validateAssetSpec(value.assetSpec);
+  if (Object.hasOwn(value, "delivery")) {
+    const d = value.delivery;
+    if (!live || !record(d) || !exact(d, ["kind", "referenceCount", "fallbackUsed"]) || d.kind !== "procedural-blueprint" || !bounded(d.referenceCount, 0, 6) || !Number.isInteger(d.referenceCount) || d.fallbackUsed !== false || !Object.hasOwn(value, "evidence")) throw new Error("Invalid delivery evidence");
+  }
   if (Object.hasOwn(value, "evidence")) {
     const evidence = value.evidence;
     if (!live || !record(evidence) || !exact(evidence, ["providerResponseId", "receivedAt", "blueprintSha256", "inputTokens", "outputTokens", "totalTokens"]) ||

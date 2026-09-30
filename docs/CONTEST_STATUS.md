@@ -1,5 +1,20 @@
 # WORLDIFACT — current release evidence
 
+## 30 September — generation incident safety repair (not deployed yet)
+
+Owner authorized implementation and deployment only after green exact-head checks. Work is isolated on `fix/astra-reference-billing-20260930`. The complete executable acceptance task is in `CODEX_P0_GENERATION_REPAIR_20260930.md`.
+
+VERIFIED in code: the customer Shop used the bounded specification endpoint, a 2,000-character field and only the first image; the actual detailed Oracle/Blender service remains disabled. The primitive WorldBlueprint schema cannot produce a faithful realistic character. Screenshots alone do not prove duplicate processing of one request or a bank-card debit.
+
+Implemented safety scope: up to six ordered reference images (four supported, not compulsory), 4,000-character input without silent truncation, explicit procedural-versus-detailed deliverables, unsupported character/detailed requests rejected before reservation/provider calls, payload-bound account idempotency, atomically saved results and read-only recovery, one-time failure settlement and overdue synchronous-reservation reconciliation. New LIVE deliveries require exact model and provider evidence. Historical Studio receipts, payment plans and provider-spend safeguards are preserved. No runtime generation gate is enabled by this repair.
+
+Local evidence: `node --experimental-strip-types --test tests/blueprint-repair.test.ts tests/blueprint-accounts.test.ts` passed 36/36 tests on Node 22. Adding the unchanged budget regression suite passes 45/45. These are deterministic fixtures, not paid/live quality evidence. The first full Node 24 run exposed strict JSON typing and old fixture/copy expectations; these are corrected without skipping tests. Complete green CI, packaging and production smoke are still required. Native-fetch receiver handling and definitive pre-reservation rejections have additional regression coverage.
+
+BLOCKED / unresolved: photorealistic character generation is not restored by this safety repair. Image support must not be advertised as faithful reconstruction. Historical customer credit reimbursement requires identified account/job ledger evidence and has not been performed. Physical Android/WebGL tests and paid AI calls were not executed.
+
+The previously deployed payment-release evidence below remains historical baseline evidence, not evidence that the current generation repair is deployed.
+
+
 Updated 30 September 2026 (Europe/Warsaw). Deployment timestamps below are UTC.
 
 ## VERIFIED — PR #148 is merged and deployed
@@ -20,7 +35,7 @@ This documentation-only update does not publish a second runtime version. The de
 - A different fully unpaid pending upgrade can open explicit Stripe confirmation for the selected target on the same subscription only after server checks of ownership, item, amount and the already-paid base period. The application does not itself pay, void or cancel an invoice or subscription. Partial, ambiguous or different first-purchase/renewal invoices are not silently replaced or sent to the wrong plan.
 - New Checkout is opened only when no outstanding subscription was found, using the existing reservation and idempotency rules. The currently paid plan opens billing management, not another subscription.
 - The pricing grid, prices and credit rates are preserved. Payment methods and billing, including Change card and Retry payment, are below the offers. A cached browser Back return releases the stale UI opening lock and refreshes state without replaying payment.
-- Confirmed invoice grants are additive and idempotent. Synthetic regressions explicitly passed for an existing balance of 605: Pro adds 4,500 for 5,105; Studio adds 7,500 for 8,105. Repeated refreshes do not repeat the grant. These are test balances, not a statement of a customer's current balance or successful purchase.
+- Confirmed invoice grants are additive and idempotentent. Synthetic regressions explicitly passed for an existing balance of 605: Pro adds 4,500 for 5,105; Studio adds 7,500 for 8,105. Repeated refreshes do not repeat the grant. These are test balances, not a statement of a customer's current balance or successful purchase.
 
 ## VERIFIED — release checks, not a paid customer checkout
 

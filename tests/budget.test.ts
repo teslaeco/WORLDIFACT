@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { GenerationBudget } from "../server/budget.ts";
 import type { BudgetStorage } from "../server/budget.ts";
 import { handle } from "../server/worker.ts";
-import { demoBlueprint, localSceneResult, validateGenerationResult } from "../src/lib/blueprint.ts";
+import { assetSpecForBlueprint, demoBlueprint, localSceneResult, validateGenerationResult } from "../src/lib/blueprint.ts";
 
 function state() {
   const data = new Map<string, number>();
@@ -157,7 +157,7 @@ test("generation details identify exact content and usage without persisting acc
     : Response.json({
       status: "completed", model: "gpt-6-sol", id: "resp_fixture_123",
       usage: { input_tokens: 25, output_tokens: 50, total_tokens: 75 },
-      output: [{ content: [{ type: "output_text", text: JSON.stringify(blueprint) }] }],
+      output: [{ content: [{ type: "output_text", text: JSON.stringify({ blueprint, assetSpec: assetSpecForBlueprint(blueprint) }) }] }],
     })) as typeof fetch;
   const response = await handle(blueprintRequest(), configured(), provider);
   assert.equal(response.status, 200);

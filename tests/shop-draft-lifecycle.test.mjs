@@ -4,6 +4,7 @@ import { setImmediate as nextTick } from 'node:timers/promises'
 import React from 'react'
 import { loadShopComponent } from './shop-render-helper.mjs'
 import * as clientModule from '../src/lib/studioClient.ts'
+import { blueprintRequestId } from '../src/lib/blueprintRequest.ts'
 import { FAST_DRAFT_PROFILE } from '../src/lib/studioProtocol.ts'
 
 const oldId = '12345678-1234-4234-8234-123456789abc'
@@ -63,7 +64,12 @@ async function harness({ ready = false, state = 'succeeded', solReady = ready, d
     calls.push({ path, method, body: init.body })
     if (path === '/api/studio/status') return Response.json(status)
     if (path === '/api/health') return Response.json({ generationReady: solReady || ready, model: solReady ? 'gpt-6-sol' : null, qualityModel: ready ? 'gpt-6-astra' : null, astraBlueprintReady: ready })
-    if (path === '/api/blueprint' && method === 'POST') return Response.json(fastGeneration)
+    if (path === '/api/blueprint' && method === 'POST') return Response.json({ ...fastGeneration,
+      model: 'gpt-6-' + JSON.parse(init.body).model,
+      requestId: await blueprintRequestId(new Headers(init.headers).get('X-WORLDIFACT-Request')),
+      evidence: { providerResponseId: 'resp_ui_fixture', receivedAt: new Date().toISOString(), blueprintSha256: 'f'.repeat(64), inputTokens: null, outputTokens: null, totalTokens: null },
+      delivery: { kind: 'procedural-blueprint', referenceCount: JSON.parse(init.body).references.length, fallbackUsed: false },
+    })
     if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
@@ -97,7 +103,7 @@ async function harness({ ready = false, state = 'succeeded', solReady = ready, d
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
       saveStudioModel: async saved => { if (!archive.has(saved.receipt.id)) archive.set(saved.receipt.id, { id: saved.receipt.id, prompt: saved.prompt, savedAt: saved.startedAt, byteLength: blob.size, sha256: 'new-fixture', review: 'UNREVIEWED' }); return archive.get(saved.receipt.id) },
     },
-    '../lib/studioPhotos': { prepareStudioPhoto: async (file, size, view) => ({ name: file.name, view, dataUrl: 'data:image/jpeg;base64,ZmFrZQ==', textureMaxSize: size }) },
+    '../lib/studioPhotos': { prepareStudioPhoto: async (file, size, view) => ({ name: file.name, view, dataUrl: 'data:image/jpeg;base64,/9j/2Q==', textureMaxSize: size }) },
   } })
   const settle = async () => {
     for (let i = 0; i < 24; i++) {
@@ -169,7 +175,7 @@ test('explicit FAST after completion sends one Sol blueprint POST and never subm
     const studioPosts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
     assert.equal(solPosts.length, 1)
     assert.equal(studioPosts.length, 0)
-    assert.deepEqual(JSON.parse(solPosts[0].body), { worldId: 'enchanted-ai-shop', prompt: 'A blue rook in FAST', mode: 'live', model: 'sol' })
+    assert.deepEqual(JSON.parse(solPosts[0].body), { worldId: 'enchanted-ai-shop', prompt: 'A blue rook in FAST', mode: 'live', model: 'sol', deliverable: 'procedural-blueprint', references: [] })
     assert.match(h.fastDescription(), /Compact procedural FAST draft/)
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), storedBefore)
     assert.equal(h.archive.get(oldId).sha256, 'original')
@@ -231,4 +237,38 @@ test('private character brief fills an empty Shop draft without a generation, an
     assert.equal(recovered.byId('studio-prompt').props.value, 'Original brown chess knight')
     assert.equal(recovered.calls.filter(call => call.method === 'POST').length, 0)
   } finally { recovered.close() }
+})
+
+
+test('Shop keeps 3,500 characters and four views, and blocks detailed characters without a POST', async () => {
+  const h = await harness({ ready: true, withExistingJob: false })
+  try {
+    const brief = ('Create a realistic adult heroine with silver hair. ' + 'outfit '.repeat(550)).slice(0,3500)
+    h.byId('studio-prompt').props.onChange({ target: { value: brief } })
+    h.byId('studio-photos').props.onChange({ target: { files: Array.from({length:4},(_,i)=>({name:`view-${i}.jpg`})), value:'views' } })
+    await h.settle()
+    assert.equal(h.byId('studio-prompt').props.value, brief)
+    assert.equal(h.byId('studio-prompt').props.maxLength, undefined, 'No silent text truncation')
+    assert.equal(h.all().filter(n=>n.type==='img' && /Your reference/.test(n.props.alt||'')).length,4)
+    assert.equal(h.byId('studio-photos').props.disabled,false,'There is still room for two optional views')
+    assert.equal(h.button('Generate GPT-6 Astra blueprint').props.disabled,true)
+    await h.form().props.onSubmit({preventDefault(){}});await h.settle()
+    assert.equal(h.calls.filter(c=>c.method==='POST').length,0)
+  } finally { h.close() }
+})
+
+test('Shop transmits all four explicitly accepted procedural reference views in order', async () => {
+  const h=await harness({ready:true,withExistingJob:false})
+  try {
+    h.byId('studio-prompt').props.onChange({target:{value:'MCC cabinet procedural study'}})
+    h.byId('studio-photos').props.onChange({target:{files:Array.from({length:4},(_,i)=>({name:`cabinet-${i}.jpg`})),value:'views'}})
+    await h.settle()
+    h.byId('studio-deliverable').props.onChange({target:{value:'procedural-blueprint'}});await h.settle()
+    assert.equal(h.button('Generate GPT-6 Astra blueprint').props.disabled,false)
+    await h.form().props.onSubmit({preventDefault(){}});await h.settle()
+    const posts=h.calls.filter(c=>c.path==='/api/blueprint' && c.method==='POST')
+    assert.equal(posts.length,1)
+    assert.deepEqual(JSON.parse(posts[0].body).references.map(p=>p.view),['front','left','right','back'])
+    assert.match(h.fastDescription(),/Compact procedural FAST draft/)
+  } finally {h.close()}
 })

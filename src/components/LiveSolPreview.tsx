@@ -24,8 +24,9 @@ export default function LiveSolPreview({ result, prompt }: { result: GenerationR
       : <p role="status">{current?.error || `Building the 3D preview from the returned ${name} specification…`}</p>}
     <p><strong>LIVE {name} specification · procedural GAME geometry</strong></p>
     <p>{result.assetSpec?.summary || result.blueprint.title}</p>
+    <dl><dt>Provider / model</dt><dd>OpenAI / {result.model}</dd><dt>Request</dt><dd>{result.requestId}</dd><dt>References sent</dt><dd>{result.delivery?.referenceCount ?? 'Not recorded for this historical result'}</dd><dt>Deliverable</dt><dd>Procedural specification; local GAME geometry. Not a detailed mesh.</dd><dt>Provider evidence</dt><dd>{result.evidence?.providerResponseId ?? 'Not recorded'}</dd></dl>
     <small>The preview and downloaded GLB use the same AI-returned objects, colors and placements. ASTRA here is a bounded single-call blueprint/spec path; this is not the separate detailed Oracle mesh workflow or a manufacturing-approved file.</small>
-    {current?.url && <a className="native-shop-back" href={current.url} download={`WORLDIFACT-${name}-generated-blueprint.glb`}>Download this {name} model · GLB</a>}
+    {current?.url && <a className="native-shop-back" href={current.url} download={`WORLDIFACT-${name}-generated-blueprint.glb`}>Download procedural blueprint · GLB</a>}
     <details><summary>Submitted description</summary><p>{prompt}</p></details>
   </div>
 }

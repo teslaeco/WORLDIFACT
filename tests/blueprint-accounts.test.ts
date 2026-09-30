@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { handle, type Env } from '../server/worker.ts'
 import { GenerationBudget, type BudgetStorage } from '../server/budget.ts'
 import { AccountEntitlements, entitlementCall, entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, type EntitlementStorage } from '../server/entitlements.ts'
-import { demoBlueprint } from '../src/lib/blueprint.ts'
+import { demoBlueprint, assetSpecForBlueprint } from '../src/lib/blueprint.ts'
 
 const origin = 'https://worldifact.test'
 const alice = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', bob = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -45,7 +45,7 @@ function fixture() {
     assert.equal(init?.method, 'POST'); providerCalls++
     if (fail) return Response.json({ error: 'Fixture failure only' }, { status: 500 })
     const requestBody = JSON.parse(String(init?.body)) as { model?: string }
-    return Response.json({ id: 'resp_test_fixture', status: 'completed', model: requestBody.model, output: [{ content: [{ type: 'output_text', text: JSON.stringify(demoBlueprint('A silver research tower')) }] }] })
+    return Response.json({ id: 'resp_test_fixture', status: 'completed', model: requestBody.model, output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint: demoBlueprint('A silver research tower'), assetSpec: assetSpecForBlueprint(demoBlueprint('A silver research tower')) }) }] }] })
   }) as typeof fetch
   const call = (requestId: string = crypto.randomUUID(), user: 'alice' | 'bob' | null = 'alice', input = body) => handle(new Request(origin + '/api/blueprint', {
     method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': requestId, ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) }, body: JSON.stringify(input),

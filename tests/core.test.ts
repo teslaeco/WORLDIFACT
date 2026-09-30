@@ -11,6 +11,7 @@ import {
   Texture,
 } from "three";
 import {
+  assetSpecForBlueprint,
   demoBlueprint,
   localSceneResult,
   parseBlueprintJson,
@@ -67,7 +68,7 @@ const ok = () =>
           content: [
             {
               type: "output_text",
-              text: JSON.stringify(demoBlueprint("village")),
+              text: JSON.stringify({ blueprint: demoBlueprint("village"), assetSpec: assetSpecForBlueprint(demoBlueprint("village")) }),
             },
           ],
         },
@@ -260,10 +261,10 @@ test("production profiles distinguish observed prices from blocked quotes", () =
     /Not recommended/,
   );
 });
-test("no configured key produces explicitly labelled DEMO without network", async () => {
+test("explicit DEMO without a configured key produces labelled local output without network", async () => {
   let calls = 0;
   const r = await handle(
-    request({ prompt: "village", mode: "live" }),
+    request({ prompt: "village", mode: "demo" }),
     {},
     makeFetch(() => {
       calls++;
@@ -277,7 +278,8 @@ test("a key alone never enables paid generation", async () => {
   const r = await handle(request({ prompt: "village", mode: "live" }), {
     OPENAI_API_KEY: "test",
   });
-  assert.equal(((await r.json()) as { mode: string }).mode, "DEMO");
+  assert.equal(r.status, 503);
+  assert.equal(((await r.json()) as { noCharge: boolean }).noCharge, true);
 });
 test("health never advertises LIVE for an unapproved model or missing limiter", async () => {
   for (const env of [
