@@ -49,6 +49,12 @@ jobs:
             echo 'mode=DEMO' >> "$GITHUB_OUTPUT"
             echo 'No ongoing LIVE marker: deploying reviewed disabled-cost base configuration.'
           fi
+      - name: Verify guarded detailed worker before restoring signed model route
+        if: steps.mode.outputs.mode == 'LIVE'
+        run: node scripts/restore-detailed-studio-config.mjs "${{ steps.mode.outputs.config }}"
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
       - name: Dry-run selected deployment configuration
         run: npx wrangler deploy --dry-run --config "${{ steps.mode.outputs.config }}" --outdir .wrangler/preview
       - name: Verify and sync OpenAI secrets
@@ -125,6 +131,26 @@ jobs:
         run: node scripts/release-check.ts smoke
         env:
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson
+      - name: Verify published detailed route without creating a model
+        if: steps.mode.outputs.mode == 'LIVE'
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const origin = 'https://worldifact.xodobrox.workers.dev';
+          const response = await fetch(origin + '/api/studio/status', {redirect:'error',signal:AbortSignal.timeout(20000)});
+          assert.equal(response.status,200);
+          const status = await response.json();
+          assert.equal(status.ready,true);
+          assert.equal(status.detailedReady,true);
+          assert.equal(status.costGuardReady,true);
+          assert.equal(status.outputPolicyReady,true);
+          assert.equal(status.photoReady,true);
+          assert.equal(status.detailedReferenceLimit,4);
+          assert.equal(status.accountRequired,true);
+          const denied = await fetch(origin + '/api/studio/prepare', {method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({worldId:'enchanted-ai-shop',prompt:'Character reference routing guard probe',purpose:'game',textureMaxSize:4096,photos:[]})});
+          assert.equal(denied.status,401);
+          console.log('PASS: detailed route READY, four views, current cost/output guards, unauthenticated preparation rejected; no paid generation.');
+          JS
       - name: Report deployed generation capability without spending
         run: |
           node --input-type=module - <<'JS'
