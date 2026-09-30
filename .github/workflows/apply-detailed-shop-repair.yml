@@ -1,0 +1,68 @@
+name: Prepare detailed Shop routing repair
+on:
+  push:
+    branches: ['fix/restore-detailed-shop-20260930']
+    paths: ['.github/workflows/apply-detailed-shop-repair.yml']
+permissions:
+  contents: write
+concurrency:
+  group: prepare-detailed-shop-repair
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/fix/restore-detailed-shop-20260930'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply exact audited source patch, never credentials or production settings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = b007b8dab2f9f96a5954d08ea397b79cdae7fa9d
+          : > "$RUNNER_TEMP/repair.gz"
+          for blob in a4a4f178ec200f7884e126bd866530a1f5ca4c41 f164f16e9d90a700382b9e54e56fa96e3ed886b8 db6ad5a3a7190752e20a3303f8ac18ee6e99f295; do
+            gh api "repos/teslaeco/WORLDIFACT/git/blobs/$blob" --jq .content | base64 --decode >> "$RUNNER_TEMP/repair.gz"
+          done
+          gzip -dc "$RUNNER_TEMP/repair.gz" > "$RUNNER_TEMP/repair.patch"
+          echo "7345fc796f8a82ef8d2da54ddd26958163b8996c94164ac2cbd654057ee9a8af  $RUNNER_TEMP/repair.patch" | sha256sum --check
+          git apply --unidiff-zero --check --index "$RUNNER_TEMP/repair.patch"
+          git apply --unidiff-zero --index "$RUNNER_TEMP/repair.patch"
+          git diff --cached --check
+      - run: npm ci
+      - name: Full verification without paid generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npm run verify > "$RUNNER_TEMP/verify.log" 2>&1; then
+            grep -E '^>|tests |pass |fail |skipped |PASS|built in|warnings and' "$RUNNER_TEMP/verify.log" | tail -60
+          else
+            grep -E '^>|✖|error TS|AssertionError|not ok|tests |pass |fail |actual:|expected:|test at|Error:' "$RUNNER_TEMP/verify.log" | tail -100 || true
+            exit 1
+          fi
+      - uses: ./.github/actions/foundations
+      - run: npm run deploy:check
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: detailed-shop-verification
+          path: ${{ runner.temp }}/verify.log
+          retention-days: 3
+      - name: Commit only tested source; no merge, deployment or runtime activation
+        run: |
+          set -euo pipefail
+          git diff --quiet
+          git rm .github/workflows/apply-detailed-shop-repair.yml
+          git diff --cached --check
+          git config user.name 'WORLDIFACT repair automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: route detailed Shop models through signed Oracle jobs'
+          git push origin HEAD:fix/restore-detailed-shop-20260930
+          echo "Tested source revision: $(git rev-parse HEAD)"
