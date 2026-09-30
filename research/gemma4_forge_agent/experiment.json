@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "project": "WORLDIFACT Forge Agent",
+  "created_on": "2026-09-30",
+  "stage": "DEMO_TOOLING_ONLY",
+  "competition_slug": "gemma-4-developer-agent",
+  "competition_rules_status": "UNKNOWN",
+  "enrollment_status": "UNKNOWN",
+  "submission_status": "NOT_SUBMITTED",
+  "model_id": null,
+  "model_revision": null,
+  "dataset_revision": null,
+  "baseline_score": null,
+  "model_calls_executed": 0,
+  "training_runs_executed": 0,
+  "new_paid_compute_authorized_usd": 0,
+  "network_allowed": false,
+  "production_integration": false,
+  "automatic_merge_or_deployment": false,
+  "next_gate": "Verify official rules and reproduce organizer baseline on authorized resources"
+}

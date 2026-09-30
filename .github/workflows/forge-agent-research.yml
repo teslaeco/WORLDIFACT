@@ -1,0 +1,23 @@
+name: Forge Agent research tools
+on:
+  pull_request:
+    paths:
+      - 'research/gemma4_forge_agent/**'
+      - '.github/workflows/forge-agent-research.yml'
+permissions:
+  contents: read
+concurrency:
+  group: forge-agent-research-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  offline-tool-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Run synthetic tool tests without models or dependencies
+        run: python3 -m unittest discover -s research/gemma4_forge_agent -p 'test_*.py' -v
+      - name: Check Python syntax
+        run: python3 -m compileall -q research/gemma4_forge_agent
