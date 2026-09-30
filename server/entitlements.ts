@@ -1,3 +1,4 @@
+import { validateGenerationResult, type GenerationResult } from '../src/lib/blueprint.ts'
 import { privateWorldStore } from './privateWorldStore.ts'
 import type { BudgetNamespace } from './budget.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
@@ -16,8 +17,8 @@ export interface EntitlementStorage {
 export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
-type Job = { model?: GenerationModel; profile: GenerationKind; at: number; cost: number; kind: 'free' | 'credits'; state: 'reserved' | 'completed' | 'failed' }
-export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string }
+type Job = { fingerprint?: string; model?: GenerationModel; profile: GenerationKind; at: number; cost: number; kind: 'free' | 'credits'; state: 'reserved' | 'completed' | 'failed' }
+export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state'] }
 export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; state?: Job['state'] }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
@@ -110,21 +111,53 @@ export class AccountEntitlements {
       if (path === '/billing' && request.method === 'GET') return json({ customer: await this.storage.get<string>('customer') ?? null })
       if (request.method !== 'POST') return json({ error: 'Not found' }, 404)
       const raw = await request.text()
-      if (raw.length > 4096) return json({ error: 'Invalid internal request' }, 400)
+      if (raw.length > (path === '/blueprint-complete' ? 120_000 : 4096)) return json({ error: 'Invalid internal request' }, 400)
       const input = JSON.parse(raw) as Record<string, unknown>
       if (!input || typeof input !== 'object' || Array.isArray(input)) return json({ error: 'Invalid internal request' }, 400)
+      if (path === '/blueprint-status' || path === '/blueprint-complete') {
+        if (typeof input.id !== 'string' || !JOB_ID.test(input.id)) return json({ error: 'Invalid blueprint identifier' }, 400)
+        const id = input.id
+        let result: GenerationResult | undefined
+        if (path === '/blueprint-complete') {
+          result = validateGenerationResult(input.result)
+          if (result.mode !== 'LIVE' || !result.evidence || !result.delivery || result.requestId !== id) return json({ error: 'Missing verified blueprint evidence' }, 400)
+        }
+        return json(await this.storage.transaction(async storage => {
+          const job = await storage.get<Job>(`job:${id}`)
+          if (!job?.fingerprint) return { state: 'unknown', owned: false }
+          // A stopped synchronous Worker cannot leave customer points reserved forever.
+          // Completion and timeout reconciliation race in this same atomic transaction.
+          if (job.state === 'reserved' && now - job.at > 10 * 60_000) {
+            if (job.cost) await storage.put('balance', await balance(storage) + job.cost)
+            else { const free = await usage(storage, now); free[job.profile] = free[job.profile].filter(item => item.id !== id); await storage.put('usage', free) }
+            await storage.put(`job:${id}`, { ...job, state: 'failed' })
+            return { state: 'failed', refunded: true }
+          }
+          if (result && job.state === 'reserved') {
+            const expected = job.model === 'luna' ? 'gpt-6-luna' : job.profile === 'slow' ? 'gpt-6-astra' : 'gpt-6-sol'
+            if (result.model !== expected) return { state: job.state, saved: false }
+            await storage.put(`blueprint-result:${id}`, result)
+            await storage.put(`job:${id}`, { ...job, state: 'completed' })
+            return { state: 'completed', saved: true, result }
+          }
+          return { state: job.state, refunded: job.state === 'failed', ...(job.state === 'completed' ? { result: await storage.get<GenerationResult>(`blueprint-result:${id}`) } : {}) }
+        }))
+      }
       if (path === '/reserve') {
         if (typeof input.id !== 'string' || !JOB_ID.test(input.id) || !['fast', 'slow'].includes(String(input.profile))) return json({ error: 'Invalid generation' }, 400)
+        if (input.fingerprint !== undefined && (typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint))) return json({ error: 'Invalid request fingerprint' }, 400)
+        const fingerprint = input.fingerprint as string | undefined
         const id = input.id, profile = input.profile as GenerationKind
         const requestedModel = input.model ?? (profile === 'fast' ? 'sol' : 'astra')
         if (!['luna', 'sol', 'astra'].includes(String(requestedModel)) || (profile === 'slow') !== (requestedModel === 'astra')) return json({ error: 'Invalid model for generation route' }, 400)
         const selectedModel = requestedModel as GenerationModel
         const result = await this.storage.transaction(async storage => {
           const existing = await storage.get<Job>(`job:${id}`)
+          if (existing && existing.fingerprint !== fingerprint) return { allowed: false, repeated: true, reason: 'REQUEST_PAYLOAD_MISMATCH' }
           if (existing && existing.profile === profile && (existing.model ?? (existing.profile === 'fast' ? 'sol' : 'astra')) !== selectedModel) return { allowed: false, reason: 'JOB_MODEL_MISMATCH' }
           if (existing) return existing.profile !== profile
             ? { allowed: false, reason: 'JOB_PROFILE_MISMATCH' }
-            : { allowed: existing.state !== 'failed', repeated: true, cost: existing.cost, kind: existing.kind, ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
+            : { allowed: existing.state !== 'failed', repeated: true, state: existing.state, cost: existing.cost, kind: existing.kind, ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
           const credits = await balance(storage), subscription = await storage.get<Subscription>('subscription')
           if (credits < 0 || await storage.get<boolean>('billingHold') === true) return { allowed: false, reason: 'BILLING_REVIEW_REQUIRED' }
           const subscriptionActive = active(subscription, now)
@@ -148,7 +181,7 @@ export class AccountEntitlements {
             if (remaining < ceiling) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
             await storage.put(PROVIDER_BUDGET, remaining - ceiling)
           }
-          const job: Job = { ...(model === 'luna' ? { model } : {}), profile, at: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', state: 'reserved' }
+          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(model === 'luna' ? { model } : {}), profile, at: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', state: 'reserved' }
           if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
           if (creatorAstra) await storage.put(`creator-astra:${period}`, used + 1)
@@ -335,7 +368,7 @@ export async function entitlementCall<T>(env: EntitlementEnv, userId: string, pa
   return response.json() as Promise<T>
 }
 export const entitlementStatus = (env: EntitlementEnv, userId: string) => entitlementCall<EntitlementStatus>(env, userId, '/status')
-export const reserveUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel) => entitlementCall<Reservation>(env, userId, '/reserve', { id: jobId, profile, ...(model ? { model } : {}) })
+export const reserveUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string) => entitlementCall<Reservation>(env, userId, '/reserve', { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}) })
 export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, state: 'completed' | 'failed') => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state })
 export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<JobAccess>(env, userId, '/job', { id: jobId })
 export async function entitlementApi(request: Request, env: AccountEnv & EntitlementEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {

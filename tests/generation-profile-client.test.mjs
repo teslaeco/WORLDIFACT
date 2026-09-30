@@ -45,9 +45,9 @@ test('existing STANDARD receipts remain readable and unknown saved modes fail cl
 test('actual Shop initial render exposes Astra blueprint and keeps FAST gated until Sol LIVE health is confirmed', async () => {
   const html = await renderShopMarkup()
   assert.match(html, /Choose generation mode/)
-  assert.match(html, /ASTRA · QUALITY BLUEPRINT/)
+  assert.match(html, /ASTRA · SCENE BLUEPRINT/)
   assert.match(html, /FAST · DRAFT/)
-  assert.match(html, /aria-pressed="true"[^>]*><strong>ASTRA · QUALITY BLUEPRINT/s)
+  assert.match(html, /aria-pressed="true"[^>]*><strong>ASTRA · SCENE BLUEPRINT/s)
   assert.match(html, /aria-pressed="false"[^>]*disabled=""[^>]*><strong>FAST · DRAFT/s)
   assert.match(html, /FAST is waiting for the verified GPT-6 Sol worker/)
   assert.match(html, /Generate GPT-6 Astra blueprint · 250 points/)
