@@ -1,51 +1,40 @@
-# WORLDIFACT — current release evidence
+# WORLDIFACT — generation incident remains open
 
-Updated 30 September 2026. All timestamps below are UTC.
+Updated 30 September 2026 after the owner's 16:33 device-time diagnostic screenshot. This branch changes read-only diagnostics only, not production generation, prices or budgets.
 
-## VERIFIED — actual Astra/Blender routing restored and published
+## VERIFIED — screenshot evidence, not a new successful generation
 
-The owner requested a working detailed character route after PR150 left that workflow blocked and authorized repair, merge and deployment after green checks. [PR #153](https://github.com/teslaeco/WORLDIFACT/pull/153) passed all six exact-head workflows at `f9c26e1ab70666d4395ec8654e92a3e01c49396c`, including [Verify WORLDIFACT 36717479887](https://github.com/teslaeco/WORLDIFACT/actions/runs/36717479887). It merged as `110055288c6508322afd4bb05ffd6c86b8cfc198` at 2026-09-30T12:54:06Z.
+The owner ran the original collector in OCI Cloud Shell and supplied part of its output. Two visible jobs have `finished=false`, `unknownUsage=false` and the generic `WORLDIFACT_ASTRA_COST_GUARD` code. The bottom visible job has no root model.glb, model.blend, model.fbx, scene.json or model.froge-scene.json. The screenshot is partial; it does not show every artifact entry for the upper job or the full three-job report.
 
-[Production publication 36717823536](https://github.com/teslaeco/WORLDIFACT/actions/runs/36717823536), deploy job `109895052089`, completed successfully. This first functional publication of PR153 produced Cloudflare version `b47e9061-4b61-463d-967f-6d8949fc677a` at 12:55:50Z. These identifiers record that observed release, not an assertion that no later documentation publication can produce another version.
+| Visible sample | Input tokens recorded | Output tokens recorded | Completed settlements | Held micro-USD | Remaining micro-USD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A | 107682 | 2135 | 4 | 1624973 | 125027 |
+| B | 97755 | 1288 | 5 | 1439410 | 310590 |
 
-Public Shop: https://worldifact.xodobrox.workers.dev/shop
+A records three references; B's null count means unavailable evidence, not zero images. The gateway request counters (five and six) include a stopped attempt and must not be described as five/six completed billable provider calls.
 
-At 12:55:59Z the public `/api/studio/status` check confirmed `ready=true`, `detailedReady=true`, `costGuardReady=true`, `outputPolicyReady=true`, `photoReady=true`, `detailedReferenceLimit=4` and `accountRequired=true`. An unauthenticated preparation request was rejected with HTTP401 before any model job. Deployed configuration has `ENABLE_STUDIO_JOBS=true` and `ENABLE_ORACLE_JOBS=false`. This is verified routing/readiness, not evidence of a newly generated realistic character.
+Using the reviewed v2 ledger's conservative rates (14 micro-USD/input token and 55/output token), the token totals exactly reproduce both held balances. Input accounts for 92.77% and 95.08% of these calculated upper allocations. These are local budget calculations, NOT verified OpenAI invoice amounts or evidence of cache misses. The remaining balance may be insufficient for a further request's input plus minimum output reservation. The generic error still does not reveal the exact rejected preflight subreason.
 
-## VERIFIED — root causes and implemented repair
+## VERIFIED — correct the diagnostic event-count ambiguity
 
-The Shop previously selected `/api/blueprint` even for detailed characters, while the existing signed `/api/studio` route remained disabled. A bounded blueprint provides supported procedural scene objects, not the requested reference character. The installed Oracle photo protocol accepts four images and `side`, not the UI's `left`/`right` labels. Appending fixed instructions to long user prompts could also exceed Oracle's 5,000-character limit.
+Review of `oracle_connector/blender_mcp.py` at the pinned private reference revision d3f61b842dcfeda2ed794210caafc391919a75be confirms that `record` appends separate started/completed/failed rows. The original collector summed rows per tool. Consequently `get_modeling_contract: 2` can describe ONE successful invocation, not two reads. A single build_model row does not prove a successful Blender build: it could be an argument rejection or an incomplete start. Do not infer an agent loop or a built model from the original aggregate.
 
-Detailed requests now use the real StudioCoordinator -> account-bound signed Studio endpoint -> existing Oracle/Codex -> Blender path. They do not use a blueprint substitute. One to four reference images are supported, including the owner's three views; four are not compulsory. All accepted image bytes are sent. Left/right map to the compatible upstream side enum while the original ordered labels travel in agentInstructions. The complete user prompt, up to 4,000 characters, fits because fixed manufacturing/reference instructions travel separately. The distinct procedural concept path retains its six-image capability and must not be confused with the four-image mesh path.
+Implemented: retain the legacy field only with an explicit EVENT_ROWS_NOT_INVOCATIONS meaning; add separate started/completed/failed/unknown counts, bounded ordered recent events, recorded terminal-call/build-attempt/revision metadata and fixed allowlisted error-prefix categories. Recognize inspect_render. Unknown metadata stays null. No tool arguments, model code, prompts, images, exception text, paths, keys or authorization codes are emitted. This is a diagnostic correction, not a generator fix.
 
-Current runtime proof is required before a new detailed job: the unchanged USD1.75 per-job guard, input-token preflight and low-reasoning/reconciled v2 output policy. Restoration changes only the account-bound Studio flag, not anonymous Oracle access, credit prices, customer quotas or provider-spend limits. Production rechecks the installed proof before publication and checks deployed readiness afterward without creating a model.
+Ten new local synthetic tests pass, including start+completion counting, rejected build arguments, incomplete starts, anatomy failure, private canaries, malformed metadata, bounded history and no local subprocess/provider calls. The existing eleven privacy/budget tests are preserved. Dedicated CI must pass on the updated exact head; no remote execution of the updated collector or successful character is inferred from local tests.
 
-The existing signed receipt, single reservation and recovery survive duplicate clicks and lost connections. Newly completed jobs require an actual nonempty material-bearing GLB structure before completed settlement. Missing/invalid output fails and returns the customer reservation once; uncertain reads retain recovery. Structural inspection does not establish facial similarity, photorealism, texture quality or manufacturing approval. Safe cost-limit messages do not expose private upstream text. Mobile layout constrains form and preview widths instead of hiding overflowing controls; physical Android interaction remains unverified.
+## What remains required
 
-## VERIFIED — tests and production evidence
+Read the failed job's tool states, recorded build_attempts and fixed error category before changing modeling instructions or cost policy. Investigate context efficiency using exact request/usage evidence; repeated context is not automatically repeated billable uncached input. Preserve the full user brief, all references, geometry validation, current cost cap and one-reservation rule. Do not retry the failed job or start a new paid generation without explicit approval.
 
-The final release passed **613 tests, 613 passed, zero failed, zero skipped**, plus TypeScript, build, real local HTTP smoke, foundation packaging and Worker deployment dry-run. Existing findings remain: 27 lint warnings, zero lint errors, and three dependency advisories (two moderate, one high). No forced dependency update was included.
+The customer credit ledger is not inspected; historical refunds and the credit-refresh timeout remain unresolved. The original generic guard maps several SpendError causes to one code and loses its subreason. No limit increase, refund, server restart or production deployment is performed in this diagnostic follow-up.
 
-Automated regressions exercise the real Shop submission handler and signed Studio/account state machines with deterministic provider fixtures. They cover four image payloads, long intact prompts, correct route selection, incompatible labels, missing/stale monetary proof, one-time250-point reservation, failed-output settlement, cost-limit errors and recovery. Fixtures are not live AI generation evidence. Earlier preparation failures exposed strict typing and a trailing-whitespace fixture mismatch; both were corrected without skipping tests or weakening behavior checks.
+The new Commander screenshot reaches device authorization without the previous WebSocket startup error. It still displays waiting for authorization and returns to a shell prompt; successful pairing and a running connection are not established. Current plugin discovery reports Remote Desktop Commander not installed in this ChatGPT connection. Device authorization must be completed by the user; do not redeem or publish their temporary code. Cloud Shell and the compute VM remain distinct.
 
-At 12:55:58Z the public no-cost release smoke passed for 16 HTML routes, 52 matching hub assets, 105 original application entries/assets, API404, explicit DEMO generation and origin rejection. The new detailed-route readiness/HTTP401 guard check passed at 12:55:59Z. Payment readiness/security checks passed. Existing deployment probes created and immediately expired isolated unpaid Stripe sessions; no customer card was charged and no purchase or historical credit correction was completed.
+## Preserved release evidence
 
-## VERIFIED — existing installed runtime policy
+[CONTEST_STATUS_PR153_RELEASE.md](CONTEST_STATUS_PR153_RELEASE.md), original blob b19650def2d2f36d4e1b35acb31ec1b6e6611980, preserves the prior PR153/154 record byte-for-byte: real signed routing, 613 passing application tests and historical production readiness, but no proven new character generation. Its observations do not establish success of these failed jobs.
 
-Initial [audit 36713365291](https://github.com/teslaeco/WORLDIFACT/actions/runs/36713365291) found the OpenAI / gpt-6-astra / connector33 runtime and the earlier failed cost-guard activation job; that job was not retried.
+The collector continues to use the original OCI Cloud Shell key and strict known-host SSH over stdin. No VM upload, generation request, budget reset or credential-file content read is introduced. It fails closed when that SSH context is unavailable.
 
-Extended [audit 36714798184](https://github.com/teslaeco/WORLDIFACT/actions/runs/36714798184), [preparation 36717085333](https://github.com/teslaeco/WORLDIFACT/actions/runs/36717085333), and the production preflight at12:55:32Z confirmed the already installed `astra-low-reconciled-v2` policy, low reasoning, 16,000 maximum output tokens, authenticated completed-usage settlement, reference input and existing USD1.75 cap. No blind reinstallation, provider-budget reset or cap increase was performed.
-
-## UNKNOWN / not completed
-
-No new paid character generation or visual-quality trial was executed by this repair. The requested character's appearance, reference fidelity and successful new export remain unverified. A structurally valid model can still be visually inadequate; do not advertise realistic quality from health status or unit tests. Existing cost limits can still reject a job that exceeds its approved budget.
-
-Historical customer reimbursements have not been performed. Identify actual account/job ledger entries before correcting credits; do not infer a duplicate bank-card charge from screenshots. No customer balance was arbitrarily changed. New failure-settlement behavior is not evidence that previous deductions have been returned.
-
-Release decision: **GO — actual signed detailed route restored and production readiness verified. UNKNOWN — successful new character generation and visual quality. Historical refund remains unresolved.**
-
-## Preserved earlier evidence
-
-The complete prior status ledger is retained byte-for-byte in [CONTEST_STATUS_ARCHIVE_20260930_BEFORE_DETAILED_RESTORE.md](CONTEST_STATUS_ARCHIVE_20260930_BEFORE_DETAILED_RESTORE.md), Git blob `7261825dd4121170b4ec43c96ee65b46d31284c3`. It includes PR150 safety changes, PR148 payments, earlier archive links, warnings and unperformed refunds. Its disabled-route statements describe the earlier release and are superseded by the observed PR153 routing publication above.
-
-The current production workflow also runs on documentation pushes to main. A documentation-only follow-up can republish unchanged application code; it must not be described as incapable of creating another deployment version.
+Release decision: NO-GO for claiming completed character generation. PR155 remains draft and diagnostic-only.
