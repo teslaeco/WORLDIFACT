@@ -1,0 +1,40 @@
+name: Verify supplied Stripe publishable key (read only)
+on:
+  push:
+    branches: ['fix/billing-return-seller-20260930']
+    paths: ['scripts/connect-stripe-publishable.ts', 'tests/stripe-publishable.test.ts', '.github/workflows/stripe-publishable-review.yml']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-publishable-key-review
+  cancel-in-progress: false
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: node --test tests/stripe-publishable.test.ts
+  read-only:
+    needs: unit
+    if: github.ref == 'refs/heads/fix/billing-return-seller-20260930'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify existing paid intent through both account keys; GET only
+        run: node scripts/connect-stripe-publishable.ts verify
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
