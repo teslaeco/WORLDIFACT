@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAccount } from '../lib/account'
 import { applyWorldCommand, blankWorld, newEntity, parseWorldCommand, validatePrivateWorld, WORLD_LIMITS, type EntityKind, type LocalWorldCommand, type PrivateWorld, type SavedWorld, type WorldCharacter, type WorldControl } from '../lib/privateWorld'
-import { listStudioModels, readStudioModel, type StudioArchiveEntry } from '../lib/studioArchive'
+import { listStudioModels, readStudioModel, STUDIO_ARCHIVE_EVENT, STUDIO_ARCHIVE_SIGNAL_KEY, type StudioArchiveEntry } from '../lib/studioArchive'
 import { listWorldAssets, storeWorldAsset, type WorldAsset } from '../lib/privateWorldAssets'
 import EighteenCrystal from '../components/EighteenCrystal'
 import GenerationCostNotice from '../components/GenerationCostNotice'
@@ -16,6 +16,7 @@ import './PrivateGameLab.css'
 import './EditorPolish.css'
 const Canvas=lazy(()=>import('../components/PrivateWorldCanvas'))
 type WorldSummary={id:string;name:string;revision:number;updatedAt:string}
+type GameLabArchiveEntry=StudioArchiveEntry&{accountVerified:boolean}
 type Tool='select'|'place'|'mountain'|'valley'
 const STEPS=[
   {title:'1 · Name your world',text:'Choose New game. Name the world and describe the character: outfit, hair, colors, style and label. These descriptions are saved without an AI call. The preview character is a local placeholder.'},
@@ -31,7 +32,7 @@ export default function PrivateGameLab(){
   const [emptyWorld]=useState<PrivateWorld>(()=>blankWorld())
   const [world,setWorld]=useState<PrivateWorld>(()=>blankWorld()),worldRef=useRef(world);worldRef.current=world
   const [ownedBy,setOwnedBy]=useState<string|null>(null),[revision,setRevision]=useState(0),revisionRef=useRef(0)
-  const [worlds,setWorlds]=useState<WorldSummary[]>([]),[assets,setAssets]=useState<WorldAsset[]>([]),[gallery,setGallery]=useState<StudioArchiveEntry[]>([])
+  const [worlds,setWorlds]=useState<WorldSummary[]>([]),[assets,setAssets]=useState<WorldAsset[]>([]),[gallery,setGallery]=useState<GameLabArchiveEntry[]>([])
   const [selected,setSelected]=useState<string|null>(null),[point,setPoint]=useState({x:-8,z:0}),[tool,setTool]=useState<Tool>('select'),[radius,setRadius]=useState(7)
   const [kind,setKind]=useState<EntityKind>('tree'),[assetId,setAssetId]=useState<string|null>(null)
   const [playing,setPlaying]=useState(false),[message,setMessage]=useState('A fresh meadow and river. No shared portal-world assets are loaded.'),[error,setError]=useState('')
@@ -76,13 +77,57 @@ export default function PrivateGameLab(){
   }
   const beginNew=()=>{if(saving||aiBusy||fileBusy)return;if(dirty&&!window.confirm('Start a new world? Save or export the current world first to keep your changes.'))return;setPlaying(false);setName('');setCharacter(blankWorld().character);setNewStep(0);setNewGame(true)}
   const finishNew=()=>{if(!owner)return;try{const doc=validatePrivateWorld({...blankWorld(),name:name.trim(),character});setWorld(doc);setOwnedBy(owner);revisionRef.current=0;setRevision(0);setDirty(true);sequence.current++;history.current=[];future.current=[];setSelected(null);setNewGame(false);setTutorial(0);setTab('character');setFocusCharacterVersion(v=>v+1);setError('');setMessage('Your character preview is now visible. Generate a detailed character explicitly in Character; no AI was charged by creating this world.')}catch(e){setError(e instanceof Error?e.message:'Check the world name and character fields.')}}
-  async function refreshLibrary(){if(!owner)return;const actor=owner;try{const local=await listWorldAssets(actor);const archive=await listStudioModels();const result=await api('/api/worlds/library','POST',{ids:archive.slice(0,60).map(v=>v.id)},AbortSignal.timeout(18000));if(ownerRef.current!==actor)return;setAssets(local);setGallery(archive.filter(e=>(result.ids as string[]).includes(e.id)));}catch(e){if(ownerRef.current===actor)setError(e instanceof Error?e.message:'Library unavailable.') }}
-  useEffect(()=>{if(tab!=='library'||!owner)return;void refreshLibrary();const update=()=>void refreshLibrary();window.addEventListener('worldifact-private-library',update);return()=>window.removeEventListener('worldifact-private-library',update)
+  async function refreshLibrary(){
+    if(!owner)return
+    const actor=owner
+    try{
+      const [local,archive]=await Promise.all([listWorldAssets(actor),listStudioModels()])
+      let verified=new Set<string>()
+      try{
+        const result=await api('/api/worlds/library','POST',{ids:archive.slice(0,60).map(v=>v.id)},AbortSignal.timeout(18000))
+        verified=new Set(Array.isArray(result.ids)?result.ids:[])
+      }catch{
+        // Device GLBs remain usable exactly like an explicit local file import.
+        // Server ownership verification is an extra badge, never a reason to hide
+        // bytes already stored in this browser.
+      }
+      if(ownerRef.current!==actor)return
+      setAssets(local)
+      setGallery(archive.map(entry=>({...entry,accountVerified:verified.has(entry.id)})))
+      setError('')
+    }catch(e){if(ownerRef.current===actor)setError(e instanceof Error?e.message:'Library unavailable.')}
+  }
+  useEffect(()=>{
+    if(tab!=='library'||!owner)return
+    let closed=false
+    const update=()=>{if(!closed)void refreshLibrary()}
+    const storage=(event:StorageEvent)=>{if(event.key===STUDIO_ARCHIVE_SIGNAL_KEY)update()}
+    const visible=()=>{if(document.visibilityState==='visible')update()}
+    update()
+    window.addEventListener('worldifact-private-library',update)
+    window.addEventListener(STUDIO_ARCHIVE_EVENT,update)
+    window.addEventListener('storage',storage)
+    window.addEventListener('focus',update)
+    window.addEventListener('pageshow',update)
+    document.addEventListener('visibilitychange',visible)
+    return()=>{closed=true;window.removeEventListener('worldifact-private-library',update);window.removeEventListener(STUDIO_ARCHIVE_EVENT,update);window.removeEventListener('storage',storage);window.removeEventListener('focus',update);window.removeEventListener('pageshow',update);document.removeEventListener('visibilitychange',visible)}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[tab,owner])
   const addAsset=(id:string,label:string)=>{if(!canEdit)return;setAssetId(id);setKind('asset');setTool('place');setMessage(`Selected ${label}. Tap the ground to place it, or use Add at marker.`)}
   async function importModel(blob:Blob,label:string){if(!owner||fileBusy)return;const actor=owner;setFileBusy(true);setError('');try{const item=await storeWorldAsset(actor,label,blob);if(ownerRef.current===actor){setAssets(await listWorldAssets(actor));addAsset(item.id,item.name)}}catch(e){if(ownerRef.current===actor)setError(e instanceof Error?e.message:'The model could not be imported.')}finally{setFileBusy(false)}}
-  async function importGalleryModel(entry:StudioArchiveEntry){if(!owner||fileBusy)return;try{const permitted=await api('/api/worlds/library','POST',{ids:[entry.id]},AbortSignal.timeout(18000));if(!(permitted.ids as string[]).includes(entry.id))throw new Error('This saved model is not owned or downloadable by your account.');await importModel(await readStudioModel(entry.id),entry.prompt)}catch(e){setError(e instanceof Error?e.message:'Model unavailable.')}}
+  async function importGalleryModel(entry:GameLabArchiveEntry){
+    if(!owner||fileBusy)return
+    try{
+      if(entry.accountVerified){
+        const permitted=await api('/api/worlds/library','POST',{ids:[entry.id]},AbortSignal.timeout(18000))
+        if(!(permitted.ids as string[]).includes(entry.id))throw new Error('This account-verified model is no longer downloadable. The local GLB was not deleted.')
+      }
+      // A device-local generated GLB is equivalent to choosing the same file
+      // through the explicit import picker. No server ownership is invented.
+      await importModel(await readStudioModel(entry.id),entry.prompt)
+      if(!entry.accountVerified)setMessage('Local generated GLB imported from this device. Account ownership was not asserted; no AI request or point charge occurred.')
+    }catch(e){setError(e instanceof Error?e.message:'Model unavailable.')}
+  }
   const place=(target=point)=>{if(!canEdit)return;if(kind==='asset'&&!assetId){setError('Choose a model from your library first.');return}const e=newEntity(kind,target.x,target.z,kind==='asset'?assetId:null);if(e.assetId)e.name=assets.find(a=>a.id===e.assetId)?.name??'My model';change({...worldRef.current,entities:[...worldRef.current.entities,e]});setSelected(e.id)}
   const pick=(target:{x:number;z:number},entityId:string|null)=>{setPoint(target);if(!canEdit)return;if(tool==='select'){setSelected(entityId);if(entityId)setTransformMode('move')}else if(tool==='place')place(target);else change({...worldRef.current,terrain:[...worldRef.current.terrain,{id:crypto.randomUUID(),...target,radius,strength:tool==='mountain'?4:-3}]})}
   const control=(value:WorldControl)=>change({...world,controls:world.controls.includes(value)?world.controls.filter(c=>c!==value):[...world.controls,value]})
@@ -124,7 +169,7 @@ export default function PrivateGameLab(){
       <h3>Game controls</h3>{(['jump','sprint','interact'] as const).map(v=><label key={v} className="private-toggle"><input type="checkbox" checked={world.controls.includes(v)} disabled={!canEdit} onChange={()=>control(v)}/>{v==='jump'?'Jump · Space':v==='sprint'?'Sprint · Shift':'Interact · E'}</label>)}
       {selectedEntity&&<section className="private-inspector"><h3>Selected: {selectedEntity.name}</h3>{(['x','z','scale','rotation','elevation'] as const).map(k=><label key={k}>{k}<input type="number" value={selectedEntity[k]} step={k==='scale'?.1:1} min={k==='scale'?.1:k==='elevation'?0:k==='rotation'?-360:-40} max={k==='scale'?8:k==='elevation'?20:k==='rotation'?360:40} disabled={!canEdit} onChange={e=>change({...world,entities:world.entities.map(o=>o.id===selected?{...o,[k]:Number(e.target.value)}:o)})}/></label>)}<button disabled={!canEdit} onClick={()=>{change({...world,entities:world.entities.filter(o=>o.id!==selected)});setSelected(null)}}>Remove from world</button></section>}
       <details><summary>Your character brief</summary><p>{world.character.description||'Local preview character. Add a description with New game.'}</p><p>{world.character.outfit} · {world.character.hair} · {world.character.style}</p><Link to="/shop" state={{worldPrompt:charPrompt}}>Create detailed character in AI Shop →</Link><p className="private-fine">Opening AI Shop does not buy a generation. Review the model and points there.</p></details></div>}
-      {tab==='library'&&<div className="private-panel"><span className="private-eyebrow">YOUR FILES · DEVICE LIBRARY</span><h2>Add your models</h2><p className="private-fine">World layout saves to your account. GLB files stay in this browser. Other accounts cannot open your world through the server API. Keep original file backups.</p><button disabled={!owner||fileBusy} onClick={()=>void refreshLibrary()}>Refresh library</button><label>Import embedded GLB · up to 50 MB<input type="file" accept=".glb,model/gltf-binary" disabled={!canEdit||fileBusy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void importModel(file,file.name)}}/></label><p className="private-fine">No four-model placement cap. The editor uses lightweight proxies when the rendering budget is full; every placement is retained. Use optimized GAME copies for smooth editing.</p>{assets.map(a=><article className="private-asset" key={a.id}><strong>{a.name}</strong><small>{(a.bytes/1e6).toFixed(1)} MB · YOUR DEVICE</small><button disabled={!canEdit||fileBusy} onClick={()=>addAsset(a.id,a.name)}>Choose and place</button></article>)}<h3>Owned generation gallery</h3>{gallery.length?gallery.map(a=><article className="private-asset" key={a.id}><strong>{a.prompt.slice(0,100)}</strong><small>{(a.byteLength/1e6).toFixed(1)} MB · original preserved</small><button disabled={!canEdit||fileBusy} onClick={()=>void importGalleryModel(a)}>Use this saved model</button></article>):<p>No owned downloadable models found on this device. For older unassigned gallery models, download your original and explicitly import the GLB here.</p>}<Link to="/shop">Generate a new 3D model →</Link></div>}
+      {tab==='library'&&<div className="private-panel"><span className="private-eyebrow">YOUR FILES · DEVICE LIBRARY</span><h2>Add your models</h2><p className="private-fine">World layout saves to your account. GLB files stay in this browser. Other accounts cannot open your world through the server API. Keep original file backups.</p><button disabled={!owner||fileBusy} onClick={()=>void refreshLibrary()}>Refresh library</button><label>Import embedded GLB · up to 50 MB<input type="file" accept=".glb,model/gltf-binary" disabled={!canEdit||fileBusy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void importModel(file,file.name)}}/></label><p className="private-fine">No four-model placement cap. The editor uses lightweight proxies when the rendering budget is full; every placement is retained. Use optimized GAME copies for smooth editing.</p>{assets.map(a=><article className="private-asset" key={a.id}><strong>{a.name}</strong><small>{(a.bytes/1e6).toFixed(1)} MB · YOUR DEVICE</small><button disabled={!canEdit||fileBusy} onClick={()=>addAsset(a.id,a.name)}>Choose and place</button></article>)}<h3>Generated models on this device</h3>{gallery.length?gallery.map(a=><article className="private-asset" key={a.id}><strong>{a.prompt.slice(0,100)}</strong><small>{(a.byteLength/1e6).toFixed(1)} MB · {a.accountVerified?'ACCOUNT VERIFIED':'DEVICE ARCHIVE'} · original preserved</small><button disabled={!canEdit||fileBusy} onClick={()=>void importGalleryModel(a)}>{a.accountVerified?'Use this saved model':'Use local GLB'}</button></article>):<p>No generated GLB models are stored in this browser yet. New completed Shop models appear here automatically after they are saved locally.</p>}<Link to="/shop">Generate a new 3D model →</Link></div>}
       {tab==='character'&&owner&&ownedBy===owner&&<div className="private-panel"><WorldCharacterStudio key={owner+world.id} owner={owner} world={world} disabled={!canEdit||playing} onFocus={()=>setFocusCharacterVersion(v=>v+1)} onSetAsset={id=>change({...worldRef.current,character:{...worldRef.current.character,assetId:id}})} onReady={(id,snapshot,asset)=>{if(!canEdit||worldRef.current.id!==id||JSON.stringify(worldRef.current.character)!==snapshot){setMessage('Character is in your library. This world changed, so select the model explicitly in Character.');return}change({...worldRef.current,character:{...worldRef.current.character,assetId:asset.id}});setFocusCharacterVersion(v=>v+1)}}/></div>}
       {tab==='assistant'&&<div className="private-panel"><span className="private-eyebrow">LOCAL ASSISTANT · NO MODEL CALL</span><h2>Build by command</h2><p>Describe one supported edit, review it, then Apply. Local commands are rules, not a live Codex agent.</p><label>Command<textarea value={command} maxLength={500} onChange={e=>setCommand(e.target.value)} placeholder="Add a jump button / Dodaj przycisk skoku"/></label><div className="private-chip-row">{['Add jump button','Add sprint','Dig valley','Add mountain','Show stars'].map(s=><button key={s} disabled={!canEdit} onClick={()=>setCommand(s)}>{s}</button>)}</div><button disabled={!canEdit} onClick={propose}>Preview edit · 0 points</button>{proposal&&<div className="private-proposal"><strong>Proposed: {proposal.command.kind}</strong><p>{proposal.command.kind==='terrain'?`Terrain strength ${proposal.command.strength} at marker`:proposal.command.kind==='control'?`Add ${proposal.command.control} control`:proposal.command.kind==='object'?`Place ${proposal.command.object} at marker`:`Switch to ${proposal.command.value?'stars':'daylight'}`}</p><button disabled={!canEdit} onClick={()=>{if(proposal.worldId!==world.id||proposal.sequence!==sequence.current){setError('World changed; preview this command again.');return}change(applyWorldCommand(world,proposal.command,proposal.point));setMessage('Local edit applied. API cost: 0.')}}>Apply to my world</button><button onClick={()=>setProposal(null)}>Discard</button></div>}
       <WorldCodexPanel world={world} selected={selected} request={command} disabled={!canEdit||playing} onChange={change} onMessage={setMessage}/>
