@@ -10,6 +10,7 @@ Default is PLAN ONLY. Installation requires --approve-service-restart.
 """
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
