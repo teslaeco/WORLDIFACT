@@ -1,4 +1,5 @@
 import { inspectGLB } from '../src/lib/glb.ts'
+import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
@@ -54,26 +55,6 @@ async function accountAccess(env: StudioEnv, userId: string | undefined, id: str
   return access
 }
 const outputChecks = new Map<string, Promise<'valid' | 'invalid'>>()
-function structuralQuality(model: ReturnType<typeof inspectGLB>, qualityProfile: StudioQualityProfile) {
-  const base = model.meshCount > 0 && model.triangles > 0 && model.renderedTriangles > 0 && model.materialCount > 0
-  if (!base) return false
-  if (qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE) {
-    // Reject the failure mode proven by the owner's references: a cabinet shell
-    // plus one photographed interior plane. This is structural QA only, not an
-    // assertion that electrical design/rating/function is correct.
-    return model.renderedTriangles >= 20_000 &&
-      model.meshCount >= 8 && model.substantialMeshCount >= 6 &&
-      model.primitiveCount >= 8 && model.materialCount >= 3 && model.nodeCount >= 8
-  }
-  if (qualityProfile === REFERENCE_CHARACTER_PROFILE) {
-    // A reference-driven human should contain real face/body/garment geometry,
-    // not a card/cutout. Perceptual likeness still requires human review.
-    return model.renderedTriangles >= 25_000 &&
-      model.meshCount >= 5 && model.substantialMeshCount >= 4 &&
-      model.primitiveCount >= 5 && model.materialCount >= 3 && model.nodeCount >= 5
-  }
-  return true
-}
 async function validateCompletedModel(env: StudioEnv, userId: string, id: string, fetcher: typeof fetch, qualityProfile: StudioQualityProfile = 'standard') {
   const key = `${userId}:${id}:${qualityProfile}`
   const existing = outputChecks.get(key)
@@ -86,7 +67,7 @@ async function validateCompletedModel(env: StudioEnv, userId: string, id: string
     catch (e) { if (e instanceof StudioError && [404, 413, 502].includes(e.status)) return 'invalid'; throw e }
     const bytes = await response.arrayBuffer() // Interrupted reads are uncertain, not an automatic refund.
     try {
-      return structuralQuality(inspectGLB(bytes), qualityProfile) ? 'valid' : 'invalid'
+      return passesStudioStructuralQuality(inspectGLB(bytes), qualityProfile) ? 'valid' : 'invalid'
     } catch { return 'invalid' }
   })()
   outputChecks.set(key, check)
