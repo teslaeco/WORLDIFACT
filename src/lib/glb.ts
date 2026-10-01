@@ -3,6 +3,11 @@ export interface GLBInspection {
   renderedTriangles: number;
   meshCount: number;
   materialCount: number;
+  nodeCount: number;
+  primitiveCount: number;
+  substantialMeshCount: number;
+  largestMeshTriangles: number;
+  imageCount: number;
   byteLength: number;
 }
 /** Inspect the GLB container before handing it to a renderer. No network access. */
@@ -37,10 +42,12 @@ export function inspectGLB(buffer: ArrayBuffer): GLBInspection {
         "External model resources are not allowed. Embed textures and buffers in the GLB.",
       );
   let triangles = 0;
+  let primitiveCount = 0;
   const meshTriangles: number[] = [];
   for (const mesh of doc.meshes ?? []) {
     let meshTotal = 0;
     for (const p of mesh.primitives ?? []) {
+      primitiveCount++;
       const count = doc.accessors?.[p.indices ?? p.attributes?.POSITION]?.count;
       if (!Number.isInteger(count) || count < 0 || count > 9_000_000)
         throw new Error("Invalid mesh accessor.");
@@ -109,6 +116,11 @@ export function inspectGLB(buffer: ArrayBuffer): GLBInspection {
     renderedTriangles,
     meshCount: doc.meshes?.length ?? 0,
     materialCount: doc.materials?.length ?? 0,
+    nodeCount: nodes.length,
+    primitiveCount,
+    substantialMeshCount: meshTriangles.filter(value => value >= 24).length,
+    largestMeshTriangles: meshTriangles.length ? Math.max(...meshTriangles) : 0,
+    imageCount: doc.images?.length ?? 0,
     byteLength: buffer.byteLength,
   };
 }
