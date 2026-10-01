@@ -33,7 +33,7 @@ class TimeoutInstallerTests(unittest.TestCase):
         t=tempfile.TemporaryDirectory(); self.addCleanup(t.cleanup)
         self.root=Path(t.name); self.source=self.root/'worker'; self.source.mkdir()
         self.runner=self.source/update.RUNNER
-        self.original=("prefix\n"+update.OLD+"\nsuffix\n").encode()
+        self.original=("def fixture(opener, request):\n    "+update.OLD+"\n        pass\n").encode()
         self.runner.write_bytes(self.original)
         receipt=self.source/update.base.RECEIPT; receipt.parent.mkdir(parents=True); receipt.write_text('{"old":true}')
         self.model=self.source/'state/jobs/preserved.glb'; self.model.parent.mkdir(parents=True); self.model.write_bytes(b'ORIGINAL_MODEL')
