@@ -2,7 +2,7 @@ import { inspectGLB } from '../src/lib/glb.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
-import { reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
+import { entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
 import { inputDigest, oracleStudioPayload, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
 
@@ -291,21 +291,39 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
     const match = new RegExp(`^/api/studio/jobs/(${UUID})(?:/(model|exports/(?:pbr|fbx|blend)))?$`).exec(url.pathname)
     if (match && request.method === 'GET') {
       const user = await accountIdentity(request, env, fetcher)
+      // The HMAC receipt is account-bound. If the entitlement Durable Object lost
+      // only its job row, keep recovery tied to this exact signed UUID instead of
+      // spinning forever or starting another paid generation.
       const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', match[1], !!user, user?.id)
-      const access = await accountAccess(env, user?.id, auth.id)
+      const access = user ? await userJobAccess(env, user.id, auth.id) : null
       await limit(request, env, match[2] ? 'artifact' : `poll:${auth.id}`)
       if (match[2]) {
-        // Previewing a GLB transfers its complete bytes. A free SLOW preview
-        // therefore cannot use this route; an active subscription is required.
-        if (access && !access.downloadAllowed) throw new StudioError('SLOW models and textures require an active subscription to download. Your generated model is preserved.', 403)
+        // Legacy/operator mode has no account ledger and keeps its historical
+        // signed-receipt artifact behavior unchanged.
+        if (!user) return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
+        if (access?.owned) {
+          if (!access.downloadAllowed) throw new StudioError('SLOW models and textures require an active subscription to download. Your generated model is preserved.', 403)
+          return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
+        }
+        const statusResponse = await oracle(env, `/v1/jobs/${auth.id}`, fetcher)
+        if (!statusResponse.ok) { await statusResponse.body?.cancel(); throw new StudioError('The recovered model is not available on the worker.', statusResponse.status === 404 ? 404 : 502) }
+        const statusValue = await limitedJson(statusResponse, 16_384)
+        if (statusValue.id !== auth.id || statusValue.state !== 'succeeded') throw new StudioError('The recovered model has not completed on the worker.', 409)
+        const entitlement = await entitlementStatus(env, user.id)
+        if (!entitlement.subscription.active || entitlement.billingReview || entitlement.credits < 0)
+          throw new StudioError('This recovered SLOW result requires an active account without billing review.', 403)
         return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
       }
+
       const response = await oracle(env, `/v1/jobs/${auth.id}`, fetcher)
       if (response.status === 404) {
         await response.body?.cancel()
         const expired = Date.now() - auth.issued >= 180_000
-        if (user && expired) {
+        if (user && access?.owned && expired) {
           return json({ job: await accountJob(env, user.id, auth.id, 'failed'), reconciledMissing: true })
+        }
+        if (user && !access?.owned && expired) {
+          return json({ job: { id: auth.id, state: 'failed', detail: 'This signed receipt has no matching account reservation or Oracle job. No generation is active for this receipt; no automatic retry or charge was started.' }, reconciledMissing: true })
         }
         const state = !user && expired ? 'failed' : 'pending'
         return json({ job: { id: auth.id, state, detail: JOB_DETAILS[state] } })
@@ -313,6 +331,23 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
       const value = await limitedJson(response, 16_384)
       if (((user || value.id !== undefined) && value.id !== auth.id) || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new StudioError('The worker returned an invalid job status.', 502)
+
+      if (user && !access?.owned) {
+        const state = value.state as StudioJob['state']
+        const entitlement = await entitlementStatus(env, user.id)
+        const downloadAllowed = state === 'succeeded' && entitlement.subscription.active && !entitlement.billingReview && entitlement.credits >= 0
+        return json({ job: {
+          id: auth.id, state,
+          detail: state === 'succeeded'
+            ? 'Oracle completed this exact signed job, but its account-ledger ownership row is missing. The same receipt can recover the result; no new generation or point charge is started.'
+            : state === 'failed' || state === 'cancelled'
+              ? 'Oracle finished this exact signed job, but its account-ledger ownership row is missing. No automatic retry, refund, or new charge is performed; billing reconciliation remains separate.'
+              : 'Oracle still has this exact signed job, but its account-ledger ownership row is missing. Recovery is paused for review; do not start a duplicate paid generation.',
+          downloadAllowed, previewOnly: !downloadAllowed, previewAvailable: downloadAllowed,
+          reconciliationRequired: true,
+        } })
+      }
+
       return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state'], fetcher, value.state === 'failed' && typeof value.detail === 'string' && /astra budget guard|WORLDIFACT_ASTRA_COST_GUARD|astra job budget exhausted/i.test(value.detail) ? 'ASTRA_COST_LIMIT' : undefined) })
     }
     return json({ error: 'Studio route or method not found.' }, 404)

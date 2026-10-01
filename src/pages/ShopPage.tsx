@@ -229,7 +229,12 @@ export default function ShopPage() {
         const value = await client.poll(selected)
         if (stopped) return
         failures = 0; setJob(value); setError('')
-        if (value.reconciliationRequired) { setNotice(value.detail); return }
+        if (value.reconciliationRequired) {
+          setNotice(value.detail)
+          setSeconds(0)
+          if (value.state === 'succeeded' && value.downloadAllowed) { updateCredits(); void loadResult(selected, value) }
+          return
+        }
         if (value.state === 'succeeded') { updateCredits(); void loadResult(selected, value); return }
         if (value.state === 'failed' || value.state === 'cancelled') {
           updateCredits()

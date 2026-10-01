@@ -194,3 +194,42 @@ test('cost-limit failure returns points and a fixed customer message, never priv
   assert.match(body,/ASTRA_COST_LIMIT/);assert.doesNotMatch(body,/PRIVATE_KEY/)
   assert.equal((await entitlementStatus(f.env,alice)).credits,4500);assert.equal(f.posts(),1)
 })
+
+
+test('account-bound receipt recovers the exact Oracle job when only the entitlement job row is missing', async () => {
+  const f = fixture(); await f.subscribe()
+  const receipt = await f.prepare()
+  // Deliberately skip /api/studio/jobs POST: the entitlement row is absent,
+  // while the fixture Oracle reports this exact signed UUID as succeeded.
+  const response = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+  assert.equal(response.status, 200)
+  const value = await response.json() as { job: StudioJob }
+  assert.equal(value.job.id, receipt.id)
+  assert.equal(value.job.state, 'succeeded')
+  assert.equal(value.job.reconciliationRequired, true)
+  assert.equal(value.job.downloadAllowed, true)
+  assert.match(value.job.detail, /account-ledger ownership row is missing/i)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4500, 'Recovery never creates a second debit.')
+
+  const artifact = await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket)
+  assert.equal(artifact.status, 200)
+  assert.equal(f.artifacts(), 1)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+  assert.equal(f.posts(), 0, 'Recovery never submits another Oracle generation.')
+})
+
+test('missing entitlement row plus missing Oracle job becomes terminal after reconciliation window without charging', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare(); f.lose()
+  const now = Date.now
+  try {
+    Date.now = () => now() + 181_000
+    const response = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+    assert.equal(response.status, 200)
+    const value = await response.json() as { job: StudioJob; reconciledMissing?: boolean }
+    assert.equal(value.job.state, 'failed')
+    assert.equal(value.reconciledMissing, true)
+    assert.match(value.job.detail, /no matching account reservation or Oracle job/i)
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+    assert.equal(f.posts(), 0)
+  } finally { Date.now = now }
+})
