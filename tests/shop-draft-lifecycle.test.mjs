@@ -295,3 +295,17 @@ test('a real character request selects the signed Studio route, keeps all views 
     assert.equal(h.button('Generate Astra/Blender model').props.disabled,true)
   } finally {h.close()}
 })
+
+
+test('reconciled succeeded Studio job loads the same GLB and never starts another paid job', async () => {
+  const h = await harness({ ready: true, state: 'succeeded', reconciliationRequired: true, downloadAllowed: true })
+  try {
+    await h.poll()
+    await h.settle()
+    assert.ok(h.calls.some(call => call.path.endsWith('/model') && call.method === 'GET'))
+    assert.equal(h.calls.filter(call => call.path === '/api/studio/jobs' && call.method === 'POST').length, 0)
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.ok(h.all().some(node => node.props['data-testid'] === 'result-description'))
+    assert.equal(h.all().some(node => node.type === 'p' && text(node).startsWith('Elapsed:')), false)
+  } finally { h.close() }
+})
