@@ -298,11 +298,13 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const access = user ? await userJobAccess(env, user.id, auth.id) : null
       await limit(request, env, match[2] ? 'artifact' : `poll:${auth.id}`)
       if (match[2]) {
+        // Legacy/operator mode has no account ledger and keeps its historical
+        // signed-receipt artifact behavior unchanged.
+        if (!user) return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
         if (access?.owned) {
           if (!access.downloadAllowed) throw new StudioError('SLOW models and textures require an active subscription to download. Your generated model is preserved.', 403)
           return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
         }
-        if (!user) throw new StudioError('A verified account is required for recovery.', 401)
         const statusResponse = await oracle(env, `/v1/jobs/${auth.id}`, fetcher)
         if (!statusResponse.ok) { await statusResponse.body?.cancel(); throw new StudioError('The recovered model is not available on the worker.', statusResponse.status === 404 ? 404 : 502) }
         const statusValue = await limitedJson(statusResponse, 16_384)
