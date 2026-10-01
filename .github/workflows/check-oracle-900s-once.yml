@@ -31,7 +31,14 @@ jobs:
             'model': v.get('model'),
             'connectorVersion': v.get('connectorVersion'),
             'astraTimeLimitSeconds': v.get('astraTimeLimitSeconds'),
-            'blenderTimeLimitSeconds': v.get('blenderTimeLimitSeconds')
+            'blenderTimeLimitSeconds': v.get('blenderTimeLimitSeconds'),
+            'agentBudgetSeconds': v.get('agentBudgetSeconds'),
+            'planningBudgetSeconds': v.get('planningBudgetSeconds'),
+            'photoPlanningBudgetSeconds': v.get('photoPlanningBudgetSeconds'),
+            'photoReviewReservedSeconds': v.get('photoReviewReservedSeconds'),
+            'photoAiBudgetSeconds': v.get('photoAiBudgetSeconds'),
+            'agentRequestLimit': v.get('agentRequestLimit'),
+            'agentBuildLimit': v.get('agentBuildLimit')
           }
           print(json.dumps(out,sort_keys=True))
           PY
