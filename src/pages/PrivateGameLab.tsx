@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAccount } from '../lib/account'
 import { applyWorldCommand, blankWorld, newEntity, parseWorldCommand, validatePrivateWorld, WORLD_LIMITS, type EntityKind, type LocalWorldCommand, type PrivateWorld, type SavedWorld, type WorldCharacter, type WorldControl } from '../lib/privateWorld'
-import { listStudioModels, readStudioModel, STUDIO_ARCHIVE_EVENT, STUDIO_ARCHIVE_SIGNAL_KEY, type StudioArchiveEntry } from '../lib/studioArchive'
+import { listStudioModels, readStudioModel, STUDIO_ARCHIVE_EVENT, STUDIO_ARCHIVE_SIGNAL_KEY } from '../lib/studioArchive'
+import { mergeGameLabArchive, type GameLabArchiveEntry } from '../lib/gameLabLibrary'
 import { listWorldAssets, storeWorldAsset, type WorldAsset } from '../lib/privateWorldAssets'
 import EighteenCrystal from '../components/EighteenCrystal'
 import GenerationCostNotice from '../components/GenerationCostNotice'
@@ -16,7 +17,6 @@ import './PrivateGameLab.css'
 import './EditorPolish.css'
 const Canvas=lazy(()=>import('../components/PrivateWorldCanvas'))
 type WorldSummary={id:string;name:string;revision:number;updatedAt:string}
-type GameLabArchiveEntry=StudioArchiveEntry&{accountVerified:boolean}
 type Tool='select'|'place'|'mountain'|'valley'
 const STEPS=[
   {title:'1 · Name your world',text:'Choose New game. Name the world and describe the character: outfit, hair, colors, style and label. These descriptions are saved without an AI call. The preview character is a local placeholder.'},
@@ -93,7 +93,7 @@ export default function PrivateGameLab(){
       }
       if(ownerRef.current!==actor)return
       setAssets(local)
-      setGallery(archive.map(entry=>({...entry,accountVerified:verified.has(entry.id)})))
+      setGallery(mergeGameLabArchive(archive,verified))
       setError('')
     }catch(e){if(ownerRef.current===actor)setError(e instanceof Error?e.message:'Library unavailable.')}
   }
