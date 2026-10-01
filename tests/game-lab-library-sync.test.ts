@@ -2,9 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { mergeGameLabArchive } from '../src/lib/gameLabLibrary.ts'
-import type { StudioArchiveEntry } from '../src/lib/studioArchive.ts'
 
-function entry(id:string, savedAt:string): StudioArchiveEntry {
+function entry(id:string, savedAt:string) {
   return { id, prompt:'Generated model '+id, savedAt, byteLength:8_900_000, sha256:'a'.repeat(64), review:'UNREVIEWED' }
 }
 
@@ -26,7 +25,7 @@ test('server verification is only a badge and cannot delete the generated device
   const merged=mergeGameLabArchive(models,[])
   assert.equal(merged.length,models.length)
   assert.ok(merged.every(item=>item.accountVerified===false))
-  assert.deepEqual(merged.map(({accountVerified,...item})=>item),models)
+  assert.deepEqual(merged.map(item=>{const copy={...item};delete (copy as Partial<typeof item>).accountVerified;return copy}),models)
 })
 
 
