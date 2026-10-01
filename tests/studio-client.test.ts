@@ -88,3 +88,24 @@ test('explicit account quota rejection stays terminal across reload without endl
   restored.clearSelection()
   assert.equal(restored.current, null)
 })
+
+
+test('legacy ownership 403 becomes same-job reconciliation instead of endless polling or paid replay', async () => {
+  const storage = store()
+  storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: new Date().toISOString() }))
+  const calls: { url: string; method: string }[] = []
+  const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({ url: String(url), method: init?.method ?? 'GET' })
+    return Response.json({ error: 'This model belongs to a different account or has no account receipt.' }, { status: 403 })
+  }) as typeof fetch
+  const client = new StudioCoordinator(storage, fetcher)
+  client.restore()
+  const job = await client.poll()
+  assert.equal(job.state, 'pending')
+  assert.equal(job.reconciliationRequired, true)
+  assert.match(job.detail, /account-ledger reconciliation/i)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].method, 'GET')
+  assert.equal(calls.some(call => call.method === 'POST'), false)
+  assert.equal(client.current?.receipt.id, id)
+})
