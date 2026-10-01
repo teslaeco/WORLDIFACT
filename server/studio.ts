@@ -315,7 +315,8 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (((user || value.id !== undefined) && value.id !== auth.id) || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new StudioError('The worker returned an invalid job status.', 502)
       const workerState = value.state as StudioJob['state']
       const failureCode = workerState === 'failed' && typeof value.detail === 'string' && /astra budget guard|WORLDIFACT_ASTRA_COST_GUARD|astra job budget exhausted/i.test(value.detail) ? 'ASTRA_COST_LIMIT' : undefined
-      if (!['succeeded', 'failed', 'cancelled'].includes(workerState) && Date.now() - auth.issued >= STUDIO_STALE_REVIEW_MS) {
+      const startedAt = access?.reservedAt ?? auth.issued
+      if (!['succeeded', 'failed', 'cancelled'].includes(workerState) && Date.now() - startedAt >= STUDIO_STALE_REVIEW_MS) {
         const review = await accountJob(env, user?.id, auth.id, 'pending', fetcher)
         if (review.state === 'failed') return json({ job: review })
         return json({ job: { ...review, state: 'pending', detail: STUDIO_RECONCILIATION_DETAIL, reconciliationRequired: true }, stale: true })
