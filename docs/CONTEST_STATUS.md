@@ -70,3 +70,48 @@ FBX and separate PBR ZIP are not available for this character yet. GLB and BLEND
 MAKE remains validation-required. No manufacturing approval, supplier acceptance or production-ready claim was created.
 
 Release decision: **GO — the generated Astra heroine is live as the default TerraformingPlanet/WORLDIFACT shared-world GAME avatar. NO-GO for reference-perfect-likeness, FBX/PBR-complete or manufacturing-ready claims until separately verified.**
+
+
+## VERIFIED — Oracle timeout maintenance completed before this recovery fix
+
+The owner-installed Oracle maintenance completed successfully on 1 October 2026 with `ASTRA_REQUEST_TIMEOUT900_VERIFIED`, `astra_request_timeout_seconds: 900`, `agent_budget_seconds_unchanged: 1800`, `max_provider_usd: 1.75`, `payment_settings_changed: false` and no paid quality test. A later authenticated read-only health probe confirmed production remained `ready: true`, `provider: openai`, `model: gpt-6-astra`, connector v33, agent budget 1800 seconds, photo planning budget 900 seconds and the current cache-accounting/output-policy evidence.
+
+## VERIFIED — separate stuck-job UI incident
+
+A later Shop screenshot showed one saved detailed job still rendered as `Preparing your model…` after more than 92 minutes. This is not evidence that Astra was still executing. Source inspection found a client recovery defect: after four consecutive status-read failures Shop returned from its polling loop permanently, while the elapsed-time interval continued. WorldCharacterStudio had equivalent stop-after-errors behavior and an additional finite-attempt polling stop.
+
+The same screenshot also showed the exact account-ownership error `This model belongs to a different account or has no account receipt.`, which the prior client treated as a thrown poll error while retaining the current selection.
+
+## IMPLEMENTED — GET-only stuck-job recovery candidate
+
+Branch `fix/studio-stuck-job-recovery-20261001` implements the Codex task recorded in [CODEX_TASK_STUDIO_STUCK_JOB_REPAIR_20261001.md](CODEX_TASK_STUDIO_STUCK_JOB_REPAIR_20261001.md):
+
+- normal polling remains 25 seconds;
+- after four consecutive poll failures the UI switches to reconciliation/status-review instead of pretending generation is active;
+- recovery continues using GET only every 60 seconds and never submits a replacement paid job;
+- a later successful/terminal GET automatically supersedes the temporary review state;
+- an exact account-ownership 403 becomes a preserved local reconciliation state rather than an endless thrown error;
+- users can explicitly archive the uncertain local recovery receipt; the existing receipt-history path is used and this action does not cancel, refund or resubmit the server job;
+- server-side nonterminal jobs older than 40 minutes from the actual entitlement reservation timestamp return `pending + reconciliationRequired`, without settling or refunding the reservation;
+- a later real `succeeded`, `failed` or `cancelled` worker state still wins;
+- WorldCharacterStudio now uses the same safe recovery behavior and no longer stops permanently after four failures or its prior attempt counter.
+
+Stripe, PayPal, plans, point prices, customer balances, the USD1.75 Astra guard, the installed 900-second Astra request timeout, Oracle model identity and stored artifacts are unchanged.
+
+## BLOCKED — production proof for the 92-minute job
+
+This branch has not yet been merged or deployed. The already-visible 92-minute browser receipt has not been inspected through the user's current browser storage, so its actual Oracle terminal state remains UNKNOWN. Do not claim that old job is repaired or refunded merely from this source change.
+
+## VERIFIED — exact implementation CI
+
+Implementation head `aad081ba87a90d7d1ba72dd520e4d7c056b7730d` passed all six applicable PR workflows:
+- Verify WORLDIFACT — success;
+- Review FAST draft worker (no paid API) — success;
+- Review FAST v33 installation safety — success;
+- Review FAST Cloud Shell launcher — success;
+- Review approved FAST cost guard — success;
+- Review Oracle project-file patch — success.
+
+The main verification job ran **620 tests: 620 passed, 0 failed**, plus lint, typecheck, local HTTP smoke, build, foundations and `wrangler deploy --dry-run`. The new recovery regressions passed, including four transient poll failures followed by a later successful GET, explicit receipt archiving with zero POSTs, account-mismatch reconciliation, and >40-minute stale worker review without customer refund or a second Oracle submission.
+
+Release decision: **GO for merge/deployment of this recovery hotfix, pending the owner's explicit production approval.** The already-stuck browser job itself remains UNKNOWN until the deployed code performs recovery against its saved receipt. No paid model generation is required for the deployment check.

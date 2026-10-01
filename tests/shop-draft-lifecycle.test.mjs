@@ -52,11 +52,12 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, characterPrompt = '', detailedReady = false } = {}) {
+async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, characterPrompt = '', detailedReady = false, pollFailures = 0 } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
+  let remainingPollFailures = pollFailures
   const status = { detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
     reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000, detailedReferenceLimit: 4 }
   const fetcher = async (url, init = {}) => {
@@ -70,6 +71,7 @@ async function harness({ ready = false, state = 'succeeded', solReady = ready, d
       evidence: { providerResponseId: 'resp_ui_fixture', receivedAt: new Date().toISOString(), blueprintSha256: 'f'.repeat(64), inputTokens: null, outputTokens: null, totalTokens: null },
       delivery: { kind: 'procedural-blueprint', referenceCount: JSON.parse(init.body).references.length, fallbackUsed: false },
     })
+    if (method === 'GET' && path === `/api/studio/jobs/${oldId}` && remainingPollFailures > 0) { remainingPollFailures--; throw new TypeError('Simulated transient poll failure') }
     if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
@@ -294,4 +296,31 @@ test('a real character request selects the signed Studio route, keeps all views 
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id,newId)
     assert.equal(h.button('Generate Astra/Blender model').props.disabled,true)
   } finally {h.close()}
+})
+
+
+test('four transient status failures switch to review but keep GET-only recovery alive until a later status succeeds', async () => {
+  const h = await harness({ ready: true, state: 'building', pollFailures: 4 })
+  try {
+    for (let i = 0; i < 4; i++) await h.poll()
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Model needs a status review'))
+    assert.equal(h.all().some(node => node.type === 'p' && text(node).startsWith('Elapsed:')), false)
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    await h.poll()
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Preparing your model…'), 'A later successful GET exits local review state')
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+test('explicitly archiving a reconciliation receipt preserves history and never cancels, refunds or resubmits', async () => {
+  const h = await harness({ ready: true, state: 'pending', reconciliationRequired: true })
+  try {
+    await h.poll()
+    const current = JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY))
+    h.button('Archive local recovery receipt').props.onClick()
+    await h.settle()
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), undefined)
+    assert.deepEqual(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_HISTORY_PREFIX + current.receipt.id)), current)
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+  } finally { h.close() }
 })

@@ -61,7 +61,7 @@ function fixture() {
     await entitlementCall(env, alice, '/grant', { id: 'in_subscription', credits: 4500, subscriptionId: 'sub_test' })
     await entitlementCall(env, alice, '/subscription', { id: 'sub_test', until: Date.now() + 86400000, active: true, revision: 1, plan: 'pro', grantId: 'in_subscription' })
   }
-  return { env, call, prepare, subscribe, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
+  return { env, call, prepare, subscribe, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' }, setState: (next: StudioJob['state']) => { state = next },
     busy: () => { busy = true }, lose: () => { loss = true; status404 = true } }
 }
 
@@ -193,4 +193,30 @@ test('cost-limit failure returns points and a fixed customer message, never priv
   const response=await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket), body=await response.text()
   assert.match(body,/ASTRA_COST_LIMIT/);assert.doesNotMatch(body,/PRIVATE_KEY/)
   assert.equal((await entitlementStatus(f.env,alice)).credits,4500);assert.equal(f.posts(),1)
+})
+
+
+test('a worker state still nonterminal after 40 minutes becomes reconciliation without refund or duplicate POST, then later terminal success wins', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare(); f.setState('building')
+  assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).status, 202)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
+  const realNow = Date.now
+  try {
+    Date.now = () => realNow() + 41 * 60_000
+    const review = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob; stale?: boolean }
+    assert.equal(review.job.state, 'pending')
+    assert.equal(review.job.reconciliationRequired, true)
+    assert.equal(review.stale, true)
+    assert.match(review.job.detail, /status is reviewed/i)
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4250, 'Stale review is not a refund or failure settlement')
+    assert.equal(f.posts(), 1, 'Recovery must never create another Oracle POST')
+
+    f.setState('succeeded')
+    const terminal = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(terminal.job.state, 'succeeded', 'A later real terminal worker state supersedes stale review')
+    assert.equal(terminal.job.reconciliationRequired, undefined)
+    assert.equal(f.posts(), 1)
+  } finally {
+    Date.now = realNow
+  }
 })

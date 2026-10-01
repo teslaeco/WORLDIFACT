@@ -4,7 +4,7 @@ import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
-import { inputDigest, oracleStudioPayload, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
+import { inputDigest, oracleStudioPayload, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_STALE_REVIEW_MS, STUDIO_RECONCILIATION_DETAIL, JOB_DETAILS, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
@@ -313,7 +313,15 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
       const value = await limitedJson(response, 16_384)
       if (((user || value.id !== undefined) && value.id !== auth.id) || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new StudioError('The worker returned an invalid job status.', 502)
-      return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state'], fetcher, value.state === 'failed' && typeof value.detail === 'string' && /astra budget guard|WORLDIFACT_ASTRA_COST_GUARD|astra job budget exhausted/i.test(value.detail) ? 'ASTRA_COST_LIMIT' : undefined) })
+      const workerState = value.state as StudioJob['state']
+      const failureCode = workerState === 'failed' && typeof value.detail === 'string' && /astra budget guard|WORLDIFACT_ASTRA_COST_GUARD|astra job budget exhausted/i.test(value.detail) ? 'ASTRA_COST_LIMIT' : undefined
+      const startedAt = access?.reservedAt ?? auth.issued
+      if (!['succeeded', 'failed', 'cancelled'].includes(workerState) && Date.now() - startedAt >= STUDIO_STALE_REVIEW_MS) {
+        const review = await accountJob(env, user?.id, auth.id, 'pending', fetcher)
+        if (review.state === 'failed') return json({ job: review })
+        return json({ job: { ...review, state: 'pending', detail: STUDIO_RECONCILIATION_DETAIL, reconciliationRequired: true }, stale: true })
+      }
+      return json({ job: await accountJob(env, user?.id, auth.id, workerState, fetcher, failureCode) })
     }
     return json({ error: 'Studio route or method not found.' }, 404)
   } catch (e) {

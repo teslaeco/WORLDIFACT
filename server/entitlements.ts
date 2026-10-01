@@ -19,7 +19,7 @@ type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
 type Job = { fingerprint?: string; model?: GenerationModel; profile: GenerationKind; at: number; cost: number; kind: 'free' | 'credits'; state: 'reserved' | 'completed' | 'failed' }
 export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state'] }
-export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; state?: Job['state'] }
+export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; state?: Job['state']; reservedAt?: number }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
 type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
@@ -198,7 +198,7 @@ export class AccountEntitlements {
           if (!job) return json({ owned: false, downloadAllowed: false, previewOnly: false })
           const subscription = await this.storage.get<Subscription>('subscription')
           const allowed = job.state === 'completed' && (job.profile === 'fast' || active(subscription, now)) && await balance(this.storage) >= 0 && await this.storage.get<boolean>('billingHold') !== true
-          return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, state: job.state })
+          return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, state: job.state, reservedAt: job.at })
         }
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
         const next = input.state as 'completed' | 'failed'

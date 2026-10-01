@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { StudioCoordinator, type ReceiptStore, type SavedStudioJob } from '../lib/studioClient'
-import { validateStudioInput, type StudioJob } from '../lib/studioProtocol'
+import { STUDIO_RECOVERY_POLL_MS, STUDIO_POLL_FAILURE_REVIEW_COUNT, STUDIO_RECONCILIATION_DETAIL, validateStudioInput, type StudioJob } from '../lib/studioProtocol'
 import { saveStudioModel } from '../lib/studioArchive'
 import { listWorldAssets, storeWorldAsset, type WorldAsset } from '../lib/privateWorldAssets'
 import { characterGenerationPrompt } from '../lib/editorTools'
@@ -41,13 +41,21 @@ export default function WorldCharacterStudio(p:Props){
   useEffect(()=>{
     if(!saved||!client.current)return
     const api=client.current,record=saved;let closed=false,attempts=0,failures=0,timer:ReturnType<typeof setTimeout>|undefined
-    async function poll(){if(closed)return;if(lock.current){timer=setTimeout(poll,4500);return}try{const value=await api.poll(record);if(closed)return;setJob(value);failures=0
-      if(value.reconciliationRequired){setNotice('This job needs reconciliation. No paid retry was started.');return}
+    const schedule=(ms:number)=>{if(!closed)timer=setTimeout(poll,ms)}
+    async function poll(){if(closed)return;if(lock.current){schedule(4500);return}try{const value=await api.poll(record);if(closed)return;setJob(value);failures=0
+      if(value.reconciliationRequired){setNotice(value.detail||'This job needs reconciliation. No paid retry was started.');schedule(STUDIO_RECOVERY_POLL_MS);return}
       if(value.state==='succeeded'){void loadResult(record,value);return}
       if(terminal(value.state)){setNotice('The character job did not complete. The prior character and recovery receipt are preserved.');return}
-    }catch(e){if(closed)return;failures++;setError(e instanceof Error?e.message:'Status check failed.');if(failures>=4)return}
-      if(++attempts>=160){setNotice('Status polling paused. Recover this job to check again without buying another generation.');return}timer=setTimeout(poll,4500)
-    }timer=setTimeout(poll,800);return()=>{closed=true;if(timer)clearTimeout(timer)}
+      attempts++
+      schedule(attempts>=160?STUDIO_RECOVERY_POLL_MS:4500)
+    }catch(e){if(closed)return;failures++;setError(e instanceof Error?e.message:'Status check failed.')
+      if(failures>=STUDIO_POLL_FAILURE_REVIEW_COUNT){
+        setJob({id:record.receipt.id,state:'pending',detail:STUDIO_RECONCILIATION_DETAIL,reconciliationRequired:true})
+        setNotice('Character status checks are temporarily failing. GET-only recovery will continue; no second paid generation was started.')
+        schedule(STUDIO_RECOVERY_POLL_MS);return
+      }
+      schedule(4500)
+    }}timer=setTimeout(poll,800);return()=>{closed=true;if(timer)clearTimeout(timer)}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[saved?.receipt.id,retry])
   async function generate(){
