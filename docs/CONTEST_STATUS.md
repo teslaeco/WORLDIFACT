@@ -70,3 +70,27 @@ FBX and separate PBR ZIP are not available for this character yet. GLB and BLEND
 MAKE remains validation-required. No manufacturing approval, supplier acceptance or production-ready claim was created.
 
 Release decision: **GO — the generated Astra heroine is live as the default TerraformingPlanet/WORLDIFACT shared-world GAME avatar. NO-GO for reference-perfect-likeness, FBX/PBR-complete or manufacturing-ready claims until separately verified.**
+
+
+## VERIFIED — stuck Studio receipt recovery deployed (1 October 2026)
+
+Owner evidence showed a selected Astra/Blender Studio job still displaying `Preparing your model…` after more than 92 minutes while recovery returned `This model belongs to a different account or has no account receipt.`
+
+Root cause in the public client: that exact HTTP403 was treated as a transient polling failure. Polling eventually stopped, but the signed receipt remained selected as non-terminal, so the elapsed timer continued indefinitely and the generation UI stayed locked.
+
+PR #164 merged as `f7c9eeb5f4add49dbb14eb2ad433dfd923eb3fab` after exact-head green checks. Production workflow [36904740422](https://github.com/teslaeco/WORLDIFACT/actions/runs/36904740422) completed successfully, including deploy and post-deploy detailed-route verification. Main CI [36904740551](https://github.com/teslaeco/WORLDIFACT/actions/runs/36904740551) also passed.
+
+The repair:
+- keeps HMAC receipts bound to the verified account UUID;
+- never turns a receipt from another account into ownership;
+- when the valid current-account receipt exists but its entitlement job row is missing, reads only the exact matching Oracle UUID;
+- never starts another generation, reserves another job, debits points, grants credits or mutates Stripe/PayPal during recovery;
+- returns `reconciliationRequired` instead of an endless elapsed timer;
+- treats an Oracle 404 after the existing reconciliation window as terminal without financial mutation when no entitlement reservation exists;
+- allows GET recovery of an already-succeeded exact Oracle artifact only when the current account still has an active subscription and no billing review;
+- preserves the normal owned-job settlement/download path unchanged;
+- contains a client compatibility path so the old exact ownership-403 enters same-job review instead of spinning indefinitely.
+
+The Codex implementation contract is recorded in `docs/CODEX_TASK_STUCK_STUDIO_RECOVERY_20261001.md`.
+
+No paid Astra generation was run for this repair. The specific owner's 92-minute receipt still requires one post-deploy browser recovery action to reveal whether its exact Oracle UUID succeeded, failed/cancelled, or is absent; do not claim that model itself recovered until that result is observed.
