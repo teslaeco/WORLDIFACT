@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { gunzipSync } from 'node:zlib'
-import { avatarApi, NEPTUNE_QUEEN_JOB_ID, MAX_AVATAR_GLB_BYTES, type AvatarCache } from '../server/avatar.ts'
+import { avatarApi, NEPTUNE_QUEEN_JOB_ID, TERRAFORMING_HEROINE_JOB_ID, MAX_AVATAR_GLB_BYTES, type AvatarCache } from '../server/avatar.ts'
 const env = { ORACLE_ENDPOINT: 'https://queen.trycloudflare.com', ORACLE_API_TOKEN: 'private-fixture-token' }
 const url = 'https://worldifact.test/api/avatar/neptune-queen'
 function glb(length = 4096) {
@@ -85,4 +85,21 @@ test('cache failures are optional and cache writes can run off the response path
   const pending: AvatarCache = { async match() { return undefined }, put() { return new Promise<void>(resolve => { finish = resolve }) } }
   const immediate = (await avatarApi(new Request(url), env, (async () => source()) as typeof fetch, pending, { waitUntil(task) { background.push(task) } }))!
   assert.equal(immediate.status, 200); assert.equal(background.length, 1); finish(); await Promise.all(background)
+})
+
+test('TerraformingPlanet heroine is proxied only from the exact successful Astra job', async () => {
+  const heroineUrl = 'https://worldifact.test/api/avatar/terraforming-heroine'
+  let calls = 0
+  const fetcher = (async (input, init) => {
+    calls++
+    assert.equal(String(input), `${env.ORACLE_ENDPOINT}/v1/jobs/${TERRAFORMING_HEROINE_JOB_ID}/model`)
+    assert.equal(init?.method, 'GET')
+    assert.equal(init?.redirect, 'manual')
+    return source()
+  }) as typeof fetch
+  const response = (await avatarApi(new Request(heroineUrl), env, fetcher, undefined))!
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('X-WORLDIFACT-Avatar'), 'TerraformingPlanet-Heroine-Astra')
+  assert.equal(response.headers.get('X-WORLDIFACT-Source-Job'), TERRAFORMING_HEROINE_JOB_ID)
+  assert.equal(calls, 1)
 })
