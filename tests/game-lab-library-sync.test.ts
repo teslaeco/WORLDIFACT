@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { mergeGameLabArchive } from '../src/lib/gameLabLibrary.ts'
 import type { StudioArchiveEntry } from '../src/lib/studioArchive.ts'
 
@@ -26,4 +27,22 @@ test('server verification is only a badge and cannot delete the generated device
   assert.equal(merged.length,models.length)
   assert.ok(merged.every(item=>item.accountVerified===false))
   assert.deepEqual(merged.map(({accountVerified,...item})=>item),models)
+})
+
+
+test('archive save notifies Game Lab and Game Lab no longer filters local GLBs out of view',async()=>{
+  const [archiveSource,labSource]=await Promise.all([
+    readFile(new URL('../src/lib/studioArchive.ts',import.meta.url),'utf8'),
+    readFile(new URL('../src/pages/PrivateGameLab.tsx',import.meta.url),'utf8'),
+  ])
+  assert.match(archiveSource,/worldifact:studio-archive-changed/)
+  assert.match(archiveSource,/worldifact-studio-archive-revision-v1/)
+  assert.match(archiveSource,/dispatchEvent\(new CustomEvent/)
+  assert.match(archiveSource,/localStorage\.setItem\(STUDIO_ARCHIVE_SIGNAL_KEY/)
+  assert.match(labSource,/mergeGameLabArchive\(archive,verified\)/)
+  assert.doesNotMatch(labSource,/archive\.filter\(e=>\(result\.ids/)
+  assert.match(labSource,/window\.addEventListener\(STUDIO_ARCHIVE_EVENT,update\)/)
+  assert.match(labSource,/window\.addEventListener\('storage',storage\)/)
+  assert.match(labSource,/DEVICE ARCHIVE/)
+  assert.match(labSource,/Use local GLB/)
 })
