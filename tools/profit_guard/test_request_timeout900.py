@@ -1,5 +1,6 @@
 """No-network tests for the 15-minute Astra request-timeout installer."""
 import contextlib
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -36,6 +37,17 @@ class TimeoutInstallerTests(unittest.TestCase):
         self.original=("def fixture(opener, request):\n    "+update.OLD+"\n        pass\n").encode()
         self.runner.write_bytes(self.original)
         receipt=self.source/update.base.RECEIPT; receipt.parent.mkdir(parents=True); receipt.write_text('{"old":true}')
+        self.guard_receipt=self.source/update.cache.legacy.RECEIPT
+        self.guard_value={
+            'revision': update.cache.legacy.REVISION,
+            'sha256': {
+                'codex_runner.py': hashlib.sha256(self.original).hexdigest(),
+                'fast_preview.py': 'a'*64,
+                'astra_spend.py': 'b'*64,
+            },
+            'outputPolicy': {'revision': update.policy.REVISION, 'sha256': 'c'*64},
+        }
+        self.guard_receipt.write_text(json.dumps(self.guard_value))
         self.model=self.source/'state/jobs/preserved.glb'; self.model.parent.mkdir(parents=True); self.model.write_bytes(b'ORIGINAL_MODEL')
         self.pay=self.source/'state/payment-canary.json'; self.pay.write_text('{"credits":3805}')
         self.addCleanup(patch.stopall)
@@ -70,15 +82,34 @@ class TimeoutInstallerTests(unittest.TestCase):
         self.assertEqual(result['max_provider_usd'],1.75)
         self.assertFalse(result['payment_settings_changed']); self.assertFalse(result['paid_generation_requested'])
         self.assertIn(update.NEW.encode(),self.runner.read_bytes())
+        guard=json.loads(self.guard_receipt.read_text())
+        self.assertEqual(guard['sha256']['codex_runner.py'],hashlib.sha256(self.runner.read_bytes()).hexdigest())
+        self.assertEqual(guard['sha256']['fast_preview.py'],self.guard_value['sha256']['fast_preview.py'])
+        self.assertEqual(guard['sha256']['astra_spend.py'],self.guard_value['sha256']['astra_spend.py'])
+        self.assertEqual(guard['outputPolicy'],self.guard_value['outputPolicy'])
         self.assertEqual(ops.events,['preflight','quiesce','idle','verify','start','health'])
         self.preserved()
 
     def test_verification_failure_rolls_back_runner_and_receipt(self):
         original_receipt=(self.source/update.base.RECEIPT).read_bytes()
+        original_guard=self.guard_receipt.read_bytes()
         ops=self.ops('verify')
         with self.assertRaises(update.base.InstallError): update.install(self.source,self.root/'backup',ops,approved=True)
         self.assertEqual(self.runner.read_bytes(),self.original)
         self.assertEqual((self.source/update.base.RECEIPT).read_bytes(),original_receipt)
+        self.assertEqual(self.guard_receipt.read_bytes(),original_guard)
+        self.preserved()
+
+    def test_guard_receipt_mismatch_stops_before_quiesce(self):
+        value=json.loads(self.guard_receipt.read_text())
+        value['sha256']['codex_runner.py']='0'*64
+        self.guard_receipt.write_text(json.dumps(value))
+        ops=self.ops()
+        with self.assertRaises(update.base.InstallError):
+            update.install(self.source,self.root/'backup',ops,approved=True)
+        self.assertEqual(ops.events,['preflight'])
+        self.assertFalse((self.root/'backup').exists())
+        self.assertEqual(self.runner.read_bytes(),self.original)
         self.preserved()
 
     def test_active_job_stops_before_backup_or_quiesce(self):
