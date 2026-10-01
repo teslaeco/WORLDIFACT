@@ -17,5 +17,5 @@ test('approved heroine job is one fixed bounded Astra character request',()=>{
   assert.match(input.prompt,/Remove the glowing orb/i)
   assert.match(input.prompt,/full-body adult female sci-fi heroine/i)
   assert.match(input.prompt,/GLB/)
-  assert.doesNotMatch(input.prompt,/manufacturing-approved/i)
+  assert.match(input.prompt,/must not be described as manufacturing-approved/i)
 })
