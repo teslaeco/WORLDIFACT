@@ -19,7 +19,7 @@ import { canSubmitNewDraft } from '../lib/studioDraft'
 import { inspectGLB } from '../lib/glb'
 import { DEFAULT_DIMENSIONS_MM, type ClientDimensions } from '../lib/shopManufacturing'
 import { type GenerationResult } from '../lib/blueprint'
-import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
+import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, STUDIO_RECOVERY_POLL_MS, STUDIO_POLL_FAILURE_REVIEW_COUNT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
 import { BlueprintClient } from '../lib/blueprintClient'
 import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, BLUEPRINT_REFERENCE_BYTES, blueprintDelivery, blueprintReferences, type BlueprintDelivery } from '../lib/blueprintRequest'
 import './ShopPage.css'
@@ -123,6 +123,23 @@ export default function ShopPage() {
       setError(e instanceof Error ? e.message : 'The previous job could not be cleared safely.')
     }
   }
+  const archiveRecoveryReceipt = () => {
+    const client = coordinator.current
+    if (!client || !saved || !job?.reconciliationRequired || operations.current.submit || operations.current.artifact) return
+    if (!window.confirm('Stop tracking this uncertain job on this device? Its signed receipt will be preserved in local history. This does not cancel, refund or resubmit the server job.')) return
+    try {
+      client.clearSelection()
+      clearPreview()
+      setSaved(null)
+      setJob(null)
+      setSeconds(0)
+      setError('')
+      setNotice('The uncertain recovery receipt was archived locally. No server job was cancelled, refunded or resubmitted.')
+      promptInput.current?.focus()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The recovery receipt could not be archived safely.')
+    }
+  }
 
   const showBlob = async (blob: Blob, identity: StudioPreviewIdentity, token: number) => {
     let warning = ''
@@ -222,14 +239,19 @@ export default function ShopPage() {
     if (!saved || !coordinator.current) return
     const selected = saved, client = coordinator.current
     let stopped = false, timer: ReturnType<typeof setTimeout> | undefined, failures = 0
+    const schedule = (ms: number) => { if (!stopped) timer = setTimeout(poll, ms) }
     const poll = async () => {
       if (stopped) return
-      if (operations.current.submit) { timer = setTimeout(poll, 1500); return }
+      if (operations.current.submit) { schedule(1500); return }
       try {
         const value = await client.poll(selected)
         if (stopped) return
         failures = 0; setJob(value); setError('')
-        if (value.reconciliationRequired) { setNotice(value.detail); return }
+        if (value.reconciliationRequired) {
+          setNotice(value.detail)
+          schedule(STUDIO_RECOVERY_POLL_MS)
+          return
+        }
         if (value.state === 'succeeded') { updateCredits(); void loadResult(selected, value); return }
         if (value.state === 'failed' || value.state === 'cancelled') {
           updateCredits()
@@ -244,12 +266,20 @@ export default function ShopPage() {
           }
           return
         }
+        schedule(STUDIO_POLL_MS)
       } catch (e) {
         if (stopped) return
-        failures++; setError(e instanceof Error ? e.message : 'Status temporarily unavailable. Recover the same job.')
-        if (failures >= 4) return
+        failures++
+        const message = e instanceof Error ? e.message : 'Status temporarily unavailable. Recover the same job.'
+        setError(message)
+        if (failures >= STUDIO_POLL_FAILURE_REVIEW_COUNT) {
+          setJob({ id: selected.receipt.id, state: 'pending', detail: STUDIO_RECONCILIATION_DETAIL, reconciliationRequired: true })
+          setNotice('Status checks are temporarily failing. WORLDIFACT is continuing GET-only recovery for this same job; no second paid generation was started.')
+          schedule(STUDIO_RECOVERY_POLL_MS)
+          return
+        }
+        schedule(STUDIO_POLL_MS * Math.min(failures + 1, 3))
       }
-      if (!stopped) timer = setTimeout(poll, STUDIO_POLL_MS * Math.min(failures + 1, 3))
     }
     timer = setTimeout(poll, 1500)
     return () => { stopped = true; if (timer) clearTimeout(timer) }
@@ -424,7 +454,7 @@ export default function ShopPage() {
           <div className="native-shop-views">{['front', 'left', 'back', 'face'].map(view => <button key={view} type="button" aria-pressed={sampleView === view} onClick={() => { setSampleView(view); setSampleMissing(false) }}>{view === 'left' ? 'Left side' : view[0].toUpperCase() + view.slice(1)}</button>)}</div>
           <small>Example only. Your own generated preview replaces it after generation succeeds.</small>
         </>}
-        {saved && <div className="native-shop-actions"><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
+        {saved && <div className="native-shop-actions"><button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{job?.reconciliationRequired && <button type="button" disabled={busy || artifactBusy} onClick={archiveRecoveryReceipt}>Archive local recovery receipt</button>}{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
       </div>
       <div className="native-shop-form">
         <span className="eyebrow">CREATE YOUR PRODUCT</span><h1>Describe it.<br />See it in 3D.</h1><p><a href="/compare/mcc/">See the real MCC cabinet comparison: WORLDIFACT and Meshy →</a></p>
