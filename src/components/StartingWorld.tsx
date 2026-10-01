@@ -81,7 +81,7 @@ export default function StartingWorld({
   const zoom = useRef(4.8);
   const overview = useRef(false);
   const [music, setMusic] = useState(false);
-  const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("queen");
+  const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("terraformer");
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [outfit, setOutfit] = useState<OutfitPreset>("original");
   const outfitRef = useRef<OutfitPreset>("original");
