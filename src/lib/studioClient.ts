@@ -140,6 +140,14 @@ export class StudioCoordinator {
       if (this.saved?.receipt.id === job.id) this.confirmedJob = job
       return job
     } catch (error) {
+      const accountMismatch = error instanceof StudioResponseError && error.status === 403 &&
+        error.message === 'This model belongs to a different account or has no account receipt.'
+      if (accountMismatch && this.saved?.receipt.id === saved.receipt.id && !this.submitting) {
+        const review: StudioJob = { id: saved.receipt.id, state: 'pending', reconciliationRequired: true,
+          detail: 'The currently signed-in account cannot confirm ownership of this saved job. Its local recovery receipt is preserved. Sign in with the original account or explicitly archive this local receipt; no cancellation, refund or second generation was started.' }
+        this.confirmedJob = review
+        return review
+      }
       // These exact 401 responses reject the recovery credential itself. An
       // expired login, another account, a timeout, 404 or 5xx is NOT equivalent.
       const unusableReceipt = error instanceof StudioResponseError && error.status === 401 &&
