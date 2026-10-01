@@ -1,52 +1,72 @@
-# WORLDIFACT — TerraformingPlanet heroine integration
+# WORLDIFACT — TerraformingPlanet Astra heroine released
 
-Updated 1 October 2026. The owner explicitly approved one bounded paid GPT-6 Astra character test and deployment while preserving the new payment system.
+Updated 1 October 2026.
 
-## VERIFIED — generator restoration and payment boundary
+## VERIFIED — one bounded live Astra character generation
 
-PR #156 merged as `bcc63fbfff94a00b671bda1394f593acd3c5cfa3` after six green exact-head workflows. Its Cloudflare publication run `36815630843` and application CI `36815630885` passed. The Oracle cache-accounting helper had already been installed from the owner's OCI Cloud Shell and reported `CACHE_ACCOUNTING_VERIFIED`, `max_provider_usd: 1.75`, `payment_settings_changed: false` and `WORLDIFACT_CACHE_FIX_INSTALLED`.
+The owner explicitly approved one paid GPT-6 Astra / Oracle / Blender character test with an unchanged maximum provider reservation of USD 1.75 and no automatic retry.
 
-Stripe, PayPal, subscriptions, product prices, generation-credit rates and customer balances were not rolled back by this restoration. The Astra job cap remains USD 1.75.
+Workflow [36815867329](https://github.com/teslaeco/WORLDIFACT/actions/runs/36815867329), exact source `a5c8266f7c4b5c3348d6913bd48e90d759917f0d`, completed successfully.
 
-## VERIFIED — exactly one live Astra / Oracle / Blender heroine job
-
-The one-time workflow [36815867329](https://github.com/teslaeco/WORLDIFACT/actions/runs/36815867329), exact source `a5c8266f7c4b5c3348d6913bd48e90d759917f0d`, completed successfully with no automatic retry and no customer checkout or credit mutation.
-
-- Model: `gpt-6-astra`
+- model: `gpt-6-astra`
 - Oracle job: `a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781`
-- Maximum provider reservation: USD 1.75
-- Submitted jobs: 1
-- GLB: 15,281,768 bytes; SHA-256 `92d777562e0292f2175f2bf4c6580fb4df03614e38f738afec2efcd25ed3028a`
-- GLB structural inspection: 368,760 triangles, 21 meshes, 8 materials
-- BLEND: 26,457,988 bytes; SHA-256 `946c0ec1427cc710bc52877508c4c891f2d3361ce1322d1d12fc81fed4705bed`
-- FBX export: FAILED
-- PBR ZIP export: FAILED
-- Actual provider invoice cost: UNKNOWN; the USD 1.75 figure is the enforced maximum reservation, not a claimed invoice charge.
+- submitted jobs: 1
+- automatic retries: 0
+- customer charges/checkouts: 0
+- maximum provider reservation: USD 1.75; actual provider invoice cost remains UNKNOWN
+- GLB: 15,281,768 bytes
+- GLB SHA-256: `92d777562e0292f2175f2bf4c6580fb4df03614e38f738afec2efcd25ed3028a`
+- structural inspection: 368,760 triangles, 21 meshes, 8 materials
+- BLEND: 26,457,988 bytes
+- BLEND SHA-256: `946c0ec1427cc710bc52877508c4c891f2d3361ce1322d1d12fc81fed4705bed`
+- FBX: FAILED
+- separate PBR ZIP: FAILED
+- visual fidelity: REQUIRES_HUMAN_REVIEW
 
-The private chat reference images were NOT committed to the public repository and were NOT transported by this GitHub Actions test. Their visible design was translated into the fixed written character brief: adult silver-haired sci-fi heroine, pearl-white/black/cyan outfit, empty hands, no glowing orb, full-body GAME asset. Therefore this run verifies the written-design pipeline, not pixel-level multi-view similarity to the three uploaded images.
+The three chat reference images were deliberately not published to the public GitHub repository and therefore were not passed as image bytes through this Actions test. Their visible character design was translated into the fixed generation brief: adult silver-haired sci-fi heroine, pearl-white/black/cyan outfit, empty hands and no glowing orb. This verifies the written-design generation path, not pixel-level multi-view similarity to those private chat images.
 
-The workflow's success is mechanical evidence of a real generated 3D model and valid GLB structure. It is NOT a human visual-fidelity approval. Visual quality remains `REQUIRES_HUMAN_REVIEW`.
+## VERIFIED — production integration
 
-## IMPLEMENTED — shared TerraformingPlanet world integration
+PR #157 passed all five exact-head checks at `31e0a023b61570cefc898f2a00a6e4e328691ae4` and merged as `2f8a94cca1f7d32a0a1706bd031024c926db0a3c`.
 
-Branch `feat/terraforming-heroine-world-20261001` wires the exact successful job into a dedicated read-only avatar route:
+The integration:
 
-- `/api/avatar/terraforming-heroine`
-- source job fixed to `a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781`
-- no generation is triggered by avatar loading
-- bounded GLB validation, lossless transport and existing cache controls are preserved
-- `TerraformingPlanet Heroine · Astra / Blender` is added to the world character picker
-- the new heroine becomes the default shared-world avatar; Neptune Queen and the archived Rapper remain selectable
-- an unrigged heroine may receive the existing GAME-only approximate locomotion binding; original generated geometry/materials are not silently replaced.
+- exposes only the exact generated job through `/api/avatar/terraforming-heroine`
+- keeps bounded GLB validation and cache controls
+- never starts generation while loading an avatar
+- adds `TerraformingPlanet Heroine · Astra / Blender` to the shared-world character picker
+- makes the heroine the default shared-world avatar
+- preserves Neptune Queen and Rapper as selectable characters
+- allows the existing GAME-only approximate locomotion binding when the generated model has no usable native rig
+- leaves Stripe, PayPal, subscriptions, prices, credit rates and customer balances unchanged.
 
-Focused regressions cover exact Oracle job routing, client cache reuse, world picker/default wiring and failure isolation. Full exact-head CI and deployment are required before this integration is called live.
+Production run [36816617943](https://github.com/teslaeco/WORLDIFACT/actions/runs/36816617943), job `110222959900`, passed all release checks. It ran **615 tests: 615 passed, 0 failed**, typecheck/build/foundations/deployment dry-run, detailed-worker verification, payment no-charge readiness probes, Cloudflare deployment and public smoke. Cloudflare published version `052b2311-130a-428d-abf1-807a31b7361f` to https://worldifact.xodobrox.workers.dev.
 
-## LIMITATIONS / NO FALSE CLAIMS
+## VERIFIED — exact production GLB readback
 
-FBX and separate PBR ZIP were not produced by the test. Do not advertise those exports for this character yet. The GLB and BLEND are the verified outputs.
+A separate no-cost post-deployment workflow [36816788673](https://github.com/teslaeco/WORLDIFACT/actions/runs/36816788673), job `110223489733`, fetched the public production route and required:
 
-No claim is made that the generated face, fingers, garment details or overall likeness already match the supplied artwork. A browser/visual review is still required after deployment.
+- HTTP success
+- `Content-Type: model/gltf-binary`
+- `X-WORLDIFACT-Avatar: TerraformingPlanet-Heroine-Astra`
+- `X-WORLDIFACT-Source-Job: a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781`
+- valid GLB v2 header and exact embedded length
+- payload larger than 10 MB.
 
-No manufacturing approval was produced. MAKE remains validation-required.
+Production returned exactly 15,281,768 bytes with SHA-256 `92d777562e0292f2175f2bf4c6580fb4df03614e38f738afec2efcd25ed3028a`, identical to the generated test GLB.
 
-Release decision: GO for CI/release of the exact generated GLB as a GAME avatar if the integration PR is green. NO-GO for claiming reference-perfect likeness, FBX/PBR completeness or manufacturing readiness.
+## PAYMENT / GENERATION SAFETY PRESERVED
+
+PR #156 had already restored authenticated completed-cache accounting and the owner installed the Oracle helper successfully with `CACHE_ACCOUNTING_VERIFIED`, `max_provider_usd: 1.75`, `payment_settings_changed: false` and `WORLDIFACT_CACHE_FIX_INSTALLED`.
+
+This heroine release does not revert the current payment plans and does not change the USD 1.75 Astra job cap.
+
+## LIMITATIONS — do not overclaim
+
+The model has not received a human visual-fidelity approval in this release. Structural success and production delivery do not prove that the face, hands, hair or outfit exactly match the supplied artwork.
+
+FBX and separate PBR ZIP are not available for this character yet. GLB and BLEND are the verified outputs.
+
+MAKE remains validation-required. No manufacturing approval, supplier acceptance or production-ready claim was created.
+
+Release decision: **GO — the generated Astra heroine is live as the default TerraformingPlanet/WORLDIFACT shared-world GAME avatar. NO-GO for reference-perfect-likeness, FBX/PBR-complete or manufacturing-ready claims until separately verified.**
