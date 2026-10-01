@@ -32,10 +32,19 @@ jobs:
                   if src.startswith('/'): assets.add(src)
           assert assets, 'no deployed JS assets found'
           bundle=''
-          for path in sorted(assets):
+          queue=list(sorted(assets))
+          seen=set()
+          while queue and len(seen)<200:
+              path=queue.pop(0)
+              if path in seen: continue
+              seen.add(path)
               status,headers,body=get(path,12_000_000)
               assert status==200
-              bundle += body.decode('utf-8','replace')
+              text=body.decode('utf-8','replace')
+              bundle += text
+              for child in re.findall(r'''["'](/assets/[^"'?#]+\.js)["']''',text):
+                  if child not in seen: queue.append(child)
+          assets=seen
           required=[
               'DEVICE ARCHIVE',
               'ACCOUNT VERIFIED',
