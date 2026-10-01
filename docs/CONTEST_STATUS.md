@@ -94,3 +94,29 @@ The repair:
 The Codex implementation contract is recorded in `docs/CODEX_TASK_STUCK_STUDIO_RECOVERY_20261001.md`.
 
 No paid Astra generation was run for this repair. The specific owner's 92-minute receipt still requires one post-deploy browser recovery action to reveal whether its exact Oracle UUID succeeded, failed/cancelled, or is absent; do not claim that model itself recovered until that result is observed.
+
+
+## READY FOR RELEASE — Game Lab live generated-model library sync (1 October 2026)
+
+Owner Android evidence shows a newly completed AI Shop GLB present in the device archive while Game Lab/World Builder still displays an older library snapshot.
+
+Root cause verified in source: Game Lab read the local IndexedDB Studio archive and then filtered the entire list through `/api/worlds/library`. That server endpoint intentionally returns only current account-ledger/downloadable IDs. A valid local GLB therefore disappeared from Game Lab whenever ledger ownership was delayed or missing, even though the bytes already existed on the device and could be imported through the ordinary file picker.
+
+PR #166 changes the device-library contract without changing server ownership:
+- every locally stored generated GLB remains visible in Game Lab, newest-first;
+- server verification becomes an additive `ACCOUNT VERIFIED` badge instead of a visibility filter;
+- unverified local models are explicitly labelled `DEVICE ARCHIVE` and are imported only as local device bytes, equivalent to the existing file picker; no cloud ownership is claimed;
+- verified entries still re-check server download permission before import;
+- `saveStudioModel` emits a same-tab archive event plus a best-effort cross-tab storage signal;
+- the Game Lab Library refreshes on archive change, cross-tab storage, focus, pageshow and return to a visible tab, with no continuous polling;
+- GLB bytes are not duplicated into the world-asset store until the user explicitly chooses a model.
+
+Regression coverage includes preservation of local models when zero server IDs are verified, verification-badge merging without reorder/byte mutation, and live notification wiring. The implementation contract is `docs/CODEX_TASK_GAME_LAB_MODEL_LIBRARY_SYNC_20261001.md`.
+
+Exact-head checks for commit `ae1ecb0e5ba2ec27ea16cb8446fa388b0ac135ca` passed:
+- Verify WORLDIFACT: success, including lint/typecheck/tests/HTTP/build/foundations/deploy-check;
+- Review FAST draft worker: success; no paid API call.
+
+No merge or production deployment has been performed for PR #166 yet. No Astra/Oracle request, point debit/refund, Stripe/PayPal/subscription mutation or server ownership transfer was introduced.
+
+Release decision: **GO for merge/deploy after explicit owner approval.**
