@@ -5,7 +5,7 @@ import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
-import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, INDUSTRIAL_ELECTRICAL_PROFILE, REFERENCE_CHARACTER_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
+import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
