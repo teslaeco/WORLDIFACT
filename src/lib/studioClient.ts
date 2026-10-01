@@ -29,7 +29,7 @@ export function parseStudioJob(value: unknown, id: string): StudioJob {
   const state = value.job.state as StudioJob['state']
   const reconciliationRequired = state === 'pending' && value.job.reconciliationRequired === true
   const failureCode = state === 'failed' && ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT'].includes(String(value.job.failureCode)) ? value.job.failureCode as StudioJob['failureCode'] : undefined
-  const failureDetail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit. Reserved customer points were returned; no automatic retry.' : failureCode === 'INVALID_MODEL_OUTPUT' ? 'No valid model was delivered. Reserved customer points were returned; no procedural replacement.' : undefined
+  const failureDetail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit. Reserved customer points were returned; no automatic retry.' : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were returned; no procedural replacement.' : undefined
   return { id, state, detail: failureDetail || (reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state]), ...(failureCode ? { failureCode } : {}),
     ...(reconciliationRequired ? { reconciliationRequired: true } : {}),
     ...(typeof value.job.downloadAllowed === 'boolean' ? { downloadAllowed: value.job.downloadAllowed } : {}),

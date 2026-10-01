@@ -1,10 +1,11 @@
 import { inspectGLB } from '../src/lib/glb.ts'
+import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
-import { inputDigest, oracleStudioPayload, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
+import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
@@ -54,8 +55,8 @@ async function accountAccess(env: StudioEnv, userId: string | undefined, id: str
   return access
 }
 const outputChecks = new Map<string, Promise<'valid' | 'invalid'>>()
-async function validateCompletedModel(env: StudioEnv, userId: string, id: string, fetcher: typeof fetch) {
-  const key = `${userId}:${id}`
+async function validateCompletedModel(env: StudioEnv, userId: string, id: string, fetcher: typeof fetch, qualityProfile: StudioQualityProfile = 'standard') {
+  const key = `${userId}:${id}:${qualityProfile}`
   const existing = outputChecks.get(key)
   if (existing) return existing
   // Coalesce same-job polling. This is a byte/structure check, not perceptual QA.
@@ -66,8 +67,7 @@ async function validateCompletedModel(env: StudioEnv, userId: string, id: string
     catch (e) { if (e instanceof StudioError && [404, 413, 502].includes(e.status)) return 'invalid'; throw e }
     const bytes = await response.arrayBuffer() // Interrupted reads are uncertain, not an automatic refund.
     try {
-      const model = inspectGLB(bytes)
-      return model.meshCount > 0 && model.triangles > 0 && model.renderedTriangles > 0 && model.materialCount > 0 ? 'valid' : 'invalid'
+      return passesStudioStructuralQuality(inspectGLB(bytes), qualityProfile) ? 'valid' : 'invalid'
     } catch { return 'invalid' }
   })()
   outputChecks.set(key, check)
@@ -78,13 +78,13 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
   const previous = await accountAccess(env, userId, id)
   if (previous?.state === 'failed') state = 'failed'
   if (state === 'succeeded' && previous?.state === 'reserved') {
-    if (await validateCompletedModel(env, userId, id, fetcher) !== 'valid') { state = 'failed'; failureCode = 'INVALID_MODEL_OUTPUT' }
+    if (await validateCompletedModel(env, userId, id, fetcher, previous.qualityProfile ?? 'standard') !== 'valid') { state = 'failed'; failureCode = 'INVALID_MODEL_OUTPUT' }
   }
   if (state === 'succeeded') await settleUserGeneration(env, userId, id, 'completed')
   if (state === 'failed' || state === 'cancelled') await settleUserGeneration(env, userId, id, 'failed')
   const access = await accountAccess(env, userId, id)
   const detail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit before completing the model. Reserved customer points were returned; no automatic retry.'
-    : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The worker did not deliver a valid nonempty model. Reserved customer points were returned; no replacement was generated.' : JOB_DETAILS[state]
+    : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The worker did not deliver a structurally valid 3D model at the requested detail level. Reserved customer points were returned; no replacement was generated.' : JOB_DETAILS[state]
   return { id, state, detail, ...(failureCode ? { failureCode } : {}), downloadAllowed: access!.downloadAllowed,
     previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed }
 }
@@ -252,7 +252,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (await boundInputDigest(input, user?.id) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
       const checked = await preflight(request, env, fetcher, input, user?.id)
       if (user) {
-        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow')
+        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, undefined, studioQualityProfile(input))
         if (!userReservation.allowed) throw new StudioError('Your free allowance is used and you do not have enough credits. View your account for limits and top-ups.', 429)
         if (userReservation.repeated) return json({ job: await accountJob(env, user.id, auth.id, 'pending'), recoveryOnly: true }, 202)
       }

@@ -13,6 +13,41 @@ export const REFERENCE_FIDELITY_INSTRUCTIONS = `WORLDIFACT REFERENCE-FIDELITY MO
 - Additional reference views describe the same object and should constrain side/back geometry. If an unseen surface is not supported by a reference, infer it conservatively instead of redesigning the visible structure.
 - Do not mark the visual result acceptable when the overall silhouette, proportions or defining arrangement are substantially different from the references.`
 
+export const INDUSTRIAL_ELECTRICAL_PROFILE = 'industrial-electrical-cabinet-v1' as const
+export const REFERENCE_CHARACTER_PROFILE = 'reference-character-v1' as const
+export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE | typeof REFERENCE_CHARACTER_PROFILE
+
+export const INDUSTRIAL_ELECTRICAL_INSTRUCTIONS = `WORLDIFACT INDUSTRIAL ELECTRICAL CABINET — TRUE 3D MODE:
+- Reconstruct the uploaded cabinet as a volumetric industrial assembly. Reference photos are geometry evidence, NEVER a texture to paste over a flat interior panel.
+- Do not use a photographed cabinet/interior as a base-color image on a plane, box face, backplate, door or other large visible surface. Labels and tiny markings may use decals; breakers, relays, terminals, ducts, rails, displays and wires must be actual 3D geometry.
+- Preserve the photographed enclosure proportions, open doors, frame depth, equipment positions and asymmetry. Keep front/side/detail views consistent.
+- Build separate visible geometry for: enclosure shell and doors; mounting plates/vertical supports; DIN rails; slotted wiring ducts; terminal strips; breaker/protection rows; contactors/relays/interface modules; controller/display modules; top cable entries; grounding hardware; door fan/control devices; fasteners/brackets; routed cable/wire bundles.
+- Components must project physically from mounting surfaces. Ducts need walls/depth, devices need bodies/terminals, and cable bundles need cylindrical/beveled 3D paths with visible stand-off from the backplate.
+- Target a dense service-ready visual assembly: multiple populated equipment rows/columns, at least 20 distinct visible component groups and at least 8 real 3D cable/wire runs when supported by the references. These are visual reconstruction targets, not an electrical engineering design claim.
+- Use realistic industrial spacing and routing: blue/brown/black/green-yellow conductors, terminal markers, gray ducts, metal rails, red/white/yellow protection hardware where visible. Do not invent dangerous functional ratings or claim the wiring is electrically commissioned.
+- Prefer repeated instanced/linked component geometry where suitable, but export a self-contained GAME GLB whose visible detail survives close inspection.
+- Before export, render a front-three-quarter review and verify that the interior still reads as hundreds of physical devices/wires, not a photo, decal or sparse cabinet shell. If it does not, repair geometry before export.
+- If the requested fidelity cannot be built, fail honestly rather than returning a flat photo-card or empty enclosure.`
+
+export const REFERENCE_CHARACTER_INSTRUCTIONS = `WORLDIFACT REFERENCE CHARACTER — REALISTIC 3D MODE:
+- Reconstruct one consistent full-body adult character from all attached views. Never use a reference photo as a face/body/clothing texture on a flat plane or billboard.
+- Prioritize believable 360-degree anatomy: skull/face volume, ears, neck/shoulders, five separated fingers, feet/shoes, hair volume and clean limb separation. No half-skeleton, fused limbs or missing back geometry.
+- Build clothing as actual layered 3D garments with readable thickness, seams, hems, folds, belts/straps/hardware and separation from the body where visible. Preserve the reference silhouette and outfit design instead of replacing it with generic clothes.
+- Use distinct PBR material regions for skin, hair, fabric, rubber/leather, metal/plastic and translucent/emissive details where supported. Do not bake photographed lighting or shadows into base color.
+- Keep the result suitable for GAME/figurine review: clean topology, finite scale, grounded feet, neutral pose and conservative unseen-surface inference. A static mesh is preferable to a broken rig.
+- For figurine intent, preserve important garment/hair detail while avoiding accidental zero-thickness sheets; this is still a generated concept and is NOT manufacturing-approved.
+- Review front, side and back before export. If face, hands, clothing layers or silhouette collapse, repair them before returning the GLB.`
+
+const ELECTRICAL_CABINET_REQUEST = /(electrical\s+(?:control\s+)?cabinet|switchgear|motor\s+control\s+cent(?:er|re)|\bmcc\b|distribution\s+panel|control\s+panel|din\s*rail|terminal\s+block|breaker|contactor|relay|rozdzieln|szaf.{0,24}(?:elektr|sterown)|bezpiecznik|stycznik|przeka[źz]nik|listw.{0,20}zacisk|okablowan)/iu
+const CHARACTER_REQUEST = /(adult\s+(?:woman|man|female|male)|character|heroine|figurine|person|human|woman|girl|man|posta[cć]|kobiet|m[eę][żz]czyzn|figur[kc])/iu
+
+export function studioQualityProfile(input: Pick<StudioInput, 'prompt' | 'photos' | 'purpose'>): StudioQualityProfile {
+  if (input.photos.length > 0 && ELECTRICAL_CABINET_REQUEST.test(input.prompt)) return INDUSTRIAL_ELECTRICAL_PROFILE
+  if (input.photos.length > 0 && ['figurine','game'].includes(input.purpose) && CHARACTER_REQUEST.test(input.prompt)) return REFERENCE_CHARACTER_PROFILE
+  return 'standard'
+}
+
+
 export const STUDIO_BODY_LIMIT = 9 * 1024 * 1024
 export const STUDIO_MODEL_LIMIT = 48 * 1024 * 1024
 export const STUDIO_POLL_MS = 25_000
@@ -101,7 +136,12 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   const photos = input.photos.map(photo => photo.view === 'left' || photo.view === 'right' ? { ...photo, view: 'side' as const } : photo)
   const viewLabels = input.photos.some(photo => photo.view === 'left' || photo.view === 'right')
     ? '\n\nOriginal reference view labels (in input order): ' + input.photos.map((photo, index) => `Reference ${index + 1}: ${photo.view}`).join('; ') + '. Side views still describe the same subject.' : ''
-  return { id, prompt: input.prompt + instruction, agentInstructions: MANUFACTURING_HARD_RULES + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + viewLabels, ...(photos.length ? { photos } : {}) }
+  const qualityProfile = studioQualityProfile(input)
+  const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
+    : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
+  return { id, prompt: input.prompt + instruction,
+    agentInstructions: MANUFACTURING_HARD_RULES + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
+    ...(photos.length ? { photos } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(input)))
