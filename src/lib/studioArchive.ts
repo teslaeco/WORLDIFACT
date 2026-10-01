@@ -3,6 +3,13 @@ import { archiveWriteDecision } from './studioView.ts'
 import { FAST_DRAFT_PROFILE } from './studioProtocol.ts'
 
 export type StudioArchiveEntry = { id: string; prompt: string; savedAt: string; byteLength: number; sha256: string; review: 'UNREVIEWED'; generationProfile?: typeof FAST_DRAFT_PROFILE }
+export const STUDIO_ARCHIVE_EVENT = 'worldifact:studio-archive-changed'
+export const STUDIO_ARCHIVE_SIGNAL_KEY = 'worldifact-studio-archive-revision-v1'
+function notifyStudioArchiveChanged(id: string) {
+  if (typeof window === 'undefined') return
+  try { window.dispatchEvent(new CustomEvent(STUDIO_ARCHIVE_EVENT, { detail: { id } })) } catch { /* Local archive stays valid even if UI notification fails. */ }
+  try { window.localStorage.setItem(STUDIO_ARCHIVE_SIGNAL_KEY, `${Date.now()}:${id}`) } catch { /* Cross-tab notification is best-effort only. */ }
+}
 function openArchive(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('worldifact-studio-models', 1)
@@ -45,6 +52,7 @@ export async function saveStudioModel(saved: SavedStudioJob, blob: Blob): Promis
       tx.onabort = tx.onerror = () => reject(failure || new Error('The model could not be saved on this device. Download the GLB; no older models were deleted.'))
     })
   } finally { db.close() }
+  notifyStudioArchiveChanged(stored.id)
   return stored
 }
 export async function listStudioModels(): Promise<StudioArchiveEntry[]> {
