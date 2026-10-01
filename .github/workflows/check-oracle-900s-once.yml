@@ -1,0 +1,37 @@
+name: Check Oracle 15-minute runtime once
+on:
+  push:
+    branches: ['ops/check-oracle-900s-20261001']
+    paths: ['.github/workflows/check-oracle-900s-once.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Authenticated read-only Oracle health
+        shell: bash
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          base=os.environ['ORACLE_ENDPOINT'].rstrip('/')
+          token=os.environ['ORACLE_API_TOKEN']
+          req=urllib.request.Request(base+'/v1/health',headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+          with urllib.request.urlopen(req,timeout=20) as r:
+              v=json.load(r)
+          out={
+            'ready': v.get('ready'),
+            'provider': v.get('provider'),
+            'model': v.get('model'),
+            'connectorVersion': v.get('connectorVersion'),
+            'astraTimeLimitSeconds': v.get('astraTimeLimitSeconds'),
+            'blenderTimeLimitSeconds': v.get('blenderTimeLimitSeconds')
+          }
+          print(json.dumps(out,sort_keys=True))
+          PY
