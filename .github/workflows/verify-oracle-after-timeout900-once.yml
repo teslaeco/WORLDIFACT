@@ -1,0 +1,51 @@
+name: Verify Oracle after timeout900 install once
+on:
+  push:
+    branches: ['ops/verify-oracle-after-timeout900-20261001']
+    paths: ['.github/workflows/verify-oracle-after-timeout900-once.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Authenticated read-only Oracle health
+        shell: bash
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          base=os.environ['ORACLE_ENDPOINT'].rstrip('/')
+          token=os.environ['ORACLE_API_TOKEN']
+          req=urllib.request.Request(base+'/v1/health',headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+          with urllib.request.urlopen(req,timeout=20) as r:
+              v=json.load(r)
+          safe={
+            'ready':v.get('ready'),
+            'provider':v.get('provider'),
+            'model':v.get('model'),
+            'connectorVersion':v.get('connectorVersion'),
+            'agentBudgetSeconds':v.get('agentBudgetSeconds'),
+            'photoPlanningBudgetSeconds':v.get('photoPlanningBudgetSeconds'),
+            'photoAiBudgetSeconds':v.get('photoAiBudgetSeconds'),
+            'astraBudgetMaxUsd':v.get('astraBudgetMaxUsd'),
+            'astraOutputPolicy':v.get('astraOutputPolicy'),
+            'astraUsageSettlement':v.get('astraUsageSettlement'),
+            'astraCacheAccounting':v.get('astraCacheAccounting'),
+          }
+          print(json.dumps(safe,sort_keys=True))
+          assert safe['ready'] is True
+          assert safe['provider']=='openai'
+          assert safe['model']=='gpt-6-astra'
+          assert safe['connectorVersion']==33
+          assert safe['agentBudgetSeconds']==1800
+          assert safe['photoPlanningBudgetSeconds']==900
+          assert safe['astraBudgetMaxUsd']==1.75
+          assert safe['astraUsageSettlement']=='authenticated-completed-only'
+          assert safe['astraCacheAccounting']=='astra-confirmed-cache-v1'
+          PY
