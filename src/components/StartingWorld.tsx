@@ -81,7 +81,7 @@ export default function StartingWorld({
   const zoom = useRef(4.8);
   const overview = useRef(false);
   const [music, setMusic] = useState(false);
-  const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("queen");
+  const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("terraformer");
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [outfit, setOutfit] = useState<OutfitPreset>("original");
   const outfitRef = useRef<OutfitPreset>("original");
@@ -703,13 +703,13 @@ export default function StartingWorld({
       previous = now;
       elapsed += dt;
       const axes = movementAxes(input.current, stick.current);
-      const waitingForQueen = avatarChoice === "queen" && !avatar.root.userData.avatarLoaded;
+      const waitingForAvatar = avatarChoice !== "rapper" && !avatar.root.userData.avatarLoaded;
       const operating = ride ? backhoes.get(ride) : undefined;
       const movingBucket = operating?.enabled && operating.action !== "carry";
-      const move = waitingForQueen || boarding || overview.current || movingBucket || jump.preparation > 0 ? 0 : axes.forward;
-      const side = waitingForQueen || boarding || overview.current || movingBucket || jump.preparation > 0 ? 0 : axes.side;
+      const move = waitingForAvatar || boarding || overview.current || movingBucket || jump.preparation > 0 ? 0 : axes.forward;
+      const side = waitingForAvatar || boarding || overview.current || movingBucket || jump.preparation > 0 ? 0 : axes.side;
       const controllingDrone = equipmentMode === "drone";
-      const canJump = !waitingForQueen && !boarding && !ride && !overview.current && equipmentMode === "stowed" && waterMode === "land" && flightHeight < .05;
+      const canJump = !waitingForAvatar && !boarding && !ride && !overview.current && equipmentMode === "stowed" && waterMode === "land" && flightHeight < .05;
       if (!canJump) resetJump(jump);
       for (let presses = jumpRequests.current; presses > 0; presses--) requestJump(jump, canJump);
       jumpRequests.current = 0;
@@ -792,7 +792,7 @@ export default function StartingWorld({
       if (action.current && !boarding) {
         const a = action.current;
         action.current = "";
-        if (waitingForQueen && a !== "reset") {
+        if (waitingForAvatar && a !== "reset") {
           setCaptureNotice("The original character is still loading.");
         } else if (jump.jumps > 0 && (a === "drive" || (a === "interact" && ((near && !nearPortal) || nearBuildingEntrance || nearBuildingExit)))) {
           setCaptureNotice("Land before entering a vehicle.");
@@ -1180,6 +1180,7 @@ export default function StartingWorld({
       <label className="avatar-note avatar-picker">Character
         <select value={avatarChoice} onChange={e => setAvatarChoice(e.target.value as AvatarChoice)} aria-label="Choose player character">
           <option value="queen">Fan Queen · 8 Planets / MPC2</option>
+          <option value="terraformer">TerraformingPlanet Heroine · Astra / Blender</option>
           <option value="rapper">Rapper · MPC2 archive</option>
         </select>
       </label>

@@ -1,41 +1,52 @@
-# WORLDIFACT — generation restoration remains open
+# WORLDIFACT — TerraformingPlanet heroine integration
 
-Updated 30 September 2026. The owner requested one command to install the prepared generator correction while retaining all new payments. [PR156](https://github.com/teslaeco/WORLDIFACT/pull/156) remains a scoped candidate, not a full rollback or a completed live character.
+Updated 1 October 2026. The owner explicitly approved one bounded paid GPT-6 Astra character test and deployment while preserving the new payment system.
 
-## IMPLEMENTED — one-command Cloud Shell entry point
+## VERIFIED — generator restoration and payment boundary
 
-`tools/profit_guard/oracle_cache_launch.py`, implementation head `c8586f17818f5c0e949c40f553316899a709121b`, is standalone and needs no Commander process. It uses the original OCI Cloud Shell CLI, existing SSH key and mandatory known-host verification to resolve the running `froge-blender` VM in eu-amsterdam-1. It does not look for generation files in Cloud Shell.
+PR #156 merged as `bcc63fbfff94a00b671bda1394f593acd3c5cfa3` after six green exact-head workflows. Its Cloudflare publication run `36815630843` and application CI `36815630885` passed. The Oracle cache-accounting helper had already been installed from the owner's OCI Cloud Shell and reported `CACHE_ACCOUNTING_VERIFIED`, `max_provider_usd: 1.75`, `payment_settings_changed: false` and `WORLDIFACT_CACHE_FIX_INSTALLED`.
 
-The launcher pins the complete ten-file public installer dependency set to `2ec02e9484a313bc40c0dcd9117a778fb1784696`. Every source file is size-bounded, compared against its Git blob identity and syntax-checked before SSH upload; the receiver rechecks those bytes. No key contents, user prompts, photos, payment settings or original models are uploaded. No Node/npm installation is performed. The outer launcher SHA256 is `3945205719c302d0e92a1f4f6df0e1cc56e422533a4830640adcf2c5d3e839bf` and its Git blob is `3238cf10b6d927cb9cde2373ac6daf924ce397f9`; the connector readback matches the locally tested bytes.
+Stripe, PayPal, subscriptions, product prices, generation-credit rates and customer balances were not rolled back by this restoration. The Astra job cap remains USD 1.75.
 
-Default invocation is PLAN ONLY. The owner-approved `--approve-service-restart` runs the existing exact-ancestry, idle-only cache installer on the actual generator VM. It checks current sources and queue, creates private backups, changes only the output-policy helper/hash receipt, performs the genuine offline Codex/MCP/Blender check, restarts the worker and verifies authenticated local readiness. Active jobs are not cancelled. Verification failure invokes the installer's scoped rollback; unknown/recovery-required outcomes never print success. The installation status marker is `WORLDIFACT_CACHE_FIX_INSTALLED`, not a claim of a generated character. The console must remain open during this maintenance.
+## VERIFIED — exactly one live Astra / Oracle / Blender heroine job
 
-The launcher has no model request, no customer refund, no budget reset and no Stripe/PayPal mutation. It cannot resolve an unrelated model-building failure merely by changing cache accounting.
+The one-time workflow [36815867329](https://github.com/teslaeco/WORLDIFACT/actions/runs/36815867329), exact source `a5c8266f7c4b5c3348d6913bd48e90d759917f0d`, completed successfully with no automatic retry and no customer checkout or credit mutation.
 
-## VERIFIED — preservation boundary and existing implementation
+- Model: `gpt-6-astra`
+- Oracle job: `a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781`
+- Maximum provider reservation: USD 1.75
+- Submitted jobs: 1
+- GLB: 15,281,768 bytes; SHA-256 `92d777562e0292f2175f2bf4c6580fb4df03614e38f738afec2efcd25ed3028a`
+- GLB structural inspection: 368,760 triangles, 21 meshes, 8 materials
+- BLEND: 26,457,988 bytes; SHA-256 `946c0ec1427cc710bc52877508c4c891f2d3361ce1322d1d12fc81fed4705bed`
+- FBX export: FAILED
+- PBR ZIP export: FAILED
+- Actual provider invoice cost: UNKNOWN; the USD 1.75 figure is the enforced maximum reservation, not a claimed invoice charge.
 
-Changes are restricted to `tools/profit_guard/` and this record. Frontend/server payment code, checkout, prices, subscriptions, credit rates, customer balances, deployment configuration and original assets are unchanged. The USD1.75 per-job cap, low reasoning, model, service tier, token ceilings and review expiry are unchanged.
+The private chat reference images were NOT committed to the public repository and were NOT transported by this GitHub Actions test. Their visible design was translated into the fixed written character brief: adult silver-haired sci-fi heroine, pearl-white/black/cyan outfit, empty hands, no glowing orb, full-body GAME asset. Therefore this run verifies the written-design pipeline, not pixel-level multi-view similarity to the three uploaded images.
 
-The prepared v2 helper accounts for complete, valid, provider-confirmed cache reads only on the same authenticated completed response. Unknown/partial usage uses the original conservative bound; malformed or incomplete results preserve the full hold. Historical completed holds and uncertain legacy entries are immutable. No cache hit is assumed during preflight. This addresses a concrete possible premature-stop mechanism, but the owner's earlier screenshots do not establish cached-token usage or the original build failure.
+The workflow's success is mechanical evidence of a real generated 3D model and valid GLB structure. It is NOT a human visual-fidelity approval. Visual quality remains `REQUIRES_HUMAN_REVIEW`.
 
-Official sources and the complete accounting rationale, unchanged rates, maintenance/rollback restrictions and earlier evidence remain preserved in [the previous PR156 status](https://github.com/teslaeco/WORLDIFACT/blob/2ec02e9484a313bc40c0dcd9117a778fb1784696/docs/CONTEST_STATUS.md), original blob `349fa9adb7ec2348b7614181501bd9f6b0328ab9`. No new model/pricing assumption is introduced by this launcher.
+## IMPLEMENTED — shared TerraformingPlanet world integration
 
-## VERIFIED — testing, not production installation
+Branch `feat/terraforming-heroine-world-20261001` wires the exact successful job into a dedicated read-only avatar route:
 
-The unchanged installer/accounting implementation at `5e5a98e1df0922191e62b72c7c5bae49caef9145` passed all six workflows: [56 guard tests](https://github.com/teslaeco/WORLDIFACT/actions/runs/36773686202) and [613 application tests, typecheck, build, HTTP smoke and packaging](https://github.com/teslaeco/WORLDIFACT/actions/runs/36773686033). No tests failed or were skipped in those CI runs. Existing 27 lint warnings and three dependency advisories remain.
+- `/api/avatar/terraforming-heroine`
+- source job fixed to `a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781`
+- no generation is triggered by avatar loading
+- bounded GLB validation, lossless transport and existing cache controls are preserved
+- `TerraformingPlanet Heroine · Astra / Blender` is added to the world character picker
+- the new heroine becomes the default shared-world avatar; Neptune Queen and the archived Rapper remain selectable
+- an unrigged heroine may receive the existing GAME-only approximate locomotion binding; original generated geometry/materials are not silently replaced.
 
-The new launcher passed 16 deterministic local tests without OCI/SSH access. A seventeenth CI test verifies every real dependency against the pinned manifest and launches the isolated installer in PLAN ONLY, checking for missing imports without modifying a VM. [Guard CI 36775875347](https://github.com/teslaeco/WORLDIFACT/actions/runs/36775875347), job110093509831, passed at head `c8586f17818f5c0e949c40f553316899a709121b`, including source reconstruction, compilation and test discovery. An initial transfer introduced a missing parenthesis in a test fixture; it was corrected to the locally passing bytes. Nothing was deployed from the failing test revision.
+Focused regressions cover exact Oracle job routing, client cache reuse, world picker/default wiring and failure isolation. Full exact-head CI and deployment are required before this integration is called live.
 
-Full application verification on this final implementation head is still being observed at the time of this documentation write. Do not conflate earlier green tests with a new head or a production model. This documentation follow-up does not change launcher/installer bytes.
+## LIMITATIONS / NO FALSE CLAIMS
 
-## BLOCKED / not performed
+FBX and separate PBR ZIP were not produced by the test. Do not advertise those exports for this character yet. The GLB and BLEND are the verified outputs.
 
-No Oracle installation or service restart was executed by the assistant in this turn. The user must run the single approved entry point in their existing Cloud Shell because the prior conversation tool connection did not expose a device. The actual command result must be observed before describing the helper as installed. No extra cloud resource is purchased. No paid generation or historical customer credit correction was performed.
+No claim is made that the generated face, fingers, garment details or overall likeness already match the supplied artwork. A browser/visual review is still required after deployment.
 
-A future completed character must still have its real GLB/export and visual fidelity reviewed. A ready service, passing tests or a successful cache-helper installation alone does not prove that outcome. Cloudflare deployment alone does not update Oracle Python files, so this branch is not merged merely to produce another website release.
+No manufacturing approval was produced. MAKE remains validation-required.
 
-Release decision: the single-command entry point is prepared; NO-GO for claiming that production character generation is already restored. New payment settings remain preserved.
-
-## Earlier release record
-
-The prior PR153/154 routing/readiness release and its linked historical archives remain at [the immutable production-source status](https://github.com/teslaeco/WORLDIFACT/blob/673be0cecd83ebb5959770fe90716cd2485369e5/docs/CONTEST_STATUS.md), blob `b19650def2d2f36d4e1b35acb31ec1b6e6611980`. PR155 is a separate diagnostic draft. Neither historical readiness nor the old billing evidence is silently relabelled as a successful new character.
+Release decision: GO for CI/release of the exact generated GLB as a GAME avatar if the integration PR is green. NO-GO for claiming reference-perfect likeness, FBX/PBR completeness or manufacturing readiness.

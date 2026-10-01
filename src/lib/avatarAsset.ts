@@ -1,7 +1,7 @@
-/** Only the two existing, server-authorized avatar GETs; never a generation call. */
-export type AvatarAsset = 'queen' | 'rapper'
+/** Only server-authorized avatar GETs; never a generation call. */
+export type AvatarAsset = 'queen' | 'rapper' | 'terraformer'
 export type AvatarProgress = { phase: 'waiting' | 'downloading' | 'retrying' | 'downloaded'; loaded: number; total: number; attempt: number }
-const urls: Record<AvatarAsset, string> = { queen: '/api/avatar/neptune-queen', rapper: '/api/avatar/rapper-la' }
+const urls: Record<AvatarAsset, string> = { queen: '/api/avatar/neptune-queen', rapper: '/api/avatar/rapper-la', terraformer: '/api/avatar/terraforming-heroine' }
 const MAX_BYTES = 48 * 1024 * 1024
 const FIRST_BYTE_MS = 90_000, STALL_MS = 30_000, MAX_DOWNLOAD_MS = 180_000
 const cache = new Map<AvatarAsset, { controller: AbortController; promise: Promise<ArrayBuffer> }>()
