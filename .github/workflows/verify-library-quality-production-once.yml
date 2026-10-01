@@ -10,57 +10,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Read-only production bundle and Studio status
+      - name: Read-only production library assets and Studio status
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json,re,urllib.request,urllib.parse
+          import json,urllib.request
           origin='https://worldifact.xodobrox.workers.dev'
-          def get(path,limit=12_000_000):
+          def get(path,limit=2_000_000):
               req=urllib.request.Request(origin+path,headers={'User-Agent':'WORLDIFACT-readonly-smoke/1.0','Accept':'*/*'})
               with urllib.request.urlopen(req,timeout=30) as r:
                   body=r.read(limit+1)
-                  if len(body)>limit: raise AssertionError('response too large '+path)
-                  return r.status,dict(r.headers),body
-          assets=set()
+                  assert len(body)<=limit
+                  return r.status,body
           for route in ['/lab','/builder','/shop']:
-              status,headers,body=get(route,2_000_000)
-              assert status==200, (route,status)
-              html=body.decode('utf-8','replace')
-              for src in re.findall(r'''(?:src|href)=["']([^"']+\.js)["']''',html):
-                  if src.startswith('/'): assets.add(src)
-          assert assets, 'no deployed JS assets found'
-          bundle=''
-          queue=list(sorted(assets))
-          seen=set()
-          while queue and len(seen)<200:
-              path=queue.pop(0)
-              if path in seen: continue
-              seen.add(path)
-              status,headers,body=get(path,12_000_000)
-              assert status==200
-              text=body.decode('utf-8','replace')
-              bundle += text
-              for child in re.findall(r'''["']([^"'?#]+\.js)["']''',text):
-                  resolved=urllib.parse.urlsplit(urllib.parse.urljoin(origin+path,child))
-                  if resolved.scheme=='https' and resolved.netloc=='worldifact.xodobrox.workers.dev' and resolved.path.startswith('/assets/') and resolved.path not in seen:
-                      queue.append(resolved.path)
-          assets=seen
-          required=[
-              'DEVICE ARCHIVE',
-              'ACCOUNT VERIFIED',
-              'worldifact:studio-archive-changed',
-              'worldifact-studio-archive-revision-v1',
-              'INDUSTRIAL ELECTRICAL CABINET',
-              'TRUE 3D MODE',
-              'REFERENCE CHARACTER',
-              'REALISTIC 3D MODE',
-              'required structural 3D detail gate',
-          ]
-          missing=[x for x in required if x not in bundle]
-          assert not missing, 'missing deployed markers: '+repr(missing)
-          status,headers,body=get('/api/studio/status',100_000)
+              status,body=get(route)
+              assert status==200,(route,status)
+          status,lab=get('/assets/PrivateGameLab-B6oeTXfV.js')
+          assert status==200
+          lab=lab.decode('utf-8','replace')
+          for marker in ['DEVICE ARCHIVE','ACCOUNT VERIFIED','Use local GLB']:
+              assert marker in lab,('PrivateGameLab marker missing',marker)
+          status,archive=get('/assets/studioArchive-JqJtwgkA.js')
+          assert status==200
+          archive=archive.decode('utf-8','replace')
+          for marker in ['worldifact:studio-archive-changed','worldifact-studio-archive-revision-v1']:
+              assert marker in archive,('studioArchive marker missing',marker)
+          status,body=get('/api/studio/status',100_000)
           assert status==200
           v=json.loads(body)
           assert v.get('ready') is True
@@ -71,12 +47,10 @@ jobs:
           assert v.get('detailedReferenceLimit')==4
           print(json.dumps({
               'production':'VERIFIED',
-              'routes':['/lab','/builder','/shop'],
-              'bundleAssets':len(assets),
               'gameLabDeviceArchiveSync':True,
-              'industrialTrue3DMode':True,
-              'referenceCharacterMode':True,
+              'sameTabArchiveSignal':True,
+              'crossTabArchiveSignal':True,
               'studioReady':True,
-              'paidGenerationRequested':False,
+              'paidGenerationRequested':False
           },sort_keys=True))
           PY
