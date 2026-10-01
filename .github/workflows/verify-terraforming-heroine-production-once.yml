@@ -1,0 +1,36 @@
+name: Verify deployed TerraformingPlanet heroine once
+on:
+  push:
+    branches: ['ops/verify-terraforming-heroine-production-20261001']
+    paths:
+      - '.github/workflows/verify-terraforming-heroine-production-once.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify exact generated GLB is served by production
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://worldifact.xodobrox.workers.dev'
+          tmp="$(mktemp)"
+          hdr="$(mktemp)"
+          trap 'rm -f "$tmp" "$hdr"' EXIT
+          curl --fail --silent --show-error --location --max-redirs 0             --connect-timeout 15 --max-time 180             -D "$hdr" -o "$tmp" "$base/api/avatar/terraforming-heroine"
+          grep -qi '^content-type: model/gltf-binary' "$hdr"
+          grep -qi '^x-worldifact-avatar: TerraformingPlanet-Heroine-Astra' "$hdr"
+          grep -qi '^x-worldifact-source-job: a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781' "$hdr"
+          bytes="$(wc -c < "$tmp")"
+          test "$bytes" -gt 10000000
+          python3 - "$tmp" <<'PY'
+          import struct,sys,hashlib
+          p=sys.argv[1]
+          b=open(p,'rb').read()
+          assert b[:4]==b'glTF'
+          assert struct.unpack('<I',b[4:8])[0]==2
+          assert struct.unpack('<I',b[8:12])[0]==len(b)
+          print('PRODUCTION_HEROINE_GLB_OK',len(b),hashlib.sha256(b).hexdigest())
+          PY
