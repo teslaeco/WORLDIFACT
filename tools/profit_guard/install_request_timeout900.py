@@ -53,7 +53,30 @@ def runtime_verified(source):
 
 class Operations(cache.Operations):
     def preflight(self):
-        super().preflight()
+        # This maintenance runs AFTER the cache-accounting update, so verify the
+        # CURRENT reviewed policy instead of requiring its pre-update blob.
+        if os.getuid() == 0 or self.source != self.home / 'froge-connector' or time.time() >= policy.VALID_UNTIL:
+            raise base.InstallError('Unexpected Oracle account/source or expired pricing review.')
+        originals = {name: base.read_regular(self.source / name) for name in cache.previous.EXPECTED}
+        variant = cache.reviewed_installed_variant(originals)
+        if base.read_regular(self.source / cache.POLICY_FILE) != Path(policy.__file__).read_bytes():
+            raise base.InstallError('Installed cache-accounting policy differs from the reviewed current policy.')
+        if base.read_regular(self.source / 'astra_spend.py') != Path(cache.legacy.__file__).read_bytes():
+            raise base.InstallError('Installed original guard differs; nothing changed.')
+        if not policy.verified_health(self.source) or not base.receipt_matches(self.source):
+            raise base.InstallError('Current cache-accounting/runtime receipt is invalid.')
+        if variant == 'FAST_V33_WITH_SPEND' and hashlib.sha256(base.read_regular(self.source / 'fast_spend.py')).hexdigest() != cache.previous.FAST_SPEND_SHA256:
+            raise base.InstallError('Legacy FAST guard differs.')
+        for name, digest in base.VERIFIERS.items():
+            if base.blob_sha(base.read_regular(self.source / name)) != digest:
+                raise base.InstallError('Offline verifier differs; nothing changed.')
+        if self.state(base.WORKER) != 'active' or self.state(base.TUNNEL) != 'active':
+            raise base.InstallError('Existing worker and tunnel must be healthy.')
+        if self.command(['systemctl', '--user', 'show', base.WORKER, '--property=WorkingDirectory', '--value']) != str(self.source):
+            raise base.InstallError('Unexpected service working directory.')
+        if base.read_regular(self.dropin, 1024) != base.DROPIN:
+            raise base.InstallError('Unexpected service verification settings.')
+        self.assert_idle()
         runner = base.read_regular(self.source / RUNNER)
         _, changed = patch_runner(runner)
         if not changed:
