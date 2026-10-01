@@ -320,7 +320,7 @@ test('explicitly archiving a reconciliation receipt preserves history and never 
     h.button('Archive local recovery receipt').props.onClick()
     await h.settle()
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), undefined)
-    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_HISTORY_PREFIX + current.receipt.id), JSON.stringify(current))
+    assert.deepEqual(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_HISTORY_PREFIX + current.receipt.id)), current)
     assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
   } finally { h.close() }
 })
