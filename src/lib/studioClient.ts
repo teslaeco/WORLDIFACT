@@ -140,6 +140,18 @@ export class StudioCoordinator {
       if (this.saved?.receipt.id === job.id) this.confirmedJob = job
       return job
     } catch (error) {
+      // A 403 ownership mismatch is different from an invalid signed receipt.
+      // Older servers can emit it after an account-ledger row disappears. Stop
+      // the endless timer and require same-job reconciliation; never POST again.
+      const ownershipMismatch = error instanceof StudioResponseError && error.status === 403 &&
+        error.message === 'This model belongs to a different account or has no account receipt.'
+      if (ownershipMismatch && this.saved?.receipt.id === saved.receipt.id && !this.submitting) {
+        const review: StudioJob = { id: saved.receipt.id, state: 'pending',
+          detail: 'This signed job receipt needs account-ledger reconciliation. Recovery is paused on the same job; no new generation or point charge is started.',
+          reconciliationRequired: true }
+        this.confirmedJob = review
+        return review
+      }
       // These exact 401 responses reject the recovery credential itself. An
       // expired login, another account, a timeout, 404 or 5xx is NOT equivalent.
       const unusableReceipt = error instanceof StudioResponseError && error.status === 401 &&
