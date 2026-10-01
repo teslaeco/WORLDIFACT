@@ -1,4 +1,4 @@
-import { detailedHealthFixture, detailedGLBFixture } from './detailed-studio-fixture.ts'
+import { detailedAssemblyGLBFixture, detailedHealthFixture, detailedGLBFixture } from './detailed-studio-fixture.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
@@ -26,7 +26,7 @@ function fixture() {
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const users = new Map<string, AccountEntitlements>()
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() })); return users.get(key)! } }
-  let runtimeOverrides: Record<string, unknown> = {}, invalidModel = false, failureDetail = '', lastPayload: Record<string, any> | null = null
+  let runtimeOverrides: Record<string, unknown> = {}, invalidModel = false, denseModel = false, failureDetail = '', lastPayload: Record<string, any> | null = null
   let posts = 0, artifacts = 0, loss = false, busy = false, state: StudioJob['state'] = 'succeeded', status404 = false
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname
@@ -46,7 +46,7 @@ function fixture() {
     }
     if (/\/model$|\/exports\//.test(path)) {
       artifacts++
-      const bytes = invalidModel ? new Uint8Array(24) : detailedGLBFixture()
+      const bytes = invalidModel ? new Uint8Array(24) : denseModel ? detailedAssemblyGLBFixture(12,2400,4) : detailedGLBFixture()
       return new Response(bytes, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(bytes.length) } })
     }
     if (status404) return Response.json({}, { status: 404 })
@@ -61,7 +61,7 @@ function fixture() {
     await entitlementCall(env, alice, '/grant', { id: 'in_subscription', credits: 4500, subscriptionId: 'sub_test' })
     await entitlementCall(env, alice, '/subscription', { id: 'sub_test', until: Date.now() + 86400000, active: true, revision: 1, plan: 'pro', grantId: 'in_subscription' })
   }
-  return { env, call, prepare, subscribe, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
+  return { env, call, prepare, subscribe, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, dense: () => { denseModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
     busy: () => { busy = true }, lose: () => { loss = true; status404 = true } }
 }
 
@@ -232,4 +232,36 @@ test('missing entitlement row plus missing Oracle job becomes terminal after rec
     assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
     assert.equal(f.posts(), 0)
   } finally { Date.now = now }
+})
+
+
+test('reference-driven electrical cabinet rejects a sparse photo-card model and refunds the 250-point reservation', async () => {
+  const f=fixture();await f.subscribe()
+  const jpeg='data:image/jpeg;base64,'+Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64')
+  const request:StudioInput={...input,purpose:'object',prompt:'Reconstruct this industrial electrical control cabinet with DIN rails, terminal blocks, circuit breakers, relays and dense wiring.',
+    photos:['front','left','right'].map((view,i)=>({name:`cabinet-${i}.jpg`,view:view as 'front'|'left'|'right',dataUrl:jpeg,textureMaxSize:4096}))}
+  const prep=await f.call('/api/studio/prepare','POST',request);assert.equal(prep.status,200)
+  const receipt=await prep.json() as {id:string;ticket:string}
+  assert.equal((await f.call('/api/studio/jobs','POST',request,receipt.ticket)).status,202)
+  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+  const result=await (await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)).json() as {job:StudioJob}
+  assert.equal(result.job.state,'failed')
+  assert.equal(result.job.failureCode,'INVALID_MODEL_OUTPUT')
+  assert.equal((await entitlementStatus(f.env,alice)).credits,4500)
+  assert.equal(f.posts(),1)
+  assert.match(String(f.sent()!.agentInstructions),/INDUSTRIAL ELECTRICAL CABINET — TRUE 3D MODE/)
+})
+
+test('dense reference-driven electrical cabinet passes the structural gate without a second generation', async () => {
+  const f=fixture();await f.subscribe();f.dense()
+  const jpeg='data:image/jpeg;base64,'+Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64')
+  const request:StudioInput={...input,purpose:'object',prompt:'Detailed industrial switchgear MCC cabinet with real breakers, contactors, DIN rails and cable bundles.',
+    photos:['front','detail'].map((view,i)=>({name:`mcc-${i}.jpg`,view:view as 'front'|'detail',dataUrl:jpeg,textureMaxSize:4096}))}
+  const prep=await f.call('/api/studio/prepare','POST',request);const receipt=await prep.json() as {id:string;ticket:string}
+  await f.call('/api/studio/jobs','POST',request,receipt.ticket)
+  const result=await (await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)).json() as {job:StudioJob}
+  assert.equal(result.job.state,'succeeded')
+  assert.equal(result.job.failureCode,undefined)
+  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+  assert.equal(f.posts(),1)
 })
