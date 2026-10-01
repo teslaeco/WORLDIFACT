@@ -70,3 +70,39 @@ FBX and separate PBR ZIP are not available for this character yet. GLB and BLEND
 MAKE remains validation-required. No manufacturing approval, supplier acceptance or production-ready claim was created.
 
 Release decision: **GO — the generated Astra heroine is live as the default TerraformingPlanet/WORLDIFACT shared-world GAME avatar. NO-GO for reference-perfect-likeness, FBX/PBR-complete or manufacturing-ready claims until separately verified.**
+
+
+## VERIFIED — Oracle Astra 15-minute request timeout installed (1 October 2026)
+
+Owner-approved maintenance completed successfully from the original OCI Cloud Shell. The rollback-safe installer reported:
+
+- `phase: ASTRA_REQUEST_TIMEOUT900_VERIFIED`
+- `revision: astra-request-timeout900-v1`
+- `astra_request_timeout_seconds: 900`
+- `agent_budget_seconds_unchanged: 1800`
+- `max_provider_usd: 1.75`
+- `payment_settings_changed: false`
+- `paid_generation_requested: false`
+- `quality_test: NOT_RUN`
+- `WORLDIFACT_ASTRA_REQUEST_TIMEOUT900_INSTALLED`
+- `WORLDIFACT_TIMEOUT900_INSTALLED`
+
+The installer changed only the reviewed Codex gateway provider-response timeout from 180 to 900 seconds and atomically updated its ASTRA guard receipt. It kept the existing cache-accounting/output-policy evidence, customer payment settings, jobs and artifacts, and ran the genuine offline Codex/MCP/Blender verification before restart.
+
+A separate authenticated **read-only** production health check after the restart passed and reported:
+
+- `ready: true`
+- `provider: openai`
+- `model: gpt-6-astra`
+- `connectorVersion: 33`
+- `agentBudgetSeconds: 1800`
+- `photoPlanningBudgetSeconds: 900`
+- `photoAiBudgetSeconds: 1140`
+- `astraBudgetMaxUsd: 1.75`
+- `astraOutputPolicy: astra-low-reconciled-v2`
+- `astraUsageSettlement: authenticated-completed-only`
+- `astraCacheAccounting: astra-confirmed-cache-v1`
+
+The read-only health endpoint does not expose the per-provider request timeout field; the 900-second value is therefore verified by the successful local installer/receipt verification, while the post-restart health proves the production worker remained ready with the expected model and cost guard.
+
+No paid model generation was executed as part of this maintenance. The dense electrical-cabinet quality test remains a separate paid action and must not be reported as successful until an actual model is generated and visually reviewed.
