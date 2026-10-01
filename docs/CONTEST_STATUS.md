@@ -1,51 +1,41 @@
-# WORLDIFACT — current release evidence
+# WORLDIFACT — generation restoration remains open
 
-Updated 30 September 2026. All timestamps below are UTC.
+Updated 30 September 2026. The owner requested one command to install the prepared generator correction while retaining all new payments. [PR156](https://github.com/teslaeco/WORLDIFACT/pull/156) remains a scoped candidate, not a full rollback or a completed live character.
 
-## VERIFIED — actual Astra/Blender routing restored and published
+## IMPLEMENTED — one-command Cloud Shell entry point
 
-The owner requested a working detailed character route after PR150 left that workflow blocked and authorized repair, merge and deployment after green checks. [PR #153](https://github.com/teslaeco/WORLDIFACT/pull/153) passed all six exact-head workflows at `f9c26e1ab70666d4395ec8654e92a3e01c49396c`, including [Verify WORLDIFACT 36717479887](https://github.com/teslaeco/WORLDIFACT/actions/runs/36717479887). It merged as `110055288c6508322afd4bb05ffd6c86b8cfc198` at 2026-09-30T12:54:06Z.
+`tools/profit_guard/oracle_cache_launch.py`, implementation head `c8586f17818f5c0e949c40f553316899a709121b`, is standalone and needs no Commander process. It uses the original OCI Cloud Shell CLI, existing SSH key and mandatory known-host verification to resolve the running `froge-blender` VM in eu-amsterdam-1. It does not look for generation files in Cloud Shell.
 
-[Production publication 36717823536](https://github.com/teslaeco/WORLDIFACT/actions/runs/36717823536), deploy job `109895052089`, completed successfully. This first functional publication of PR153 produced Cloudflare version `b47e9061-4b61-463d-967f-6d8949fc677a` at 12:55:50Z. These identifiers record that observed release, not an assertion that no later documentation publication can produce another version.
+The launcher pins the complete ten-file public installer dependency set to `2ec02e9484a313bc40c0dcd9117a778fb1784696`. Every source file is size-bounded, compared against its Git blob identity and syntax-checked before SSH upload; the receiver rechecks those bytes. No key contents, user prompts, photos, payment settings or original models are uploaded. No Node/npm installation is performed. The outer launcher SHA256 is `3945205719c302d0e92a1f4f6df0e1cc56e422533a4830640adcf2c5d3e839bf` and its Git blob is `3238cf10b6d927cb9cde2373ac6daf924ce397f9`; the connector readback matches the locally tested bytes.
 
-Public Shop: https://worldifact.xodobrox.workers.dev/shop
+Default invocation is PLAN ONLY. The owner-approved `--approve-service-restart` runs the existing exact-ancestry, idle-only cache installer on the actual generator VM. It checks current sources and queue, creates private backups, changes only the output-policy helper/hash receipt, performs the genuine offline Codex/MCP/Blender check, restarts the worker and verifies authenticated local readiness. Active jobs are not cancelled. Verification failure invokes the installer's scoped rollback; unknown/recovery-required outcomes never print success. The installation status marker is `WORLDIFACT_CACHE_FIX_INSTALLED`, not a claim of a generated character. The console must remain open during this maintenance.
 
-At 12:55:59Z the public `/api/studio/status` check confirmed `ready=true`, `detailedReady=true`, `costGuardReady=true`, `outputPolicyReady=true`, `photoReady=true`, `detailedReferenceLimit=4` and `accountRequired=true`. An unauthenticated preparation request was rejected with HTTP401 before any model job. Deployed configuration has `ENABLE_STUDIO_JOBS=true` and `ENABLE_ORACLE_JOBS=false`. This is verified routing/readiness, not evidence of a newly generated realistic character.
+The launcher has no model request, no customer refund, no budget reset and no Stripe/PayPal mutation. It cannot resolve an unrelated model-building failure merely by changing cache accounting.
 
-## VERIFIED — root causes and implemented repair
+## VERIFIED — preservation boundary and existing implementation
 
-The Shop previously selected `/api/blueprint` even for detailed characters, while the existing signed `/api/studio` route remained disabled. A bounded blueprint provides supported procedural scene objects, not the requested reference character. The installed Oracle photo protocol accepts four images and `side`, not the UI's `left`/`right` labels. Appending fixed instructions to long user prompts could also exceed Oracle's 5,000-character limit.
+Changes are restricted to `tools/profit_guard/` and this record. Frontend/server payment code, checkout, prices, subscriptions, credit rates, customer balances, deployment configuration and original assets are unchanged. The USD1.75 per-job cap, low reasoning, model, service tier, token ceilings and review expiry are unchanged.
 
-Detailed requests now use the real StudioCoordinator -> account-bound signed Studio endpoint -> existing Oracle/Codex -> Blender path. They do not use a blueprint substitute. One to four reference images are supported, including the owner's three views; four are not compulsory. All accepted image bytes are sent. Left/right map to the compatible upstream side enum while the original ordered labels travel in agentInstructions. The complete user prompt, up to 4,000 characters, fits because fixed manufacturing/reference instructions travel separately. The distinct procedural concept path retains its six-image capability and must not be confused with the four-image mesh path.
+The prepared v2 helper accounts for complete, valid, provider-confirmed cache reads only on the same authenticated completed response. Unknown/partial usage uses the original conservative bound; malformed or incomplete results preserve the full hold. Historical completed holds and uncertain legacy entries are immutable. No cache hit is assumed during preflight. This addresses a concrete possible premature-stop mechanism, but the owner's earlier screenshots do not establish cached-token usage or the original build failure.
 
-Current runtime proof is required before a new detailed job: the unchanged USD1.75 per-job guard, input-token preflight and low-reasoning/reconciled v2 output policy. Restoration changes only the account-bound Studio flag, not anonymous Oracle access, credit prices, customer quotas or provider-spend limits. Production rechecks the installed proof before publication and checks deployed readiness afterward without creating a model.
+Official sources and the complete accounting rationale, unchanged rates, maintenance/rollback restrictions and earlier evidence remain preserved in [the previous PR156 status](https://github.com/teslaeco/WORLDIFACT/blob/2ec02e9484a313bc40c0dcd9117a778fb1784696/docs/CONTEST_STATUS.md), original blob `349fa9adb7ec2348b7614181501bd9f6b0328ab9`. No new model/pricing assumption is introduced by this launcher.
 
-The existing signed receipt, single reservation and recovery survive duplicate clicks and lost connections. Newly completed jobs require an actual nonempty material-bearing GLB structure before completed settlement. Missing/invalid output fails and returns the customer reservation once; uncertain reads retain recovery. Structural inspection does not establish facial similarity, photorealism, texture quality or manufacturing approval. Safe cost-limit messages do not expose private upstream text. Mobile layout constrains form and preview widths instead of hiding overflowing controls; physical Android interaction remains unverified.
+## VERIFIED — testing, not production installation
 
-## VERIFIED — tests and production evidence
+The unchanged installer/accounting implementation at `5e5a98e1df0922191e62b72c7c5bae49caef9145` passed all six workflows: [56 guard tests](https://github.com/teslaeco/WORLDIFACT/actions/runs/36773686202) and [613 application tests, typecheck, build, HTTP smoke and packaging](https://github.com/teslaeco/WORLDIFACT/actions/runs/36773686033). No tests failed or were skipped in those CI runs. Existing 27 lint warnings and three dependency advisories remain.
 
-The final release passed **613 tests, 613 passed, zero failed, zero skipped**, plus TypeScript, build, real local HTTP smoke, foundation packaging and Worker deployment dry-run. Existing findings remain: 27 lint warnings, zero lint errors, and three dependency advisories (two moderate, one high). No forced dependency update was included.
+The new launcher passed 16 deterministic local tests without OCI/SSH access. A seventeenth CI test verifies every real dependency against the pinned manifest and launches the isolated installer in PLAN ONLY, checking for missing imports without modifying a VM. [Guard CI 36775875347](https://github.com/teslaeco/WORLDIFACT/actions/runs/36775875347), job110093509831, passed at head `c8586f17818f5c0e949c40f553316899a709121b`, including source reconstruction, compilation and test discovery. An initial transfer introduced a missing parenthesis in a test fixture; it was corrected to the locally passing bytes. Nothing was deployed from the failing test revision.
 
-Automated regressions exercise the real Shop submission handler and signed Studio/account state machines with deterministic provider fixtures. They cover four image payloads, long intact prompts, correct route selection, incompatible labels, missing/stale monetary proof, one-time250-point reservation, failed-output settlement, cost-limit errors and recovery. Fixtures are not live AI generation evidence. Earlier preparation failures exposed strict typing and a trailing-whitespace fixture mismatch; both were corrected without skipping tests or weakening behavior checks.
+Full application verification on this final implementation head is still being observed at the time of this documentation write. Do not conflate earlier green tests with a new head or a production model. This documentation follow-up does not change launcher/installer bytes.
 
-At 12:55:58Z the public no-cost release smoke passed for 16 HTML routes, 52 matching hub assets, 105 original application entries/assets, API404, explicit DEMO generation and origin rejection. The new detailed-route readiness/HTTP401 guard check passed at 12:55:59Z. Payment readiness/security checks passed. Existing deployment probes created and immediately expired isolated unpaid Stripe sessions; no customer card was charged and no purchase or historical credit correction was completed.
+## BLOCKED / not performed
 
-## VERIFIED — existing installed runtime policy
+No Oracle installation or service restart was executed by the assistant in this turn. The user must run the single approved entry point in their existing Cloud Shell because the prior conversation tool connection did not expose a device. The actual command result must be observed before describing the helper as installed. No extra cloud resource is purchased. No paid generation or historical customer credit correction was performed.
 
-Initial [audit 36713365291](https://github.com/teslaeco/WORLDIFACT/actions/runs/36713365291) found the OpenAI / gpt-6-astra / connector33 runtime and the earlier failed cost-guard activation job; that job was not retried.
+A future completed character must still have its real GLB/export and visual fidelity reviewed. A ready service, passing tests or a successful cache-helper installation alone does not prove that outcome. Cloudflare deployment alone does not update Oracle Python files, so this branch is not merged merely to produce another website release.
 
-Extended [audit 36714798184](https://github.com/teslaeco/WORLDIFACT/actions/runs/36714798184), [preparation 36717085333](https://github.com/teslaeco/WORLDIFACT/actions/runs/36717085333), and the production preflight at12:55:32Z confirmed the already installed `astra-low-reconciled-v2` policy, low reasoning, 16,000 maximum output tokens, authenticated completed-usage settlement, reference input and existing USD1.75 cap. No blind reinstallation, provider-budget reset or cap increase was performed.
+Release decision: the single-command entry point is prepared; NO-GO for claiming that production character generation is already restored. New payment settings remain preserved.
 
-## UNKNOWN / not completed
+## Earlier release record
 
-No new paid character generation or visual-quality trial was executed by this repair. The requested character's appearance, reference fidelity and successful new export remain unverified. A structurally valid model can still be visually inadequate; do not advertise realistic quality from health status or unit tests. Existing cost limits can still reject a job that exceeds its approved budget.
-
-Historical customer reimbursements have not been performed. Identify actual account/job ledger entries before correcting credits; do not infer a duplicate bank-card charge from screenshots. No customer balance was arbitrarily changed. New failure-settlement behavior is not evidence that previous deductions have been returned.
-
-Release decision: **GO — actual signed detailed route restored and production readiness verified. UNKNOWN — successful new character generation and visual quality. Historical refund remains unresolved.**
-
-## Preserved earlier evidence
-
-The complete prior status ledger is retained byte-for-byte in [CONTEST_STATUS_ARCHIVE_20260930_BEFORE_DETAILED_RESTORE.md](CONTEST_STATUS_ARCHIVE_20260930_BEFORE_DETAILED_RESTORE.md), Git blob `7261825dd4121170b4ec43c96ee65b46d31284c3`. It includes PR150 safety changes, PR148 payments, earlier archive links, warnings and unperformed refunds. Its disabled-route statements describe the earlier release and are superseded by the observed PR153 routing publication above.
-
-The current production workflow also runs on documentation pushes to main. A documentation-only follow-up can republish unchanged application code; it must not be described as incapable of creating another deployment version.
+The prior PR153/154 routing/readiness release and its linked historical archives remain at [the immutable production-source status](https://github.com/teslaeco/WORLDIFACT/blob/673be0cecd83ebb5959770fe90716cd2485369e5/docs/CONTEST_STATUS.md), blob `b19650def2d2f36d4e1b35acb31ec1b6e6611980`. PR155 is a separate diagnostic draft. Neither historical readiness nor the old billing evidence is silently relabelled as a successful new character.

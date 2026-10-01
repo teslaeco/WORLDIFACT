@@ -23,6 +23,13 @@ MAX_OUTPUT = 16000
 # Uncached short input + cache-write + regional uplift <= $13.75/M;
 # short output + regional uplift <= $55/M. Do not change service tier.
 INPUT_RATE = 14
+# Verified 2026-09-30: GPT-6 Astra Standard short cached input is $1/M;
+# 10% regional uplift is $1.10/M. Round UP to $2/M; do not assume hits.
+# Noncached input still reserves $14/M (including possible cache writes).
+# https://developers.openai.com/api/docs/models/gpt-6-astra
+# https://developers.openai.com/api/docs/pricing
+CACHED_INPUT_RATE = 2
+CACHE_ACCOUNTING_REVISION = 'astra-confirmed-cache-v1'
 OUTPUT_RATE = 55
 SpendError = legacy.SpendError
 
@@ -124,6 +131,31 @@ def protect(folder, payload, headers, counter=None):
         raise SpendError('Cost preflight failed; no model request was sent.') from None
 
 
+
+def completed_upper_cost(usage, input_tokens, output_tokens):
+    """Upper bound from authenticated completed usage; never predict a cache hit.
+
+    Absence of the complete cache breakdown preserves the old expensive bound.
+    Malformed/conflicting details retain the ORIGINAL reservation. All non-read
+    tokens, including cache writes, stay at INPUT_RATE. This is not an invoice.
+    https://developers.openai.com/api/docs/guides/prompt-caching
+    """
+    details = usage.get('input_tokens_details')
+    if details is None:
+        return input_tokens * INPUT_RATE + output_tokens * OUTPUT_RATE
+    if not isinstance(details, dict):
+        return None
+    for field in ('cached_tokens', 'cache_write_tokens'):
+        if field in details and not integer(details[field], 0, input_tokens):
+            return None
+    if 'cached_tokens' not in details or 'cache_write_tokens' not in details:
+        return input_tokens * INPUT_RATE + output_tokens * OUTPUT_RATE
+    cached, writes = details['cached_tokens'], details['cache_write_tokens']
+    if cached + writes > input_tokens:
+        return None
+    return (input_tokens - cached) * INPUT_RATE + cached * CACHED_INPUT_RATE + output_tokens * OUTPUT_RATE
+
+
 def settle_completed(folder, token, response, ledger_root=None):
     """Internal gateway only: response must come from the same authenticated HTTPS stream.
 
@@ -151,8 +183,8 @@ def settle_completed(folder, token, response, ledger_root=None):
                 return hold['response'] == response_id
             if any(item.get('response') == response_id for item in state['holds'].values()):
                 return False
-            actual_upper = input_tokens * INPUT_RATE + output_tokens * OUTPUT_RATE
-            if actual_upper > hold['held']:
+            actual_upper = completed_upper_cost(usage, input_tokens, output_tokens)
+            if actual_upper is None or actual_upper > hold['held']:
                 return False
             hold['held'] = actual_upper
             hold['response'] = response_id
@@ -175,6 +207,7 @@ def verified_health(root=None):
                 or hashlib.sha256(path.read_bytes()).hexdigest() != expected['sha256']):
             return {}
         return {**proof, 'astraOutputPolicy': REVISION, 'astraReasoningEffort': 'low', 'astraMaxOutputTokens': MAX_OUTPUT,
-                'astraUsageSettlement': 'authenticated-completed-only'}
+                'astraUsageSettlement': 'authenticated-completed-only',
+                'astraCacheAccounting': CACHE_ACCOUNTING_REVISION}
     except Exception:
         return {}
