@@ -12,6 +12,7 @@ import * as world from '../src/lib/privateWorld.ts'
 import * as crystal from '../src/lib/crystal18.ts'
 import * as models from '../src/lib/modelCatalog.ts'
 import * as blueprint from '../src/lib/blueprint.ts'
+import * as gameLabLibrary from '../src/lib/gameLabLibrary.ts'
 async function component(path, dependencies, extra = {}) {
   const url = new URL(path, import.meta.url), source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
@@ -38,6 +39,7 @@ test('real editor onboarding has named world, real 18-face jewel and no shared p
     '../components/WorldCodexPanel': { __esModule: true, default: forbidden },
     '../lib/privateWorldAssets': { listWorldAssets: forbidden, storeWorldAsset: forbidden },
     '../lib/studioArchive': { listStudioModels: forbidden, readStudioModel: forbidden },
+    '../lib/gameLabLibrary': gameLabLibrary,
     '../components/EighteenCrystal': { __esModule: true, default: Eighteen },
     '../components/GenerationCostNotice': { __esModule: true, default: () => null },
     '../lib/modelCatalog': models,
