@@ -1,0 +1,46 @@
+name: Approved TerraformingPlanet heroine Astra test once — maximum USD 1.75
+on:
+  push:
+    branches: ['ops/terraforming-heroine-astra-test-20261001']
+    paths:
+      - 'ops/TERRAFORMING_HEROINE_ASTRA_TEST_20261001.json'
+      - 'scripts/approved-terraforming-heroine-test.mjs'
+      - 'tests/approved-terraforming-heroine-test.test.mjs'
+      - '.github/workflows/approved-terraforming-heroine-test-once.yml'
+permissions:
+  contents: write
+concurrency:
+  group: worldifact-terraforming-heroine-astra-test-20261001
+  cancel-in-progress: false
+jobs:
+  test:
+    if: github.ref == 'refs/heads/ops/terraforming-heroine-astra-test-20261001' && github.run_attempt == 1
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Validate the one-off character contract without network
+        run: node --experimental-strip-types --test tests/approved-terraforming-heroine-test.test.mjs
+      - name: Run exactly one owner-approved Astra/Oracle/Blender heroine job
+        run: node --experimental-strip-types scripts/approved-terraforming-heroine-test.mjs
+        env:
+          WORLDIFACT_PAID_TEST_APPROVAL: ASTRA175_TERRAFORMING_HEROINE_ONCE
+          GITHUB_TOKEN: ${{ github.token }}
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: terraforming-heroine-astra-evidence
+          path: terraforming-heroine-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
+          compression-level: 0
