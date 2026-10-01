@@ -1,0 +1,9 @@
+{
+  "approval": "Owner explicitly authorized one controlled paid Astra character test and deployment in chat on 2026-10-01.",
+  "maximumProviderReservationUsd": 1.75,
+  "retries": 0,
+  "jobId": "a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781",
+  "target": "TerraformingPlanet green valley hub",
+  "referencePolicy": "Three chat images are not published to the public GitHub repository; their visual design is encoded in the fixed test prompt.",
+  "paymentSettings": "UNCHANGED"
+}
