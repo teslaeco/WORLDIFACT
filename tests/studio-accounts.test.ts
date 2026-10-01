@@ -143,7 +143,7 @@ test('Oracle busy 409 restores customer credits immediately instead of creating 
 
 
 test('four references and a complete 4,000-character character brief reach Oracle, followed by one model-validated settlement', async () => {
-  const f=fixture();await f.subscribe()
+  const f=fixture();await f.subscribe();f.dense()
   const jpeg='data:image/jpeg;base64,'+Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64')
   const prompt=('An adult woman with silver hair, preserve references, no orb. '+'outfit '.repeat(600)).slice(0,4000)
   const request={...input,prompt,photos:['front','left','right','back'].map((view,i)=>({name:`view-${i}.jpg`,view,dataUrl:jpeg,textureMaxSize:4096}))}
