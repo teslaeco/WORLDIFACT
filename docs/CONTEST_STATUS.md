@@ -120,3 +120,55 @@ Exact-head checks for commit `ae1ecb0e5ba2ec27ea16cb8446fa388b0ac135ca` passed:
 No merge or production deployment has been performed for PR #166 yet. No Astra/Oracle request, point debit/refund, Stripe/PayPal/subscription mutation or server ownership transfer was introduced.
 
 Release decision: **GO for merge/deploy after explicit owner approval.**
+
+
+## VERIFIED — Game Lab library sync + reference-detail quality release (2 October 2026)
+
+Owner-authorized production release is live from main commit `e6521fab1542528142bc6e102d2dd6f98e486dd9`.
+
+### Game Lab generated-model library
+
+PR #166 fixed the observed Android issue where a newly completed AI Shop GLB existed in the local Studio archive but was missing from Game Lab. Root cause was a client-side filter that removed local archive entries whenever `/api/worlds/library` did not yet return the same job id.
+
+The deployed contract now:
+- preserves every completed GLB that actually exists in this browser's Studio IndexedDB archive;
+- uses server ownership as an additive `ACCOUNT VERIFIED` flag rather than a visibility filter;
+- explicitly labels non-verified local bytes `DEVICE ARCHIVE`;
+- allows those local bytes to be imported only as a local-file-equivalent action and never claims cloud/account ownership;
+- re-checks server permission for account-verified entries before import;
+- refreshes Library on same-tab archive save, cross-tab storage signal, focus, pageshow and visibility return without continuous polling;
+- never starts generation or mutates credits/payment state during library refresh.
+
+The first main publication containing PR #166 stopped before deployment because its deployment runner lacked Chromium for a browser-only regression, while the separate main CI was green. No production success was claimed from that failed run.
+
+### TRUE-3D detailed reference profiles
+
+PR #167 added two signed job quality profiles:
+- `industrial-electrical-cabinet-v1`
+- `reference-character-v1`
+
+Electrical cabinet prompts with references now tell the Astra/Codex/Blender path to treat photos as geometry evidence, not a large visible texture/plane; model enclosure depth, DIN rails, slotted ducts, terminal strips, breakers/protection, relays/contactors/interface modules, displays/controllers, door hardware and routed 3D cable bundles; and fail honestly rather than returning a flat photo-card or empty shell.
+
+Reference-driven character/figurine prompts now require volumetric 360-degree anatomy and layered garment geometry with thickness, seams/hems/folds/straps/hardware, separated material regions and front/side/back review. This remains generated GAME/figurine geometry, not human-approved likeness or manufacturing approval.
+
+The quality profile is persisted in the account job reservation. Before a reserved detailed job is settled as successful, the downloaded GLB is structurally inspected. Sparse/photo-card cabinet outputs and extremely sparse character proxies are rejected as `INVALID_MODEL_OUTPUT`; reserved customer points are returned once and no replacement generation is started automatically. The structural gate is not an electrical-safety, perceptual-likeness, rig-quality or manufacturing certification.
+
+Existing GPT-6 Astra selection, USD1.75 provider cap, cache accounting, 900-second provider-response timeout, 250-point Astra customer price, receipt binding and no-auto-retry policy remain unchanged. Stripe, PayPal, subscriptions and unrelated balances were not modified.
+
+Industrial layout vocabulary was cross-checked against public Rockwell documentation (CENTERLINE 2100 MCC and PowerFlex 750 cabinet documentation) for ordinary concepts such as terminal blocks, device units and vertical wireways. No third-party geometry/assets were copied.
+
+### Production evidence
+
+Main release workflows for `e6521fab1542528142bc6e102d2dd6f98e486dd9`:
+- Verify WORLDIFACT run `36939936420`: **SUCCESS**.
+- Publish WORLDIFACT run `36939936411`: **SUCCESS**.
+- Release test count: **629 passed / 629 total**.
+- Cloudflare version: `e22cbc94-fb59-4601-ae7e-c40df37e89ce`.
+- Public origin: https://worldifact.xodobrox.workers.dev
+- Deployment checks confirmed detailed Studio READY, four references, current cost/output guards and no paid generation from release verification.
+
+Separate no-cost production smoke run `36940461492`: **SUCCESS**. It read `/lab`, `/builder`, `/shop`, the exact deployed `PrivateGameLab-B6oeTXfV.js` and `studioArchive-JqJtwgkA.js` assets, and `/api/studio/status`. It confirmed the deployed `DEVICE ARCHIVE` / `ACCOUNT VERIFIED` UI markers, same-tab and cross-tab archive signals, and READY detailed Studio without submitting a model.
+
+### Remaining truth boundary
+
+No new paid electrical-cabinet or character generation was run as part of this release. Therefore the improved cabinet/component fidelity and realistic clothing/anatomy are **CODE-LEVEL / DEPLOYED but NOT YET LIVE-VISUALLY-VERIFIED**. The next explicit paid generation must be visually reviewed before claiming that the new mode reproduces the owner's cabinet or character references at the desired quality.
