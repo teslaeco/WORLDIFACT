@@ -15,7 +15,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json,re,urllib.request
+          import json,re,urllib.request,urllib.parse
           origin='https://worldifact.xodobrox.workers.dev'
           def get(path,limit=12_000_000):
               req=urllib.request.Request(origin+path,headers={'User-Agent':'WORLDIFACT-readonly-smoke/1.0','Accept':'*/*'})
@@ -42,8 +42,10 @@ jobs:
               assert status==200
               text=body.decode('utf-8','replace')
               bundle += text
-              for child in re.findall(r'''["'](/assets/[^"'?#]+\.js)["']''',text):
-                  if child not in seen: queue.append(child)
+              for child in re.findall(r'''["']([^"'?#]+\.js)["']''',text):
+                  resolved=urllib.parse.urlsplit(urllib.parse.urljoin(origin+path,child))
+                  if resolved.scheme=='https' and resolved.netloc=='worldifact.xodobrox.workers.dev' and resolved.path.startswith('/assets/') and resolved.path not in seen:
+                      queue.append(resolved.path)
           assets=seen
           required=[
               'DEVICE ARCHIVE',
