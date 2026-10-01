@@ -102,4 +102,16 @@ Stripe, PayPal, plans, point prices, customer balances, the USD1.75 Astra guard,
 
 This branch has not yet been merged or deployed. The already-visible 92-minute browser receipt has not been inspected through the user's current browser storage, so its actual Oracle terminal state remains UNKNOWN. Do not claim that old job is repaired or refunded merely from this source change.
 
-Release decision for this hotfix remains **NO-GO until exact-head CI is green and the owner separately approves merge/deployment**. After deployment, verify the public Shop recovery state with no paid generation.
+## VERIFIED — exact implementation CI
+
+Implementation head `aad081ba87a90d7d1ba72dd520e4d7c056b7730d` passed all six applicable PR workflows:
+- Verify WORLDIFACT — success;
+- Review FAST draft worker (no paid API) — success;
+- Review FAST v33 installation safety — success;
+- Review FAST Cloud Shell launcher — success;
+- Review approved FAST cost guard — success;
+- Review Oracle project-file patch — success.
+
+The main verification job ran **620 tests: 620 passed, 0 failed**, plus lint, typecheck, local HTTP smoke, build, foundations and `wrangler deploy --dry-run`. The new recovery regressions passed, including four transient poll failures followed by a later successful GET, explicit receipt archiving with zero POSTs, account-mismatch reconciliation, and >40-minute stale worker review without customer refund or a second Oracle submission.
+
+Release decision: **GO for merge/deployment of this recovery hotfix, pending the owner's explicit production approval.** The already-stuck browser job itself remains UNKNOWN until the deployed code performs recovery against its saved receipt. No paid model generation is required for the deployment check.
