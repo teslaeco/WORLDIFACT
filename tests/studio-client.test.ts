@@ -88,3 +88,22 @@ test('explicit account quota rejection stays terminal across reload without endl
   restored.clearSelection()
   assert.equal(restored.current, null)
 })
+
+
+test('account ownership mismatch becomes reconciliation without deleting receipt or issuing a POST', async () => {
+  const storage = store(), calls: { url: string; method: string }[] = []
+  storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: new Date().toISOString() }))
+  const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({ url: String(url), method: init?.method ?? 'GET' })
+    return Response.json({ error: 'This model belongs to a different account or has no account receipt.' }, { status: 403 })
+  }) as typeof fetch
+  const client = new StudioCoordinator(storage, fetcher)
+  const restored = client.restore()
+  assert.ok(restored)
+  const job = await client.poll()
+  assert.equal(job.state, 'pending')
+  assert.equal(job.reconciliationRequired, true)
+  assert.match(job.detail, /currently signed-in account cannot confirm ownership/i)
+  assert.ok(storage.getItem(STUDIO_RECEIPT_KEY), 'Current receipt stays selected until the user explicitly archives it')
+  assert.equal(calls.filter(call => call.method === 'POST').length, 0)
+})
