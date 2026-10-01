@@ -19,11 +19,11 @@ import subprocess
 import sys
 import urllib.request
 
-SOURCE = 'f3c8d67056e489d79eeca7584e06b6578da0d6e5'
+SOURCE = 'd3fafe782c6a9701915ad09157453cad63cd5a48'
 PUBLIC_ROOT = 'https://raw.githubusercontent.com/teslaeco/WORLDIFACT/'
 LIMIT = 262144
 FILES = {
-    'install_request_timeout900.py': ('tools/profit_guard/install_request_timeout900.py', '15109fbd8c5adcce62c813c47b1a4e61c6ee1ca0'),
+    'install_request_timeout900.py': ('tools/profit_guard/install_request_timeout900.py', 'db8dcbe570e2cc68c593113d29f29e5e514a2967'),
     'install_cache_accounting.py': ('tools/profit_guard/install_cache_accounting.py', '270b8b080f33c595b5c487dec53d0ef147eaf2b5'),
     'install.py': ('tools/profit_guard/install.py', '099e77e4e9bb89145d80603e8cfe0bf0dad1069d'),
     'install_tuning.py': ('tools/profit_guard/install_tuning.py', '933f6a1597ebc5525c791495402fefcf6f260ed9'),
