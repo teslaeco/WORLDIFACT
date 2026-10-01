@@ -1,0 +1,71 @@
+name: Verify deployed library and reference quality once
+on:
+  push:
+    branches: ['ops/verify-library-quality-production-20261002']
+    paths: ['.github/workflows/verify-library-quality-production-once.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read-only production bundle and Studio status
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,re,urllib.request
+          origin='https://worldifact.xodobrox.workers.dev'
+          def get(path,limit=12_000_000):
+              req=urllib.request.Request(origin+path,headers={'User-Agent':'WORLDIFACT-readonly-smoke/1.0','Accept':'*/*'})
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  body=r.read(limit+1)
+                  if len(body)>limit: raise AssertionError('response too large '+path)
+                  return r.status,dict(r.headers),body
+          assets=set()
+          for route in ['/lab','/builder','/shop']:
+              status,headers,body=get(route,2_000_000)
+              assert status==200, (route,status)
+              html=body.decode('utf-8','replace')
+              for src in re.findall(r'''(?:src|href)=["']([^"']+\.js)["']''',html):
+                  if src.startswith('/'): assets.add(src)
+          assert assets, 'no deployed JS assets found'
+          bundle=''
+          for path in sorted(assets):
+              status,headers,body=get(path,12_000_000)
+              assert status==200
+              bundle += body.decode('utf-8','replace')
+          required=[
+              'DEVICE ARCHIVE',
+              'ACCOUNT VERIFIED',
+              'worldifact:studio-archive-changed',
+              'worldifact-studio-archive-revision-v1',
+              'INDUSTRIAL ELECTRICAL CABINET',
+              'TRUE 3D MODE',
+              'REFERENCE CHARACTER',
+              'REALISTIC 3D MODE',
+              'required structural 3D detail gate',
+          ]
+          missing=[x for x in required if x not in bundle]
+          assert not missing, 'missing deployed markers: '+repr(missing)
+          status,headers,body=get('/api/studio/status',100_000)
+          assert status==200
+          v=json.loads(body)
+          assert v.get('ready') is True
+          assert v.get('detailedReady') is True
+          assert v.get('costGuardReady') is True
+          assert v.get('outputPolicyReady') is True
+          assert v.get('photoReady') is True
+          assert v.get('detailedReferenceLimit')==4
+          print(json.dumps({
+              'production':'VERIFIED',
+              'routes':['/lab','/builder','/shop'],
+              'bundleAssets':len(assets),
+              'gameLabDeviceArchiveSync':True,
+              'industrialTrue3DMode':True,
+              'referenceCharacterMode':True,
+              'studioReady':True,
+              'paidGenerationRequested':False,
+          },sort_keys=True))
+          PY
