@@ -19,3 +19,20 @@ export function detailedGLBFixture() {
   ;[0,0,0,1,0,0,0,1,0].forEach((n,i)=>view.setFloat32(28+padded+i*4,n,true))
   return bytes
 }
+
+/** Structural fixture for quality-gate tests. Declared accessor counts exercise
+ * the bounded GLB inspector; this is not visual or AI evidence. */
+export function detailedAssemblyGLBFixture(meshCount=12, trianglesPerMesh=2400, materialCount=4) {
+  const accessors = Array.from({length:meshCount},(_,i)=>({bufferView:0,componentType:5126,count:trianglesPerMesh*3,type:'VEC3',min:[i,0,0],max:[i+1,1,1]}))
+  const meshes = Array.from({length:meshCount},(_,i)=>({name:'component-'+i,primitives:[{attributes:{POSITION:i},material:i%materialCount}]}))
+  const nodes = meshes.map((_,i)=>({name:'part-'+i,mesh:i}))
+  const doc = { asset:{version:'2.0'},scene:0,scenes:[{nodes:nodes.map((_,i)=>i)}],nodes,meshes,
+    materials:Array.from({length:materialCount},(_,i)=>({name:'material-'+i,pbrMetallicRoughness:{baseColorFactor:[.5,.5,.5,1]}})),
+    buffers:[{byteLength:12}],bufferViews:[{buffer:0,byteLength:12}],accessors }
+  const raw=new TextEncoder().encode(JSON.stringify(doc)),padded=Math.ceil(raw.length/4)*4
+  const bytes=new Uint8Array(28+padded+12),view=new DataView(bytes.buffer)
+  view.setUint32(0,0x46546c67,true);view.setUint32(4,2,true);view.setUint32(8,bytes.length,true)
+  view.setUint32(12,padded,true);view.setUint32(16,0x4e4f534a,true);bytes.fill(32,20,20+padded);bytes.set(raw,20)
+  view.setUint32(20+padded,12,true);view.setUint32(24+padded,0x004e4942,true)
+  return bytes
+}
