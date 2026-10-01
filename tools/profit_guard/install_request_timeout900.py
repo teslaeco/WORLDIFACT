@@ -100,15 +100,28 @@ def install(source, workspace, operations, approved=False):
 
     operations.preflight()
     original_receipt = base.read_regular(source / base.RECEIPT, 16384)
+    original_guard_receipt = base.read_regular(source / cache.legacy.RECEIPT, 16384)
     original = base.read_regular(source / RUNNER)
     patched, changed = patch_runner(original)
     if not changed:
         raise base.InstallError('Concurrent timeout update detected; no overwrite.')
 
+    guard_proof = json.loads(original_guard_receipt)
+    sha256 = guard_proof.get('sha256')
+    if (guard_proof.get('revision') != cache.legacy.REVISION or not isinstance(sha256, dict)
+            or set(sha256) != {'codex_runner.py', 'fast_preview.py', 'astra_spend.py'}
+            or hashlib.sha256(original).hexdigest() != sha256.get('codex_runner.py')):
+        raise base.InstallError('Current Astra guard receipt does not match the installed runner.')
+    guard_proof['sha256'] = dict(sha256)
+    guard_proof['sha256']['codex_runner.py'] = hashlib.sha256(patched).hexdigest()
+    patched_guard_receipt = (json.dumps(guard_proof, indent=2) + '\n').encode()
+
     workspace.mkdir(mode=0o700, parents=True, exist_ok=False)
     mode = stat.S_IMODE((source / RUNNER).stat().st_mode)
+    receipt_mode = stat.S_IMODE((source / cache.legacy.RECEIPT).stat().st_mode)
     base.atomic_write(workspace / 'originals' / RUNNER, original)
     base.atomic_write(workspace / 'original-runtime-receipt.json', original_receipt)
+    base.atomic_write(workspace / 'original-astra-guard-receipt.json', original_guard_receipt)
     base.summary_file(workspace, 'STAGED_TIMEOUT900_NOT_INSTALLED',
                       astra_request_timeout_seconds=900, max_provider_usd=1.75,
                       paid_generation_requested=False, payment_settings_changed=False)
@@ -120,6 +133,7 @@ def install(source, workspace, operations, approved=False):
             if base.read_regular(source / RUNNER) != original:
                 raise base.InstallError('Concurrent source change; no overwrite.')
             base.atomic_write(source / RUNNER, patched, mode)
+            base.atomic_write(source / cache.legacy.RECEIPT, patched_guard_receipt, receipt_mode)
             touched = True
             operations.verify(workspace)
             operations.start()
@@ -138,6 +152,7 @@ def install(source, workspace, operations, approved=False):
                     if current_bytes not in (patched, original):
                         raise base.InstallError('Concurrent recovery edit; preserve backup.')
                     base.atomic_write(source / RUNNER, original, mode)
+                    base.atomic_write(source / cache.legacy.RECEIPT, original_guard_receipt, receipt_mode)
                     base.atomic_write(source / base.RECEIPT, original_receipt)
                 operations.start()
                 operations.health(True)
