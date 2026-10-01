@@ -12,6 +12,8 @@ test('electrical cabinet references select true-3D industrial quality mode and f
     prompt:'Reconstruct this industrial electrical control cabinet with DIN rails, breakers, terminal blocks and dense wiring.'}
   assert.equal(studioQualityProfile(input),INDUSTRIAL_ELECTRICAL_PROFILE)
   const payload=oracleStudioPayload('11111111-1111-4111-8111-111111111111',input)
+  assert.ok('agentInstructions' in payload)
+  if(!('agentInstructions' in payload)) throw new Error('Expected STANDARD payload')
   assert.match(payload.agentInstructions,/TRUE 3D MODE/)
   assert.match(payload.agentInstructions,/NEVER a texture to paste over a flat interior panel/)
   assert.match(payload.agentInstructions,/at least 20 distinct visible component groups/)
@@ -24,7 +26,9 @@ test('reference character mode demands volumetric anatomy and layered clothing i
   const input:StudioInput={worldId:'ai-game-lab',purpose:'figurine',textureMaxSize:4096,photos:[photo('front'),photo('back')],
     prompt:'Create a realistic adult woman character with elegant layered clothing and detailed shoes.'}
   assert.equal(studioQualityProfile(input),REFERENCE_CHARACTER_PROFILE)
-  const payload=oracleStudioPayload('22222222-2222-4222-8222-222222222222',input)
+  const payload=oracleStudioPayload('22222222-2222-4222-8234-222222222222',input)
+  assert.ok('agentInstructions' in payload)
+  if(!('agentInstructions' in payload)) throw new Error('Expected STANDARD payload')
   assert.match(payload.agentInstructions,/REALISTIC 3D MODE/)
   assert.match(payload.agentInstructions,/five separated fingers/)
   assert.match(payload.agentInstructions,/actual layered 3D garments/)
