@@ -155,7 +155,7 @@ test('four references and a complete 4,000-character character brief reach Oracl
   const prep=await f.call('/api/studio/prepare','POST',request);assert.equal(prep.status,200)
   const receipt=await prep.json() as {id:string;ticket:string}
   const replies=await Promise.all(Array.from({length:4},()=>f.call('/api/studio/jobs','POST',request,receipt.ticket)))
-  assert.ok(replies.every(r=>r.status===202));assert.equal(f.posts(),1)
+  assert.deepEqual(replies.map(r=>r.status),[202,202,202,202]);assert.equal(f.posts(),1)
   assert.ok(f.sent()!.prompt.startsWith(prompt));assert.ok(f.sent()!.prompt.length<=5000)
   assert.deepEqual(f.sent()!.photos,request.photos.map(photo => photo.view === 'left' || photo.view === 'right' ? {...photo,view:'side'} : photo))
   assert.deepEqual(request.photos.map(photo=>photo.view),['front','left','right','back'],'Original signed input and its view labels are unchanged')
@@ -200,7 +200,11 @@ test('cloud current endpoint recovers the exact active Studio job after browser 
 
 test('a mismatched explicit idempotency key is rejected before reservation or Oracle POST', async () => {
   const f=fixture();await f.subscribe();const receipt=await f.prepare()
-  const response=await studioApi(new Request(origin+'/api/studio/jobs',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-WORLDIFACT-Job':receipt.ticket,'X-WORLDIFACT-Idempotency-Key':'00000000-0000-4000-8000-000000000000',Cookie:'__Host-worldifact-access=alice-token'},body:JSON.stringify(input)}),f.env,(async ()=>{throw new Error('Oracle must not be called')}) as typeof fetch)
+  const guardFetcher=(async (url:string|URL|Request)=>{
+    if(new URL(String(url)).pathname==='/auth/v1/user')return Response.json({id:alice,email:'alice@example.test'})
+    throw new Error('Oracle must not be called')
+  }) as typeof fetch
+  const response=await studioApi(new Request(origin+'/api/studio/jobs',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-WORLDIFACT-Job':receipt.ticket,'X-WORLDIFACT-Idempotency-Key':'00000000-0000-4000-8000-000000000000',Cookie:'__Host-worldifact-access=alice-token'},body:JSON.stringify(input)}),f.env,guardFetcher)
   assert.equal(response.status,409)
   const status=await entitlementStatus(f.env,alice)
   assert.equal(status.credits,4500);assert.equal(status.reservedCredits,0)
