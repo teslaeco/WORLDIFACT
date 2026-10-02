@@ -52,7 +52,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, characterPrompt = '', detailedReady = false } = {}) {
+async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
@@ -63,6 +63,7 @@ async function harness({ ready = false, state = 'succeeded', solReady = ready, d
     const path = String(url), method = init.method || 'GET'
     calls.push({ path, method, body: init.body })
     if (path === '/api/studio/status') return Response.json(status)
+    if (path === '/api/studio/current') return Response.json(cloudCurrent ? { current: { receipt: makeReceipt(oldId), prompt: selected.prompt, startedAt: selected.startedAt, financialState: 'reserved', reservedPoints: 250 } } : { current: null })
     if (path === '/api/health') return Response.json({ generationReady: solReady || ready, model: solReady ? 'gpt-6-sol' : null, qualityModel: ready ? 'gpt-6-astra' : null, astraBlueprintReady: ready })
     if (path === '/api/blueprint' && method === 'POST') return Response.json({ ...fastGeneration,
       model: 'gpt-6-' + JSON.parse(init.body).model,
@@ -210,6 +211,29 @@ test('completed free SLOW displays its subscription lock and never fetches the d
     assert.ok(h.all().some(node => node.props.to === '/account/credits' && text(node).includes('View subscription')))
     assert.equal(h.all().some(node => node.type === 'button' && text(node).includes('Download model')), false)
     assert.ok(h.all().some(node => text(node).includes('protected image preview is not available')))
+  } finally { h.close() }
+})
+
+test('failed cloud job stays visible with its failure state instead of resetting to the sample preview', async () => {
+  const h = await harness({ ready: true, state: 'failed' })
+  try {
+    await h.poll()
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Previous model did not finish'))
+    assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
+    assert.ok(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), 'terminal receipt remains selected until explicit dismissal')
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+test('missing local receipt recovers the current cloud job before the sample preview is allowed', async () => {
+  const h = await harness({ ready: true, withExistingJob: false, cloudCurrent: true, state: 'building' })
+  try {
+    await h.settle()
+    assert.ok(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), 'fresh cloud receipt is restored into local recovery storage')
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Preparing your model…'))
+    assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
+    assert.equal(h.calls.filter(call => call.path === '/api/studio/jobs' && call.method === 'POST').length, 0)
+    assert.ok(h.calls.some(call => call.path === '/api/studio/current' && call.method === 'GET'))
   } finally { h.close() }
 })
 
