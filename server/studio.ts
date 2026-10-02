@@ -169,6 +169,7 @@ async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init:
 function oracleFailureCode(value: Record<string, unknown>): StudioJob['failureCode'] {
   if (value.state === 'cancelled') return 'ORACLE_CANCELLED'
   if (value.state !== 'failed') return undefined
+  if (value.worldifactFailureCode === 'ORACLE_JOB_INCOMPLETE' || value.worldifactFailureCode === 'INVALID_MODEL_OUTPUT' || value.worldifactFailureCode === 'ASTRA_COST_LIMIT') return value.worldifactFailureCode
   return typeof value.detail === 'string' && /astra budget guard|WORLDIFACT_ASTRA_COST_GUARD|astra job budget exhausted/i.test(value.detail)
     ? 'ASTRA_COST_LIMIT' : 'ORACLE_JOB_FAILED'
 }
@@ -185,6 +186,26 @@ async function submissionFailureCode(response: Response): Promise<NonNullable<St
   }
   return 'ORACLE_SUBMISSION_REJECTED'
 }
+/** Oracle v33 preserves unfinished candidates under state=succeeded. A retained
+ * draft is useful diagnostic evidence, never proof of a completed paid model. */
+async function completedOracleStatus(env: StudioEnv, id: string, value: Record<string, unknown>, fetcher: typeof fetch) {
+  if (value.state !== 'succeeded' || value.modelStatus !== 'draft') return value
+  const response = await oracle(env, `/v1/jobs/${id}/quality`, fetcher)
+  if (!response.ok) { await response.body?.cancel(); throw new StudioError('The worker completion evidence is temporarily unavailable. Recover this same job.', 502) }
+  const quality = await limitedJson(response, 262_144)
+  if (quality.revision !== 6 || quality.state !== 'succeeded' || quality.hasModel !== true || quality.modelStatus !== 'draft' || quality.automaticQualityAccepted !== false)
+    throw new StudioError('The worker completion evidence is inconsistent. Recover this same job.', 502)
+  const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+  const usage = record(quality.agentUsage) ? quality.agentUsage : {}
+  const agent = record(quality.agent) ? quality.agent : {}
+  // Only a fixed allowlisted code crosses this boundary. No raw provider/tool
+  // diagnostics, original brief, generated scripts or images are retained.
+  // A deliberately finished unreviewed model keeps the existing structural
+  // acceptance path. Only an execution that never finished is rejected here.
+  if (agent.finished === true) return value
+  const failureCode: StudioJob['failureCode'] = usage.error_code === 'WORLDIFACT_ASTRA_COST_GUARD' ? 'ASTRA_COST_LIMIT' : 'ORACLE_JOB_INCOMPLETE'
+  return { ...value, state: 'failed', worldifactFailureCode: failureCode }
+}
 async function oracleJobStatus(env: StudioEnv, id: string, fetcher: typeof fetch, requireId: boolean) {
   const response = await oracle(env, `/v1/jobs/${id}`, fetcher)
   if (response.status === 404) { await response.body?.cancel(); return null }
@@ -192,7 +213,7 @@ async function oracleJobStatus(env: StudioEnv, id: string, fetcher: typeof fetch
   const value = await limitedJson(response, 16_384)
   if (((requireId || value.id !== undefined) && value.id !== id) || !Object.hasOwn(JOB_DETAILS, String(value.state)))
     throw new StudioError('The worker returned an invalid job status.', 502)
-  return value
+  return completedOracleStatus(env, id, value, fetcher)
 }
 async function health(env: StudioEnv, fetcher: typeof fetch) {
   const response = await oracle(env, '/v1/health', fetcher)
@@ -370,7 +391,8 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (!response.ok) { await response.body?.cancel(); throw new Error('Unconfirmed acceptance') }
         const value = await limitedJson(response, 16_384)
         if (value.id !== auth.id || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new Error('Unconfirmed acceptance')
-        return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state'], fetcher, oracleFailureCode(value)) }, 202)
+        const completed = await completedOracleStatus(env, auth.id, value, fetcher)
+        return json({ job: await accountJob(env, user?.id, auth.id, completed.state as StudioJob['state'], fetcher, oracleFailureCode(completed)) }, 202)
       } catch (error) {
         if (error instanceof StudioError) throw error
         return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending } }, 202)
@@ -396,7 +418,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         const statusResponse = await oracle(env, `/v1/jobs/${auth.id}`, fetcher)
         if (!statusResponse.ok) { await statusResponse.body?.cancel(); throw new StudioError('The recovered model is not available on the worker.', statusResponse.status === 404 ? 404 : 502) }
         const statusValue = await limitedJson(statusResponse, 16_384)
-        if (statusValue.id !== auth.id || statusValue.state !== 'succeeded') throw new StudioError('The recovered model has not completed on the worker.', 409)
+        if (statusValue.id !== auth.id || statusValue.state !== 'succeeded' || statusValue.modelStatus === 'draft') throw new StudioError('The recovered model has not completed on the worker.', 409)
         const entitlement = await entitlementStatus(env, user.id)
         if (!entitlement.subscription.active || entitlement.billingReview || entitlement.credits < 0)
           throw new StudioError('This recovered SLOW result requires an active account without billing review.', 403)
