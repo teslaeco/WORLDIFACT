@@ -518,7 +518,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const user = await accountIdentity(request, env, fetcher)
       const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', undefined, false, user?.id)
       const idempotencyKey = request.headers.get('X-WORLDIFACT-Idempotency-Key')
-      if (idempotencyKey !== auth.id) throw new StudioError('The generation idempotency key does not match this signed job. No new charge was made.', 409)
+      if (idempotencyKey && idempotencyKey !== auth.id) throw new StudioError('The generation idempotency key does not match this signed job. No new charge was made.', 409)
       if (Date.now() - auth.issued > 30 * 60_000) throw new StudioError('This unsubmitted receipt expired. Review your inputs before preparing another.', 409)
       const input = await inputFrom(request)
       if (await boundInputDigest(input, user?.id) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
