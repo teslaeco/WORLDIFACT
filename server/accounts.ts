@@ -136,6 +136,36 @@ export async function getVerifiedAccount(request: Request, env: AccountEnv, fetc
   const token = cookieValue(request, ACCESS_COOKIE)
   return token ? verifiedUser(env, fetcher, token) : null
 }
+function jwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split('.')
+  if (parts.length !== 3 || parts[1].length > 8192) return null
+  try {
+    const raw = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = raw + '='.repeat((4 - raw.length % 4) % 4)
+    const value: unknown = JSON.parse(atob(padded))
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+  } catch { return null }
+}
+export type OAuthAccount = { user: AccountUser; token: string; clientId: string }
+/** Verifies a Supabase OAuth access token for MCP. Signature/expiry are rechecked by /auth/v1/user. */
+export async function getVerifiedOAuthAccount(request: Request, env: AccountEnv, fetcher: typeof fetch = fetch): Promise<OAuthAccount | null> {
+  const header = request.headers.get('Authorization') || ''
+  const match = /^Bearer ([A-Za-z0-9._~-]{8,3800})$/.exec(header)
+  if (!match) return null
+  const token = match[1], claims = jwtPayload(token)
+  if (!claims) return null
+  const { base } = config(env), now = Math.floor(Date.now() / 1000)
+  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
+  const scopes = typeof claims.scope === 'string' ? new Set(claims.scope.split(/\s+/).filter(Boolean)) : new Set<string>()
+  if (claims.iss !== base + '/auth/v1' || !aud.includes('authenticated') ||
+    typeof claims.exp !== 'number' || claims.exp <= now ||
+    (typeof claims.nbf === 'number' && claims.nbf > now + 30) ||
+    typeof claims.sub !== 'string' || !UUID.test(claims.sub) ||
+    typeof claims.client_id !== 'string' || claims.client_id.length < 1 || claims.client_id.length > 512 ||
+    !scopes.has('email') || !scopes.has('profile')) return null
+  const user = await verifiedUser(env, fetcher, token)
+  return user && user.id === claims.sub ? { user, token, clientId: claims.client_id } : null
+}
 async function digest(value: string) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
@@ -266,6 +296,67 @@ async function googleCallback(request: Request, env: AccountEnv, fetcher: typeof
     return failed(error instanceof AccountError && error.status === 429 ? 'rate_limited' : error instanceof AccountError && error.status === 503 ? 'service_unavailable' : stage)
   }
 }
+const AUTHORIZATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function trustedOpenAIRedirect(value: unknown) {
+  if (typeof value !== 'string' || value.length > 1024) return false
+  try {
+    const url = new URL(value)
+    return url.origin === 'https://chatgpt.com' &&
+      (url.pathname === '/connector_platform_oauth_redirect' || /^\/connector\/oauth\/[A-Za-z0-9_-]{1,180}$/.test(url.pathname)) &&
+      !url.username && !url.password
+  } catch { return false }
+}
+async function oauthAuthorization(request: Request, env: AccountEnv, fetcher: typeof fetch) {
+  if (!accountsConfigured(env)) throw new AccountError('WORLDIFACT OAuth is not configured.')
+  const token = cookieValue(request, ACCESS_COOKIE)
+  if (!token || !await verifiedUser(env, fetcher, token)) throw new AccountError('Sign in to WORLDIFACT before approving this connection.', 401)
+  await limit(request, env, 'oauth-authorization')
+  if (request.method === 'GET') {
+    const url = new URL(request.url), ids = url.searchParams.getAll('authorization_id')
+    if (ids.length !== 1 || !AUTHORIZATION_ID.test(ids[0]) || [...url.searchParams.keys()].some(key => key !== 'authorization_id'))
+      throw new AccountError('Invalid OAuth authorization request.', 400)
+    const response = await upstream(env, fetcher, '/oauth/authorizations/' + encodeURIComponent(ids[0]), 'GET', undefined, token)
+    if (!response.ok) { await response.body?.cancel(); throw new AccountError(response.status === 401 ? 'Sign in again before approving this connection.' : 'This OAuth authorization request is unavailable.', response.status === 401 ? 401 : 400) }
+    const value = await responseJson(response)
+    if (typeof value.redirect_url === 'string') {
+      if (!trustedOpenAIRedirect(value.redirect_url)) throw new AccountError('WORLDIFACT only approves the configured OpenAI connection.', 403)
+      return json({ redirectUrl: value.redirect_url })
+    }
+    const client = value.client && typeof value.client === 'object' && !Array.isArray(value.client) ? value.client as Record<string, unknown> : null
+    if (value.authorization_id !== ids[0] || typeof value.redirect_uri !== 'string' || !trustedOpenAIRedirect(value.redirect_uri) ||
+      !client || typeof client.id !== 'string' || client.id.length > 512 ||
+      (client.name !== undefined && (typeof client.name !== 'string' || client.name.length > 160)) ||
+      typeof value.scope !== 'string' || value.scope.length > 240)
+      throw new AccountError('The OAuth client could not be verified for WORLDIFACT.', 403)
+    const scopes = value.scope.split(/\s+/).filter(Boolean)
+    if (scopes.some(scope => !['openid', 'email', 'profile', 'phone'].includes(scope)))
+      throw new AccountError('The OAuth client requested unsupported permissions.', 403)
+    return json({
+      authorizationId: ids[0],
+      client: { id: client.id, name: typeof client.name === 'string' && client.name.trim() ? client.name.trim() : 'OpenAI', uri: typeof client.uri === 'string' ? client.uri.slice(0, 1024) : '' },
+      redirectUri: value.redirect_uri,
+      scope: value.scope,
+    })
+  }
+  if (request.method !== 'POST') return json({ error: 'Use GET or POST.' }, 405)
+  if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
+  const input = await boundedJson(request, MAX_BODY)
+  if (Object.keys(input).some(key => !['authorizationId', 'action'].includes(key)) ||
+    typeof input.authorizationId !== 'string' || !AUTHORIZATION_ID.test(input.authorizationId) ||
+    !['approve', 'deny'].includes(String(input.action))) throw new AccountError('Invalid OAuth decision.', 400)
+  // Read details again immediately before consent so a stale or non-OpenAI
+  // dynamic client cannot be approved through this endpoint.
+  const details = await upstream(env, fetcher, '/oauth/authorizations/' + encodeURIComponent(input.authorizationId), 'GET', undefined, token)
+  if (!details.ok) { await details.body?.cancel(); throw new AccountError('This OAuth authorization request is unavailable.', 400) }
+  const current = await responseJson(details)
+  if (typeof current.redirect_uri !== 'string' || !trustedOpenAIRedirect(current.redirect_uri)) throw new AccountError('WORLDIFACT only approves the configured OpenAI connection.', 403)
+  const response = await upstream(env, fetcher, '/oauth/authorizations/' + encodeURIComponent(input.authorizationId) + '/consent', 'POST', { action: input.action }, token)
+  if (!response.ok) { await response.body?.cancel(); throw new AccountError('The OAuth decision could not be completed.', response.status === 401 ? 401 : 400) }
+  const value = await responseJson(response)
+  if (!trustedOpenAIRedirect(value.redirect_url)) throw new AccountError('The OAuth redirect was rejected.', 403)
+  return json({ redirectUrl: value.redirect_url })
+}
+
 async function recoveryCallback(request: Request, env: AccountEnv, fetcher: typeof fetch) {
   const verifier = cookieValue(request, PKCE_COOKIE), url = new URL(request.url), code = url.searchParams.get('code')
   if (env.SUPABASE_RECOVERY_REDIRECT_READY !== 'true' || !verifier || !code || !/^[A-Za-z0-9_-]{12,512}$/.test(code))
@@ -283,7 +374,7 @@ export async function accountApi(request: Request, env: AccountEnv, fetcher: typ
   const { pathname, origin } = new URL(request.url)
   if (!pathname.startsWith('/api/account/')) return null
   const action = pathname.slice('/api/account/'.length)
-  if (!['config', 'session', 'login', 'register', 'recover', 'logout', 'password', 'recovery/callback', 'oauth/google', 'oauth/callback'].includes(action)) return json({ error: 'Account route not found.' }, 404)
+  if (!['config', 'session', 'login', 'register', 'recover', 'logout', 'password', 'recovery/callback', 'oauth/google', 'oauth/callback', 'oauth/authorization'].includes(action)) return json({ error: 'Account route not found.' }, 404)
   try {
     // This external top-level navigation is bound to an HttpOnly PKCE verifier;
     // all other account endpoints remain strictly same-origin.
@@ -296,6 +387,7 @@ export async function accountApi(request: Request, env: AccountEnv, fetcher: typ
       return await googleCallback(request, env, fetcher)
     }
     checkOrigin(request)
+    if (action === 'oauth/authorization') return await oauthAuthorization(request, env, fetcher)
     const expectedMethod = ['config', 'session'].includes(action) ? 'GET' : 'POST'
     if (request.method !== expectedMethod) return json({ error: `Use ${expectedMethod}.` }, 405)
     if (action === 'config') {
