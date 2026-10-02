@@ -3,7 +3,7 @@ import { privateWorldStore } from './privateWorldStore.ts'
 import type { BudgetNamespace } from './budget.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId, type GenerationModel } from './generationEconomics.ts'
-import { STUDIO_FAILURE_CODES, type StudioFailureCode, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
+import { STUDIO_FAILURE_CODES, STUDIO_SUBMISSION_GRACE_MS, type StudioFailureCode, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
@@ -22,6 +22,7 @@ type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'bluepr
 export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean }
 export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean }
 export type CurrentStudioJob = { id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
+export type ClosedMissingStudioJob = { closed: boolean; state: Job['state']; fingerprintMatches: boolean; failureCode?: StudioFailureCode }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
 type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
@@ -195,6 +196,27 @@ export class AccountEntitlements {
           return { cleared: true }
         }))
       }
+      if (path === '/studio-close-missing') {
+        if (Object.keys(input).some(key => !['id', 'fingerprint', 'issued'].includes(key)) ||
+            typeof input.id !== 'string' || !JOB_ID.test(input.id) || typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint) ||
+            !Number.isSafeInteger(input.issued) || Number(input.issued) <= 0)
+          return json({ error: 'Invalid missing submission' }, 400)
+        const id = input.id, fingerprint = input.fingerprint, issued = Number(input.issued)
+        return json(await this.storage.transaction(async storage => {
+          const existing = await storage.get<Job>(`job:${id}`)
+          if (existing) return { closed: false, state: existing.state, fingerprintMatches: existing.fingerprint === fingerprint,
+            ...(existing.failureCode ? { failureCode: existing.failureCode } : {}) } satisfies ClosedMissingStudioJob
+          // Read the clock inside the transaction, after any queued reservation.
+          const closedAt = this.now()
+          if (closedAt - issued < STUDIO_SUBMISSION_GRACE_MS) throw new Error('Submission recovery window has not elapsed')
+          const tombstone: Job = { fingerprint, channel: 'studio', profile: 'slow', at: issued, updatedAt: closedAt,
+            cost: 0, kind: 'free', state: 'failed', failureCode: 'MISSING_SUBMISSION' }
+          await storage.put(`job:${id}`, tombstone)
+          // No hold, charge, refund, provider-budget change or current-pointer
+          // replacement. This only fences the exact signed absent submission.
+          return { closed: true, state: 'failed', fingerprintMatches: true, failureCode: 'MISSING_SUBMISSION' } satisfies ClosedMissingStudioJob
+        }))
+      }
       if (path === '/reserve') {
         if (typeof input.id !== 'string' || !JOB_ID.test(input.id) || !['fast', 'slow'].includes(String(input.profile))) return json({ error: 'Invalid generation' }, 400)
         if (input.fingerprint !== undefined && (typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint))) return json({ error: 'Invalid request fingerprint' }, 400)
@@ -212,6 +234,8 @@ export class AccountEntitlements {
         const result = await this.storage.transaction(async storage => {
           const existing = await storage.get<Job>(`job:${id}`)
           if (existing && existing.fingerprint !== fingerprint) return { allowed: false, repeated: true, reason: 'REQUEST_PAYLOAD_MISMATCH' }
+          if (existing?.state === 'failed' && existing.failureCode === 'MISSING_SUBMISSION')
+            return { allowed: false, repeated: true, state: existing.state, cost: 0, kind: existing.kind, reason: 'JOB_ALREADY_FAILED' }
           if (existing && existing.profile === profile && (existing.model ?? (existing.profile === 'fast' ? 'sol' : 'astra')) !== selectedModel) return { allowed: false, reason: 'JOB_MODEL_MISMATCH' }
           if (existing && (existing.qualityProfile ?? 'standard') !== qualityProfile) return { allowed: false, reason: 'JOB_QUALITY_PROFILE_MISMATCH' }
           if (existing && (existing.channel ?? 'blueprint') !== channel) return { allowed: false, reason: 'JOB_CHANNEL_MISMATCH' }
@@ -431,6 +455,7 @@ export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId:
 export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<JobAccess>(env, userId, '/job', { id: jobId })
 export const currentUserStudioJob = (env: EntitlementEnv, userId: string) => entitlementCall<{ job: CurrentStudioJob | null }>(env, userId, '/studio-current', {})
 export const clearCurrentUserStudioJob = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<{ cleared: boolean }>(env, userId, '/studio-current-clear', { id: jobId })
+export const closeMissingStudioJob = (env: EntitlementEnv, userId: string, jobId: string, fingerprint: string, issued: number) => entitlementCall<ClosedMissingStudioJob>(env, userId, '/studio-close-missing', { id: jobId, fingerprint, issued })
 export async function entitlementApi(request: Request, env: AccountEnv & EntitlementEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
   if (new URL(request.url).pathname !== '/api/account/entitlements') return null
   if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)

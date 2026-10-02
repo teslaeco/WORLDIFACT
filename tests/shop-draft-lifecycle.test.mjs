@@ -52,7 +52,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, cloudLookup } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, cloudLookup } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
@@ -73,6 +73,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, artifa
       delivery: { kind: 'procedural-blueprint', referenceCount: JSON.parse(init.body).references.length, fallbackUsed: false },
     })
     if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
+    if (method === 'POST' && submissionRejection) return Response.json({ error: 'PRIVATE_UPSTREAM_MESSAGE', failureCode: submissionRejection }, { status: 409 })
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model') && artifactFailure) throw new TypeError('Interrupted artifact download')
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
@@ -106,7 +107,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, artifa
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
       saveStudioModel: async saved => { if (!archive.has(saved.receipt.id)) archive.set(saved.receipt.id, { id: saved.receipt.id, prompt: saved.prompt, savedAt: saved.startedAt, byteLength: blob.size, sha256: 'new-fixture', review: 'UNREVIEWED' }); return archive.get(saved.receipt.id) },
     },
-    '../lib/studioPhotos': { prepareStudioPhoto: async (file, size, view) => ({ name: file.name, view, dataUrl: 'data:image/jpeg;base64,/9j/2Q==', textureMaxSize: size }) },
+    '../lib/studioPhotos': { prepareStudioPhoto: async (file, size, view) => ({ name: file.name, view, dataUrl: 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64'), textureMaxSize: size }) },
   } })
   const settle = async () => {
     for (let i = 0; i < 24; i++) {
@@ -154,7 +155,7 @@ test('an active job can have a next draft, but cannot be replaced or resubmitted
     await h.poll()
     assert.equal(h.byId('studio-prompt').props.disabled, false)
     h.byId('studio-prompt').props.onChange({ target: { value: 'Next model draft' } }); await h.settle()
-    assert.equal(h.button('Generate GPT-6 Astra blueprint').props.disabled, true)
+    assert.equal(h.all().find(node => node.type === 'button' && node.props.type === 'submit').props.disabled, true)
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     h.button('Clear next-model draft').props.onClick(); await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, '')
@@ -232,7 +233,7 @@ test('missing local receipt recovers the current cloud job before the sample pre
   try {
     await h.settle()
     assert.ok(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), 'fresh cloud receipt is restored into local recovery storage')
-    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Preparing your model…'))
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Checking whether your request was accepted…'))
     assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
     assert.equal(h.calls.filter(call => call.path === '/api/studio/jobs' && call.method === 'POST').length, 0)
     assert.ok(h.calls.some(call => call.path === '/api/studio/current' && call.method === 'GET'))
@@ -245,7 +246,7 @@ test('unconfirmed old jobs display review state instead of an endless generation
     await h.poll()
     assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Model needs a status review'))
     assert.equal(h.all().some(node => node.type === 'p' && text(node).startsWith('Elapsed:')), false)
-    assert.equal(h.button('Generate GPT-6 Astra blueprint').props.disabled, true, 'Uncertain jobs must not be silently duplicated')
+    assert.equal(h.all().find(node => node.type === 'button' && node.props.type === 'submit').props.disabled, true, 'Uncertain jobs must not be silently duplicated')
     assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
   } finally { h.close() }
 })
@@ -393,7 +394,7 @@ test('repeated cloud lookup failures retain the recovery gate and retry GET unti
     h.byId('studio-prompt').props.onChange({ target: { value: 'A new rook concept' } }); await h.settle()
     for (let i = 0; i < 5; i++) {
       assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
-      assert.equal(h.button('Generate GPT-6 Astra blueprint').props.disabled, true)
+      assert.equal(h.all().find(node => node.type === 'button' && node.props.type === 'submit').props.disabled, true)
       await h.form().props.onSubmit({ preventDefault() {} })
       await h.poll()
     }
@@ -401,7 +402,7 @@ test('repeated cloud lookup failures retain the recovery gate and retry GET unti
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
     assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
     assert.ok(h.delays.slice(0, 5).every(delay => delay >= 5000 && delay <= 120000))
-    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Preparing your model…'))
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Checking whether your request was accepted…'))
   } finally { h.close() }
 })
 
@@ -459,5 +460,35 @@ test('a completed model whose preview download is interrupted never receives fai
     assert.match(visible, /Your model is complete/)
     assert.doesNotMatch(visible, /original failure reason was not saved/)
     assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+
+test('reloading a detailed receipt preserves the detailed route and missing submission is not presented as a model crash', async () => {
+  const h = await harness({ ready: true, state: 'failed', failureCode: 'MISSING_SUBMISSION' })
+  try {
+    await h.poll()
+    assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
+    const visible = text(h.all())
+    assert.match(visible, /The upload was not confirmed/)
+    assert.match(visible, /Model submission was not confirmed/)
+    assert.doesNotMatch(visible, /Previous model did not finish|original failure reason was not saved/)
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+
+test('an immediately rejected submission shows its saved capacity reason instead of claiming it was lost', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, submissionRejection: 'JOB_CAPACITY' })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A detailed blue chess knight' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } })
+    await h.settle()
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const visible = text(h.all())
+    assert.match(visible, /stored-job capacity/)
+    assert.match(visible, /Reason: JOB_CAPACITY/)
+    assert.doesNotMatch(visible, /original failure reason was not saved|PRIVATE_UPSTREAM_MESSAGE/)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 1)
   } finally { h.close() }
 })

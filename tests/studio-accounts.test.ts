@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
 import { GenerationBudget, type BudgetStorage } from '../server/budget.ts'
 import { AccountEntitlements, entitlementCall, entitlementStatus, type EntitlementStorage } from '../server/entitlements.ts'
-import type { StudioInput, StudioJob } from '../src/lib/studioProtocol.ts'
+import { prepareStudioInput, STUDIO_FAILURE_DETAILS, STUDIO_SUBMISSION_GRACE_MS, type StudioInput, type StudioJob, type StudioReceipt } from '../src/lib/studioProtocol.ts'
 
 const origin = 'https://worldifact.test'
 const alice = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', bob = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -25,12 +25,14 @@ function fixture() {
   const budget = new GenerationBudget({ storage: storage() as BudgetStorage }, env)
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const users = new Map<string, AccountEntitlements>()
-  env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() })); return users.get(key)! } }
+  env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() }, {}, () => Date.now())); return users.get(key)! } }
   let runtimeOverrides: Record<string, unknown> = {}, invalidModel = false, denseModel = false, failureDetail = '', lastPayload: Record<string, any> | null = null
   let posts = 0, artifacts = 0, loss = false, busy = false, state: StudioJob['state'] = 'succeeded', status404 = false
   let statusFailure: 'http' | 'rate-limit' | 'transport' | 'malformed' | null = null
   let artifactFailure = false, artifactHttpStatus = 0, artifactGate: Promise<void> | undefined
   let artifactResponse: (() => Response) | undefined
+  let submissionRejection: { status: number; body: unknown } | undefined
+  let healthGate: Promise<void> | undefined, statusGate: Promise<void> | undefined, healthReads = 0, statusReads = 0
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname
     if (path === '/auth/v1/user') {
@@ -39,12 +41,13 @@ function fixture() {
       if (token === 'Bearer bob-token') return Response.json({ id: bob, email: 'bob@example.test' })
       return Response.json({}, { status: 401 })
     }
-    if (path === '/v1/health') return Response.json({ ...detailedHealthFixture, ...runtimeOverrides })
+    if (path === '/v1/health') { healthReads++; await healthGate; return Response.json({ ...detailedHealthFixture, ...runtimeOverrides }) }
     if (path === '/v1/jobs') {
       posts++
       lastPayload = JSON.parse(String(init?.body))
       if (loss) throw new Error('Unconfirmed transport acceptance')
-      if (busy) return Response.json({ error: 'Serwer wykonuje poprzedni model. Poczekaj na wynik.' }, { status: 409 })
+      if (busy) return Response.json({ error: 'Serwer wykonuje poprzedni model. Poczekaj na wynik lub anuluj tamto zlecenie.' }, { status: 409 })
+      if (submissionRejection) return Response.json(submissionRejection.body, { status: submissionRejection.status })
       return Response.json({ id: JSON.parse(String(init?.body)).id, state: 'building' })
     }
     if (/\/model$|\/exports\//.test(path)) {
@@ -56,6 +59,7 @@ function fixture() {
       const bytes = invalidModel ? new Uint8Array(24) : denseModel ? detailedAssemblyGLBFixture(12,2400,4) : detailedGLBFixture()
       return new Response(bytes, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(bytes.length) } })
     }
+    statusReads++; await statusGate
     if (statusFailure === 'http') return Response.json({ error: 'Temporarily unavailable' }, { status: 503 })
     if (statusFailure === 'rate-limit') return Response.json({ error: 'Slow down' }, { status: 429 })
     if (statusFailure === 'transport') throw new TypeError('Simulated status transport failure')
@@ -83,6 +87,11 @@ function fixture() {
     artifactHttpStatus: (value: number) => { artifactHttpStatus = value },
     artifactGate: (value: Promise<void> | undefined) => { artifactGate = value },
     artifactResponse: (value: (() => Response) | undefined) => { artifactResponse = value },
+    rejectSubmission: (status: number, body: unknown) => { submissionRejection = { status, body } },
+    cancel: () => { state = 'cancelled' },
+    healthGate: (value: Promise<void> | undefined) => { healthGate = value }, healthReads: () => healthReads,
+    statusGate: (value: Promise<void> | undefined) => { statusGate = value }, statusReads: () => statusReads,
+    missing: (value = true) => { status404 = value },
     busy: () => { busy = true }, lose: () => { loss = true; status404 = true } }
 }
 
@@ -132,7 +141,7 @@ test('an unknown acceptance stays pending briefly, then an explicit Oracle 404 r
   { const status = await entitlementStatus(f.env, alice); assert.equal(status.credits, 4500); assert.equal(status.reservedCredits, 250); assert.equal(status.availableCredits, 4250) }
   const now = Date.now
   try {
-    Date.now = () => now() + 181_000
+    Date.now = () => now() + STUDIO_SUBMISSION_GRACE_MS + 1000
     const review = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob; reconciledMissing?: boolean }
     assert.equal(review.job.state, 'failed'); assert.equal(review.reconciledMissing, true)
     { const status = await entitlementStatus(f.env, alice); assert.equal(status.credits, 4500); assert.equal(status.reservedCredits, 0) }
@@ -351,13 +360,15 @@ test('missing entitlement row plus missing Oracle job becomes terminal after rec
   const f = fixture(); await f.subscribe(); const receipt = await f.prepare(); f.lose()
   const now = Date.now
   try {
-    Date.now = () => now() + 181_000
+    Date.now = () => now() + STUDIO_SUBMISSION_GRACE_MS + 1000
     const response = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
     assert.equal(response.status, 200)
     const value = await response.json() as { job: StudioJob; reconciledMissing?: boolean }
     assert.equal(value.job.state, 'failed')
+    assert.equal(value.job.failureCode, 'MISSING_SUBMISSION')
     assert.equal(value.reconciledMissing, true)
     assert.match(value.job.detail, /no matching account reservation or Oracle job/i)
+    assert.doesNotMatch(value.job.detail, /points were released|refunded|charged/i)
     assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
     assert.equal(f.posts(), 0)
   } finally { Date.now = now }
@@ -437,7 +448,7 @@ test('failure categories survive repeat polling and recovery without saving raw 
     if (code === 'ORACLE_JOB_FAILED') f.fail()
     const now = Date.now
     try {
-      if (code === 'ORACLE_JOB_MISSING') { f.lose(); Date.now = () => now() + 4 * 60_000 }
+      if (code === 'ORACLE_JOB_MISSING') { f.lose(); Date.now = () => now() + STUDIO_SUBMISSION_GRACE_MS + 1000 }
       for (let attempt = 0; attempt < 2; attempt++) {
         const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
         assert.equal(result.job.state, 'failed'); assert.equal(result.job.failureCode, code)
@@ -524,4 +535,149 @@ test('local verification contention cannot turn another overdue successful model
     assert.equal((await entitlementStatus(b.env, alice)).credits, 4250)
     assert.equal(b.posts(), 1)
   } finally { Date.now = now; release(); await validating }
+})
+
+test('lightweight account preparation preserves legacy binding and cannot cross accounts or bypass full validation', async () => {
+  const f = fixture(); await f.subscribe()
+  const manifest = await prepareStudioInput(input)
+  const prepared = await (await f.call('/api/studio/prepare', 'POST', manifest)).json() as StudioReceipt
+  const legacy = await f.prepare()
+  assert.equal(prepared.ticket.split('.')[2], legacy.ticket.split('.')[2])
+  assert.equal(f.posts(), 0)
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+  assert.equal((await f.call('/api/studio/jobs', 'POST', input, prepared.ticket, 'bob')).status, 401)
+  assert.equal((await f.call('/api/studio/jobs', 'POST', { ...input, prompt: 'Different model' }, prepared.ticket)).status, 409)
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+  assert.equal(f.posts(), 0)
+  assert.equal((await f.call('/api/studio/jobs', 'POST', input, prepared.ticket)).status, 202)
+  assert.equal(f.posts(), 1)
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+})
+
+test('known pre-acceptance rejections persist their exact safe category through polling and cloud recovery', async () => {
+  const cases = [
+    [409, 'Serwer wykonuje poprzedni model. Poczekaj na wynik lub anuluj tamto zlecenie.', 'ORACLE_BUSY'],
+    [409, 'Na serwerze zostalo mniej niz 2 GB wolnego miejsca.', 'STORAGE_FULL'],
+    [409, 'Osiagnieto limit 300 zlecen. Zarchiwizuj modele na serwerze przed dalsza praca.', 'JOB_CAPACITY'],
+    [409, 'Identyfikator zlecenia jest juz zajety. Sprobuj ponownie.', 'ORACLE_SUBMISSION_REJECTED'],
+    [409, 'PRIVATE fixture credential and unknown capacity explanation', 'ORACLE_SUBMISSION_REJECTED'],
+    [409, 'PRIVATE'.repeat(2000), 'ORACLE_SUBMISSION_REJECTED'],
+    [400, 'Nieprawidlowe dane zadania.', 'ORACLE_SUBMISSION_REJECTED'],
+    [422, 'PRIVATE provider explanation', 'ORACLE_SUBMISSION_REJECTED'],
+    [429, 'PRIVATE proxy rate limit', 'RATE_LIMITED'],
+  ] as const
+  for (const [status, message, code] of cases) {
+    const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+    f.rejectSubmission(status, { error: message })
+    const rejected = await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+    assert.equal(rejected.status, status)
+    assert.equal((await rejected.json() as { error: string }).error, STUDIO_FAILURE_DETAILS[code])
+    for (let repeat = 0; repeat < 2; repeat++) {
+      const poll = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+      assert.equal(poll.job.state, 'failed'); assert.equal(poll.job.failureCode, code)
+      assert.doesNotMatch(JSON.stringify(poll), /PRIVATE|Serwer|Osiagnieto|Na serwerze/)
+    }
+    const current = await (await f.call('/api/studio/current')).json() as { current: { failureCode: string; financialState: string } }
+    assert.equal(current.current.financialState, 'failed'); assert.equal(current.current.failureCode, code)
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+    assert.equal(f.posts(), 1)
+  }
+})
+
+test('failed operator allowance reservation stores a safe cause before any Oracle submission', async () => {
+  for (const transport of [false, true]) {
+    const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+    f.env.GENERATION_BUDGET = { idFromName: name => name, get: () => ({ async fetch(request) {
+      if (new URL(request.url).pathname === '/status') return Response.json({ used: 0, limit: null, remaining: null, unlimited: true, enabled: true })
+      if (transport) throw new Error('PRIVATE fixture transport interruption')
+      return Response.json({ allowed: false }, { status: 503 })
+    } }) }
+    assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).status, 503)
+    const current = await (await f.call('/api/studio/current')).json() as { current: { failureCode: string } }
+    assert.equal(current.current.failureCode, 'STUDIO_ALLOWANCE_UNAVAILABLE')
+    const poll = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(poll.job.failureCode, 'STUDIO_ALLOWANCE_UNAVAILABLE')
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+    assert.equal(f.posts(), 0)
+  }
+})
+
+test('unknown Oracle 503 or transport loss remains uncertain and cannot falsely release a hold', async () => {
+  for (const transport of [false, true]) {
+    const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+    if (transport) f.lose(); else f.rejectSubmission(503, { error: 'PRIVATE: acceptance unknown' })
+    const response = await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+    assert.equal(response.status, 202)
+    const result = await response.json() as { job: StudioJob }
+    assert.equal(result.job.state, 'pending'); assert.equal(result.job.failureCode, undefined)
+    const current = await (await f.call('/api/studio/current')).json() as { current: { financialState: string; failureCode?: string } }
+    assert.equal(current.current.financialState, 'reserved'); assert.equal(current.current.failureCode, undefined)
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+    assert.equal(f.posts(), 1)
+  }
+})
+
+test('worker cancellation has a durable safe reason and releases the existing hold once', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket); f.cancel()
+  for (let repeat = 0; repeat < 2; repeat++) {
+    const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(result.job.state, 'failed'); assert.equal(result.job.failureCode, 'ORACLE_CANCELLED')
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+  }
+  const current = await (await f.call('/api/studio/current')).json() as { current: { failureCode: string } }
+  assert.equal(current.current.failureCode, 'ORACLE_CANCELLED')
+  assert.equal(f.posts(), 1)
+})
+
+test('missing-submission fence wins against an original POST still awaiting admission and prevents its late paid dispatch', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  let release!: () => void
+  f.healthGate(new Promise<void>(resolve => { release = resolve }))
+  const previousHealthReads = f.healthReads()
+  const lateSubmission = f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  while (f.healthReads() === previousHealthReads) await new Promise(resolve => setImmediate(resolve))
+  const now = Date.now
+  try {
+    Date.now = () => now() + STUDIO_SUBMISSION_GRACE_MS + 1000
+    f.missing()
+    const closed = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(closed.job.state, 'failed'); assert.equal(closed.job.failureCode, 'MISSING_SUBMISSION')
+    release()
+    const late = await (await lateSubmission).json() as { job: StudioJob }
+    assert.equal(late.job.state, 'failed'); assert.equal(late.job.failureCode, 'MISSING_SUBMISSION')
+    assert.equal(f.posts(), 0)
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+    const budget = f.env.GENERATION_BUDGET!.get(f.env.GENERATION_BUDGET!.idFromName('worldifact-generation-budget-v1'))
+    assert.equal((await (await budget.fetch(new Request('https://budget.internal/status'))).json() as { used: number }).used, 0)
+    assert.deepEqual(await (await f.call('/api/studio/current')).json(), { current: null }, 'Fencing cannot invent or replace the cloud-current pointer')
+  } finally { release(); await lateSubmission; Date.now = now }
+})
+
+test('a fresh reservation winning during an old receipt Oracle 404 stays pending and can complete exactly once', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  let release!: () => void
+  f.missing(); f.statusGate(new Promise<void>(resolve => { release = resolve }))
+  const now = Date.now
+  let polling: Promise<Response> | undefined
+  try {
+    Date.now = () => now() + STUDIO_SUBMISSION_GRACE_MS + 1000
+    polling = f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+    while (!f.statusReads()) await new Promise(resolve => setImmediate(resolve))
+    assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).status, 202)
+    release()
+    const observed = await (await polling).json() as { job: StudioJob }
+    assert.equal(observed.job.state, 'pending'); assert.equal(observed.job.failureCode, undefined)
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+    assert.equal(f.posts(), 1)
+    f.missing(false); f.statusGate(undefined)
+    const completed = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(completed.job.state, 'succeeded')
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
+    assert.equal(f.posts(), 1)
+  } finally { release(); await polling; Date.now = now }
 })
