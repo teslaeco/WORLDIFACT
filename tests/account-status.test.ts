@@ -4,7 +4,7 @@ import { checkoutHomeDestination, checkoutReturnNotice, fetchAccountBalance, rea
 const account = (active = false, credits = 0, reservedCredits = 0) => ({ credits, reservedCredits, availableCredits: credits - reservedCredits, subscription: { active, expiresAt: null }, billingReview: false, free: { fastRemaining: 2, slowRemaining: 1 } })
 
 test('visible balance preserves real zero, free allowances and server membership', () => {
-  assert.deepEqual(readAccountBalance(account()), { credits: 0, membershipActive: false, billingReview: false, fastRemaining: 2, slowRemaining: 1 })
+  assert.deepEqual(readAccountBalance(account()), { credits: 0, reservedCredits: 0, availableCredits: 0, membershipActive: false, billingReview: false, fastRemaining: 2, slowRemaining: 1 })
   assert.equal(readAccountBalance(account(true, 1450)).credits, 1450)
   assert.equal(readAccountBalance(account(true, 1450)).membershipActive, true)
 })
