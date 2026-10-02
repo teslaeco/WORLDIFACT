@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { StudioCoordinator, STUDIO_RECEIPT_KEY, parseStudioJob, readSavedStudioJob, type ReceiptStore } from '../src/lib/studioClient.ts'
+import { StudioCoordinator, STUDIO_RECEIPT_KEY, STUDIO_RECEIPT_HISTORY_PREFIX, parseStudioJob, readSavedStudioJob, type ReceiptStore } from '../src/lib/studioClient.ts'
 import type { StudioInput } from '../src/lib/studioProtocol.ts'
 const id = '12345678-1234-4234-8234-123456789abc'
 const receipt = { id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` }
@@ -8,6 +8,10 @@ const input: StudioInput = { worldId: 'enchanted-ai-shop', prompt: 'Create a blu
 function store(): ReceiptStore {
   const data = new Map<string, string>()
   return { getItem: key => data.get(key) ?? null, setItem: (key, value) => { data.set(key, value) }, removeItem: key => { data.delete(key) } }
+}
+function resignedReceipt(offset = 1000) {
+  const issued = Number(receipt.ticket.split('.')[1]) + offset
+  return { id, createdAt: new Date(issued).toISOString(), ticket: `${id}.${issued}.${'a'.repeat(64)}.${'c'.repeat(64)}` }
 }
 
 test('the exact receipt is retained before the only paid POST and double clicks are rejected', async () => {
@@ -91,6 +95,84 @@ test('explicit cloud dismissal uses DELETE and then clears only the selected loc
   assert.deepEqual(JSON.parse(calls[0].body!),{id})
 })
 
+test('cloud recovery preserves the original receipt and its re-signed revision before DELETE', async () => {
+  const storage = store(), original = { receipt, prompt: input.prompt, startedAt: receipt.createdAt }
+  const canonicalKey = STUDIO_RECEIPT_HISTORY_PREFIX + id, originalText = JSON.stringify(original)
+  storage.setItem(canonicalKey, originalText)
+  const refreshed = resignedReceipt(), revisionKey = `${canonicalKey}:${refreshed.ticket.split('.')[1]}`
+  let deletes = 0
+  const client = new StudioCoordinator(storage, (async (_url, init) => {
+    if (init?.method === 'DELETE') {
+      deletes++
+      assert.equal(storage.getItem(canonicalKey), originalText, 'Canonical history is immutable')
+      assert.equal(JSON.parse(storage.getItem(revisionKey)!).receipt.ticket, refreshed.ticket, 'The refreshed credential is retained before cloud mutation')
+      return Response.json({ cleared: true })
+    }
+    return Response.json({ current: { ...original, receipt: refreshed, financialState: 'completed' } })
+  }) as typeof fetch)
+  await client.recoverCurrent()
+  await client.dismissCurrent()
+  assert.equal(deletes, 1); assert.equal(client.current, null)
+  assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), null)
+  assert.equal(storage.getItem(canonicalKey), originalText)
+  assert.equal(JSON.parse(storage.getItem(revisionKey)!).receipt.ticket, refreshed.ticket)
+})
+
+test('same-job receipt revisions retain distinct immutable timestamp records and allow replay', () => {
+  const storage = store(), original = { receipt, prompt: input.prompt, startedAt: receipt.createdAt }
+  const canonicalKey = STUDIO_RECEIPT_HISTORY_PREFIX + id, originalText = JSON.stringify(original)
+  const revisions = new Map<string, string>()
+  storage.setItem(canonicalKey, originalText)
+  for (const offset of [1000, 2000, 1000]) {
+    const refreshed = resignedReceipt(offset), saved = { ...original, receipt: refreshed }, text = JSON.stringify(saved)
+    storage.setItem(STUDIO_RECEIPT_KEY, text)
+    const client = new StudioCoordinator(storage); client.restore(); client.clearSelection()
+    assert.equal(storage.getItem(canonicalKey), originalText)
+    const key = `${canonicalKey}:${refreshed.ticket.split('.')[1]}`, retained = storage.getItem(key)!
+    assert.deepEqual(JSON.parse(retained), saved)
+    if (revisions.has(key)) assert.equal(retained, revisions.get(key), 'Identical replay cannot rewrite a revision')
+    revisions.set(key, retained)
+  }
+})
+
+test('conflicting or corrupt receipt history blocks dismissal without DELETE or overwriting evidence', async () => {
+  const refreshed = resignedReceipt(), saved = { receipt: refreshed, prompt: input.prompt, startedAt: receipt.createdAt }
+  const canonicalKey = STUDIO_RECEIPT_HISTORY_PREFIX + id
+  for (const existing of ['broken JSON', 'null', JSON.stringify({ receipt }),
+    JSON.stringify({ ...saved, receipt: { ...receipt, ticket: receipt.ticket.replace('a'.repeat(64), 'd'.repeat(64)) } }),
+    JSON.stringify({ ...saved, receipt: { ...refreshed, ticket: refreshed.ticket.replace('c'.repeat(64), 'd'.repeat(64)) } }),
+  ]) {
+    const storage = store(), selected = JSON.stringify(saved); let deletes = 0
+    storage.setItem(canonicalKey, existing); storage.setItem(STUDIO_RECEIPT_KEY, selected)
+    const client = new StudioCoordinator(storage, (async () => { deletes++; return Response.json({ cleared: true }) }) as typeof fetch)
+    client.restore()
+    await assert.rejects(client.dismissCurrent(), /receipt|history/i)
+    assert.equal(deletes, 0); assert.equal(client.current?.receipt.ticket, refreshed.ticket)
+    assert.equal(storage.getItem(canonicalKey), existing); assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), selected)
+  }
+})
+
+test('an existing conflicting revision or failed history write cannot clear the cloud pointer', async () => {
+  for (const failure of ['collision', 'throw', 'discard'] as const) {
+    const storage = store(), refreshed = resignedReceipt(), original = { receipt, prompt: input.prompt, startedAt: receipt.createdAt }
+    const saved = { ...original, receipt: refreshed }, canonicalKey = STUDIO_RECEIPT_HISTORY_PREFIX + id
+    storage.setItem(canonicalKey, JSON.stringify(original)); storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
+    const revisionKey = `${canonicalKey}:${refreshed.ticket.split('.')[1]}`
+    if (failure === 'collision') storage.setItem(revisionKey, 'conflicting existing history')
+    else {
+      storage.setItem = () => { if (failure === 'throw') throw new Error('History storage unavailable') }
+    }
+    let deletes = 0
+    const client = new StudioCoordinator(storage, (async () => { deletes++; return Response.json({ cleared: true }) }) as typeof fetch)
+    client.restore()
+    await assert.rejects(client.dismissCurrent(), /receipt|history/i)
+    assert.equal(deletes, 0); assert.equal(client.current?.receipt.id, id)
+    assert.equal(storage.getItem(canonicalKey), JSON.stringify(original))
+    assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), JSON.stringify(saved))
+    if (failure === 'collision') assert.equal(storage.getItem(revisionKey), 'conflicting existing history')
+  }
+})
+
 test('wrong job IDs, unknown states and corrupt stored receipts never appear as a valid current result', () => {
   assert.throws(() => parseStudioJob({ job: { id: crypto.randomUUID(), state: 'succeeded' } }, id))
   assert.throws(() => parseStudioJob({ job: { id, state: 'published' } }, id))
@@ -152,4 +234,55 @@ test('legacy ownership 403 becomes same-job reconciliation instead of endless po
   assert.equal(calls[0].method, 'GET')
   assert.equal(calls.some(call => call.method === 'POST'), false)
   assert.equal(client.current?.receipt.id, id)
+})
+
+test('in-flight cloud discovery prevents a paid start and duplicate discovery from replacing the recovered receipt', async () => {
+  const storage = store(), calls: string[] = []
+  let finishLookup!: (value: Response) => void
+  const pending = new Promise<Response>(resolve => { finishLookup = resolve })
+  const client = new StudioCoordinator(storage, (async (url: string | URL | Request) => {
+    calls.push(String(url))
+    if (String(url) === '/api/studio/current') return pending
+    if (String(url).endsWith('/prepare')) return Response.json({ ...receipt, id: '87654321-1234-4234-8234-123456789abc' })
+    throw new Error('No paid submission is allowed while discovery is pending')
+  }) as typeof fetch)
+  const recovery = client.recoverCurrent()
+  await assert.rejects(client.start(input, () => {}), /cloud recovery/)
+  await assert.rejects(client.recoverCurrent(), /cloud recovery/)
+  assert.deepEqual(calls, ['/api/studio/current'])
+  finishLookup(Response.json({ current: { receipt, prompt: input.prompt, startedAt: receipt.createdAt, financialState: 'reserved' } }))
+  assert.equal((await recovery)?.saved.receipt.id, id)
+  assert.equal(client.current?.receipt.id, id)
+  assert.equal(readSavedStudioJob(storage)?.receipt.id, id)
+  assert.equal((await client.recoverCurrent())?.saved.receipt.id, id)
+  assert.deepEqual(calls, ['/api/studio/current'])
+})
+
+test('malformed cloud discovery is never interpreted as a confirmed empty account and can be retried', async () => {
+  for (const invalid of [null, [], 42, {}, { current: [] }, { current: {} }]) {
+    const storage = store()
+    let attempts = 0
+    const client = new StudioCoordinator(storage, (async () => Response.json(++attempts === 1 ? invalid : { current: null })) as typeof fetch)
+    await assert.rejects(client.recoverCurrent(), /cloud job recovery record is invalid/)
+    assert.equal(client.current, null)
+    assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), null)
+    assert.equal(await client.recoverCurrent(), null)
+    assert.equal(attempts, 2)
+  }
+})
+
+test('aborted cloud discovery cannot overwrite a receipt saved by a newer page', async () => {
+  const storage = store(), controller = new AbortController()
+  let finishLookup!: (value: Response) => void, suppliedSignal: AbortSignal | null | undefined
+  const pending = new Promise<Response>(resolve => { finishLookup = resolve })
+  const client = new StudioCoordinator(storage, (async (_url, init) => { suppliedSignal = init?.signal; return pending }) as typeof fetch)
+  const recovery = client.recoverCurrent('', controller.signal)
+  controller.abort()
+  assert.equal(suppliedSignal?.aborted, true, 'The caller signal reaches the request through the combined timeout signal')
+  const replacement = JSON.stringify({ receipt: resignedReceipt(3000), prompt: 'Newer selection', startedAt: receipt.createdAt })
+  storage.setItem(STUDIO_RECEIPT_KEY, replacement)
+  finishLookup(Response.json({ current: { receipt, prompt: input.prompt, startedAt: receipt.createdAt, financialState: 'reserved' } }))
+  await assert.rejects(recovery, { name: 'AbortError' })
+  assert.equal(client.current, null)
+  assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), replacement)
 })

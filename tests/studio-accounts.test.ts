@@ -28,6 +28,8 @@ function fixture() {
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() })); return users.get(key)! } }
   let runtimeOverrides: Record<string, unknown> = {}, invalidModel = false, denseModel = false, failureDetail = '', lastPayload: Record<string, any> | null = null
   let posts = 0, artifacts = 0, loss = false, busy = false, state: StudioJob['state'] = 'succeeded', status404 = false
+  let statusFailure: 'http' | 'rate-limit' | 'transport' | 'malformed' | null = null
+  let artifactFailure = false
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname
     if (path === '/auth/v1/user') {
@@ -46,9 +48,14 @@ function fixture() {
     }
     if (/\/model$|\/exports\//.test(path)) {
       artifacts++
+      if (artifactFailure) throw new TypeError('Simulated artifact transport failure')
       const bytes = invalidModel ? new Uint8Array(24) : denseModel ? detailedAssemblyGLBFixture(12,2400,4) : detailedGLBFixture()
       return new Response(bytes, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(bytes.length) } })
     }
+    if (statusFailure === 'http') return Response.json({ error: 'Temporarily unavailable' }, { status: 503 })
+    if (statusFailure === 'rate-limit') return Response.json({ error: 'Slow down' }, { status: 429 })
+    if (statusFailure === 'transport') throw new TypeError('Simulated status transport failure')
+    if (statusFailure === 'malformed') return Response.json({ id: 'not-this-job', state: 'building' })
     if (status404) return Response.json({}, { status: 404 })
     return Response.json({ id: path.split('/').pop(), state, detail: failureDetail })
   }) as typeof fetch
@@ -67,6 +74,8 @@ function fixture() {
     await entitlementCall(env, alice, '/subscription', { id: 'sub_test', until: Date.now() + 86400000, active: true, revision: 1, plan: 'pro', grantId: 'in_subscription' })
   }
   return { env, call, prepare, subscribe, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, dense: () => { denseModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
+    statusFailure: (value: typeof statusFailure) => { statusFailure = value },
+    artifactFailure: (value: boolean) => { artifactFailure = value },
     busy: () => { busy = true }, lose: () => { loss = true; status404 = true } }
 }
 
@@ -121,6 +130,73 @@ test('an unknown acceptance stays pending briefly, then an explicit Oracle 404 r
     assert.equal(review.job.state, 'failed'); assert.equal(review.reconciledMissing, true)
     { const status = await entitlementStatus(f.env, alice); assert.equal(status.credits, 4500); assert.equal(status.reservedCredits, 0) }
     assert.equal(f.posts(), 1, 'recovery never submits another Oracle job')
+  } finally { Date.now = now }
+})
+
+test('the whole-job watchdog releases an overdue hold even when Oracle status cannot be recovered', async () => {
+  for (const failure of ['http', 'rate-limit', 'transport', 'malformed'] as const) {
+    const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+    assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).status, 202)
+    f.statusFailure(failure)
+    const before = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+    assert.ok([429, 502, 503].includes(before.status), `${failure} remains uncertain before the watchdog`)
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+    const now = Date.now
+    try {
+      Date.now = () => now() + 36 * 60_000
+      assert.equal((await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket, 'bob')).status, 401)
+      assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250, 'Another account cannot release this hold')
+      const response = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+      assert.equal(response.status, 200, failure)
+      const result = await response.json() as { job: StudioJob }
+      assert.equal(result.job.state, 'failed'); assert.equal(result.job.failureCode, 'STUDIO_TIMEOUT')
+      const status = await entitlementStatus(f.env, alice)
+      assert.equal(status.credits, 4500); assert.equal(status.reservedCredits, 0)
+      const repeated = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+      assert.equal(repeated.status, 200)
+      assert.equal((await repeated.json() as { job: StudioJob }).job.state, 'failed', 'The settled failure remains terminal while Oracle is offline')
+      assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0, 'Repeated recovery cannot release the same hold twice')
+      f.statusFailure(null)
+      const laterSuccess = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+      assert.equal((await laterSuccess.json() as { job: StudioJob }).job.state, 'failed', 'Later Oracle success cannot reopen a terminal failure')
+      assert.equal((await entitlementStatus(f.env, alice)).credits, 4500, 'Later Oracle success cannot charge the released hold')
+      assert.equal(f.posts(), 1, 'Watchdog reconciliation never submits another Oracle generation')
+    } finally { Date.now = now }
+  }
+})
+
+test('the whole-job watchdog also bounds successful statuses with an unrecoverable model stream', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  f.artifactFailure(true)
+  assert.equal((await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).status, 503)
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+  const now = Date.now
+  try {
+    Date.now = () => now() + 36 * 60_000
+    const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(result.job.state, 'failed'); assert.equal(result.job.failureCode, 'STUDIO_TIMEOUT')
+    const status = await entitlementStatus(f.env, alice)
+    assert.equal(status.credits, 4500); assert.equal(status.reservedCredits, 0)
+    f.artifactFailure(false)
+    const later = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(later.job.state, 'failed')
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+    assert.equal(f.posts(), 1)
+  } finally { Date.now = now }
+})
+
+test('an overdue reservation still recovers a verified Oracle success before applying the watchdog', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  const now = Date.now
+  try {
+    Date.now = () => now() + 36 * 60_000
+    const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(result.job.state, 'succeeded')
+    const status = await entitlementStatus(f.env, alice)
+    assert.equal(status.credits, 4250); assert.equal(status.reservedCredits, 0)
+    assert.equal(f.posts(), 1)
   } finally { Date.now = now }
 })
 

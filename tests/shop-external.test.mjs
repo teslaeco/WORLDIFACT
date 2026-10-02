@@ -29,14 +29,10 @@ test('native Shop presents a customer creation flow with cart and no visible eng
   assert.doesNotMatch(html, /<iframe|<object|<embed|Opening the original generator/)
 })
 
-test('example model remains clearly labelled after cloud recovery check and customer view has no pre-purchase download button', async () => {
-  const [html, source] = await Promise.all([
-    renderShopMarkup(),
-    readFile(new URL('../src/pages/ShopPage.tsx', import.meta.url), 'utf8'),
-  ])
-  assert.match(source, /assets\/model-front\.webp/)
-  assert.match(source, /Example only/)
-  assert.match(html, /Checking your cloud job|Example 3D product preview/)
+test('initial render checks cloud recovery before exposing any example preview or pre-purchase download', async () => {
+  const html = await renderShopMarkup()
+  assert.match(html, /Checking your cloud job/)
+  assert.doesNotMatch(html, /Example 3D product preview|assets\/model-[a-z]+\.webp/)
   assert.doesNotMatch(html, />Download GLB \+ embedded materials/)
   assert.doesNotMatch(html, /Model ID:/)
 })

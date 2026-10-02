@@ -156,7 +156,9 @@ export default function ShopPage() {
   }
   useEffect(() => {
     mounted.current = true
-    let closed = false
+    let closed = false, recoveryFailures = 0
+    let recoveryTimer: ReturnType<typeof setTimeout> | undefined
+    const recoveryAbort = new AbortController()
     const version = epoch, urls = objectUrl, flags = operations.current
     try {
       const directClient = new BlueprintClient(window.localStorage, fetch)
@@ -172,21 +174,32 @@ export default function ShopPage() {
         setJob({ id: restored.receipt.id, state: 'pending', detail: JOB_DETAILS.pending })
         setCloudChecking(false)
       } else {
-        void client.recoverCurrent().then(recovered => {
-          if (closed) return
-          if (recovered) {
-            setSaved(recovered.saved); setPrompt(recovered.saved.prompt)
-            setProfile(recovered.saved.generationProfile || 'standard')
-            setJob(recovered.job)
-            setNotice('Recovered your active cloud model. No new generation or point charge was started.')
-          } else if (pendingCharacter.current) {
-            setPrompt(pendingCharacter.current)
-            setNotice('Character brief copied from your private world. Review model and points before generating.')
-            pendingCharacter.current = ''
+        const recoverCloud = async () => {
+          try {
+            const recovered = await client.recoverCurrent('', recoveryAbort.signal)
+            if (closed) return
+            if (recovered) {
+              setSaved(recovered.saved); setPrompt(recovered.saved.prompt)
+              setProfile(recovered.saved.generationProfile || 'standard')
+              setJob(recovered.job)
+              setNotice('Recovered your active cloud model. No new generation or point charge was started.')
+            } else if (pendingCharacter.current) {
+              setPrompt(pendingCharacter.current)
+              setNotice('Character brief copied from your private world. Review model and points before generating.')
+              pendingCharacter.current = ''
+            }
+            setError('')
+            setCloudChecking(false)
+          } catch (e) {
+            if (closed) return
+            setError(e instanceof Error ? e.message : 'Cloud recovery is temporarily unavailable. No new generation was started.')
+            // An unavailable lookup is not proof that no cloud job exists.
+            // Keep the sample and paid submission blocked while retrying GET.
+            recoveryFailures++
+            recoveryTimer = setTimeout(recoverCloud, Math.min(120_000, 5_000 * (2 ** Math.min(recoveryFailures, 4))))
           }
-        }).catch(e => {
-          if (!closed) setError(e instanceof Error ? e.message : 'Cloud recovery is temporarily unavailable. No new generation was started.')
-        }).finally(() => { if (!closed) setCloudChecking(false) })
+        }
+        void recoverCloud()
       }
     } catch (e) {
       coordinator.current = null
@@ -203,7 +216,7 @@ export default function ShopPage() {
         setError('The generation services are unavailable. You can still prepare your description and use the local DEMO preview.')
     }).finally(() => { if (!closed) { flags.status = false; setChecking(false) } })
     listStudioModels().then(value => { if (!closed) setArchive(value) }).catch(() => {})
-    return () => { closed = true; mounted.current = false; version.current++; if (urls.current) URL.revokeObjectURL(urls.current) }
+    return () => { closed = true; recoveryAbort.abort(); if (recoveryTimer) clearTimeout(recoveryTimer); mounted.current = false; version.current++; if (urls.current) URL.revokeObjectURL(urls.current) }
   }, [])
 
   const loadResult = async (selected: SavedStudioJob, known?: StudioJob) => {
@@ -312,7 +325,7 @@ export default function ShopPage() {
   const generate = async (event: React.FormEvent) => {
     event.preventDefault()
     const flags = operations.current, directClient = blueprintClient.current
-    if (flags.submit || flags.photos || flags.artifact || !previousFinished || !directClient) return
+    if (cloudChecking || flags.submit || flags.photos || flags.artifact || !previousFinished || !directClient) return
     if (recovery?.state === 'pending') { setError('Recover the pending blueprint request before starting another model.'); return }
     if (detailed) {
       const client = coordinator.current
@@ -408,7 +421,7 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
+  const canGenerate = !cloudChecking && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
     (detailed ? !detailedProblem && prompt.length <= (status?.promptMaxLength ?? 0) : fast ? fastAvailable && !photos.length && purpose !== 'terrain' : astraReady && photos.length <= BLUEPRINT_REFERENCE_LIMIT)
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
   const activeReady = detailed ? !detailedProblem : fast ? fastAvailable : astraReady

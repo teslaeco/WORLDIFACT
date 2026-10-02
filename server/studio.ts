@@ -83,7 +83,14 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
     failureCode = 'STUDIO_TIMEOUT'
   }
   if (state === 'succeeded' && previous?.state === 'reserved') {
-    if (await validateCompletedModel(env, userId, id, fetcher, previous.qualityProfile ?? 'standard') !== 'valid') { state = 'failed'; failureCode = 'INVALID_MODEL_OUTPUT' }
+    try {
+      if (await validateCompletedModel(env, userId, id, fetcher, previous.qualityProfile ?? 'standard') !== 'valid') { state = 'failed'; failureCode = 'INVALID_MODEL_OUTPUT' }
+    } catch (error) {
+      if (!previous.at || Date.now() - previous.at <= STUDIO_JOB_WATCHDOG_MS) throw error
+      // A success label without recoverable, verified model bytes cannot keep
+      // the customer's hold indefinitely either. Do not claim Oracle cancelled.
+      state = 'failed'; failureCode = 'STUDIO_TIMEOUT'
+    }
   }
   if (state === 'succeeded') await settleUserGeneration(env, userId, id, 'completed')
   if (state === 'failed' || state === 'cancelled') await settleUserGeneration(env, userId, id, 'failed')
@@ -143,6 +150,15 @@ async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init:
   if (!origin || !env.ORACLE_API_TOKEN) throw new StudioError('The existing Oracle connection is not configured.', 503)
   return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(path.includes('/model') || path.includes('/exports/') ? 180_000 : 25_000),
     headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: path.includes('/model') ? 'model/gltf-binary' : path.includes('/exports/') ? 'application/octet-stream, application/zip' : 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) } })
+}
+async function oracleJobStatus(env: StudioEnv, id: string, fetcher: typeof fetch, requireId: boolean) {
+  const response = await oracle(env, `/v1/jobs/${id}`, fetcher)
+  if (response.status === 404) { await response.body?.cancel(); return null }
+  if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
+  const value = await limitedJson(response, 16_384)
+  if (((requireId || value.id !== undefined) && value.id !== id) || !Object.hasOwn(JOB_DETAILS, String(value.state)))
+    throw new StudioError('The worker returned an invalid job status.', 502)
+  return value
 }
 async function health(env: StudioEnv, fetcher: typeof fetch) {
   const response = await oracle(env, '/v1/health', fetcher)
@@ -345,10 +361,23 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
       }
 
-      const response = await oracle(env, `/v1/jobs/${auth.id}`, fetcher)
-      if (response.status === 404) {
-        await response.body?.cancel()
-        const expired = Date.now() - auth.issued >= 180_000
+      // A previously reconciled failure is durable even if Oracle stays offline.
+      if (user && access?.owned && access.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed') })
+      const overdue = user && access?.owned && access.state === 'reserved' && access.at && Date.now() - access.at > STUDIO_JOB_WATCHDOG_MS
+      let value: Record<string, unknown> | null
+      try {
+        // Read a real terminal result first: a late browser return must still
+        // recover a model that Oracle completed while this client was away.
+        value = await oracleJobStatus(env, auth.id, fetcher, !!user)
+      } catch (error) {
+        // Transport failures cannot retain a customer hold beyond the whole-job
+        // recovery window. This settles only the authenticated account receipt;
+        // it neither cancels Oracle nor replenishes the provider-spend budget.
+        if (overdue) return json({ job: await accountJob(env, user!.id, auth.id, 'pending') })
+        throw error
+      }
+      if (value === null) {
+        const expired = Date.now() - auth.issued >= 180_000 || overdue
         if (user && access?.owned && expired) {
           return json({ job: await accountJob(env, user.id, auth.id, 'failed'), reconciledMissing: true })
         }
@@ -358,10 +387,6 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         const state = !user && expired ? 'failed' : 'pending'
         return json({ job: { id: auth.id, state, detail: JOB_DETAILS[state] } })
       }
-      if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
-      const value = await limitedJson(response, 16_384)
-      if (((user || value.id !== undefined) && value.id !== auth.id) || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new StudioError('The worker returned an invalid job status.', 502)
-
       if (user && !access?.owned) {
         const state = value.state as StudioJob['state']
         const entitlement = await entitlementStatus(env, user.id)
