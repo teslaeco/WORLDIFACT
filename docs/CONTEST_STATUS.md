@@ -120,3 +120,23 @@ Exact-head checks for commit `ae1ecb0e5ba2ec27ea16cb8446fa388b0ac135ca` passed:
 No merge or production deployment has been performed for PR #166 yet. No Astra/Oracle request, point debit/refund, Stripe/PayPal/subscription mutation or server ownership transfer was introduced.
 
 Release decision: **GO for merge/deploy after explicit owner approval.**
+
+
+## P0 IN REVIEW — durable cloud Studio recovery and deferred point settlement (2 October 2026)
+
+Incident evidence: a paid detailed Astra/Blender request on Android visibly returned to the example preview after starting, while the account UI showed 250 fewer credits. A production customer must not depend on one React/browser state object to recover a paid cloud model.
+
+Branch `fix/cloud-studio-durable-recovery-20261002` implements:
+- account-ledger current Studio pointer with exact UUID, fingerprint, prompt, timestamps, quality profile and financial state;
+- account-bound `/api/studio/current` recovery that issues a fresh signed receipt for only the exact same verified account/job;
+- explicit generation idempotency header bound to the receipt UUID, with mismatch fail-closed;
+- detailed Studio credit **hold**: `credits` remains the actual balance while `reservedCredits` is unavailable for another generation; a valid completed model commits the hold and failure/invalid-output/timeout releases it;
+- no change to the separate provider/API spend budget, which remains conservative and is not replenished by customer release;
+- no change to blueprint/Sol/Luna accounting in this narrow repair;
+- Shop recovery from cloud before sample preview, persistent terminal failure UI, bounded exponential status retry, and no silent duplicate POST;
+- a 35-minute WORLDIFACT whole-job reconciliation watchdog, separate from the verified 15-minute Astra provider-request timeout;
+- account/quote UI shows held vs available points.
+
+The implementation contract is `docs/CODEX_TASK_CLOUD_STUDIO_DURABLE_RECOVERY_20261002.md`.
+
+This milestone is **not yet deployed**. Merge/deploy requires exact-head green CI; the owner has explicitly authorized merge and production deployment for this repair once green. No paid generation is authorized merely for validation of this code change.
