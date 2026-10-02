@@ -5,11 +5,13 @@ import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId, type GenerationModel } from './generationEconomics.ts'
 import { STUDIO_FAILURE_CODES, STUDIO_SUBMISSION_GRACE_MS, type StudioFailureCode, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
 import type { AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
+import { astraSupportApproval, ASTRA_SUPPORT_ONCE_KEY, ASTRA_SUPPORT_NAMESPACE, ASTRA_SUPPORT_CENTS, type AstraSupportApproval, type AstraSupportClaim, type AstraSupportIdentity } from './astraSupportOnce.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
   ENFORCE_ACCOUNT_ENTITLEMENTS?: string
   ACCOUNT_LEDGER_MODE?: string
+  WORLDIFACT_ASTRA_SUPPORT_ONCE?: string
 }
 export interface EntitlementStorage {
   get<T>(key: string): Promise<T | undefined>
@@ -19,8 +21,8 @@ export interface EntitlementStorage {
 export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
-type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed' }
-export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean }
+type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed' }
+export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean }
 export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean }
 export type CurrentStudioJob = { id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
 export type ClosedMissingStudioJob = { closed: boolean; state: Job['state']; fingerprintMatches: boolean; failureCode?: StudioFailureCode }
@@ -29,6 +31,8 @@ type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expi
 type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
 export interface EntitlementStatus {
   generationAdmission: Record<GenerationModel, { allowed: boolean; reason?: AdmissionFailureCode }>
+  studioAdmission: { allowed: boolean; reason?: AdmissionFailureCode }
+  astraSupportOnce?: { available: boolean; consumed: boolean; maximumProviderCents: 175 }
   credits: number
   reservedCredits: number
   availableCredits: number
@@ -120,7 +124,7 @@ async function usage(storage: EntitlementStorage, now: number) {
     slow: value.slow.filter(item => Math.floor(item.at / DAY) === Math.floor(now / DAY)),
   }
 }
-async function status(storage: EntitlementStorage, now: number, astraEnabled = false): Promise<EntitlementStatus> {
+async function status(storage: EntitlementStorage, now: number, astraEnabled = false, support: AstraSupportApproval | null = null, globalAvailable = false, globalConsumed = false): Promise<EntitlementStatus> {
   const [credits, reserved, free, subscription, billingHold] = await Promise.all([balance(storage), reservedCredits(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
   const plan: PlanId = subscription?.plan ?? 'creator'
   const period = subscription?.grantId ?? `${subscription?.id ?? 'none'}:${subscription?.until ?? 0}`
@@ -130,8 +134,10 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
   // replenish or reveal the internal provider ledger while reading an account.
   const storedProviderBudget = await storage.get<number>(PROVIDER_BUDGET)
   const providerRemaining = storedProviderBudget === undefined ? Math.floor(Math.max(0, credits) * 7 / 10) : storedProviderBudget
+  const supportConsumed = support ? globalConsumed || await storage.get(ASTRA_SUPPORT_ONCE_KEY) !== undefined : false
+  const supportAvailable = !!support && globalAvailable && !supportConsumed && Number.isSafeInteger(providerRemaining) && providerRemaining >= 0
   const subscriptionActive = active(subscription, now)
-  const admission = (model: GenerationModel): { allowed: boolean; reason?: AdmissionFailureCode } => {
+  const admission = (model: GenerationModel, detailed = false): { allowed: boolean; reason?: AdmissionFailureCode } => {
     const blocked = (reason: AdmissionFailureCode) => ({ allowed: false, reason })
     if (credits < 0 || billingHold === true) return blocked('BILLING_REVIEW_REQUIRED')
     if (model === 'astra' && (!subscriptionActive || !modelAllowed(plan, 'astra') || (plan === 'creator' && !astraEnabled))) return blocked('ASTRA_PLAN_REQUIRED')
@@ -141,11 +147,13 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
     if (!paid && model === 'astra') return blocked('FREE_SOL_ONLY')
     if (!paid && free.fast.length >= 2) return blocked('FAST_DAILY_LIMIT')
     if (paid && !Number.isSafeInteger(providerRemaining)) return blocked('ACCOUNT_ADMISSION_UNAVAILABLE')
-    if (paid && providerRemaining < MODEL_ECONOMICS[model].maxProviderCents) return blocked('PROVIDER_BUDGET_EXHAUSTED')
+    if (paid && providerRemaining < MODEL_ECONOMICS[model].maxProviderCents && !(model === 'astra' && detailed && supportAvailable)) return blocked('PROVIDER_BUDGET_EXHAUSTED')
     return { allowed: true }
   }
   return {
     generationAdmission: { luna: admission('luna'), sol: admission('sol'), astra: admission('astra') },
+    studioAdmission: admission('astra', true),
+    ...(support ? { astraSupportOnce: { available: supportAvailable && admission('astra', true).allowed, consumed: supportConsumed, maximumProviderCents: ASTRA_SUPPORT_CENTS } } : {}),
     creatorAstra: { active: astraEnabled && active(subscription, now), remaining: Math.max(0, 6 - used), maximum: 6, recommended: 2, pointsForTwo: 500 },
     credits, reservedCredits: reserved, availableCredits: credits - reserved, generationCost: 50, generationCosts: { sol: 50, astra: 250, luna: 15 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
     subscription: { active: active(subscription, now), plan, expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
@@ -160,18 +168,47 @@ export class AccountEntitlements {
   private storage: EntitlementStorage
   private now: () => number
   private astraEnabled: boolean
-  constructor(state: { storage: EntitlementStorage }, env: unknown = {}, now = Date.now) { this.storage = state.storage; this.now = now; this.astraEnabled = !!env && typeof env === 'object' && (env as { ENABLE_ASTRA_PLANS?: string }).ENABLE_ASTRA_PLANS === 'true' }
+  private supportEnv: EntitlementEnv
+  constructor(state: { storage: EntitlementStorage }, env: unknown = {}, now = Date.now) { this.storage = state.storage; this.now = now; this.astraEnabled = !!env && typeof env === 'object' && (env as { ENABLE_ASTRA_PLANS?: string }).ENABLE_ASTRA_PLANS === 'true'; this.supportEnv = env && typeof env === 'object' ? env as EntitlementEnv : {} }
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname, now = this.now()
     try {
+      const support = () => astraSupportApproval(this.supportEnv.WORLDIFACT_ASTRA_SUPPORT_ONCE, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
+      if (path === '/astra-support-status' && request.method === 'GET') {
+        const approved = support(), consumed = approved ? await this.storage.get(ASTRA_SUPPORT_ONCE_KEY) !== undefined : false
+        return json({ available: !!approved && !consumed, consumed })
+      }
       if (path === '/private-worlds' && request.method === 'POST') return privateWorldStore(request, this.storage, now)
-      if (path === '/status' && request.method === 'GET') return json(await this.storage.transaction(storage => status(storage, now, this.astraEnabled)))
+      if (path === '/status' && request.method === 'GET') return json(await this.storage.transaction(storage => status(storage, now, this.astraEnabled,
+        request.headers.get('X-WORLDIFACT-Support-Status') === 'known' ? support() : null,
+        request.headers.get('X-WORLDIFACT-Support-Available') === 'true', request.headers.get('X-WORLDIFACT-Support-Consumed') === 'true')))
       if (path === '/billing' && request.method === 'GET') return json({ customer: await this.storage.get<string>('customer') ?? null })
       if (request.method !== 'POST') return json({ error: 'Not found' }, 404)
       const raw = await request.text()
       if (raw.length > (path === '/blueprint-complete' ? 120_000 : 8192)) return json({ error: 'Invalid internal request' }, 400)
       const input = JSON.parse(raw) as Record<string, unknown>
       if (!input || typeof input !== 'object' || Array.isArray(input)) return json({ error: 'Invalid internal request' }, 400)
+      if (path === '/astra-support-claim') {
+        if (Object.keys(input).length !== 2 || Object.keys(input).some(key => !['id','fingerprint'].includes(key)) || typeof input.id !== 'string' || !JOB_ID.test(input.id) ||
+          typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint)) return json({ approved: false }, 400)
+        return json(await this.storage.transaction(async storage => {
+          const approved = support()
+          if (!approved) return { approved: false }
+          const existing = await storage.get<AstraSupportClaim & { accountId: string; issuedAt: string; expiresAt: string }>(ASTRA_SUPPORT_ONCE_KEY)
+          if (existing !== undefined) {
+            const matches = !!existing && typeof existing === 'object' && !Array.isArray(existing) && Object.keys(existing).length === 9 &&
+              Object.keys(existing).every(key => ['version','accountId','approvalId','amountCents','jobId','fingerprint','at','issuedAt','expiresAt'].includes(key)) &&
+              existing.version === 1 && existing.amountCents === ASTRA_SUPPORT_CENTS && existing.accountId === approved.accountId &&
+              existing.approvalId === approved.approvalId && existing.jobId === input.id && existing.fingerprint === input.fingerprint &&
+              existing.issuedAt === approved.issuedAt && existing.expiresAt === approved.expiresAt && Number.isSafeInteger(existing.at) &&
+              existing.at >= Date.parse(approved.issuedAt) && existing.at < Date.parse(approved.expiresAt) && existing.at <= this.now()
+            return { approved: matches, ...(matches ? { approvalId: approved.approvalId } : {}) }
+          }
+          await storage.put(ASTRA_SUPPORT_ONCE_KEY, { version: 1, accountId: approved.accountId, approvalId: approved.approvalId, amountCents: ASTRA_SUPPORT_CENTS,
+            jobId: input.id, fingerprint: input.fingerprint, at: this.now(), issuedAt: approved.issuedAt, expiresAt: approved.expiresAt })
+          return { approved: true, approvalId: approved.approvalId }
+        }))
+      }
       if (path === '/blueprint-status' || path === '/blueprint-complete') {
         if (typeof input.id !== 'string' || !JOB_ID.test(input.id)) return json({ error: 'Invalid blueprint identifier' }, 400)
         const id = input.id
@@ -280,14 +317,27 @@ export class AccountEntitlements {
           const free = await usage(storage, now)
           if (!paid && profile === 'slow') return { allowed: false, reason: 'FREE_SOL_ONLY' }
           if (!paid && free.fast.length >= 2) return { allowed: false, reason: 'FAST_DAILY_LIMIT' }
+          let supportApprovalId: string | undefined
           if (paid) {
             const remaining = await providerBudget(storage, credits)
             const ceiling = MODEL_ECONOMICS[model].maxProviderCents
-            if (remaining < ceiling) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
-            await storage.put(PROVIDER_BUDGET, remaining - ceiling)
+            const candidate = model === 'astra' && channel === 'studio' && fingerprint && remaining >= 0 && ceiling === ASTRA_SUPPORT_CENTS ? support() : null
+            const claim = candidate ? await storage.get(ASTRA_SUPPORT_ONCE_KEY) : undefined
+            const approved = candidate && claim === undefined && request.headers.get('X-WORLDIFACT-Support-Approval') === candidate.approvalId
+            if (remaining < ceiling && !approved) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', ...(candidate && claim === undefined ? { supportEligible: true } : {}) }
+            if (approved) {
+              // The singleton marker is independent of approval ID. Changing
+              // configuration, replaying, restarting or failure cannot refill it.
+              const record: AstraSupportClaim = { version: 1, approvalId: candidate.approvalId, amountCents: ASTRA_SUPPORT_CENTS, jobId: id, fingerprint: fingerprint!, at: this.now() }
+              await storage.put(ASTRA_SUPPORT_ONCE_KEY, record)
+              supportApprovalId = candidate.approvalId
+            }
+            // Exactly +175 funding and -175 reservation, without an unsafe
+            // intermediate integer or replenishing the pre-existing balance.
+            await storage.put(PROVIDER_BUDGET, approved ? remaining : remaining - ceiling)
           }
           const cloudHold = paid && channel === 'studio'
-          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved' }
+          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved' }
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
@@ -456,7 +506,16 @@ export class AccountEntitlements {
 }
 
 /** This helper is server-only. Never accept a uid from a request parameter or body. */
-export async function entitlementCall<T>(env: EntitlementEnv, userId: string, path: string, body?: unknown): Promise<T> {
+type SupportContext = { identity?: AstraSupportIdentity; available?: boolean; consumed?: boolean; approvalId?: string; statusKnown?: boolean }
+function internalHeaders(userId: string, support?: SupportContext) {
+  return { 'X-WORLDIFACT-Verified-Account': userId.toLowerCase(),
+    ...(support?.identity?.emailVerified === true ? { 'X-WORLDIFACT-Verified-Email': support.identity.email.toLowerCase() } : {}),
+    ...(support?.statusKnown === true ? { 'X-WORLDIFACT-Support-Status': 'known' } : {}),
+    ...(support?.available === true ? { 'X-WORLDIFACT-Support-Available': 'true' } : {}),
+    ...(support?.consumed === true ? { 'X-WORLDIFACT-Support-Consumed': 'true' } : {}),
+    ...(support?.approvalId ? { 'X-WORLDIFACT-Support-Approval': support.approvalId } : {}) }
+}
+export async function entitlementCall<T>(env: EntitlementEnv, userId: string, path: string, body?: unknown, support?: SupportContext): Promise<T> {
   if (!ACCOUNT_ID.test(userId)) throw new EntitlementError('A verified account is required.', 401)
   if (!env.ACCOUNT_ENTITLEMENTS) throw new EntitlementError('Account allowances are not configured.')
   if (env.ACCOUNT_LEDGER_MODE !== undefined && !['sandbox', 'live'].includes(env.ACCOUNT_LEDGER_MODE)) throw new EntitlementError('Account ledger mode is invalid.')
@@ -465,13 +524,42 @@ export async function entitlementCall<T>(env: EntitlementEnv, userId: string, pa
   const prefix = env.ACCOUNT_LEDGER_MODE === 'sandbox' ? 'account:sandbox:v1' : 'account:v1'
   const object = env.ACCOUNT_ENTITLEMENTS.get(env.ACCOUNT_ENTITLEMENTS.idFromName(`${prefix}:${userId.toLowerCase()}`))
   let response: Response
-  try { response = await object.fetch(new Request(`https://entitlements.internal${path}`, { method: body === undefined ? 'GET' : 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000) })) }
+  try { response = await object.fetch(new Request(`https://entitlements.internal${path}`, { method: body === undefined ? 'GET' : 'POST', headers: internalHeaders(userId, support), ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000) })) }
   catch { throw new EntitlementError('Account allowances are temporarily unavailable.') }
   if (!response.ok && !(path === '/reserve' && response.status === 429)) throw new EntitlementError('Account allowances are temporarily unavailable.')
   return response.json() as Promise<T>
 }
-export const entitlementStatus = (env: EntitlementEnv, userId: string) => entitlementCall<EntitlementStatus>(env, userId, '/status')
-export const reserveUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string }) => entitlementCall<Reservation>(env, userId, '/reserve', { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}) })
+async function supportCall(env: EntitlementEnv, userId: string, identity?: AstraSupportIdentity, body?: { id: string; fingerprint: string }): Promise<{ available?: boolean; consumed?: boolean; approved?: boolean; approvalId?: string }> {
+  if (!env.WORLDIFACT_ASTRA_SUPPORT_ONCE || (env.ACCOUNT_LEDGER_MODE !== undefined && env.ACCOUNT_LEDGER_MODE !== 'live')) return {}
+  if (!ACCOUNT_ID.test(userId) || !env.ACCOUNT_ENTITLEMENTS) throw new EntitlementError('A verified account allowance is required.')
+  const object = env.ACCOUNT_ENTITLEMENTS.get(env.ACCOUNT_ENTITLEMENTS.idFromName(ASTRA_SUPPORT_NAMESPACE))
+  try {
+    const response = await object.fetch(new Request(`https://entitlements.internal/astra-support-${body ? 'claim' : 'status'}`, {
+      method: body ? 'POST' : 'GET', headers: internalHeaders(userId, { identity }), ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(5000),
+    }))
+    if (!response.ok) throw new Error('Unconfirmed support state')
+    const result = await response.json() as Record<string, unknown>
+    if (!result || typeof result !== 'object' || (body ? typeof result.approved !== 'boolean' || (result.approved && (typeof result.approvalId !== 'string' || !ACCOUNT_ID.test(result.approvalId)))
+      : typeof result.available !== 'boolean' || typeof result.consumed !== 'boolean')) throw new Error('Invalid support state')
+    return body ? { approved: result.approved === true, ...(result.approved ? { approvalId: String(result.approvalId) } : {}) } : { available: result.available === true, consumed: result.consumed === true }
+  } catch { throw new EntitlementError('The one-time support allowance could not be confirmed. Keep the same job; do not start another.') }
+}
+export async function entitlementStatus(env: EntitlementEnv, userId: string, identity?: AstraSupportIdentity) {
+  let support: { available?: boolean; consumed?: boolean } = {}
+  try { support = await supportCall(env, userId, identity) } catch { /* Optional support cannot hide ordinary account availability. */ }
+  return entitlementCall<EntitlementStatus>(env, userId, '/status', undefined, { identity, available: support.available, consumed: support.consumed, statusKnown: typeof support.available === 'boolean' })
+}
+export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity }) {
+  const body = { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}) }
+  const identity = metadata?.supportIdentity
+  const initial = await entitlementCall<Reservation>(env, userId, '/reserve', body, { identity })
+  if (initial.allowed || initial.reason !== 'PROVIDER_BUDGET_EXHAUSTED' || initial.supportEligible !== true || metadata?.channel !== 'studio' || profile !== 'slow' || (model !== undefined && model !== 'astra') || !fingerprint) return initial
+  // Claim globally before adding account funding. Uncertain/failed account
+  // admission never releases this claim; only this exact job can replay it.
+  const claim = await supportCall(env, userId, identity, { id: jobId, fingerprint })
+  if (!claim.approved) return initial
+  return entitlementCall<Reservation>(env, userId, '/reserve', body, { identity, approvalId: claim.approvalId })
+}
 export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, state: 'completed' | 'failed', failureCode?: StudioFailureCode) => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state, ...(failureCode ? { failureCode } : {}) })
 export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<JobAccess>(env, userId, '/job', { id: jobId })
 export const currentUserStudioJob = (env: EntitlementEnv, userId: string) => entitlementCall<{ job: CurrentStudioJob | null }>(env, userId, '/studio-current', {})
@@ -483,6 +571,6 @@ export async function entitlementApi(request: Request, env: AccountEnv & Entitle
   try {
     const user = await getVerifiedAccount(request, env, fetcher)
     if (!user) return json({ error: 'Sign in to view your allowance.' }, 401)
-    return json(await entitlementStatus(env, user.id))
+    return json(await entitlementStatus(env, user.id, user))
   } catch (error) { return json({ error: error instanceof EntitlementError ? error.message : 'Account allowances are unavailable.' }, error instanceof EntitlementError ? error.status : 503) }
 }

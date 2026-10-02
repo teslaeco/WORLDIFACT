@@ -366,7 +366,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (await boundInputDigest(input, user?.id) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
       const checked = await preflight(request, env, fetcher, prepareMetadata(input), user?.id)
       if (user) {
-        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt })
+        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt, supportIdentity: user })
         if (userReservation.repeated && userReservation.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed'), recoveryOnly: true }, 202)
         if (!userReservation.allowed) {
           const conflict = ['REQUEST_PAYLOAD_MISMATCH', 'JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(userReservation.reason ?? '')

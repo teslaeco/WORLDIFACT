@@ -10,7 +10,7 @@ export interface AccountEnv {
   ACCOUNT_LIMITER?: AccountRateLimiter
   GENERATION_LIMITER?: AccountRateLimiter
 }
-export interface AccountUser { id: string; email: string; displayName: string }
+export interface AccountUser { id: string; email: string; displayName: string; readonly emailVerified?: boolean }
 export const CHESS_AUTH_URL = 'https://oiezgikconcyjvdeshdh.supabase.co'
 // Public, non-privileged publishable key read from the deployed Chess frontend.
 // This is NOT the service_role key. Auth and database RLS still enforce access.
@@ -123,18 +123,24 @@ async function upstream(env: AccountEnv, fetcher: typeof fetch, path: string, me
 async function responseJson(response: Response) {
   try { return await boundedJson(response, MAX_UPSTREAM_BODY) } catch { throw new AccountError('Account service returned an incomplete response.', 502) }
 }
-async function verifiedUser(env: AccountEnv, fetcher: typeof fetch, token: string): Promise<AccountUser | null> {
+async function verifiedUser(env: AccountEnv, fetcher: typeof fetch, token: string, includeEmailProof = false): Promise<AccountUser | null> {
   const response = await upstream(env, fetcher, '/user', 'GET', undefined, token)
   if ([400, 401, 403].includes(response.status)) { await response.body?.cancel(); return null }
   if (!response.ok) { await response.body?.cancel(); throw new AccountError('Account service is temporarily unavailable.') }
-  const user = publicUser(await responseJson(response))
+  const raw = await responseJson(response)
+  const user = publicUser(raw)
   if (!user) throw new AccountError('Account service returned an incomplete response.', 502)
+  // Only authoritative /user email confirmation is usable for support scope.
+  // Never trust user_metadata, phone confirmation or a client/JWT email claim.
+  // Keep this server-only proof out of session JSON and profile presentation.
+  if (includeEmailProof) Object.defineProperty(user, 'emailVerified', { value: raw.is_anonymous !== true && typeof raw.email_confirmed_at === 'string' &&
+    Number.isFinite(Date.parse(raw.email_confirmed_at)) && Date.parse(raw.email_confirmed_at) <= Date.now(), enumerable: false })
   return user
 }
 /** Verifies the access cookie with Supabase. Call /session to refresh before a retry. */
 export async function getVerifiedAccount(request: Request, env: AccountEnv, fetcher: typeof fetch = fetch): Promise<AccountUser | null> {
   const token = cookieValue(request, ACCESS_COOKIE)
-  return token ? verifiedUser(env, fetcher, token) : null
+  return token ? verifiedUser(env, fetcher, token, true) : null
 }
 async function digest(value: string) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))

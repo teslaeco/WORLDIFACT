@@ -5,14 +5,14 @@ export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits'
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const integer = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 /** Non-binding display only. The server rechecks identity, model and funds atomically. */
-export function quoteGeneration(model: QuotedModel, account: unknown, billing: unknown, signedIn: boolean): GenerationQuote {
+export function quoteGeneration(model: QuotedModel, account: unknown, billing: unknown, signedIn: boolean, detailed = false): GenerationQuote {
   if (!signedIn) return { state: 'signin', points: null, after: null, message: 'Sign in to check your points and funded free allowance.' }
   const value = object(account), subscription = object(value.subscription), free = object(value.free), costs = object(value.generationCosts)
   const points = MODEL_CATALOG[model].creditsPerGeneration
   // New authenticated status can explain a refusal even when the displayed
   // point balance is high. Older servers omit this field and retain old checks.
   if (Object.hasOwn(value, 'generationAdmission')) {
-    const admission = object(object(value.generationAdmission)[model])
+    const admission = detailed && model === 'astra' && Object.hasOwn(value, 'studioAdmission') ? object(value.studioAdmission) : object(object(value.generationAdmission)[model])
     if (admission.allowed === false && isAdmissionFailureCode(admission.reason))
       return { state: 'blocked', points, after: null, message: ADMISSION_FAILURE_DETAILS[admission.reason] }
     if (admission.allowed !== true || admission.reason !== undefined)
