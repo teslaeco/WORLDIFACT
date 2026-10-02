@@ -102,7 +102,42 @@ class LaunchTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()):
             launch.main(['--source-commit', COMMIT, '--diagnose-job', JOB_UUID])
         package.assert_called_once_with(COMMIT)
-        script.assert_called_once_with('payload', approved=False, diagnose_job=JOB_UUID)
+        script.assert_called_once_with('payload', approved=False, diagnose_job=JOB_UUID, stage_test_helper=False)
+
+    def test_maintenance_launcher_cannot_invoke_separately_approved_paid_helper(self):
+        for maintenance in ([], ['--approve-service-restart'], ['--stage-test-helper']):
+            with self.subTest(maintenance=maintenance), patch.object(launch, 'connection') as connection, \
+                    patch.object(launch, 'package') as package, \
+                    contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as stopped:
+                launch.main(['--source-commit', COMMIT, *maintenance, '--approve-paid-test', 'STAGED_ONLY'])
+            self.assertEqual(stopped.exception.code, 2)
+            connection.assert_not_called()
+            package.assert_not_called()
+
+    def test_stage_helper_requires_exact_commit_and_is_exclusive(self):
+        cases = [(['--stage-test-helper'], launch.LaunchError),
+                 (['--source-commit', COMMIT, '--stage-test-helper', '--approve-service-restart'], launch.LaunchError),
+                 (['--source-commit', COMMIT, '--stage-test-helper', '--diagnose-job', JOB_UUID], launch.LaunchError)]
+        for args, error in cases:
+            with self.subTest(args=args), patch.object(launch, 'connection') as connection, \
+                    patch.object(launch, 'package') as package, self.assertRaises(error):
+                launch.main(args)
+            connection.assert_not_called()
+            package.assert_not_called()
+        for flags in ({'approved': True}, {'diagnose_job': JOB_UUID}):
+            with self.subTest(flags=flags), self.assertRaises(launch.LaunchError):
+                launch.script('payload', stage_test_helper=True, **flags)
+
+    def test_stage_helper_cli_requests_only_staging(self):
+        with patch.object(launch, 'connection', return_value=['ssh', 'fixture']), \
+                patch.object(launch, 'package', return_value='payload') as package, \
+                patch.object(launch, 'script', return_value='remote') as script, \
+                patch.object(subprocess, 'run', return_value=types.SimpleNamespace(returncode=0)) as run, \
+                contextlib.redirect_stdout(io.StringIO()):
+            launch.main(['--source-commit', COMMIT, '--stage-test-helper'])
+        package.assert_called_once_with(COMMIT)
+        script.assert_called_once_with('payload', approved=False, diagnose_job=None, stage_test_helper=True)
+        self.assertEqual(run.call_args.kwargs['input'], 'remote')
 
     def test_package_contains_only_pinned_compiled_python_without_key(self):
         data, manifest = self.fixtures()
@@ -120,6 +155,8 @@ class LaunchTests(unittest.TestCase):
         payload = launch.package(COMMIT, lambda path: (root / path).read_bytes())
         self.assertEqual(set(json.loads(base64.b64decode(payload))), set(launch.FILES))
         self.assertIn('install_completion.py', launch.FILES)
+        self.assertIn('reviewed_direct_export.py', launch.FILES)
+        self.assertIn('test_original_job_once.py', launch.FILES)
         self.assertNotIn('source_fixture.py', launch.FILES)
 
     def test_flat_package_imports_and_default_installer_stays_plan_only(self):
@@ -129,12 +166,17 @@ class LaunchTests(unittest.TestCase):
             directory = Path(folder)
             for name, encoded in payload.items():
                 (directory / name).write_bytes(base64.b64decode(encoded))
-            answer = subprocess.run([launch.sys.executable, '-B', str(directory / 'install_completion.py')],
-                                    cwd=directory, stdin=subprocess.DEVNULL, capture_output=True,
-                                    text=True, timeout=10)
-        self.assertEqual(answer.returncode, 0, answer.stderr)
-        self.assertIn('PLAN ONLY', answer.stdout)
-        self.assertNotIn('WORLDIFACT_MODEL_COMPLETION_VERIFIED', answer.stdout)
+            for entry, marker in (('install_completion.py', 'PLAN ONLY'),
+                                  ('test_original_job_once.py', 'PLAN_ONLY')):
+                with self.subTest(entry=entry):
+                    answer = subprocess.run([launch.sys.executable, '-B', str(directory / entry)],
+                                            cwd=directory, stdin=subprocess.DEVNULL, capture_output=True,
+                                            text=True, timeout=10)
+                    self.assertEqual(answer.returncode, 0, answer.stderr)
+                    self.assertIn(marker, answer.stdout)
+                    self.assertNotIn('WORLDIFACT_MODEL_COMPLETION_VERIFIED', answer.stdout)
+                    if entry == 'test_original_job_once.py':
+                        self.assertIs(json.loads(answer.stdout)['paidGenerationRequested'], False)
 
     def test_bad_package_bytes_fail_before_any_ssh(self):
         for raw in (b'', b'changed', b'x' * (launch.LIMIT + 1), 'not bytes'):
@@ -226,6 +268,7 @@ class LaunchTests(unittest.TestCase):
         output, popen = self.execute_remote(self.payload(data, manifest), manifest, process)
         args = popen.call_args.args[0]
         self.assertEqual(Path(args[2]).name, 'install_completion.py')
+        self.assertNotIn('test_original_job_once.py', ' '.join(args))
         self.assertEqual(args[-1], '--approve-service-restart')
         self.assertEqual(popen.call_args.kwargs['stdin'], subprocess.DEVNULL)
         self.assertIn('WORLDIFACT_MODEL_COMPLETION_VERIFIED', output)
@@ -244,6 +287,8 @@ class LaunchTests(unittest.TestCase):
         args = popen.call_args.args[0]
         self.assertEqual(args[-2:], ['--diagnose-job', JOB_UUID])
         self.assertNotIn('--approve-service-restart', args)
+        self.assertEqual(Path(args[2]).name, 'install_completion.py')
+        self.assertNotIn('test_original_job_once.py', ' '.join(args))
         self.assertIn('WORLDIFACT_MODEL_COMPLETION_DIAGNOSTIC_COMPLETE', output)
         self.assertNotIn('WORLDIFACT_MODEL_COMPLETION_VERIFIED', output)
 
@@ -253,21 +298,75 @@ class LaunchTests(unittest.TestCase):
         output, popen = self.execute_remote(self.payload(data, manifest), manifest, process,
                                            approved=True, diagnose_job=JOB_UUID)
         self.assertEqual(popen.call_args.args[0][-3:], ['--approve-service-restart', '--diagnose-job', JOB_UUID])
+        self.assertEqual(Path(popen.call_args.args[0][2]).name, 'install_completion.py')
+        self.assertNotIn('test_original_job_once.py', ' '.join(popen.call_args.args[0]))
         self.assertIn('WORLDIFACT_MODEL_COMPLETION_VERIFIED', output)
+
+    def test_receiver_stage_only_prints_private_safe_helper_path_without_execution(self):
+        data, manifest = self.fixtures()
+        path, _ = manifest['test_original_job_once.py']
+        data[path] = b'raise AssertionError("STAGED_HELPER_MUST_NOT_EXECUTE")\n'
+        manifest['test_original_job_once.py'] = (path, launch.blob(data[path]))
+        output = io.StringIO()
+        with patch.object(launch, 'FILES', manifest), \
+                patch.object(Path, 'home', return_value=self.home), \
+                patch.object(subprocess, 'Popen') as popen, \
+                patch.object(subprocess, 'run') as run, \
+                patch.object(launch.urllib.request, 'build_opener') as network, \
+                patch.object(signal, 'signal') as handlers, \
+                contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as stopped:
+            script = launch.script(self.payload(data, manifest), stage_test_helper=True)
+            exec(compile(script, '<remote>', 'exec'), {'__name__': 'fixture'})
+        self.assertEqual(stopped.exception.code, 0)
+        popen.assert_not_called()
+        run.assert_not_called()
+        network.assert_not_called()
+        handlers.assert_not_called()
+        summary = json.loads(output.getvalue())
+        self.assertEqual(summary['phase'], 'WORLDIFACT_MODEL_TEST_HELPER_STAGED')
+        self.assertIs(summary['paid_generation_requested'], False)
+        self.assertIs(summary['service_restarted'], False)
+        helper = Path(summary['helper_path'])
+        parent = self.home / '.local/state/worldifact-astra-guard'
+        self.assertEqual(helper.parent.parent, parent)
+        self.assertEqual(helper.name, 'test_original_job_once.py')
+        self.assertTrue(helper.parent.name.startswith('model-completion-package-'))
+        self.assertEqual(helper.read_bytes(), data[path])
+        self.assertEqual(helper.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(helper.parent.stat().st_mode & 0o777, 0o700)
+        self.assertFalse(helper.is_symlink())
+        self.assertEqual({p.name for p in helper.parent.iterdir()}, set(manifest))
+        self.assertFalse((self.home / 'froge-connector').exists())
+        self.assertNotIn('WORLDIFACT_MODEL_COMPLETION_VERIFIED', output.getvalue())
+
+    def test_receiver_stage_only_rejects_symlink_destination(self):
+        data, manifest = self.fixtures()
+        outside = self.home / 'outside'
+        outside.mkdir()
+        (self.home / '.local').symlink_to(outside, target_is_directory=True)
+        with patch.object(launch, 'FILES', manifest), \
+                patch.object(Path, 'home', return_value=self.home), \
+                patch.object(subprocess, 'Popen') as popen, self.assertRaises(SystemExit):
+            script = launch.script(self.payload(data, manifest), stage_test_helper=True)
+            exec(compile(script, '<remote>', 'exec'), {'__name__': 'fixture'})
+        popen.assert_not_called()
+        self.assertEqual(list(outside.iterdir()), [])
 
     def test_receiver_rejects_changed_bytes_or_extra_names_before_staging(self):
         data, manifest = self.fixtures()
         contents = json.loads(base64.b64decode(self.payload(data, manifest)))
         mutated = [dict(contents, **{'install_completion.py': base64.b64encode(b'# tampered').decode()}),
+                   dict(contents, **{'test_original_job_once.py': base64.b64encode(b'# tampered helper').decode()}),
                    dict(contents, **{'../unexpected.py': base64.b64encode(b'# unexpected').decode()})]
-        for value in mutated:
-            with self.subTest(keys=list(value)), patch.object(launch, 'FILES', manifest), \
-                    patch.object(Path, 'home', return_value=self.home), \
-                    patch.object(subprocess, 'Popen') as popen, self.assertRaises(SystemExit):
-                exec(compile(launch.script(base64.b64encode(json.dumps(value).encode()).decode(), approved=True),
-                             '<remote>', 'exec'), {'__name__': 'fixture'})
-            popen.assert_not_called()
-            self.assertFalse((self.home / '.local').exists())
+        for flags in ({'approved': True}, {'stage_test_helper': True}):
+            for value in mutated:
+                with self.subTest(flags=flags, keys=list(value)), patch.object(launch, 'FILES', manifest), \
+                        patch.object(Path, 'home', return_value=self.home), \
+                        patch.object(subprocess, 'Popen') as popen, self.assertRaises(SystemExit):
+                    exec(compile(launch.script(base64.b64encode(json.dumps(value).encode()).decode(), **flags),
+                                 '<remote>', 'exec'), {'__name__': 'fixture'})
+                popen.assert_not_called()
+                self.assertFalse((self.home / '.local').exists())
 
     def test_receiver_failure_never_claims_success(self):
         data, manifest = self.fixtures()
