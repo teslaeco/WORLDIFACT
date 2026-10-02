@@ -73,7 +73,11 @@ class Operations(cache.Operations):
         if self.source != self.home/'froge-connector' or time.time() >= previous.policy.VALID_UNTIL:
             raise base.InstallError('Unexpected source or expired pricing review.')
         sources={name:base.read_regular(self.source/name) for name in source_patch.EXPECTED}
-        source_patch.changes(sources, (HERE/'completion_policy.py').read_bytes())
+        try:
+            server_variant=source_patch.reviewed_sources(sources)
+            source_patch.changes(sources, (HERE/'completion_policy.py').read_bytes())
+        except ValueError as error:
+            raise base.InstallError(str(error)) from None
         # Reverse exactly the reviewed timeout, then prove the existing guard
         # chain, including FAST-spend ancestry. A hash display is not enough.
         runner=cache.previous.once(sources['codex_runner.py'].decode(), previous.NEW, previous.OLD).encode()
@@ -92,6 +96,7 @@ class Operations(cache.Operations):
             raise base.InstallError('Unexpected service directory.')
         if base.read_regular(self.dropin,1024)!=base.DROPIN: raise base.InstallError('Unexpected service settings.')
         self.assert_idle()
+        print('Verified reviewed server variant: '+server_variant,flush=True)
 
 
 def install(source, workspace, operations, approved=False):

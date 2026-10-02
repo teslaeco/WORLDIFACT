@@ -4,6 +4,7 @@ Only runner, MCP and server health are changed. No renderer, payment, ledger,
 secret, system settings or generic Froge behavior is replaced.
 """
 import hashlib
+import reviewed_direct_export as direct_export
 
 EXPECTED = {
     'astra_spend_v2.py': '80cb48b2717c238986b7f1ac085fc8ac387be82aa54fa509582b71752e7136e7',
@@ -101,10 +102,51 @@ def patch_mcp(text):
     return text
 
 
-def changes(originals, helper):
+
+# Reconstructed from WORLDIFACT PR125 head c7ed3c364127cef7074d01e58921a7e2557fd51c,
+# tools/export_prepare/direct_v33_patch.py Git blob
+# 385811ea2aeb8a817328ffed584ab79e48c10026, applied to the reviewed FAST v33.
+# This is the exact 60,833-byte server observed on the existing Oracle VM.
+DIRECT_EXPORT_SERVER_SHA256 = '4ee9c8b22f12c342f599bb67d2e1a5134b15d81c9ee19d99340a426d818a193b'
+DIRECT_EXPORT_SERVER_BLOB = '076ae0ff95b847184e08d960e5e3b670d80f9df9'
+
+
+def reviewed_server_variant(raw):
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest == EXPECTED['server.py']: return 'FAST_V33_BASE'
+    if digest != DIRECT_EXPORT_SERVER_SHA256:
+        raise ValueError('Unreviewed installed completion ancestor: server.py; no service stopped.')
+    # Independently prove the full reviewed ancestry. Never bless new source
+    # solely because its displayed hash was added to a table.
+    text = bytes(raw).decode('utf-8')
+    original = once(text, direct_export.HELPERS, '')
+    original = once(original,
+        r"(?:/(model|cancel|quality|exports(?:/(?:fbx|obj|stl|blend|scene-json|master|pbr|prepare))?))?",
+        r"(?:/(model|cancel|quality|exports(?:/(?:fbx|obj|stl|blend|scene-json|master|pbr))?))?")
+    original = once(original, direct_export.PREPARE, '')
+    original = once(original,
+        "return self.send_json({**capability(health()),'posthocExportRevision':2,'legacyGlbExportRecoveryRevision':1})",
+        "return self.send_json(capability(health()))")
+    new_read = 'paths = customer_export_files(folder, name)'
+    if original.count(new_read) != 2:
+        raise ValueError('Reviewed direct-export read context differs; no service stopped.')
+    original = original.replace(new_read, 'paths = export_files(folder, name)')
+    if (hashlib.sha256(original.encode()).hexdigest() != EXPECTED['server.py'] or
+            direct_export.patch_server(original).encode() != raw):
+        raise ValueError('Reviewed direct-export ancestry proof failed; no service stopped.')
+    return 'FAST_V33_DIRECT_EXPORT_V2'
+
+
+def reviewed_sources(originals):
     if set(originals) != set(EXPECTED): raise ValueError('Unexpected completion source selection.')
-    if {name: hashlib.sha256(raw).hexdigest() for name,raw in originals.items()} != EXPECTED:
-        raise ValueError('Unreviewed installed completion ancestor; no service stopped.')
+    for name, expected in EXPECTED.items():
+        if name != 'server.py' and hashlib.sha256(originals[name]).hexdigest() != expected:
+            raise ValueError('Unreviewed installed completion ancestor: '+name+'; no service stopped.')
+    return reviewed_server_variant(originals['server.py'])
+
+
+def changes(originals, helper):
+    reviewed_sources(originals)
     server = once(originals['server.py'].decode(), '    state = _text_health()\n',
         "    state = _text_health()\n    from completion_policy import verified_health as completion_health\n    state.update(completion_health())\n")
     server = once(server, "            return self.send_json({**dict(row),**model_status(JOBS/job_id,row['state'])})",

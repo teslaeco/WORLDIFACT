@@ -97,3 +97,24 @@ active-job/unknown-source refusal, verification and partial-write rollback,
 no-side-effect diagnosis, strict original-key SSH and flattened-package imports.
 Local tests use inert geometry/CLI fixtures; genuine Codex/Blender round-trip and
 worker restart remain installation-time checks on the original Oracle VM.
+
+## Reviewed direct-export source compatibility
+
+The maintenance package supports the original FAST v33 server and its exact
+public direct-export v2 transform from PR125 commit
+`c7ed3c364127cef7074d01e58921a7e2557fd51c`. The unchanged transform from
+`tools/export_prepare/direct_v33_patch.py` (Git blob
+`385811ea2aeb8a817328ffed584ab79e48c10026`) is vendored as
+`reviewed_direct_export.py`. No historical installer or paid-test script runs.
+
+Preflight reverses the extension to the reviewed base, verifies that base, then
+reapplies the extension byte-for-byte. It preserves export helpers, routes and
+recovery markers. All other source pins, guard receipts, idle-queue checks and
+rollback requirements remain unchanged. Unknown variants are rejected.
+
+The launcher includes the pinned transform dependency and refreshed installer
+and source-patch hashes. Default execution is plan-only. Explicit restart mode
+performs the installation and offline verification without a paid generation.
+The source regression tests cover public-source reconstruction, real preflight,
+active-job refusal, export preservation and byte-exact rollback using synthetic
+state fixtures. Test success does not prove a real generated preview.
