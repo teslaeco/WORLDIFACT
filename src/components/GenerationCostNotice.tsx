@@ -27,7 +27,7 @@ export default function GenerationCostNotice({ model, busy = false, detailed = f
     return () => { controller.abort(); window.clearTimeout(timeout) }
   }, [user?.id, busy, revision])
   const current = user && snapshot?.owner === user.id ? snapshot : null
-  const quote = quoteGeneration(model, current?.account, current?.billing, !!user)
+  const quote = quoteGeneration(model, current?.account, current?.billing, !!user, detailed)
   const rate = model === 'luna' ? 15 : model === 'sol' ? 50 : 250
   return <section className="generation-cost-notice" aria-label="Selected model and cost before generation" aria-live="polite">
     <div><strong>{model === 'luna' ? 'GPT-6 LUNA' : model === 'sol' ? 'GPT-6 SOL' : 'GPT-6 ASTRA'}</strong><span>{rate} points / paid generation</span></div>
