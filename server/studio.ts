@@ -4,7 +4,7 @@ import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedSt
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
-import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
+import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, reserveUserGeneration, settleUserGeneration, userJobAccess, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
 import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata } from '../src/lib/studioProtocol.ts'
 
@@ -107,7 +107,10 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
     }
   }
   if (state === 'succeeded') await settleUserGeneration(env, userId, id, 'completed')
-  if (state === 'failed' || state === 'cancelled') await settleUserGeneration(env, userId, id, 'failed', failureCode)
+  if (state === 'failed' || state === 'cancelled') {
+    const settlement = await settleUserGeneration(env, userId, id, 'failed', failureCode)
+    if (!settlement.settled) { state = 'pending'; failureCode = undefined }
+  }
   const access = await accountAccess(env, userId, id)
   // A concurrent poll may have won settlement. Report its durable result,
   // never an uncommitted failure or a refund for a previously completed job.
@@ -164,7 +167,7 @@ async function allowance(env: StudioEnv) {
 async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init: RequestInit = {}) {
   const origin = oracleOrigin(env.ORACLE_ENDPOINT)
   if (!origin || !env.ORACLE_API_TOKEN) throw new StudioError('The existing Oracle connection is not configured.', 503)
-  return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(path.includes('/model') || path.includes('/exports/') ? 180_000 : 25_000),
+  return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(path.includes('/model') || path.includes('/exports/') ? 180_000 : STUDIO_ORACLE_TIMEOUT_MS),
     headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: path.includes('/model') ? 'model/gltf-binary' : path.includes('/exports/') ? 'application/octet-stream, application/zip' : 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) } })
 }
 function oracleFailureCode(value: Record<string, unknown>): StudioJob['failureCode'] {
@@ -387,7 +390,16 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         throw new StudioError(STUDIO_FAILURE_DETAILS.STUDIO_ALLOWANCE_UNAVAILABLE, error instanceof StudioError ? error.status : 503, 'STUDIO_ALLOWANCE_UNAVAILABLE')
       }
       try {
-        const response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: JSON.stringify(oracleStudioPayload(auth.id, input)) })
+        const payload = JSON.stringify(oracleStudioPayload(auth.id, input))
+        // A poll may have closed the account reservation while the global
+        // budget call was pending. Claim exactly once before any Oracle POST.
+        if (user) {
+          const claim = await markStudioDispatch(env, user.id, auth.id, auth.hash)
+          // No await between this expiry check and the actual Oracle fetch.
+          if (!claim.dispatch || Date.now() >= claim.deadline)
+            return json({ job: await accountJob(env, user.id, auth.id, 'pending'), recoveryOnly: true }, 202)
+        }
+        const response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: payload })
         if ([400, 409, 422, 429].includes(response.status)) {
           const failureCode = await submissionFailureCode(response)
           if (user) await settleUserGeneration(env, user.id, auth.id, 'failed', failureCode)
@@ -453,9 +465,15 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         const latest = user ? await userJobAccess(env, user.id, auth.id) : null
         if (user && latest?.owned && ['completed', 'failed'].includes(latest.state!))
           return json({ job: await accountJob(env, user.id, auth.id, latest.state === 'completed' ? 'succeeded' : 'failed') })
-        const expired = Date.now() - (latest?.owned && latest.at ? latest.at : auth.issued) >= STUDIO_SUBMISSION_GRACE_MS || overdue
+        const missingAfter = Math.max((latest?.owned && latest.at ? latest.at : auth.issued) + STUDIO_SUBMISSION_GRACE_MS,
+          (latest?.studioDispatchUntil ?? 0) + STUDIO_ORACLE_TIMEOUT_MS)
+        // A freshly claimed dispatch near the grace boundary may still be in
+        // flight. Its bounded deadline plus the existing POST timeout must end
+        // before a 404 can close the hold and present a terminal result.
+        const expired = Date.now() >= missingAfter || overdue
         if (user && latest?.owned && expired) {
-          return json({ job: await accountJob(env, user.id, auth.id, 'failed', fetcher, 'ORACLE_JOB_MISSING'), reconciledMissing: true })
+          const job = await accountJob(env, user.id, auth.id, 'failed', fetcher, 'ORACLE_JOB_MISSING')
+          return json({ job, ...(job.state === 'failed' ? { reconciledMissing: true } : {}) })
         }
         if (user && !latest?.owned && expired) {
           // Atomic with /reserve: whichever wins determines whether this was a

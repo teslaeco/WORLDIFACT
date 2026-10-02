@@ -91,7 +91,7 @@ export default function PortalPage() {
     </p>}
 
     {app.route !== '/terra' && <details open className="portal-generator-drawer">
-      <summary>Create inside this world with GPT-6 Astra</summary>
+      <summary>Create a blueprint inside this world</summary>
       <PortalAstraGenerator worldId={worldId} title={app.title} />
     </details>}
   </main>

@@ -11,7 +11,8 @@ import * as tools from '../src/lib/editorTools.ts'
 import * as world from '../src/lib/privateWorld.ts'
 import * as crystal from '../src/lib/crystal18.ts'
 import * as models from '../src/lib/modelCatalog.ts'
-import * as blueprint from '../src/lib/blueprint.ts'
+import * as scopedBlueprint from '../src/lib/scopedBlueprintClient.ts'
+import * as blueprintRequest from '../src/lib/blueprintRequest.ts'
 import * as gameLabLibrary from '../src/lib/gameLabLibrary.ts'
 async function component(path, dependencies, extra = {}) {
   const url = new URL(path, import.meta.url), source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
@@ -43,7 +44,8 @@ test('real editor onboarding has named world, real 18-face jewel and no shared p
     '../components/EighteenCrystal': { __esModule: true, default: Eighteen },
     '../components/GenerationCostNotice': { __esModule: true, default: () => null },
     '../lib/modelCatalog': models,
-    '../lib/blueprint': blueprint,
+    '../lib/scopedBlueprintClient': scopedBlueprint,
+    '../lib/blueprintRequest': blueprintRequest,
   }, { fetch: forbidden })
   const html = renderToStaticMarkup(React.createElement(MemoryRouter, { initialEntries: ['/lab'] }, React.createElement(PrivateLab)))
   assert.match(html, /Create your world\./)
