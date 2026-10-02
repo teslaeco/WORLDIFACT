@@ -28,8 +28,8 @@ export function parseStudioJob(value: unknown, id: string): StudioJob {
   if (!object(value) || !object(value.job) || value.job.id !== id || typeof value.job.state !== 'string' || !Object.hasOwn(JOB_DETAILS, value.job.state)) throw new Error('The response does not belong to the current model. The previous model will not be substituted.')
   const state = value.job.state as StudioJob['state']
   const reconciliationRequired = state === 'pending' && value.job.reconciliationRequired === true
-  const failureCode = state === 'failed' && ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT'].includes(String(value.job.failureCode)) ? value.job.failureCode as StudioJob['failureCode'] : undefined
-  const failureDetail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit. Reserved customer points were returned; no automatic retry.' : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were returned; no procedural replacement.' : undefined
+  const failureCode = state === 'failed' && ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT'].includes(String(value.job.failureCode)) ? value.job.failureCode as StudioJob['failureCode'] : undefined
+  const failureDetail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit. Reserved customer points were released; no automatic retry.' : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.' : failureCode === 'STUDIO_TIMEOUT' ? 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.' : undefined
   return { id, state, detail: failureDetail || (reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state]), ...(failureCode ? { failureCode } : {}),
     ...(reconciliationRequired ? { reconciliationRequired: true } : {}),
     ...(typeof value.job.downloadAllowed === 'boolean' ? { downloadAllowed: value.job.downloadAllowed } : {}),
@@ -80,6 +80,39 @@ export class StudioCoordinator {
     this.confirmedJob = this.rejectedJob
     return this.saved
   }
+  async recoverCurrent(owner = ''): Promise<{ saved: SavedStudioJob; job: StudioJob } | null> {
+    if (this.saved) return { saved: this.saved, job: this.confirmedJob ?? { id: this.saved.receipt.id, state: 'pending', detail: JOB_DETAILS.pending } }
+    const response = await this.fetcher('/api/studio/current', { headers: accessHeaders(owner), cache: 'no-store', signal: AbortSignal.timeout(40_000) })
+    const value = await responseJson(response)
+    if (!object(value) || value.current === null) return null
+    if (!object(value.current) || typeof value.current.prompt !== 'string' || value.current.prompt.length > 4000 ||
+      typeof value.current.startedAt !== 'string' || !Number.isFinite(Date.parse(value.current.startedAt)) ||
+      !['reserved','completed','failed'].includes(String(value.current.financialState))) throw new Error('The cloud job recovery record is invalid.')
+    const saved: SavedStudioJob = { receipt: readReceipt(value.current.receipt), prompt: value.current.prompt, startedAt: value.current.startedAt }
+    const financial = String(value.current.financialState)
+    const job: StudioJob = financial === 'completed'
+      ? { id: saved.receipt.id, state: 'succeeded', detail: JOB_DETAILS.succeeded }
+      : financial === 'failed'
+        ? { id: saved.receipt.id, state: 'failed', detail: JOB_DETAILS.failed }
+        : { id: saved.receipt.id, state: 'pending', detail: JOB_DETAILS.pending }
+    this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
+    if (this.store.getItem(STUDIO_RECEIPT_KEY) !== JSON.stringify(saved)) throw new Error('The recovered cloud receipt could not be stored. No new generation was started.')
+    this.saved = saved; this.confirmedJob = job; this.rejectedJob = null
+    return { saved, job }
+  }
+  async dismissCurrent(owner = '') {
+    if (!this.saved) return
+    if (this.submitting) throw new Error('Wait for submission to finish before changing jobs.')
+    const selected = this.saved
+    const response = await this.fetcher('/api/studio/current', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner) },
+      body: JSON.stringify({ id: selected.receipt.id }), signal: AbortSignal.timeout(20_000),
+    })
+    await responseJson(response)
+    this.preserveReceipt(selected)
+    this.store.removeItem(STUDIO_RECEIPT_KEY)
+    this.saved = null; this.confirmedJob = null; this.rejectedJob = null
+  }
   private preserveReceipt(saved: SavedStudioJob) {
     const key = STUDIO_RECEIPT_HISTORY_PREFIX + saved.receipt.id, text = JSON.stringify(saved)
     const existing = this.store.getItem(key)
@@ -110,7 +143,7 @@ export class StudioCoordinator {
       this.saved = saved; this.confirmedJob = null; this.rejectedJob = null; onPrepared(saved)
       try {
         const result = await this.fetcher('/api/studio/jobs', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': receipt.ticket, ...accessHeaders(owner), ...previousHeaders },
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': receipt.ticket, 'X-WORLDIFACT-Idempotency-Key': receipt.id, ...accessHeaders(owner), ...previousHeaders },
           body, signal: AbortSignal.timeout(45_000),
         })
         const job = parseStudioJob(await responseJson(result), receipt.id)
