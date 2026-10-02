@@ -22,6 +22,8 @@ try {
  const {response:healthResponse}=await get('/v1/health');report.healthHttp=healthResponse.status
  if(healthResponse.ok){const health=JSON.parse((await bounded(healthResponse,32768)).toString());report.runtime={};for(const key of ['ready','codexReady','photoInput','astraBudgetMaxUsd','connectorVersion','astraMaxOutputTokens','astraRequestTimeoutSeconds']) if(typeof health[key]==='boolean'||typeof health[key]==='number')report.runtime[key]=health[key]}
  else await healthResponse.body?.cancel()
+ report.persistenceProbes=[]
+ for(const [label,id] of [['published-character','a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781'],['published-building','e7e96cc3-8ad6-4ce8-996a-a4292407bc24']]){const {response}=await get('/v1/jobs/'+id);const item={label,http:response.status};if(response.ok){const row=JSON.parse((await bounded(response,65536)).toString());item.exactRecord=row.id===id;item.state=STATES.includes(row.state)?row.state:'UNKNOWN'}else await response.body?.cancel();report.persistenceProbes.push(item)}
  const {response,started}=await get('/v1/jobs/'+JOB);report.jobHttp=response.status;report.statusReadMs=Date.now()-started
  if(!response.ok){await response.body?.cancel();console.log(JSON.stringify(report,null,2));process.exit(0)}
  const job=JSON.parse((await bounded(response,65536)).toString());if(job.id!==JOB)throw new Error('JOB_IDENTITY_MISMATCH')
