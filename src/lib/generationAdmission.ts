@@ -29,3 +29,8 @@ export const ADMISSION_FAILURE_DETAILS: Record<AdmissionFailureCode, string> = {
 export function isAdmissionFailureCode(value: unknown): value is AdmissionFailureCode {
   return typeof value === 'string' && ADMISSION_FAILURE_CODES.includes(value as AdmissionFailureCode)
 }
+
+/** The blueprint route calls its provider directly instead of the Oracle worker. */
+export function blueprintAdmissionDetail(code: AdmissionFailureCode): string {
+  return ADMISSION_FAILURE_DETAILS[code].replaceAll('Oracle', 'provider')
+}

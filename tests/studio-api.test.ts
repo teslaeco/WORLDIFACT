@@ -114,6 +114,29 @@ test('GLB and texture exports need the exact receipt and never trigger generatio
   assert.equal(posts(f).length, 0)
 })
 
+test('preview and format downloads keep independent bounded slots for each signed job', async () => {
+  const f = fixture(), hits = new Map<string, number>()
+  f.env.GENERATION_LIMITER = { async limit({ key }) {
+    const count = (hits.get(key) ?? 0) + 1; hits.set(key, count)
+    return { success: count <= 3 }
+  } }
+  const first = await data(f.call('/api/studio/prepare', 'POST', input))
+  const second = await data(f.call('/api/studio/prepare', 'POST', { ...input, prompt: 'A different ivory study' }))
+  const get = (job: Reply, route: string) => f.call(`/api/studio/jobs/${job.id}/${route}`, 'GET', undefined, job.ticket)
+  for (const route of ['model', 'model', 'exports/pbr', 'exports/fbx', 'exports/blend']) {
+    const response = await get(first, route)
+    assert.equal(response.status, 200, route); await response.arrayBuffer()
+  }
+  assert.equal((await get(first, 'model')).status, 200)
+  const upstreamBeforeDenied = f.calls.length
+  assert.equal((await get(first, 'model')).status, 429, 'Repeated downloads of the same format remain rate limited')
+  assert.equal(f.calls.length, upstreamBeforeDenied, 'A denied artifact request never reaches Oracle')
+  for (const route of ['model', 'exports/pbr', 'exports/fbx', 'exports/blend']) assert.equal((await get(second, route)).status, 200, route)
+  assert.equal((await f.call(`/api/studio/jobs/${second.id}/model`, 'GET', undefined, first.ticket)).status, 401)
+  assert.equal(posts(f).length, 0)
+  assert.equal(f.values.get('reserved-attempts'), 5)
+})
+
 test('invalid photos and unrecognized fields are rejected before contacting paid services', async () => {
   const f = fixture()
   for (const body of [{ ...input, photos: [{ dataUrl: 'https://private.invalid' }] }, { ...input, apiKey: 'not-allowed' }, { ...input, prompt: '' }, { ...input, textureMaxSize: '4096' }]) assert.equal((await f.call('/api/studio/prepare', 'POST', body)).status, 400)

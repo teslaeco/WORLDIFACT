@@ -10,6 +10,8 @@ import { ADMISSION_FAILURE_CODES } from '../src/lib/generationAdmission.ts'
 
 const oldId = '12345678-1234-4234-8234-123456789abc'
 const newId = '87654321-1234-4234-8234-123456789abc'
+const fundedAccount = { credits: 3000, generationCosts: { luna: 15, sol: 50, astra: 250 }, subscription: { active: true, plan: 'pro' }, free: { fastRemaining: 2 }, billingReview: false, generationAdmission: { luna: { allowed: true }, sol: { allowed: true }, astra: { allowed: true } }, studioAdmission: { allowed: true } }
+const blockedAccount = { ...fundedAccount, generationAdmission: { luna: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, sol: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, astra: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } }, studioAdmission: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } }
 const makeReceipt = id => ({ id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` })
 const fastGeneration = {
   mode: 'LIVE', provenance: 'GENERATED', requestId: 'req_fast_fixture', model: 'gpt-6-sol',
@@ -53,9 +55,10 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, cloudLookup } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, cloudLookup, accountLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
+  if (blueprintRecovery) storeData.set('worldifact:blueprint-recovery:v1', JSON.stringify(blueprintRecovery))
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
   const status = { detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
@@ -63,6 +66,8 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   const fetcher = async (url, init = {}) => {
     const path = String(url), method = init.method || 'GET'
     calls.push({ path, method, body: init.body })
+    if (path === '/api/account/entitlements') return accountLookup ? accountLookup(accountState.user?.id, init) : Response.json(fundedAccount)
+    if (path === '/api/billing/status') return Response.json({ plans: { pro: { checkoutReady: true }, studio: { checkoutReady: true } } })
     if (path === '/api/studio/status') return Response.json(status)
     if (path === '/api/studio/current' && cloudLookup) return cloudLookup()
     if (path === '/api/studio/current') return Response.json(cloudCurrent ? { current: { receipt: makeReceipt(oldId), prompt: selected.prompt, startedAt: selected.startedAt, financialState: 'reserved', reservedPoints: 250 } } : { current: null })
@@ -81,7 +86,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     return Response.json({ job: { id: path.endsWith(oldId) ? oldId : newId, state, failureCode, reconciliationRequired, ...(downloadAllowed === undefined ? {} : { downloadAllowed, previewOnly: !downloadAllowed, previewAvailable: downloadAllowed }) } })
   }
   const slots = [], effects = [], timers = new Map(), delays = []
-  let cursor = 0, dirty = true, tree, serial = 0
+  let cursor = 0, dirty = true, tree, serial = 0, accountState = initialAccount
   const hookReact = { ...React,
     useState(initial) {
       const index = cursor++
@@ -89,6 +94,8 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
       return [slots[index].value, action => { const next = typeof action === 'function' ? action(slots[index].value) : action; if (!Object.is(next, slots[index].value)) { slots[index].value = next; dirty = true } }]
     },
     useRef(initial) { const index = cursor++; if (!slots[index]) slots[index] = { ref: { current: initial } }; return slots[index].ref },
+    useCallback(callback, deps) { const index = cursor++, prior = slots[index]; if (!prior || deps.some((v, i) => !Object.is(v, prior.deps?.[i]))) slots[index] = { value: callback, deps }; return slots[index].value },
+    useMemo(create, deps) { const index = cursor++, prior = slots[index]; if (!prior || deps.some((v, i) => !Object.is(v, prior.deps?.[i]))) slots[index] = { value: create(), deps }; return slots[index].value },
     useEffect(callback, deps) {
       const index = cursor++, prior = slots[index]
       if (!prior || !deps || deps.some((v,i) => !Object.is(v, prior.deps?.[i]))) {
@@ -99,10 +106,13 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   }
   const timeout = (callback, delay) => { delays.push(delay); const id = ++serial; timers.set(id, callback); return id }
   const interval = () => ++serial
-  const globals = { fetch: fetcher, URL, Blob, AbortSignal, AbortController, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
-    window: { localStorage: storage, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: () => {} } }
+  const events = new EventTarget(), downloads = [], anchors = new Set()
+  const globals = { fetch: fetcher, URL, Blob, AbortSignal, AbortController, Event, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
+    document: { body: { appendChild: node => anchors.add(node) }, createElement: () => { const node = { click: () => downloads.push({ name: node.download, attached: anchors.has(node) }), remove: () => anchors.delete(node) }; return node } },
+    window: { localStorage: storage, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: () => {}, addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events) } }
   const Component = await loadShopComponent({ react: hookReact, globals, adapters: {
     'react-router-dom': { useLocation: () => ({ pathname: '/shop', state: characterPrompt ? { worldPrompt: characterPrompt } : null }) },
+    '../lib/account': { useAccount: () => accountState },
     '../lib/studioClient': { ...clientModule, StudioCoordinator: class extends clientModule.StudioCoordinator { constructor(store) { super(store, fetcher) } }, checkStudio: () => clientModule.checkStudio(fetcher) },
     '../lib/studioArchive': {
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
@@ -119,13 +129,16 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   }
   const node = predicate => { const found = elements(tree).find(predicate); assert.ok(found, 'Expected actual component control was not rendered'); return found }
   await settle()
-  return { settle, calls, selected, storeData, archive, delays,
+  return { settle, calls, selected, storeData, archive, delays, downloads,
+    async account(next) { accountState = next; dirty = true; await settle() },
+    async balanceChanged() { events.dispatchEvent(new Event('worldifact:balance-changed')); await settle() },
     byId: id => node(n => n.props.id === id),
     button: label => node(n => n.type === 'button' && text(n).includes(label)),
     all: () => elements(tree),
     description: () => text(node(n => n.props['data-testid'] === 'result-description')),
     fastDescription: () => text(node(n => n.props['data-testid'] === 'fast-result-description')),
     form: () => node(n => n.type === 'form'),
+    quote: () => node(n => !!n.props.accountQuote).props.accountQuote,
     async poll() { const first = timers.entries().next().value; assert.ok(first, 'Recovery should have scheduled a GET'); timers.delete(first[0]); await first[1](); await settle() },
     close() { for (const slot of slots) slot?.cleanup?.(); timers.clear() },
   }
@@ -525,5 +538,181 @@ test('immediate HTTP429 funding refusal keeps the detailed request terminal with
     assert.doesNotMatch(visible, /Previous model did not finish|PRIVATE_UPSTREAM_MESSAGE|Not enough available points|points were released/)
     assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 1)
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).rejectionCode, 'PROVIDER_BUDGET_EXHAUSTED')
+  } finally { h.close() }
+})
+
+test('one account snapshot blocks both ready Shop routes and forced form submission when provider funds are unavailable', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, accountLookup: () => Response.json(blockedAccount) })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook' } }); await h.settle()
+    for (const delivery of ['procedural-blueprint', 'detailed-mesh']) {
+      h.byId('studio-deliverable').props.onChange({ target: { value: delivery } }); await h.settle()
+      assert.equal(h.quote().quote.state, 'blocked')
+      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+      const status = h.all().find(n => n.props.className === 'shop-customer-status')
+      assert.match(text(status), /Generation is unavailable for this account/)
+      assert.match(text(status), /provider funding limit/)
+      assert.doesNotMatch(text(status), /generation available/)
+      await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    }
+    assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 1)
+    assert.equal(h.calls.filter(c => c.path === '/api/billing/status').length, 1)
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    assert.equal(h.byId('studio-prompt').props.disabled, false)
+    assert.equal(h.byId('studio-photos').props.disabled, false)
+  } finally { h.close() }
+})
+
+test('switching models recomputes costs from the same snapshot and distinguishes detailed admission', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, accountLookup: () => Response.json({ ...fundedAccount, studioAdmission: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } }) })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook' } }); await h.settle()
+    assert.equal(h.quote().quote.state, 'credits')
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    assert.equal(h.quote().quote.state, 'blocked')
+    h.byId('studio-mode').props.onChange({ target: { value: 'luna' } }); await h.settle()
+    assert.equal(h.quote().quote.points, 15)
+    assert.equal(h.quote().quote.state, 'credits')
+    assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 1)
+    assert.equal(h.calls.filter(c => c.path === '/api/billing/status').length, 1)
+  } finally { h.close() }
+})
+
+test('account startup waits for session resolution before discovery and signed-out drafts stay editable', async () => {
+  const h = await harness({ ready: true, withExistingJob: false, initialAccount: { user: null, loading: true } })
+  try {
+    assert.equal(h.calls.some(c => ['/api/account/entitlements', '/api/billing/status', '/api/studio/current'].includes(c.path)), false)
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Keep this draft through sign-in' } }); await h.settle()
+    await h.account({ user: null, loading: false })
+    assert.equal(h.quote().quote.state, 'signin')
+    assert.equal(h.byId('studio-prompt').props.disabled, false)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    await h.account({ user: { id: 'owner-a' }, loading: false })
+    assert.equal(h.quote().quote.state, 'credits')
+    assert.equal(h.byId('studio-prompt').props.value, 'Keep this draft through sign-in')
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/current').length, 1)
+    assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 1)
+  } finally { h.close() }
+})
+
+test('healthy service refresh cannot erase cloud authentication failure or enable a paid request', async () => {
+  const h = await harness({ ready: true, withExistingJob: false, cloudLookup: () => Response.json({ error: 'PRIVATE_AUTH_DETAIL' }, { status: 401 }) })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook' } }); await h.settle()
+    assert.match(text(h.all()), /Sign in again to recover your account models/)
+    assert.doesNotMatch(text(h.all()), /PRIVATE_AUTH_DETAIL/)
+    await h.button('Refresh availability').props.onClick(); await h.settle()
+    assert.match(text(h.all()), /Sign in again to recover your account models/)
+    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+test('late account A responses cannot enable generation after signout or account B selection', async () => {
+  let finishA, finishB
+  const h = await harness({ ready: true, withExistingJob: false, accountLookup: owner => new Promise(resolve => { if (owner === 'owner-a') finishA = resolve; else finishB = resolve }) })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook' } }); await h.settle()
+    await h.account({ user: null, loading: false })
+    assert.equal(h.quote().quote.state, 'signin')
+    await h.account({ user: { id: 'owner-b' }, loading: false })
+    assert.equal(h.quote().quote.state, 'pending')
+    finishB(Response.json(blockedAccount)); await h.settle()
+    assert.equal(h.quote().quote.state, 'blocked')
+    finishA(Response.json(fundedAccount)); await h.settle()
+    assert.equal(h.quote().quote.state, 'blocked')
+    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+    assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 2)
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+test('balance refresh invalidates the allowed quote while pending and ignores an older response', async () => {
+  const responses = []
+  let count = 0
+  const h = await harness({ ready: true, withExistingJob: false, accountLookup: () => ++count === 1 ? Response.json(fundedAccount) : new Promise(resolve => responses.push(resolve)) })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook' } }); await h.settle()
+    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, false)
+    await h.balanceChanged()
+    assert.equal(h.quote().checking, true)
+    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+    await h.balanceChanged()
+    responses[1](Response.json(blockedAccount)); await h.settle()
+    responses[0](Response.json(fundedAccount)); await h.settle()
+    assert.equal(h.quote().quote.state, 'blocked')
+    assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 3)
+    assert.equal(h.calls.filter(c => c.path === '/api/billing/status').length, 3)
+  } finally { h.close() }
+})
+
+test('unknown account data and expired authentication fail closed without an endless cost spinner', async () => {
+  for (const response of [Response.json({ credits: 3000 }), Response.json({ error: 'PRIVATE_AUTH_DETAIL' }, { status: 401 }), new Response('<html>not JSON</html>', { headers: { 'content-type': 'text/html' } })]) {
+    const h = await harness({ ready: true, withExistingJob: false, accountLookup: () => response })
+    try {
+      h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook' } }); await h.settle()
+      assert.ok(['pending', 'signin'].includes(h.quote().quote.state))
+      assert.equal(h.quote().checking, false)
+      assert.equal(h.quote().canRefresh, true)
+      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+      assert.doesNotMatch(text(h.all()), /PRIVATE_AUTH_DETAIL/)
+    } finally { h.close() }
+  }
+  const timeout = await harness({ ready: true, withExistingJob: false, accountLookup: (_owner, init) => new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true })) })
+  try {
+    assert.equal(timeout.quote().checking, true)
+    await timeout.poll()
+    assert.equal(timeout.quote().quote.state, 'pending')
+    assert.equal(timeout.quote().checking, false)
+    assert.equal(timeout.quote().canRefresh, true)
+  } finally { timeout.close() }
+})
+
+test('a saved rejected blueprint displays its reason instead of the example and remains recoverable while funding is blocked', async () => {
+  const blueprintRecovery = { id: newId, fingerprint: 'b'.repeat(64), model: 'astra', state: 'failed', createdAt: Date.now(), failureCode: 'PROVIDER_BUDGET_EXHAUSTED' }
+  for (const withExistingJob of [false, true]) {
+    const h = await harness({ ready: true, withExistingJob, blueprintRecovery, accountLookup: () => Response.json(blockedAccount) })
+    try {
+      if (withExistingJob) {
+        await h.poll()
+        assert.match(text(h.all()), /Previous preview preserved/)
+        assert.match(h.description(), /Original brown chess knight/)
+      } else assert.ok(h.all().some(n => n.type === 'h2' && text(n) === 'Generation was not started'))
+      assert.equal(h.all().some(n => n.type === 'img' && n.props.alt === 'Example 3D product preview'), false)
+      assert.equal(h.button('Recover same request').props.disabled, false)
+      await h.button('Recover same request').props.onClick(); await h.settle()
+      assert.equal(h.calls.some(c => c.path.startsWith('/api/blueprint')), false)
+      assert.match(text(h.all()), /provider funding limit/)
+      assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    } finally { h.close() }
+  }
+})
+
+test('signout and account switching pause automatic selected-job requests without losing the receipt', async () => {
+  const h = await harness({ ready: true, state: 'building' })
+  try {
+    const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    await h.account({ user: null, loading: false })
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    await assert.rejects(h.poll(), /Recovery should have scheduled a GET/)
+    await h.account({ user: { id: 'owner-b' }, loading: false })
+    assert.match(text(h.all()), /Sign in to the original account to recover this model/)
+    assert.equal(h.calls.filter(c => c.path.startsWith('/api/studio/jobs/')).length, 0)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.equal(h.button('Recover this job').props.disabled, false)
+  } finally { h.close() }
+})
+
+test('downloading the verified current GLB uses its existing bytes and a document-attached link', async () => {
+  const h = await harness({ ready: true })
+  try {
+    await h.poll()
+    const before = h.calls.filter(c => c.path.endsWith('/model')).length
+    await h.button('Download model · GLB').props.onClick(); await h.settle()
+    assert.equal(h.calls.filter(c => c.path.endsWith('/model')).length, before)
+    assert.deepEqual(h.downloads, [{ name: `WORLDIFACT-${oldId}.glb`, attached: true }])
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
   } finally { h.close() }
 })
