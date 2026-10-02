@@ -156,7 +156,7 @@ Local follow-up verification: lint (existing warnings only), TypeScript, 654 non
 All provider calls in the regression suite are fixtures. Public health/Studio GET probes returned HTTP 200 without generation. These checks are not visual, Android, or paid-generation proof. No production customer balance or provider-budget mutation, merge, or deployment was performed during this follow-up.
 
 
-## IN VERIFICATION — generated GLB placement and preview recovery (2 October 2026)
+## DEPLOYED — generated GLB placement and preview recovery (2 October 2026)
 
 The owner reported that generated 3D models still did not add to AI Game Lab and authorized repair, then merge/deployment after green checks. The work is based on released main `8a38d1f349a2f454d913b6b7042881460991575c`; the independent Dots/MCP PR #170 is outside this repair.
 
@@ -171,4 +171,19 @@ Reproduced defects and repairs:
 
 Eighteen new deterministic lifecycle/storage/resource tests cover these paths, including the actual editor event handlers and actual world save/read validation. No provider call is used. The supported editor input remains a self-contained GLB up to 50 MB; FBX/BLEND exports must be converted to an embedded GAME GLB before import. File contents remain device-local; a world save stores placement references, not a cloud backup of private originals.
 
-Local verification: lint and TypeScript passed; 671 non-browser tests passed. The single pre-existing native Chromium regression is blocked by this executor's `socket() failed: Operation not permitted`; it remains enabled and required in GitHub CI. Real local DEMO HTTP/origin checks, production build, pinned Chess/Terra/ISS assembly and Worker deployment dry-run also passed. No local browser/device, physical Android or paid-generation pass is claimed. Exact-head CI and production release evidence must be checked before reporting deployment.
+Local verification: lint and TypeScript passed; 671 non-browser tests passed. The single pre-existing native Chromium regression is blocked by this executor's `socket() failed: Operation not permitted`; it remains enabled and required in GitHub CI. Real local DEMO HTTP/origin checks, production build, pinned Chess/Terra/ISS assembly and Worker deployment dry-run also passed. No local browser/device, physical Android or paid-generation pass is claimed. PR #171 passed all five exact-head workflows, including 672/672 tests and the native Chromium regression. It merged as `b5622655b24c662c38babc9b6ae3b7b30d5f1f82`. Production release [36974732658](https://github.com/teslaeco/WORLDIFACT/actions/runs/36974732658) succeeded with Cloudflare version `6f237447-7176-4b7a-89af-82b5e0984931`. Independent read-only GETs for `/lab`, `/builder` and the Game Lab/Canvas JS/CSS matched the exact tested build hashes.
+
+
+## IN VERIFICATION — complete procedural model and world handoff (2 October 2026)
+
+The owner requested a fuller no-cost Shop → archive → Game Lab → save/reopen check after PR #171. A joined deterministic test exercised the actual detailed Shop handler/StudioCoordinator, archive and account-scoped asset storage, Game Lab placement, world save/remount/reopen and real GLTFLoader geometry parsing. The original file/hash, prompt, asset reference and transforms survived; duplicate clicks and repeated failed/recovered artifact reads did not submit another generation. No external request or provider call was made.
+
+That check also reproduced two adjacent gaps:
+- The separate procedural Sol/Luna/Astra blueprint view offered its emitted GLB for download but did not put it in the device model archive. This was a missing automatic handoff, not evidence that the detailed-model repair regressed.
+- Leaving a new dirty Game Lab world through a Shop link before the eight-second autosave could unmount the editor and lose the unsaved world.
+
+The follow-up archives successful procedural GAME GLBs with explicit blueprint provenance and their real generation evidence, without inventing a Studio receipt or account-verified ownership. It also saves a dirty world before Shop navigation and keeps the editor open if saving fails or the account/world/revision changes. Namespaced procedural entries never enter the server's detailed Studio ownership lookup.
+
+The live public UI was inspected in the cloud browser: both updated editor controls and detailed Astra/Blender availability appeared. The browser was signed out and WebGL was disabled, so neither authenticated private-model handling nor physical-device visual quality was verified there. The live detailed model action displayed 250 points and was not used. No new paid generation, cloud model upload or user-account mutation is authorized merely to test this change.
+
+Local lint and TypeScript passed. The aggregate suite passed 698 tests; its only blocked test was the pre-existing native Chromium fixture because this executor cannot start the browser process (`socket() failed: Operation not permitted`). That test remains enabled for full exact-head GitHub CI. Local DEMO HTTP/origin checks, production build, pinned Chess/Terra/ISS assembly and Worker deployment dry-run passed. Independent review found and then verified the fix for an overlapping open-world/save race. Full exact-head GitHub CI and production release verification remain required.
