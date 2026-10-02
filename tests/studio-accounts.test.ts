@@ -162,12 +162,12 @@ test('four references and a complete 4,000-character character brief reach Oracl
   assert.match(f.sent()!.agentInstructions,/Reference 1: front; Reference 2: left; Reference 3: right; Reference 4: back/)
   assert.ok(f.sent()!.agentInstructions.length <= 12000,'Installed agent instruction limit')
   assert.match(f.sent()!.agentInstructions,/authoritative visual input/)
-  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+  { const status=await entitlementStatus(f.env,alice); assert.equal(status.credits,4500); assert.equal(status.reservedCredits,250); assert.equal(status.availableCredits,4250) }
   const result=await (await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)).json() as {job:StudioJob}
   assert.equal(result.job.state,'succeeded');assert.equal(f.artifacts(),1)
   await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)
   assert.equal(f.artifacts(),1,'A verified terminal job does not redownload its model on every poll')
-  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+  { const status=await entitlementStatus(f.env,alice); assert.equal(status.credits,4250); assert.equal(status.reservedCredits,0) }
 })
 
 test('missing, stale or changed monetary/output-policy evidence blocks before any point reservation', async () => {
@@ -184,10 +184,10 @@ test('missing, stale or changed monetary/output-policy evidence blocks before an
 test('a succeeded status without a valid actual model refunds once and cannot later be charged again', async () => {
   const f=fixture();await f.subscribe();const receipt=await f.prepare();f.invalid()
   await f.call('/api/studio/jobs','POST',input,receipt.ticket)
-  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+  { const status=await entitlementStatus(f.env,alice); assert.equal(status.credits,4500); assert.equal(status.reservedCredits,250) }
   const result=await (await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)).json() as {job:StudioJob}
   assert.equal(result.job.state,'failed');assert.equal(result.job.failureCode,'INVALID_MODEL_OUTPUT')
-  assert.equal(result.job.downloadAllowed,false);assert.equal((await entitlementStatus(f.env,alice)).credits,4500)
+  assert.equal(result.job.downloadAllowed,false);{ const status=await entitlementStatus(f.env,alice); assert.equal(status.credits,4500); assert.equal(status.reservedCredits,0) }
   await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)
   assert.equal((await entitlementStatus(f.env,alice)).credits,4500);assert.equal(f.posts(),1)
 })
@@ -248,11 +248,11 @@ test('reference-driven electrical cabinet rejects a sparse photo-card model and 
   const prep=await f.call('/api/studio/prepare','POST',request);assert.equal(prep.status,200)
   const receipt=await prep.json() as {id:string;ticket:string}
   assert.equal((await f.call('/api/studio/jobs','POST',request,receipt.ticket)).status,202)
-  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+  { const status=await entitlementStatus(f.env,alice); assert.equal(status.credits,4500); assert.equal(status.reservedCredits,250) }
   const result=await (await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)).json() as {job:StudioJob}
   assert.equal(result.job.state,'failed')
   assert.equal(result.job.failureCode,'INVALID_MODEL_OUTPUT')
-  assert.equal((await entitlementStatus(f.env,alice)).credits,4500)
+  { const status=await entitlementStatus(f.env,alice); assert.equal(status.credits,4500); assert.equal(status.reservedCredits,0) }
   assert.equal(f.posts(),1)
   assert.match(String(f.sent()!.agentInstructions),/INDUSTRIAL ELECTRICAL CABINET — TRUE 3D MODE/)
 })
@@ -267,6 +267,6 @@ test('dense reference-driven electrical cabinet passes the structural gate witho
   const result=await (await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,receipt.ticket)).json() as {job:StudioJob}
   assert.equal(result.job.state,'succeeded')
   assert.equal(result.job.failureCode,undefined)
-  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+  { const status=await entitlementStatus(f.env,alice); assert.equal(status.credits,4250); assert.equal(status.reservedCredits,0) }
   assert.equal(f.posts(),1)
 })
