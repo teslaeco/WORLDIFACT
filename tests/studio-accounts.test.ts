@@ -26,6 +26,9 @@ function fixture() {
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const users = new Map<string, AccountEntitlements>()
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() }, {}, () => Date.now())); return users.get(key)! } }
+  let modelStatus: 'draft' | 'reviewed' | undefined, qualityFailure = false
+  let quality: Record<string, unknown> = { revision: 6, state: 'succeeded', hasModel: true, modelStatus: 'draft', automaticQualityAccepted: false, agent: {}, agentUsage: { completed: false, error_code: null }, visualReview: { assessment_completed: false, accepted: false, status: 'not_completed' } }
+  let qualityReads = 0
   let runtimeOverrides: Record<string, unknown> = {}, invalidModel = false, denseModel = false, failureDetail = '', lastPayload: Record<string, any> | null = null
   let posts = 0, artifacts = 0, loss = false, busy = false, state: StudioJob['state'] = 'succeeded', status404 = false
   let statusFailure: 'http' | 'rate-limit' | 'transport' | 'malformed' | null = null
@@ -50,6 +53,7 @@ function fixture() {
       if (submissionRejection) return Response.json(submissionRejection.body, { status: submissionRejection.status })
       return Response.json({ id: JSON.parse(String(init?.body)).id, state: 'building' })
     }
+    if (path.endsWith('/quality')) { qualityReads++; return qualityFailure ? Response.json({}, { status: 503 }) : Response.json(quality) }
     if (/\/model$|\/exports\//.test(path)) {
       artifacts++
       await artifactGate
@@ -65,7 +69,7 @@ function fixture() {
     if (statusFailure === 'transport') throw new TypeError('Simulated status transport failure')
     if (statusFailure === 'malformed') return Response.json({ id: 'not-this-job', state: 'building' })
     if (status404) return Response.json({}, { status: 404 })
-    return Response.json({ id: path.split('/').pop(), state, detail: failureDetail })
+    return Response.json({ id: path.split('/').pop(), state, detail: failureDetail, ...(modelStatus ? { modelStatus } : {}) })
   }) as typeof fetch
   const call = (path: string, method = 'GET', body?: unknown, ticket?: string, user: 'alice' | 'bob' | null = 'alice') => {
     const jobId = ticket?.split('.')[0]
@@ -82,6 +86,8 @@ function fixture() {
     await entitlementCall(env, alice, '/subscription', { id: 'sub_test', until: Date.now() + 86400000, active: true, revision: 1, plan: 'pro', grantId: 'in_subscription' })
   }
   return { env, call, prepare, subscribe, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, dense: () => { denseModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
+    quality: (value: Record<string, unknown> = {}) => { modelStatus = 'draft'; quality = { ...quality, ...value } },
+    qualityFailure: (value: boolean) => { qualityFailure = value }, qualityReads: () => qualityReads,
     statusFailure: (value: typeof statusFailure) => { statusFailure = value },
     artifactFailure: (value: boolean) => { artifactFailure = value },
     artifactHttpStatus: (value: number) => { artifactHttpStatus = value },
@@ -680,4 +686,50 @@ test('a fresh reservation winning during an old receipt Oracle 404 stays pending
     assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
     assert.equal(f.posts(), 1)
   } finally { release(); await polling; Date.now = now }
+})
+
+
+test('a retained unfinished Oracle draft is never charged as a completed model even when its GLB passes', async () => {
+  const f = fixture(); await f.subscribe()
+  const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  f.quality(); f.dense()
+  const first = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+  assert.equal(first.job.state, 'failed'); assert.equal(first.job.failureCode, 'ORACLE_JOB_INCOMPLETE')
+  assert.equal(f.artifacts(), 0); assert.equal(f.posts(), 1); assert.equal(f.qualityReads(), 1)
+  const account = await entitlementStatus(f.env, alice)
+  assert.equal(account.credits, 4500); assert.equal(account.reservedCredits, 0)
+  const repeat = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+  assert.equal(repeat.job.failureCode, 'ORACLE_JOB_INCOMPLETE'); assert.equal(f.qualityReads(), 1)
+  assert.equal((await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket)).status, 403)
+})
+
+test('retained draft quality evidence preserves a known cost stop without exposing private diagnostics', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  f.quality({ agentUsage: { completed: false, error_code: 'WORLDIFACT_ASTRA_COST_GUARD', last_error: 'PRIVATE_PROVIDER_DATA' } })
+  const response = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+  const text = await response.text(); assert.doesNotMatch(text, /PRIVATE_PROVIDER_DATA/)
+  assert.equal(JSON.parse(text).job.failureCode, 'ASTRA_COST_LIMIT')
+})
+
+test('unavailable or inconsistent draft evidence remains uncertain until the same job can be verified', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  f.quality(); f.qualityFailure(true)
+  assert.equal((await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).status, 502)
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+  f.qualityFailure(false); f.quality({ modelStatus: 'reviewed', automaticQualityAccepted: true })
+  assert.equal((await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).status, 502)
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250); assert.equal(f.posts(), 1)
+})
+
+
+test('an explicitly finished unreviewed standard draft keeps structural model delivery semantics', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  f.quality({ agent: { finished: true, accepted: false }, agentUsage: { completed: true }, visualReview: { assessment_completed: true, accepted: false, status: 'needs_revision' } })
+  const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+  assert.equal(result.job.state, 'succeeded'); assert.equal(f.artifacts(), 1); assert.equal(f.posts(), 1)
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
 })

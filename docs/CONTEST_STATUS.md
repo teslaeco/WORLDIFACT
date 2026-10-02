@@ -188,7 +188,7 @@ The live public UI was inspected in the cloud browser: both updated editor contr
 
 Local lint and TypeScript passed. The aggregate suite passed 698 tests; its only blocked test was the pre-existing native Chromium fixture because this executor cannot start the browser process (`socket() failed: Operation not permitted`). That test remains enabled for full exact-head GitHub CI. Local DEMO HTTP/origin checks, production build, pinned Chess/Terra/ISS assembly and Worker deployment dry-run passed. Independent review found and then verified the fix for an overlapping open-world/save race. Full exact-head GitHub CI and production release verification remain required.
 
-## IN VERIFICATION — preserve Studio failure diagnostics and recover uncertain artifact reads (2 October 2026)
+## DEPLOYED — preserve Studio failure diagnostics and recover uncertain artifact reads (2 October 2026)
 
 The owner reported that a detailed prompt/reference job displayed “Previous model did not finish” after returning to Shop. Its exact UUID and authenticated worker logs were not available during this repair. The screenshot proves the terminal UI state, not whether that particular job hit a provider budget, failed generation, invalid geometry, a missing job or a timeout. No historic refund or exact incident cause is inferred.
 
@@ -203,9 +203,9 @@ The repair preserves the original UUID, point-hold policy, same-job GET recovery
 
 Local verification: lint and TypeScript pass; all 709 non-browser tests pass, including 108 focused account/client/Shop lifecycle tests. The aggregate `npm run verify` runs 710 tests and its only blocked test is the retained native Chromium fixture (`socket() failed: Operation not permitted` in this executor). Local DEMO HTTP/origin checks and production build pass. Full exact-head GitHub CI, including the native Chromium fixture and pinned foundation build, remains the release gate. Worker dry-run passes with its writable configuration/log directory. No paid generation or customer-account mutation was performed as a test.
 
-The owner explicitly authorized this repair, publication, merge and deployment on 2 October after validation. Exact PR/production evidence will be recorded in the repair PR; the separate prior #171/#172 releases are not evidence that this incident was fixed.
+The owner explicitly authorized publication, merge and deployment. PR #173 passed 710 tests and merged as `6a1c6750e153e02839d256ed4fda16d0018284bf`; production release [36980848475](https://github.com/teslaeco/WORLDIFACT/actions/runs/36980848475) succeeded. This fixed the reproduced recovery defects, not an identified cause for the original unspecified job.
 
-## IN VERIFICATION — single-upload Studio submission and truthful admission recovery (2 October 2026)
+## DEPLOYED — single-upload Studio submission and truthful admission recovery (2 October 2026)
 
 A subsequent report showed an interrupted browser response while “Preparing your model” remained visible, then a generic failed receipt after reload. Authenticated read-only inspection found no row for that reported UUID on the connected Oracle worker. Two previously published model records remained available by their exact identifiers. This is evidence of the current missing record, not proof of whether the original upload reached admission, encountered a capacity rejection, or was affected by another historical event. The reported account's authenticated current-job result and runtime capacity remain unverified.
 
@@ -223,3 +223,19 @@ Regression coverage includes three large reference payloads, request mutation, f
 The provider funding policy remains conservative. Historical before-acceptance reservation leakage requires a separate evidence-backed review; this change does not replenish provider spending authority. Final local/CI/production results belong to this follow-up's release record. No complete paid mobile generation success is claimed.
 
 Local final checks for this follow-up: 735 non-browser tests pass, including the real workerd manifest flow and SQLite Durable Object race tests. Lint, TypeScript, local DEMO HTTP/origin checks and the production build pass; Worker packaging passes. The native Chromium regression remains enabled for CI and is blocked locally by the executor's process/socket restriction. No paid generation, point debit, model creation or historical funding replenishment was performed as validation.
+
+PR #174 subsequently passed all 736 tests and merged as `8c7e854fe4465efb64c8bd768fd1b87fa5e0cf8f`. Production release [36986292007](https://github.com/teslaeco/WORLDIFACT/actions/runs/36986292007) succeeded; the deployed Shop and JS/CSS hashes matched the tested build. This was not proof of a successful paid reference-model generation.
+
+## IN VERIFICATION — finish the actual reference model within its original budget (2 October 2026)
+
+A newer reported job now has concrete backend evidence. Read-only authenticated inspection found an existing Oracle `succeeded` row and a 21,708-byte GLB containing 13 box meshes, 156 rendered triangles, no images and no substantial meshes. The cabinet gate correctly rejected this sparse draft. It was not an instance-count false rejection or a missing upload.
+
+The exact quality report says `modelStatus=draft`, `automaticQualityAccepted=false`, no completed visual assessment and no finished agent outcome. Its three completed MCP calls were contract inspection, an invalid initial build call, and a successful sparse build; no render inspection, edit or finish call followed. The stored CLI diagnostic matches `stream disconnected before completion` and `max_output_tokens`. Gateway usage was known, but the old gateway did not classify this incomplete terminal response as an error. Source review confirmed that the runner retained its unfinished candidate and the Oracle server labelled retained drafts `succeeded`. The original per-call affordable token allocation still requires the bounded VM ledger diagnostic; it is not inferred from the output size alone.
+
+The local repair adds a complete-first-build contract, actual candidate-GLB feedback, explicit current-render/finish requirements and a WORLDIFACT-scoped runtime completion policy. It preserves the USD1.75 per-job cap and incomplete-response reservations. A tiny affordable output allocation cannot launch an unfinished structural build; a structurally passing candidate keeps the compact finish path. Only a clean, fully accounted CLI exit can receive one continuation inside the same gateway, job, original deadline, request/output/build limits and durable cost ledger. An incomplete provider response is terminal and is never automatically retried. Generic Froge/FAST behavior remains outside the scoped contract.
+
+The web adapter separately refuses to charge an execution that has no finished outcome, while preserving deliberately finished, unreviewed standard drafts subject to the unchanged structural gate. Previously settled account outcomes remain authoritative. This does not reopen or refund a historical job.
+
+The installer uses exact reviewed source ancestry, strict existing SSH access, atomic idle-queue maintenance, private backups, genuine offline Codex/MCP/Blender verification, receipt-bound health evidence and rollback. It makes no paid request. A separate, default-inert one-shot test helper is being prepared to reuse the original prompt and three photos on the VM; paid execution requires the owner's clarified budget approval. No new API key, credential grant, budget reset or customer-point debit is part of that test route.
+
+At this checkpoint the runtime package is under final offline review and has not been confirmed installed on the Oracle VM. Local fixtures and source tests are not generated-quality or visible-preview evidence. The user's completion criterion remains an actual generated model inspected in the real preview.
