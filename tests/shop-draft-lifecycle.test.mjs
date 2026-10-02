@@ -6,6 +6,7 @@ import { loadShopComponent } from './shop-render-helper.mjs'
 import * as clientModule from '../src/lib/studioClient.ts'
 import { blueprintRequestId } from '../src/lib/blueprintRequest.ts'
 import { FAST_DRAFT_PROFILE } from '../src/lib/studioProtocol.ts'
+import { ADMISSION_FAILURE_CODES } from '../src/lib/generationAdmission.ts'
 
 const oldId = '12345678-1234-4234-8234-123456789abc'
 const newId = '87654321-1234-4234-8234-123456789abc'
@@ -52,7 +53,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, cloudLookup } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, cloudLookup } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
@@ -73,7 +74,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
       delivery: { kind: 'procedural-blueprint', referenceCount: JSON.parse(init.body).references.length, fallbackUsed: false },
     })
     if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
-    if (method === 'POST' && submissionRejection) return Response.json({ error: 'PRIVATE_UPSTREAM_MESSAGE', failureCode: submissionRejection }, { status: 409 })
+    if (method === 'POST' && submissionRejection) return Response.json({ error: 'PRIVATE_UPSTREAM_MESSAGE', failureCode: submissionRejection }, { status: submissionRejectionStatus })
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model') && artifactFailure) throw new TypeError('Interrupted artifact download')
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
@@ -490,5 +491,39 @@ test('an immediately rejected submission shows its saved capacity reason instead
     assert.match(visible, /Reason: JOB_CAPACITY/)
     assert.doesNotMatch(visible, /original failure reason was not saved|PRIVATE_UPSTREAM_MESSAGE/)
     assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 1)
+  } finally { h.close() }
+})
+
+test('account refusal is shown as generation not started, without a model failure or refund claim', async () => {
+  for (const failureCode of ADMISSION_FAILURE_CODES) {
+    const h = await harness({ ready: true, state: 'failed', failureCode })
+    try {
+      await h.poll()
+      const visible = text(h.all())
+      assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Generation was not started'))
+      assert.match(visible, failureCode === 'ACCOUNT_REQUEST_CONFLICT'
+        ? /No new Oracle submission or points reservation was made/
+        : /No Oracle generation was submitted and no points were reserved for this request/)
+      assert.doesNotMatch(visible, /Previous model did not finish|original failure reason was not saved|points were released/)
+      assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    } finally { h.close() }
+  }
+})
+
+test('immediate HTTP429 funding refusal keeps the detailed request terminal with its accurate headline', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false,
+    submissionRejection: 'PROVIDER_BUDGET_EXHAUSTED', submissionRejectionStatus: 429 })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A detailed blue chess knight' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } })
+    await h.settle()
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const visible = text(h.all())
+    assert.match(visible, /Generation was not started/)
+    assert.match(visible, /provider funding limit/)
+    assert.match(visible, /Reason: PROVIDER_BUDGET_EXHAUSTED/)
+    assert.doesNotMatch(visible, /Previous model did not finish|PRIVATE_UPSTREAM_MESSAGE|Not enough available points|points were released/)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 1)
+    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).rejectionCode, 'PROVIDER_BUDGET_EXHAUSTED')
   } finally { h.close() }
 })

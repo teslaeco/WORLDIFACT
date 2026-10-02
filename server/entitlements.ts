@@ -4,6 +4,7 @@ import type { BudgetNamespace } from './budget.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId, type GenerationModel } from './generationEconomics.ts'
 import { STUDIO_FAILURE_CODES, STUDIO_SUBMISSION_GRACE_MS, type StudioFailureCode, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
+import type { AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
@@ -27,6 +28,7 @@ type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
 type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
 export interface EntitlementStatus {
+  generationAdmission: Record<GenerationModel, { allowed: boolean; reason?: AdmissionFailureCode }>
   credits: number
   reservedCredits: number
   availableCredits: number
@@ -124,7 +126,26 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
   const period = subscription?.grantId ?? `${subscription?.id ?? 'none'}:${subscription?.until ?? 0}`
   const used = await storage.get<number>(`creator-astra:${period}`) ?? 0
   if (!Number.isSafeInteger(used) || used < 0) throw new Error('Invalid Astra period quota')
+  // Read-only projection of the same admission order as /reserve. Never seed,
+  // replenish or reveal the internal provider ledger while reading an account.
+  const storedProviderBudget = await storage.get<number>(PROVIDER_BUDGET)
+  const providerRemaining = storedProviderBudget === undefined ? Math.floor(Math.max(0, credits) * 7 / 10) : storedProviderBudget
+  const subscriptionActive = active(subscription, now)
+  const admission = (model: GenerationModel): { allowed: boolean; reason?: AdmissionFailureCode } => {
+    const blocked = (reason: AdmissionFailureCode) => ({ allowed: false, reason })
+    if (credits < 0 || billingHold === true) return blocked('BILLING_REVIEW_REQUIRED')
+    if (model === 'astra' && (!subscriptionActive || !modelAllowed(plan, 'astra') || (plan === 'creator' && !astraEnabled))) return blocked('ASTRA_PLAN_REQUIRED')
+    if (model === 'astra' && plan === 'creator' && used >= 6) return blocked('CREATOR_ASTRA_PERIOD_LIMIT')
+    const paid = subscriptionActive || credits > 0
+    if (paid && credits - reserved < MODEL_ECONOMICS[model].creditsPerGeneration) return blocked('CREDITS_EXHAUSTED')
+    if (!paid && model === 'astra') return blocked('FREE_SOL_ONLY')
+    if (!paid && free.fast.length >= 2) return blocked('FAST_DAILY_LIMIT')
+    if (paid && !Number.isSafeInteger(providerRemaining)) return blocked('ACCOUNT_ADMISSION_UNAVAILABLE')
+    if (paid && providerRemaining < MODEL_ECONOMICS[model].maxProviderCents) return blocked('PROVIDER_BUDGET_EXHAUSTED')
+    return { allowed: true }
+  }
   return {
+    generationAdmission: { luna: admission('luna'), sol: admission('sol'), astra: admission('astra') },
     creatorAstra: { active: astraEnabled && active(subscription, now), remaining: Math.max(0, 6 - used), maximum: 6, recommended: 2, pointsForTwo: 500 },
     credits, reservedCredits: reserved, availableCredits: credits - reserved, generationCost: 50, generationCosts: { sol: 50, astra: 250, luna: 15 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
     subscription: { active: active(subscription, now), plan, expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
