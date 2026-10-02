@@ -166,7 +166,7 @@ export default function ShopPage() {
       const restored = client.restore()
       coordinator.current = client
       if (restored) {
-        setSaved(restored); setPrompt(restored.prompt); setDeliverable('detailed-mesh')
+        setSaved(restored); setPrompt(restored.prompt)
         setProfile(restored.generationProfile || 'standard')
         if (restored.generationProfile === FAST_DRAFT_PROFILE) setTextureLimit(2048)
         setJob({ id: restored.receipt.id, state: 'pending', detail: JOB_DETAILS.pending })
@@ -175,7 +175,7 @@ export default function ShopPage() {
         void client.recoverCurrent().then(recovered => {
           if (closed) return
           if (recovered) {
-            setSaved(recovered.saved); setPrompt(recovered.saved.prompt); setDeliverable('detailed-mesh')
+            setSaved(recovered.saved); setPrompt(recovered.saved.prompt)
             setProfile(recovered.saved.generationProfile || 'standard')
             setJob(recovered.job)
             setNotice('Recovered your active cloud model. No new generation or point charge was started.')
