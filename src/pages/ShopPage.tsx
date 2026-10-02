@@ -16,12 +16,14 @@ import { prepareStudioPhoto } from '../lib/studioPhotos'
 import { listStudioModels, readStudioModel, saveStudioModel, type StudioArchiveEntry } from '../lib/studioArchive'
 import { mayExportCurrentJob, type StudioPreviewIdentity } from '../lib/studioView'
 import { canSubmitNewDraft } from '../lib/studioDraft'
+import { useAccount } from '../lib/account'
+import { useGenerationQuote } from '../lib/useGenerationQuote'
 import { inspectGLB } from '../lib/glb'
 import { DEFAULT_DIMENSIONS_MM, type ClientDimensions } from '../lib/shopManufacturing'
 import { type GenerationResult } from '../lib/blueprint'
 import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
-import { isAdmissionFailureCode } from '../lib/generationAdmission'
-import { BlueprintClient } from '../lib/blueprintClient'
+import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../lib/generationAdmission'
+import { BlueprintClient, type BlueprintRecovery } from '../lib/blueprintClient'
 import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, BLUEPRINT_REFERENCE_BYTES, blueprintDelivery, blueprintReferences, type BlueprintDelivery } from '../lib/blueprintRequest'
 import './ShopPage.css'
 
@@ -38,7 +40,8 @@ const REASONS: Record<string, string> = {
 const terminal = (state?: string) => ['succeeded', 'failed', 'cancelled'].includes(state || '')
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob), link = document.createElement('a')
-  link.href = url; link.download = name; link.click()
+  link.href = url; link.download = name; link.hidden = true
+  document.body.appendChild(link); link.click(); link.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 type Preview = StudioPreviewIdentity & { blob: Blob; url: string; warning: string }
@@ -55,6 +58,8 @@ async function checkGenerationReady(fetcher: typeof fetch = fetch) {
 /** Draft inputs are separate from the immutable submitted job and its result. */
 export default function ShopPage() {
   const location = useLocation()
+  const { user, loading: accountLoading } = useAccount()
+  const accountOwner = user?.id ?? null
   const pendingCharacter = useRef(typeof location.state?.worldPrompt === 'string' && location.state.worldPrompt.length <= BLUEPRINT_PROMPT_LIMIT ? location.state.worldPrompt : '')
   const coordinator = useRef<StudioCoordinator | null>(null)
   const mounted = useRef(false), epoch = useRef(0), objectUrl = useRef('')
@@ -68,7 +73,8 @@ export default function ShopPage() {
   const [photos, setPhotos] = useState<StudioPhoto[]>([])
   const [deliverable, setDeliverable] = useState<BlueprintDelivery>('procedural-blueprint')
   const blueprintClient = useRef<BlueprintClient | null>(null)
-  const [recovery, setRecovery] = useState<{ id: string; state: string } | null>(null)
+  const [recoveryOwner, setRecoveryOwner] = useState<{ id: string; owner: string } | null>(null)
+  const [recovery, setRecovery] = useState<BlueprintRecovery | null>(null)
   const [owner, setOwner] = useState('')
   const [status, setStatus] = useState<StudioStatus | null>(null)
   const [checking, setChecking] = useState(false)
@@ -77,6 +83,9 @@ export default function ShopPage() {
   const [saved, setSaved] = useState<SavedStudioJob | null>(null)
   const [job, setJob] = useState<StudioJob | null>(null)
   const [cloudChecking, setCloudChecking] = useState(true)
+  const [discoveredOwner, setDiscoveredOwner] = useState<string | null>(null)
+  const [recoveryError, setRecoveryError] = useState('')
+  const [serviceError, setServiceError] = useState('')
   const [retry, setRetry] = useState(0)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState('')
@@ -99,6 +108,10 @@ export default function ShopPage() {
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
   const detailed = blueprintDelivery({ prompt, deliverable }, photos.length) === 'detailed-mesh'
   const detailedProblem = detailed ? (fast ? 'Select Astra for a detailed model. The selected model will never be upgraded automatically.' : detailedUnavailable(status, photos.length)) : null
+  const accountQuote = useGenerationQuote(fast ? cheapModel : 'astra', busy, detailed)
+  const accountReady = accountQuote.quote.state === 'credits' || accountQuote.quote.state === 'free'
+  const recoveryAccountMismatch = !!accountOwner && !!saved && recoveryOwner?.id === saved.receipt.id && recoveryOwner.owner !== accountOwner
+  const cloudRecoveryPending = cloudChecking || accountLoading || recoveryAccountMismatch || (!!accountOwner && !saved && discoveredOwner !== accountOwner)
   const photoLimit = DETAILED_REFERENCE_LIMIT
   const updateCredits = () => { if (typeof window.dispatchEvent === 'function') window.dispatchEvent(new Event('worldifact:balance-changed')) }
 
@@ -116,6 +129,7 @@ export default function ShopPage() {
       await client.dismissCurrent(owner)
       clearPreview()
       setSaved(null)
+      setDiscoveredOwner(accountOwner)
       setJob(null)
       setSeconds(0)
       setError('')
@@ -142,24 +156,22 @@ export default function ShopPage() {
   const refresh = async () => {
     const flags = operations.current
     if (flags.status) return
-    flags.status = true; setChecking(true)
+    flags.status = true; setChecking(true); accountQuote.refresh()
     const [studioCheck, generationCheck] = await Promise.allSettled([checkStudio(fetch, owner), checkGenerationReady(fetch)])
     if (mounted.current) {
       if (studioCheck.status === 'fulfilled') applyStatus(studioCheck.value)
       else setStatus(null)
       if (generationCheck.status === 'fulfilled') { setSolReady(generationCheck.value.sol); setAstraReady(generationCheck.value.astra) }
       else { setSolReady(false); setAstraReady(false) }
-      if (studioCheck.status === 'fulfilled' || (generationCheck.status === 'fulfilled' && (generationCheck.value.sol || generationCheck.value.astra))) setError('')
-      else setError('Generation services are temporarily unavailable. Your draft is preserved.')
+      if (studioCheck.status === 'fulfilled' || (generationCheck.status === 'fulfilled' && (generationCheck.value.sol || generationCheck.value.astra))) setServiceError('')
+      else setServiceError('Generation services are temporarily unavailable. Your draft is preserved.')
     }
     flags.status = false
     if (mounted.current) setChecking(false)
   }
   useEffect(() => {
     mounted.current = true
-    let closed = false, recoveryFailures = 0
-    let recoveryTimer: ReturnType<typeof setTimeout> | undefined
-    const recoveryAbort = new AbortController()
+    let closed = false
     const version = epoch, urls = objectUrl, flags = operations.current
     try {
       const directClient = new BlueprintClient(window.localStorage, fetch)
@@ -175,38 +187,10 @@ export default function ShopPage() {
         if (restored.generationProfile === FAST_DRAFT_PROFILE) setTextureLimit(2048)
         setJob({ id: restored.receipt.id, state: 'pending', detail: JOB_DETAILS.pending })
         setCloudChecking(false)
-      } else {
-        const recoverCloud = async () => {
-          try {
-            const recovered = await client.recoverCurrent('', recoveryAbort.signal)
-            if (closed) return
-            if (recovered) {
-              setSaved(recovered.saved); setPrompt(recovered.saved.prompt)
-              setProfile(recovered.saved.generationProfile || 'standard')
-              setDeliverable(recovered.saved.generationProfile === FAST_DRAFT_PROFILE ? 'procedural-blueprint' : 'detailed-mesh')
-              setJob(recovered.job)
-              setNotice('Recovered your active cloud model. No new generation or point charge was started.')
-            } else if (pendingCharacter.current) {
-              setPrompt(pendingCharacter.current)
-              setNotice('Character brief copied from your private world. Review model and points before generating.')
-              pendingCharacter.current = ''
-            }
-            setError('')
-            setCloudChecking(false)
-          } catch (e) {
-            if (closed) return
-            setError(e instanceof Error ? e.message : 'Cloud recovery is temporarily unavailable. No new generation was started.')
-            // An unavailable lookup is not proof that no cloud job exists.
-            // Keep the sample and paid submission blocked while retrying GET.
-            recoveryFailures++
-            recoveryTimer = setTimeout(recoverCloud, Math.min(120_000, 5_000 * (2 ** Math.min(recoveryFailures, 4))))
-          }
-        }
-        void recoverCloud()
       }
     } catch (e) {
       coordinator.current = null
-      setError(e instanceof Error ? e.message : 'Recovery storage is unavailable. Generation is paused.')
+      setRecoveryError(e instanceof Error ? e.message : 'Recovery storage is unavailable. Generation is paused.')
     }
     flags.status = true; setChecking(true)
     Promise.allSettled([checkStudio(), checkGenerationReady()]).then(([studioCheck, generationCheck]) => {
@@ -216,11 +200,56 @@ export default function ShopPage() {
       if (generationCheck.status === 'fulfilled') { setSolReady(generationCheck.value.sol); setAstraReady(generationCheck.value.astra) }
       else { setSolReady(false); setAstraReady(false) }
       if (studioCheck.status === 'rejected' && !(generationCheck.status === 'fulfilled' && (generationCheck.value.sol || generationCheck.value.astra)))
-        setError('The generation services are unavailable. You can still prepare your description and use the local DEMO preview.')
+        setServiceError('The generation services are unavailable. You can still prepare your description and use the local DEMO preview.')
     }).finally(() => { if (!closed) { flags.status = false; setChecking(false) } })
     listStudioModels().then(value => { if (!closed) setArchive(value) }).catch(() => {})
-    return () => { closed = true; recoveryAbort.abort(); if (recoveryTimer) clearTimeout(recoveryTimer); mounted.current = false; version.current++; if (urls.current) URL.revokeObjectURL(urls.current) }
+    return () => { closed = true; mounted.current = false; version.current++; if (urls.current) URL.revokeObjectURL(urls.current) }
   }, [])
+
+  useEffect(() => {
+    const client = coordinator.current
+    if (accountLoading || !client) return
+    if (!accountOwner) {
+      setCloudChecking(false)
+      setDiscoveredOwner(null)
+      setRecoveryError('Sign in to recover your account models and check generation availability. Your draft and saved receipts are preserved.')
+      return
+    }
+    if (client.current) { setCloudChecking(false); setRecoveryError(''); return }
+    let closed = false, failures = 0
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const controller = new AbortController()
+    setCloudChecking(true); setRecoveryError('')
+    const recoverCloud = async () => {
+      try {
+        const recovered = await client.recoverCurrent('', controller.signal)
+        if (closed) return
+        if (recovered) {
+          setSaved(recovered.saved); setPrompt(value => value || recovered.saved.prompt)
+          setProfile(recovered.saved.generationProfile || 'standard')
+          setDeliverable(recovered.saved.generationProfile === FAST_DRAFT_PROFILE ? 'procedural-blueprint' : 'detailed-mesh')
+          setJob(recovered.job)
+          setNotice('Recovered your active cloud model. No new generation or point charge was started.')
+        } else if (pendingCharacter.current) {
+          const characterPrompt = pendingCharacter.current
+          setPrompt(value => value || characterPrompt)
+          setNotice('Character brief copied from your private world. Review model and points before generating.')
+          pendingCharacter.current = ''
+        }
+        setRecoveryError(''); setDiscoveredOwner(accountOwner); setCloudChecking(false)
+      } catch (e) {
+        if (closed) return
+        const authRequired = e && typeof e === 'object' && 'status' in e && e.status === 401
+        setRecoveryError(authRequired ? 'Sign in again to recover your account models. No new generation was started; your draft and saved receipts are preserved.' : e instanceof Error ? e.message : 'Cloud recovery is temporarily unavailable. No new generation was started.')
+        // Health success cannot clear a failed account lookup. Retry only GET;
+        // unavailable discovery never unlocks a new paid submission.
+        failures++
+        timer = setTimeout(recoverCloud, Math.min(120_000, 5_000 * (2 ** Math.min(failures, 4))))
+      }
+    }
+    void recoverCloud()
+    return () => { closed = true; controller.abort(); if (timer) clearTimeout(timer) }
+  }, [accountLoading, accountOwner])
 
   const loadResult = async (selected: SavedStudioJob, known?: StudioJob) => {
     const flags = operations.current, client = coordinator.current
@@ -252,7 +281,12 @@ export default function ShopPage() {
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
   useEffect(() => {
-    if (!saved || !coordinator.current) return
+    if (!saved || !coordinator.current || accountLoading || !accountOwner) return
+    if (recoveryOwner?.id === saved.receipt.id && recoveryOwner.owner !== accountOwner) {
+      setRecoveryError('Sign in to the original account to recover this model. The same receipt and current preview are preserved.')
+      return
+    }
+    if (recoveryOwner?.id !== saved.receipt.id) setRecoveryOwner({ id: saved.receipt.id, owner: accountOwner })
     const selected = saved, client = coordinator.current
     let stopped = false, timer: ReturnType<typeof setTimeout> | undefined, failures = 0
     const poll = async () => {
@@ -293,7 +327,7 @@ export default function ShopPage() {
     return () => { stopped = true; if (timer) clearTimeout(timer) }
     // Draft edits must not restart the selected job's request loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saved?.receipt.id, retry])
+  }, [saved?.receipt.id, retry, accountLoading, accountOwner, recoveryOwner])
   useEffect(() => {
     if (!saved || terminal(job?.state) || job?.reconciliationRequired) return
     const tick = () => setSeconds(Math.max(0, Math.floor((Date.now() - Date.parse(saved.startedAt)) / 1000)))
@@ -328,7 +362,8 @@ export default function ShopPage() {
   const generate = async (event: React.FormEvent) => {
     event.preventDefault()
     const flags = operations.current, directClient = blueprintClient.current
-    if (cloudChecking || flags.submit || flags.photos || flags.artifact || !previousFinished || !directClient) return
+    if (cloudRecoveryPending || flags.status || flags.submit || flags.photos || flags.artifact || !previousFinished || !directClient) return
+    if (!accountReady) { setError(accountQuote.quote.message); return }
     if (recovery?.state === 'pending') { setError('Recover the pending blueprint request before starting another model.'); return }
     if (detailed) {
       const client = coordinator.current
@@ -411,8 +446,14 @@ export default function ShopPage() {
     const flags = operations.current
     if (flags.artifact || !saved || !mayExportCurrentJob(saved.receipt.id, job?.state, preview) || !coordinator.current) return
     if (job?.downloadAllowed === false || (saved.generationProfile === FAST_DRAFT_PROFILE && !['model', 'blend'].includes(format))) return
-    flags.artifact = true; setArtifactBusy(true)
-    try { const blob = await coordinator.current.artifact(format, saved); download(blob, `WORLDIFACT-${saved.receipt.id}.${format === 'pbr' ? 'textures.zip' : format === 'model' ? 'glb' : format}`) }
+    flags.artifact = true; setArtifactBusy(true); setError('')
+    try {
+      // A loaded current-job GLB has already passed the rights and identity
+      // checks. Download those exact bytes without spending another GET slot.
+      const blob = format === 'model' && preview?.origin === 'job' && preview.id === saved.receipt.id && preview.blob.size
+        ? preview.blob : await coordinator.current.artifact(format, saved)
+      download(blob, `WORLDIFACT-${saved.receipt.id}.${format === 'pbr' ? 'textures.zip' : format === 'model' ? 'glb' : format}`)
+    }
     catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'This export is not available on the connected worker.') }
     finally { flags.artifact = false; if (mounted.current) setArtifactBusy(false) }
   }
@@ -425,17 +466,19 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = !cloudChecking && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
+  const canGenerate = accountReady && !cloudRecoveryPending && !checking && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
     (detailed ? !detailedProblem && prompt.length <= (status?.promptMaxLength ?? 0) : fast ? fastAvailable && !photos.length && purpose !== 'terrain' : astraReady && photos.length <= BLUEPRINT_REFERENCE_LIMIT)
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
-  const activeReady = detailed ? !detailedProblem : fast ? fastAvailable : astraReady
+  const runtimeReady = detailed ? !detailedProblem : fast ? fastAvailable : astraReady
+  const activeReady = runtimeReady && accountReady && !cloudRecoveryPending
 
   return <main className="portal-page native-shop">
     <header className="native-shop-nav"><Link to="/world" className="native-shop-back">← Back to WORLDIFAKT</Link><strong>AI Shop</strong><Link to="/account/models">My models</Link><Link to="/account/credits">Account & credits</Link><nav aria-label="World portals">{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></header>
     <section className="native-shop-workspace" aria-label="Create and preview a 3D product">
       <div className="native-shop-preview">
         <span className="eyebrow">3D PREVIEW</span>
-        {cloudChecking && !saved ? <div className="native-shop-progress" role="status"><h2>Checking your cloud job…</h2><p>WORLDIFACT is checking whether this account already has a model in progress. This never starts a new generation or point charge.</p></div> : fastResult ? <>
+        {(busy || recovery?.failureCode) && (preview || fastResult || demoPrompt) && <p role="status"><strong>Previous preview preserved.</strong> {recovery?.failureCode ? <>The rejected request did not create this model. {blueprintAdmissionDetail(recovery.failureCode)}</> : 'The current request does not have a new preview yet.'}</p>}
+        {cloudRecoveryPending && !saved ? <div className="native-shop-progress" role="status"><h2>{accountLoading ? 'Checking your account…' : recoveryError ? 'Cloud recovery needs attention' : 'Checking your cloud job…'}</h2><p>{recoveryError || 'WORLDIFACT is checking whether this account already has a model in progress. This never starts a new generation or point charge.'}</p></div> : fastResult ? <>
           <LiveSolPreview result={fastResult} prompt={fastPrompt} />
           <small hidden data-testid="fast-result-description">{fastResult.assetSpec?.summary ?? fastResult.blueprint.title}</small>
           {dimensionsEnabled && <p className="shop-preview-dimensions">FAST draft target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
@@ -459,6 +502,10 @@ export default function ShopPage() {
           {job?.state === 'succeeded' && job.downloadAllowed === false && <Link to="/account/credits">View subscription & credits</Link>}
           {!terminal(job?.state) && !job?.reconciliationRequired && <p>Elapsed: {Math.floor(seconds / 60)}m {seconds % 60}s</p>}
           {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={() => void dismissFinishedJob()}>Start a new model</button>}
+        </div> : busy && !recovery ? <div className="native-shop-progress" role="status"><h2>Submitting your blueprint request…</h2><p>No result for this request is displayed yet. Keep this page open while its status is confirmed.</p></div> : recovery ? <div className="native-shop-progress" role="status">
+          <h2>{recovery.failureCode ? 'Generation was not started' : recovery.state === 'failed' ? 'Previous blueprint attempt did not finish' : recovery.state === 'completed' ? 'Your blueprint result can be recovered' : 'Checking whether your blueprint request was accepted…'}</h2>
+          <p>{recovery.failureCode ? blueprintAdmissionDetail(recovery.failureCode) : 'No result for this request is displayed. Recover the same request below; this does not start another paid generation.'}</p>
+          <p>Request ID: {recovery.id}{recovery.failureCode && <> · Reason: {recovery.failureCode}</>}</p>
         </div> : <>
           {!sampleMissing ? <img className="native-shop-sample" src={`${EXAMPLE_ORIGIN}/assets/model-${sampleView}.webp`} alt="Example 3D product preview" referrerPolicy="no-referrer" onError={() => setSampleMissing(true)} /> : <p>The example preview is temporarily unavailable. You can still create your own model.</p>}
           <div className="native-shop-views">{['front', 'left', 'back', 'face'].map(view => <button key={view} type="button" aria-pressed={sampleView === view} onClick={() => { setSampleView(view); setSampleMissing(false) }}>{view === 'left' ? 'Left side' : view[0].toUpperCase() + view.slice(1)}</button>)}</div>
@@ -512,20 +559,20 @@ export default function ShopPage() {
             <option value="procedural-blueprint">Procedural concept only — simple shapes, not a faithful reconstruction</option>
             <option value="detailed-mesh">Detailed 3D model — Astra + Blender</option>
           </select>
-          {detailed && <p className={detailedProblem ? "native-shop-error" : "shop-beta-note"} role="status">{detailedProblem || "Astra/Blender is ready for one explicit model request. All attached views will be used. Output quality must be reviewed; uploading or refreshing never starts a paid job."}</p>}
+          {detailed && <p className={detailedProblem ? "native-shop-error" : "shop-beta-note"} role="status">{detailedProblem || (!accountReady ? accountQuote.quote.message : cloudRecoveryPending ? recoveryError || 'Checking your account models before a new request can start.' : "Astra/Blender is ready for one explicit model request. All attached views will be used. Output quality must be reviewed; uploading or refreshing never starts a paid job.")}</p>}
           <p id="studio-prompt-count" role="status">{prompt.length}/{BLUEPRINT_PROMPT_LIMIT} characters. Full text is preserved; shorten it before submitting when over the limit.</p>
-          {recovery && <div role="status"><p>Request {recovery.id} · {recovery.state}. Recovering it does not start another paid generation.</p><button type="button" disabled={busy} onClick={() => void recoverBlueprint()}>Recover same request · no extra charge</button>{recovery.state !== 'pending' && <button type="button" disabled={busy} onClick={newBlueprintAttempt}>Start a new paid attempt</button>}</div>}
-          {detailedProblem ? <p><strong>No points reserved — model generation has not started.</strong></p> : <GenerationCostNotice model={fast ? cheapModel : 'astra'} busy={busy} detailed={detailed} />}
+          {recovery && <div role="status"><p>Request {recovery.id} · {recovery.state}. Recovering it does not start another paid generation.</p>{recovery.failureCode && <p>{blueprintAdmissionDetail(recovery.failureCode)}</p>}<button type="button" disabled={busy} onClick={() => void recoverBlueprint()}>Recover same request · no extra charge</button>{recovery.state !== 'pending' && <button type="button" disabled={busy} onClick={newBlueprintAttempt}>Start a new paid attempt</button>}</div>}
+          {detailedProblem && <p><strong>No points reserved — model generation has not started.</strong></p>}<GenerationCostNotice model={fast ? cheapModel : 'astra'} busy={busy} detailed={detailed} accountQuote={accountQuote} />
           <label htmlFor="studio-prompt">Describe your model · Prompt</label><textarea ref={promptInput} id="studio-prompt" value={prompt} aria-describedby="studio-prompt-count" aria-invalid={prompt.length > BLUEPRINT_PROMPT_LIMIT} rows={6} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="For example: a compact MCC cabinet procedural concept with white panels and turquoise controls." required />
           <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add ASTRA references · JPG / PNG / WebP · ${photos.length}/${photoLimit}`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= photoLimit} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Up to four reference views for a detailed model: front / left / right / back. One, two or three are also accepted. Every accepted view is transmitted. Combined prepared size: {BLUEPRINT_REFERENCE_BYTES / 1048576} MB. Sol/Luna remain text-only.</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy} />
           <button className="native-shop-generate" type="submit" disabled={!canGenerate}>{busy ? 'Uploading model request…' : detailed ? 'Generate Astra/Blender model · 250 points' : fast ? `Generate ${MODEL_CATALOG[cheapModel].label} draft · ${MODEL_CATALOG[cheapModel].creditsPerGeneration} points or funded free allowance` : 'Generate GPT-6 Astra blueprint · 250 points'}</button><small>Free: up to 2 shared Sol/Luna drafts per rolling 24 hours when funded capacity is available. Paid Luna uses 15 points, Sol 50 and Astra 250. Astra requires eligible membership and verified runtime activation. There is no free Astra fallback. Manufacturing and delivery are separate.</small>
         </form>
-        <div className="shop-customer-status" role="status"><strong>{checking ? 'Checking availability…' : detailed ? activeReady ? 'Astra/Blender model generation available' : 'Astra/Blender awaiting readiness' : activeReady ? fast ? 'FAST Sol generation available' : 'ASTRA blueprint generation available' : 'Generation temporarily unavailable'}</strong><p>{detailed ? detailedProblem || 'Your explicit request starts one signed model job. Recovery and downloads never start another generation.' : activeReady ? fast ? 'FAST creates a generated Sol specification and lightweight procedural 3D draft.' : 'ASTRA creates a validated premium specification and a procedural downloadable GAME GLB in one bounded call.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && !detailed && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking} onClick={() => void refresh()}>Refresh availability</button></div>
+        <div className="shop-customer-status" role="status"><strong>{checking || accountQuote.checking ? 'Checking availability…' : !accountReady ? accountQuote.quote.state === 'signin' ? 'Sign in to generate' : 'Generation is unavailable for this account' : cloudRecoveryPending ? 'Resolve cloud recovery before generating' : detailed ? activeReady ? 'Astra/Blender model generation available' : 'Astra/Blender awaiting readiness' : activeReady ? fast ? 'FAST Sol generation available' : 'ASTRA blueprint generation available' : 'Generation temporarily unavailable'}</strong><p>{!accountReady ? accountQuote.quote.message : cloudRecoveryPending ? recoveryError || 'Checking for an existing model before another generation can start.' : detailed ? detailedProblem || 'Your explicit request starts one signed model job. Recovery and downloads never start another generation.' : activeReady ? fast ? 'FAST creates a generated Sol specification and lightweight procedural 3D draft.' : 'ASTRA creates a validated premium specification and a procedural downloadable GAME GLB in one bounded call.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && !detailed && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking || accountQuote.checking} onClick={() => void refresh()}>Refresh availability</button></div>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}
-        {error && <p className="native-shop-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
+        {recoveryError && <p className="native-shop-error" role="alert">{recoveryError}</p>}{serviceError && <p className="native-shop-error" role="alert">{serviceError}</p>}{error && <p className="native-shop-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
         <p className="shop-beta-note"><strong>Experimental beta.</strong> Manufacturing requires a real production review before an order can be completed. Delivery times can change if the supplier requests another safety or geometry check.</p>
       </div>
     </section>

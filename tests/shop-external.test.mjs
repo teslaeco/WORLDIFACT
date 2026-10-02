@@ -31,7 +31,7 @@ test('native Shop presents a customer creation flow with cart and no visible eng
 
 test('initial render checks cloud recovery before exposing any example preview or pre-purchase download', async () => {
   const html = await renderShopMarkup()
-  assert.match(html, /Checking your cloud job/)
+  assert.match(html, /Checking your account/)
   assert.doesNotMatch(html, /Example 3D product preview|assets\/model-[a-z]+\.webp/)
   assert.doesNotMatch(html, />Download GLB \+ embedded materials/)
   assert.doesNotMatch(html, /Model ID:/)
@@ -40,9 +40,9 @@ test('initial render checks cloud recovery before exposing any example preview o
 test('unavailable generation is customer-friendly and does not expose quota diagnostics', async () => {
   const html = await renderShopMarkup()
   assert.match(html, /type="submit" disabled=""/)
-  assert.match(html, /Generation temporarily unavailable/)
+  assert.match(html, /Checking availability/)
   assert.match(html, /Preview DEMO · no API cost/)
-  assert.match(html, /local DEMO preview/)
+  assert.match(html, /Checking your account before generation/)
   assert.match(html, /Eligible free Sol or Luna drafts include GLB downloads/)
   assert.match(html, /Experimental beta/)
   assert.doesNotMatch(html, /blocked by the exhausted pilot quota/)

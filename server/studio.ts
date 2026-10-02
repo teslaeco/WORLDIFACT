@@ -411,7 +411,9 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       // spinning forever or starting another paid generation.
       const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', match[1], !!user, user?.id)
       const access = user ? await userJobAccess(env, user.id, auth.id) : null
-      await limit(request, env, match[2] ? 'artifact' : `poll:${auth.id}`)
+      // A preview/model read must not consume another format's download slot.
+      // The verified receipt and fixed route grammar bound each independent key.
+      await limit(request, env, match[2] ? `artifact:${auth.id}:${match[2].replace('exports/', '')}` : `poll:${auth.id}`)
       if (match[2]) {
         // Legacy/operator mode has no account ledger and keeps its historical
         // signed-receipt artifact behavior unchanged.

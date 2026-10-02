@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { StudioCoordinator, type ReceiptStore, type SavedStudioJob } from '../lib/studioClient'
-import { validateStudioInput, type StudioJob } from '../lib/studioProtocol'
+import { STUDIO_POLL_MS, validateStudioInput, type StudioJob } from '../lib/studioProtocol'
 import { saveStudioModel } from '../lib/studioArchive'
 import { listWorldAssets, storeWorldAsset, type WorldAsset } from '../lib/privateWorldAssets'
 import { characterGenerationPrompt } from '../lib/editorTools'
@@ -40,13 +40,13 @@ export default function WorldCharacterStudio(p:Props){
   }
   useEffect(()=>{
     if(!saved||!client.current)return
-    const api=client.current,record=saved;let closed=false,attempts=0,failures=0,timer:ReturnType<typeof setTimeout>|undefined
-    async function poll(){if(closed)return;if(lock.current){timer=setTimeout(poll,4500);return}try{const value=await api.poll(record);if(closed)return;setJob(value);failures=0
-      if(value.reconciliationRequired){setNotice('This job needs reconciliation. No paid retry was started.');return}
+    const api=client.current,record=saved;let closed=false,failures=0,timer:ReturnType<typeof setTimeout>|undefined
+    async function poll(){if(closed)return;if(lock.current){timer=setTimeout(poll,STUDIO_POLL_MS);return}try{const value=await api.poll(record);if(closed)return;setJob(value);setError('');failures=0
+      if(value.reconciliationRequired){setNotice(value.detail);if(value.state==='succeeded'&&value.downloadAllowed){void loadResult(record,value);return}timer=setTimeout(poll,60_000);return}
       if(value.state==='succeeded'){void loadResult(record,value);return}
       if(terminal(value.state)){setNotice('The character job did not complete. The prior character and recovery receipt are preserved.');return}
-    }catch(e){if(closed)return;failures++;setError(e instanceof Error?e.message:'Status check failed.');if(failures>=4)return}
-      if(++attempts>=160){setNotice('Status polling paused. Recover this job to check again without buying another generation.');return}timer=setTimeout(poll,4500)
+    }catch(e){if(closed)return;failures++;setError(e instanceof Error?e.message:'Status check failed.');timer=setTimeout(poll,Math.min(120_000,5_000*(2**Math.min(failures,5))));return}
+      timer=setTimeout(poll,STUDIO_POLL_MS)
     }timer=setTimeout(poll,800);return()=>{closed=true;if(timer)clearTimeout(timer)}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[saved?.receipt.id,retry])
@@ -61,7 +61,7 @@ export default function WorldCharacterStudio(p:Props){
   return <section className="world-character-studio" aria-label="Character studio">
     <span className="private-eyebrow">YOUR CHARACTER</span><h2>A character in your world</h2><p>Your procedural preview is visible in Edit and Play. Clothes, hair and colors follow supported description presets; it is not an AI-generated detailed mesh.</p>
     <button onClick={p.onFocus}>Focus character</button><label>Use a library GLB as character<select value={p.world.character.assetId??''} disabled={p.disabled||busy} onChange={e=>p.onSetAsset(e.target.value||null)}><option value="">Procedural preview · no AI cost</option>{files.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
-    <details open><summary>Generate a detailed character here</summary><p>Astra → existing Codex runner → Blender MCP → your GLB. The existing account, job receipt and spend guards remain authoritative; no unmetered agent loop.</p><GenerationCostNotice model="astra" busy={busy}/><button className="private-primary" disabled={p.disabled||busy||!client.current||quote?.state!=='credits'||!!saved&&!terminal(job?.state)} onClick={()=>void generate()}>{busy?'Working on this character…':'Generate character · 250 points'}</button>{quote?.state!=='credits'&&<p className="private-fine">{quote?.message??'Checking detailed generation availability. No request has been bought.'}</p>}<button disabled={busy} onClick={()=>void refresh()}>Refresh availability</button></details>
+    <details open><summary>Generate a detailed character here</summary><p>Astra → existing Codex runner → Blender MCP → your GLB. The existing account, job receipt and spend guards remain authoritative; no unmetered agent loop.</p><GenerationCostNotice model="astra" busy={busy} detailed/><button className="private-primary" disabled={p.disabled||busy||!client.current||quote?.state!=='credits'||!!saved&&!terminal(job?.state)} onClick={()=>void generate()}>{busy?'Working on this character…':'Generate character · 250 points'}</button>{quote?.state!=='credits'&&<p className="private-fine">{quote?.message??'Checking detailed generation availability. No request has been bought.'}</p>}<button disabled={busy} onClick={()=>void refresh()}>Refresh availability</button></details>
     {saved&&<div className="private-proposal"><strong>Character job: {job?.state??'checking'}</strong><p>{job?.detail??'Receipt saved; waiting for server confirmation.'}</p><button disabled={busy} onClick={()=>job?.state==='succeeded'?void loadResult(saved,job):setRetry(v=>v+1)}>Recover this character job · no new generation</button></div>}
     {notice&&<p role="status">{notice}</p>}{error&&<p className="private-error" role="alert">{error}</p>}
     <p className="private-fine">Generated results are checked as GLB before import. Static models do not become rigged merely by selecting them; existing animation clips are reused where present.</p>
