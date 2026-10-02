@@ -1,56 +1,20 @@
-// One exact incident; GET-only, no customer/provider state mutation or raw-data output.
-import { inspectGLB } from '../src/lib/glb.ts'
-import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
-import { INDUSTRIAL_ELECTRICAL_PROFILE, REFERENCE_CHARACTER_PROFILE } from '../src/lib/studioProtocol.ts'
-import { createHash } from 'node:crypto'
-const JOB = '3c9187a7-937a-4227-bdab-27c99b938d03'
-const STATES = ['pending','queued','generating','retrying','building','succeeded','failed','cancelled']
-const signals = ['WORLDIFACT_ASTRA_COST_GUARD','FORGE_JOB_BUDGET','CODEX_TOOLS_MISSING','OPENAI_HTTP_429','OPENAI_HTTP_400','max_output_tokens','timeout','timed out','incomplete','reasoning','budget','quota','rate limit','insufficient','cancelled','aborted','out of memory','MemoryError','killed','GLB','Blender','Codex','Traceback','HTTP 400','HTTP 401','HTTP 403','HTTP 404','HTTP 409','HTTP 429','HTTP 500','HTTP 502','HTTP 503','output','invalid','schema','tool','credit','refusal','image','reference','authentication','connection','disconnect','completed','success','restart','unavailable','permission','disk','space','unrecognized','unexpected','broken pipe','closed','maximum','limit','context length']
-const secret = process.env.ORACLE_API_TOKEN
-const url = new URL(process.env.ORACLE_ENDPOINT || '')
-if (url.protocol !== 'https:' || !/^[a-z0-9-]+\.trycloudflare\.com$/.test(url.hostname) || url.username || url.password || url.port || url.pathname !== '/' || url.search || url.hash || !secret || secret.length < 32 || secret.length > 256 || /\s/.test(secret)) throw new Error('CONFIGURATION_INVALID')
-const headers = { Authorization: 'Bearer ' + secret }
-const sha = bytes => createHash('sha256').update(bytes).digest('hex')
-async function bounded(response, limit) {
- const reader=response.body?.getReader();if(!reader)throw new Error('EMPTY_BODY')
- const chunks=[];let length=0
- try {for(;;){const {value,done}=await reader.read();if(done)break;length+=value.length;if(length>limit)throw new Error('BODY_TOO_LARGE');chunks.push(Buffer.from(value))}return Buffer.concat(chunks)}finally{await reader.cancel().catch(()=>{})}
+// Existing CI route: authenticated health GET only, bounded allowlisted output.
+import { pathToFileURL } from 'node:url'
+export function evidence(h) {
+ const expected={ready:true,codexReady:true,provider:'openai',model:'gpt-6-astra',astraBudgetRevision:'astra-usd175-v1',astraBudgetMaxUsd:1.75,astraUsageSettlement:'authenticated-completed-only',worldifactCompletionPolicy:'worldifact-reference-completion-v1',worldifactCompletionMaxContinuations:1}
+ if(!h||typeof h!=='object'||Array.isArray(h)||Object.entries(expected).some(([k,v])=>h[k]!==v))throw Error('COMPLETION_RUNTIME_NOT_VERIFIED')
+ return {phase:'WORLDIFACT_COMPLETION_RUNTIME_VERIFIED',revision:expected.worldifactCompletionPolicy,maxContinuations:1,maxProviderUsd:1.75,paidRequests:0,qualityTest:'NOT_RUN'}
 }
-async function get(path, timeout=25000) {const started=Date.now();const response=await fetch(url.origin+path,{method:'GET',redirect:'error',headers,signal:AbortSignal.timeout(timeout)});return {response,started}}
-const report={checkedAt:new Date().toISOString(),scope:'single-reported-studio-job',paidRequests:0,mutations:0}
-try {
- const {response:healthResponse}=await get('/v1/health');report.healthHttp=healthResponse.status
- if(healthResponse.ok){const health=JSON.parse((await bounded(healthResponse,32768)).toString());report.runtime={};for(const key of ['ready','codexReady','photoInput','astraBudgetMaxUsd','connectorVersion','astraMaxOutputTokens','astraRequestTimeoutSeconds']) if(typeof health[key]==='boolean'||typeof health[key]==='number')report.runtime[key]=health[key]}
- else await healthResponse.body?.cancel()
- report.persistenceProbes=[]
- for(const [label,id] of [['published-character','a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781'],['published-building','e7e96cc3-8ad6-4ce8-996a-a4292407bc24']]){const {response}=await get('/v1/jobs/'+id);const item={label,http:response.status};if(response.ok){const row=JSON.parse((await bounded(response,65536)).toString());item.exactRecord=row.id===id;item.state=STATES.includes(row.state)?row.state:'UNKNOWN'}else await response.body?.cancel();report.persistenceProbes.push(item)}
- const {response,started}=await get('/v1/jobs/'+JOB);report.jobHttp=response.status;report.statusReadMs=Date.now()-started
- if(!response.ok){await response.body?.cancel();console.log(JSON.stringify(report,null,2));process.exit(0)}
- const job=JSON.parse((await bounded(response,65536)).toString());if(job.id!==JOB)throw new Error('JOB_IDENTITY_MISMATCH')
- const detail=[job.detail,job.error,job.errorCode,job.error_code].filter(x=>typeof x==='string').join('\n')
- report.job={state:STATES.includes(job.state)?job.state:'UNKNOWN',detailLength:detail.length,detailSha256:sha(detail),signals:signals.filter(x=>detail.toLowerCase().includes(x.toLowerCase()))}
- for(const key of ['createdAt','updatedAt','startedAt','completedAt','created_at','updated_at','started_at','finished_at'])if(typeof job[key]==='string'&&/^\d{4}-\d\d-\d\d[T ][\d:.+Z-]+$/.test(job[key]))report.job[key]=job[key]
- if(typeof job.progress==='number'&&Number.isFinite(job.progress))report.job.progress=job.progress
- const {response:qualityResponse}=await get('/v1/jobs/'+JOB+'/quality');report.qualityHttp=qualityResponse.status
- if(qualityResponse.ok){
-  const quality=JSON.parse((await bounded(qualityResponse,262144)).toString());report.quality={}
-  const pick=(source, fields)=>{const result={};if(!source||typeof source!=='object'||Array.isArray(source))return result;for(const field of fields){const v=source[field];if(typeof v==='boolean'||typeof v==='number'&&Number.isFinite(v)&&v>=0)result[field]=v}return result}
-  Object.assign(report.quality,pick(quality,['revision','hasModel','automaticQualityAccepted']))
-  for(const [key,values] of Object.entries({state:STATES,modelStatus:['none','draft','reviewed'],executor:['codex-mcp','astra-scene']}))if(values.includes(quality[key]))report.quality[key]=quality[key]
-  for(const [key,fields] of Object.entries({geometry:['vertices','triangles','objects'],timing:['total_seconds','ai_seconds','blender_seconds'],visualReview:['assessment_completed','accepted','reportedAccepted','hostAcceptanceBlocked','model_revision'],agent:['finished','accepted','reportedAccepted','revision','builds','blender_seconds'],acceptanceGate:['passed','referenceRequired','boardRequired'],agentUsage:['requests','request_count','input_tokens','output_tokens','total_tokens','cached_input_tokens','unknown_usage','completed','reserved_microusd','spent_microusd']}))report.quality[key]=pick(quality[key],fields)
-  const issues=Array.isArray(quality.visualReview?.issues)?quality.visualReview.issues.filter(x=>typeof x==='string'):[]
-  report.quality.stopClassification={cleanExitWithoutFinalReview:issues.includes('Codex nie zakonczyl oceny aktualnego eksportu.'),cliDiagnostic:issues.some(x=>x.startsWith('Codex: ')),genericCliError:issues.includes('Codex zakonczyl prace bledem. Zachowano diagnostyke i gotowy model, jezeli powstal.'),jobDeadline:issues.includes('Codex przekroczyl czas zlecenia.'),startupStall:issues.includes('Codex nie uruchomil polaczenia z modelem w 60 s. Nie rozpoczeto platnego zapytania.')}
-  const knownErrorTerms=['max_output_tokens','max output tokens','maximum output','output token','token limit','maximum context','context length','context_window_exceeded','content_filter','server_error','response.incomplete','incomplete_details','stream disconnected before completion','stream closed before','Incomplete model output','budget exhausted','tool call','model output was incomplete','reasoning','SyntaxError','TypeError','ReferenceError','NameError','JSONDecodeError','is not defined','not a function','invalid tool','Unknown tool','expected_revision','scene_json','required','wymagane pola','nieznany typ','nieprawidlowa','cancelled','aborted','stream','timeout','budget','limit','output','incomplete','tool_call','exec','model','unrecognized','unexpected','Tool not found','request failed','400','429','500','502','503'];const diagnostics=[...issues,...(Array.isArray(quality.agentTools?.calls)?quality.agentTools.calls.map(c=>typeof c?.error==='string'?c.error:''):[])].join('\n');report.quality.diagnosticSignals=knownErrorTerms.filter(term=>diagnostics.toLowerCase().includes(term.toLowerCase()))
-  const errorCodes=['WORLDIFACT_ASTRA_COST_GUARD','FORGE_JOB_BUDGET','FORGE_STREAM_INTERRUPTED','FORGE_UNCERTAIN_USAGE','CODEX_TOOLS_MISSING','FORGE_REPEATED_CODE_ERROR','FORGE_REPEATED_TOOL_ERROR','OPENAI_RESPONSE_FAILED','OPENAI_HTTP_400','OPENAI_HTTP_401','OPENAI_HTTP_403','OPENAI_HTTP_408','OPENAI_HTTP_409','OPENAI_HTTP_422','OPENAI_HTTP_429','OPENAI_HTTP_500','OPENAI_HTTP_502','OPENAI_HTTP_503','OPENAI_HTTP_504','insufficient_quota','rate_limit_exceeded'];report.quality.agentUsage.errorCode=quality.agentUsage?.error_code==null?null:errorCodes.includes(quality.agentUsage.error_code)?quality.agentUsage.error_code:'UNRECOGNIZED'
-  report.quality.agentTools=pick(quality.agentTools,['total_calls','failures','build_attempts','revision']);report.quality.agentExecution=pick(quality.agentExecution,['failed_calls'])
-  if(Array.isArray(quality.agentTools?.calls))report.quality.agentTools.calls=quality.agentTools.calls.slice(-40).map(c=>({...pick(c,['revision','build_attempts','attempt','elapsed_seconds']),tool:['get_modeling_contract','get_current_model','build_model','edit_model','inspect_render','finish_model'].includes(c?.tool)?c.tool:'OTHER',status:['started','completed','failed','succeeded'].includes(c?.status)?c.status:'OTHER'}))
-  if(['not_completed','needs_revision','reviewed'].includes(quality.visualReview?.status))report.quality.visualReview.status=quality.visualReview.status
-  if(Array.isArray(quality.visualReview?.inspected_views))report.quality.visualReview.inspectedViews=quality.visualReview.inspected_views.filter(v=>['front','side','back','face','three-quarter'].includes(v))
-  if(Array.isArray(quality.acceptanceGate?.failures))report.quality.acceptanceGate.failures=quality.acceptanceGate.failures.filter(v=>['portrait_structural_checks_incomplete','reference_manifest_invalid','reference_reconstruction_incomplete','board_geometry_or_materials_unverified'].includes(v))
- }else await qualityResponse.body?.cancel()
- if(job.state==='succeeded'){
-  const {response,started}=await get('/v1/jobs/'+JOB+'/model',180000);report.artifact={http:response.status,declaredBytes:Number(response.headers.get('content-length'))||null,mime:['model/gltf-binary','application/octet-stream'].includes(response.headers.get('content-type'))?response.headers.get('content-type'):'OTHER'}
-  if(response.ok){try{const bytes=await bounded(response,50*1024*1024);report.artifact.receivedBytes=bytes.length;report.artifact.elapsedMs=Date.now()-started;report.artifact.sha256=sha(bytes);const model=inspectGLB(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength));report.artifact.structuralChecks={standard:passesStudioStructuralQuality(model,'standard'),cabinet:passesStudioStructuralQuality(model,INDUSTRIAL_ELECTRICAL_PROFILE),character:passesStudioStructuralQuality(model,REFERENCE_CHARACTER_PROFILE)};report.artifact.inspection=model}catch(error){report.artifact.structureError=['Use a self-contained GLB between 20 bytes and 50 MB.','Invalid GLB 2 container.','Invalid GLB JSON chunk.','Only glTF 2.0 is supported.','Invalid GLB document structure.','External model resources are not allowed. Embed textures and buffers in the GLB.','Invalid mesh accessor.','Too many scene nodes for this preview.','Convert GPU instances to a bounded GAME copy before preview.','Invalid scene mesh reference.','Invalid scene hierarchy.','Invalid or repeated scene node.','Scene hierarchy is too deep or cyclic.','Scene hierarchy is too deep.','This preview supports up to 3 million triangles including instances. Use an optimized GAME copy.'].includes(error?.message)?error.message:'OTHER';report.artifact.failure=error?.name==='TimeoutError'?'TIMEOUT':error?.message==='BODY_TOO_LARGE'?'BODY_TOO_LARGE':'ARTIFACT_READ_OR_STRUCTURE_FAILED'}}else await response.body?.cancel()
- }
- console.log(JSON.stringify(report,null,2))
-}catch(error){report.failure=['CONFIGURATION_INVALID','EMPTY_BODY','BODY_TOO_LARGE','JOB_IDENTITY_MISMATCH'].includes(error?.message)?error.message:error?.name==='TimeoutError'?'TIMEOUT':'READ_ONLY_INSPECTION_FAILED';console.log(JSON.stringify(report,null,2));process.exitCode=1}
+export async function inspect(env,fetcher=fetch){
+ const u=new URL(env.ORACLE_ENDPOINT||'https://invalid.invalid'),token=env.ORACLE_API_TOKEN
+ if(u.protocol!=='https:'||!/^[a-z0-9]+(?:-[a-z0-9]+)*\.trycloudflare\.com$/.test(u.hostname)||u.username||u.password||u.port||u.pathname!=='/'||u.search||u.hash||typeof token!=='string'||token.length<32||token.length>256||/\s/.test(token))throw Error('CONFIGURATION_INVALID')
+ const response=await fetcher(u.origin+'/v1/health',{method:'GET',redirect:'error',headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(15000)})
+ if(!response.ok||!response.headers.get('content-type')?.startsWith('application/json')||Number(response.headers.get('content-length')||0)>32768){await response.body?.cancel();throw Error('COMPLETION_RUNTIME_NOT_VERIFIED')}
+ const reader=response.body?.getReader();if(!reader)throw Error('COMPLETION_RUNTIME_NOT_VERIFIED')
+ let size=0;const chunks=[]
+ try{for(;;){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>32768)throw Error('COMPLETION_RUNTIME_NOT_VERIFIED');chunks.push(Buffer.from(value))}return evidence(JSON.parse(Buffer.concat(chunks).toString()))}finally{await reader.cancel().catch(()=>{})}
+}
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
+ try{console.log(JSON.stringify({checkedAt:new Date().toISOString(),...await inspect(process.env)},null,2))}
+ catch{console.error(JSON.stringify({phase:'COMPLETION_RUNTIME_NOT_VERIFIED',paidRequests:0,qualityTest:'NOT_RUN'}));process.exitCode=1}
+}
