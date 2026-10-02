@@ -12,10 +12,11 @@ function store(): ReceiptStore {
 
 test('the exact receipt is retained before the only paid POST and double clicks are rejected', async () => {
   const storage = store(), calls: string[] = []
-  const fake = (async (url: string | URL | Request) => {
+  const fake = (async (url: string | URL | Request, init?: RequestInit) => {
     calls.push(String(url))
     if (String(url).endsWith('/prepare')) return Response.json(receipt)
     assert.equal(readSavedStudioJob(storage)?.receipt.ticket, receipt.ticket)
+    assert.equal(new Headers(init?.headers).get('X-WORLDIFACT-Idempotency-Key'), id)
     return Response.json({ job: { id, state: 'building' } })
   }) as typeof fetch
   const client = new StudioCoordinator(storage, fake)
@@ -39,7 +40,7 @@ test('lost POST response plus page reload resumes the same job with GET only', a
   const fake = (async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: String(url), method: init?.method ?? 'GET' })
     if (String(url).endsWith('/prepare')) return Response.json(receipt)
-    if (init?.method === 'POST') throw new TypeError('Simulated network loss')
+    if (init?.method === 'POST') { assert.equal(new Headers(init.headers).get('X-WORLDIFACT-Idempotency-Key'), id); throw new TypeError('Simulated network loss') }
     assert.equal(new Headers(init?.headers).get('X-WORLDIFACT-Job'), receipt.ticket)
     return Response.json({ job: { id, state: 'succeeded' } })
   }) as typeof fetch
@@ -52,6 +53,42 @@ test('lost POST response plus page reload resumes the same job with GET only', a
   assert.equal(calls.filter(c => c.url === '/api/studio/jobs' && c.method === 'POST').length, 1)
   assert.equal(calls.filter(c => c.method === 'GET').length, 2)
   assert.ok(calls.every(c => !c.url.includes(receipt.ticket)))
+})
+
+test('cloud recovery restores an active job when browser localStorage lost the current receipt', async () => {
+  const storage = store(), calls: { url: string; method: string }[] = []
+  const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({ url: String(url), method: init?.method ?? 'GET' })
+    if (String(url) === '/api/studio/current') return Response.json({ current: {
+      receipt, prompt: input.prompt, startedAt: new Date().toISOString(), financialState: 'reserved', reservedPoints: 250,
+    } })
+    return Response.json({ job: { id, state: 'building' } })
+  }) as typeof fetch
+  const client = new StudioCoordinator(storage, fetcher)
+  assert.equal(client.restore(), null)
+  const recovered = await client.recoverCurrent()
+  assert.equal(recovered?.saved.receipt.id, id)
+  assert.equal(recovered?.job.state, 'pending')
+  assert.equal(readSavedStudioJob(storage)?.receipt.id, id)
+  assert.deepEqual(calls, [{ url: '/api/studio/current', method: 'GET' }])
+  assert.equal(calls.some(call => call.method === 'POST'), false)
+  assert.equal((await client.poll()).state, 'building')
+})
+
+test('explicit cloud dismissal uses DELETE and then clears only the selected local receipt', async () => {
+  const storage = store(); storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: new Date().toISOString() })); storage.setItem('unrelated-model','keep')
+  const calls: { url: string; method: string; body?: string }[] = []
+  const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({ url: String(url), method: init?.method ?? 'GET', body: typeof init?.body === 'string' ? init.body : undefined })
+    return Response.json({ cleared: true })
+  }) as typeof fetch
+  const client = new StudioCoordinator(storage, fetcher); client.restore()
+  await client.dismissCurrent()
+  assert.equal(client.current, null)
+  assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), null)
+  assert.equal(storage.getItem('unrelated-model'), 'keep')
+  assert.equal(calls.length,1); assert.equal(calls[0].url,'/api/studio/current'); assert.equal(calls[0].method,'DELETE')
+  assert.deepEqual(JSON.parse(calls[0].body!),{id})
 })
 
 test('wrong job IDs, unknown states and corrupt stored receipts never appear as a valid current result', () => {
@@ -89,6 +126,13 @@ test('explicit account quota rejection stays terminal across reload without endl
   assert.equal(restored.current, null)
 })
 
+
+test('cloud timeout failure remains terminal and tells the user the held points were released', () => {
+  const job = parseStudioJob({ job: { id, state: 'failed', failureCode: 'STUDIO_TIMEOUT' } }, id)
+  assert.equal(job.failureCode, 'STUDIO_TIMEOUT')
+  assert.match(job.detail, /maximum recovery window/i)
+  assert.match(job.detail, /points were released/i)
+})
 
 test('legacy ownership 403 becomes same-job reconciliation instead of endless polling or paid replay', async () => {
   const storage = store()
