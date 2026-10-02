@@ -1,4 +1,4 @@
-export type VisibleBalance = { credits: number; membershipActive: boolean; billingReview: boolean; fastRemaining: number; slowRemaining: number }
+export type VisibleBalance = { credits: number; reservedCredits: number; availableCredits: number; membershipActive: boolean; billingReview: boolean; fastRemaining: number; slowRemaining: number }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 
 /** Display only authenticated server values, never prices or URL-supplied credit counts. */
@@ -8,7 +8,11 @@ export function readAccountBalance(value: unknown): VisibleBalance {
       !Number.isSafeInteger(value.free.fastRemaining) || Number(value.free.fastRemaining) < 0 ||
       !Number.isSafeInteger(value.free.slowRemaining) || Number(value.free.slowRemaining) < 0)
     throw new Error('Your credit balance could not be verified. Please refresh.')
-  return { credits: Number(value.credits), membershipActive: value.subscription.active, billingReview: value.billingReview,
+  const reserved = Number.isSafeInteger(value.reservedCredits) && Number(value.reservedCredits) >= 0 ? Number(value.reservedCredits) : 0
+  const available = Number.isSafeInteger(value.availableCredits) && Number(value.availableCredits) >= 0 ? Number(value.availableCredits) : Number(value.credits) - reserved
+  if (!Number.isSafeInteger(available) || available < 0 || available + reserved !== Number(value.credits))
+    throw new Error('Your reserved credit balance could not be verified. Please refresh.')
+  return { credits: Number(value.credits), reservedCredits: reserved, availableCredits: available, membershipActive: value.subscription.active, billingReview: value.billingReview,
     fastRemaining: Number(value.free.fastRemaining), slowRemaining: Number(value.free.slowRemaining) }
 }
 export async function fetchAccountBalance(signal: AbortSignal, fetcher: typeof fetch = fetch): Promise<VisibleBalance> {
