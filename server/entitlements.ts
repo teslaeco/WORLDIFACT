@@ -3,7 +3,7 @@ import { privateWorldStore } from './privateWorldStore.ts'
 import type { BudgetNamespace } from './budget.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId, type GenerationModel } from './generationEconomics.ts'
-import type { StudioQualityProfile } from '../src/lib/studioProtocol.ts'
+import { STUDIO_FAILURE_CODES, type StudioFailureCode, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
@@ -18,10 +18,10 @@ export interface EntitlementStorage {
 export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
-type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed' }
+type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed' }
 export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean }
-export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean }
-export type CurrentStudioJob = { id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile }
+export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean }
+export type CurrentStudioJob = { id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
 type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
@@ -70,7 +70,7 @@ async function changeReservedCredits(storage: EntitlementStorage, delta: number)
   await storage.put(CUSTOMER_RESERVED_CREDITS, next)
   return next
 }
-async function settleReservedJob(storage: EntitlementStorage, id: string, job: Job, next: 'completed' | 'failed', now: number) {
+async function settleReservedJob(storage: EntitlementStorage, id: string, job: Job, next: 'completed' | 'failed', now: number, failureCode?: StudioFailureCode) {
   if (job.state !== 'reserved') return { settled: true, repeated: true }
   if (job.cost) {
     if (job.billingMode === 'hold-v1') {
@@ -85,7 +85,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
     free[job.profile] = free[job.profile].filter(item => item.id !== id)
     await storage.put('usage', free)
   }
-  await storage.put(`job:${id}`, { ...job, state: next, updatedAt: now })
+  await storage.put(`job:${id}`, { ...job, state: next, updatedAt: now, ...(next === 'failed' && failureCode ? { failureCode } : {}) })
   return { settled: true, repeated: false }
 }
 
@@ -184,7 +184,7 @@ export class AccountEntitlements {
         if (!job || job.channel !== 'studio' || !job.fingerprint || !/^[a-f0-9]{64}$/.test(job.fingerprint)) return json({ job: null })
         return json({ job: { id: pointer.id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
           updatedAt: job.updatedAt ?? job.at, state: job.state, cost: job.cost, held: job.billingMode === 'hold-v1' && job.state === 'reserved',
-          ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}) } satisfies CurrentStudioJob })
+          ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}) } satisfies CurrentStudioJob })
       }
       if (path === '/studio-current-clear') {
         if (typeof input.id !== 'string' || !JOB_ID.test(input.id)) return json({ error: 'Invalid job' }, 400)
@@ -261,15 +261,16 @@ export class AccountEntitlements {
           if (!job) return json({ owned: false, downloadAllowed: false, previewOnly: false })
           const subscription = await this.storage.get<Subscription>('subscription')
           const allowed = job.state === 'completed' && (job.profile === 'fast' || active(subscription, now)) && await balance(this.storage) >= 0 && await this.storage.get<boolean>('billingHold') !== true
-          return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, held: job.billingMode === 'hold-v1' && job.state === 'reserved' })
+          return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, held: job.billingMode === 'hold-v1' && job.state === 'reserved' })
         }
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
         const next = input.state as 'completed' | 'failed'
+        if (input.failureCode !== undefined && (next !== 'failed' || !STUDIO_FAILURE_CODES.includes(input.failureCode as StudioFailureCode))) return json({ error: 'Invalid failure diagnostic' }, 400)
         return json(await this.storage.transaction(async storage => {
           const job = await storage.get<Job>(`job:${id}`)
           if (!job) return { settled: false, reason: 'NOT_OWNED' }
           // Terminal results are immutable. Transport uncertainty MUST NOT call /settle failed.
-          return settleReservedJob(storage, id, job, next, now)
+          return settleReservedJob(storage, id, job, next, now, input.failureCode as StudioFailureCode | undefined)
         }))
       }
       if (path === '/customer') {
@@ -426,7 +427,7 @@ export async function entitlementCall<T>(env: EntitlementEnv, userId: string, pa
 }
 export const entitlementStatus = (env: EntitlementEnv, userId: string) => entitlementCall<EntitlementStatus>(env, userId, '/status')
 export const reserveUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string }) => entitlementCall<Reservation>(env, userId, '/reserve', { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}) })
-export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, state: 'completed' | 'failed') => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state })
+export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, state: 'completed' | 'failed', failureCode?: StudioFailureCode) => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state, ...(failureCode ? { failureCode } : {}) })
 export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<JobAccess>(env, userId, '/job', { id: jobId })
 export const currentUserStudioJob = (env: EntitlementEnv, userId: string) => entitlementCall<{ job: CurrentStudioJob | null }>(env, userId, '/studio-current', {})
 export const clearCurrentUserStudioJob = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<{ cleared: boolean }>(env, userId, '/studio-current-clear', { id: jobId })

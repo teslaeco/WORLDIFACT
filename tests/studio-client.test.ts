@@ -286,3 +286,21 @@ test('aborted cloud discovery cannot overwrite a receipt saved by a newer page',
   assert.equal(client.current, null)
   assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), replacement)
 })
+
+
+test('safe failure codes survive cloud-only recovery and polling without exposing raw details', async () => {
+  for (const code of ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_MISSING']) {
+    const client = new StudioCoordinator(store(), (async () => Response.json({ current: {
+      receipt, prompt: input.prompt, startedAt: receipt.createdAt, financialState: 'failed', failureCode: code, detail: 'PRIVATE_KEY',
+    } })) as typeof fetch)
+    const recovered = await client.recoverCurrent()
+    const polled = parseStudioJob({ job: { id, state: 'failed', failureCode: code, detail: 'PRIVATE_KEY' } }, id)
+    assert.equal(recovered?.job.failureCode, code)
+    assert.equal(recovered?.job.detail, polled.detail)
+    assert.match(polled.detail, /Reserved customer points were released/)
+    assert.doesNotMatch(JSON.stringify(recovered), /PRIVATE_KEY/)
+  }
+  const unknown = parseStudioJob({ job: { id, state: 'failed', failureCode: 'PRIVATE_KEY', detail: 'PRIVATE_KEY' } }, id)
+  assert.equal(unknown.failureCode, undefined)
+  assert.doesNotMatch(JSON.stringify(unknown), /PRIVATE_KEY/)
+})

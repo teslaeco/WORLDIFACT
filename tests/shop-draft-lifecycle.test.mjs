@@ -52,7 +52,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, cloudLookup } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, cloudLookup } = {}) {
   const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
@@ -74,8 +74,9 @@ async function harness({ ready = false, state = 'succeeded', solReady = ready, d
     })
     if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
+    if (path.endsWith('/model') && artifactFailure) throw new TypeError('Interrupted artifact download')
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
-    return Response.json({ job: { id: path.endsWith(oldId) ? oldId : newId, state, reconciliationRequired, ...(downloadAllowed === undefined ? {} : { downloadAllowed, previewOnly: !downloadAllowed, previewAvailable: downloadAllowed }) } })
+    return Response.json({ job: { id: path.endsWith(oldId) ? oldId : newId, state, failureCode, reconciliationRequired, ...(downloadAllowed === undefined ? {} : { downloadAllowed, previewOnly: !downloadAllowed, previewAvailable: downloadAllowed }) } })
   }
   const slots = [], effects = [], timers = new Map(), delays = []
   let cursor = 0, dirty = true, tree, serial = 0
@@ -433,4 +434,30 @@ test('a late successful cloud lookup after leaving Shop cannot overwrite a newer
   assert.deepEqual(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)), newer)
   assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
   await assert.rejects(h.poll(), /Recovery should have scheduled a GET/)
+})
+
+
+test('failed model shows its safe diagnostic and copyable job ID without rendering the signed receipt', async () => {
+  const h = await harness({ ready: true, state: 'failed', failureCode: 'ASTRA_COST_LIMIT' })
+  try {
+    await h.poll()
+    const visible = text(h.all())
+    assert.match(visible, new RegExp('Job ID: ' + oldId))
+    assert.match(visible, /Reason: ASTRA_COST_LIMIT/)
+    assert.match(visible, /Astra stopped at this job’s cost limit/)
+    assert.equal(visible.includes(h.selected.receipt.ticket), false)
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+
+test('a completed model whose preview download is interrupted never receives failure-reason wording', async () => {
+  const h = await harness({ ready: true, state: 'succeeded', artifactFailure: true })
+  try {
+    await h.poll()
+    const visible = text(h.all())
+    assert.match(visible, /Your model is complete/)
+    assert.doesNotMatch(visible, /original failure reason was not saved/)
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+  } finally { h.close() }
 })
