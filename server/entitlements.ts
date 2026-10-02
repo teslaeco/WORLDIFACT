@@ -147,7 +147,7 @@ export class AccountEntitlements {
       if (path === '/billing' && request.method === 'GET') return json({ customer: await this.storage.get<string>('customer') ?? null })
       if (request.method !== 'POST') return json({ error: 'Not found' }, 404)
       const raw = await request.text()
-      if (raw.length > (path === '/blueprint-complete' ? 120_000 : 4096)) return json({ error: 'Invalid internal request' }, 400)
+      if (raw.length > (path === '/blueprint-complete' ? 120_000 : 8192)) return json({ error: 'Invalid internal request' }, 400)
       const input = JSON.parse(raw) as Record<string, unknown>
       if (!input || typeof input !== 'object' || Array.isArray(input)) return json({ error: 'Invalid internal request' }, 400)
       if (path === '/blueprint-status' || path === '/blueprint-complete') {
