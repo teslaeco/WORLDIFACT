@@ -29,7 +29,8 @@ function fixture() {
   let runtimeOverrides: Record<string, unknown> = {}, invalidModel = false, denseModel = false, failureDetail = '', lastPayload: Record<string, any> | null = null
   let posts = 0, artifacts = 0, loss = false, busy = false, state: StudioJob['state'] = 'succeeded', status404 = false
   let statusFailure: 'http' | 'rate-limit' | 'transport' | 'malformed' | null = null
-  let artifactFailure = false
+  let artifactFailure = false, artifactHttpStatus = 0, artifactGate: Promise<void> | undefined
+  let artifactResponse: (() => Response) | undefined
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname
     if (path === '/auth/v1/user') {
@@ -48,7 +49,10 @@ function fixture() {
     }
     if (/\/model$|\/exports\//.test(path)) {
       artifacts++
+      await artifactGate
+      if (artifactResponse) return artifactResponse()
       if (artifactFailure) throw new TypeError('Simulated artifact transport failure')
+      if (artifactHttpStatus) return Response.json({ error: 'Temporary artifact availability' }, { status: artifactHttpStatus })
       const bytes = invalidModel ? new Uint8Array(24) : denseModel ? detailedAssemblyGLBFixture(12,2400,4) : detailedGLBFixture()
       return new Response(bytes, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(bytes.length) } })
     }
@@ -76,6 +80,9 @@ function fixture() {
   return { env, call, prepare, subscribe, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, dense: () => { denseModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
     statusFailure: (value: typeof statusFailure) => { statusFailure = value },
     artifactFailure: (value: boolean) => { artifactFailure = value },
+    artifactHttpStatus: (value: number) => { artifactHttpStatus = value },
+    artifactGate: (value: Promise<void> | undefined) => { artifactGate = value },
+    artifactResponse: (value: (() => Response) | undefined) => { artifactResponse = value },
     busy: () => { busy = true }, lose: () => { loss = true; status404 = true } }
 }
 
@@ -386,4 +393,135 @@ test('dense reference-driven electrical cabinet passes the structural gate witho
   assert.equal(result.job.failureCode,undefined)
   { const status=await entitlementStatus(f.env,alice); assert.equal(status.credits,4250); assert.equal(status.reservedCredits,0) }
   assert.equal(f.posts(),1)
+})
+
+
+test('temporary model HTTP errors preserve the same pending hold and recover without another generation', async () => {
+  for (const statusCode of [404, 409, 429, 500, 502, 503]) {
+    const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+    await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+    f.artifactHttpStatus(statusCode)
+    const unavailable = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+    assert.ok([404, 409, 429, 502, 503].includes(unavailable.status), `HTTP ${statusCode} is an uncertain read, not terminal invalid geometry`)
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+    f.artifactHttpStatus(0)
+    const recovered = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(recovered.job.state, 'succeeded')
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+    assert.equal(f.posts(), 1, 'Recovering the artifact never generates another model')
+  }
+})
+
+test('a settled cost failure keeps its safe diagnostic on repeated polls and account recovery', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket); f.costFailure()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(result.job.state, 'failed'); assert.equal(result.job.failureCode, 'ASTRA_COST_LIMIT')
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE_KEY/)
+  }
+  const current = await (await f.call('/api/studio/current')).json() as { current: { failureCode?: string } }
+  assert.equal(current.current.failureCode, 'ASTRA_COST_LIMIT')
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+  assert.equal(f.posts(), 1)
+})
+
+
+test('failure categories survive repeat polling and recovery without saving raw worker messages', async () => {
+  for (const code of ['INVALID_MODEL_OUTPUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_MISSING'] as const) {
+    const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+    await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+    if (code === 'INVALID_MODEL_OUTPUT') f.invalid()
+    if (code === 'ORACLE_JOB_FAILED') f.fail()
+    const now = Date.now
+    try {
+      if (code === 'ORACLE_JOB_MISSING') { f.lose(); Date.now = () => now() + 4 * 60_000 }
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+        assert.equal(result.job.state, 'failed'); assert.equal(result.job.failureCode, code)
+      }
+      const current = await (await f.call('/api/studio/current')).json() as { current: { failureCode?: string } }
+      assert.equal(current.current.failureCode, code)
+      assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+      assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+      assert.equal(f.posts(), 1)
+    } finally { Date.now = now }
+  }
+})
+
+test('interrupted GLB reads before and after the header remain recoverable under the same hold', async () => {
+  for (const size of [4, 16]) {
+    const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+    await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+    const bytes = detailedGLBFixture()
+    f.artifactResponse(() => new Response(bytes.subarray(0, size), { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(bytes.length) } }))
+    const interrupted = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+    assert.ok([502, 503].includes(interrupted.status))
+    assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+    f.artifactResponse(undefined)
+    const recovered = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(recovered.job.state, 'succeeded')
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
+    assert.equal(f.posts(), 1)
+  }
+})
+
+test('a verified completion stays successful if Oracle later fails, disappears or becomes unavailable', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+  for (const disturb of [() => f.fail(), () => f.lose(), () => f.statusFailure('transport')]) {
+    disturb()
+    const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(result.job.state, 'succeeded'); assert.equal(result.job.failureCode, undefined)
+    assert.doesNotMatch(result.job.detail, /released|failed/)
+    assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
+    assert.equal(f.artifacts(), 1)
+  }
+  assert.equal(f.posts(), 1)
+})
+
+test('concurrent success and failure polls report the one durable settlement instead of contradictory charges', async () => {
+  const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  let release!: () => void
+  f.artifactGate(new Promise<void>(resolve => { release = resolve }))
+  const validating = f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+  while (!f.artifacts()) await new Promise(resolve => setImmediate(resolve))
+  f.costFailure()
+  const failed = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+  release()
+  const lateSuccess = await (await validating).json() as { job: StudioJob }
+  for (const result of [failed, lateSuccess]) {
+    assert.equal(result.job.state, 'failed'); assert.equal(result.job.failureCode, 'ASTRA_COST_LIMIT')
+    assert.equal(result.job.downloadAllowed, false)
+  }
+  assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+  assert.equal(f.posts(), 1)
+})
+
+test('local verification contention cannot turn another overdue successful model into a terminal timeout', async () => {
+  const a = fixture(), b = fixture(); await a.subscribe(); await b.subscribe()
+  const ar = await a.prepare(), br = await b.prepare()
+  await a.call('/api/studio/jobs', 'POST', input, ar.ticket)
+  await b.call('/api/studio/jobs', 'POST', input, br.ticket)
+  let release!: () => void
+  a.artifactGate(new Promise<void>(resolve => { release = resolve }))
+  const validating = a.call(`/api/studio/jobs/${ar.id}`, 'GET', undefined, ar.ticket)
+  while (!a.artifacts()) await new Promise(resolve => setImmediate(resolve))
+  const now = Date.now
+  try {
+    Date.now = () => now() + 36 * 60_000
+    const busy = await b.call(`/api/studio/jobs/${br.id}`, 'GET', undefined, br.ticket)
+    assert.equal(busy.status, 503)
+    assert.equal((await entitlementStatus(b.env, alice)).reservedCredits, 250)
+    release(); await validating
+    const recovered = await (await b.call(`/api/studio/jobs/${br.id}`, 'GET', undefined, br.ticket)).json() as { job: StudioJob }
+    assert.equal(recovered.job.state, 'succeeded')
+    assert.equal((await entitlementStatus(b.env, alice)).credits, 4250)
+    assert.equal(b.posts(), 1)
+  } finally { Date.now = now; release(); await validating }
 })

@@ -1,4 +1,4 @@
-import { JOB_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
+import { JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
 import { canSubmitNewDraft } from './studioDraft.ts'
 
 export const STUDIO_RECEIPT_KEY = 'worldifact-studio-current-v1'
@@ -30,8 +30,8 @@ export function parseStudioJob(value: unknown, id: string): StudioJob {
   if (!object(value) || !object(value.job) || value.job.id !== id || typeof value.job.state !== 'string' || !Object.hasOwn(JOB_DETAILS, value.job.state)) throw new Error('The response does not belong to the current model. The previous model will not be substituted.')
   const state = value.job.state as StudioJob['state']
   const reconciliationRequired = state === 'pending' && value.job.reconciliationRequired === true
-  const failureCode = state === 'failed' && ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT'].includes(String(value.job.failureCode)) ? value.job.failureCode as StudioJob['failureCode'] : undefined
-  const failureDetail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit. Reserved customer points were released; no automatic retry.' : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.' : failureCode === 'STUDIO_TIMEOUT' ? 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.' : undefined
+  const failureCode = state === 'failed' && STUDIO_FAILURE_CODES.includes(value.job.failureCode as NonNullable<StudioJob['failureCode']>) ? value.job.failureCode as StudioJob['failureCode'] : undefined
+  const failureDetail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : undefined
   return { id, state, detail: failureDetail || (reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state]), ...(failureCode ? { failureCode } : {}),
     ...(reconciliationRequired ? { reconciliationRequired: true } : {}),
     ...(typeof value.job.downloadAllowed === 'boolean' ? { downloadAllowed: value.job.downloadAllowed } : {}),
@@ -102,7 +102,7 @@ export class StudioCoordinator {
       const job: StudioJob = financial === 'completed'
         ? { id: saved.receipt.id, state: 'succeeded', detail: JOB_DETAILS.succeeded }
         : financial === 'failed'
-          ? { id: saved.receipt.id, state: 'failed', detail: JOB_DETAILS.failed }
+          ? parseStudioJob({ job: { id: saved.receipt.id, state: 'failed', failureCode: value.current.failureCode } }, saved.receipt.id)
           : { id: saved.receipt.id, state: 'pending', detail: JOB_DETAILS.pending }
       this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
       if (this.store.getItem(STUDIO_RECEIPT_KEY) !== JSON.stringify(saved)) throw new Error('The recovered cloud receipt could not be stored. No new generation was started.')

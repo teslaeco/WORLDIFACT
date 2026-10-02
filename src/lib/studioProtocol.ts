@@ -59,7 +59,16 @@ export type TextureLimit = 2048 | 4096 | 8192
 export type StudioPhoto = { name: string; view: PhotoView; dataUrl: string; subject?: string; textureMaxSize: TextureLimit }
 export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string }
-export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: 'ASTRA_COST_LIMIT' | 'INVALID_MODEL_OUTPUT' | 'STUDIO_TIMEOUT'; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
+export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_MISSING'] as const
+export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
+export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
+export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
+  ASTRA_COST_LIMIT: 'Astra stopped at this job’s cost limit. Reserved customer points were released; no automatic retry.',
+  INVALID_MODEL_OUTPUT: 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.',
+  STUDIO_TIMEOUT: 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.',
+  ORACLE_JOB_FAILED: 'The Astra/Blender worker reported that this job failed. Reserved customer points were released. Keep this job ID for diagnosis; no automatic retry.',
+  ORACLE_JOB_MISSING: 'The worker could not find this submitted job after the recovery window. Reserved customer points were released. Keep this job ID for diagnosis; no automatic retry.',
+}
 export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const keys = (value: Record<string, unknown>, names: string[]) => Object.keys(value).every(name => names.includes(name))
