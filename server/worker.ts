@@ -5,6 +5,7 @@ import { oracleJobApi } from "./oracle-jobs.ts";
 import { studioApi } from "./studio.ts";
 import { avatarApi, type AvatarContext } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
+import { mcpApi } from "./mcp.ts";
 import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
 import { entitlementCall, entitlementApi, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
 import { billingApi, type BillingEnv } from './billing.ts';
@@ -76,6 +77,8 @@ async function limitedBody(request: Request) {
 }
 export async function handle(request: Request, env: Env = {}, fetcher: typeof fetch = fetch, context?: AvatarContext): Promise<Response> {
   const url = new URL(request.url);
+  const mcp = await mcpApi(request, env, fetcher);
+  if (mcp) return mcp;
   const privateWorld = await privateWorldApi(request, env, fetcher);
   if (privateWorld) return privateWorld;
   const decor = await decorApi(request, fetcher);
