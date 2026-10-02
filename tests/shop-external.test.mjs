@@ -31,7 +31,8 @@ test('native Shop presents a customer creation flow with cart and no visible eng
 
 test('example model is clearly an example and customer view has no pre-purchase download button', async () => {
   const html = await renderShopMarkup()
-  assert.match(html, /assets\/model-front\.webp/)
+  assert.match(source, /assets\/model-front\.webp/)
+  assert.match(html, /Checking your cloud job|Example 3D product preview/)
   assert.match(html, /Example only/)
   assert.doesNotMatch(html, />Download GLB \+ embedded materials/)
   assert.doesNotMatch(html, /Model ID:/)
