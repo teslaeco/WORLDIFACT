@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { checkoutHomeDestination, checkoutReturnNotice, fetchAccountBalance, readAccountBalance } from '../src/lib/accountBalance.ts'
-const account = (active = false, credits = 0) => ({ credits, subscription: { active, expiresAt: null }, billingReview: false, free: { fastRemaining: 2, slowRemaining: 1 } })
+const account = (active = false, credits = 0, reservedCredits = 0) => ({ credits, reservedCredits, availableCredits: credits - reservedCredits, subscription: { active, expiresAt: null }, billingReview: false, free: { fastRemaining: 2, slowRemaining: 1 } })
 
 test('visible balance preserves real zero, free allowances and server membership', () => {
   assert.deepEqual(readAccountBalance(account()), { credits: 0, membershipActive: false, billingReview: false, fastRemaining: 2, slowRemaining: 1 })
@@ -37,4 +37,12 @@ test('balance refresh uses a same-origin no-store GET, not a payment or generati
 test('failed requests and HTML login pages never expose stale balances as current', async () => {
   for (const response of [Response.json(account(true, 9999), { status: 401 }), new Response('<html>login</html>', { headers: { 'content-type': 'text/html' } })])
     await assert.rejects(fetchAccountBalance(new AbortController().signal, (async () => response) as typeof fetch))
+})
+
+test('visible balance keeps held cloud-generation points separate from actual credits',()=>{
+  const balance=readAccountBalance(account(true,1500,250))
+  assert.equal(balance.credits,1500)
+  assert.equal(balance.reservedCredits,250)
+  assert.equal(balance.availableCredits,1250)
+  assert.throws(()=>readAccountBalance({...account(true,1500,250),availableCredits:1500}),/reserved credit balance/)
 })
