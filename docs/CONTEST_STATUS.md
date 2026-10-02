@@ -96,7 +96,7 @@ The Codex implementation contract is recorded in `docs/CODEX_TASK_STUCK_STUDIO_R
 No paid Astra generation was run for this repair. The specific owner's 92-minute receipt still requires one post-deploy browser recovery action to reveal whether its exact Oracle UUID succeeded, failed/cancelled, or is absent; do not claim that model itself recovered until that result is observed.
 
 
-## READY FOR RELEASE — Game Lab live generated-model library sync (1 October 2026)
+## MERGED — Game Lab live generated-model library sync (1 October 2026)
 
 Owner Android evidence shows a newly completed AI Shop GLB present in the device archive while Game Lab/World Builder still displays an older library snapshot.
 
@@ -117,12 +117,12 @@ Exact-head checks for commit `ae1ecb0e5ba2ec27ea16cb8446fa388b0ac135ca` passed:
 - Verify WORLDIFACT: success, including lint/typecheck/tests/HTTP/build/foundations/deploy-check;
 - Review FAST draft worker: success; no paid API call.
 
-No merge or production deployment has been performed for PR #166 yet. No Astra/Oracle request, point debit/refund, Stripe/PayPal/subscription mutation or server ownership transfer was introduced.
+PR #166 merged on 1 October 2026 as `f9d3c677d04745e48678931a5efec439bd796c69`. Its library-visibility changes are present in the subsequently deployed main baseline `8a38d1f349a2f454d913b6b7042881460991575c`. No Astra/Oracle request, point debit/refund, Stripe/PayPal/subscription mutation or server ownership transfer was introduced.
 
-Release decision: **GO for merge/deploy after explicit owner approval.**
+Release decision: **MERGED**. The 2 October placement/runtime follow-up below addresses separate defects remaining after the library-visibility repair.
 
 
-## P0 IN REVIEW — durable cloud Studio recovery and deferred point settlement (2 October 2026)
+## DEPLOYED — durable cloud Studio recovery and deferred point settlement (2 October 2026)
 
 Incident evidence: a paid detailed Astra/Blender request on Android visibly returned to the example preview after starting, while the account UI showed 250 fewer credits. A production customer must not depend on one React/browser state object to recover a paid cloud model.
 
@@ -139,7 +139,7 @@ Branch `fix/cloud-studio-durable-recovery-20261002` implements:
 
 The implementation contract is `docs/CODEX_TASK_CLOUD_STUDIO_DURABLE_RECOVERY_20261002.md`.
 
-This milestone is **not yet deployed**. Exact-head green CI is required before any release decision. This repair follow-up does not merge or deploy. No paid generation is authorized merely for validation of this code change.
+PR #169 merged as `8a38d1f349a2f454d913b6b7042881460991575c` after owner approval and green checks. Main CI [36971937848](https://github.com/teslaeco/WORLDIFACT/actions/runs/36971937848) and production release [36971937864](https://github.com/teslaeco/WORLDIFACT/actions/runs/36971937864) completed successfully. No paid generation was run as release validation.
 
 ### Recovery/verification follow-up (2 October 2026)
 
@@ -154,3 +154,21 @@ The review also reproduced and repaired recovery defects:
 Local follow-up verification: lint (existing warnings only), TypeScript, 654 non-browser tests, real local DEMO HTTP/origin checks, production build, pinned Chess/Terra/ISS assembly, and Worker deployment dry-run pass. The aggregate `npm run verify` reached the existing native Chromium regression but this executor blocked browser startup with `socket() failed: Operation not permitted`; that test was left intact, and the remaining tests were rerun separately. Exact-head GitHub CI remains the release gate.
 
 All provider calls in the regression suite are fixtures. Public health/Studio GET probes returned HTTP 200 without generation. These checks are not visual, Android, or paid-generation proof. No production customer balance or provider-budget mutation, merge, or deployment was performed during this follow-up.
+
+
+## IN VERIFICATION — generated GLB placement and preview recovery (2 October 2026)
+
+The owner reported that generated 3D models still did not add to AI Game Lab and authorized repair, then merge/deployment after green checks. The work is based on released main `8a38d1f349a2f454d913b6b7042881460991575c`; the independent Dots/MCP PR #170 is outside this repair.
+
+Reproduced defects and repairs:
+- Multiline generation prompts became scene-object names, which strict world validation rejected. New and legacy device labels now normalize to bounded single-line names without rewriting prompts or GLB originals.
+- Library actions only selected a model; placement required another action hidden in Build. Add to world now places one copy at the marker immediately, selects it and exposes transform controls. A failed validation never announces success.
+- Model selection/read/import is locked before the first asynchronous operation, rejects duplicate in-flight clicks, and discards stale owner/world/unmounted results. A late world-load response cannot erase a newer placement. Verified entries still recheck account download rights.
+- Local bytes display before the optional server verification badge returns; late refreshes cannot overwrite newer library results or clear an import error.
+- A missing device GLB can be explicitly relinked to a selected saved object without changing its ID or transforms. Reimporting the same hash also repairs an absent blob under the prior asset ID.
+- Failed preview loads no longer remain permanently pending. An explicit visible retry or a successful device-library import can recover them without an automatic retry loop.
+- The preview cache releases unused resources, resets between worlds/accounts, counts in-flight bytes, limits concurrent loads to two, and disposes late decoded models safely.
+
+Eighteen new deterministic lifecycle/storage/resource tests cover these paths, including the actual editor event handlers and actual world save/read validation. No provider call is used. The supported editor input remains a self-contained GLB up to 50 MB; FBX/BLEND exports must be converted to an embedded GAME GLB before import. File contents remain device-local; a world save stores placement references, not a cloud backup of private originals.
+
+Local verification: lint and TypeScript passed; 671 non-browser tests passed. The single pre-existing native Chromium regression is blocked by this executor's `socket() failed: Operation not permitted`; it remains enabled and required in GitHub CI. Real local DEMO HTTP/origin checks, production build, pinned Chess/Terra/ISS assembly and Worker deployment dry-run also passed. No local browser/device, physical Android or paid-generation pass is claimed. Exact-head CI and production release evidence must be checked before reporting deployment.

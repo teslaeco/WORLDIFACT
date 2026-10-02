@@ -11,6 +11,7 @@ import { createWorldObject } from '../lib/worldGeometry'
 import type { AssetKind } from '../lib/blueprint'
 import { loadWorldAsset } from '../lib/privateWorldAssets'
 import { inspectGLB } from '../lib/glb'
+import { createPrivateWorldPreviewAssets } from '../lib/privateWorldPreviewAssets'
 import { riverCenter, terrainHeight, type PrivateWorld, type WorldEntity } from '../lib/privateWorld'
 
 type Point = {x:number;z:number}
@@ -29,11 +30,11 @@ function primitive(e:WorldEntity):THREE.Group{
 }
 function avatar(world:PrivateWorld){return createCharacterPreview(world.character,text=>{const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const ctx=canvas.getContext('2d');if(!ctx)return null;ctx.clearRect(0,0,512,128);ctx.fillStyle='#f5f7ec';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px sans-serif';ctx.fillText(text,256,64,480);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;return texture})}
 export default function PrivateWorldCanvas(props:WorldCanvasProps){
-  const container=useRef<HTMLDivElement>(null),latest=useRef(props),draw=useRef<((world:PrivateWorld)=>void)|null>(null),keys=useRef(new Set<string>())
-  const [error,setError]=useState('')
+  const container=useRef<HTMLDivElement>(null),latest=useRef(props),draw=useRef<((world:PrivateWorld)=>void)|null>(null),retryPreviews=useRef<(()=>void)|null>(null),keys=useRef(new Set<string>())
+  const [error,setError]=useState(''),[previewFailures,setPreviewFailures]=useState(0)
   latest.current=props
   useEffect(()=>{
-    const host=container.current;if(!host)return
+    const host=container.current;if(!host)return;setPreviewFailures(0)
     let renderer:THREE.WebGLRenderer
     try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'low-power'});setError('')}catch{setError('3D is unavailable on this device. Your world, inspector, library and save controls still work.');return}
     let alive=true,raf=0,frame=0,last=0,clock=0,jump=0,vertical=0,interact=false
@@ -60,7 +61,7 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
     const selection=new THREE.Box3Helper(new THREE.Box3(),new THREE.Color('#ffe7a1'));selection.visible=false;scene.add(selection)
     const items=new THREE.Group();scene.add(items)
     let player=avatar(latest.current.world);const playerAt=new THREE.Vector3(-8,0,10);scene.add(player);player.visible=false
-    const cached=new Map<string,THREE.Group>(),pending=new Set<string>(),assetCosts=new Map<string,PreviewCost>();let loadedBytes=0,inflightBytes=0,previousCharacter='',terrainSignature='',lastFocus=-1,lastCharacterFocus=-1
+    let previousCharacter='',terrainSignature='',lastFocus=-1,lastCharacterFocus=-1
     let mixer:THREE.AnimationMixer|null=null
     const transforms=attachEditorTransforms(camera,renderer.domElement,scene,items,orbit,()=>latest.current)
     const focus=(object:THREE.Object3D)=>{const box=new THREE.Box3().setFromObject(object),center=box.getCenter(new THREE.Vector3()),span=Math.max(4,box.getSize(new THREE.Vector3()).length()*1.4);orbit.target.copy(center);camera.position.copy(center).add(new THREE.Vector3(span*.65,span*.55,span));orbit.update()}
@@ -75,40 +76,48 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
       }
       transforms.beforeRebuild()
       for(const child of [...items.children]){items.remove(child);if(!child.userData.sharedAsset)release(child)}
+      previews.retain([...world.entities.flatMap(e=>e.assetId?[e.assetId]:[]),...(world.character.assetId?[world.character.assetId]:[])])
+      setPreviewFailures(previews.failedCount())
       let previewCost:PreviewCost={triangles:0,draws:0,bytes:0},proxyCount=0
       const ordered=[...world.entities].sort((a,b)=>Number(b.id===latest.current.selected)-Number(a.id===latest.current.selected))
       for(const e of ordered){
         let group:THREE.Group
-        const knownAsset=e.assetId?cached.get(e.assetId):null
-        const asset=knownAsset&&fitsPreview(previewCost,assetCosts.get(e.assetId!)??{triangles:0,draws:0,bytes:0})?knownAsset:null
+        const knownAsset=e.assetId?previews.get(e.assetId):null
+        const asset=knownAsset&&fitsPreview(previewCost,knownAsset.cost)?knownAsset.root:null
         if(asset){group=cloneSkeleton(asset) as THREE.Group;group.userData.sharedAsset=true}
         else{group=primitive(e.kind==='mcc-cabinet'&&!fitsPreview(previewCost,{triangles:30000,draws:500,bytes:0})?{...e,kind:'crate'}:e);if(e.kind==='asset'){group.name='Model awaiting device file';group.children.forEach(o=>{if(o instanceof THREE.Mesh){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();o.material=new THREE.MeshBasicMaterial({color:'#798a93',wireframe:true})}})}}
         const currentCost=costOf(group);if(!fitsPreview(previewCost,currentCost)){if(!group.userData.sharedAsset)release(group);group=primitive({...e,kind:'asset'});group.name='Resource-budget proxy';proxyCount++}else previewCost=sumPreview(previewCost,currentCost)
         if(e.kind==='asset'&&!asset)proxyCount++
         group.userData.editorBaseScale=group.scale.x
         group.position.set(e.x,terrainHeight(e.x,e.z,world.terrain)+e.elevation,e.z);group.scale.multiplyScalar(e.scale);group.rotation.y=e.rotation*Math.PI/180;group.userData.entityId=e.id;items.add(group)
-        if(e.assetId&&!knownAsset&&!pending.has(e.assetId)&&latest.current.owner)queueAsset(e.assetId,latest.current.owner)
+        if(e.assetId&&!knownAsset&&latest.current.owner)void previews.request(e.assetId)
       }
-      if(world.character.assetId&&!cached.has(world.character.assetId)&&!pending.has(world.character.assetId)&&latest.current.owner)queueAsset(world.character.assetId,latest.current.owner)
+      if(world.character.assetId&&!previews.get(world.character.assetId)&&latest.current.owner)void previews.request(world.character.assetId)
       if(proxyCount)latest.current.onMessage(`${proxyCount} object(s) use lightweight previews while files load or the rendering budget is full. All placements are saved; the old four-model limit is removed.`)
 
-      const character=JSON.stringify(world.character)+(world.character.assetId&&cached.has(world.character.assetId)?':loaded':'');if(character!==previousCharacter){disposePlayer();const asset=world.character.assetId?cached.get(world.character.assetId):null;if(asset){player=cloneSkeleton(asset) as THREE.Group;player.scale.multiplyScalar(.64);player.userData.sharedAsset=true;const clips=asset.animations;if(clips.length){mixer=new THREE.AnimationMixer(player);const clip=clips.find(c=>/walk|run|idle/i.test(c.name))??clips[0];mixer.clipAction(clip).play()}}else player=avatar(world);scene.add(player);player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,world.terrain),playerAt.z);player.visible=true;previousCharacter=character}
+      const character=JSON.stringify(world.character)+(world.character.assetId&&previews.get(world.character.assetId)?':loaded':'');if(character!==previousCharacter){disposePlayer();const asset=world.character.assetId?previews.get(world.character.assetId)?.root:null;if(asset){player=cloneSkeleton(asset) as THREE.Group;player.scale.multiplyScalar(.64);player.userData.sharedAsset=true;const clips=asset.animations;if(clips.length){mixer=new THREE.AnimationMixer(player);const clip=clips.find(c=>/walk|run|idle/i.test(c.name))??clips[0];mixer.clipAction(clip).play()}}else player=avatar(world);scene.add(player);player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,world.terrain),playerAt.z);player.visible=true;previousCharacter=character}
       transforms.update()
 
     }
-    const queued:{id:string;owner:string}[]=[];let loadingAssets=0
-    function queueAsset(id:string,owner:string){pending.add(id);queued.push({id,owner});pumpAssets()}
-    function pumpAssets(){if(!alive||loadingAssets>=2||!queued.length)return;const item=queued.shift()!;loadingAssets++;let reserved=0
-      void loadWorldAsset(item.owner,item.id).then(async blob=>{if(!alive)throw new Error('Editor closed.');reserved=blob.size;inflightBytes+=reserved;if(loadedBytes+inflightBytes>96_000_000)throw new Error('Loaded model files reached the 96 MB interactive budget; placements and originals are preserved.');return blob.arrayBuffer()}).then(async bytes=>{
+    const previews=createPrivateWorldPreviewAssets<{root:THREE.Group;cost:PreviewCost}>({
+      isCurrent:()=>latest.current.owner===props.owner&&latest.current.world.id===props.world.id,
+      read:async id=>{if(!props.owner)throw new Error('Sign in to load your device models.');return loadWorldAsset(props.owner,id)},
+      decode:async bytes=>{
         const info=inspectGLB(bytes);if(info.renderedTriangles>2_000_000)throw new Error('Use an optimized GAME copy under two million triangles for this interactive preview; the original is preserved.')
         const manager=new THREE.LoadingManager();manager.setURLModifier(url=>{if(url.startsWith('blob:')||url.startsWith('data:'))return url;throw new Error('Only embedded model resources are supported.')})
-        const gltf=await new GLTFLoader(manager).parseAsync(bytes,'');if(!alive||latest.current.owner!==item.owner){release(gltf.scene);return}
+        const gltf=await new GLTFLoader(manager).parseAsync(bytes,'')
         const box=new THREE.Box3().setFromObject(gltf.scene),size=box.getSize(new THREE.Vector3()),extent=Math.max(size.x,size.y,size.z)
         if(!Number.isFinite(extent)||extent<=0||extent>1e6){release(gltf.scene);throw new Error('Invalid model dimensions.')}
-        const center=box.getCenter(new THREE.Vector3()),root=new THREE.Group();gltf.scene.position.sub(new THREE.Vector3(center.x,box.min.y,center.z));root.add(gltf.scene);root.scale.setScalar(3/extent);root.animations=gltf.animations;cached.set(item.id,root);assetCosts.set(item.id,costOf(root));loadedBytes+=bytes.byteLength
-        rebuild(latest.current.world)
-      }).catch(e=>{if(alive)latest.current.onMessage(e instanceof Error?e.message:'Model preview unavailable. The original and placement remain.')}).finally(()=>{inflightBytes-=reserved;loadingAssets--;pumpAssets()});pumpAssets()
-    }
+        const center=box.getCenter(new THREE.Vector3()),root=new THREE.Group();gltf.scene.position.sub(new THREE.Vector3(center.x,box.min.y,center.z));root.add(gltf.scene);root.scale.setScalar(3/extent);root.animations=gltf.animations
+        return {root,cost:costOf(root)}
+      },
+      release:value=>release(value.root),
+      onLoaded:()=>{if(alive)rebuild(latest.current.world)},
+      onError:(_id,error)=>{if(alive){setPreviewFailures(previews.failedCount());latest.current.onMessage(error.message)}},
+    })
+    const retry=()=>{if(!alive)return;setPreviewFailures(0);void previews.retryFailed()}
+    retryPreviews.current=retry
+    window.addEventListener('worldifact-private-library',retry)
     draw.current=rebuild;rebuild(latest.current.world)
     const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();let down={x:0,y:0}
     const pointerDown=(e:PointerEvent)=>{down={x:e.clientX,y:e.clientY}}
@@ -131,9 +140,9 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
       }else{keys.current.clear();jump=0;player.position.y=terrainHeight(playerAt.x,playerAt.z,w.terrain);mixer?.update(dt)}
       orbit.update();renderer.render(scene,camera)
     };raf=requestAnimationFrame(animate)
-    return()=>{alive=false;cancelAnimationFrame(raf);draw.current=null;observer.disconnect();window.removeEventListener('keydown',downKey);window.removeEventListener('keyup',upKey);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',pointerDown);renderer.domElement.removeEventListener('pointerup',pick);renderer.domElement.removeEventListener('webglcontextlost',lost);transforms.dispose();orbit.dispose();if(player.userData.sharedAsset)scene.remove(player);for(const child of [...items.children])if(child.userData.sharedAsset)items.remove(child);release(scene);cached.forEach(release);renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();keys.current.clear()}
-  },[props.owner])
+    return()=>{alive=false;cancelAnimationFrame(raf);draw.current=null;retryPreviews.current=null;window.removeEventListener('worldifact-private-library',retry);observer.disconnect();window.removeEventListener('keydown',downKey);window.removeEventListener('keyup',upKey);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',pointerDown);renderer.domElement.removeEventListener('pointerup',pick);renderer.domElement.removeEventListener('webglcontextlost',lost);transforms.dispose();orbit.dispose();if(player.userData.sharedAsset)scene.remove(player);for(const child of [...items.children])if(child.userData.sharedAsset)items.remove(child);release(scene);previews.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();keys.current.clear()}
+  },[props.owner,props.world.id])
   useEffect(()=>{draw.current?.(props.world)},[props.world])
   const hold=(key:string)=>({onPointerDown:(e:React.PointerEvent<HTMLButtonElement>)=>{e.currentTarget.setPointerCapture(e.pointerId);keys.current.add(key)},onPointerUp:()=>keys.current.delete(key),onPointerCancel:()=>keys.current.delete(key),onLostPointerCapture:()=>keys.current.delete(key)})
-  return <div className="private-canvas-shell"><div ref={container} className="private-canvas"/>{error&&<p className="private-canvas-error" role="alert">{error}</p>}{!props.playing&&<div className="private-canvas-hint">Tap to select · Move/Rotate/Scale handles edit objects · drag empty space to orbit</div>}{props.playing&&<div className="private-game-controls"><div className="private-move-pad"><button aria-label="Move forward" {...hold('KeyW')}>↑</button><button aria-label="Move left" {...hold('KeyA')}>←</button><button aria-label="Move back" {...hold('KeyS')}>↓</button><button aria-label="Move right" {...hold('KeyD')}>→</button></div><div>{props.world.controls.includes('jump')&&<button {...hold('Space')}>Jump</button>}{props.world.controls.includes('sprint')&&<button {...hold('ShiftLeft')}>Sprint</button>}{props.world.controls.includes('interact')&&<button {...hold('KeyE')}>Interact</button>}</div></div>}</div>
+  return <div className="private-canvas-shell"><div ref={container} className="private-canvas"/>{previewFailures>0&&<button className="private-preview-retry" onClick={()=>retryPreviews.current?.()}>Retry model previews ({previewFailures})</button>}{error&&<p className="private-canvas-error" role="alert">{error}</p>}{!props.playing&&<div className="private-canvas-hint">Tap to select · Move/Rotate/Scale handles edit objects · drag empty space to orbit</div>}{props.playing&&<div className="private-game-controls"><div className="private-move-pad"><button aria-label="Move forward" {...hold('KeyW')}>↑</button><button aria-label="Move left" {...hold('KeyA')}>←</button><button aria-label="Move back" {...hold('KeyS')}>↓</button><button aria-label="Move right" {...hold('KeyD')}>→</button></div><div>{props.world.controls.includes('jump')&&<button {...hold('Space')}>Jump</button>}{props.world.controls.includes('sprint')&&<button {...hold('ShiftLeft')}>Sprint</button>}{props.world.controls.includes('interact')&&<button {...hold('KeyE')}>Interact</button>}</div></div>}</div>
 }
