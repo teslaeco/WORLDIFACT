@@ -47,6 +47,12 @@ export function terrainHeight(x: number, z: number, edits: readonly TerrainEdit[
   for (const edit of edits) { const d = Math.hypot(x-edit.x,z-edit.z)/edit.radius; if (d < 1) h += edit.strength * Math.pow(1-d*d,2) * bank }
   return Math.max(-9, Math.min(12,h))
 }
+/** Scene labels are single-line even when the original generation prompt is not. */
+export function worldAssetName(value: string): string {
+  // Scene text validation deliberately rejects control characters.
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100).trim() || 'Imported model'
+}
 export function newEntity(kind: EntityKind, x: number, z: number, assetId: string | null = null): WorldEntity {
   return { id: crypto.randomUUID(), kind, name: kind === 'asset' ? 'My model' : kind[0].toUpperCase()+kind.slice(1), x, z, elevation:0, scale:1, rotation:0, color: kind === 'tree' ? '#488f52' : '#b1c3b5', assetId }
 }

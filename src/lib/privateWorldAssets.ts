@@ -1,4 +1,4 @@
-import { WORLD_ID } from './privateWorld.ts'
+import { WORLD_ID, worldAssetName } from './privateWorld.ts'
 import { inspectGLB } from './glb.ts'
 export type WorldAsset = { id: string; owner: string; name: string; bytes: number; sha256: string }
 const validOwner = (owner: string) => { if (!WORLD_ID.test(owner)) throw new Error('A verified account is required for this library.') }
@@ -17,7 +17,7 @@ export async function listWorldAssets(owner: string): Promise<WorldAsset[]> {
   try {
     return await new Promise((resolve, reject) => {
       const r = db.transaction('assets').objectStore('assets').getAll()
-      r.onsuccess = () => resolve((r.result as WorldAsset[]).filter(v => v.owner === owner.toLowerCase()).map(({ id, owner, name, bytes, sha256 }) => ({ id, owner, name, bytes, sha256 })))
+      r.onsuccess = () => resolve((r.result as WorldAsset[]).filter(v => v.owner === owner.toLowerCase()).map(({ id, owner, name, bytes, sha256 }) => ({ id, owner, name: worldAssetName(name), bytes, sha256 })))
       r.onerror = () => reject(new Error('Library could not be read.'))
     })
   } finally { db.close() }
@@ -27,7 +27,7 @@ export async function storeWorldAsset(owner: string, name: string, blob: Blob): 
   if (blob.size > 50_000_000 || blob.size < 20) throw new Error('Use an embedded GLB up to 50 MB.')
   const bytes = await blob.arrayBuffer(); inspectGLB(bytes)
   const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), n => n.toString(16).padStart(2, '0')).join('')
-  const item: WorldAsset = { id: crypto.randomUUID(), owner: owner.toLowerCase(), name: name.slice(0, 100) || 'Imported model', bytes: blob.size, sha256 }
+  const item: WorldAsset = { id: crypto.randomUUID(), owner: owner.toLowerCase(), name: worldAssetName(name), bytes: blob.size, sha256 }
   const db = await open(); let stored = item
   try {
     await new Promise<void>((resolve, reject) => {
@@ -37,7 +37,14 @@ export async function storeWorldAsset(owner: string, name: string, blob: Blob): 
       read.onsuccess = () => {
         const owned = (read.result as WorldAsset[]).filter(v => v.owner === owner.toLowerCase())
         const previous = owned.find(v => v.sha256 === sha256)
-        if (previous) { stored = previous; return }
+        if (previous) {
+          stored = { ...previous, name: worldAssetName(previous.name) }
+          // A recovered original with the same hash repairs a missing local
+          // blob under its existing ID, keeping saved placements valid.
+          const originals = tx.objectStore('blobs'), original = originals.get(key(owner, previous.id))
+          original.onsuccess = () => { if (!(original.result instanceof Blob)) originals.put(blob, key(owner, previous.id)) }
+          return
+        }
         if (owned.reduce((n, e) => n + e.bytes, 0) + blob.size > 350_000_000) {
           failure = new Error('This device library reached its 350 MB storage budget. No per-model count limit; originals remain in your gallery.'); tx.abort(); return
         }
