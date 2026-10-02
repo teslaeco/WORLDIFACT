@@ -241,13 +241,15 @@ export class AccountEntitlements {
             if (remaining < ceiling) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
             await storage.put(PROVIDER_BUDGET, remaining - ceiling)
           }
-          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(paid ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved' }
-          if (paid) await changeReservedCredits(storage, cost)
+          const cloudHold = paid && channel === 'studio'
+          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved' }
+          if (cloudHold) await changeReservedCredits(storage, cost)
+          else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
           if (creatorAstra) await storage.put(`creator-astra:${period}`, used + 1)
           await storage.put(`job:${id}`, job)
           if (channel === 'studio') await storage.put(CURRENT_STUDIO_JOB, { id })
-          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: paid }
+          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold }
         })
         return json(result, result.allowed ? 200 : 429)
       }
