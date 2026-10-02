@@ -9,6 +9,7 @@ import { MemoryRouter } from 'react-router-dom'
 import * as portals from '../src/config/portals.ts'
 import * as references from '../src/config/references.ts'
 import * as protocol from '../src/lib/studioProtocol.ts'
+import * as generationAdmission from '../src/lib/generationAdmission.ts'
 import * as client from '../src/lib/studioClient.ts'
 import * as photos from '../src/lib/studioPhotos.ts'
 import * as archive from '../src/lib/studioArchive.ts'
@@ -69,7 +70,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
     crypto: globalThis.crypto, ...globals, module, exports: module.exports,
     require(id) {
       const modules = { '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
-        '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
+        '../lib/studioProtocol': protocol, '../lib/generationAdmission': generationAdmission, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
         '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }
       if (id in modules) return adapters[id] || modules[id]

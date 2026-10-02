@@ -17,9 +17,10 @@ test('native Chromium reproduces the old invocation error and accepts the repair
   const compile = name => ts.transpileModule(readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText.replace(/^export /gm, '')
-  const protocol = compile('studioProtocol'), draft = compile('studioDraft')
+  const admission = compile('generationAdmission')
+  const protocol = compile('studioProtocol').replace(/^import .+ from ['"]\.\/generationAdmission\.ts['"];?\s*$/gm, ''), draft = compile('studioDraft')
   const client = compile('studioClient').replace(/^import .+ from ['"]\.\/(?:studioProtocol|studioDraft)\.ts['"];?\s*$/gm, '')
-  assert.doesNotMatch(protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
+  assert.doesNotMatch(admission + protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
   // A top-level inert data: document has no secure-context SubtleCrypto. Keep
   // this receiver/transport test off all network origins and adapt ONLY digest
   // with precomputed real SHA-256 fixtures; manifest security has its own tests.
@@ -97,7 +98,7 @@ test('native Chromium reproduces the old invocation error and accepts the repair
     } finally { globalThis.fetch = nativeFetch; }
   } catch (error) { result.textContent = 'FAIL: ' + error.message; }
 })();`
-  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + protocol + '\n' + draft + '\n' + client + '\n' + exercise + '</script>'
+  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + admission + '\n' + protocol + '\n' + draft + '\n' + client + '\n' + exercise + '</script>'
   const profile = mkdtempSync(join(tmpdir(), 'worldifact-native-fetch-'))
   try {
     const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking', '--no-first-run', '--no-default-browser-check',

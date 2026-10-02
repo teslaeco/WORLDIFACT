@@ -1,4 +1,5 @@
 import { MODEL_CATALOG, type GenerationModel } from './modelCatalog.ts'
+import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode } from './generationAdmission.ts'
 export type QuotedModel = GenerationModel
 export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits' | 'blocked'; points: number | null; after: number | null; message: string }
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -8,6 +9,15 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
   if (!signedIn) return { state: 'signin', points: null, after: null, message: 'Sign in to check your points and funded free allowance.' }
   const value = object(account), subscription = object(value.subscription), free = object(value.free), costs = object(value.generationCosts)
   const points = MODEL_CATALOG[model].creditsPerGeneration
+  // New authenticated status can explain a refusal even when the displayed
+  // point balance is high. Older servers omit this field and retain old checks.
+  if (Object.hasOwn(value, 'generationAdmission')) {
+    const admission = object(object(value.generationAdmission)[model])
+    if (admission.allowed === false && isAdmissionFailureCode(admission.reason))
+      return { state: 'blocked', points, after: null, message: ADMISSION_FAILURE_DETAILS[admission.reason] }
+    if (admission.allowed !== true || admission.reason !== undefined)
+      return { state: 'pending', points: null, after: null, message: 'Your current generation availability could not be verified. No payment is inferred.' }
+  }
   if (!integer(value.credits) || typeof subscription.active !== 'boolean' || costs.sol !== 50 || costs.astra !== 250 || (model === 'luna' && costs.luna !== 15))
     return { state: 'pending', points: null, after: null, message: 'Your current balance and generation cost could not be verified. No payment is inferred.' }
   if (value.billingReview !== false) return { state: 'blocked', points: null, after: null, message: 'Your account needs billing review before another generation.' }

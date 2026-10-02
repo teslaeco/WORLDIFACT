@@ -25,7 +25,8 @@ function fixture() {
   const budget = new GenerationBudget({ storage: storage() as BudgetStorage }, env)
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const users = new Map<string, AccountEntitlements>()
-  env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() }, {}, () => Date.now())); return users.get(key)! } }
+  let reservationDenial: string | undefined
+  env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() }, {}, () => Date.now())); const object = users.get(key)!; return { fetch: (request: Request) => reservationDenial && new URL(request.url).pathname === '/reserve' ? Promise.resolve(Response.json({ allowed: false, reason: reservationDenial }, { status: 429 })) : object.fetch(request) } } }
   let modelStatus: 'draft' | 'reviewed' | undefined, qualityFailure = false
   let quality: Record<string, unknown> = { revision: 6, state: 'succeeded', hasModel: true, modelStatus: 'draft', automaticQualityAccepted: false, agent: {}, agentUsage: { completed: false, error_code: null }, visualReview: { assessment_completed: false, accepted: false, status: 'not_completed' } }
   let qualityReads = 0
@@ -85,7 +86,7 @@ function fixture() {
     await entitlementCall(env, alice, '/grant', { id: 'in_subscription', credits: 4500, subscriptionId: 'sub_test' })
     await entitlementCall(env, alice, '/subscription', { id: 'sub_test', until: Date.now() + 86400000, active: true, revision: 1, plan: 'pro', grantId: 'in_subscription' })
   }
-  return { env, call, prepare, subscribe, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, dense: () => { denseModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
+  return { env, call, prepare, subscribe, denyReservation: (reason: string) => { reservationDenial = reason }, setHealth: (overrides: Record<string, unknown>) => { runtimeOverrides = overrides }, sent: () => lastPayload, invalid: () => { invalidModel = true }, dense: () => { denseModel = true }, costFailure: () => { state = 'failed'; failureDetail = 'ASTRA budget guard stopped before another API call. PRIVATE_KEY'; }, posts: () => posts, artifacts: () => artifacts, fail: () => { state = 'failed' },
     quality: (value: Record<string, unknown> = {}) => { modelStatus = 'draft'; quality = { ...quality, ...value } },
     qualityFailure: (value: boolean) => { qualityFailure = value }, qualityReads: () => qualityReads,
     statusFailure: (value: typeof statusFailure) => { statusFailure = value },
@@ -732,4 +733,52 @@ test('an explicitly finished unreviewed standard draft keeps structural model de
   const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
   assert.equal(result.job.state, 'succeeded'); assert.equal(f.artifacts(), 1); assert.equal(f.posts(), 1)
   assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
+})
+
+test('Studio returns precise safe admission reasons without an Oracle request or a new account reservation', async () => {
+  const reasons = ['BILLING_REVIEW_REQUIRED', 'ASTRA_PLAN_REQUIRED', 'CREATOR_ASTRA_PERIOD_LIMIT', 'CREDITS_EXHAUSTED', 'FREE_SOL_ONLY', 'FAST_DAILY_LIMIT', 'PROVIDER_BUDGET_EXHAUSTED'] as const
+  for (const reason of reasons) {
+    const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+    f.denyReservation(reason)
+    const reply = await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+    assert.equal(reply.status, 429)
+    const body = await reply.json() as { failureCode: string; error: string }
+    assert.equal(body.failureCode, reason)
+    assert.equal(body.error, STUDIO_FAILURE_DETAILS[reason])
+    assert.equal(f.posts(), 0)
+    const status = await entitlementStatus(f.env, alice)
+    assert.equal(status.credits, 4500)
+    assert.equal(status.reservedCredits, 0)
+    assert.equal((await entitlementCall<{ owned: boolean }>(f.env, alice, '/job', { id: receipt.id })).owned, false)
+  }
+})
+
+test('unknown or conflicting account denial never leaks arbitrary internal text', async () => {
+  for (const reason of ['PRIVATE_UNEXPECTED_DETAIL', 'REQUEST_PAYLOAD_MISMATCH', 'JOB_CHANNEL_MISMATCH']) {
+    const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
+    f.denyReservation(reason)
+    const body = await (await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).json() as { failureCode: string; error: string }
+    assert.equal(body.failureCode, reason === 'PRIVATE_UNEXPECTED_DETAIL' ? 'ACCOUNT_ADMISSION_UNAVAILABLE' : 'ACCOUNT_REQUEST_CONFLICT')
+    assert.equal(body.error, STUDIO_FAILURE_DETAILS[body.failureCode as keyof typeof STUDIO_FAILURE_DETAILS])
+    assert.equal(JSON.stringify(body).includes(reason), false)
+    assert.equal(f.posts(), 0)
+  }
+})
+
+test('actual exhausted provider allowance does not masquerade as exhausted customer points', async () => {
+  const f = fixture(); await f.subscribe()
+  for (let index = 0; index < 18; index++) {
+    const id = crypto.randomUUID()
+    assert.equal((await entitlementCall<{ allowed: boolean }>(f.env, alice, '/reserve', { id, profile: 'slow' })).allowed, true)
+    await entitlementCall(f.env, alice, '/settle', { id, state: 'failed' })
+  }
+  const before = await entitlementStatus(f.env, alice)
+  assert.equal(before.credits, 4500)
+  assert.deepEqual(before.generationAdmission.astra, { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' })
+  const receipt = await f.prepare()
+  const reply = await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  assert.equal(reply.status, 429)
+  assert.equal((await reply.json() as { failureCode: string }).failureCode, 'PROVIDER_BUDGET_EXHAUSTED')
+  assert.deepEqual(await entitlementStatus(f.env, alice), before)
+  assert.equal(f.posts(), 0)
 })

@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { StudioCoordinator, STUDIO_RECEIPT_KEY, STUDIO_RECEIPT_HISTORY_PREFIX, parseStudioJob, readSavedStudioJob, type ReceiptStore } from '../src/lib/studioClient.ts'
 import type { StudioInput } from '../src/lib/studioProtocol.ts'
+import { ADMISSION_FAILURE_CODES, ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode } from '../src/lib/generationAdmission.ts'
 const id = '12345678-1234-4234-8234-123456789abc'
 const receipt = { id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` }
 const input: StudioInput = { worldId: 'enchanted-ai-shop', prompt: 'Create a blue skull sculpture', purpose: 'figurine', textureMaxSize: 4096, photos: [] }
@@ -384,7 +385,9 @@ test('an aborted status body is a recoverable connection error and never leaks t
 
 
 test('explicit admission failures keep safe codes through immediate rejection and reload without polling or resubmission', async () => {
-  for (const [status, failureCode] of [[409,'ORACLE_BUSY'],[409,'STORAGE_FULL'],[409,'JOB_CAPACITY'],[429,'RATE_LIMITED'],[503,'STUDIO_ALLOWANCE_UNAVAILABLE']] as const) {
+  const cases = [[409,'ORACLE_BUSY'],[409,'STORAGE_FULL'],[409,'JOB_CAPACITY'],[429,'RATE_LIMITED'],[503,'STUDIO_ALLOWANCE_UNAVAILABLE'],
+    ...ADMISSION_FAILURE_CODES.map(code => [429, code] as const)] as const
+  for (const [status, failureCode] of cases) {
     const storage = store(), calls: string[] = []
     const client = new StudioCoordinator(storage, (async url => {
       calls.push(String(url))
@@ -399,5 +402,27 @@ test('explicit admission failures keep safe codes through immediate rejection an
     assert.deepEqual(recovered, rejected)
     assert.deepEqual(calls, ['/api/studio/prepare','/api/studio/jobs'])
     assert.equal(readSavedStudioJob(storage)?.rejectionCode, failureCode)
+    if (isAdmissionFailureCode(failureCode)) {
+      assert.equal(rejected.detail, ADMISSION_FAILURE_DETAILS[failureCode])
+      assert.match(rejected.detail, failureCode === 'ACCOUNT_REQUEST_CONFLICT'
+        ? /No new Oracle submission or points reservation was made/
+        : /No Oracle generation was submitted and no points were reserved for this request; no automatic retry/)
+      assert.doesNotMatch(rejected.detail, /refund|released/i)
+    }
   }
+})
+
+test('account admission diagnostics remain allowlisted and distinct from submitted model failures', () => {
+  for (const failureCode of ADMISSION_FAILURE_CODES) {
+    assert.equal(isAdmissionFailureCode(failureCode), true)
+    const job = parseStudioJob({ job: { id, state: 'failed', failureCode, detail: 'PRIVATE_LEDGER_VALUE' } }, id)
+    assert.equal(job.failureCode, failureCode)
+    assert.equal(job.detail, ADMISSION_FAILURE_DETAILS[failureCode])
+    assert.doesNotMatch(job.detail, /PRIVATE_LEDGER_VALUE/)
+  }
+  for (const value of [undefined, null, 429, {}, ['CREDITS_EXHAUSTED'], 'PRIVATE_LEDGER_VALUE', 'toString', 'ASTRA_COST_LIMIT'])
+    assert.equal(isAdmissionFailureCode(value), false)
+  const unknown = parseStudioJob({ job: { id, state: 'failed', failureCode: 'PRIVATE_LEDGER_VALUE' } }, id)
+  assert.equal(unknown.failureCode, undefined)
+  assert.doesNotMatch(unknown.detail, /PRIVATE_LEDGER_VALUE/)
 })

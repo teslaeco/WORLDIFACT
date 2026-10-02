@@ -1,5 +1,6 @@
 // WORLDIFACT adapter to the existing Froge /v1/jobs contract; no new AI provider.
 // Reviewed reference: Froge-MPC-2-test @ d3f61b842dcfeda2ed794210caafc391919a75be.
+import { ADMISSION_FAILURE_CODES, ADMISSION_FAILURE_DETAILS } from './generationAdmission.ts'
 
 const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for every generated asset:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
 
@@ -77,10 +78,11 @@ export const STUDIO_SUBMISSION_GRACE_MS = 5 * 60_000
 export type StudioPrepareMetadata = Pick<StudioInput, 'worldId' | 'prompt' | 'purpose' | 'textureMaxSize' | 'generationProfile'> & { photoCount: number }
 export type StudioPrepareManifest = StudioPrepareMetadata & { version: typeof STUDIO_PREPARE_VERSION; inputDigest: string }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string }
-export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED'] as const
+export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
 export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
 export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
 export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
+  ...ADMISSION_FAILURE_DETAILS,
   ASTRA_COST_LIMIT: 'Astra stopped at this job’s cost limit. Reserved customer points were released; no automatic retry.',
   INVALID_MODEL_OUTPUT: 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.',
   STUDIO_TIMEOUT: 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.',

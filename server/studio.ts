@@ -3,6 +3,7 @@ import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
+import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
 import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
 import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata } from '../src/lib/studioProtocol.ts'
@@ -367,7 +368,11 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (user) {
         const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt })
         if (userReservation.repeated && userReservation.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed'), recoveryOnly: true }, 202)
-        if (!userReservation.allowed) throw new StudioError('Your free allowance is used and you do not have enough credits. View your account for limits and top-ups.', 429)
+        if (!userReservation.allowed) {
+          const conflict = ['REQUEST_PAYLOAD_MISMATCH', 'JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(userReservation.reason ?? '')
+          const reason: AdmissionFailureCode = isAdmissionFailureCode(userReservation.reason) ? userReservation.reason : conflict ? 'ACCOUNT_REQUEST_CONFLICT' : 'ACCOUNT_ADMISSION_UNAVAILABLE'
+          throw new StudioError(ADMISSION_FAILURE_DETAILS[reason], 429, reason)
+        }
         if (userReservation.repeated) return json({ job: await accountJob(env, user.id, auth.id, 'pending'), recoveryOnly: true }, 202)
       }
       // Keep the operator budget independent from customer credits. A rejected

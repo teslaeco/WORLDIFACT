@@ -20,6 +20,7 @@ import { inspectGLB } from '../lib/glb'
 import { DEFAULT_DIMENSIONS_MM, type ClientDimensions } from '../lib/shopManufacturing'
 import { type GenerationResult } from '../lib/blueprint'
 import { JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
+import { isAdmissionFailureCode } from '../lib/generationAdmission'
 import { BlueprintClient } from '../lib/blueprintClient'
 import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, BLUEPRINT_REFERENCE_BYTES, blueprintDelivery, blueprintReferences, type BlueprintDelivery } from '../lib/blueprintRequest'
 import './ShopPage.css'
@@ -448,7 +449,7 @@ export default function ShopPage() {
           <small hidden data-testid="result-description">Submitted description: {preview.label}</small>
           {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
         </> : saved ? <div className="native-shop-progress" role="status">
-          <h2>{job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your SLOW model is ready' : job?.failureCode === 'MISSING_SUBMISSION' ? 'The upload was not confirmed' : job?.state === 'failed' ? 'Previous model did not finish' : job?.state === 'cancelled' ? 'Previous model was cancelled' : busy ? 'Uploading your model request…' : job?.state === 'pending' ? 'Checking whether your request was accepted…' : 'Preparing your model…'}</h2>
+          <h2>{job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your SLOW model is ready' : isAdmissionFailureCode(job?.failureCode) ? 'Generation was not started' : job?.failureCode === 'MISSING_SUBMISSION' ? 'The upload was not confirmed' : job?.state === 'failed' ? 'Previous model did not finish' : job?.state === 'cancelled' ? 'Previous model was cancelled' : busy ? 'Uploading your model request…' : job?.state === 'pending' ? 'Checking whether your request was accepted…' : 'Preparing your model…'}</h2>
           <p>{job?.reconciliationRequired ? job.detail : job?.state === 'succeeded' && job.downloadAllowed === false
             ? 'Model and texture downloads require an active subscription. Your result is preserved; a protected image preview is not available on this worker yet.'
             : terminal(job?.state)
