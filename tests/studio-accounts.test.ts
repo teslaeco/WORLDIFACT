@@ -170,6 +170,43 @@ test('four references and a complete 4,000-character character brief reach Oracl
   { const status=await entitlementStatus(f.env,alice); assert.equal(status.credits,4250); assert.equal(status.reservedCredits,0) }
 })
 
+test('cloud current endpoint recovers the exact active Studio job after browser receipt loss without another Oracle POST', async () => {
+  const f=fixture();await f.subscribe();const receipt=await f.prepare()
+  assert.equal((await f.call('/api/studio/jobs','POST',input,receipt.ticket)).status,202)
+  assert.equal(f.posts(),1)
+  let status=await entitlementStatus(f.env,alice)
+  assert.equal(status.credits,4500);assert.equal(status.reservedCredits,250);assert.equal(status.availableCredits,4250)
+
+  const response=await f.call('/api/studio/current','GET')
+  assert.equal(response.status,200)
+  const current=await response.json() as {current:{receipt:{id:string;ticket:string;createdAt:string};prompt:string;financialState:string;reservedPoints:number}}
+  assert.equal(current.current.receipt.id,receipt.id)
+  assert.equal(current.current.prompt,input.prompt)
+  assert.equal(current.current.financialState,'reserved')
+  assert.equal(current.current.reservedPoints,250)
+
+  const recovered=await f.call(`/api/studio/jobs/${receipt.id}`,'GET',undefined,current.current.receipt.ticket)
+  assert.equal(recovered.status,200)
+  assert.equal(f.posts(),1,'recovery must never submit another Oracle generation')
+  status=await entitlementStatus(f.env,alice)
+  assert.equal(status.credits,4250,'the first successful terminal poll commits the existing held charge once')
+  assert.equal(status.reservedCredits,0)
+
+  const again=await f.call('/api/studio/jobs','POST',input,current.current.receipt.ticket)
+  assert.equal(again.status,202)
+  assert.equal(f.posts(),1,'same UUID is idempotent even after browser recovery')
+  assert.equal((await entitlementStatus(f.env,alice)).credits,4250)
+})
+
+test('a mismatched explicit idempotency key is rejected before reservation or Oracle POST', async () => {
+  const f=fixture();await f.subscribe();const receipt=await f.prepare()
+  const response=await studioApi(new Request(origin+'/api/studio/jobs',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-WORLDIFACT-Job':receipt.ticket,'X-WORLDIFACT-Idempotency-Key':'00000000-0000-4000-8000-000000000000',Cookie:'__Host-worldifact-access=alice-token'},body:JSON.stringify(input)}),f.env,(async (...args)=>{throw new Error('Oracle must not be called')}) as typeof fetch)
+  assert.equal(response.status,409)
+  const status=await entitlementStatus(f.env,alice)
+  assert.equal(status.credits,4500);assert.equal(status.reservedCredits,0)
+  assert.equal(f.posts(),0)
+})
+
 test('missing, stale or changed monetary/output-policy evidence blocks before any point reservation', async () => {
   for(const changed of [{astraBudgetRevision:undefined},{astraBudgetMaxUsd:4},{astraBudgetExpiry:1},{codexReady:false},
     {astraOutputPolicy:undefined},{astraReasoningEffort:'high'},{astraUsageSettlement:'estimated'},{astraMaxOutputTokens:96000}]) {
