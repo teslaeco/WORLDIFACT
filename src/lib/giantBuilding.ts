@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { abortableResource, createVerifiedWorldAsset, WorldAssetCompressionError, type WorldAssetProgress, type WorldAssetRequest } from "./verifiedWorldAsset.ts";
+import { disposeObject } from "./worldGeometry.ts";
 
 export const GIANT_BUILDING_SOURCE_SHA256 = "0321c8f76c84d53a33f6fed20d128cd3460b3e24f87ff4bb36ee92f25cf3a3c6";
 export const GIANT_BUILDING_SOURCE_BYTES = 21_047_056;
@@ -6,6 +8,7 @@ export const GIANT_BUILDING_SOURCE_VERTICES = 491_138;
 export const GIANT_BUILDING_SOURCE_TRIANGLES = 264_680;
 export const GIANT_BUILDING_RUNTIME_PROFILE = "owner-exact-glb-v1";
 export const GIANT_BUILDING_URL = "/world-assets/giant-building/terrace-tower-e7e96cc3.glb";
+export const GIANT_BUILDING_GZIP_URL = `${GIANT_BUILDING_URL}.gz`;
 export const GIANT_BUILDING_GAME_SHA256 = GIANT_BUILDING_SOURCE_SHA256;
 export const GIANT_BUILDING_GAME_BYTES = GIANT_BUILDING_SOURCE_BYTES;
 export const GIANT_BUILDING_GAME_TRIANGLES = GIANT_BUILDING_SOURCE_TRIANGLES;
@@ -106,24 +109,43 @@ export function createGiantBuildingInterior() {
   return root;
 }
 
-function hex(bytes: ArrayBuffer) {
-  return Array.from(new Uint8Array(bytes), value => value.toString(16).padStart(2, "0")).join("");
+const towerAsset = createVerifiedWorldAsset({
+  url: GIANT_BUILDING_URL, gzipUrl: GIANT_BUILDING_GZIP_URL,
+  bytes: GIANT_BUILDING_GAME_BYTES, sha256: GIANT_BUILDING_GAME_SHA256,
+  label: "Exact owner building",
+});
+export type GiantBuildingProgress = WorldAssetProgress | { phase: 'preparing'; loaded: number; total: number };
+export function giantBuildingProgressLabel(progress: GiantBuildingProgress) {
+  if (progress.phase === 'preparing' || progress.phase === 'downloaded') return 'Terrace tower: preparing original geometry and textures…';
+  if (progress.phase === 'verifying') return 'Terrace tower: verifying the exact owner model…';
+  return `Terrace tower: loading original model… ${Math.min(100, Math.floor(progress.loaded / progress.total * 100))}%`;
 }
 
-export async function loadGiantBuilding(fetcher: typeof fetch = fetch) {
-  const response = await fetcher(GIANT_BUILDING_URL, { cache: "no-store", credentials: "same-origin" });
-  if (!response.ok) throw new Error(`exact owner building unavailable (${response.status})`);
-  const bytes = await response.arrayBuffer();
-  if (bytes.byteLength !== GIANT_BUILDING_GAME_BYTES) throw new Error(`exact owner building size mismatch (${bytes.byteLength})`);
-  if (bytes.byteLength < 12) throw new Error("exact owner building GLB is truncated");
-  const header = new DataView(bytes, 0, 12);
-  if (String.fromCharCode(...new Uint8Array(bytes, 0, 4)) !== "glTF" || header.getUint32(4, true) !== 2 || header.getUint32(8, true) !== bytes.byteLength)
-    throw new Error("exact owner building GLB container invalid");
-  if (!globalThis.crypto?.subtle) throw new Error("browser SHA-256 unavailable");
-  const digest = hex(await globalThis.crypto.subtle.digest("SHA-256", bytes));
-  if (digest !== GIANT_BUILDING_GAME_SHA256) throw new Error("exact owner building hash mismatch");
-  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-  const gltf = await new GLTFLoader().parseAsync(bytes, "");
+export async function loadGiantBuilding(fetcher: typeof fetch = fetch, options: Omit<WorldAssetRequest, 'fetcher' | 'onProgress'> & { onProgress?: (progress: GiantBuildingProgress) => void } = {}) {
+  let bytes: ArrayBuffer;
+  try { bytes = await towerAsset.load({ ...options, fetcher }); }
+  catch (error) {
+    // A single read-only fallback preserves old browsers and staggered asset publication.
+    if (!(error instanceof WorldAssetCompressionError) || options.signal?.aborted) throw error;
+    bytes = await towerAsset.load({ ...options, fetcher });
+  }
+  options.signal?.throwIfAborted();
+  const controller = new AbortController();
+  const abort = () => controller.abort(options.signal?.reason);
+  options.signal?.addEventListener('abort', abort, { once: true });
+  const deadline = setTimeout(() => controller.abort(new DOMException('Building preparation timed out. Please retry.', 'TimeoutError')), 45_000);
+  options.onProgress?.({ phase: 'preparing', loaded: bytes.byteLength, total: bytes.byteLength });
+  let gltf;
+  try {
+    const parsed = import("three/examples/jsm/loaders/GLTFLoader.js").then(({ GLTFLoader }) => {
+      controller.signal.throwIfAborted();
+      return new GLTFLoader().parseAsync(bytes, "");
+    });
+    gltf = await abortableResource(parsed, controller.signal, model => disposeObject(model.scene));
+  } finally {
+    clearTimeout(deadline);
+    options.signal?.removeEventListener('abort', abort);
+  }
   const root = gltf.scene;
   root.name = "owner-terrace-tower-exact-glb";
   root.position.set(GIANT_BUILDING_POSITION.x, .11, GIANT_BUILDING_POSITION.z);

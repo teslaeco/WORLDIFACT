@@ -16,14 +16,14 @@ The WORLDIFACT project owner supplied the replacement as GLB, FBX and a texture 
 
 The existing generated Oracle artifact was retrieved without requesting another AI generation, verified against the exact byte length and SHA-256 above, and committed as:
 
-- `public/world-assets/giant-building/giant-tower.glb`
+- `public/world-assets/giant-building/terrace-tower-e7e96cc3.glb`
 - `public/world-assets/giant-building/current.json`
 
 ## Runtime representation
 
-The five-portal valley now loads the **exact owner-selected GLB**, not the earlier procedural floor-profile derivative. Runtime validates HTTP success, GLB container length and SHA-256 before parsing it with Three.js.
+The five-portal valley now loads the **exact owner-selected GLB**, not the earlier procedural floor-profile derivative. Runtime validates HTTP success, exact decoded length, GLB container and SHA-256 before parsing it with Three.js. Build preparation creates a lossless `.glb.gz` transport (about 8.45 MB rather than 21.05 MB), preserving every source byte. Browsers without gzip-stream decoding use the original GLB. A failed compressed delivery falls back once to that original path; no model generation is involved.
 
-The building remains lazy-loaded after the core world/avatar so a large landmark cannot block the five portals or the Queen startup. The exterior is scaled and positioned as a GAME world instance only; that transform does not claim real-world architectural scale or engineering validation.
+The building remains lazy-loaded independently of the core world/avatar. The UI reports download and preparation progress; bounded network/decoding failures expose a building-only retry. Verified bytes are reused across world visits, unused reads are cancelled, and character changes retain the existing world, vehicles and landmark. The exterior is scaled and positioned as a GAME world instance only; that transform does not claim real-world architectural scale or engineering validation.
 
 ## Interior truth boundary
 
