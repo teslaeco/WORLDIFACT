@@ -46,9 +46,13 @@ export class BlueprintClient {
     throw new Error('This request is pending or its acceptance is not yet confirmed. Recover the same request; no second generation or charge has been started.')
   }
   async submit(payload: Payload, signal?: AbortSignal): Promise<GenerationResult> {
+    signal?.throwIfAborted()
     const fingerprint = await blueprintFingerprint(payload), previous = this.current()
     if (previous?.state === 'pending' && previous.fingerprint !== fingerprint) throw new Error('Different inputs cannot replace a pending paid request. Recover the existing request first.')
     if (previous?.state === 'pending' || previous?.fingerprint === fingerprint) return this.recover(signal)
+    // Cancellation before allocation is known not to have submitted anything.
+    // Do not strand a new durable request while an earlier local save/hash ran.
+    signal?.throwIfAborted()
     const record: BlueprintRecovery = { id: crypto.randomUUID(), fingerprint, model: payload.model, state: 'pending', createdAt: Date.now() }
     this.save(record) // Fail closed if durable browser recovery storage is unavailable.
     const response = await this.fetcher('/api/blueprint', {

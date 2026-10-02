@@ -219,3 +219,17 @@ test('a denial code cannot mask uncertain acceptance or be restored on a pending
     assert.throws(() => client.current(), /metadata needs review/)
   }
 })
+
+test('cancellation before Blueprint allocation creates no orphan receipt or request', async () => {
+  const data = new Map<string, string>()
+  const store = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value) }, removeItem: (key: string) => { data.delete(key) } }
+  let calls = 0
+  const client = new BlueprintClient(store, (async () => { calls++; throw new Error('No request should start') }) as typeof fetch)
+  const already = new AbortController(); already.abort()
+  await assert.rejects(client.submit(payload(), already.signal), { name: 'AbortError' })
+  assert.equal(client.current(), null); assert.equal(calls, 0)
+  const duringHash = new AbortController(), submission = client.submit(payload(), duringHash.signal)
+  duringHash.abort()
+  await assert.rejects(submission, { name: 'AbortError' })
+  assert.equal(client.current(), null); assert.equal(calls, 0)
+})

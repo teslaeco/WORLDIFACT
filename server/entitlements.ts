@@ -21,9 +21,12 @@ export interface EntitlementStorage {
 export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
-type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed' }
+type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number }
 export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean }
-export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean }
+export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number }
+type StudioDispatchClaim = { dispatch: false } | { dispatch: true; deadline: number }
+export const STUDIO_DISPATCH_WINDOW_MS = 30_000
+export const STUDIO_ORACLE_TIMEOUT_MS = 25_000
 export type CurrentStudioJob = { id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
 export type ClosedMissingStudioJob = { closed: boolean; state: Job['state']; fingerprintMatches: boolean; failureCode?: StudioFailureCode }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
@@ -56,6 +59,9 @@ const grantId = (value: unknown): value is string => typeof value === 'string' &
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
 const active = (subscription: Subscription | undefined, now: number) => !!subscription?.active && subscription.until > now
 const validInteger = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value)
+function studioDispatchUntil(job: Job): number | undefined {
+  return job.studioDispatch === 'claimed-v1' && Number.isSafeInteger(job.studioDispatchUntil) && Number(job.studioDispatchUntil) > job.at && Number(job.studioDispatchUntil) <= job.at + STUDIO_SUBMISSION_GRACE_MS ? job.studioDispatchUntil : undefined
+}
 export class EntitlementError extends Error {
   status: number
   constructor(message: string, status = 503) { super(message); this.status = status }
@@ -275,6 +281,23 @@ export class AccountEntitlements {
           return { closed: true, state: 'failed', fingerprintMatches: true, failureCode: 'MISSING_SUBMISSION' } satisfies ClosedMissingStudioJob
         }))
       }
+      if (path === '/studio-dispatch') {
+        if (Object.keys(input).some(key => !['id', 'fingerprint'].includes(key)) ||
+            typeof input.id !== 'string' || !JOB_ID.test(input.id) || typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint))
+          return json({ error: 'Invalid Studio dispatch commitment' }, 400)
+        return json(await this.storage.transaction(async storage => {
+          const job = await storage.get<Job>(`job:${input.id}`)
+          if (!job || job.channel !== 'studio' || job.fingerprint !== input.fingerprint || job.state !== 'reserved' || job.studioDispatch !== 'ready-v1') return { dispatch: false }
+          const claimedAt = this.now()
+          if (!Number.isSafeInteger(job.at) || claimedAt < job.at || claimedAt >= job.at + STUDIO_SUBMISSION_GRACE_MS) return { dispatch: false }
+          const deadline = Math.min(claimedAt + STUDIO_DISPATCH_WINDOW_MS, job.at + STUDIO_SUBMISSION_GRACE_MS)
+          // One-use fence, atomic with terminal settlement. A lost response is
+          // recovery-only; a delayed acknowledgement cannot launch after this
+          // bounded deadline. Legacy rows cannot acquire dispatch permission.
+          await storage.put(`job:${input.id}`, { ...job, studioDispatch: 'claimed-v1', studioDispatchUntil: deadline })
+          return { dispatch: true, deadline }
+        }))
+      }
       if (path === '/reserve') {
         if (typeof input.id !== 'string' || !JOB_ID.test(input.id) || !['fast', 'slow'].includes(String(input.profile))) return json({ error: 'Invalid generation' }, 400)
         if (input.fingerprint !== undefined && (typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint))) return json({ error: 'Invalid request fingerprint' }, 400)
@@ -337,7 +360,7 @@ export class AccountEntitlements {
             await storage.put(PROVIDER_BUDGET, approved ? remaining : remaining - ceiling)
           }
           const cloudHold = paid && channel === 'studio'
-          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved' }
+          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
@@ -356,7 +379,8 @@ export class AccountEntitlements {
           if (!job) return json({ owned: false, downloadAllowed: false, previewOnly: false })
           const subscription = await this.storage.get<Subscription>('subscription')
           const allowed = job.state === 'completed' && (job.profile === 'fast' || active(subscription, now)) && await balance(this.storage) >= 0 && await this.storage.get<boolean>('billingHold') !== true
-          return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, held: job.billingMode === 'hold-v1' && job.state === 'reserved' })
+          const dispatchUntil = studioDispatchUntil(job)
+          return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, held: job.billingMode === 'hold-v1' && job.state === 'reserved', ...(dispatchUntil ? { studioDispatchUntil: dispatchUntil } : {}) })
         }
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
         const next = input.state as 'completed' | 'failed'
@@ -364,6 +388,12 @@ export class AccountEntitlements {
         return json(await this.storage.transaction(async storage => {
           const job = await storage.get<Job>(`job:${id}`)
           if (!job) return { settled: false, reason: 'NOT_OWNED' }
+          // A 404 snapshot can predate a claim which won this same transaction
+          // queue. Recheck the dispatch tail atomically with missing-job closure;
+          // real Oracle terminal failures retain their existing settlement path.
+          const dispatchUntil = studioDispatchUntil(job)
+          if (job.state === 'reserved' && next === 'failed' && input.failureCode === 'ORACLE_JOB_MISSING' && dispatchUntil && this.now() < dispatchUntil + STUDIO_ORACLE_TIMEOUT_MS)
+            return { settled: false }
           // Terminal results are immutable. Transport uncertainty MUST NOT call /settle failed.
           return settleReservedJob(storage, id, job, next, now, input.failureCode as StudioFailureCode | undefined)
         }))
@@ -565,6 +595,16 @@ export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string
 export const currentUserStudioJob = (env: EntitlementEnv, userId: string) => entitlementCall<{ job: CurrentStudioJob | null }>(env, userId, '/studio-current', {})
 export const clearCurrentUserStudioJob = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<{ cleared: boolean }>(env, userId, '/studio-current-clear', { id: jobId })
 export const closeMissingStudioJob = (env: EntitlementEnv, userId: string, jobId: string, fingerprint: string, issued: number) => entitlementCall<ClosedMissingStudioJob>(env, userId, '/studio-close-missing', { id: jobId, fingerprint, issued })
+export async function markStudioDispatch(env: EntitlementEnv, userId: string, jobId: string, fingerprint: string): Promise<StudioDispatchClaim> {
+  const value = await entitlementCall<unknown>(env, userId, '/studio-dispatch', { id: jobId, fingerprint })
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const claim = value as Record<string, unknown>
+    if (claim.dispatch === false && Object.keys(claim).length === 1) return { dispatch: false }
+    if (claim.dispatch === true && Object.keys(claim).length === 2 && Number.isSafeInteger(claim.deadline) && Number(claim.deadline) > 0 && Number(claim.deadline) <= Date.now() + STUDIO_DISPATCH_WINDOW_MS)
+      return { dispatch: true, deadline: Number(claim.deadline) }
+  }
+  throw new EntitlementError('The Studio dispatch acknowledgement could not be verified.')
+}
 export async function entitlementApi(request: Request, env: AccountEnv & EntitlementEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
   if (new URL(request.url).pathname !== '/api/account/entitlements') return null
   if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
