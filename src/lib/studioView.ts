@@ -5,6 +5,7 @@ export function mayExportCurrentJob(id: string | undefined, state: string | unde
   return !!id && state === 'succeeded' && (!preview || (preview.origin === 'job' && preview.id === id))
 }
 export function previewFileName(preview: StudioPreviewIdentity): string {
+  if (preview.origin === 'archive' && /^blueprint:[a-f0-9]{64}$/.test(preview.id)) return `WORLDIFACT-${preview.id.replace(':', '-')}.glb`
   if (!/^[a-f0-9-]{36}$/.test(preview.id)) throw new Error('Invalid model identity.')
   return `WORLDIFACT-${preview.id}.glb`
 }
