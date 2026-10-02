@@ -226,6 +226,9 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
   const compatible = state.ready === true && state.provider === 'openai' && state.model === 'gpt-6-astra' && Number.isSafeInteger(state.connectorVersion) && Number(state.connectorVersion) >= 33
   const fastReady = compatible && supportsFastDraft(state)
   return { ...detailedRuntime(state), ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
+    // Read-only evidence of the exact reviewed no-AI export helper. Unknown or
+    // newer revisions require review; this does not invoke or enable exports.
+    exportPreparationReady: compatible && state.posthocExportRevision === 2 && state.legacyGlbExportRecoveryRevision === 1,
     fastBudgetReady: fastReady && state.fastBudgetRevision === 'fast-usd4-v1' && state.fastBudgetMaxUsd === 4,
     promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
 }
@@ -312,6 +315,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : (!pool.unlimited && pool.remaining === 0) ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : accountPolicy(env) && !state.costGuardReady ? 'ASTRA_COST_GUARD_REQUIRED' : accountPolicy(env) && !state.outputPolicyReady ? 'ASTRA_OUTPUT_POLICY_REQUIRED' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
       return json({ detailedReady: reason === 'READY' && state?.costGuardReady === true && state?.outputPolicyReady === true, detailedReferenceLimit: DETAILED_REFERENCE_LIMIT, costGuardReady: state?.costGuardReady === true, outputPolicyReady: state?.outputPolicyReady === true, accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
         photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, fastBudgetReady: state?.fastBudgetReady === true,
+        exportPreparationReady: state?.exportPreparationReady === true,
         fastOnly: trial, promptMaxLength: Math.min(4000, Math.max(3, (state?.promptMaxLength ?? 2000) - oracleStudioPayload('', { worldId: 'enchanted-ai-shop', prompt: '', purpose: 'figurine', textureMaxSize: 4096, photos: [] }).prompt.length)), allowance: pool })
     }
     if (!secretReady(env)) throw new StudioError('The job receipt service is not configured.', 503)
