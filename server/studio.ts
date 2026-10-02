@@ -3,12 +3,13 @@ import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
-import { entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
+import { clearCurrentUserStudioJob, currentUserStudioJob, entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
 import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, JOB_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
+const STUDIO_JOB_WATCHDOG_MS = 35 * 60_000
 const RECEIPT = new RegExp(`^(${UUID})\\.([0-9]{13})\\.([a-f0-9]{64})\\.([a-f0-9]{64})$`)
 const EXPORTS: Record<string, { name: string; type: string; limit: number }> = {
   pbr: { name: 'textures-pbr.zip', type: 'application/zip', limit: 512 * 1024 * 1024 },
@@ -77,14 +78,26 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
   if (!userId) return { id, state, detail: JOB_DETAILS[state] }
   const previous = await accountAccess(env, userId, id)
   if (previous?.state === 'failed') state = 'failed'
+  if (previous?.state === 'reserved' && previous.at && Date.now() - previous.at > STUDIO_JOB_WATCHDOG_MS && !['succeeded','failed','cancelled'].includes(state)) {
+    state = 'failed'
+    failureCode = 'STUDIO_TIMEOUT'
+  }
   if (state === 'succeeded' && previous?.state === 'reserved') {
-    if (await validateCompletedModel(env, userId, id, fetcher, previous.qualityProfile ?? 'standard') !== 'valid') { state = 'failed'; failureCode = 'INVALID_MODEL_OUTPUT' }
+    try {
+      if (await validateCompletedModel(env, userId, id, fetcher, previous.qualityProfile ?? 'standard') !== 'valid') { state = 'failed'; failureCode = 'INVALID_MODEL_OUTPUT' }
+    } catch (error) {
+      if (!previous.at || Date.now() - previous.at <= STUDIO_JOB_WATCHDOG_MS) throw error
+      // A success label without recoverable, verified model bytes cannot keep
+      // the customer's hold indefinitely either. Do not claim Oracle cancelled.
+      state = 'failed'; failureCode = 'STUDIO_TIMEOUT'
+    }
   }
   if (state === 'succeeded') await settleUserGeneration(env, userId, id, 'completed')
   if (state === 'failed' || state === 'cancelled') await settleUserGeneration(env, userId, id, 'failed')
   const access = await accountAccess(env, userId, id)
-  const detail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit before completing the model. Reserved customer points were returned; no automatic retry.'
-    : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The worker did not deliver a structurally valid 3D model at the requested detail level. Reserved customer points were returned; no replacement was generated.' : JOB_DETAILS[state]
+  const detail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit before completing the model. Reserved customer points were released; no automatic retry.'
+    : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The worker did not deliver a structurally valid 3D model at the requested detail level. Reserved customer points were released; no replacement was generated.'
+    : failureCode === 'STUDIO_TIMEOUT' ? 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry was started.' : JOB_DETAILS[state]
   return { id, state, detail, ...(failureCode ? { failureCode } : {}), downloadAllowed: access!.downloadAllowed,
     previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed }
 }
@@ -137,6 +150,15 @@ async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init:
   if (!origin || !env.ORACLE_API_TOKEN) throw new StudioError('The existing Oracle connection is not configured.', 503)
   return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(path.includes('/model') || path.includes('/exports/') ? 180_000 : 25_000),
     headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: path.includes('/model') ? 'model/gltf-binary' : path.includes('/exports/') ? 'application/octet-stream, application/zip' : 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) } })
+}
+async function oracleJobStatus(env: StudioEnv, id: string, fetcher: typeof fetch, requireId: boolean) {
+  const response = await oracle(env, `/v1/jobs/${id}`, fetcher)
+  if (response.status === 404) { await response.body?.cancel(); return null }
+  if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
+  const value = await limitedJson(response, 16_384)
+  if (((requireId || value.id !== undefined) && value.id !== id) || !Object.hasOwn(JOB_DETAILS, String(value.state)))
+    throw new StudioError('The worker returned an invalid job status.', 502)
+  return value
 }
 async function health(env: StudioEnv, fetcher: typeof fetch) {
   const response = await oracle(env, '/v1/health', fetcher)
@@ -234,6 +256,28 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         fastOnly: trial, promptMaxLength: Math.min(4000, Math.max(3, (state?.promptMaxLength ?? 2000) - oracleStudioPayload('', { worldId: 'enchanted-ai-shop', prompt: '', purpose: 'figurine', textureMaxSize: 4096, photos: [] }).prompt.length)), allowance: pool })
     }
     if (!secretReady(env)) throw new StudioError('The job receipt service is not configured.', 503)
+    if (url.pathname === '/api/studio/current' && request.method === 'GET') {
+      await limit(request, env, 'current')
+      const user = await accountIdentity(request, env, fetcher)
+      if (!user) throw new StudioError('Sign in to recover your cloud model.', 401)
+      const current = await currentUserStudioJob(env, user.id)
+      if (!current.job) return json({ current: null })
+      const freshReceipt = await receipt(env, current.job.id, current.job.fingerprint, user.id)
+      return json({ current: {
+        receipt: freshReceipt,
+        prompt: current.job.prompt,
+        startedAt: new Date(current.job.at).toISOString(),
+        financialState: current.job.state,
+        reservedPoints: current.job.held ? current.job.cost : 0,
+      } })
+    }
+    if (url.pathname === '/api/studio/current' && request.method === 'DELETE') {
+      const user = await accountIdentity(request, env, fetcher)
+      if (!user) throw new StudioError('Sign in to dismiss your cloud model.', 401)
+      const value = await limitedJson(request, 1024)
+      if (typeof value.id !== 'string' || !new RegExp(`^${UUID}$`).test(value.id)) throw new StudioError('Invalid cloud job.', 400)
+      return json(await clearCurrentUserStudioJob(env, user.id, value.id))
+    }
     if (url.pathname === '/api/studio/prepare' && request.method === 'POST') {
       await limit(request, env, 'prepare')
       const user = await accountIdentity(request, env, fetcher)
@@ -247,12 +291,14 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       await limit(request, env, 'submit')
       const user = await accountIdentity(request, env, fetcher)
       const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', undefined, false, user?.id)
+      const idempotencyKey = request.headers.get('X-WORLDIFACT-Idempotency-Key')
+      if (idempotencyKey && idempotencyKey !== auth.id) throw new StudioError('The generation idempotency key does not match this signed job. No new charge was made.', 409)
       if (Date.now() - auth.issued > 30 * 60_000) throw new StudioError('This unsubmitted receipt expired. Review your inputs before preparing another.', 409)
       const input = await inputFrom(request)
       if (await boundInputDigest(input, user?.id) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
       const checked = await preflight(request, env, fetcher, input, user?.id)
       if (user) {
-        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, undefined, studioQualityProfile(input))
+        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt })
         if (!userReservation.allowed) throw new StudioError('Your free allowance is used and you do not have enough credits. View your account for limits and top-ups.', 429)
         if (userReservation.repeated) return json({ job: await accountJob(env, user.id, auth.id, 'pending'), recoveryOnly: true }, 202)
       }
@@ -315,10 +361,23 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
       }
 
-      const response = await oracle(env, `/v1/jobs/${auth.id}`, fetcher)
-      if (response.status === 404) {
-        await response.body?.cancel()
-        const expired = Date.now() - auth.issued >= 180_000
+      // A previously reconciled failure is durable even if Oracle stays offline.
+      if (user && access?.owned && access.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed') })
+      const overdue = user && access?.owned && access.state === 'reserved' && access.at && Date.now() - access.at > STUDIO_JOB_WATCHDOG_MS
+      let value: Record<string, unknown> | null
+      try {
+        // Read a real terminal result first: a late browser return must still
+        // recover a model that Oracle completed while this client was away.
+        value = await oracleJobStatus(env, auth.id, fetcher, !!user)
+      } catch (error) {
+        // Transport failures cannot retain a customer hold beyond the whole-job
+        // recovery window. This settles only the authenticated account receipt;
+        // it neither cancels Oracle nor replenishes the provider-spend budget.
+        if (overdue) return json({ job: await accountJob(env, user!.id, auth.id, 'pending') })
+        throw error
+      }
+      if (value === null) {
+        const expired = Date.now() - auth.issued >= 180_000 || overdue
         if (user && access?.owned && expired) {
           return json({ job: await accountJob(env, user.id, auth.id, 'failed'), reconciledMissing: true })
         }
@@ -328,10 +387,6 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         const state = !user && expired ? 'failed' : 'pending'
         return json({ job: { id: auth.id, state, detail: JOB_DETAILS[state] } })
       }
-      if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
-      const value = await limitedJson(response, 16_384)
-      if (((user || value.id !== undefined) && value.id !== auth.id) || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new StudioError('The worker returned an invalid job status.', 502)
-
       if (user && !access?.owned) {
         const state = value.state as StudioJob['state']
         const entitlement = await entitlementStatus(env, user.id)

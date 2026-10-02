@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { AccountEntitlements, entitlementCall, entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, type EntitlementStorage, type EntitlementEnv } from '../server/entitlements.ts'
+import { AccountEntitlements, currentUserStudioJob, entitlementCall, entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, type EntitlementStorage, type EntitlementEnv } from '../server/entitlements.ts'
 import { billingApi, verifyStripeSignature, type BillingEnv } from '../server/billing.ts'
 
 const USER = 'b8867f90-8703-4d20-b97e-4b6b4c24d142'
@@ -71,6 +71,38 @@ test('Creator SOL buys exactly 30 Sol generations and cannot spend credits on As
   assert.equal(rest.filter(result => result.allowed).length, 29)
   assert.equal((await entitlementStatus(env, USER)).credits, 0)
 })
+test('Studio Astra uses a non-destructive credit hold until the cloud job settles', async () => {
+  const { env, now } = fixture()
+  await grant(env, 4500); await subscribe(env, now(), { plan: 'pro' })
+  const job = id(), fingerprint = 'a'.repeat(64)
+  const reserved = await reserveUserGeneration(env, USER, job, 'slow', undefined, fingerprint, 'standard', { channel: 'studio', prompt: 'Detailed MCC cabinet' })
+  assert.equal(reserved.allowed, true); assert.equal(reserved.cost, 250); assert.equal(reserved.held, true)
+  let state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4500)
+  assert.equal(state.reservedCredits, 250)
+  assert.equal(state.availableCredits, 4250)
+  const current = await currentUserStudioJob(env, USER)
+  assert.equal(current.job?.id, job)
+  assert.equal(current.job?.fingerprint, fingerprint)
+  assert.equal(current.job?.prompt, 'Detailed MCC cabinet')
+  const replay = await reserveUserGeneration(env, USER, job, 'slow', undefined, fingerprint, 'standard', { channel: 'studio', prompt: 'Detailed MCC cabinet' })
+  assert.equal(replay.repeated, true)
+  state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4500); assert.equal(state.reservedCredits, 250)
+
+  await settleUserGeneration(env, USER, job, 'failed')
+  state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4500); assert.equal(state.reservedCredits, 0); assert.equal(state.availableCredits, 4500)
+
+  const success = id()
+  await reserveUserGeneration(env, USER, success, 'slow', undefined, 'b'.repeat(64), 'standard', { channel: 'studio', prompt: 'Second detailed model' })
+  state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4500); assert.equal(state.reservedCredits, 250)
+  await settleUserGeneration(env, USER, success, 'completed')
+  state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4250); assert.equal(state.reservedCredits, 0); assert.equal(state.availableCredits, 4250)
+})
+
 test('Only explicit failure refunds a Sol reservation once; completed jobs are terminal', async () => {
   const { env, now } = fixture()
   await grant(env); await subscribe(env, now(), { plan: 'creator' })

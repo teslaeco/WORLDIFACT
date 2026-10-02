@@ -18,14 +18,17 @@ export interface EntitlementStorage {
 export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
-type Job = { fingerprint?: string; model?: GenerationModel; qualityProfile?: StudioQualityProfile; profile: GenerationKind; at: number; cost: number; kind: 'free' | 'credits'; state: 'reserved' | 'completed' | 'failed' }
-export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state'] }
-export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; state?: Job['state'] }
+type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed' }
+export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean }
+export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean }
+export type CurrentStudioJob = { id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
 type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
 export interface EntitlementStatus {
   credits: number
+  reservedCredits: number
+  availableCredits: number
   generationCost: 50
   generationCosts: { sol: 50; astra: 250; luna?: 15 }
   subscriptionGrant: number
@@ -38,6 +41,8 @@ export interface EntitlementStatus {
 export const ACCOUNT_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 const JOB_ID = ACCOUNT_ID
 const DAY = 86_400_000
+const CUSTOMER_RESERVED_CREDITS = 'customer-reserved-credits:v1'
+const CURRENT_STUDIO_JOB = 'current-studio-job:v1'
 const stripeId = /^(?:cus|sub|evt|in|cs|pi|ch)_[A-Za-z0-9_]{1,180}$/
 const paypalId = /^[A-Z0-9]{10,40}$/
 const grantId = (value: unknown): value is string => typeof value === 'string' && (stripeId.test(value) || /^pp_[A-Z0-9]{10,40}$/.test(value))
@@ -52,6 +57,36 @@ async function balance(storage: EntitlementStorage) {
   const value = await storage.get<number>('balance') ?? 0
   if (!validInteger(value)) throw new Error('Invalid balance')
   return value
+}
+
+async function reservedCredits(storage: EntitlementStorage) {
+  const value = await storage.get<number>(CUSTOMER_RESERVED_CREDITS) ?? 0
+  if (!validInteger(value) || value < 0) throw new Error('Invalid reserved credits')
+  return value
+}
+async function changeReservedCredits(storage: EntitlementStorage, delta: number) {
+  const next = await reservedCredits(storage) + delta
+  if (!Number.isSafeInteger(next) || next < 0) throw new Error('Invalid reserved credits')
+  await storage.put(CUSTOMER_RESERVED_CREDITS, next)
+  return next
+}
+async function settleReservedJob(storage: EntitlementStorage, id: string, job: Job, next: 'completed' | 'failed', now: number) {
+  if (job.state !== 'reserved') return { settled: true, repeated: true }
+  if (job.cost) {
+    if (job.billingMode === 'hold-v1') {
+      await changeReservedCredits(storage, -job.cost)
+      if (next === 'completed') await storage.put('balance', await balance(storage) - job.cost)
+    } else if (next === 'failed') {
+      // Legacy jobs were debited at reservation time; preserve refund semantics.
+      await storage.put('balance', await balance(storage) + job.cost)
+    }
+  } else if (next === 'failed') {
+    const free = await usage(storage, now)
+    free[job.profile] = free[job.profile].filter(item => item.id !== id)
+    await storage.put('usage', free)
+  }
+  await storage.put(`job:${id}`, { ...job, state: next, updatedAt: now })
+  return { settled: true, repeated: false }
 }
 
 // Separate from customer credits: a failed job may refund credits, never API spend.
@@ -83,14 +118,14 @@ async function usage(storage: EntitlementStorage, now: number) {
   }
 }
 async function status(storage: EntitlementStorage, now: number, astraEnabled = false): Promise<EntitlementStatus> {
-  const [credits, free, subscription, billingHold] = await Promise.all([balance(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
+  const [credits, reserved, free, subscription, billingHold] = await Promise.all([balance(storage), reservedCredits(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
   const plan: PlanId = subscription?.plan ?? 'creator'
   const period = subscription?.grantId ?? `${subscription?.id ?? 'none'}:${subscription?.until ?? 0}`
   const used = await storage.get<number>(`creator-astra:${period}`) ?? 0
   if (!Number.isSafeInteger(used) || used < 0) throw new Error('Invalid Astra period quota')
   return {
     creatorAstra: { active: astraEnabled && active(subscription, now), remaining: Math.max(0, 6 - used), maximum: 6, recommended: 2, pointsForTwo: 500 },
-    credits, generationCost: 50, generationCosts: { sol: 50, astra: 250, luna: 15 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
+    credits, reservedCredits: reserved, availableCredits: credits - reserved, generationCost: 50, generationCosts: { sol: 50, astra: 250, luna: 15 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
     subscription: { active: active(subscription, now), plan, expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
     free: { fastRemaining: Math.max(0, 2 - free.fast.length), fastResetAt: free.fast.length ? new Date(Math.min(...free.fast.map(item => item.at)) + DAY).toISOString() : null,
       slowRemaining: 0, slowResetAt: new Date((Math.floor(now / DAY) + 1) * DAY).toISOString() },
@@ -112,7 +147,7 @@ export class AccountEntitlements {
       if (path === '/billing' && request.method === 'GET') return json({ customer: await this.storage.get<string>('customer') ?? null })
       if (request.method !== 'POST') return json({ error: 'Not found' }, 404)
       const raw = await request.text()
-      if (raw.length > (path === '/blueprint-complete' ? 120_000 : 4096)) return json({ error: 'Invalid internal request' }, 400)
+      if (raw.length > (path === '/blueprint-complete' ? 120_000 : 8192)) return json({ error: 'Invalid internal request' }, 400)
       const input = JSON.parse(raw) as Record<string, unknown>
       if (!input || typeof input !== 'object' || Array.isArray(input)) return json({ error: 'Invalid internal request' }, 400)
       if (path === '/blueprint-status' || path === '/blueprint-complete') {
@@ -129,25 +164,45 @@ export class AccountEntitlements {
           // A stopped synchronous Worker cannot leave customer points reserved forever.
           // Completion and timeout reconciliation race in this same atomic transaction.
           if (job.state === 'reserved' && now - job.at > 10 * 60_000) {
-            if (job.cost) await storage.put('balance', await balance(storage) + job.cost)
-            else { const free = await usage(storage, now); free[job.profile] = free[job.profile].filter(item => item.id !== id); await storage.put('usage', free) }
-            await storage.put(`job:${id}`, { ...job, state: 'failed' })
+            await settleReservedJob(storage, id, job, 'failed', now)
             return { state: 'failed', refunded: true }
           }
           if (result && job.state === 'reserved') {
             const expected = job.model === 'luna' ? 'gpt-6-luna' : job.profile === 'slow' ? 'gpt-6-astra' : 'gpt-6-sol'
             if (result.model !== expected) return { state: job.state, saved: false }
             await storage.put(`blueprint-result:${id}`, result)
-            await storage.put(`job:${id}`, { ...job, state: 'completed' })
+            await settleReservedJob(storage, id, job, 'completed', now)
             return { state: 'completed', saved: true, result }
           }
           return { state: job.state, refunded: job.state === 'failed', ...(job.state === 'completed' ? { result: await storage.get<GenerationResult>(`blueprint-result:${id}`) } : {}) }
+        }))
+      }
+      if (path === '/studio-current') {
+        const pointer = await this.storage.get<{ id: string }>(CURRENT_STUDIO_JOB)
+        if (!pointer?.id || !JOB_ID.test(pointer.id)) return json({ job: null })
+        const job = await this.storage.get<Job>(`job:${pointer.id}`)
+        if (!job || job.channel !== 'studio' || !job.fingerprint || !/^[a-f0-9]{64}$/.test(job.fingerprint)) return json({ job: null })
+        return json({ job: { id: pointer.id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
+          updatedAt: job.updatedAt ?? job.at, state: job.state, cost: job.cost, held: job.billingMode === 'hold-v1' && job.state === 'reserved',
+          ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}) } satisfies CurrentStudioJob })
+      }
+      if (path === '/studio-current-clear') {
+        if (typeof input.id !== 'string' || !JOB_ID.test(input.id)) return json({ error: 'Invalid job' }, 400)
+        return json(await this.storage.transaction(async storage => {
+          const pointer = await storage.get<{ id: string }>(CURRENT_STUDIO_JOB)
+          if (!pointer || pointer.id !== input.id) return { cleared: false }
+          await storage.put(CURRENT_STUDIO_JOB, { id: '' })
+          return { cleared: true }
         }))
       }
       if (path === '/reserve') {
         if (typeof input.id !== 'string' || !JOB_ID.test(input.id) || !['fast', 'slow'].includes(String(input.profile))) return json({ error: 'Invalid generation' }, 400)
         if (input.fingerprint !== undefined && (typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint))) return json({ error: 'Invalid request fingerprint' }, 400)
         const fingerprint = input.fingerprint as string | undefined
+        const channel = input.channel === undefined ? 'blueprint' : String(input.channel)
+        if (!['blueprint','studio'].includes(channel)) return json({ error: 'Invalid generation channel' }, 400)
+        const prompt = input.prompt === undefined ? undefined : String(input.prompt)
+        if (prompt !== undefined && (prompt.length < 3 || prompt.length > 4000)) return json({ error: 'Invalid generation prompt' }, 400)
         const qualityProfile = input.qualityProfile === undefined ? 'standard' : String(input.qualityProfile)
         if (!['standard','industrial-electrical-cabinet-v1','reference-character-v1'].includes(qualityProfile)) return json({ error: 'Invalid generation quality profile' }, 400)
         const id = input.id, profile = input.profile as GenerationKind
@@ -159,10 +214,11 @@ export class AccountEntitlements {
           if (existing && existing.fingerprint !== fingerprint) return { allowed: false, repeated: true, reason: 'REQUEST_PAYLOAD_MISMATCH' }
           if (existing && existing.profile === profile && (existing.model ?? (existing.profile === 'fast' ? 'sol' : 'astra')) !== selectedModel) return { allowed: false, reason: 'JOB_MODEL_MISMATCH' }
           if (existing && (existing.qualityProfile ?? 'standard') !== qualityProfile) return { allowed: false, reason: 'JOB_QUALITY_PROFILE_MISMATCH' }
+          if (existing && (existing.channel ?? 'blueprint') !== channel) return { allowed: false, reason: 'JOB_CHANNEL_MISMATCH' }
           if (existing) return existing.profile !== profile
             ? { allowed: false, reason: 'JOB_PROFILE_MISMATCH' }
             : { allowed: existing.state !== 'failed', repeated: true, state: existing.state, cost: existing.cost, kind: existing.kind, ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
-          const credits = await balance(storage), subscription = await storage.get<Subscription>('subscription')
+          const credits = await balance(storage), heldCredits = await reservedCredits(storage), subscription = await storage.get<Subscription>('subscription')
           if (credits < 0 || await storage.get<boolean>('billingHold') === true) return { allowed: false, reason: 'BILLING_REVIEW_REQUIRED' }
           const subscriptionActive = active(subscription, now)
           const plan: PlanId = subscriptionActive ? subscription?.plan ?? 'creator' : 'creator'
@@ -175,7 +231,7 @@ export class AccountEntitlements {
           if (creatorAstra && !this.astraEnabled) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
           if (creatorAstra && (!Number.isSafeInteger(used) || used < 0 || used >= 6)) return { allowed: false, reason: 'CREATOR_ASTRA_PERIOD_LIMIT' }
           const paid = subscriptionActive || credits > 0
-          if (paid && credits < cost) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
+          if (paid && credits - heldCredits < cost) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
           const free = await usage(storage, now)
           if (!paid && profile === 'slow') return { allowed: false, reason: 'FREE_SOL_ONLY' }
           if (!paid && free.fast.length >= 2) return { allowed: false, reason: 'FAST_DAILY_LIMIT' }
@@ -185,12 +241,15 @@ export class AccountEntitlements {
             if (remaining < ceiling) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
             await storage.put(PROVIDER_BUDGET, remaining - ceiling)
           }
-          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', state: 'reserved' }
-          if (paid) await storage.put('balance', credits - cost)
+          const cloudHold = paid && channel === 'studio'
+          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved' }
+          if (cloudHold) await changeReservedCredits(storage, cost)
+          else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
           if (creatorAstra) await storage.put(`creator-astra:${period}`, used + 1)
           await storage.put(`job:${id}`, job)
-          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind }
+          if (channel === 'studio') await storage.put(CURRENT_STUDIO_JOB, { id })
+          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold }
         })
         return json(result, result.allowed ? 200 : 429)
       }
@@ -202,7 +261,7 @@ export class AccountEntitlements {
           if (!job) return json({ owned: false, downloadAllowed: false, previewOnly: false })
           const subscription = await this.storage.get<Subscription>('subscription')
           const allowed = job.state === 'completed' && (job.profile === 'fast' || active(subscription, now)) && await balance(this.storage) >= 0 && await this.storage.get<boolean>('billingHold') !== true
-          return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), state: job.state })
+          return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, held: job.billingMode === 'hold-v1' && job.state === 'reserved' })
         }
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
         const next = input.state as 'completed' | 'failed'
@@ -210,13 +269,7 @@ export class AccountEntitlements {
           const job = await storage.get<Job>(`job:${id}`)
           if (!job) return { settled: false, reason: 'NOT_OWNED' }
           // Terminal results are immutable. Transport uncertainty MUST NOT call /settle failed.
-          if (job.state !== 'reserved') return { settled: true, repeated: true }
-          if (next === 'failed') {
-            if (job.cost) await storage.put('balance', await balance(storage) + job.cost)
-            else { const free = await usage(storage, now); free[job.profile] = free[job.profile].filter(item => item.id !== id); await storage.put('usage', free) }
-          }
-          await storage.put(`job:${id}`, { ...job, state: next })
-          return { settled: true, repeated: false }
+          return settleReservedJob(storage, id, job, next, now)
         }))
       }
       if (path === '/customer') {
@@ -372,9 +425,11 @@ export async function entitlementCall<T>(env: EntitlementEnv, userId: string, pa
   return response.json() as Promise<T>
 }
 export const entitlementStatus = (env: EntitlementEnv, userId: string) => entitlementCall<EntitlementStatus>(env, userId, '/status')
-export const reserveUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile) => entitlementCall<Reservation>(env, userId, '/reserve', { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}) })
+export const reserveUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string }) => entitlementCall<Reservation>(env, userId, '/reserve', { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}) })
 export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, state: 'completed' | 'failed') => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state })
 export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<JobAccess>(env, userId, '/job', { id: jobId })
+export const currentUserStudioJob = (env: EntitlementEnv, userId: string) => entitlementCall<{ job: CurrentStudioJob | null }>(env, userId, '/studio-current', {})
+export const clearCurrentUserStudioJob = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<{ cleared: boolean }>(env, userId, '/studio-current-clear', { id: jobId })
 export async function entitlementApi(request: Request, env: AccountEnv & EntitlementEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
   if (new URL(request.url).pathname !== '/api/account/entitlements') return null
   if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)

@@ -30,3 +30,12 @@ test('missing or stale identity and altered prices never fabricate a current cha
   assert.equal(quoteGeneration('sol', { ...account, credits: 49 }, billing, true).after, null)
   assert.equal(quoteGeneration('sol', { ...account, billingReview: true }, billing, true).state, 'blocked')
 })
+
+test('active cloud hold reduces only spendable points without pretending the balance was charged',()=>{
+  const pro={...account,credits:1500,reservedCredits:250,availableCredits:1250,subscription:{active:true,plan:'pro'}}
+  const quote=quoteGeneration('astra',pro,billing,true)
+  assert.equal(quote.state,'credits')
+  assert.equal(quote.after,1000)
+  assert.match(quote.message,/250 points are already reserved/)
+  assert.equal(quoteGeneration('astra',{...pro,availableCredits:200},billing,true).state,'blocked')
+})

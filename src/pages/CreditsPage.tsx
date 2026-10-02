@@ -7,7 +7,7 @@ import { onCachedBillingReturn, planPaymentAddress, planPaymentNotice } from '..
 import './CreditsPage.css'
 
 type PlanId = 'creator' | 'pro' | 'studio'
-type Balance = { credits: number; generationCost: number; generationCosts?: { sol: number; astra: number }; subscriptionGrant: number; subscription: { active: boolean; plan?: PlanId; expiresAt: string | null }; free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }; billingReview: boolean }
+type Balance = { credits: number; reservedCredits?: number; availableCredits?: number; generationCost: number; generationCosts?: { sol: number; astra: number }; subscriptionGrant: number; subscription: { active: boolean; plan?: PlanId; expiresAt: string | null }; free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }; billingReview: boolean }
 type PlanOffer = { id: PlanId; name: string; amountCents: number; credits: number; allowedModels: readonly string[]; checkoutReady: boolean; blockedReason?: string | null }
 type Billing = { portalReady?: boolean; planChangeReady?: boolean; checkoutReady: boolean; topupReady: boolean; cardReady: boolean; googlePay: 'eligible_devices' | 'unavailable'; mode: 'test' | 'live' | null; subscriptionInterval: 'month' | null; generationCosts?: { sol: number; astra: number }; plans?: Record<PlanId, PlanOffer> }
 type PayPal = { ready: boolean; mode: 'sandbox' | 'live' | null }
@@ -173,7 +173,9 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
     <header><Link to="/" className="credits-wordmark">WORLDIFAKT</Link><Link to={user ? '/account' : signInHref}>{user ? user.displayName : 'Sign in'} ↗</Link></header>
     <section className="credits-heading"><span>CHOOSE QUALITY · KEEP COSTS CONTROLLED</span><h1>Sol for speed.<br /><em>Astra when quality matters.</em></h1><p>Free and Creator use GPT-6 Sol. Pro and Studio unlock GPT-6 Astra with higher credit cost and hard provider-spend guards.</p></section>
     {user && balance && <section className="credits-balance" aria-label="Your account balance">
-      <div><span>YOUR CREDITS</span><strong>{balance.credits.toLocaleString()}</strong><small>{Math.floor(Math.max(0, balance.credits) / 50)} SOL attempts from points{['pro', 'studio'].includes(balance.subscription.plan || '') ? ` or ${Math.floor(Math.max(0, balance.credits) / 250)} ASTRA attempts` : ''} · subject to remaining API budget</small></div>
+      <div><span>YOUR CREDITS</span><strong>{balance.credits.toLocaleString()}</strong><small>{(balance.reservedCredits ?? 0) > 0
+        ? `${(balance.reservedCredits ?? 0).toLocaleString()} points reserved for an active cloud generation · ${(balance.availableCredits ?? balance.credits).toLocaleString()} available · the reservation is released on failure/timeout`
+        : `${Math.floor(Math.max(0, balance.credits) / 50)} SOL attempts from points${['pro', 'studio'].includes(balance.subscription.plan || '') ? ` or ${Math.floor(Math.max(0, balance.credits) / 250)} ASTRA attempts` : ''} · subject to remaining API budget`}</small></div>
       <div><span>MEMBERSHIP</span><strong>{member ? 'Active' : 'Free'}</strong><small>{balance.subscription.expiresAt ? `Current period ends ${new Date(balance.subscription.expiresAt).toLocaleDateString()}` : 'Daily free generations included'}</small></div>
       <button onClick={() => { setError(''); setChecking(true); void refresh() }} disabled={!!busy || checking}>{checking ? 'Refreshing…' : 'Refresh balance'}</button>
     </section>}

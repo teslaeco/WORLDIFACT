@@ -1,6 +1,6 @@
 # WORLDIFACT — TerraformingPlanet Astra heroine released
 
-Updated 1 October 2026.
+Updated 2 October 2026.
 
 ## VERIFIED — one bounded live Astra character generation
 
@@ -120,3 +120,37 @@ Exact-head checks for commit `ae1ecb0e5ba2ec27ea16cb8446fa388b0ac135ca` passed:
 No merge or production deployment has been performed for PR #166 yet. No Astra/Oracle request, point debit/refund, Stripe/PayPal/subscription mutation or server ownership transfer was introduced.
 
 Release decision: **GO for merge/deploy after explicit owner approval.**
+
+
+## P0 IN REVIEW — durable cloud Studio recovery and deferred point settlement (2 October 2026)
+
+Incident evidence: a paid detailed Astra/Blender request on Android visibly returned to the example preview after starting, while the account UI showed 250 fewer credits. A production customer must not depend on one React/browser state object to recover a paid cloud model.
+
+Branch `fix/cloud-studio-durable-recovery-20261002` implements:
+- account-ledger current Studio pointer with exact UUID, fingerprint, prompt, timestamps, quality profile and financial state;
+- account-bound `/api/studio/current` recovery that issues a fresh signed receipt for only the exact same verified account/job;
+- explicit generation idempotency header bound to the receipt UUID, with mismatch fail-closed;
+- detailed Studio credit **hold**: `credits` remains the actual balance while `reservedCredits` is unavailable for another generation; a valid completed model commits the hold and failure/invalid-output/timeout releases it;
+- no change to the separate provider/API spend budget, which remains conservative and is not replenished by customer release;
+- no change to blueprint/Sol/Luna accounting in this narrow repair;
+- Shop recovery from cloud before sample preview, persistent terminal failure UI, bounded exponential status retry, and no silent duplicate POST;
+- a 35-minute WORLDIFACT whole-job reconciliation watchdog, separate from the verified 15-minute Astra provider-request timeout;
+- account/quote UI shows held vs available points.
+
+The implementation contract is `docs/CODEX_TASK_CLOUD_STUDIO_DURABLE_RECOVERY_20261002.md`.
+
+This milestone is **not yet deployed**. Exact-head green CI is required before any release decision. This repair follow-up does not merge or deploy. No paid generation is authorized merely for validation of this code change.
+
+### Recovery/verification follow-up (2 October 2026)
+
+The failing Shop test searched source text for a literal front-image URL even though the existing view selector builds that URL dynamically. Replaced that brittle assertion with actual initial-render and lifecycle checks: no example before recovery is confirmed, labelled front/left/back/face examples after an empty recovery result, and image-failure/view-switch behavior.
+
+The review also reproduced and repaired recovery defects:
+- a pending or failed current-job lookup could unlock a new paid submit or reveal the sample before the old cloud job was known; discovery now remains gated and retries GET with bounded backoff;
+- in-flight or late unmounted discovery could overwrite the selected receipt; client mutual exclusion and abort-aware recovery preserve the newer selection;
+- a newly signed receipt for the same cloud job conflicted with immutable local receipt history; valid same-job/fingerprint revisions are retained separately, and history is saved before cloud dismissal;
+- Oracle status/transport/schema failures, or an unavailable successful model stream, bypassed the 35-minute recovery watchdog; authenticated overdue holds now settle once, while a valid late success is still recovered first. Settled failures cannot reopen or charge after a later Oracle success.
+
+Local follow-up verification: lint (existing warnings only), TypeScript, 654 non-browser tests, real local DEMO HTTP/origin checks, production build, pinned Chess/Terra/ISS assembly, and Worker deployment dry-run pass. The aggregate `npm run verify` reached the existing native Chromium regression but this executor blocked browser startup with `socket() failed: Operation not permitted`; that test was left intact, and the remaining tests were rerun separately. Exact-head GitHub CI remains the release gate.
+
+All provider calls in the regression suite are fixtures. Public health/Studio GET probes returned HTTP 200 without generation. These checks are not visual, Android, or paid-generation proof. No production customer balance or provider-budget mutation, merge, or deployment was performed during this follow-up.

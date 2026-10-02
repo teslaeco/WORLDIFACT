@@ -75,6 +75,7 @@ export default function ShopPage() {
   const [photoBusy, setPhotoBusy] = useState(false)
   const [saved, setSaved] = useState<SavedStudioJob | null>(null)
   const [job, setJob] = useState<StudioJob | null>(null)
+  const [cloudChecking, setCloudChecking] = useState(true)
   const [retry, setRetry] = useState(0)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState('')
@@ -107,20 +108,20 @@ export default function ShopPage() {
     setPreview(null)
     return epoch.current
   }
-  const dismissFinishedJob = () => {
+  const dismissFinishedJob = async () => {
     const client = coordinator.current
     if (!client || !saved || !terminal(job?.state) || operations.current.submit || operations.current.artifact) return
     try {
-      client.clearSelection()
+      await client.dismissCurrent(owner)
       clearPreview()
       setSaved(null)
       setJob(null)
       setSeconds(0)
       setError('')
-      setNotice('The previous finished/failed job receipt was archived. Your description is still here and you can generate a new model now.')
+      setNotice('The finished cloud job was archived. Your description is still here and you can explicitly start a new model.')
       promptInput.current?.focus()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The previous job could not be cleared safely.')
+      setError(e instanceof Error ? e.message : 'The finished cloud job could not be dismissed safely.')
     }
   }
 
@@ -155,7 +156,9 @@ export default function ShopPage() {
   }
   useEffect(() => {
     mounted.current = true
-    let closed = false
+    let closed = false, recoveryFailures = 0
+    let recoveryTimer: ReturnType<typeof setTimeout> | undefined
+    const recoveryAbort = new AbortController()
     const version = epoch, urls = objectUrl, flags = operations.current
     try {
       const directClient = new BlueprintClient(window.localStorage, fetch)
@@ -164,12 +167,39 @@ export default function ShopPage() {
       const client = new StudioCoordinator(window.localStorage)
       const restored = client.restore()
       coordinator.current = client
-      if (!restored && pendingCharacter.current) { setPrompt(pendingCharacter.current); setNotice('Character brief copied from your private world. Review model and points before generating.'); pendingCharacter.current = '' }
       if (restored) {
         setSaved(restored); setPrompt(restored.prompt)
         setProfile(restored.generationProfile || 'standard')
         if (restored.generationProfile === FAST_DRAFT_PROFILE) setTextureLimit(2048)
         setJob({ id: restored.receipt.id, state: 'pending', detail: JOB_DETAILS.pending })
+        setCloudChecking(false)
+      } else {
+        const recoverCloud = async () => {
+          try {
+            const recovered = await client.recoverCurrent('', recoveryAbort.signal)
+            if (closed) return
+            if (recovered) {
+              setSaved(recovered.saved); setPrompt(recovered.saved.prompt)
+              setProfile(recovered.saved.generationProfile || 'standard')
+              setJob(recovered.job)
+              setNotice('Recovered your active cloud model. No new generation or point charge was started.')
+            } else if (pendingCharacter.current) {
+              setPrompt(pendingCharacter.current)
+              setNotice('Character brief copied from your private world. Review model and points before generating.')
+              pendingCharacter.current = ''
+            }
+            setError('')
+            setCloudChecking(false)
+          } catch (e) {
+            if (closed) return
+            setError(e instanceof Error ? e.message : 'Cloud recovery is temporarily unavailable. No new generation was started.')
+            // An unavailable lookup is not proof that no cloud job exists.
+            // Keep the sample and paid submission blocked while retrying GET.
+            recoveryFailures++
+            recoveryTimer = setTimeout(recoverCloud, Math.min(120_000, 5_000 * (2 ** Math.min(recoveryFailures, 4))))
+          }
+        }
+        void recoverCloud()
       }
     } catch (e) {
       coordinator.current = null
@@ -186,7 +216,7 @@ export default function ShopPage() {
         setError('The generation services are unavailable. You can still prepare your description and use the local DEMO preview.')
     }).finally(() => { if (!closed) { flags.status = false; setChecking(false) } })
     listStudioModels().then(value => { if (!closed) setArchive(value) }).catch(() => {})
-    return () => { closed = true; mounted.current = false; version.current++; if (urls.current) URL.revokeObjectURL(urls.current) }
+    return () => { closed = true; recoveryAbort.abort(); if (recoveryTimer) clearTimeout(recoveryTimer); mounted.current = false; version.current++; if (urls.current) URL.revokeObjectURL(urls.current) }
   }, [])
 
   const loadResult = async (selected: SavedStudioJob, known?: StudioJob) => {
@@ -232,29 +262,29 @@ export default function ShopPage() {
         if (value.reconciliationRequired) {
           setNotice(value.detail)
           setSeconds(0)
-          if (value.state === 'succeeded' && value.downloadAllowed) { updateCredits(); void loadResult(selected, value) }
+          if (value.state === 'succeeded' && value.downloadAllowed) { updateCredits(); void loadResult(selected, value); return }
+          if (!stopped) timer = setTimeout(poll, 60_000)
           return
         }
         if (value.state === 'succeeded') { updateCredits(); void loadResult(selected, value); return }
         if (value.state === 'failed' || value.state === 'cancelled') {
           updateCredits()
           setSeconds(0)
-          try {
-            client.clearSelection()
-            setSaved(null)
-            setJob(null)
-            setNotice(value.detail !== JOB_DETAILS[value.state] ? value.detail : 'The previous failed/cancelled job was archived automatically. Your description is preserved and a new model can be started now.')
-          } catch {
-            setJob(value)
-          }
+          // Keep the terminal cloud job selected until the user explicitly
+          // dismisses it. This prevents the UI from falling back to the sample
+          // image and makes the refund/failure state visible and recoverable.
+          setNotice(value.detail !== JOB_DETAILS[value.state] ? value.detail : 'This cloud job finished without a usable model. No automatic retry was started. If points were reserved, settlement releases them.')
           return
         }
       } catch (e) {
         if (stopped) return
-        failures++; setError(e instanceof Error ? e.message : 'Status temporarily unavailable. Recover the same job.')
-        if (failures >= 4) return
+        failures++
+        setError(e instanceof Error ? e.message : 'Status temporarily unavailable. The same cloud job will keep retrying.')
+        setNotice('Cloud status is temporarily unavailable. WORLDIFACT will keep recovering this exact job; do not start another paid generation.')
+        if (!stopped) timer = setTimeout(poll, Math.min(120_000, 5_000 * (2 ** Math.min(failures, 4))))
+        return
       }
-      if (!stopped) timer = setTimeout(poll, STUDIO_POLL_MS * Math.min(failures + 1, 3))
+      if (!stopped) timer = setTimeout(poll, STUDIO_POLL_MS)
     }
     timer = setTimeout(poll, 1500)
     return () => { stopped = true; if (timer) clearTimeout(timer) }
@@ -295,7 +325,7 @@ export default function ShopPage() {
   const generate = async (event: React.FormEvent) => {
     event.preventDefault()
     const flags = operations.current, directClient = blueprintClient.current
-    if (flags.submit || flags.photos || flags.artifact || !previousFinished || !directClient) return
+    if (cloudChecking || flags.submit || flags.photos || flags.artifact || !previousFinished || !directClient) return
     if (recovery?.state === 'pending') { setError('Recover the pending blueprint request before starting another model.'); return }
     if (detailed) {
       const client = coordinator.current
@@ -391,7 +421,7 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
+  const canGenerate = !cloudChecking && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
     (detailed ? !detailedProblem && prompt.length <= (status?.promptMaxLength ?? 0) : fast ? fastAvailable && !photos.length && purpose !== 'terrain' : astraReady && photos.length <= BLUEPRINT_REFERENCE_LIMIT)
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
   const activeReady = detailed ? !detailedProblem : fast ? fastAvailable : astraReady
@@ -401,7 +431,7 @@ export default function ShopPage() {
     <section className="native-shop-workspace" aria-label="Create and preview a 3D product">
       <div className="native-shop-preview">
         <span className="eyebrow">3D PREVIEW</span>
-        {fastResult ? <>
+        {cloudChecking && !saved ? <div className="native-shop-progress" role="status"><h2>Checking your cloud job…</h2><p>WORLDIFACT is checking whether this account already has a model in progress. This never starts a new generation or point charge.</p></div> : fastResult ? <>
           <LiveSolPreview result={fastResult} prompt={fastPrompt} />
           <small hidden data-testid="fast-result-description">{fastResult.assetSpec?.summary ?? fastResult.blueprint.title}</small>
           {dimensionsEnabled && <p className="shop-preview-dimensions">FAST draft target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
@@ -423,7 +453,7 @@ export default function ShopPage() {
             : 'The model is built on the server. Return to this browser to recover the same job; no second generation is needed.'}</p>
           {job?.state === 'succeeded' && job.downloadAllowed === false && <Link to="/account/credits">View subscription & credits</Link>}
           {!terminal(job?.state) && !job?.reconciliationRequired && <p>Elapsed: {Math.floor(seconds / 60)}m {seconds % 60}s</p>}
-          {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={dismissFinishedJob}>Start a new model</button>}
+          {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={() => void dismissFinishedJob()}>Start a new model</button>}
         </div> : <>
           {!sampleMissing ? <img className="native-shop-sample" src={`${EXAMPLE_ORIGIN}/assets/model-${sampleView}.webp`} alt="Example 3D product preview" referrerPolicy="no-referrer" onError={() => setSampleMissing(true)} /> : <p>The example preview is temporarily unavailable. You can still create your own model.</p>}
           <div className="native-shop-views">{['front', 'left', 'back', 'face'].map(view => <button key={view} type="button" aria-pressed={sampleView === view} onClick={() => { setSampleView(view); setSampleMissing(false) }}>{view === 'left' ? 'Left side' : view[0].toUpperCase() + view.slice(1)}</button>)}</div>

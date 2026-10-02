@@ -17,7 +17,9 @@ export function readReceipt(value: unknown): StudioReceipt {
 export function readSavedStudioJob(store: ReceiptStore): SavedStudioJob | null {
   const text = store.getItem(STUDIO_RECEIPT_KEY)
   if (!text) return null
-  const value: unknown = JSON.parse(text)
+  return parseSavedStudioJob(JSON.parse(text))
+}
+function parseSavedStudioJob(value: unknown): SavedStudioJob {
   if (!object(value) || typeof value.prompt !== 'string' || value.prompt.length > 4000 || typeof value.startedAt !== 'string' || !Number.isFinite(Date.parse(value.startedAt))) throw new Error('The saved job receipt is damaged. Do not submit a duplicate job.')
   const profile = generationProfile(value.generationProfile)
   return { receipt: readReceipt(value.receipt), prompt: value.prompt, startedAt: value.startedAt,
@@ -28,8 +30,8 @@ export function parseStudioJob(value: unknown, id: string): StudioJob {
   if (!object(value) || !object(value.job) || value.job.id !== id || typeof value.job.state !== 'string' || !Object.hasOwn(JOB_DETAILS, value.job.state)) throw new Error('The response does not belong to the current model. The previous model will not be substituted.')
   const state = value.job.state as StudioJob['state']
   const reconciliationRequired = state === 'pending' && value.job.reconciliationRequired === true
-  const failureCode = state === 'failed' && ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT'].includes(String(value.job.failureCode)) ? value.job.failureCode as StudioJob['failureCode'] : undefined
-  const failureDetail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit. Reserved customer points were returned; no automatic retry.' : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were returned; no procedural replacement.' : undefined
+  const failureCode = state === 'failed' && ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT'].includes(String(value.job.failureCode)) ? value.job.failureCode as StudioJob['failureCode'] : undefined
+  const failureDetail = failureCode === 'ASTRA_COST_LIMIT' ? 'Astra stopped at this job’s cost limit. Reserved customer points were released; no automatic retry.' : failureCode === 'INVALID_MODEL_OUTPUT' ? 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.' : failureCode === 'STUDIO_TIMEOUT' ? 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.' : undefined
   return { id, state, detail: failureDetail || (reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state]), ...(failureCode ? { failureCode } : {}),
     ...(reconciliationRequired ? { reconciliationRequired: true } : {}),
     ...(typeof value.job.downloadAllowed === 'boolean' ? { downloadAllowed: value.job.downloadAllowed } : {}),
@@ -70,6 +72,7 @@ export class StudioCoordinator {
   private confirmedJob: StudioJob | null = null
   private rejectedJob: StudioJob | null = null
   private submitting = false
+  private recovering = false
   private store: ReceiptStore
   private fetcher: Fetcher
   constructor(store: ReceiptStore, fetcher: Fetcher = fetch) { this.store = store; this.fetcher = fetcher.bind(globalThis) }
@@ -80,14 +83,69 @@ export class StudioCoordinator {
     this.confirmedJob = this.rejectedJob
     return this.saved
   }
+  async recoverCurrent(owner = '', signal?: AbortSignal): Promise<{ saved: SavedStudioJob; job: StudioJob } | null> {
+    if (this.saved) return { saved: this.saved, job: this.confirmedJob ?? { id: this.saved.receipt.id, state: 'pending', detail: JOB_DETAILS.pending } }
+    if (this.recovering || this.submitting) throw new Error('Wait for cloud recovery or submission to finish before changing jobs.')
+    this.recovering = true
+    try {
+      const recoverySignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(40_000)]) : AbortSignal.timeout(40_000)
+      const response = await this.fetcher('/api/studio/current', { headers: accessHeaders(owner), cache: 'no-store', signal: recoverySignal })
+      const value = await responseJson(response)
+      recoverySignal.throwIfAborted()
+      if (!object(value)) throw new Error('The cloud job recovery record is invalid.')
+      if (value.current === null) return null
+      if (!object(value.current) || typeof value.current.prompt !== 'string' || value.current.prompt.length > 4000 ||
+        typeof value.current.startedAt !== 'string' || !Number.isFinite(Date.parse(value.current.startedAt)) ||
+        !['reserved','completed','failed'].includes(String(value.current.financialState))) throw new Error('The cloud job recovery record is invalid.')
+      const saved: SavedStudioJob = { receipt: readReceipt(value.current.receipt), prompt: value.current.prompt, startedAt: value.current.startedAt }
+      const financial = String(value.current.financialState)
+      const job: StudioJob = financial === 'completed'
+        ? { id: saved.receipt.id, state: 'succeeded', detail: JOB_DETAILS.succeeded }
+        : financial === 'failed'
+          ? { id: saved.receipt.id, state: 'failed', detail: JOB_DETAILS.failed }
+          : { id: saved.receipt.id, state: 'pending', detail: JOB_DETAILS.pending }
+      this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
+      if (this.store.getItem(STUDIO_RECEIPT_KEY) !== JSON.stringify(saved)) throw new Error('The recovered cloud receipt could not be stored. No new generation was started.')
+      this.saved = saved; this.confirmedJob = job; this.rejectedJob = null
+      return { saved, job }
+    } finally { this.recovering = false }
+  }
+  async dismissCurrent(owner = '') {
+    if (!this.saved) return
+    if (this.submitting) throw new Error('Wait for submission to finish before changing jobs.')
+    const selected = this.saved
+    this.preserveReceipt(selected)
+    const response = await this.fetcher('/api/studio/current', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner) },
+      body: JSON.stringify({ id: selected.receipt.id }), signal: AbortSignal.timeout(20_000),
+    })
+    await responseJson(response)
+    this.store.removeItem(STUDIO_RECEIPT_KEY)
+    this.saved = null; this.confirmedJob = null; this.rejectedJob = null
+  }
   private preserveReceipt(saved: SavedStudioJob) {
-    const key = STUDIO_RECEIPT_HISTORY_PREFIX + saved.receipt.id, text = JSON.stringify(saved)
-    const existing = this.store.getItem(key)
-    if (existing !== null && existing !== text) throw new Error('A different receipt is already retained for this model. Nothing was overwritten.')
+    let key = STUDIO_RECEIPT_HISTORY_PREFIX + saved.receipt.id
+    const text = JSON.stringify(saved)
+    let existing = this.store.getItem(key)
+    if (existing !== null && existing !== text) {
+      const conflict = () => new Error('A different or damaged receipt is already retained for this model. Nothing was overwritten.')
+      let original: SavedStudioJob, revision: SavedStudioJob
+      try { original = parseSavedStudioJob(JSON.parse(existing)); revision = parseSavedStudioJob(saved) }
+      catch { throw conflict() }
+      const [, originalIssued, originalFingerprint] = original.receipt.ticket.split('.')
+      const [, issued, fingerprint] = revision.receipt.ticket.split('.')
+      if (original.receipt.id !== revision.receipt.id || originalFingerprint !== fingerprint || originalIssued === issued) throw conflict()
+      // Cloud recovery re-signs the same account-bound job at a new timestamp.
+      // Keep the canonical history immutable and retain each credential revision.
+      key += `:${issued}`
+      existing = this.store.getItem(key)
+      if (existing !== null && existing !== text) throw conflict()
+    }
     if (existing === null) this.store.setItem(key, text)
     if (this.store.getItem(key) !== text) throw new Error('The previous receipt could not be retained. No new model was submitted.')
   }
   async start(input: StudioInput, onPrepared: (saved: SavedStudioJob) => void, owner = '', replaceCompleted = false): Promise<StudioJob> {
+    if (this.recovering) throw new Error('Wait for cloud recovery to finish before starting a new job.')
     if (this.submitting || (this.saved && (!replaceCompleted || !canSubmitNewDraft(this.saved.receipt.id, this.confirmedJob))))
       throw new Error('A job is already selected. Recover it instead of sending another paid request.')
     this.submitting = true
@@ -110,7 +168,7 @@ export class StudioCoordinator {
       this.saved = saved; this.confirmedJob = null; this.rejectedJob = null; onPrepared(saved)
       try {
         const result = await this.fetcher('/api/studio/jobs', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': receipt.ticket, ...accessHeaders(owner), ...previousHeaders },
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': receipt.ticket, 'X-WORLDIFACT-Idempotency-Key': receipt.id, ...accessHeaders(owner), ...previousHeaders },
           body, signal: AbortSignal.timeout(45_000),
         })
         const job = parseStudioJob(await responseJson(result), receipt.id)
