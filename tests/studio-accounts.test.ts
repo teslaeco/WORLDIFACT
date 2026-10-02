@@ -200,7 +200,7 @@ test('cloud current endpoint recovers the exact active Studio job after browser 
 
 test('a mismatched explicit idempotency key is rejected before reservation or Oracle POST', async () => {
   const f=fixture();await f.subscribe();const receipt=await f.prepare()
-  const response=await studioApi(new Request(origin+'/api/studio/jobs',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-WORLDIFACT-Job':receipt.ticket,'X-WORLDIFACT-Idempotency-Key':'00000000-0000-4000-8000-000000000000',Cookie:'__Host-worldifact-access=alice-token'},body:JSON.stringify(input)}),f.env,(async (...args)=>{throw new Error('Oracle must not be called')}) as typeof fetch)
+  const response=await studioApi(new Request(origin+'/api/studio/jobs',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-WORLDIFACT-Job':receipt.ticket,'X-WORLDIFACT-Idempotency-Key':'00000000-0000-4000-8000-000000000000',Cookie:'__Host-worldifact-access=alice-token'},body:JSON.stringify(input)}),f.env,(async ()=>{throw new Error('Oracle must not be called')}) as typeof fetch)
   assert.equal(response.status,409)
   const status=await entitlementStatus(f.env,alice)
   assert.equal(status.credits,4500);assert.equal(status.reservedCredits,0)
