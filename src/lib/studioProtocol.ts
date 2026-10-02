@@ -58,8 +58,14 @@ export type PhotoView = typeof PHOTO_VIEWS[number]
 export type TextureLimit = 2048 | 4096 | 8192
 export type StudioPhoto = { name: string; view: PhotoView; dataUrl: string; subject?: string; textureMaxSize: TextureLimit }
 export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE }
+export const STUDIO_PREPARE_VERSION = 'studio-prepare-v1' as const
+// Allows the bounded full upload and admission checks to finish before an
+// absent submission is atomically fenced against any late paid dispatch.
+export const STUDIO_SUBMISSION_GRACE_MS = 5 * 60_000
+export type StudioPrepareMetadata = Pick<StudioInput, 'worldId' | 'prompt' | 'purpose' | 'textureMaxSize' | 'generationProfile'> & { photoCount: number }
+export type StudioPrepareManifest = StudioPrepareMetadata & { version: typeof STUDIO_PREPARE_VERSION; inputDigest: string }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string }
-export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_MISSING'] as const
+export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED'] as const
 export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
 export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
 export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
@@ -68,6 +74,14 @@ export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   STUDIO_TIMEOUT: 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.',
   ORACLE_JOB_FAILED: 'The Astra/Blender worker reported that this job failed. Reserved customer points were released. Keep this job ID for diagnosis; no automatic retry.',
   ORACLE_JOB_MISSING: 'The worker could not find this submitted job after the recovery window. Reserved customer points were released. Keep this job ID for diagnosis; no automatic retry.',
+  MISSING_SUBMISSION: 'This prepared receipt has no matching account reservation or Oracle job after the recovery window. Model submission was not confirmed. Your draft is preserved; no automatic retry.',
+  ORACLE_SUBMISSION_REJECTED: 'The worker rejected this submission before generation started. Reserved customer points were released; no automatic retry.',
+  ORACLE_BUSY: 'The worker is still finishing another model and did not accept this submission. Reserved customer points were released; no automatic retry.',
+  RATE_LIMITED: 'The worker temporarily rate-limited this submission before generation started. Reserved customer points were released; no automatic retry.',
+  STORAGE_FULL: 'The worker has insufficient storage and did not accept this submission. Reserved customer points were released; no automatic retry.',
+  JOB_CAPACITY: 'The worker has reached its stored-job capacity and did not accept this submission. Reserved customer points were released; no automatic retry.',
+  STUDIO_ALLOWANCE_UNAVAILABLE: 'The generation allowance could not be reserved, so no Oracle generation was submitted. Reserved customer points were released; no automatic retry.',
+  ORACLE_CANCELLED: 'The worker reported that this job was cancelled. Reserved customer points were released; no automatic retry.',
 }
 export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -155,6 +169,24 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
 export async function inputDigest(input: StudioInput): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(input)))
   return Array.from(new Uint8Array(bytes), v => v.toString(16).padStart(2, '0')).join('')
+}
+/** Preparation sends a bounded commitment, never a second copy of the images.
+ * Its metadata is only for preflight; the full POST is independently validated
+ * and must match this canonical input digest before anything is reserved. */
+export async function prepareStudioInput(input: StudioInput): Promise<StudioPrepareManifest> {
+  const canonical = validateStudioInput(input)
+  const { photos, ...metadata } = canonical
+  return { version: STUDIO_PREPARE_VERSION, inputDigest: await inputDigest(canonical), ...metadata, photoCount: photos.length }
+}
+export function validateStudioPrepareManifest(value: unknown): StudioPrepareManifest {
+  if (!record(value) || !keys(value, ['version', 'inputDigest', 'worldId', 'prompt', 'purpose', 'textureMaxSize', 'photoCount', 'generationProfile']) ||
+      value.version !== STUDIO_PREPARE_VERSION || typeof value.inputDigest !== 'string' || !/^[a-f0-9]{64}$/.test(value.inputDigest) ||
+      !Number.isSafeInteger(value.photoCount) || Number(value.photoCount) < 0 || Number(value.photoCount) > 4)
+    throw new Error('Invalid lightweight preparation manifest. No generation was submitted.')
+  const { photos: _photos, ...metadata } = validateStudioInput({ worldId: value.worldId, prompt: value.prompt, purpose: value.purpose,
+    textureMaxSize: value.textureMaxSize, generationProfile: value.generationProfile, photos: [] })
+  if (metadata.generationProfile === FAST_DRAFT_PROFILE && value.photoCount !== 0) throw new Error('FAST v1 does not support reference photos.')
+  return { version: STUDIO_PREPARE_VERSION, inputDigest: value.inputDigest, ...metadata, photoCount: Number(value.photoCount) }
 }
 export const JOB_DETAILS: Record<StudioJob['state'], string> = {
   pending: 'Checking whether the server accepted this same job. No replacement request is sent.',

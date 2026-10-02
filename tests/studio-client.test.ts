@@ -304,3 +304,100 @@ test('safe failure codes survive cloud-only recovery and polling without exposin
   assert.equal(unknown.failureCode, undefined)
   assert.doesNotMatch(JSON.stringify(unknown), /PRIVATE_KEY/)
 })
+
+function threeLargePhotoInput(): StudioInput {
+  // Byte-sized normalized-JPEG protocol fixtures, not a generated/visual model test.
+  const bytes = new Uint8Array(700_000)
+  bytes.set([255,216,255,192,0,17,8,4,0,4,0,3,1,17,0,2,17,0,3,17,0])
+  bytes.set([255,217],bytes.length - 2)
+  const dataUrl = 'data:image/jpeg;base64,' + Buffer.from(bytes).toString('base64')
+  return { ...input, photos: (['front','left','right'] as const).map((view, i) => ({ name: `reference-${i}.jpg`, view, dataUrl, textureMaxSize: 4096 })) }
+}
+
+test('three large references are uploaded once while prepare carries only a bounded exact-digest manifest', async () => {
+  const snapshot = threeLargePhotoInput(), requests: { path: string; body: string }[] = []
+  const client = new StudioCoordinator(store(), (async (url, options) => {
+    const path = String(url), body = String(options?.body)
+    requests.push({ path, body })
+    return path.endsWith('/prepare') ? Response.json(receipt) : Response.json({ job: { id, state: 'building' } })
+  }) as typeof fetch)
+  assert.equal((await client.start(snapshot, () => {})).state, 'building')
+  assert.equal(requests.length, 2)
+  const manifest = JSON.parse(requests[0].body), submitted = JSON.parse(requests[1].body)
+  assert.equal(manifest.version, 'studio-prepare-v1'); assert.equal(manifest.photoCount, 3)
+  assert.ok(requests[0].body.length < 1024)
+  assert.doesNotMatch(requests[0].body, /data:image|dataUrl|reference-0/)
+  assert.ok(requests[1].body.length > 2_000_000)
+  assert.deepEqual(submitted, snapshot)
+  const { inputDigest, validateStudioInput } = await import('../src/lib/studioProtocol.ts')
+  assert.equal(manifest.inputDigest, await inputDigest(validateStudioInput(submitted)))
+})
+
+test('a slow single image upload has an explicit upload deadline rather than the old 45-second cap', async t => {
+  const actualTimeout = AbortSignal.timeout.bind(AbortSignal), timeouts: number[] = [], signals = new WeakMap<AbortSignal, number>()
+  t.mock.method(AbortSignal, 'timeout', (ms: number) => { timeouts.push(ms); const signal = actualTimeout(ms); signals.set(signal, ms); return signal })
+  const client = new StudioCoordinator(store(), (async (url, options) => {
+    if (String(url).endsWith('/prepare')) return Response.json(receipt)
+    assert.ok(String(options?.body).length > 2_000_000)
+    // Deterministic virtual upload: 80 seconds would abort the previous 45s cap.
+    const elapsedUploadMs = 80_000
+    assert.ok(signals.get(options!.signal!)! > elapsedUploadMs)
+    return Response.json({ job: { id, state: 'queued' } })
+  }) as typeof fetch)
+  assert.equal((await client.start(threeLargePhotoInput(), () => {})).state, 'queued')
+  assert.deepEqual(timeouts, [90_000, 180_000])
+})
+
+test('suspended upload retains its receipt across reload and reports missing submission without a refund claim or automatic POST', async () => {
+  const storage = store(), methods: string[] = []
+  const fetcher = (async (url, options) => {
+    const method = options?.method ?? 'GET'; methods.push(method)
+    if (String(url).endsWith('/prepare')) return Response.json(receipt)
+    if (method === 'POST') throw new DOMException('The user agent aborted the upload while suspended', 'AbortError')
+    return Response.json({ job: { id, state: 'failed', failureCode: 'MISSING_SUBMISSION' } })
+  }) as typeof fetch
+  const started = new StudioCoordinator(storage, fetcher)
+  assert.equal((await started.start(threeLargePhotoInput(), () => {})).state, 'pending')
+  const restored = new StudioCoordinator(storage, fetcher); restored.restore()
+  const missing = await restored.poll()
+  assert.equal(missing.failureCode, 'MISSING_SUBMISSION')
+  assert.doesNotMatch(missing.detail, /points were released|refund|worker.*failed/i)
+  assert.deepEqual(methods, ['POST','POST','GET'])
+  assert.equal(restored.current?.receipt.ticket, receipt.ticket)
+})
+
+test('an aborted status body is a recoverable connection error and never leaks the browser implementation message', async () => {
+  const storage = store(); storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: receipt.createdAt }))
+  let interrupted = true, posts = 0
+  const client = new StudioCoordinator(storage, (async (_url, options) => {
+    if (options?.method === 'POST') posts++
+    if (interrupted) return new Response(new ReadableStream({ start(controller) { controller.error(new DOMException('BodyStreamBuffer was aborted', 'AbortError')) } }), { headers: { 'Content-Type': 'application/json' } })
+    return Response.json({ job: { id, state: 'building' } })
+  }) as typeof fetch)
+  client.restore()
+  await assert.rejects(client.poll(), error => error instanceof Error && /connection was interrupted/.test(error.message) && !/BodyStreamBuffer/.test(error.message))
+  interrupted = false
+  assert.equal((await client.poll()).state, 'building')
+  assert.equal(client.current?.receipt.id, id)
+  assert.equal(posts, 0)
+})
+
+
+test('explicit admission failures keep safe codes through immediate rejection and reload without polling or resubmission', async () => {
+  for (const [status, failureCode] of [[409,'ORACLE_BUSY'],[409,'STORAGE_FULL'],[409,'JOB_CAPACITY'],[429,'RATE_LIMITED'],[503,'STUDIO_ALLOWANCE_UNAVAILABLE']] as const) {
+    const storage = store(), calls: string[] = []
+    const client = new StudioCoordinator(storage, (async url => {
+      calls.push(String(url))
+      return String(url).endsWith('/prepare') ? Response.json(receipt) : Response.json({ error: 'PRIVATE_UPSTREAM_MESSAGE', failureCode }, { status })
+    }) as typeof fetch)
+    const rejected = await client.start(input, () => {})
+    assert.equal(rejected.state, 'failed'); assert.equal(rejected.failureCode, failureCode)
+    assert.doesNotMatch(rejected.detail, /PRIVATE_UPSTREAM_MESSAGE/)
+    const restored = new StudioCoordinator(storage, (async () => { throw new Error('No further request expected') }) as typeof fetch)
+    restored.restore()
+    const recovered = await restored.poll()
+    assert.deepEqual(recovered, rejected)
+    assert.deepEqual(calls, ['/api/studio/prepare','/api/studio/jobs'])
+    assert.equal(readSavedStudioJob(storage)?.rejectionCode, failureCode)
+  }
+})

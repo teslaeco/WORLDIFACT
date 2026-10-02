@@ -1,9 +1,17 @@
-import { JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
+import { JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, prepareStudioInput, validateStudioInput, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
 import { canSubmitNewDraft } from './studioDraft.ts'
 
+// Upload is separate from provider execution: a large mobile request must not
+// inherit the short status-request deadline. Photos are uploaded only once.
+export const STUDIO_PREPARE_TIMEOUT_MS = 90_000
+export const STUDIO_SUBMIT_TIMEOUT_MS = 180_000
+// Account verification, status lookup, artifact verification and settlement all
+// complete server-side before this status JSON is returned (25+25+180s plus DO reads).
+export const STUDIO_POLL_TIMEOUT_MS = 270_000
+export const STUDIO_CONNECTION_INTERRUPTED = 'The connection was interrupted while reading this job. Keep this receipt; recovery checks the same job without starting another generation.'
 export const STUDIO_RECEIPT_KEY = 'worldifact-studio-current-v1'
 export const STUDIO_RECEIPT_HISTORY_PREFIX = 'worldifact-studio-receipt-v1:'
-export type SavedStudioJob = { receipt: StudioReceipt; prompt: string; startedAt: string; rejection?: string; generationProfile?: typeof FAST_DRAFT_PROFILE }
+export type SavedStudioJob = { receipt: StudioReceipt; prompt: string; startedAt: string; rejection?: string; rejectionCode?: StudioJob['failureCode']; generationProfile?: typeof FAST_DRAFT_PROFILE }
 export type ReceiptStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type Fetcher = typeof fetch
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -24,6 +32,7 @@ function parseSavedStudioJob(value: unknown): SavedStudioJob {
   const profile = generationProfile(value.generationProfile)
   return { receipt: readReceipt(value.receipt), prompt: value.prompt, startedAt: value.startedAt,
     ...(typeof value.rejection === 'string' && value.rejection.length <= 600 ? { rejection: value.rejection } : {}),
+    ...(STUDIO_FAILURE_CODES.includes(value.rejectionCode as NonNullable<StudioJob['failureCode']>) ? { rejectionCode: value.rejectionCode as StudioJob['failureCode'] } : {}),
     ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
 }
 export function parseStudioJob(value: unknown, id: string): StudioJob {
@@ -40,7 +49,8 @@ export function parseStudioJob(value: unknown, id: string): StudioJob {
 }
 class StudioResponseError extends Error {
   status: number
-  constructor(message: string, status: number) { super(message); this.status = status }
+  failureCode?: StudioJob['failureCode']
+  constructor(message: string, status: number, failureCode?: StudioJob['failureCode']) { super(message); this.status = status; this.failureCode = failureCode }
 }
 async function responseJson(response: Response) {
   if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('The server did not return JSON. Your model was not replaced.')
@@ -48,15 +58,22 @@ async function responseJson(response: Response) {
   if (!reader) throw new Error('The server response is empty.')
   let text = '', count = 0
   const decoder = new TextDecoder()
-  for (;;) {
+  try { for (;;) {
     const next = await reader.read()
     if (next.done) break
     count += next.value.byteLength
     if (count > 32_768) { await reader.cancel(); throw new Error('The status response is too large.') }
     text += decoder.decode(next.value, { stream: true })
+  } } catch (error) {
+    await reader.cancel().catch(() => {})
+    if (error instanceof Error && (['AbortError', 'TimeoutError'].includes(error.name) || /BodyStreamBuffer.*aborted|body.*abort/i.test(error.message))) throw new Error(STUDIO_CONNECTION_INTERRUPTED)
+    throw error
   }
   const value: unknown = JSON.parse(text + decoder.decode())
-  if (!response.ok) throw new StudioResponseError(object(value) && typeof value.error === 'string' ? value.error.slice(0, 600) : `Request failed (${response.status}).`, response.status)
+  if (!response.ok) {
+    const failureCode = object(value) && STUDIO_FAILURE_CODES.includes(value.failureCode as NonNullable<StudioJob['failureCode']>) ? value.failureCode as StudioJob['failureCode'] : undefined
+    throw new StudioResponseError(failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : object(value) && typeof value.error === 'string' ? value.error.slice(0, 600) : `Request failed (${response.status}).`, response.status, failureCode)
+  }
   return value
 }
 const accessHeaders = (owner: string): Record<string, string> => owner ? { 'X-WORLDIFACT-Owner': owner } : {}
@@ -79,7 +96,7 @@ export class StudioCoordinator {
   get current() { return this.saved }
   restore() {
     this.saved = readSavedStudioJob(this.store)
-    this.rejectedJob = this.saved?.rejection ? { id: this.saved.receipt.id, state: 'failed', detail: this.saved.rejection } : null
+    this.rejectedJob = this.saved?.rejection ? { id: this.saved.receipt.id, state: 'failed', detail: this.saved.rejectionCode ? STUDIO_FAILURE_DETAILS[this.saved.rejectionCode] : this.saved.rejection, ...(this.saved.rejectionCode ? { failureCode: this.saved.rejectionCode } : {}) } : null
     this.confirmedJob = this.rejectedJob
     return this.saved
   }
@@ -151,12 +168,13 @@ export class StudioCoordinator {
     this.submitting = true
     const previous = this.saved
     try {
-      const body = JSON.stringify(input), snapshot = JSON.parse(body) as StudioInput
+      const snapshot = validateStudioInput(input), body = JSON.stringify(snapshot)
+      const prepareBody = JSON.stringify(await prepareStudioInput(snapshot))
       // The previous signed receipt proves existing access for the one approved
       // trial. It stays in a same-origin header, never a URL or a public log.
       const previousHeaders: Record<string, string> = previous ? { 'X-WORLDIFACT-Previous-Job': previous.receipt.ticket } : {}
       const prepared = await this.fetcher('/api/studio/prepare', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner), ...previousHeaders }, body, signal: AbortSignal.timeout(45_000),
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner), ...previousHeaders }, body: prepareBody, signal: AbortSignal.timeout(STUDIO_PREPARE_TIMEOUT_MS),
       })
       const receipt = readReceipt(await responseJson(prepared))
       if (previous?.receipt.id === receipt.id) throw new Error('A new model requires a new receipt. The previous model was not changed.')
@@ -169,17 +187,17 @@ export class StudioCoordinator {
       try {
         const result = await this.fetcher('/api/studio/jobs', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': receipt.ticket, 'X-WORLDIFACT-Idempotency-Key': receipt.id, ...accessHeaders(owner), ...previousHeaders },
-          body, signal: AbortSignal.timeout(45_000),
+          body, signal: AbortSignal.timeout(STUDIO_SUBMIT_TIMEOUT_MS),
         })
         const job = parseStudioJob(await responseJson(result), receipt.id)
         this.confirmedJob = job; return job
       } catch (error) {
         // An explicit validation/auth/quota rejection is not uncertain provider
         // acceptance. Keep it terminal so a denied account does not poll forever.
-        if (error instanceof StudioResponseError && [400, 401, 403, 409, 422, 429].includes(error.status)) {
-          this.rejectedJob = { id: receipt.id, state: 'failed', detail: error.message }
+        if (error instanceof StudioResponseError && ([400, 401, 403, 409, 422, 429].includes(error.status) || error.failureCode !== undefined)) {
+          this.rejectedJob = { id: receipt.id, state: 'failed', detail: error.message, ...(error.failureCode ? { failureCode: error.failureCode } : {}) }
           this.confirmedJob = this.rejectedJob
-          this.saved = { ...saved, rejection: error.message }
+          this.saved = { ...saved, rejection: error.message, ...(error.failureCode ? { rejectionCode: error.failureCode } : {}) }
           try { this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(this.saved)) } catch { /* Explicit rejection is still terminal in this tab. */ }
           return this.rejectedJob
         }
@@ -191,7 +209,7 @@ export class StudioCoordinator {
     if (!saved) throw new Error('No job receipt is selected.')
     if (this.rejectedJob?.id === saved.receipt.id) return this.rejectedJob
     const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}`, {
-      headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(40_000),
+      headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(STUDIO_POLL_TIMEOUT_MS),
     })
     try {
       const job = parseStudioJob(await responseJson(response), saved.receipt.id)
