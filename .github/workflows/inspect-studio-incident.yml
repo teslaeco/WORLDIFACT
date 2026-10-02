@@ -1,0 +1,28 @@
+name: Inspect reported Studio incident without generation
+on:
+  push:
+    branches: ['diagnostics/studio-job-d2a64901-20261002']
+    paths: ['scripts/inspect-studio-incident.mjs', '.github/workflows/inspect-studio-incident.yml']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-studio-incident-readonly
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/diagnostics/studio-job-d2a64901-20261002'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: GET the exact reported job with safe classifications only
+        run: node scripts/inspect-studio-incident.mjs
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}

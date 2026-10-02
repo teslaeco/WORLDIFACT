@@ -1,0 +1,37 @@
+// One exact incident; GET-only, no customer/provider state mutation or raw-data output.
+import { inspectGLB } from '../src/lib/glb.ts'
+import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
+import { INDUSTRIAL_ELECTRICAL_PROFILE, REFERENCE_CHARACTER_PROFILE } from '../src/lib/studioProtocol.ts'
+import { createHash } from 'node:crypto'
+const JOB = 'd2a64901-2a4c-4581-8a2c-f022128c92ed'
+const STATES = ['pending','queued','generating','retrying','building','succeeded','failed','cancelled']
+const signals = ['WORLDIFACT_ASTRA_COST_GUARD','FORGE_JOB_BUDGET','CODEX_TOOLS_MISSING','OPENAI_HTTP_429','OPENAI_HTTP_400','max_output_tokens','timeout','timed out','incomplete','reasoning','budget','quota','rate limit','insufficient','cancelled','aborted','out of memory','MemoryError','killed','GLB','Blender','Codex','Traceback','HTTP 400','HTTP 401','HTTP 403','HTTP 404','HTTP 409','HTTP 429','HTTP 500','HTTP 502','HTTP 503','output','invalid','schema','tool','credit','refusal','image','reference','authentication','connection','disconnect','completed','success','restart','unavailable','permission','disk','space','unrecognized','unexpected','broken pipe','closed','maximum','limit','context length']
+const secret = process.env.ORACLE_API_TOKEN
+const url = new URL(process.env.ORACLE_ENDPOINT || '')
+if (url.protocol !== 'https:' || !/^[a-z0-9-]+\.trycloudflare\.com$/.test(url.hostname) || url.username || url.password || url.port || url.pathname !== '/' || url.search || url.hash || !secret || secret.length < 32 || secret.length > 256 || /\s/.test(secret)) throw new Error('CONFIGURATION_INVALID')
+const headers = { Authorization: 'Bearer ' + secret }
+const sha = bytes => createHash('sha256').update(bytes).digest('hex')
+async function bounded(response, limit) {
+ const reader=response.body?.getReader();if(!reader)throw new Error('EMPTY_BODY')
+ const chunks=[];let length=0
+ try {for(;;){const {value,done}=await reader.read();if(done)break;length+=value.length;if(length>limit)throw new Error('BODY_TOO_LARGE');chunks.push(Buffer.from(value))}return Buffer.concat(chunks)}finally{await reader.cancel().catch(()=>{})}
+}
+async function get(path, timeout=25000) {const started=Date.now();const response=await fetch(url.origin+path,{method:'GET',redirect:'error',headers,signal:AbortSignal.timeout(timeout)});return {response,started}}
+const report={checkedAt:new Date().toISOString(),scope:'single-reported-studio-job',paidRequests:0,mutations:0}
+try {
+ const {response:healthResponse}=await get('/v1/health');report.healthHttp=healthResponse.status
+ if(healthResponse.ok){const health=JSON.parse((await bounded(healthResponse,32768)).toString());report.runtime={};for(const key of ['ready','codexReady','photoInput','astraBudgetMaxUsd','connectorVersion','astraMaxOutputTokens','astraRequestTimeoutSeconds']) if(typeof health[key]==='boolean'||typeof health[key]==='number')report.runtime[key]=health[key]}
+ else await healthResponse.body?.cancel()
+ const {response,started}=await get('/v1/jobs/'+JOB);report.jobHttp=response.status;report.statusReadMs=Date.now()-started
+ if(!response.ok){await response.body?.cancel();console.log(JSON.stringify(report,null,2));process.exit(0)}
+ const job=JSON.parse((await bounded(response,65536)).toString());if(job.id!==JOB)throw new Error('JOB_IDENTITY_MISMATCH')
+ const detail=[job.detail,job.error,job.errorCode,job.error_code].filter(x=>typeof x==='string').join('\n')
+ report.job={state:STATES.includes(job.state)?job.state:'UNKNOWN',detailLength:detail.length,detailSha256:sha(detail),signals:signals.filter(x=>detail.toLowerCase().includes(x.toLowerCase()))}
+ for(const key of ['createdAt','updatedAt','startedAt','completedAt','created_at','updated_at','started_at','finished_at'])if(typeof job[key]==='string'&&/^\d{4}-\d\d-\d\d[T ][\d:.+Z-]+$/.test(job[key]))report.job[key]=job[key]
+ if(typeof job.progress==='number'&&Number.isFinite(job.progress))report.job.progress=job.progress
+ if(job.state==='succeeded'){
+  const {response,started}=await get('/v1/jobs/'+JOB+'/model',180000);report.artifact={http:response.status,declaredBytes:Number(response.headers.get('content-length'))||null,mime:['model/gltf-binary','application/octet-stream'].includes(response.headers.get('content-type'))?response.headers.get('content-type'):'OTHER'}
+  if(response.ok){try{const bytes=await bounded(response,50*1024*1024);report.artifact.receivedBytes=bytes.length;report.artifact.elapsedMs=Date.now()-started;report.artifact.sha256=sha(bytes);const model=inspectGLB(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength));report.artifact.structuralChecks={standard:passesStudioStructuralQuality(model,'standard'),cabinet:passesStudioStructuralQuality(model,INDUSTRIAL_ELECTRICAL_PROFILE),character:passesStudioStructuralQuality(model,REFERENCE_CHARACTER_PROFILE)};report.artifact.inspection=model}catch(error){report.artifact.failure=error?.name==='TimeoutError'?'TIMEOUT':error?.message==='BODY_TOO_LARGE'?'BODY_TOO_LARGE':'ARTIFACT_READ_OR_STRUCTURE_FAILED'}}else await response.body?.cancel()
+ }
+ console.log(JSON.stringify(report,null,2))
+}catch(error){report.failure=['CONFIGURATION_INVALID','EMPTY_BODY','BODY_TOO_LARGE','JOB_IDENTITY_MISMATCH'].includes(error?.message)?error.message:error?.name==='TimeoutError'?'TIMEOUT':'READ_ONLY_INSPECTION_FAILED';console.log(JSON.stringify(report,null,2));process.exitCode=1}
