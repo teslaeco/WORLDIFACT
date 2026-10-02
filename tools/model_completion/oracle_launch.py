@@ -3,8 +3,10 @@
 Default: PLAN ONLY. With --approve-service-restart, resolve the existing
 froge-blender VM, verify a pinned public package, and run the idle-only,
 backup/verification/rollback installer through strict SSH. --diagnose-job UUID
-runs only the safe ledger diagnostic when restart approval is absent. Both
-remote modes require an exact reviewed --source-commit.
+runs only the safe ledger diagnostic when restart approval is absent. Every
+remote mode requires an exact reviewed --source-commit. --stage-test-helper
+only stages the verified package and prints its helper path; it cannot execute
+the separate paid test.
 
 No paid generation, no customer credit mutation, no Stripe/PayPal change,
 no new cloud resource, and the SSH private key is never read or uploaded.
@@ -39,6 +41,8 @@ FILES = {
     'apply.py': ('tools/fast_preview/apply.py', '825f6877710169ae26f1a39ce3933232a1b3a574'),
     'completion.py': ('tools/fast_preview/completion.py', '7b026ef54dbe2719195d05349ca3927de039e287'),
     'fast_preview.py': ('tools/fast_preview/fast_preview.py', 'b350089e795e18d4b2e105cbd18a0a8f976ffa5c'),
+    # Staged only. No launcher mode executes this separately approved helper.
+    'test_original_job_once.py': ('tools/model_completion/test_original_job_once.py', '9a1d836363f2b2746954208d3fe50c4f757bae29'),
 }
 
 
@@ -163,6 +167,11 @@ for name, raw in files.items():
     fd = os.open(str(folder/name), os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'wb') as stream:
         stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+if STAGE_TEST_HELPER:
+    print(json.dumps({'phase': 'WORLDIFACT_MODEL_TEST_HELPER_STAGED',
+        'helper_path': str(folder/'test_original_job_once.py'),
+        'paid_generation_requested': False, 'service_restarted': False}, sort_keys=True), flush=True)
+    raise SystemExit(0)
 command = [sys.executable, '-B', str(folder/'install_completion.py')]
 if APPROVED:
     command.append('--approve-service-restart')
@@ -189,25 +198,31 @@ print(marker + '. Payments unchanged. Paid generation NOT RUN.', flush=True)
 '''
 
 
-def script(payload, *, approved=False, diagnose_job=None):
-    if approved is not True and diagnose_job is None:
+def script(payload, *, approved=False, diagnose_job=None, stage_test_helper=False):
+    if stage_test_helper is True and (approved is True or diagnose_job is not None):
+        raise LaunchError('Helper staging cannot be combined with maintenance or diagnostics; no connection made.')
+    if approved is not True and diagnose_job is None and stage_test_helper is not True:
         raise LaunchError('No remote operation requested; no connection made.')
     diagnose_job = job_uuid(diagnose_job) if diagnose_job is not None else None
     expected = {name: value[1] for name, value in FILES.items()}
     return ('EXPECTED = ' + repr(expected) + '\nPAYLOAD = ' + repr(payload)
             + '\nAPPROVED = ' + repr(approved is True)
-            + '\nDIAGNOSE_JOB = ' + repr(diagnose_job) + '\n' + REMOTE)
+            + '\nDIAGNOSE_JOB = ' + repr(diagnose_job)
+            + '\nSTAGE_TEST_HELPER = ' + repr(stage_test_helper is True) + '\n' + REMOTE)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--approve-service-restart', action='store_true')
-    parser.add_argument('--source-commit', help='Exact reviewed public commit (40 hex); required for either remote operation.')
+    parser.add_argument('--source-commit', help='Exact reviewed public commit (40 hex); required for every remote operation.')
     parser.add_argument('--diagnose-job', help='Exact UUID for a safe job-ledger diagnostic; does not approve maintenance.')
+    parser.add_argument('--stage-test-helper', action='store_true', help='Stage the verified helper only; no installation, diagnostic or paid execution.')
     args = parser.parse_args(argv)
     commit = source_commit(args.source_commit) if args.source_commit is not None else None
     diagnose_job = job_uuid(args.diagnose_job) if args.diagnose_job is not None else None
-    if not args.approve_service_restart and diagnose_job is None:
+    if args.stage_test_helper and (args.approve_service_restart or diagnose_job is not None):
+        raise LaunchError('Helper staging cannot be combined with maintenance or diagnostics; no connection made.')
+    if not args.approve_service_restart and diagnose_job is None and not args.stage_test_helper:
         print('PLAN ONLY. No download, SSH, installation, restart, payment change or model generation.')
         return
     commit = source_commit(commit)
@@ -215,9 +230,11 @@ def main(argv=None):
     ssh = connection()
     print('[2/3] Downloading and verifying the pinned model-completion installer package.', flush=True)
     payload = package(commit)
-    result = subprocess.run(ssh, input=script(payload, approved=args.approve_service_restart, diagnose_job=diagnose_job), text=True)
+    result = subprocess.run(ssh, input=script(payload, approved=args.approve_service_restart,
+                            diagnose_job=diagnose_job, stage_test_helper=args.stage_test_helper), text=True)
     if result.returncode:
-        operation = 'installation' if args.approve_service_restart else 'diagnostic'
+        operation = ('helper staging' if args.stage_test_helper else
+                     'installation' if args.approve_service_restart else 'diagnostic')
         raise LaunchError('Oracle model-completion ' + operation + ' is NOT confirmed. Preserve backups; do not pay for another attempt.')
 
 
