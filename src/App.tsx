@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import LoadingFallback from './components/LoadingFallback'
 import AccountStatusBar from './components/AccountStatusBar'
 import { useAccount } from './lib/account'
 import { clearAvatarAssets, loadAvatarBytes } from './lib/avatarAsset'
+import { createAvatarPreloadLifecycle } from './lib/avatarPreloadLifecycle'
 
 const PrivateGameLab = lazy(async () => import('./pages/PrivateGameLab'))
 const HomePage = lazy(async () => import('./pages/HomePage'))
@@ -18,13 +19,12 @@ const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
 function AvatarPreload() {
   const { pathname } = useLocation()
-  const { user } = useAccount()
-  // Use the login transition to prepare the exact original, not a low-detail copy.
+  const { user, loading } = useAccount()
+  const [preload] = useState(() => createAvatarPreloadLifecycle({ clear: clearAvatarAssets, load: loadAvatarBytes }))
+  // Initial session discovery and portal navigation must not cancel the world.
   useEffect(() => {
-    clearAvatarAssets()
-    if (user && pathname === '/world') void loadAvatarBytes('queen').catch(() => { /* The world offers explicit retry. */ })
-    return clearAvatarAssets
-  }, [user?.id, pathname])
+    preload.observe({ loading, userId: user?.id ?? null, pathname })
+  }, [preload, user?.id, loading, pathname])
   return null
 }
 
