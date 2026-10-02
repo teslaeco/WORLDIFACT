@@ -97,29 +97,29 @@ test('free accounts cannot start ASTRA SLOW jobs or transfer artifacts', async (
   assert.equal(status.credits, 0)
 })
 
-test('concurrent repeated SLOW submission debits 250 once; confirmed failure refunds once', async () => {
+test('concurrent repeated SLOW submission holds 250 once; confirmed failure releases the hold without a debit', async () => {
   const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
   const replies = await Promise.all(Array.from({ length: 5 }, () => f.call('/api/studio/jobs', 'POST', input, receipt.ticket)))
   assert.ok(replies.every(response => response.status === 202)); assert.equal(f.posts(), 1)
-  assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
+  { const status = await entitlementStatus(f.env, alice); assert.equal(status.credits, 4500); assert.equal(status.reservedCredits, 250); assert.equal(status.availableCredits, 4250) }
   f.fail()
   await Promise.all([f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket), f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)])
-  assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+  { const status = await entitlementStatus(f.env, alice); assert.equal(status.credits, 4500); assert.equal(status.reservedCredits, 0); assert.equal(status.availableCredits, 4500) }
 })
 
-test('an unknown acceptance stays pending briefly, then an explicit Oracle 404 releases the stale reservation', async () => {
+test('an unknown acceptance stays pending briefly, then an explicit Oracle 404 releases the held reservation', async () => {
   const f = fixture(); await f.subscribe(); const receipt = await f.prepare(); f.lose()
   await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
   await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
   const { job } = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
   assert.equal(job.state, 'pending'); assert.equal(f.posts(), 1)
-  assert.equal((await entitlementStatus(f.env, alice)).credits, 4250)
+  { const status = await entitlementStatus(f.env, alice); assert.equal(status.credits, 4500); assert.equal(status.reservedCredits, 250); assert.equal(status.availableCredits, 4250) }
   const now = Date.now
   try {
     Date.now = () => now() + 181_000
     const review = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob; reconciledMissing?: boolean }
     assert.equal(review.job.state, 'failed'); assert.equal(review.reconciledMissing, true)
-    assert.equal((await entitlementStatus(f.env, alice)).credits, 4500)
+    { const status = await entitlementStatus(f.env, alice); assert.equal(status.credits, 4500); assert.equal(status.reservedCredits, 0) }
     assert.equal(f.posts(), 1, 'recovery never submits another Oracle job')
   } finally { Date.now = now }
 })
