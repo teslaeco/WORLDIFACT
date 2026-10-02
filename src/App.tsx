@@ -15,6 +15,7 @@ const AccountPage = lazy(async () => import('./pages/AccountPage'))
 const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
 const ModelsPage = lazy(async () => import('./pages/ModelsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
+const OAuthConsentPage = lazy(async () => import('./pages/OAuthConsentPage'))
 
 function AvatarPreload() {
   const { pathname } = useLocation()
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/account/credits" element={<CreditsPage />} />
         <Route path="/account/models" element={<ModelsPage />} />
         <Route path="/account/reset" element={<ResetPasswordPage />} />
+        <Route path="/oauth/consent" element={<OAuthConsentPage />} />
         <Route path="/control" element={<ControlPage />} />
         <Route path="/portal/:portalId" element={<PortalPage />} />
         {['/chess', '/iss', '/planets', '/terra', '/shop'].map(path => (
