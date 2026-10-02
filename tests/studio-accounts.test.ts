@@ -52,10 +52,15 @@ function fixture() {
     if (status404) return Response.json({}, { status: 404 })
     return Response.json({ id: path.split('/').pop(), state, detail: failureDetail })
   }) as typeof fetch
-  const call = (path: string, method = 'GET', body?: unknown, ticket?: string, user: 'alice' | 'bob' | null = 'alice') => studioApi(new Request(origin + path, {
-    method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(ticket ? { 'X-WORLDIFACT-Job': ticket } : {}), ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  }), env, fetcher)
+  const call = (path: string, method = 'GET', body?: unknown, ticket?: string, user: 'alice' | 'bob' | null = 'alice') => {
+    const jobId = ticket?.split('.')[0]
+    return studioApi(new Request(origin + path, {
+      method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(ticket ? { 'X-WORLDIFACT-Job': ticket } : {}),
+        ...(method === 'POST' && path === '/api/studio/jobs' && jobId ? { 'X-WORLDIFACT-Idempotency-Key': jobId } : {}),
+        ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }), env, fetcher)
+  }
   const prepare = async () => await (await call('/api/studio/prepare', 'POST', input)).json() as { id: string; ticket: string }
   const subscribe = async () => {
     await entitlementCall(env, alice, '/grant', { id: 'in_subscription', credits: 4500, subscriptionId: 'sub_test' })
