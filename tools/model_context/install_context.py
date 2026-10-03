@@ -68,15 +68,14 @@ def sync_directory(path):
 
 
 @contextmanager
-def final_admission(source):
+def final_admission(source, allow_cancelled_cleanup=False, expected_cancelled=None):
     path = base.safe_path(source / 'state/jobs.sqlite')
     connection = sqlite3.connect(path.as_uri() + '?mode=rw', uri=True, timeout=2)
     try:
         connection.execute('BEGIN IMMEDIATE')
-        blocked = connection.execute("SELECT COUNT(*) FROM jobs WHERE state IS NULL OR state NOT IN ('succeeded','failed')").fetchone()[0]
-        if blocked:
-            raise Refused('cancelled_or_nonterminal_rows')
-        yield
+        from maintenance_fence import allowed_job_history
+        identities = allowed_job_history(connection, allow_cancelled_cleanup, expected_cancelled)
+        yield identities
     finally:
         connection.rollback(); connection.close()
 
@@ -321,9 +320,13 @@ class Operations(install_completion.Operations):
         previous.check_health(self.source)
 
 
-def install(source, workspace, operations, approved=False):
+def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False):
     if approved is not True:
         raise Refused('maintenance_approval_required')
+    if type(allow_cancelled_cleanup) is not bool:
+        raise Refused('cancelled_consent_invalid')
+    operations.allow_cancelled_cleanup = allow_cancelled_cleanup
+    operations.cancelled_job_ids = None  # Bound privately by the first DB gate.
     source, workspace = base.safe_path(source).absolute(), base.safe_path(workspace).absolute()
     if workspace.exists() or workspace == source or source in workspace.parents:
         raise Refused('unsafe_backup')
@@ -349,7 +352,8 @@ def install(source, workspace, operations, approved=False):
     for name, raw in original.items():
         base.atomic_write(workspace / 'originals' / name, raw)
     manifest = {'revision': 1, 'originals': {name: {'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw), 'mode': modes[name]} for name, raw in original.items()},
-                'absent_before': ['context_policy.py', policy.RECEIPT, policy.MAINTENANCE]}
+                'absent_before': ['context_policy.py', policy.RECEIPT, policy.MAINTENANCE],
+                'cancelled_cleanup_interruption_approved': allow_cancelled_cleanup}
     base.atomic_write(workspace / 'ORIGINAL_MANIFEST.json', (json.dumps(manifest, indent=2) + '\n').encode())
     base.summary_file(workspace, 'STANDARD_CONTEXT_STAGED_NOT_INSTALLED')
     with operations.quiesce() as lease:
@@ -375,6 +379,7 @@ def install(source, workspace, operations, approved=False):
             proof = {'revision': policy.REVISION,
                      'sha256': {name: hashlib.sha256(raw).hexdigest() for name, raw in changed.items()},
                      'maintenance_fence': policy.FENCE_REVISION,
+                     'cancelled_cleanup_interruption_approved': allow_cancelled_cleanup,
                      'offline_generic_pipeline': True, 'offline_standard_pipeline': True}
             desired = {**patched, **receipts, base.RECEIPT: runtime_receipt,
                        policy.RECEIPT: (json.dumps(proof, indent=2) + '\n').encode()}
@@ -392,7 +397,7 @@ def install(source, workspace, operations, approved=False):
             lease.assert_no_work()
             operations.start()
             identity = wait_for_health(lease, lambda: operations.context_health(maintenance=True))
-            with final_admission(source):
+            with final_admission(source, allow_cancelled_cleanup, operations.cancelled_job_ids):
                 lease.assert_worker_identity(identity)
                 check_marker(source, marker)
                 if any(base.read_regular(source / name) != raw for name, raw in desired.items()):
@@ -439,9 +444,9 @@ def install(source, workspace, operations, approved=False):
                             path.unlink()
                     if any(base.read_regular(source / name) != raw for name, raw in original.items()):
                         raise Refused('rollback_source_mismatch')
-                    # Old startup has no marker gate: prove no cancelled or
-                    # nonterminal rows again before its first instruction.
-                    with final_admission(source):
+                    # Old startup has no marker gate: prove unchanged bound
+                    # terminal history and no nonterminal rows before starting.
+                    with final_admission(source, allow_cancelled_cleanup, operations.cancelled_job_ids):
                         if marker_owned:
                             check_marker(source, marker)
                             (source / policy.MAINTENANCE).unlink()
@@ -462,7 +467,10 @@ def install(source, workspace, operations, approved=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--approve-service-maintenance', action='store_true')
+    parser.add_argument('--allow-cancelled-cleanup', action='store_true')
     args = parser.parse_args(argv)
+    if args.allow_cancelled_cleanup and not args.approve_service_maintenance:
+        parser.error('--allow-cancelled-cleanup also requires --approve-service-maintenance')
     if not args.approve_service_maintenance:
         print('PLAN ONLY. No source reads, service signals, installation, exports or generation.')
         return
@@ -481,7 +489,8 @@ def main(argv=None):
         parent = base.safe_path(home / '.local/state/worldifact-astra-guard')
         parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         workspace = parent / ('standard-context-' + time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '-' + uuid.uuid4().hex[:8])
-        value = install(source, workspace, Operations(source, home), approved=True)
+        value = install(source, workspace, Operations(source, home), approved=True,
+                        allow_cancelled_cleanup=args.allow_cancelled_cleanup)
         print(json.dumps(value, sort_keys=True))
         return value
 

@@ -12,7 +12,7 @@ from prebuild_policy import compact_json, factor_schema
 REVISION = 'worldifact-standard-context-v1'
 RECEIPT = '.worldifact-standard-context.json'
 MAINTENANCE = '.worldifact-standard-maintenance.json'
-FENCE_REVISION = 'pidfd-origin-no-cancel-v1'
+FENCE_REVISION = 'pidfd-origin-terminal-consent-v2'
 SOURCES = frozenset(('server.py', 'codex_runner.py', 'blender_mcp.py', 'astra_spend_v2.py',
                      'completion_policy.py', 'prebuild_policy.py', 'context_policy.py'))
 
@@ -93,6 +93,7 @@ def verified_health(root=None):
         expected = proof.get('sha256')
         if (proof.get('revision') != REVISION or not isinstance(expected, dict)
                 or set(expected) != SOURCES or proof.get('maintenance_fence') != FENCE_REVISION
+                or type(proof.get('cancelled_cleanup_interruption_approved')) is not bool
                 or proof.get('offline_generic_pipeline') is not True
                 or proof.get('offline_standard_pipeline') is not True):
             return {}
