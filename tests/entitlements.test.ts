@@ -49,11 +49,11 @@ test('FAST free quota is atomic, rolls over after24h, and survives Durable Objec
   assert.equal((await entitlementStatus(env, USER)).free.fastRemaining, 2)
   assert.equal((await reserveUserGeneration(env, USER, id(), 'fast')).allowed, true)
 })
-test('FREE is Sol-only and never opens an Astra SLOW allowance', async () => {
+test('FREE without credits keeps Astra closed while Sol retains the free allowance', async () => {
   const { env } = fixture()
   const slow = await reserveUserGeneration(env, USER, id(), 'slow')
   assert.equal(slow.allowed, false)
-  assert.equal(slow.reason, 'ASTRA_PLAN_REQUIRED')
+  assert.equal(slow.reason, 'FREE_SOL_ONLY')
   assert.equal((await entitlementStatus(env, USER)).free.slowRemaining, 0)
   assert.equal((await reserveUserGeneration(env, USER, id(), 'fast')).allowed, true)
   assert.equal((await entitlementStatus(env, USER)).free.fastRemaining, 1)
@@ -806,14 +806,15 @@ test('Historical pack allowlist rejects invalid or excessive IDs and cannot auth
   assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
 })
 
-test('One-time packs add Sol credits but never unlock Astra', async () => {
+test('One-time credit packs can fund Astra without changing membership', async () => {
   const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
   await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, f.fetcher)
   const astra = await reserveUserGeneration(f.env, USER, id(), 'slow')
-  assert.equal(astra.allowed, false); assert.equal(astra.reason, 'ASTRA_PLAN_REQUIRED')
+  assert.equal(astra.allowed, true); assert.equal(astra.cost, 250)
+  assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
   const sol = await reserveUserGeneration(f.env, USER, id(), 'fast')
   assert.equal(sol.allowed, true); assert.equal(sol.cost, 50)
-  assert.equal((await entitlementStatus(f.env, USER)).credits, 1450)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 1200)
 })
 
 
