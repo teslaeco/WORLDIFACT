@@ -196,11 +196,12 @@ test('ledger and receipt marker commit together, and missing or unsafe balances 
 
 test('reversed payment and billing review remain effective after only unused provider funds are reconciled', async () => {
   const { f, id } = await terminal()
+  f.values.set('creator-astra:in_terminal', 6)
   await f.call('/revoke', { id: 'in_terminal', credits: 1500, review: true })
   assert.equal(f.values.get(PROVIDER), -175)
   await f.reconcile(id)
   assert.equal(f.values.get(PROVIDER), -43, 'The known conservative spent liability remains debt')
   assert.equal(f.values.get('balance'), 0); assert.equal(f.values.get('billingHold'), true)
-  assert.equal(f.values.get('creator-astra:in_terminal'), 1)
+  assert.equal(f.values.get('creator-astra:in_terminal'), 6, 'Reconciliation preserves obsolete audit data')
   assert.equal((await f.reserve(crypto.randomUUID())).data.reason, 'BILLING_REVIEW_REQUIRED')
 })

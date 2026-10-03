@@ -69,6 +69,8 @@ function fixture() {
   const fund = async () => {
     await entitlementCall(env, alice, '/grant', { id: 'in_dispatch', credits: 1500, subscriptionId: 'sub_dispatch' })
     await entitlementCall(env, alice, '/subscription', { id: 'sub_dispatch', until: Date.now() + 86400000, active: true, revision: 1, plan: 'creator', grantId: 'in_dispatch' })
+    // Preserve historical audit data even when generation no longer uses it.
+    await stores.get(`account:v1:${alice}`)!.put('creator-astra:in_dispatch', 6)
   }
   const account = () => stores.get(`account:v1:${alice}`)!
   const counters = async () => ({ balance: await account().get('balance'), held: await account().get('customer-reserved-credits:v1'),
@@ -135,7 +137,7 @@ test('a terminal 404 poll wins while the original submission waits for global bu
   f.pauseBudget(gate.promise)
   const submitting = f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
   await f.budgetReached.promise
-  assert.deepEqual(await f.counters(), { balance: 1500, held: 250, provider: 875, creator: 1, global: 1 })
+  assert.deepEqual(await f.counters(), { balance: 1500, held: 250, provider: 875, creator: 6, global: 1 })
   const now = Date.now
   try {
     Date.now = () => now() + STUDIO_SUBMISSION_GRACE_MS + 1000
@@ -145,7 +147,7 @@ test('a terminal 404 poll wins while the original submission waits for global bu
     const result = await (await submitting).json() as { job: StudioJob; recoveryOnly: boolean }
     assert.equal(result.job.state, 'failed'); assert.equal(result.recoveryOnly, true)
     assert.equal(f.posts(), 0)
-    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 1050, creator: 1, global: 1 }, 'A new ordinary reservation releases only its fenced, never-dispatched provider funding; attempt quotas remain consumed')
+    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 1050, creator: 6, global: 1 }, 'A new ordinary reservation releases only its fenced, never-dispatched provider funding; historical quota data remains unchanged')
     await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
     assert.equal(f.posts(), 0, 'An exact replay cannot replace a fenced submission')
   } finally { gate.resolve(); await submitting; Date.now = now }
@@ -163,10 +165,10 @@ test('global allowance rejection releases a new ordinary reservation before any 
   assert.equal(response.status, 429)
   assert.equal((await response.json() as { failureCode: string }).failureCode, 'STUDIO_ALLOWANCE_UNAVAILABLE')
   assert.equal(f.posts(), 0)
-  assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 1050, creator: 1, global: 0 })
+  assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 1050, creator: 6, global: 0 })
   await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
   assert.equal(f.posts(), 0)
-  assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 1050, creator: 1, global: 0 })
+  assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 1050, creator: 6, global: 0 })
 })
 
 test('a dispatch claim whose acknowledgement arrives after terminal closure cannot send its original POST or a replacement', async () => {
@@ -188,7 +190,7 @@ test('a dispatch claim whose acknowledgement arrives after terminal closure cann
     assert.deepEqual(await markStudioDispatch(f.env, alice, receipt.id, receipt.ticket.split('.')[2]), { dispatch: false })
     await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
     assert.equal(f.posts(), 0)
-    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 875, creator: 1, global: 1 })
+    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 875, creator: 6, global: 1 })
   } finally { gate.resolve(); await submitting; Date.now = now }
 })
 
@@ -206,7 +208,7 @@ test('lost or malformed dispatch acknowledgement never sends Oracle work or retr
     assert.equal(f.posts(), 0)
     const account = await entitlementStatus(f.env, alice)
     assert.equal(account.reservedCredits, 250)
-    assert.deepEqual(await f.counters(), { balance: 1500, held: 250, provider: 875, creator: 1, global: 1 })
+    assert.deepEqual(await f.counters(), { balance: 1500, held: 250, provider: 875, creator: 6, global: 1 })
   }
 })
 
@@ -220,7 +222,7 @@ test('uncertain Oracle acceptance retains the claim and recovers only the exact 
   assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket, 'bob')).status, 401)
   assert.equal((await f.call('/api/studio/jobs', 'POST', { ...input, prompt: 'Changed model' }, receipt.ticket)).status, 409)
   assert.equal(f.posts(), 1)
-  assert.deepEqual(await f.counters(), { balance: 1500, held: 250, provider: 875, creator: 1, global: 1 })
+  assert.deepEqual(await f.counters(), { balance: 1500, held: 250, provider: 875, creator: 6, global: 1 })
 })
 
 test('a claim near the five-minute boundary keeps 404 recovery pending through the POST timeout tail, then blocks a stale acknowledgement', async () => {
@@ -246,7 +248,7 @@ test('a claim near the five-minute boundary keeps 404 recovery pending through t
     claimGate.resolve()
     const result = await (await submitting).json() as { job: StudioJob }
     assert.equal(result.job.state, 'failed'); assert.equal(f.posts(), 0)
-    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 875, creator: 1, global: 1 })
+    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 875, creator: 6, global: 1 })
   } finally { budgetGate.resolve(); claimGate.resolve(); await submitting; Date.now = now }
 })
 
@@ -313,6 +315,6 @@ test('a stale pre-claim 404 snapshot cannot settle through a dispatch tail which
     assert.equal(terminal.job.state, 'failed'); assert.equal(terminal.job.failureCode, 'ORACLE_JOB_MISSING')
     await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
     assert.equal(f.posts(), 1)
-    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 875, creator: 1, global: 1 })
+    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 875, creator: 6, global: 1 })
   } finally { budgetGate.resolve(); snapshotGate.resolve(); await submitting; await polling; Date.now = now }
 })

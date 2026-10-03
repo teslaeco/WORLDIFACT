@@ -26,7 +26,7 @@ const text = n => n == null || typeof n === 'boolean' ? '' : Array.isArray(n) ? 
 const nodes = tree => { const values = []; const walk = n => { if (Array.isArray(n)) n.forEach(walk); else if (React.isValidElement(n)) { values.push(n); walk(n.props.children) } }; walk(tree); return values }
 const png = 'data:image/png;base64,' + Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]).toString('base64')
 const file = (name = 'reference.png', dataUrl = png) => ({ name, type: 'image/png', size: 12, dataUrl })
-const posts = h => h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget')
+const posts = h => h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path))
 async function verified(seed, payload) {
   const world = blueprint.demoBlueprint(payload.prompt)
   world.title = `${payload.model.toUpperCase()} fixture result`
@@ -73,6 +73,10 @@ async function harness({ store = new Map(), io = transport(), accountRead, fundi
     if (path === '/api/health') return Response.json(health)
     if (path === '/api/account/entitlements') return accountRead ? accountRead(owner, init) : Response.json(funded)
     if (path === '/api/studio/reconcile-budget') return fundingRead ? fundingRead(JSON.parse(init.body), init) : Response.json({ error: 'Unavailable in fixture' }, { status: 503 })
+    if (path === '/api/billing/recovery') {
+      assert.equal(init.method, 'POST'); assert.deepEqual(JSON.parse(init.body), { action: 'status' })
+      return Response.json({ error: 'Unavailable in fixture' }, { status: 503 })
+    }
     if (path === '/api/billing/status') return Response.json({ plans: { pro: { checkoutReady: true }, studio: { checkoutReady: true } } })
     assert.match(path, /^\/api\/blueprint(?:\/requests\/[a-f0-9-]+)?$/)
     return io(path, init, owner)
@@ -130,7 +134,7 @@ async function harness({ store = new Map(), io = transport(), accountRead, fundi
       const deadline = Date.now() + 10_000
       while (Date.now() < deadline) {
         await settle()
-        if (calls.filter(call => call.method === 'POST').length === count) return
+        if (calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length === count) return
       }
       assert.fail('Expected inert POST was not reached; WebCrypto preparation did not finish')
     },
@@ -232,7 +236,7 @@ test('paid failure keeps the existing preview and never silently generates DEMO'
     h.button('Generate DEMO').props.onClick(); await h.settle()
     const previous = h.canvas().props.blueprint
     h.primary().props.onClick(); await h.waitDone()
-    assert.equal(h.canvas().props.blueprint, previous); assert.match(h.text(), /Previous preview preserved/); assert.match(h.text(), /provider funding limit/)
+    assert.equal(h.canvas().props.blueprint, previous); assert.match(h.text(), /Previous preview preserved/); assert.match(h.text(), /unreserved API funding/)
     assert.equal(posts(h).length, 1); assert.equal(JSON.parse([...h.store.values()][0]).recovery.state, 'failed')
   } finally { h.close() }
   const empty = await harness({ io: transport({ reject: true }) })

@@ -2,7 +2,42 @@
 
 Updated 3 October 2026.
 
-## IN VERIFICATION — actionable funding refusal and completed Blueprint accounting
+## IN VERIFICATION — paid membership refresh and removal of Creator attempt quota
+
+At 22:59 the owner reported another generator-limit message and specifically
+asked to repair stale cheapest-plan settings after a Pro upgrade, and remove
+generation quotas for the standard paid account. Fresh read-only Stripe evidence
+shows one active Pro subscription, upgraded on the same subscription/item, with
+the full Pro invoice paid and no pending change. There is no second subscription
+to cancel. The private local entitlement record is not directly observable here.
+
+A regression fixture reproduces upgraded points with a stale Creator projection
+when the separate subscription write rejects an older revision. The existing
+authenticated billing status recovery repairs that projection without repeating
+the credit grant or making a Stripe write. Generation screens previously never
+called that recovery. They now perform a bounded status-only membership sync on
+entry and refresh, then re-read authenticated entitlements. Billing transport
+failure must not erase an established funding refusal, and expired authentication
+must not retain the former user's allowance.
+
+The requested policy removes the Creator six-attempt period quota, while keeping
+active paid membership for Astra, owned downloads, available point checks,
+verified runtime activation and funded provider-spend limits. Standard/Creator,
+Pro and Studio use the same generation admission rules. The 250-point/USD 2 and
+explicitly accepted 500-point/USD 4 detailed-job budgets remain unchanged.
+The Credits screen also stops presenting Creator as the default highlighted
+offer for an already-verified Pro member. No actual account credit, payment,
+subscription or provider budget has been manually changed.
+
+Independent implementation review passed. The frozen local verification passes
+lint, TypeScript and 1,070 tests with zero skips; the sole failure is the retained
+native Chromium test because Chrome/Chromium is not installed in this executor.
+Hosted exact-head CI must pass that test before merge. The local HTTP check,
+production build and Wrangler dry-run also passed. Upgrade recovery, interrupted
+webhook settlement, account-switch/login races, actual paid-plan page controls
+and native SQLite funding safeguards have regression coverage. Release pending.
+
+## DEPLOYED, ACCOUNT RECOVERY UNVERIFIED — actionable funding refusal #200
 
 The owner's 22:16 screenshot shows the PR #199 client, 2,755 customer points,
 a completed funding check and continued `PROVIDER_BUDGET_EXHAUSTED` for an Astra
@@ -36,7 +71,13 @@ rollback and restart/replay. The sole local failure is the retained native
 Chromium test because this executor lacks Chrome/Chromium; it must pass in the
 exact-head hosted CI run before merge. The real local HTTP smoke check,
 production build and Wrangler deployment dry-run passed without a paid provider
-request. Production deployment remains pending.
+request. PR #200 then passed all six exact-head workflows and 1,052/1,052 tests,
+including native Chromium, with zero skips. It merged as
+`33eb7b665193b09ac85457b7f582375a9144269a`; production run
+[37152297735](https://github.com/teslaeco/WORLDIFACT/actions/runs/37152297735)
+published Cloudflare `d31617f6-a8c9-4f12-9fd9-f2d7afb931ef` at 20:41 UTC.
+LIVE assets and READY runtime checks passed. The later owner report above still
+does not establish account-specific recovery or a successful new paid model.
 
 ## DEPLOYED, ACCOUNT STILL BLOCKED — shared generation admission repair #199
 

@@ -2,7 +2,7 @@ import { validateGenerationResult, type GenerationResult } from '../src/lib/blue
 import { privateWorldStore } from './privateWorldStore.ts'
 import type { BudgetNamespace } from './budget.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
-import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId, type GenerationModel } from './generationEconomics.ts'
+import { MODEL_ECONOMICS, PLAN_CATALOG, type PlanId, type GenerationModel } from './generationEconomics.ts'
 import { STUDIO_FAILURE_CODES, STUDIO_SUBMISSION_GRACE_MS, type StudioFailureCode, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
 import type { AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
 import { STUDIO_PRICING, isStudioPricing, type StudioPricing, type StudioBudgetTier } from '../src/lib/studioPricing.ts'
@@ -14,6 +14,7 @@ export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
   ENFORCE_ACCOUNT_ENTITLEMENTS?: string
   ACCOUNT_LEDGER_MODE?: string
+  ENABLE_ASTRA_PLANS?: string
   WORLDIFACT_ASTRA_SUPPORT_ONCE?: string
   WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT?: string
 }
@@ -45,6 +46,7 @@ type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
 type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
 export interface EntitlementStatus {
+  paidGenerationPolicy: 'paid-membership-no-quota-v1'
   generationAdmission: Record<GenerationModel, { allowed: boolean; reason?: AdmissionFailureCode }>
   studioAdmission: { allowed: boolean; reason?: AdmissionFailureCode; tiers: Record<StudioBudgetTier, { allowed: boolean; reason?: AdmissionFailureCode; pricing: StudioPricing }> }
   astraSupportOnce?: { available: boolean; consumed: boolean; maximumProviderCents: 175 }
@@ -59,7 +61,7 @@ export interface EntitlementStatus {
   free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }
   slowDownloadRequiresSubscription: true
   billingReview: boolean
-  creatorAstra: { active: boolean; remaining: number; maximum: 6; recommended: 2; pointsForTwo: 500 }
+  creatorAstra: { active: boolean; remaining: null; maximum: null; recommended: 2; pointsForTwo: 500 }
 }
 export const ACCOUNT_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 const JOB_ID = ACCOUNT_ID
@@ -297,9 +299,8 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
   supplemental: AstraSupplementalGrant | null = null, supplementalGlobalAvailable = false, supplementalGlobalConsumed = false, originalSupportConfigured = support !== null): Promise<EntitlementStatus> {
   const [credits, reserved, free, subscription, billingHold] = await Promise.all([balance(storage), reservedCredits(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
   const plan: PlanId = subscription?.plan ?? 'creator'
-  const period = subscription?.grantId ?? `${subscription?.id ?? 'none'}:${subscription?.until ?? 0}`
-  const used = await storage.get<number>(`creator-astra:${period}`) ?? 0
-  if (!Number.isSafeInteger(used) || used < 0) throw new Error('Invalid Astra period quota')
+  // Historical Creator counters remain untouched for audit. Admission now uses
+  // existing funded credits, never a plan-specific attempt allowance.
   // Read-only projection of the same admission order as /reserve. Never seed,
   // replenish or reveal the internal provider ledger while reading an account.
   const storedProviderBudget = await storage.get<number>(PROVIDER_BUDGET)
@@ -320,8 +321,8 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
   const admission = (model: GenerationModel, detailed = false, pricing?: StudioPricing): { allowed: boolean; reason?: AdmissionFailureCode } => {
     const blocked = (reason: AdmissionFailureCode) => ({ allowed: false, reason })
     if (credits < 0 || billingHold === true) return blocked('BILLING_REVIEW_REQUIRED')
-    if (model === 'astra' && (!subscriptionActive || !modelAllowed(plan, 'astra') || (plan === 'creator' && !astraEnabled))) return blocked('ASTRA_PLAN_REQUIRED')
-    if (model === 'astra' && plan === 'creator' && used >= 6) return blocked('CREATOR_ASTRA_PERIOD_LIMIT')
+    if (model === 'astra' && !subscriptionActive) return blocked('ASTRA_PLAN_REQUIRED')
+    if (model === 'astra' && !astraEnabled) return blocked('ASTRA_RUNTIME_DISABLED')
     const paid = subscriptionActive || credits > 0
     if (paid && credits - reserved < (pricing?.points ?? MODEL_ECONOMICS[model].creditsPerGeneration)) return blocked('CREDITS_EXHAUSTED')
     if (!paid && model === 'astra') return blocked('FREE_SOL_ONLY')
@@ -331,6 +332,7 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
     return { allowed: true }
   }
   return {
+    paidGenerationPolicy: 'paid-membership-no-quota-v1',
     generationAdmission: { luna: admission('luna'), sol: admission('sol'), astra: admission('astra') },
     studioAdmission: { ...admission('astra', true), tiers: {
       standard: { ...admission('astra', true, STUDIO_PRICING.standard), pricing: STUDIO_PRICING.standard },
@@ -338,7 +340,7 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
     } },
     ...(support ? { astraSupportOnce: { available: supportAvailable && admission('astra', true).allowed, consumed: supportConsumed, maximumProviderCents: ASTRA_SUPPORT_CENTS } } : {}),
     ...(supplemental ? { astraSupplementalGrant: { available: supplementalAvailable && admission('astra', true).allowed, consumed: supplementalConsumed, maximumProviderCents: ASTRA_SUPPLEMENTAL_CENTS } } : {}),
-    creatorAstra: { active: astraEnabled && active(subscription, now), remaining: Math.max(0, 6 - used), maximum: 6, recommended: 2, pointsForTwo: 500 },
+    creatorAstra: { active: astraEnabled && subscriptionActive, remaining: null, maximum: null, recommended: 2, pointsForTwo: 500 },
     credits, reservedCredits: reserved, availableCredits: credits - reserved, generationCost: 50, generationCosts: { sol: 50, astra: 250, luna: 15 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
     subscription: { active: active(subscription, now), plan, expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
     free: { fastRemaining: Math.max(0, 2 - free.fast.length), fastResetAt: free.fast.length ? new Date(Math.min(...free.fast.map(item => item.at)) + DAY).toISOString() : null,
@@ -548,15 +550,10 @@ export class AccountEntitlements {
           const credits = await balance(storage), heldCredits = await reservedCredits(storage), subscription = await storage.get<Subscription>('subscription')
           if (credits < 0 || await storage.get<boolean>('billingHold') === true) return { allowed: false, reason: 'BILLING_REVIEW_REQUIRED' }
           const subscriptionActive = active(subscription, now)
-          const plan: PlanId = subscriptionActive ? subscription?.plan ?? 'creator' : 'creator'
           const model = selectedModel
           const cost = pricing?.points ?? MODEL_ECONOMICS[model].creditsPerGeneration
-          if (model === 'astra' && (!subscriptionActive || !modelAllowed(plan, 'astra'))) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
-          const creatorAstra = model === 'astra' && plan === 'creator'
-          const period = subscription?.grantId ?? `${subscription?.id ?? 'none'}:${subscription?.until ?? 0}`
-          const used = creatorAstra ? await storage.get<number>(`creator-astra:${period}`) ?? 0 : 0
-          if (creatorAstra && !this.astraEnabled) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
-          if (creatorAstra && (!Number.isSafeInteger(used) || used < 0 || used >= 6)) return { allowed: false, reason: 'CREATOR_ASTRA_PERIOD_LIMIT' }
+          if (model === 'astra' && !subscriptionActive) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
+          if (model === 'astra' && !this.astraEnabled) return { allowed: false, reason: 'ASTRA_RUNTIME_DISABLED' }
           const paid = subscriptionActive || credits > 0
           if (paid && credits - heldCredits < cost) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
           const free = await usage(storage, now)
@@ -606,7 +603,6 @@ export class AccountEntitlements {
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
-          if (creatorAstra) await storage.put(`creator-astra:${period}`, used + 1)
           await storage.put(`job:${id}`, job)
           if (channel === 'studio') await storage.put(CURRENT_STUDIO_JOB, { id })
           return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold, ...(job.pricing ? { pricing: job.pricing } : {}) }

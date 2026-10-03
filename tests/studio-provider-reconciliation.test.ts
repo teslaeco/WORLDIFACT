@@ -44,7 +44,7 @@ function terminalReceipt(jobId: string, liability = 200001) {
 function fixture() {
   const env: StudioEnv = {
     OWNER_ACCESS_TOKEN: 'fixture-owner-token-'.repeat(3), ORACLE_ENDPOINT: ORACLE, ORACLE_API_TOKEN: ORACLE_TOKEN,
-    PUBLIC_PILOT: 'true', ENABLE_STUDIO_JOBS: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true',
+    PUBLIC_PILOT: 'true', ENABLE_STUDIO_JOBS: 'true', ENABLE_ASTRA_PLANS: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true',
     GENERATION_LIMITER: { async limit() { return { success: true } } },
   }
   const globalBudget = new GenerationBudget({ storage: transactionalStorage() as BudgetStorage }, env)

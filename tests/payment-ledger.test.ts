@@ -11,13 +11,13 @@ function ledger() {
     async put(key, value) { entries.set(key, structuredClone(value)) },
     transaction<T>(fn: (storage: EntitlementStorage) => Promise<T>) { const next = queued.then(() => fn(storage)); queued = next.catch(() => undefined); return next },
   }
-  let object = new AccountEntitlements({ storage })
+  let object = new AccountEntitlements({ storage }, { ENABLE_ASTRA_PLANS: 'true' })
   return {
     async call(path: string, body?: unknown) {
       const response = await object.fetch(new Request(`https://ledger.test${path}`, { method: body === undefined ? 'GET' : 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) }))
       return { status: response.status, data: await response.json() as { id: string; url: string; saved: boolean; owned: boolean; cleared: boolean; credits: number; cost: number; billingReview: boolean; reason: string; downloadAllowed: boolean; subscription: { active: boolean } } }
     },
-    restart() { object = new AccountEntitlements({ storage }) },
+    restart() { object = new AccountEntitlements({ storage }, { ENABLE_ASTRA_PLANS: 'true' }) },
   }
 }
 const ORDER = '1AB23456CD789012E'

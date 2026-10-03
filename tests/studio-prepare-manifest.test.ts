@@ -173,6 +173,7 @@ test('native SQLite Durable Object serializes absent-submission closure against 
   ` }, bundle: true, write: false, format: 'esm', platform: 'neutral' })
   const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, compatibilityDate: '2026-09-14', cf: false,
     script: bundle.outputFiles[0].text,
+    bindings: { ENABLE_ASTRA_PLANS: 'true' },
     durableObjects: { ACCOUNT_ENTITLEMENTS: { className: 'AccountEntitlements', useSQLite: true } },
     outboundService: () => { throw new Error('Native fence fixture must never contact an external service') },
   }))

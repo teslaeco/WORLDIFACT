@@ -65,6 +65,7 @@ function fixture() {
 
 test('only a newly recorded ordinary Studio debit releases unused funding once before dispatch', async () => {
   const f = fixture(); await f.fund(); const id = crypto.randomUUID()
+  f.values.set('creator-astra:in_unspent', 6)
   assert.equal((await f.reserve(id)).data.allowed, true)
   assert.equal(f.values.get(PROVIDER), 875); assert.equal(f.values.get(HELD), 250)
   assert.equal((await f.reserve(id)).data.repeated, true)
@@ -72,7 +73,7 @@ test('only a newly recorded ordinary Studio debit releases unused funding once b
   f.restart()
   await Promise.all(Array.from({ length: 12 }, () => f.settle(id)))
   assert.equal(f.values.get(PROVIDER), 1050); assert.equal(f.values.get(HELD), 0); assert.equal(f.values.get('balance'), 1500)
-  assert.equal(f.values.get('creator-astra:in_unspent'), 1, 'Attempt quota is not reset')
+  assert.equal(f.values.get('creator-astra:in_unspent'), 6, 'Historical quota data is neither incremented nor reset')
   assert.equal((f.job(id).studioProviderReservation as { state: string }).state, 'released')
   f.restart()
   assert.equal((await f.reserve(id)).data.allowed, false)

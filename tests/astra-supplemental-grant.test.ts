@@ -192,7 +192,7 @@ test('default and explicit live ledgers admit exactly 175 support cents and pres
     assert.equal(store.values.get('balance'), 1500)
     assert.equal(store.values.get(HELD), 250)
     assert.equal(store.values.get(PROVIDER), 0, 'Supplemental funding and this reservation leave paid funding unchanged')
-    assert.equal(store.values.get('creator-astra:in_Synthetic'), 1)
+    assert.equal(store.values.has('creator-astra:in_Synthetic'), false, 'Funded generation does not create a subscription quota')
     const marker = store.values.get(MARKER) as Record<string, unknown>
     assert.deepEqual(marker, { version: 1, accountId: OWNER, grantId: APPROVAL, amountCents: 175, jobId: job, fingerprint: FINGERPRINT, at: NOW, issuedAt: new Date(NOW).toISOString(), expiresAt: new Date(NOW + DAY).toISOString() }, 'The durable claim must bind its source, job and request')
     assert.deepEqual(store.values.get('grant:in_Synthetic'), paidGrant)
@@ -276,17 +276,18 @@ test('support status peeks are read-only before use, after consumption and when 
   assert.equal(legacyStore.values.has(PROVIDER), false, 'An eligibility read may never initialize provider funding')
 })
 
-test('support does not bypass billing review, plan activation, point holds, Creator quota or negative provider debt', async () => {
+test('support does not bypass billing review, paid membership, runtime activation, point holds or negative provider debt', async () => {
   const active = { id: 'sub_Synthetic', active: true, until: NOW + DAY, revision: 1, plan: 'creator', grantId: 'in_Synthetic' }
   const cases: { label: string; seed?: Record<string, unknown>; enabled?: boolean; reason: string }[] = [
     { label: 'billing review', seed: { billingHold: true }, reason: 'BILLING_REVIEW_REQUIRED' },
     { label: 'negative points', seed: { balance: -1 }, reason: 'BILLING_REVIEW_REQUIRED' },
     { label: 'inactive subscription', seed: { subscription: { ...active, active: false } }, reason: 'ASTRA_PLAN_REQUIRED' },
     { label: 'expired subscription', seed: { subscription: { ...active, until: NOW } }, reason: 'ASTRA_PLAN_REQUIRED' },
-    { label: 'disabled Creator gate', enabled: false, reason: 'ASTRA_PLAN_REQUIRED' },
+    { label: 'disabled Creator Astra runtime', enabled: false, reason: 'ASTRA_RUNTIME_DISABLED' },
+    { label: 'disabled Pro Astra runtime', seed: { subscription: { ...active, plan: 'pro' } }, enabled: false, reason: 'ASTRA_RUNTIME_DISABLED' },
+    { label: 'disabled Studio Astra runtime', seed: { subscription: { ...active, plan: 'studio' } }, enabled: false, reason: 'ASTRA_RUNTIME_DISABLED' },
     { label: 'insufficient points', seed: { balance: 249 }, reason: 'CREDITS_EXHAUSTED' },
     { label: 'points already held', seed: { [HELD]: 1251 }, reason: 'CREDITS_EXHAUSTED' },
-    { label: 'Creator period exhausted', seed: { 'creator-astra:in_Synthetic': 6 }, reason: 'CREATOR_ASTRA_PERIOD_LIMIT' },
     { label: 'negative paid funding', seed: { [PROVIDER]: -1 }, reason: 'PROVIDER_BUDGET_EXHAUSTED' },
     { label: 'larger funding debt', seed: { [PROVIDER]: -175 }, reason: 'PROVIDER_BUDGET_EXHAUSTED' },
   ]
@@ -302,6 +303,22 @@ test('support does not bypass billing review, plan activation, point holds, Crea
     assert.equal(result.allowed, false, item.label); assert.equal(result.reason, item.reason, item.label)
     assert.deepEqual(snapshot(store), before, item.label)
     assert.equal(store.values.has(MARKER), false, item.label)
+  }
+})
+
+test('active paid memberships ignore historical Creator quota while support remains one-use', async () => {
+  for (const plan of ['creator', 'pro', 'studio']) {
+    const subscription = { id: 'sub_Synthetic', active: true, until: NOW + DAY, revision: 1, plan, grantId: 'in_Synthetic' }
+    const f = fixture({ seed: { subscription, 'creator-astra:in_Synthetic': 6 } }), store = f.store()
+    const status = await f.status()
+    assert.equal(status.studioAdmission.allowed, true)
+    assert.equal(status.astraSupplementalGrant?.available, true)
+    assert.equal((await f.reserve()).allowed, true)
+    assert.equal(store.values.get(HELD), 250)
+    assert.equal(store.values.get(PROVIDER), 0)
+    assert.equal(store.values.get('creator-astra:in_Synthetic'), 6, 'Historical quota is preserved but cannot block funded member work')
+    assert.equal((await f.reserve()).reason, 'PROVIDER_BUDGET_EXHAUSTED', 'Removing the period quota cannot duplicate support authority')
+    assert.equal((await f.status()).astraSupplementalGrant?.consumed, true)
   }
 })
 
@@ -402,7 +419,7 @@ test('failed or cancelled jobs release customer points, never support authority 
     await settleUserGeneration(f.env, OWNER, job, 'failed', failureCode)
     assert.equal(store.values.get('balance'), 1500); assert.equal(store.values.get(HELD), 0)
     assert.equal(store.values.get(PROVIDER), 0); assert.deepEqual(store.values.get(MARKER), claim)
-    assert.equal(store.values.get('creator-astra:in_Synthetic'), 1)
+    assert.equal(store.values.has('creator-astra:in_Synthetic'), false, 'Funded generation does not create a subscription quota')
     assert.equal((await f.reserve(job)).reason, 'JOB_ALREADY_FAILED')
     f.env.WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT = config({ grantId: NEXT_APPROVAL }); f.restart()
     assert.equal((await f.reserve()).reason, 'PROVIDER_BUDGET_EXHAUSTED')

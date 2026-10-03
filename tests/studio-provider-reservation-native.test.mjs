@@ -107,7 +107,7 @@ test('native SQLite atomically fences undispatched Studio funding release agains
     assert.equal(failed.providerCents, 1050)
     assert.equal(failed.credits, 1500)
     assert.equal(failed.heldCredits, 0)
-    assert.equal(failed.creatorUsage, 1, 'Provider reservation release does not replenish creator generation allowance')
+    assert.equal(failed.creatorUsage, 0, 'Funded generation and reservation release do not create a subscription quota')
     assert.equal(failed.job.state, 'failed')
     assert.equal(failed.job.studioProviderReservation.state, 'released')
     assert.equal((await call(account, '/reserve', { id, profile: 'slow', channel: 'studio', fingerprint, prompt: 'Inert native Studio fixture' }, 429)).allowed, false)

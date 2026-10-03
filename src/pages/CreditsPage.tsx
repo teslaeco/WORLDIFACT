@@ -7,6 +7,8 @@ import { onCachedBillingReturn, planPaymentAddress, planPaymentNotice } from '..
 import './CreditsPage.css'
 
 type PlanId = 'creator' | 'pro' | 'studio'
+const PLAN_NAMES: Record<PlanId, string> = { creator: 'Creator SOL', pro: 'Pro ASTRA', studio: 'Studio ASTRA' }
+const isPlanId = (value: unknown): value is PlanId => value === 'creator' || value === 'pro' || value === 'studio'
 type Balance = { credits: number; reservedCredits?: number; availableCredits?: number; generationCost: number; generationCosts?: { sol: number; astra: number }; subscriptionGrant: number; subscription: { active: boolean; plan?: PlanId; expiresAt: string | null }; free: { fastRemaining: number; fastResetAt: string | null; slowRemaining: number; slowResetAt: string }; billingReview: boolean }
 type PlanOffer = { id: PlanId; name: string; amountCents: number; credits: number; allowedModels: readonly string[]; checkoutReady: boolean; blockedReason?: string | null }
 type Billing = { portalReady?: boolean; planChangeReady?: boolean; checkoutReady: boolean; topupReady: boolean; cardReady: boolean; googlePay: 'eligible_devices' | 'unavailable'; mode: 'test' | 'live' | null; subscriptionInterval: 'month' | null; generationCosts?: { sol: number; astra: number }; plans?: Record<PlanId, PlanOffer> }
@@ -40,11 +42,15 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
   const [notice, setNotice] = useState<PaymentNotice>(null)
   const [understandsPack, setUnderstandsPack] = useState(false)
   const [purchaseKind, setPurchaseKind] = useState<'subscription' | 'topup'>('subscription')
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>('creator')
+  const [explicitPlan, setExplicitPlan] = useState<PlanId | null>(null)
   const loadVersion = useRef(0), actionVersion = useRef(0), actionLock = useRef(false)
   // Results are scoped to their account, including the first render after signing out.
   const current = snapshot?.owner === owner ? snapshot : null
   const balance = current?.balance, billing = current?.billing, paypal = current?.paypal
+  const activePlan = balance?.subscription.active && isPlanId(balance.subscription.plan) ? balance.subscription.plan : null
+  // Follow the verified membership until the customer chooses an offer. The
+  // account-keyed content resets this choice when the signed-in identity changes.
+  const selectedPlan = explicitPlan ?? activePlan ?? 'creator'
 
   const refresh = useCallback(async () => {
     const version = ++loadVersion.current
@@ -96,7 +102,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
 
   function openPlan(id: PlanId) {
     if (!canOpenPlan(id)) return
-    setSelectedPlan(id)
+    setExplicitPlan(id)
     setPurchaseKind('subscription')
     void checkout('plan', { kind: 'subscription', plan: id })
   }
@@ -171,12 +177,12 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
 
   return <main className="credits-page">
     <header><Link to="/" className="credits-wordmark">WORLDIFAKT</Link><Link to={user ? '/account' : signInHref}>{user ? user.displayName : 'Sign in'} ↗</Link></header>
-    <section className="credits-heading"><span>CHOOSE QUALITY · KEEP COSTS CONTROLLED</span><h1>Sol for speed.<br /><em>Astra when quality matters.</em></h1><p>Free and Creator use GPT-6 Sol. Pro and Studio unlock GPT-6 Astra with higher credit cost and hard provider-spend guards.</p></section>
+    <section className="credits-heading"><span>CHOOSE QUALITY · KEEP COSTS CONTROLLED</span><h1>Sol for speed.<br /><em>Astra when quality matters.</em></h1><p>Free accounts share a SOL / LUNA draft allowance. Every active Creator, Pro and Studio membership supports paid ASTRA generation, subject to available points, provider funding and runtime availability.</p></section>
     {user && balance && <section className="credits-balance" aria-label="Your account balance">
       <div><span>YOUR CREDITS</span><strong>{balance.credits.toLocaleString()}</strong><small>{(balance.reservedCredits ?? 0) > 0
         ? `${(balance.reservedCredits ?? 0).toLocaleString()} points reserved for an active cloud generation · ${(balance.availableCredits ?? balance.credits).toLocaleString()} available · the reservation is released on failure/timeout`
-        : `${Math.floor(Math.max(0, balance.credits) / 50)} SOL attempts from points${['pro', 'studio'].includes(balance.subscription.plan || '') ? ` or ${Math.floor(Math.max(0, balance.credits) / 250)} ASTRA attempts` : ''} · subject to remaining API budget`}</small></div>
-      <div><span>MEMBERSHIP</span><strong>{member ? 'Active' : 'Free'}</strong><small>{balance.subscription.expiresAt ? `Current period ends ${new Date(balance.subscription.expiresAt).toLocaleDateString()}` : 'Daily free generations included'}</small></div>
+        : `${Math.floor(Math.max(0, balance.credits) / 50)} SOL attempts from points${activePlan ? ` or ${Math.floor(Math.max(0, balance.credits) / 250)} ASTRA attempts` : ''} · subject to remaining API budget`}</small></div>
+      <div><span>MEMBERSHIP</span><strong>{activePlan ? PLAN_NAMES[activePlan] : member ? 'Active membership · plan unverified' : 'Free'}</strong><small>{balance.subscription.expiresAt ? `Current period ends ${new Date(balance.subscription.expiresAt).toLocaleDateString()}` : 'Daily free generations included'}</small></div>
       <button onClick={() => { setError(''); setChecking(true); void refresh() }} disabled={!!busy || checking}>{checking ? 'Refreshing…' : 'Refresh balance'}</button>
     </section>}
     {!loading && !user && <div className="credits-signin"><div><strong>Your ideas, one account.</strong><p>Sign in before purchasing. Confirmed credits go to your WORLDIFAKT account.</p></div><Link className="credits-action secondary" to={signInHref}>Sign in or create an account ↗</Link></div>}
@@ -211,11 +217,10 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
           openPlan(id)
         }}
       >
-        <span className="credits-plan-tag">{id === 'creator' ? 'CREATOR' : id === 'pro' ? 'PRO' : 'STUDIO'}</span>
+        <span className="credits-plan-tag">{id.toUpperCase()}{activePlan === id ? ' · YOUR ACTIVE PLAN' : ''}</span>
         <h2>{name}</h2>
-        {id === 'creator' && billing?.plans?.pro?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' && <p className="credits-method-note">Creator ASTRA access is prepared, but is not live until the updated generator passes its end-to-end test. Luna and Sol remain separate available paths.</p>}
         <div className="credits-price"><div><strong>{price}</strong><b> USD / month</b></div><span>{credits} every confirmed paid month</span></div>
-        <ul><li><b>{capacity}</b></li><li>{models}</li><li>{id === 'creator' ? 'Creator can try Astra after runtime activation: budget 500 of the included points for two attempts; maximum six Astra attempts per paid period. These are not extra credits or guaranteed successful outputs.' : 'Astra access is plan-gated and still subject to per-job provider-spend limits.'}</li></ul>
+        <ul><li><b>{capacity}</b></li><li>{models}</li><li>All active paid plans support ASTRA without an additional monthly attempt quota. Points, available provider funding and per-model spend limits still apply; successful output is not guaranteed.</li></ul>
         {billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' && <p className="credits-method-note">ASTRA purchasing is temporarily paused while the live generation and export check is completed. No payment will be taken for an unavailable plan.</p>}
         <p className="credits-method-note">Confirmed plan credits are added to your existing balance, never substituted for it. Opening payment does not add credits.</p>
         <button className="credits-action" disabled={!canOpenPlan(id)} onClick={() => openPlan(id)}>{busy === 'plan' && selectedPlan === id ? 'Opening secure payment…' : member && (balance?.subscription.plan??'creator')===id ? 'Manage current subscription ↗' : billing?.plans?.[id]?.checkoutReady===false ? 'Temporarily unavailable · no charge' : `Subscribe ${price} / month ↗`}</button>
@@ -223,7 +228,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
       <article>
         <span className="credits-plan-tag">TOP-UP</span><h2>1,500 extra credits</h2>
         <div className="credits-price"><div><strong>$29.99</strong><b> USD once</b></div><span>No automatic renewal</span></div>
-        <ul><li>30 extra SOL generations</li><li>Astra needs active membership and runtime availability. Creator stays limited to six attempts per paid period, including top-ups.</li><li>Top-up alone does not unlock ASTRA or membership-only access</li></ul>
+        <ul><li>30 extra SOL generations</li><li>Astra needs active membership, available provider funding and runtime availability. Creator, Pro and Studio can use added points without a separate monthly attempt quota.</li><li>Top-up alone does not unlock ASTRA or membership-only access</li></ul>
         {!member && <label><input type="checkbox" checked={understandsPack} disabled={!user || !!busy} onChange={event => setUnderstandsPack(event.target.checked)} /><span>I understand this adds credits only and does not unlock ASTRA.</span></label>}
         <button className="credits-action secondary" disabled={!canBuyPack || !billing?.topupReady} onClick={() => { setPurchaseKind('topup'); void checkout('card', { kind: 'topup' }) }}>{busy === 'card' && purchaseKind === 'topup' ? 'Opening secure checkout…' : 'Buy $29.99 top-up'} ↗</button>
         <button className="credits-action credits-paypal" disabled={!canBuyPack || !paypal?.ready} onClick={() => { setPurchaseKind('topup'); void checkout('paypal', { kind: 'topup' }) }}>{busy === 'paypal' ? 'Opening PayPal…' : 'Pay once with PayPal'} ↗</button>
@@ -232,7 +237,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
     </section>
     <BillingRecovery enabled={!!user && !loading} onRefresh={refresh} />
     <section className="credits-trust" aria-label="Payment privacy"><strong>Secure checkout. Private payment details.</strong><p>Card and wallet details are entered with the payment provider. WORLDIFAKT does not collect your full card number or display the seller’s bank account details.</p></section>
-    <p className="credits-footnote">FAST is the SOL path. Detailed ASTRA uses 250 points for the standard model budget or 500 points for the extended budget when that option is verified as available and explicitly accepted. Astra blueprints remain 250 points. Attempt counts above are points-based maxima, subject to remaining API funding, account limits and runtime activation. The existing 1,500-credit Creator grant can fund two Astra attempts plus twenty Sol attempts, not thirty Sol plus free Astra. WORLDIFACT never silently falls back from SOL to ASTRA when the cheaper route is unavailable. A GAME model still needs separate validation for physical manufacturing.</p>
+    <p className="credits-footnote">FAST is the SOL path. Detailed ASTRA uses 250 points for the standard model budget or 500 points for the extended budget when that option is verified as available and explicitly accepted. Standard describes one model's budget, not your membership plan; upgrading to Pro does not automatically select the 500-point budget. Astra blueprints remain 250 points. Attempt counts above are points-based maxima, subject to remaining API funding and runtime activation, not extra monthly quotas. The existing 1,500-credit Creator grant can fund two Astra attempts plus twenty Sol attempts, not thirty Sol plus free Astra. WORLDIFACT never silently falls back from SOL to ASTRA when the cheaper route is unavailable. A GAME model still needs separate validation for physical manufacturing.</p>
     <footer><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/world">Back to the portals →</Link></footer>
   </main>
 }

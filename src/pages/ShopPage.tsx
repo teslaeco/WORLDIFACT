@@ -580,7 +580,7 @@ export default function ShopPage() {
               <option value="standard">Standard model budget · 250 points</option>
               <option value="extended">Extended model budget · 500 points</option>
             </select>
-            <p>Higher complexity may need the 500-point budget. This is not a measurement of this draft. Choosing a higher budget does not guarantee completion or quality.</p>
+            <p>Standard is the budget for one model, not your membership plan. Pro members can keep the 250-point budget. Higher complexity may need the 500-point budget. This is not a measurement of this draft. Choosing a higher budget does not guarantee completion or quality.</p>
             {budgetTier === 'extended' && <label htmlFor="studio-budget-consent"><input id="studio-budget-consent" type="checkbox" checked={budgetAccepted} onChange={e => setAcceptedBudgetRevision(e.target.checked ? draftBudgetRevision : null)} />I explicitly accept 500 points for one attempt with this description and these reference images.</label>}
             <p>No automatic upgrade, paid retry or additional debit. Editing this draft requires a new 500-point acceptance.</p>
           </fieldset>}
