@@ -20,9 +20,9 @@ const compiled = ts.transpileModule(source, { fileName: sourceUrl.pathname,
 
 // Actual component effects and timers, with inert API/asset adapters. This does
 // not render WebGL or make a paid call, and does not stand in for model quality.
-async function harness(readStatus, { withExistingJob = true, ready = false } = {}) {
+async function harness(readStatus, { withExistingJob = true, ready = false, quoteOverride = null } = {}) {
   const slots = [], effects = [], timers = new Map(), delays = []
-  let tree, dirty = true, cursor = 0, serial = 0, polls = 0, posts = 0, loads = 0, adopted = 0, elapsed = 0
+  let tree, dirty = true, cursor = 0, serial = 0, polls = 0, posts = 0, loads = 0, adopted = 0, elapsed = 0, refreshes = 0
   const submitted = [], runtime = { ready, detailedReady: ready, tiersReady: ready, photoReady: true, pricingRevision: studioPricing.STUDIO_PRICING_REVISION }
   const record = { receipt: { id: '12345678-1234-4234-8234-123456789abc', ticket: 'fixture', createdAt: new Date().toISOString() },
     prompt: 'Synthetic adult character', startedAt: new Date().toISOString() }
@@ -64,7 +64,7 @@ async function harness(readStatus, { withExistingJob = true, ready = false } = {
       if (id === '../lib/studioPricing') return studioPricing
       if (id === '../lib/studioTierSelection') return studioTierSelection
       if (id === '../lib/detailedStudio') return detailedStudio
-      if (id === '../lib/useGenerationQuote') return { useGenerationQuote: (model, busy, detailed, tier) => ({ checking: busy, canRefresh: !busy, refresh() {}, quote: ready ? quoteGeneration(model, { credits: 3000, availableCredits: 3000, generationCosts: { sol: 50, astra: 250 }, billingReview: false, subscription: { active: true, plan: 'pro' }, studioAdmission: { tiers: Object.fromEntries(Object.entries(studioPricing.STUDIO_PRICING).map(([tier, pricing]) => [tier, { allowed: true, pricing }])) } }, { plans: { pro: { checkoutReady: true } } }, true, detailed, tier) : { state: 'pending' } }) }
+      if (id === '../lib/useGenerationQuote') return { useGenerationQuote: (model, busy, detailed, tier) => ({ checking: busy, canRefresh: !busy, refresh() { refreshes++ }, quote: quoteOverride || (ready ? quoteGeneration(model, { credits: 3000, availableCredits: 3000, generationCosts: { sol: 50, astra: 250 }, billingReview: false, subscription: { active: true, plan: 'pro' }, studioAdmission: { tiers: Object.fromEntries(Object.entries(studioPricing.STUDIO_PRICING).map(([tier, pricing]) => [tier, { allowed: true, pricing }])) } }, { plans: { pro: { checkoutReady: true } } }, true, detailed, tier) : { state: 'pending' }) }) }
       if (id === '../lib/generationQuote') return { quoteGeneration: () => ({ state: 'pending' }) }
       if (id === './GenerationCostNotice') return { __esModule: true, default: () => null }
       throw new Error(`Unexpected component dependency: ${id}`)
@@ -81,7 +81,7 @@ async function harness(readStatus, { withExistingJob = true, ready = false } = {
   }
   await settle()
   return {
-    delays, timers, submitted, runtime, tree: () => tree, async edit(description) { props.world = { ...props.world, character: { ...props.world.character, description } }; dirty = true; await settle() }, counts: () => ({ polls, posts, loads, adopted }), settle,
+    delays, timers, submitted, runtime, refreshes: () => refreshes, async quote(value) { quoteOverride = value; dirty = true; await settle() }, tree: () => tree, async edit(description) { props.world = { ...props.world, character: { ...props.world.character, description } }; dirty = true; await settle() }, counts: () => ({ polls, posts, loads, adopted }), settle,
     async poll() { const next = timers.entries().next().value; assert.ok(next, 'Same-job recovery should be scheduled')
       timers.delete(next[0]); elapsed += next[1].delay; await next[1].callback(); await settle() },
     close() { for (const slot of slots) slot?.cleanup?.(); timers.clear() },
@@ -167,5 +167,23 @@ test('character extended budget requires explicit consent for the current descri
     assert.equal(h.submitted[0].pricingRevision, studioPricing.STUDIO_PRICING_REVISION)
     assert.equal(h.submitted[0].budgetTier, 'extended'); assert.equal(h.submitted[0].acceptedPoints, 500)
     assert.equal(byId('character-budget-consent').props.checked, false)
+  } finally { h.close() }
+})
+
+test('blocked character primary action reviews funding only and never automatically generates after eligibility returns', async () => {
+  const h = await harness(() => ({ state: 'building' }), { withExistingJob: false, ready: true,
+    quoteOverride: { state: 'blocked', points: 250, after: null, reason: 'PROVIDER_BUDGET_EXHAUSTED', message: 'Funding is not available.' } })
+  const primary = () => { const result = []; const walk = n => { if (Array.isArray(n)) n.forEach(walk); else if (React.isValidElement(n)) { result.push(n); walk(n.props.children) } }; walk(h.tree()); return result.find(n => n.type === 'button' && n.props.className === 'private-primary') }
+  try {
+    assert.equal(primary().props.type, 'button')
+    assert.equal(primary().props.disabled, false)
+    assert.match(primary().props.children, /Check generation funding · no charge/)
+    const before = h.refreshes()
+    primary().props.onClick(); await h.settle()
+    assert.equal(h.refreshes(), before + 1)
+    assert.equal(h.counts().posts, 0)
+    await h.quote({ state: 'credits', points: 250, after: 2750, message: 'Funding verified.' })
+    assert.match(primary().props.children, /Generate character/)
+    assert.equal(h.counts().posts, 0)
   } finally { h.close() }
 })

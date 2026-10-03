@@ -2,7 +2,43 @@
 
 Updated 3 October 2026.
 
-## IN VERIFICATION — restore shared generation admission after account funding failures
+## IN VERIFICATION — actionable funding refusal and completed Blueprint accounting
+
+The owner's 22:16 screenshot shows the PR #199 client, 2,755 customer points,
+a completed funding check and continued `PROVIDER_BUDGET_EXHAUSTED` for an Astra
+procedural Blueprint. This is direct evidence that the prior deployment did not
+restore this account's generation. Its generic completed-check wording could
+also represent zero eligible rows; it was not evidence of money returned.
+
+Read-only verification through the connected account services confirmed the
+owner's authenticated account and active, paid Pro subscription. No payment,
+subscription, grant or balance was changed. Payment success does not prove that
+earlier provider reservations are unused.
+
+The follow-up makes the primary action respond to a confirmed funding refusal
+by checking existing funding, without starting or buying a model. Zero eligible
+rows now have explicit wording. A restored allowance never starts a model
+automatically: generation requires a separate click.
+
+The bounded, account-owned recovery now includes previously excluded completed
+ordinary paid Blueprints with matching server-persisted LIVE results, complete
+provider usage and a validated blueprint hash. Immutable historical terms retain
+the entire 4,000-token output ceiling and a 2,048-token input margin; only the
+remaining reserved portion is returned atomically once. Failed, unknown, free,
+support and Studio liabilities are excluded from this Blueprint calculation.
+The old Studio-only internal API remains compatible. No account is reseeded and
+chargeback debt remains. The actual amount that can be recovered on the owner's
+account is not yet known.
+
+Independent review found no blocker. Local verification passes lint, TypeScript
+and 1,051 tests with zero skips, including native workerd/SQLite reconciliation,
+rollback and restart/replay. The sole local failure is the retained native
+Chromium test because this executor lacks Chrome/Chromium; it must pass in the
+exact-head hosted CI run before merge. The real local HTTP smoke check,
+production build and Wrangler deployment dry-run passed without a paid provider
+request. Production deployment remains pending.
+
+## DEPLOYED, ACCOUNT STILL BLOCKED — shared generation admission repair #199
 
 The owner's 21:48–21:51 screenshots show procedural Blueprint controls with an
 explicit exhausted provider-funding refusal or an unresolved account quote.
@@ -34,8 +70,14 @@ smoke check and production build. The retained native Chromium regression is
 the sole local test failure because this executor has no Chromium/Chrome binary;
 it must pass in the full exact-head GitHub run before merge. Native workerd and
 SQLite tests ran successfully, including actual storage pagination, rollback,
-mixed-version dispatch and exact-once settlement. Merge and production deployment
-evidence are pending; no local or CI result is a paid user-generation result.
+mixed-version dispatch and exact-once settlement. PR #199 passed all six exact-head
+workflows with 1,042/1,042 tests and zero skips, then merged as
+`2446e6ddc4ea956040d1176822e9b99352b1344b`. Production run
+[37150636740](https://github.com/teslaeco/WORLDIFACT/actions/runs/37150636740)
+succeeded with Cloudflare version `db4889f3-d27c-44a3-b4bd-822dca212216`.
+The final runtime diagnostic reported general generation and Studio `READY`;
+the later owner screenshot above independently establishes the remaining
+account-specific refusal. No local or CI result is a paid user-generation result.
 
 ## ORACLE ACTIVATION VERIFIED — explicitly approved Studio price tiers
 

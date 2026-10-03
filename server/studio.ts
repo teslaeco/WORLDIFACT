@@ -4,7 +4,7 @@ import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedSt
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
-import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, pendingUserStudioProvider, reconcileUserStudioProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv } from './entitlements.ts'
+import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, pendingUserStudioProvider, reconcileUserStudioProvider, reconcileUserBlueprintProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
@@ -354,9 +354,12 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const page = await pendingUserStudioProvider(env, user.id, typeof value.cursor === 'string' ? value.cursor : null)
       // Receipt reads are bounded and independent. A missing/uncertain receipt
       // retains its original debit; another verified receipt may still settle.
-      const results = await Promise.all(page.ids.map(id => reconcileProviderReservation(env, user.id, id, fetcher)))
-      const reconciled = results.filter(Boolean).length
-      return json({ checked: page.ids.length, reconciled, unresolved: page.ids.length - reconciled,
+      const results = await Promise.all([
+        ...page.ids.map(id => reconcileProviderReservation(env, user.id, id, fetcher)),
+        ...page.blueprintIds.map(id => reconcileUserBlueprintProvider(env, user.id, id).then(value => value.reconciled === true).catch(() => false)),
+      ])
+      const checked = page.ids.length + page.blueprintIds.length, reconciled = results.filter(Boolean).length
+      return json({ checked, reconciled, unresolved: checked - reconciled,
         nextCursor: page.nextCursor, hasMore: page.hasMore, paidGenerationRequested: false })
     }
     if (url.pathname === '/api/studio/current' && request.method === 'GET') {

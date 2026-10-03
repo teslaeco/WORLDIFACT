@@ -74,8 +74,12 @@ export function useGenerationQuote(model: QuotedModel, busy = false, detailed = 
       const checked = await reconcileGenerationFunding(fetch, controller.signal, cursor)
       if (closed) return
       fundingCursor.current = { owner: request.owner!, cursor: checked.nextCursor }
-      fundingReview = checked.hasMore
-        ? 'This batch of earlier models was checked. Refresh availability to check the next batch; no new model or payment will be started.'
+      fundingReview = checked.checked === 0
+        ? checked.hasMore
+          ? 'No eligible earlier model reservations were found in this batch. Refresh availability to check the next batch; no new model or payment will be started.'
+          : 'No eligible earlier model reservations were found for this funding check. No unused funding was confirmed or returned; the current account funding limit still applies.'
+        : checked.hasMore
+          ? 'This batch of earlier models was checked. Refresh availability to check the next batch; no new model or payment will be started.'
         : checked.unresolved > 0
           ? 'Earlier models were checked. Unverified or incurred provider costs remain reserved; only proven unused funding can be returned.'
           : 'Earlier models were checked for proven unused funding. No new model or payment was started.'

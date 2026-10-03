@@ -27,11 +27,12 @@ export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
 type StudioProviderReservation = { version: 1; source: 'ordinary'; amountCents: number; state: 'reserved' | 'released' }
+type BlueprintProviderReconciliation = { revision: 'blueprint-bounded-output-v1'; model: GenerationModel; resultSha256: string; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number }
 type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalReservedCents: 175 | 200 | 400; retainedCents: number; releasedCents: number; at: number }
-type Job = { pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation }
+type Job = { pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
 export type Reservation = { pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean }
 export type JobAccess = { fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
-export type StudioProviderReconciliationPage = { ids: string[]; nextCursor: string | null; hasMore: boolean }
+export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
 export type StudioProviderReconciliationResult = { reconciled: boolean; repeated?: boolean; releasedCents?: number; retainedCents?: number; reason?: string }
 type StudioDispatchClaim = { dispatch: false } | { dispatch: true; deadline: number }
 export const STUDIO_DISPATCH_WINDOW_MS = 30_000
@@ -119,6 +120,77 @@ function validProviderReconciliation(value: unknown, id: string, job: Job): valu
   return Object.keys(saved).length === 5 && validateTerminalBudgetReceipt(saved.receipt, id, job.pricing ?? null) && saved.originalReservedCents === reservationTerms(job)?.maxProviderCents &&
     saved.retainedCents === Math.ceil(saved.receipt.maximumLiabilityMicroUsd / 10_000) && saved.releasedCents === saved.originalReservedCents - saved.retainedCents &&
     Number.isSafeInteger(saved.at) && saved.at > 0
+}
+// Immutable historical writer economics for blueprint-bounded-output-v1.
+// Future catalogue edits must never reinterpret an old markerless debit.
+const BLUEPRINT_RECONCILIATION_TERMS = Object.freeze({
+  luna: { model: 'gpt-6-luna', points: 15, capCents: 10, inputRate: 1, outputRate: 1 },
+  sol: { model: 'gpt-6-sol', points: 50, capCents: 35, inputRate: 6, outputRate: 17 },
+  astra: { model: 'gpt-6-astra', points: 250, capCents: 175, inputRate: 14, outputRate: 55 },
+})
+function completedOrdinaryBlueprint(job: Job): GenerationModel | null {
+  const fields = ['fingerprint', 'channel', 'model', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'state',
+    'blueprintDispatch', 'blueprintDispatchUntil', 'blueprintProviderReservation', 'blueprintProviderReconciliation']
+  if (!job || typeof job !== 'object' || Array.isArray(job) || Object.keys(job).some(key => !fields.includes(key)) ||
+      job.state !== 'completed' || job.kind !== 'credits' || !['fast', 'slow'].includes(job.profile) ||
+      Object.hasOwn(job, 'channel') && job.channel !== 'blueprint' ||
+      typeof job.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(job.fingerprint) || !Number.isSafeInteger(job.at) || job.at <= 0 ||
+      Object.hasOwn(job, 'updatedAt') && (!Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at)) return null
+  const model = job.model ?? (job.profile === 'fast' ? 'sol' : 'astra')
+  if (!Object.hasOwn(BLUEPRINT_RECONCILIATION_TERMS, model) || (model === 'astra') !== (job.profile === 'slow') || job.cost !== BLUEPRINT_RECONCILIATION_TERMS[model].points) return null
+  if (Object.hasOwn(job, 'blueprintDispatch')) {
+    if (job.channel !== 'blueprint' || job.blueprintDispatch !== 'claimed-v1' || !Number.isSafeInteger(job.blueprintDispatchUntil) ||
+        Number(job.blueprintDispatchUntil) <= job.at || Number(job.blueprintDispatchUntil) > job.at + BLUEPRINT_JOB_WINDOW_MS) return null
+  } else if (Object.hasOwn(job, 'blueprintDispatchUntil')) return null
+  if (Object.hasOwn(job, 'blueprintProviderReservation')) {
+    const reservation = job.blueprintProviderReservation
+    if (!reservation || typeof reservation !== 'object' || Array.isArray(reservation) || Object.keys(reservation).length !== 4 ||
+        reservation.version !== 1 || reservation.source !== 'ordinary' || reservation.state !== 'reserved' || reservation.amountCents !== BLUEPRINT_RECONCILIATION_TERMS[model].capCents ||
+        job.blueprintDispatch !== 'claimed-v1') return null
+  }
+  return model
+}
+const sha256Json = async (value: unknown) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)))), n => n.toString(16).padStart(2, '0')).join('')
+async function reconcileCompletedBlueprint(storage: EntitlementStorage, id: string, now: number): Promise<StudioProviderReconciliationResult> {
+  const job = await storage.get<Job>(`job:${id}`)
+  const model = job ? completedOrdinaryBlueprint(job) : null
+  if (!job || !model) return { reconciled: false, reason: 'INELIGIBLE_BLUEPRINT' }
+  let result: GenerationResult
+  try { result = validateGenerationResult(await storage.get(`blueprint-result:${id}`)) }
+  catch { return { reconciled: false, reason: 'UNVERIFIED_BLUEPRINT_RESULT' } }
+  const usage = result.evidence, receivedAt = usage ? Date.parse(usage.receivedAt) : NaN
+  // The saved-result writer (d3a7dd5) postdates funded admission (73ff4e7).
+  // It permits exactly one default-tier provider response, max4000 output,
+  // without paid tools. A completed result is durable and cannot dispatch again.
+  // A bare old Studio row or a failure label does not establish this proof.
+  if (result.mode !== 'LIVE' || result.requestId !== id || result.model !== BLUEPRINT_RECONCILIATION_TERMS[model].model ||
+      result.delivery?.kind !== 'procedural-blueprint' || !usage || !Number.isSafeInteger(usage.inputTokens) ||
+      !Number.isSafeInteger(usage.outputTokens) || !Number.isSafeInteger(usage.totalTokens) ||
+      Number(usage.inputTokens) < 0 || Number(usage.inputTokens) > 32768 || Number(usage.outputTokens) < 0 || Number(usage.outputTokens) > 4000 ||
+      usage.totalTokens !== Number(usage.inputTokens) + Number(usage.outputTokens) ||
+      !Number.isSafeInteger(now) || now < job.at || receivedAt < job.at || receivedAt > now ||
+      Object.hasOwn(job, 'updatedAt') && receivedAt > Number(job.updatedAt) ||
+      await sha256Json(result.blueprint) !== usage.blueprintSha256) return { reconciled: false, reason: 'UNVERIFIED_BLUEPRINT_USAGE' }
+  // Keep the ENTIRE 4000-token output ceiling and 2048 input framing margin;
+  // no invoice, cache discount or zero-cost inference is needed for this bound.
+  const terms = BLUEPRINT_RECONCILIATION_TERMS[model], originalReservedCents = terms.capCents
+  const retainedCents = Math.ceil(((Number(usage.inputTokens) + 2048) * terms.inputRate + 4000 * terms.outputRate) / 10_000)
+  if (retainedCents > originalReservedCents) return { reconciled: false, reason: 'UNVERIFIED_BLUEPRINT_LIABILITY' }
+  const releasedCents = originalReservedCents - retainedCents, resultSha256 = await sha256Json(result)
+  if (Object.hasOwn(job, 'blueprintProviderReconciliation')) {
+    const saved = job.blueprintProviderReconciliation
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved) || Object.keys(saved).length !== 7 ||
+        saved.revision !== 'blueprint-bounded-output-v1' || saved.model !== model || saved.resultSha256 !== resultSha256 ||
+        saved.originalReservedCents !== originalReservedCents || saved.retainedCents !== retainedCents || saved.releasedCents !== releasedCents ||
+        !Number.isSafeInteger(saved.at) || saved.at < receivedAt || saved.at > now) return { reconciled: false, reason: 'UNVERIFIED_BLUEPRINT_RECONCILIATION' }
+    return { reconciled: true, repeated: true, retainedCents, releasedCents }
+  }
+  const remaining = await storage.get<number>(PROVIDER_BUDGET)
+  if (!Number.isSafeInteger(remaining) || !Number.isSafeInteger(Number(remaining) + releasedCents)) throw new Error('Invalid blueprint funding reconciliation')
+  const reconciliation: BlueprintProviderReconciliation = { revision: 'blueprint-bounded-output-v1', model, resultSha256, originalReservedCents, retainedCents, releasedCents, at: now }
+  await storage.put(PROVIDER_BUDGET, Number(remaining) + releasedCents)
+  await storage.put(`job:${id}`, { ...job, blueprintProviderReconciliation: reconciliation })
+  return { reconciled: true, repeated: false, retainedCents, releasedCents }
 }
 export class EntitlementError extends Error {
   status: number
@@ -541,7 +613,7 @@ export class AccountEntitlements {
         })
         return json(result, result.allowed ? 200 : 429)
       }
-      if (path === '/studio-provider-pending') {
+      if (path === '/studio-provider-pending' || path === '/provider-reconciliation-pending') {
         if (Object.keys(input).some(key => key !== 'cursor') ||
             input.cursor !== undefined && input.cursor !== null && (typeof input.cursor !== 'string' || !JOB_ID.test(input.cursor)))
           return json({ error: 'Invalid reconciliation cursor' }, 400)
@@ -549,7 +621,7 @@ export class AccountEntitlements {
         // a page neither seeds funding nor infers payment from an old failure.
         if (!this.storage.list) throw new Error('Account history listing unavailable')
         const entries = await this.storage.list<Job>({ prefix: 'job:', ...(input.cursor ? { startAfter: `job:${input.cursor}` } : {}), limit: 64 })
-        const ids: string[] = []
+        const ids: string[] = [], blueprintIds: string[] = []
         let cursor: string | null = null, consumed = 0
         for (const [key, job] of entries) {
           if (!/^job:[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(key)) throw new Error('Invalid account job key')
@@ -557,10 +629,16 @@ export class AccountEntitlements {
           // Older writers accepted uppercase UUIDs. Preserve their exact key
           // for pagination, but Oracle's receipt protocol accepts lowercase IDs.
           if (cursor === cursor.toLowerCase() && job && typeof job === 'object' && !Array.isArray(job) && providerBudgetPending(job)) ids.push(cursor)
-          if (ids.length === 8) break
+          if (path === '/provider-reconciliation-pending' && job && !Object.hasOwn(job, 'blueprintProviderReconciliation') && completedOrdinaryBlueprint(job)) blueprintIds.push(cursor)
+          if (ids.length + blueprintIds.length === 8) break
         }
         const hasMore = consumed < entries.size || entries.size === 64
-        return json({ ids, nextCursor: hasMore ? cursor : null, hasMore } satisfies StudioProviderReconciliationPage)
+        return json({ ids, ...(path === '/provider-reconciliation-pending' ? { blueprintIds } : {}), nextCursor: hasMore ? cursor : null, hasMore })
+      }
+      if (path === '/reconcile-blueprint-provider') {
+        if (Object.keys(input).length !== 1 || typeof input.id !== 'string' || !JOB_ID.test(input.id)) return json({ error: 'Invalid Blueprint reconciliation' }, 400)
+        const id = input.id
+        return json(await this.storage.transaction(storage => reconcileCompletedBlueprint(storage, id, this.now())))
       }
       if (path === '/reconcile-studio-provider') {
         if (Object.keys(input).length !== 2 || Object.keys(input).some(key => !['id', 'receipt'].includes(key)) ||
@@ -862,14 +940,16 @@ export async function reserveUserGeneration(env: EntitlementEnv, userId: string,
 }
 export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, state: 'completed' | 'failed', failureCode?: StudioFailureCode) => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state, ...(failureCode ? { failureCode } : {}) })
 export async function pendingUserStudioProvider(env: EntitlementEnv, userId: string, cursor: string | null = null): Promise<StudioProviderReconciliationPage> {
-  const page = await entitlementCall<StudioProviderReconciliationPage>(env, userId, '/studio-provider-pending', { cursor })
-  if (!page || typeof page !== 'object' || Array.isArray(page) || Object.keys(page).length !== 3 ||
+  const page = await entitlementCall<StudioProviderReconciliationPage>(env, userId, '/provider-reconciliation-pending', { cursor })
+  if (!page || typeof page !== 'object' || Array.isArray(page) || Object.keys(page).length !== 4 ||
       !Array.isArray(page.ids) || page.ids.length > 8 || page.ids.some(id => typeof id !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id)) ||
-      new Set(page.ids).size !== page.ids.length || typeof page.hasMore !== 'boolean' ||
+      !Array.isArray(page.blueprintIds) || page.ids.length + page.blueprintIds.length > 8 || page.blueprintIds.some(id => typeof id !== 'string' || !JOB_ID.test(id)) ||
+      new Set([...page.ids, ...page.blueprintIds]).size !== page.ids.length + page.blueprintIds.length || typeof page.hasMore !== 'boolean' ||
       (page.hasMore ? typeof page.nextCursor !== 'string' || !JOB_ID.test(page.nextCursor) || (cursor !== null && page.nextCursor <= cursor) : page.nextCursor !== null))
     throw new EntitlementError('Account history could not be verified.')
   return page
 }
+export const reconcileUserBlueprintProvider = (env: EntitlementEnv, userId: string, id: string) => entitlementCall<StudioProviderReconciliationResult>(env, userId, '/reconcile-blueprint-provider', { id })
 export async function reconcileUserStudioProvider(env: EntitlementEnv, userId: string, jobId: string, receipt: TerminalBudgetReceipt): Promise<StudioProviderReconciliationResult> {
   if (!validateTerminalBudgetReceipt(receipt, jobId)) throw new EntitlementError('The terminal provider receipt could not be verified.')
   return entitlementCall<StudioProviderReconciliationResult>(env, userId, '/reconcile-studio-provider', { id: jobId, receipt })
