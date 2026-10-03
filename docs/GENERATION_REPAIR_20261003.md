@@ -235,3 +235,18 @@ passed. Generic fixture rows are discarded, cabinet progress updates work, an
 unsuccessful cabinet subprocess still refuses installation, and a separate live
 database remains byte-identical. This confirms the fixture defect; it does not
 attest a real Oracle installation or a new model generation.
+
+### Original Oracle activation confirmed — owner screenshot at 21:40
+
+The owner ran the checksum-pinned PR #197 launcher at source commit
+`0ef1276ef239b98f1d973e57e72513bf66da1fd9` in the original Oracle Cloud Shell.
+Both downloaded file checksums passed. Its final report is
+`WORLDIFACT_STUDIO_PRICING_VERIFIED` with `revision: studio-pricing-v1`,
+`activation_committed: true`, `provider_limits_changed: true`,
+`job_rows_changed: false`, `paid_generation_requested: false` and
+`legacy_provider_cap_micro_usd: 1750000`.
+
+This confirms installation/activation and the mandatory offline runtime checks
+on the original worker. It does not establish a successful new paid model,
+visual quality or additional account funding. No further installer run is
+needed to address the two repaired maintenance failures.
