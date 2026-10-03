@@ -173,6 +173,7 @@ dist-ssr
 .env.*.local
 .wrangler/
 .review/
+.dots-review.wrangler.json
 reports-local/
 
 __pycache__/

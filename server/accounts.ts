@@ -10,6 +10,7 @@ export interface AccountEnv {
   MCP_RESOURCE_URL?: string
   MCP_OAUTH_CLIENT_IDS?: string
   MCP_OAUTH_REDIRECT_URIS?: string
+  MCP_OAUTH_ENABLED?: string
   ACCOUNT_LIMITER?: AccountRateLimiter
   GENERATION_LIMITER?: AccountRateLimiter
 }
@@ -418,7 +419,10 @@ export async function accountApi(request: Request, env: AccountEnv, fetcher: typ
       return await googleCallback(request, env, fetcher)
     }
     checkOrigin(request)
-    if (action === 'oauth/authorization') return await oauthAuthorization(request, env, fetcher)
+    if (action === 'oauth/authorization') {
+      if (env.MCP_OAUTH_ENABLED === 'true') return json({ error: 'Start the optional connection from OpenAI to review the current WORLDIFACT permissions.' }, 410)
+      return await oauthAuthorization(request, env, fetcher)
+    }
     const expectedMethod = ['config', 'session'].includes(action) ? 'GET' : 'POST'
     if (request.method !== expectedMethod) return json({ error: `Use ${expectedMethod}.` }, 405)
     if (action === 'config') {

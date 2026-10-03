@@ -6,6 +6,7 @@ import { studioApi } from "./studio.ts";
 import { avatarApi, type AvatarContext } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
 import { mcpApi } from "./mcp.ts";
+import { handleMcpOAuth, type McpOAuthEnv } from './mcpOAuth.ts';
 import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
 import { entitlementCall, entitlementApi, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
 import { billingApi, type BillingEnv } from './billing.ts';
@@ -27,7 +28,7 @@ import { budgetSettings } from "./budget.ts";
 import { blueprintModel, blueprintReservationMicroUsd, MODEL_CATALOG, type BlueprintModel } from "../src/lib/modelCatalog.ts";
 import type { BudgetEnv, BudgetNamespace } from "./budget.ts";
 export { GenerationBudget } from "./budget.ts";
-export interface Env extends BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv {
+export interface Env extends BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv, McpOAuthEnv {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   OPENAI_FAST_MODEL?: string;
@@ -78,6 +79,8 @@ async function limitedBody(request: Request) {
 }
 export async function handle(request: Request, env: Env = {}, fetcher: typeof fetch = fetch, context?: AvatarContext): Promise<Response> {
   const url = new URL(request.url);
+  const oauth = await handleMcpOAuth(request, env, fetcher, context);
+  if (oauth) return oauth;
   const mcp = await mcpApi(request, env, fetcher);
   if (mcp) return mcp;
   const privateWorld = await privateWorldApi(request, env, fetcher);

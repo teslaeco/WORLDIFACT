@@ -4,6 +4,13 @@ import { pathToFileURL } from 'node:url'
 
 const PROTOCOL = '2025-06-18'
 const DEFAULT_ENDPOINT = 'https://worldifact.xodobrox.workers.dev/mcp'
+const REQUIRED_SCOPES = ['profile:read', 'worlds:read', 'worlds:write', 'models:read', 'models:generate']
+const TOOL_SCOPES = {
+  get_profile: 'profile:read', list_my_worlds: 'worlds:read', get_my_world: 'worlds:read',
+  save_my_world: 'worlds:write', create_or_update_world: 'worlds:write',
+  list_my_models: 'models:read', get_generation_status: 'models:read', get_model_download: 'models:read',
+  start_3d_model: 'models:generate',
+}
 const object = value => value && typeof value === 'object' && !Array.isArray(value)
 const strings = value => Array.isArray(value) && value.length > 0 && value.length <= 100 && value.every(item => typeof item === 'string' && item.length <= 128)
 const failure = code => Object.assign(new Error(code), { code })
@@ -118,10 +125,13 @@ export async function checkMcpReadiness(endpoint = DEFAULT_ENDPOINT, fetcher = f
     if (value.resource !== target.href || !strings(value.authorization_servers) || !strings(value.scopes_supported) || !value.bearer_methods_supported?.includes('header')) throw failure('INVALID_RESOURCE_METADATA')
     value.authorization_servers.forEach(publicHttps)
     if (!strings(status.oauthScopes) || status.oauthScopes.some(scope => !value.scopes_supported.includes(scope))) throw failure('STATUS_SCOPES_MISMATCH')
+    if (REQUIRED_SCOPES.some(scope => !value.scopes_supported.includes(scope) || !status.oauthScopes.includes(scope))) throw failure('GRANULAR_SCOPES_MISSING')
     for (const tool of listed) {
       for (const scheme of tool.securitySchemes || []) {
         if (scheme.type === 'oauth2' && (!strings(scheme.scopes) || scheme.scopes.some(scope => !value.scopes_supported.includes(scope)))) throw failure('TOOL_SCOPES_MISMATCH')
       }
+      const requiredScope = TOOL_SCOPES[tool.name]
+      if (requiredScope && (!Array.isArray(tool.securitySchemes) || !tool.securitySchemes.length || tool.securitySchemes.some(scheme => scheme.type !== 'oauth2' || !scheme.scopes?.includes(requiredScope)))) throw failure('TOOL_PERMISSION_MISMATCH')
     }
     return value
   })

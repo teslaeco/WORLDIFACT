@@ -29,7 +29,10 @@ export default function AccountPage() {
     if (timer.current) clearTimeout(timer.current)
     setPhase('success')
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    timer.current = setTimeout(() => navigate(destination, { replace: true }), reduced ? 100 : 2800)
+    timer.current = setTimeout(() => {
+      if (destination.startsWith('/oauth/authorize?continuation=')) window.location.replace(destination)
+      else navigate(destination, { replace: true })
+    }, reduced ? 100 : 2800)
   }, [destination, navigate])
   const refresh = account.refresh
   useEffect(() => {

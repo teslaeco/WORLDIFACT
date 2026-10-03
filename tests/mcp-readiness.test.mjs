@@ -4,6 +4,7 @@ import { checkMcpReadiness } from '../scripts/check-mcp-readiness.mjs'
 
 const endpoint = 'https://worldifact.example.com/mcp'
 const issuer = 'https://auth.example.com/auth/v1'
+const scopes = ['profile:read', 'worlds:read', 'worlds:write', 'models:read', 'models:generate']
 const privateMarker = 'DO_NOT_LOG_PRIVATE_TOKEN_OR_PROFILE'
 function fixture(options = {}) {
   const calls = []
@@ -16,20 +17,20 @@ function fixture(options = {}) {
       if (rpc.method === 'initialize') result = { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'WORLDIFACT' } }
       else if (rpc.method === 'tools/list') result = { tools: [
         { name: 'get_worldifact_status', annotations: { readOnlyHint: !options.writableStatus }, securitySchemes: [{ type: 'noauth' }] },
-        { name: 'get_profile', securitySchemes: [{ type: 'oauth2', scopes: ['email', 'profile'] }] },
-        { name: 'start_3d_model', securitySchemes: [{ type: 'oauth2', scopes: ['email', 'profile'] }] },
+        { name: 'get_profile', securitySchemes: [{ type: 'oauth2', scopes: ['profile:read'] }] },
+        { name: 'start_3d_model', securitySchemes: [{ type: 'oauth2', scopes: [options.wrongToolScope ? 'profile:read' : 'models:generate'] }] },
       ] }
-      else if (rpc.method === 'tools/call' && rpc.params.name === 'get_worldifact_status') result = { structuredContent: { mcp: 'RESPONDING', generationStarted: false, oauthConfigured: options.configured ?? true, oauthScopes: ['email', 'profile'], privateToken: privateMarker } }
+      else if (rpc.method === 'tools/call' && rpc.params.name === 'get_worldifact_status') result = { structuredContent: { mcp: 'RESPONDING', generationStarted: false, oauthConfigured: options.configured ?? true, oauthScopes: options.legacyScopes ? ['email', 'profile'] : scopes, privateToken: privateMarker } }
       else throw new Error('Unexpected or mutating tool call')
       return options.html ? new Response('<html>login</html>', { headers: { 'Content-Type': 'text/html' } }) : Response.json({ jsonrpc: '2.0', id: rpc.id, result })
     }
     if (url.endsWith('/.well-known/oauth-protected-resource/mcp')) return options.configured === false
       ? Response.json({ error: privateMarker }, { status: 503 })
-      : Response.json({ resource: options.wrongResource ? 'https://other.example.com/mcp' : endpoint, authorization_servers: [options.unsafeIssuer ?? issuer], scopes_supported: ['email', 'profile'], bearer_methods_supported: ['header'] })
+      : Response.json({ resource: options.wrongResource ? 'https://other.example.com/mcp' : endpoint, authorization_servers: [options.unsafeIssuer ?? issuer], scopes_supported: options.legacyScopes ? ['email', 'profile'] : scopes, bearer_methods_supported: ['header'] })
     if (url === 'https://auth.example.com/.well-known/oauth-authorization-server/auth/v1' || url === issuer + '/.well-known/openid-configuration') {
       if (options.oidcOnly && url.includes('/.well-known/oauth-authorization-server')) return Response.json({ error: 'not_found' }, { status: 404 })
       if (options.disabled) return Response.json({ error: 'OAuth server is disabled', secret: privateMarker }, { status: 404 })
-      return Response.json({ issuer: options.wrongIssuer ? 'https://other.example.com' : issuer, authorization_endpoint: issuer + '/oauth/authorize', token_endpoint: issuer + '/oauth/token', code_challenge_methods_supported: options.noS256 ? ['plain'] : ['S256'], response_types_supported: ['code'], grant_types_supported: ['authorization_code'], scopes_supported: options.missingScope ? ['profile'] : ['email', 'profile'], token: privateMarker })
+      return Response.json({ issuer: options.wrongIssuer ? 'https://other.example.com' : issuer, authorization_endpoint: issuer + '/oauth/authorize', token_endpoint: issuer + '/oauth/token', code_challenge_methods_supported: options.noS256 ? ['plain'] : ['S256'], response_types_supported: ['code'], grant_types_supported: ['authorization_code'], scopes_supported: options.missingScope ? ['profile:read'] : scopes, token: privateMarker })
     }
     throw new Error('Unexpected URL ' + url)
   } }
@@ -65,7 +66,7 @@ test('missing OAuth or disabled discovery never reports ready or reveals upstrea
 })
 
 test('scope, issuer, resource, JSON and PKCE defects fail closed before a connection claim', async () => {
-  for (const options of [{ wrongResource: true }, { wrongIssuer: true }, { noS256: true }, { missingScope: true }, { html: true }, { unsafeIssuer: 'http://127.0.0.1/private' }]) {
+  for (const options of [{ wrongResource: true }, { wrongIssuer: true }, { noS256: true }, { missingScope: true }, { legacyScopes: true }, { wrongToolScope: true }, { html: true }, { unsafeIssuer: 'http://127.0.0.1/private' }]) {
     const { fetcher } = fixture(options)
     const report = await checkMcpReadiness(endpoint, fetcher)
     assert.equal(report.readyForConnectionTest, false)

@@ -1,16 +1,41 @@
-import test from 'node:test'
+import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { build } from 'esbuild'
 import { CHESS_AUTH_URL } from '../server/accounts.ts'
-import { mcpApi, WORLDIFACT_MCP_TOOLS } from '../server/mcp.ts'
 import type { StudioEnv } from '../server/studio.ts'
+import type { McpOAuthEnv, McpOAuthKV } from '../server/mcpOAuth.ts'
 import { GenerationBudget, type BudgetStorage } from '../server/budget.ts'
 import { AccountEntitlements, entitlementCall, entitlementStatus, type EntitlementStorage } from '../server/entitlements.ts'
 import { detailedHealthFixture } from './detailed-studio-fixture.ts'
 
+// Exercise the real broker and pinned OAuth library under Node. Only the unused
+// Workers handler base class is replaced; workerd coverage validates that runtime
+// separately. All CIMD and Supabase replies below are inert local fixtures.
+const temporary = await mkdtemp(join(tmpdir(), 'worldifact-mcp-tests-'))
+after(() => rm(temporary, { recursive: true, force: true }))
+const built = await build({
+  stdin: { contents: "export * from './server/mcp.ts'; export * from './server/mcpOAuth.ts'; export { OAuthAuthorizationServer } from '@cloudflare/workers-oauth-provider';", resolveDir: process.cwd(), sourcefile: 'mcp-test-entry.ts' },
+  bundle: true, format: 'esm', platform: 'node', write: false,
+  define: { Cloudflare: JSON.stringify({ compatibilityFlags: { global_fetch_strictly_public: true } }) },
+  plugins: [{ name: 'workers-base-class-only', setup(builder) {
+    builder.onResolve({ filter: /^cloudflare:workers$/ }, () => ({ path: 'base-class', namespace: 'workers-test' }))
+    builder.onLoad({ filter: /.*/, namespace: 'workers-test' }, () => ({ contents: 'export class WorkerEntrypoint {}', loader: 'js' }))
+  } }],
+})
+const bundlePath = join(temporary, 'mcp.mjs')
+await writeFile(bundlePath, built.outputFiles[0].text)
+const { mcpApi, WORLDIFACT_MCP_TOOLS, MCP_SCOPES, mcpOAuthBrokerConfig, OAuthAuthorizationServer } = await import(pathToFileURL(bundlePath).href) as
+  typeof import('../server/mcp.ts') & typeof import('../server/mcpOAuth.ts') & typeof import('@cloudflare/workers-oauth-provider')
+type TestEnv = StudioEnv & McpOAuthEnv
+
 const USER_ID = '11111111-1111-4111-8111-111111111111'
 const USER = { id: USER_ID, email: 'owner@example.test', user_metadata: { name: 'WORLDIFACT Owner' } }
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url')
-function token(overrides: Record<string, unknown> = {}) {
+function sourceToken(overrides: Record<string, unknown> = {}) {
   const now = Math.floor(Date.now() / 1000)
   return `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: CHESS_AUTH_URL + '/auth/v1', aud: ['authenticated', 'https://worldifact.test/mcp'], exp: now + 3600, iat: now, sub: USER_ID, client_id: 'openai-test-client', scope: 'email profile', ...overrides })}.signature`
 }
@@ -26,8 +51,50 @@ function message(method: string, params?: unknown, authorization?: string, heade
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, ...(params === undefined ? {} : { params }) }),
   })
 }
-const env: StudioEnv = { MCP_RESOURCE_URL: 'https://worldifact.test/mcp', MCP_OAUTH_CLIENT_IDS: 'openai-test-client', MCP_OAUTH_REDIRECT_URIS: 'https://chatgpt.com/connector_platform_oauth_redirect' }
+function oauthKv(): McpOAuthKV {
+  const entries = new Map<string, { value: string; metadata?: unknown; expires: number }>()
+  return {
+    async get<T>(key: string) { const entry = entries.get(key); return entry && entry.expires > Date.now() ? JSON.parse(entry.value) as T : null },
+    async put(key, value, options) { entries.set(key, { value, metadata: options?.metadata, expires: options?.expirationTtl ? Date.now() + options.expirationTtl * 1000 : Infinity }) },
+    async delete(key) { entries.delete(key) },
+    async list(options) { return { keys: [...entries.entries()].filter(([key, entry]) => key.startsWith(options?.prefix || '') && entry.expires > Date.now()).map(([name, entry]) => ({ name, metadata: entry.metadata })), list_complete: true } },
+  }
+}
+const env: TestEnv = { MCP_OAUTH_ENABLED: 'true', OAUTH_KV: oauthKv(), MCP_RESOURCE_URL: 'https://worldifact.test/mcp', MCP_OAUTH_CLIENT_IDS: 'https://chatgpt.com/oauth/worldifact/client.json', MCP_OAUTH_REDIRECT_URIS: 'https://chatgpt.com/connector_platform_oauth_redirect' }
 const modelArgs = { prompt: 'A precise solar rover wheel', worldId: 'enchanted-ai-shop', purpose: 'object', textureMaxSize: 4096, model: 'astra', generationProfile: 'standard' }
+
+async function token(overrides: Record<string, unknown> = {}, target = env) {
+  const config = mcpOAuthBrokerConfig(target)
+  const clientId = typeof overrides.client_id === 'string' ? overrides.client_id : config.clientIds[0]
+  const resource = typeof overrides.aud === 'string' ? overrides.aud : config.resource
+  const scopes = typeof overrides.scope === 'string' ? overrides.scope.split(/\s+/).filter(Boolean) : [...MCP_SCOPES]
+  const upstreamToken = typeof overrides.upstreamToken === 'string' ? overrides.upstreamToken : sourceToken(overrides)
+  const userId = typeof overrides.sub === 'string' ? overrides.sub : USER_ID
+  const expiresAt = typeof overrides.exp === 'number' ? overrides.exp : Math.floor(Date.now() / 1000) + 3600
+  const oauth = new OAuthAuthorizationServer<TestEnv>({ issuer: config.issuer, resources: [resource], defaultResource: resource,
+    authorizeEndpoint: '/oauth/authorize', tokenEndpoint: '/oauth/token', scopesSupported: [...new Set([...MCP_SCOPES, ...scopes])],
+    clientIdMetadataDocumentEnabled: true, accessTokenTTL: 3600, refreshTokenTTL: 0 })
+  const verifier = 'v'.repeat(43)
+  const codeChallenge = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))).toString('base64url')
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async (input) => {
+    assert.equal(String(input), clientId, 'fixture must not contact a real network destination')
+    return Response.json({ client_id: clientId, client_name: 'OpenAI fixture', redirect_uris: config.redirectUris,
+      grant_types: ['authorization_code'], response_types: ['code'], token_endpoint_auth_method: 'none' })
+  }) as typeof fetch
+  try {
+    const completed = await oauth.getOAuthApi(target).completeAuthorization({
+      request: { responseType: 'code', clientId, redirectUri: config.redirectUris[0], scope: scopes, state: 'fixture-state', codeChallengeMethod: 'S256', codeChallenge, resource, issuer: config.issuer },
+      userId, scope: scopes, props: { userId, accessToken: upstreamToken, expiresAt }, metadata: { expiresAt }, revokeExistingGrants: false,
+    })
+    const code = new URL(completed.redirectTo).searchParams.get('code')!
+    const response = await oauth.fetch(new Request(config.issuer + '/oauth/token', { method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: verifier, client_id: clientId, redirect_uri: config.redirectUris[0], resource }) }), target, { waitUntil() {} })
+    assert.equal(response.status, 200, await response.clone().text())
+    const issued = await response.json() as { access_token: string }
+    return issued.access_token
+  } finally { globalThis.fetch = originalFetch }
+}
 
 test('MCP exposes public OAuth metadata and a stateless initialize handshake', async () => {
   const metadata = await mcpApi(new Request('https://worldifact.test/.well-known/oauth-protected-resource'), env)
@@ -35,8 +102,8 @@ test('MCP exposes public OAuth metadata and a stateless initialize handshake', a
   assert.equal(metadata.status, 200)
   const body = await metadata.json() as Record<string, unknown>
   assert.equal(body.resource, 'https://worldifact.test/mcp')
-  assert.deepEqual(body.authorization_servers, [CHESS_AUTH_URL + '/auth/v1'])
-  assert.deepEqual(body.scopes_supported, ['email', 'profile'])
+  assert.deepEqual(body.authorization_servers, ['https://worldifact.test'])
+  assert.deepEqual(body.scopes_supported, [...MCP_SCOPES])
 
   const initialized = await mcpApi(message('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } }), env)
   const init = await initialized!.json() as { result: { protocolVersion: string; capabilities: Record<string, unknown> } }
@@ -52,6 +119,8 @@ test('tool list marks private tools with OAuth and generation as consequential',
   const generation = body.result.tools.find(tool => tool.name === 'start_3d_model')
   assert.equal(status?.securitySchemes[0].type, 'noauth')
   assert.equal(profile?.securitySchemes[0].type, 'oauth2')
+  assert.deepEqual(profile?.securitySchemes[0], { type: 'oauth2', scopes: ['profile:read'] })
+  assert.deepEqual(generation?.securitySchemes[0], { type: 'oauth2', scopes: ['models:generate'] })
   assert.equal(profile?._meta?.['openai/profile'], true)
   assert.equal(generation?.annotations.destructiveHint, true)
 })
@@ -77,18 +146,53 @@ test('private tools emit the OpenAI OAuth linking challenge when no valid token 
   assert.match(body.result._meta['mcp/www_authenticate'][0], /oauth-protected-resource/)
   assert.equal(response!.status, 401)
   assert.equal(response!.headers.get('WWW-Authenticate'), body.result._meta['mcp/www_authenticate'][0])
+  assert.match(response!.headers.get('WWW-Authenticate')!, /scope="profile:read"/)
   assert.equal(calls, 0)
+})
+
+test('each private tool enforces its granular broker scope before world or model work', async () => {
+  const access = await token({ scope: 'profile:read' })
+  const jobId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const receipt = jobId + '.' + Date.now() + '.' + '0'.repeat(64) + '.' + '0'.repeat(64)
+  let verified = 0
+  const fetcher = (async (input) => {
+    assert.equal(String(input), CHESS_AUTH_URL + '/auth/v1/user')
+    verified++
+    return Response.json(USER)
+  }) as typeof fetch
+  for (const [name, args, required] of [
+    ['list_my_worlds', {}, 'worlds:read'],
+    ['get_my_world', { id: 'world-1' }, 'worlds:read'],
+    ['save_my_world', { document: {} }, 'worlds:write'],
+    ['prepare_3d_model', modelArgs, 'models:generate'],
+    ['start_3d_model', { ...modelArgs, jobId, receipt, maxPoints: 250 }, 'models:generate'],
+    ['get_generation_status', { jobId, receipt }, 'models:read'],
+  ] as const) {
+    const response = await mcpApi(message('tools/call', { name, arguments: args }, access), env, fetcher)
+    assert.equal(response!.status, 403, name)
+    const challenge = response!.headers.get('WWW-Authenticate')!
+    assert.ok(challenge.includes(`scope="${required}"`))
+    assert.match(challenge, /error="insufficient_scope"/)
+    const result = await response!.json() as { result: { _meta: { 'mcp/www_authenticate': string[] } } }
+    assert.equal(result.result._meta['mcp/www_authenticate'][0], challenge)
+  }
+  const readOnly = await token({ scope: 'worlds:read' })
+  const profile = await mcpApi(message('tools/call', { name: 'get_profile', arguments: {} }, readOnly), env, fetcher)
+  assert.equal(profile!.status, 403)
+  assert.match(profile!.headers.get('WWW-Authenticate')!, /scope="profile:read"/)
+  assert.equal(verified, 7)
 })
 
 test('OAuth profile is resolved only after Supabase verifies the bearer user', async () => {
   let calls = 0
+  const source = sourceToken()
   const fetcher = (async (input, init) => {
     calls++
     assert.equal(String(input), CHESS_AUTH_URL + '/auth/v1/user')
-    assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer ' + token())
+    assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer ' + source)
     return Response.json(USER)
   }) as typeof fetch
-  const access = token()
+  const access = await token({ upstreamToken: source })
   const response = await mcpApi(message('tools/call', { name: 'get_profile', arguments: {} }, access), env, fetcher)
   const body = await response!.json() as { result: { isError?: boolean; structuredContent: Record<string, string> } }
   assert.equal(body.result.isError, undefined)
@@ -98,15 +202,15 @@ test('OAuth profile is resolved only after Supabase verifies the bearer user', a
   assert.equal(calls, 1)
 })
 
-test('expired or under-scoped OAuth tokens are rejected before any upstream request', async () => {
+test('expired, wrong-resource, unrelated-client and legacy Supabase tokens are rejected before upstream verification', async () => {
   const fetcher = (() => { throw new Error('No network expected') }) as typeof fetch
   for (const access of [
-    token({ exp: Math.floor(Date.now() / 1000) - 1 }),
-    token({ scope: 'email' }),
-    token({ client_id: undefined }),
-    token({ aud: 'other-resource' }),
-    token({ aud: 'authenticated' }),
-    token({ client_id: 'unrelated-client' }),
+    await token({ exp: Math.floor(Date.now() / 1000) - 1 }),
+    await token({ scope: 'email' }),
+    await token({ aud: 'https://other-resource.test/mcp' }),
+    await token({ client_id: 'https://chatgpt.com/oauth/unrelated/client.json' }),
+    sourceToken(),
+    sourceToken({ aud: 'https://worldifact.test/mcp', client_id: env.MCP_OAUTH_CLIENT_IDS, scope: MCP_SCOPES.join(' ') }),
   ]) {
     const response = await mcpApi(message('tools/call', { name: 'get_profile', arguments: {} }, access), env, fetcher)
     const body = await response!.json() as { result: { isError: boolean } }
@@ -117,11 +221,11 @@ test('expired or under-scoped OAuth tokens are rejected before any upstream requ
 
 test('3D tool cannot start a paid provider call when existing Studio guards are unavailable', async () => {
   let calls = 0
-  const access = token()
+  const source = sourceToken(), access = await token({ upstreamToken: source })
   const fetcher = (async (input, init) => {
     calls++
     if (String(input) === CHESS_AUTH_URL + '/auth/v1/user') {
-      assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer ' + access)
+      assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer ' + source)
       return Response.json(USER)
     }
     throw new Error('A paid/provider endpoint must not be reached')
@@ -139,7 +243,7 @@ test('OAuth discovery fails closed when missing and uses configured issuer/resou
   const configured = await mcpApi(new Request('https://alias.test/.well-known/oauth-protected-resource'), { ...env, SUPABASE_URL: 'https://testproject.supabase.co' })
   const body = await configured!.json() as { resource: string; authorization_servers: string[] }
   assert.equal(body.resource, env.MCP_RESOURCE_URL)
-  assert.deepEqual(body.authorization_servers, ['https://testproject.supabase.co/auth/v1'])
+  assert.deepEqual(body.authorization_servers, ['https://worldifact.test'])
 })
 
 test('foreign and null origins are rejected before auth while same-origin and server requests work', async () => {
@@ -158,7 +262,7 @@ test('foreign and null origins are rejected before auth while same-origin and se
 })
 
 test('temporary identity outage is not converted into an invalid-token reconnection loop', async () => {
-  const response = await mcpApi(message('tools/call', { name: 'get_profile', arguments: {} }, token()), env,
+  const response = await mcpApi(message('tools/call', { name: 'get_profile', arguments: {} }, await token()), env,
     (async () => Response.json({}, { status: 503 })) as typeof fetch)
   assert.equal(response!.status, 503)
   assert.equal(response!.headers.get('WWW-Authenticate'), null)
@@ -174,10 +278,10 @@ test('unsupported models, discarded photos, invalid enums and extra arguments ar
     { ...modelArgs, textureMaxSize: '4096' }, { ...modelArgs, textureMaxSize: 1234 },
     { prompt: modelArgs.prompt },
   ]) {
-    const response = await mcpApi(message('tools/call', { name: 'prepare_3d_model', arguments: args }, token()), env, fetcher)
+    const response = await mcpApi(message('tools/call', { name: 'prepare_3d_model', arguments: args }, 'invalid-fixture-access'), env, fetcher)
     assert.equal((await response!.json() as { result: { isError: boolean } }).result.isError, true)
   }
-  const world = await mcpApi(message('tools/call', { name: 'save_my_world', arguments: { document: {}, expectedRevision: -1 } }, token()), env, fetcher)
+  const world = await mcpApi(message('tools/call', { name: 'save_my_world', arguments: { document: {}, expectedRevision: -1 } }, 'invalid-fixture-access'), env, fetcher)
   assert.equal((await world!.json() as { result: { isError: boolean } }).result.isError, true)
   assert.equal(calls, 0)
 })
@@ -192,7 +296,7 @@ function memoryStorage(): EntitlementStorage {
   return storage
 }
 function studioFixture() {
-  const configured: StudioEnv = { ...env, OWNER_ACCESS_TOKEN: 'fixture-owner-'.repeat(4),
+  const configured: TestEnv = { ...env, OAUTH_KV: oauthKv(), OWNER_ACCESS_TOKEN: 'fixture-owner-'.repeat(4),
     ORACLE_ENDPOINT: 'https://worker.trycloudflare.com', ORACLE_API_TOKEN: 'fixture-oracle',
     PUBLIC_PILOT: 'true', ENABLE_STUDIO_JOBS: 'true', GENERATION_REQUEST_LIMIT: 'unlimited',
     ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', GENERATION_LIMITER: { async limit() { return { success: true } } } }
@@ -221,9 +325,10 @@ function studioFixture() {
     if (/^\/v1\/jobs\/[a-f0-9-]+$/.test(path)) return Response.json({ id: path.split('/').pop(), state: 'building' })
     throw new Error('Unrecognized network fixture request')
   }) as typeof fetch
-  const call = async (name: string, args: Record<string, unknown>, access = token()) => {
+  let fixtureAccess: Promise<string> | undefined
+  const call = async (name: string, args: Record<string, unknown>, access?: string) => {
     if (name === 'prepare_3d_model') prepareCalls++
-    const response = await mcpApi(message('tools/call', { name, arguments: args }, access), configured, fetcher)
+    const response = await mcpApi(message('tools/call', { name, arguments: args }, access ?? await (fixtureAccess ??= token({}, configured))), configured, fetcher)
     return await response!.json() as { result: { isError?: boolean; structuredContent: Record<string, any> } }
   }
   return { env: configured, call, posts: () => posts, prepareCalls: () => prepareCalls, lose: () => { lostAcceptance = true },
@@ -272,7 +377,7 @@ test('changed inputs, insufficient approved point ceiling and another account ca
   const args = { ...modelArgs, jobId: prepared.jobId, receipt: prepared.receipt, maxPoints: prepared.maximumPoints }
   assert.equal((await f.call('start_3d_model', { ...args, prompt: 'Different paid job' })).result.isError, true)
   assert.equal((await f.call('start_3d_model', { ...args, maxPoints: 0 })).result.isError, true)
-  assert.equal((await f.call('start_3d_model', args, token({ sub: '22222222-2222-4222-8222-222222222222' }))).result.isError, true)
+  assert.equal((await f.call('start_3d_model', args, await token({ sub: '22222222-2222-4222-8222-222222222222' }, f.env))).result.isError, true)
   assert.equal(f.posts(), 0)
   assert.equal((await entitlementStatus(f.env, USER_ID)).availableCredits, 4500)
 })

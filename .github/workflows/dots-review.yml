@@ -1,0 +1,32 @@
+name: Verify optional Dots connection in isolation
+on:
+  push:
+    branches: [codex/dots-worldifact-mcp]
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-dots-review
+  cancel-in-progress: false
+jobs:
+  review:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/codex/dots-worldifact-mcp'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - run: node scripts/build-dots-review-config.mjs
+      - run: npx wrangler deploy --dry-run --config .dots-review.wrangler.json --outdir .wrangler/dots-review
+      - name: Deploy isolated no-generation review endpoint
+        run: npx wrangler deploy --config .dots-review.wrangler.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Verify public OAuth and MCP without credentials or generation
+        run: node scripts/check-mcp-readiness.mjs https://worldifact-dots-review.xodobrox.workers.dev/mcp

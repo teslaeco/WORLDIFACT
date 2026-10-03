@@ -1,4 +1,5 @@
-import { AccountError, getVerifiedOAuthAccount, mcpOAuthConfig, mcpOAuthConfigured, type AccountUser } from './accounts.ts'
+import { AccountError, type AccountUser } from './accounts.ts'
+import { getMcpOAuthSession, mcpOAuthBrokerConfig, mcpOAuthBrokerConfigured, MCP_SCOPES, type McpOAuthEnv } from './mcpOAuth.ts'
 import { entitlementStatus } from './entitlements.ts'
 import { privateWorldApi } from './privateWorldApi.ts'
 import { platformStatus } from './platform.ts'
@@ -7,7 +8,6 @@ import { validateStudioInput } from '../src/lib/studioProtocol.ts'
 
 const PROTOCOL = '2025-06-18'
 const MAX_MCP_BODY = 160 * 1024
-const OAUTH_SCOPES = ['email', 'profile'] as const
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
   'Cache-Control': 'no-store',
@@ -16,9 +16,20 @@ const JSON_HEADERS = {
 type JsonId = string | number | null
 type JsonObject = Record<string, unknown>
 type OAuthSession = { user: AccountUser; token: string; clientId: string }
+type McpEnv = StudioEnv & McpOAuthEnv
+type ToolScope = typeof MCP_SCOPES[number]
+const TOOL_SCOPES = {
+  get_profile: 'profile:read',
+  list_my_worlds: 'worlds:read',
+  get_my_world: 'worlds:read',
+  save_my_world: 'worlds:write',
+  prepare_3d_model: 'models:generate',
+  start_3d_model: 'models:generate',
+  get_generation_status: 'models:read',
+} as const satisfies Record<string, ToolScope>
 
 const noauth = [{ type: 'noauth' }] as const
-const oauth = [{ type: 'oauth2', scopes: [...OAUTH_SCOPES] }] as const
+const oauth = (scope: ToolScope) => [{ type: 'oauth2', scopes: [scope] }] as const
 const objectSchema = { type: 'object', additionalProperties: false } as const
 const modelProperties = {
   prompt: { type: 'string', minLength: 3, maxLength: 4000 },
@@ -57,7 +68,7 @@ export const WORLDIFACT_MCP_TOOLS = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    securitySchemes: oauth,
+    securitySchemes: oauth(TOOL_SCOPES.get_profile),
     _meta: { 'openai/profile': true },
   },
   {
@@ -66,7 +77,7 @@ export const WORLDIFACT_MCP_TOOLS = [
     description: 'List only private world manifests owned by the connected WORLDIFACT account.',
     inputSchema: { ...objectSchema, properties: {} },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    securitySchemes: oauth,
+    securitySchemes: oauth(TOOL_SCOPES.list_my_worlds),
   },
   {
     name: 'get_my_world',
@@ -78,7 +89,7 @@ export const WORLDIFACT_MCP_TOOLS = [
       required: ['id'],
     },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    securitySchemes: oauth,
+    securitySchemes: oauth(TOOL_SCOPES.get_my_world),
   },
   {
     name: 'save_my_world',
@@ -93,7 +104,7 @@ export const WORLDIFACT_MCP_TOOLS = [
       required: ['document'],
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    securitySchemes: oauth,
+    securitySchemes: oauth(TOOL_SCOPES.save_my_world),
   },
   {
     name: 'prepare_3d_model',
@@ -101,7 +112,7 @@ export const WORLDIFACT_MCP_TOOLS = [
     description: 'Prepare one account-bound receipt and show the current point ceiling without starting generation or holding points. This endpoint supports text-only Astra STANDARD detailed Studio jobs; FAST/Luna/Sol and reference images are not supported. Keep the receipt and exact inputs for an explicitly authorized start.',
     inputSchema: { ...objectSchema, properties: modelProperties, required: modelRequired },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
-    securitySchemes: oauth,
+    securitySchemes: oauth(TOOL_SCOPES.prepare_3d_model),
   },
   {
     name: 'start_3d_model',
@@ -117,7 +128,7 @@ export const WORLDIFACT_MCP_TOOLS = [
       required: [...modelRequired, 'jobId', 'receipt', 'maxPoints'],
     },
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-    securitySchemes: oauth,
+    securitySchemes: oauth(TOOL_SCOPES.start_3d_model),
   },
   {
     name: 'get_generation_status',
@@ -129,13 +140,13 @@ export const WORLDIFACT_MCP_TOOLS = [
       required: ['jobId', 'receipt'],
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-    securitySchemes: oauth,
+    securitySchemes: oauth(TOOL_SCOPES.get_generation_status),
   },
 ] as const
 
-function challenge(env: StudioEnv) {
-  const metadataUrl = new URL('/.well-known/oauth-protected-resource', mcpOAuthConfig(env).resource).href
-  return `Bearer resource_metadata="${metadataUrl}", scope="${OAUTH_SCOPES.join(' ')}", error="invalid_token", error_description="Connect your WORLDIFACT account to continue"`
+function challenge(env: McpEnv, scopes: readonly string[], insufficient = false) {
+  const metadataUrl = new URL('/.well-known/oauth-protected-resource', mcpOAuthBrokerConfig(env).resource).href
+  return `Bearer resource_metadata="${metadataUrl}", scope="${scopes.join(' ')}", error="${insufficient ? 'insufficient_scope' : 'invalid_token'}", error_description="${insufficient ? 'Approve the required WORLDIFACT permission to continue' : 'Connect your WORLDIFACT account to continue'}"`
 }
 function corsHeaders(extra: Record<string, string> = {}) { return new Headers({ ...JSON_HEADERS, ...extra }) }
 function json(body: unknown, status = 200, extra: Record<string, string> = {}) {
@@ -151,12 +162,19 @@ function toolResult(value: unknown, isError = false) {
     ...(isError ? { isError: true } : {}),
   }
 }
-class AuthenticationRequired extends Error {}
-function authResult(env: StudioEnv) {
+class AuthenticationRequired extends Error {
+  readonly scopes: readonly string[]
+  readonly insufficient: boolean
+  constructor(scopes: readonly string[], insufficient = false) {
+    super(insufficient ? 'Insufficient scope' : 'Authentication required')
+    this.scopes = scopes; this.insufficient = insufficient
+  }
+}
+function authResult(env: McpEnv, error: AuthenticationRequired) {
   return {
-    content: [{ type: 'text', text: 'Authentication required. Connect your WORLDIFACT account to continue.' }],
+    content: [{ type: 'text', text: error.insufficient ? 'Additional authorization required. Approve the requested WORLDIFACT permission to continue.' : 'Authentication required. Connect your WORLDIFACT account to continue.' }],
     isError: true,
-    _meta: { 'mcp/www_authenticate': [challenge(env)] },
+    _meta: { 'mcp/www_authenticate': [challenge(env, error.scopes, error.insufficient)] },
   }
 }
 async function boundedBody(request: Request): Promise<JsonObject> {
@@ -291,17 +309,19 @@ async function generationStatus(request: Request, env: StudioEnv, fetcher: typeo
   const response = await studioApi(new Request(new URL(`/api/studio/jobs/${encodeURIComponent(args.jobId as string)}`, request.url), { headers }), env, fetcher)
   return toolResult(await internalJson(response), !response.ok)
 }
-async function callTool(request: Request, env: StudioEnv, fetcher: typeof fetch, params: JsonObject) {
+async function callTool(request: Request, env: McpEnv, fetcher: typeof fetch, params: JsonObject) {
   const name = params.name
   if (typeof name !== 'string' || !WORLDIFACT_MCP_TOOLS.some(tool => tool.name === name)) return toolResult({ error: 'Unknown WORLDIFACT tool.' }, true)
   let args: JsonObject
   try { args = argsOf(params.arguments); validateArgs(name, args) } catch (error) { return toolResult({ error: error instanceof Error ? error.message : 'Invalid arguments.' }, true) }
   if (name === 'get_worldifact_status') {
-    return toolResult({ ...platformStatus(env), mcp: 'RESPONDING', oauthConfigured: mcpOAuthConfigured(env), oauthScopes: [...OAUTH_SCOPES], generationStarted: false })
+    return toolResult({ ...platformStatus(env), mcp: 'RESPONDING', oauthConfigured: mcpOAuthBrokerConfigured(env), oauthScopes: [...MCP_SCOPES], generationStarted: false })
   }
-  mcpOAuthConfig(env)
-  const auth = await getVerifiedOAuthAccount(request, env, fetcher)
-  if (!auth) throw new AuthenticationRequired()
+  mcpOAuthBrokerConfig(env)
+  const required = [TOOL_SCOPES[name as keyof typeof TOOL_SCOPES]]
+  const auth = await getMcpOAuthSession(request, env, fetcher)
+  if (!auth) throw new AuthenticationRequired(required)
+  if (!required.every(scope => auth.scopes.includes(scope))) throw new AuthenticationRequired(required, true)
   if (name === 'get_profile') {
     const profile = { id: auth.user.id, name: auth.user.displayName, email: auth.user.email, nickname: `${auth.user.displayName} — WORLDIFACT` }
     return { ...toolResult(profile), structuredContent: profile }
@@ -313,20 +333,20 @@ async function callTool(request: Request, env: StudioEnv, fetcher: typeof fetch,
   return toolResult({ error: 'Tool unavailable.' }, true)
 }
 
-async function handleMcp(request: Request, env: StudioEnv, fetcher: typeof fetch): Promise<Response | null> {
+async function handleMcp(request: Request, env: McpEnv, fetcher: typeof fetch): Promise<Response | null> {
   const url = new URL(request.url)
   const metadata = url.pathname === '/.well-known/oauth-protected-resource' ||
     url.pathname === '/.well-known/oauth-protected-resource/mcp' || url.pathname === '/mcp/oauth-protected-resource'
   if (metadata) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders({ 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' }) })
     if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
-    if (!mcpOAuthConfigured(env)) return json({ error: 'WORLDIFACT MCP OAuth is not configured.', oauthConfigured: false }, 503)
-    const config = mcpOAuthConfig(env)
+    if (!mcpOAuthBrokerConfigured(env)) return json({ error: 'WORLDIFACT MCP OAuth is not configured.', oauthConfigured: false }, 503)
+    const config = mcpOAuthBrokerConfig(env)
     return json({
       resource: config.resource,
       authorization_servers: [config.issuer],
       bearer_methods_supported: ['header'],
-      scopes_supported: [...OAUTH_SCOPES],
+      scopes_supported: [...MCP_SCOPES],
       resource_documentation: new URL('/privacy', config.resource).href,
     })
   }
@@ -362,7 +382,7 @@ async function handleMcp(request: Request, env: StudioEnv, fetcher: typeof fetch
     if (!params || typeof params !== 'object' || Array.isArray(params)) return rpcError(id, -32602, 'Invalid params')
     try { return rpc(id, await callTool(request, env, fetcher, params as JsonObject)) }
     catch (error) {
-      if (error instanceof AuthenticationRequired) return json({ jsonrpc: '2.0', id, result: authResult(env) }, 401, { 'WWW-Authenticate': challenge(env) })
+      if (error instanceof AuthenticationRequired) return json({ jsonrpc: '2.0', id, result: authResult(env, error) }, error.insufficient ? 403 : 401, { 'WWW-Authenticate': challenge(env, error.scopes, error.insufficient) })
       if (error instanceof AccountError) return json({ jsonrpc: '2.0', id, result: toolResult({ error: error.message }, true) }, error.status)
       return rpc(id, toolResult({ error: 'WORLDIFACT could not complete this tool call. Preserve the current job/world and retry only the same operation.' }, true))
     }
@@ -370,13 +390,13 @@ async function handleMcp(request: Request, env: StudioEnv, fetcher: typeof fetch
   return rpcError(id, -32601, 'Method not found')
 }
 
-export async function mcpApi(request: Request, env: StudioEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
+export async function mcpApi(request: Request, env: McpEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
   const url = new URL(request.url)
   if (!['/mcp', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/mcp/oauth-protected-resource'].includes(url.pathname)) return null
   // Server-to-server MCP clients send no Origin. Browser clients must be on the
   // same origin or the configured resource origin; arbitrary sites get no CORS.
   const origin = request.headers.get('Origin')
-  const configuredOrigin = mcpOAuthConfigured(env) ? new URL(mcpOAuthConfig(env).resource).origin : url.origin
+  const configuredOrigin = mcpOAuthBrokerConfigured(env) ? new URL(mcpOAuthBrokerConfig(env).resource).origin : url.origin
   if (origin && origin !== url.origin && origin !== configuredOrigin) return json({ error: 'This MCP Origin is not allowed.' }, 403)
   const response = await handleMcp(request, env, fetcher)
   if (response && origin) {

@@ -9,7 +9,7 @@ test('MCP discovery reaches the Worker in both disabled base and live release ro
   const live = buildLiveGenerationConfig(base)
   for (const config of [base, live]) {
     const rules: string[] = config.assets.run_worker_first
-    for (const path of ['/mcp', '/mcp/oauth-protected-resource', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp']) {
+    for (const path of ['/mcp', '/mcp/oauth-protected-resource', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-authorization-server', '/oauth/authorize', '/oauth/token']) {
       assert.ok(rules.some(rule => rule.endsWith('*') ? path.startsWith(rule.slice(0, -1)) : rule === path), `${path} must bypass SPA assets`)
       let assetReads = 0
       const response = await handle(new Request('https://worldifact.test' + path, { headers: { 'Sec-Fetch-Mode': 'navigate' } }), {
