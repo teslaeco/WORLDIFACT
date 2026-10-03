@@ -2,7 +2,7 @@
 
 ## Actual connection state
 
-PR #170 is a draft. Creating a Dot and its cloud computer did not connect it to WORLDIFACT. The MCP/OAuth implementation has not been merged or verified in ChatGPT. This repair preserves the newer production fixes by merging main `7462a64` into the review branch. The owner subsequently requested completion of the optional connection; the current implementation uses a dedicated Worker OAuth broker, described below.
+PR #170 is a draft. Creating a Dot and its cloud computer did not connect it to WORLDIFACT. The MCP/OAuth implementation has not been merged into production, and a real account link has not been approved. This repair preserves the newer production fixes by merging main `7462a64` into the review branch. The owner subsequently requested completion of the optional connection; the current implementation uses a dedicated Worker OAuth broker, described below. The isolated review deployment and ChatGPT endpoint discovery are now observed; their exact evidence is recorded below.
 
 A public, unauthenticated read of the existing identity project's discovery endpoint returned HTTP 404 with `error_code: feature_disabled` and `msg: OAuth server is disabled` on 3 October 2026. This ruled out the original stock Supabase OAuth design. Enabling that shared project's OAuth server is **not** a prerequisite of the replacement broker:
 
@@ -39,16 +39,24 @@ A direct public request to the WORLDIFACT host from the repair executor received
 
 Eight genuine Miniflare/workerd tests execute the pinned OAuth library against inert OpenAI metadata and Supabase identity fixtures. They pass discovery/CIMD negotiation, authorization and token exchange, source-expiry limits, granular downscoping, rejected client/callback/resource/PKCE requests, browser-bound login continuation, cross-origin/account-switch rejection, denial, sequential code replay rejection, account-scoped grant listing and disconnect. They verify that dedicated credentials differ from the source session and that no refresh token or source credential appears in responses.
 
-Sixteen core MCP tests pass, including scope enforcement and same-job preparation/start/recovery behavior. Existing regression fixtures use real local account/budget classes with inert upstream calls; they do not debit a real customer or call a paid provider. The broker revision's local aggregate verification passes lint and TypeScript and runs 968 tests: 967 pass, and only the retained native Chromium regression is blocked because no Chrome/Chromium executable is installed in this executor. That test remains enabled for exact-head remote CI. Separate local DEMO HTTP/origin checks, production build, production Worker packaging (`deploy:check`) and isolated-review Wrangler dry-run pass. Exact-head remote CI remains pending; no browser or authenticated live-connection success is inferred from these results.
+Sixteen core MCP tests pass, including scope enforcement and same-job preparation/start/recovery behavior. Existing regression fixtures use real local account/budget classes with inert upstream calls; they do not debit a real customer or call a paid provider. The broker revision's local aggregate verification passes lint and TypeScript and runs 968 tests: 967 pass, and only the retained native Chromium regression is blocked because no Chrome/Chromium executable is installed in this executor. That test remained enabled and subsequently passed remotely. Separate local DEMO HTTP/origin checks, production build, production Worker packaging (`deploy:check`) and isolated-review Wrangler dry-run pass. These tests do not establish an authenticated live connection.
+
+### Remote and isolated-review evidence
+
+The broker was published to draft [PR #170](https://github.com/teslaeco/WORLDIFACT/pull/170) as commit `f4ad9aa61364af23d6b49114c015a1452cfb3fb0`, tree `a315efb234fa91857b2c2e2538d58a7b93cd3032`. All five repository CI workflows passed, including [Verify WORLDIFACT run 37119124888](https://github.com/teslaeco/WORLDIFACT/actions/runs/37119124888). This evidence applies to that exact broker commit, not to later changes.
+
+Isolated [review run 37119123080](https://github.com/teslaeco/WORLDIFACT/actions/runs/37119123080) passed **968/968 tests**, including the native Chromium regression, and successfully deployed https://worldifact-dots-review.xodobrox.workers.dev at 11:18 UTC on 3 October 2026 as Cloudflare version `88ca9249-d75c-4ba7-bef7-0eb1acb67ff2`. Its first immediate public readiness probe received HTTP 404 for MCP initialize, so the overall review workflow failed despite the successful deployment. The follow-up adds a bounded retry only for that post-deploy HTTP 404; its new exact-head CI/workflow results remain pending.
+
+Subsequent browser inspection showed the review page reporting MCP responding and OAuth configured. At 13:19 Amsterdam time on 3 October, the ChatGPT add-MCP dialog automatically discovered the pinned stable CIMD client/callback and both OAuth endpoints. This verifies discovery, not account authorization. OAuth was not approved, no plugin was created, and no authenticated tool call or generation was claimed.
 
 Cloudflare KV transaction and authorization-code consumption are not atomic against simultaneous duplicate requests. The observed replay guarantee is **sequential** rejection; these tests do not establish strict concurrent single-use or instantaneous global revocation. The browser/PKCE bindings, account checks and expiry still apply. One signed-out login-continuation cookie also means a second simultaneous login flow can replace the first, which then requires restarting.
 
 ## Remaining release gates — not solved by fixture tests
 
-1. Finish exact-head CI and packaging with the broker and optional connection UI included.
-2. Deploy and inspect the isolated review endpoint with separate OAuth storage, no production account ledger/provider secrets, and generation/billing disabled. The review deployment is still pending at this checkpoint.
-3. Run the public no-cost readiness probe, then a real test-account OAuth flow to verify account linking, read tools, scope denial, account isolation, expiry and disconnect. A real ChatGPT/Dots account link is still unverified. The original PR's successful real OAuth test remains a merge gate.
-4. Verify the exact OpenAI request/client metadata/callback on that live flow. Current pins support ChatGPT HTTPS callbacks, not Codex CLI loopback redirects.
+1. Finish exact-head CI and the isolated review workflow for the narrow post-deploy 404 retry follow-up. The prior broker commit's five repository CI workflows passed.
+2. Complete the public no-cost readiness probe against the deployed isolated endpoint. Its storage remains separate, with no production account ledger/provider secrets and with generation/billing disabled.
+3. Complete a real test-account OAuth flow to verify account linking, read tools, scope denial, account isolation, expiry and disconnect. A real ChatGPT/Dots account link is still unverified. The original PR's successful real OAuth test remains a merge gate.
+4. Preserve the exact client/callback and endpoint settings discovered by ChatGPT in the review browser. Current pins support ChatGPT HTTPS callbacks, not Codex CLI loopback redirects.
 5. Merge only after the review-endpoint OAuth check and required CI pass. Main pushes automatically deploy production, so a merge is a deployment action.
 
 Required Worker configuration (the committed review configuration is not evidence of live provisioning):
@@ -79,6 +87,6 @@ References used for the initial investigation:
 
 ## Rollback and boundaries
 
-The branch remains a draft until the release gates are met. An isolated no-generation review deployment is prepared but has not yet been verified; no live deployment or account link is claimed here. No production secret, provider limit, pricing, customer balance or Oracle runtime is changed by the local repair. No paid generation is used for development or verification. If later deployed, set `MCP_OAUTH_ENABLED` to `false` to disable the broker and authenticated MCP while preserving browser account access, or revert the focused integration release. Existing generated files and receipts must be retained.
+The branch remains a draft until the release gates are met. The isolated no-generation review endpoint is deployed and discovery was observed, but no production merge, approved OAuth account link or created plugin is claimed here. No production secret, provider limit, pricing, customer balance or Oracle runtime is changed by this review deployment. No paid generation is used for development or verification. If later released to production, set `MCP_OAUTH_ENABLED` to `false` to disable the broker and authenticated MCP while preserving browser account access, or revert the focused integration release. Existing generated files and receipts must be retained.
 
 Final local and remote test evidence is recorded in `docs/CONTEST_STATUS.md` and the PR description.
