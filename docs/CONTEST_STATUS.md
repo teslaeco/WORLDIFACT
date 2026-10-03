@@ -11,8 +11,13 @@ The original Oracle installation remains unconfirmed. The owner's 3 October
 Cloud Shell reports first showed `unsafe_job_history`; the subsequent read-only
 snapshot contained one cancelled, 60 failed and 80 succeeded rows, with no other
 states. After explicitly allowing cleanup of that one cancelled job, the
-installer stopped at `accepted_or_unknown_socket`. It did not report successful
-activation or request paid generation. See the maintenance follow-up in
+installer stopped at `accepted_or_unknown_socket`. PR #196 corrected journal
+stdio admission and passed all six workflows, including real kernel socket
+tests. The owner's 21:19 Cloud Shell result passed that gate, then reported
+`cabinet_pipeline_unverified`, `activation_committed: false` and
+`previous_source_restored: true`. Worker and tunnel returned active, job counts
+remained 1 cancelled / 60 failed / 80 succeeded, and no paid generation was
+requested. Oracle pricing activation remains unconfirmed. See the follow-up in
 `docs/GENERATION_REPAIR_20261003.md`; do not infer worker activation from the
 Cloudflare release or classify the historical rows as visually approved models.
 
