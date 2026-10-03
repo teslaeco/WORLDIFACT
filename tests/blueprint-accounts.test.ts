@@ -68,7 +68,8 @@ test('LIVE Blueprint without a verified account cannot call the provider or debi
   assert.equal(demo.status, 200); assert.equal(f.providerCalls(), 0); assert.equal(f.used(), 0)
 })
 
-test('Blueprint enforces two free FAST results per rolling 24 hours and refunds a failed customer attempt', async () => {
+test('Blueprint enforces two free FAST results per rolling 24 hours and refunds a failed customer attempt', async t => {
+  const now = Date.now(); t.mock.timers.enable({ apis: ['Date'], now })
   const f = fixture()
   assert.equal((await f.call()).status, 200)
   assert.equal((await entitlementStatus(f.env, alice)).free.fastRemaining, 1)
@@ -81,6 +82,7 @@ test('Blueprint enforces two free FAST results per rolling 24 hours and refunds 
   assert.equal((await entitlementStatus(f.env, alice)).free.fastRemaining, 0)
   assert.equal((await f.call()).status, 429); assert.equal(f.providerCalls(), 3); assert.equal(f.used(), 3)
   f.advance(86_400_001)
+  t.mock.timers.setTime(now + 86_400_001)
   assert.equal((await f.call()).status, 200)
   assert.equal((await entitlementStatus(f.env, alice)).free.fastRemaining, 1)
 })

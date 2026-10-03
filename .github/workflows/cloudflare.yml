@@ -149,6 +149,11 @@ jobs:
           assert.equal(status.accountRequired,true);
           const denied = await fetch(origin + '/api/studio/prepare', {method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({worldId:'enchanted-ai-shop',prompt:'Character reference routing guard probe',purpose:'game',textureMaxSize:4096,photos:[]})});
           assert.equal(denied.status,401);
+          const fundingDenied = await fetch(origin + '/api/studio/reconcile-budget', {method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({cursor:null})});
+          assert.equal(fundingDenied.status,401);
+          const foreignFunding = await fetch(origin + '/api/studio/reconcile-budget', {method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Origin:'https://example.invalid','Content-Type':'application/json'},body:JSON.stringify({cursor:null})});
+          assert.equal(foreignFunding.status,403);
+          console.log('PASS: published funding reconciliation requires same-origin authenticated ownership; no account change or provider generation.');
           console.log('PASS: detailed route READY, four views, current cost/output guards, unauthenticated preparation rejected; no paid generation.');
           JS
       - name: Report deployed generation capability without spending

@@ -4,7 +4,7 @@ import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedSt
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
-import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, reconcileUserStudioProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv } from './entitlements.ts'
+import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, pendingUserStudioProvider, reconcileUserStudioProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
@@ -180,13 +180,15 @@ async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init:
 async function reconcileProviderReservation(env: StudioEnv, userId: string, id: string, fetcher: typeof fetch) {
   try {
     const response = await oracle(env, `/v1/jobs/${id}/budget`, fetcher)
-    if (!response.ok) { await response.body?.cancel(); return }
+    if (!response.ok) { await response.body?.cancel(); return false }
     const value = await limitedJson(response, 4096)
-    if (!validateTerminalBudgetReceipt(value, id)) return
-    await reconcileUserStudioProvider(env, userId, id, value)
+    if (!validateTerminalBudgetReceipt(value, id)) return false
+    const result = await reconcileUserStudioProvider(env, userId, id, value)
+    return result.reconciled === true
   } catch {
     // Transport, schema and atomic-write failures preserve the existing debit.
     // Recovery of this same receipt can try again; no generation is requested.
+    return false
   }
 }
 function oracleFailureCode(value: Record<string, unknown>): StudioJob['failureCode'] {
@@ -341,6 +343,22 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         fastOnly: trial, promptMaxLength: Math.min(4000, Math.max(3, (state?.promptMaxLength ?? 2000) - oracleStudioPayload('', { worldId: 'enchanted-ai-shop', prompt: '', purpose: 'figurine', textureMaxSize: 4096, photos: [] }).prompt.length)), allowance: pool })
     }
     if (!secretReady(env)) throw new StudioError('The job receipt service is not configured.', 503)
+    if (url.pathname === '/api/studio/reconcile-budget' && request.method === 'POST') {
+      await limit(request, env, 'reconcile-budget')
+      const user = await accountIdentity(request, env, fetcher)
+      if (!user) throw new StudioError('Sign in to check your account funding.', 401)
+      const value = await limitedJson(request, 256)
+      if (Object.keys(value).some(key => key !== 'cursor') ||
+          value.cursor !== undefined && value.cursor !== null && (typeof value.cursor !== 'string' || !new RegExp(`^${UUID}$`, 'i').test(value.cursor)))
+        throw new StudioError('Invalid account history cursor.', 400)
+      const page = await pendingUserStudioProvider(env, user.id, typeof value.cursor === 'string' ? value.cursor : null)
+      // Receipt reads are bounded and independent. A missing/uncertain receipt
+      // retains its original debit; another verified receipt may still settle.
+      const results = await Promise.all(page.ids.map(id => reconcileProviderReservation(env, user.id, id, fetcher)))
+      const reconciled = results.filter(Boolean).length
+      return json({ checked: page.ids.length, reconciled, unresolved: page.ids.length - reconciled,
+        nextCursor: page.nextCursor, hasMore: page.hasMore, paidGenerationRequested: false })
+    }
     if (url.pathname === '/api/studio/current' && request.method === 'GET') {
       await limit(request, env, 'current')
       const user = await accountIdentity(request, env, fetcher)

@@ -26,7 +26,7 @@ const text = n => n == null || typeof n === 'boolean' ? '' : Array.isArray(n) ? 
 const nodes = tree => { const values = []; const walk = n => { if (Array.isArray(n)) n.forEach(walk); else if (React.isValidElement(n)) { values.push(n); walk(n.props.children) } }; walk(tree); return values }
 const png = 'data:image/png;base64,' + Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]).toString('base64')
 const file = (name = 'reference.png', dataUrl = png) => ({ name, type: 'image/png', size: 12, dataUrl })
-const posts = h => h.calls.filter(c => c.method === 'POST')
+const posts = h => h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget')
 async function verified(seed, payload) {
   const world = blueprint.demoBlueprint(payload.prompt)
   world.title = `${payload.model.toUpperCase()} fixture result`
@@ -58,7 +58,7 @@ function transport({ lose = false, reject = false, pending, recoveryPending } = 
 // Actual component, effects, event handlers, cost hook and durable request
 // clients; deterministic HTTP/storage/timer/file adapters. No DOM/WebGL or
 // browser/provider calls are exercised by these lifecycle tests.
-async function harness({ store = new Map(), io = transport(), accountRead, health = ready, initialOwner = 'owner-a', fileDeferred = false, confirm = () => true, storageWrite, initialWorld = 'chess-cube-512-ai' } = {}) {
+async function harness({ store = new Map(), io = transport(), accountRead, fundingRead, health = ready, initialOwner = 'owner-a', fileDeferred = false, confirm = () => true, storageWrite, initialWorld = 'chess-cube-512-ai' } = {}) {
   const slots = [], effects = [], calls = [], timers = new Map(), readers = [], events = new EventTarget()
   let cursor = 0, dirty = true, tree, serial = 0, owner = initialOwner, accountLoading = false, worldId = initialWorld, closed = false
   const react = { ...React,
@@ -72,6 +72,7 @@ async function harness({ store = new Map(), io = transport(), accountRead, healt
     calls.push({ path, method: init.method || 'GET', body: init.body, headers: new Headers(init.headers), owner, signal: init.signal })
     if (path === '/api/health') return Response.json(health)
     if (path === '/api/account/entitlements') return accountRead ? accountRead(owner, init) : Response.json(funded)
+    if (path === '/api/studio/reconcile-budget') return fundingRead ? fundingRead(JSON.parse(init.body), init) : Response.json({ error: 'Unavailable in fixture' }, { status: 503 })
     if (path === '/api/billing/status') return Response.json({ plans: { pro: { checkoutReady: true }, studio: { checkoutReady: true } } })
     assert.match(path, /^\/api\/blueprint(?:\/requests\/[a-f0-9-]+)?$/)
     return io(path, init, owner)
@@ -307,4 +308,18 @@ test('late file completion and retained old handlers cannot affect another owner
 test('unavailable durable storage fails closed before generation and keeps the local scene', async () => {
   const h = await harness({ storageWrite: () => { throw new Error('Storage unavailable') } })
   try { const before = h.canvas().props.blueprint; h.primary().props.onClick(); await h.waitDone(); assert.equal(posts(h).length, 0); assert.equal(h.canvas().props.blueprint, before); assert.match(h.text(), /Storage unavailable/) } finally { h.close() }
+})
+
+test('portal funding recovery checks earlier liabilities once and enables only after fresh account evidence', async () => {
+  let released = false
+  const h = await harness({ accountRead: () => Response.json(released ? funded : blocked),
+    fundingRead: () => { released = true; return Response.json({ checked: 1, reconciled: 1, unresolved: 0, nextCursor: null, hasMore: false, paidGenerationRequested: false }) },
+  })
+  try {
+    assert.equal(h.quote().quote.state, 'credits')
+    assert.equal(h.primary().props.disabled, false)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/reconcile-budget').length, 1)
+    assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 2)
+    assert.equal(posts(h).length, 0)
+  } finally { h.close() }
 })
