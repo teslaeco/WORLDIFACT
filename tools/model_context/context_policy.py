@@ -4,11 +4,17 @@ The complete schema/geometry guide is supplied once before the first build.
 The unchanged MCP contract stays available in Code Mode store for selective
 reads. Display references never replace the renderer's canonical validator.
 """
+import hashlib
 from pathlib import Path
 import completion_policy
 from prebuild_policy import compact_json, factor_schema
 
 REVISION = 'worldifact-standard-context-v1'
+RECEIPT = '.worldifact-standard-context.json'
+MAINTENANCE = '.worldifact-standard-maintenance.json'
+FENCE_REVISION = 'pidfd-origin-no-cancel-v1'
+SOURCES = frozenset(('server.py', 'codex_runner.py', 'blender_mcp.py', 'astra_spend_v2.py',
+                     'completion_policy.py', 'prebuild_policy.py', 'context_policy.py'))
 
 EXECUTION = '''The complete scene schema and geometry guide below describe build_model data, not a text-only final response.
 All original primitive and subject types remain available. Read the original modeling contract once into Code Mode store,
@@ -75,3 +81,44 @@ def turn_guidance(gateway):
     if gateway.execution_calls and gateway.execution_calls[-1]['errors']:
         text += 'Correct this exact error: ' + gateway.execution_calls[-1]['errors'][0]
     return text
+
+
+def verified_health(root=None):
+    """Bind readiness to this helper and both genuine offline pipeline gates."""
+    root = Path(root) if root is not None else Path(__file__).resolve().parent
+    try:
+        if any(path.is_symlink() for path in (root, *root.parents)):
+            return {}
+        proof = completion_policy.read(root / RECEIPT, 16384)
+        expected = proof.get('sha256')
+        if (proof.get('revision') != REVISION or not isinstance(expected, dict)
+                or set(expected) != SOURCES or proof.get('maintenance_fence') != FENCE_REVISION
+                or proof.get('offline_generic_pipeline') is not True
+                or proof.get('offline_standard_pipeline') is not True):
+            return {}
+        for name, digest in expected.items():
+            path = root / name
+            if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= 1048576:
+                return {}
+            if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                return {}
+        from prebuild_policy import verified_health as prebuild_health
+        if not prebuild_health(root):
+            return {}
+        return {'worldifactStandardContextPolicy': REVISION}
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return {}
+
+
+def maintenance_active(root=None):
+    """Unknown, unreadable and linked markers all keep admission closed."""
+    root = Path(root) if root is not None else Path(__file__).resolve().parent
+    try:
+        if any(path.is_symlink() for path in (root, *root.parents)):
+            return True
+        (root / MAINTENANCE).lstat()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True

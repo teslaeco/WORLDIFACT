@@ -30,7 +30,17 @@ def changes(original, helper):
         "    task=(context_policy.initial_task(folder,completion_request) if context_policy.active(completion_request,fast_limits['fast']) else prebuild_policy.initial_task(folder,completion_request) if prebuild_policy.active(completion_request,fast_limits['fast']) else completion_policy.guidance(completion_request)+task if not fast_limits['fast'] else task)")
     runner = once(runner, '    def execution_guidance(self):\n',
         "    def execution_guidance(self):\n        if context_policy.active(self.completion_request,self.fast_limits['fast']):return context_policy.turn_guidance(self)\n")
-    result = {**original, 'codex_runner.py': runner.encode(), 'context_policy.py': helper}
+    server = once(original['server.py'].decode(), 'import urllib.request\n', 'import urllib.request\nimport context_policy\n')
+    server = once(server, '    state.update(prebuild_health())\n',
+        "    state.update(prebuild_health())\n    context_proof=context_policy.verified_health()\n    state.update(context_proof)\n    maintenance=context_policy.maintenance_active()\n    state['worldifactStandardMaintenance']=maintenance\n    if not context_proof or maintenance:state.update(ready=False,detail='STANDARD runtime maintenance or verification is pending.')\n")
+    server = once(server, "            config = json.loads(CONFIG.read_text())\n            if write and self.path == '/v1/pair':",
+        "            config = json.loads(CONFIG.read_text())\n            if context_policy.maintenance_active(ROOT) and (write or self.path != '/v1/health'):\n                return self.send_json({'error':'Runtime maintenance is in progress.','code':'RUNTIME_MAINTENANCE'},503)\n            if write and self.path == '/v1/pair':")
+    server = once(server, "        with LOCK, database() as db:\n            row = db.execute(\"SELECT * FROM jobs WHERE state='queued' ORDER BY created LIMIT 1\").fetchone()",
+        "        with LOCK, database() as db:\n            if context_policy.maintenance_active(ROOT):continue\n            row = db.execute(\"SELECT * FROM jobs WHERE state='queued' ORDER BY created LIMIT 1\").fetchone()")
+    server = once(server,
+        "            db.execute(\"UPDATE jobs SET state='failed',detail='Serwer uruchomil sie ponownie. Wyslij opis jeszcze raz.' WHERE state NOT IN ('succeeded','failed','cancelled')\")",
+        "            if not context_policy.maintenance_active(ROOT):\n                db.execute(\"UPDATE jobs SET state='failed',detail='Serwer uruchomil sie ponownie. Wyslij opis jeszcze raz.' WHERE state NOT IN ('succeeded','failed','cancelled')\")")
+    result = {**original, 'codex_runner.py': runner.encode(), 'server.py': server.encode(), 'context_policy.py': helper}
     for name, raw in result.items():
         compile(raw, name, 'exec')
     return result

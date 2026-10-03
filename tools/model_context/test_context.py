@@ -97,7 +97,7 @@ class ContextTests(unittest.TestCase):
     def test_exact_deployed_prebuild_ancestor_required(self):
         self.assertEqual(set(self.after), set(self.before) | {'context_policy.py'})
         for name in self.before:
-            if name != 'codex_runner.py':
+            if name not in ('codex_runner.py', 'server.py'):
                 self.assertEqual(self.before[name], self.after[name])
             with self.assertRaises(ValueError):
                 context_patch.changes({**self.before, name: self.before[name] + b'\n'}, b'')
