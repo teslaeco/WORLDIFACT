@@ -12,6 +12,7 @@ const futureProviders = [{ name: 'Apple', mark: '●' }, { name: 'Xbox', mark: '
 
 export default function AccountPage() {
   const account = useAccount(), navigate = useNavigate(), location = useLocation()
+  const dotsReview = typeof window !== 'undefined' && window.location.origin === 'https://worldifact-dots-review.xodobrox.workers.dev'
   const destination = safeAccountDestination(new URLSearchParams(location.search).get('next'))
   const oauth = new URLSearchParams(location.search).get('oauth')
   const [tab, setTab] = useState<Tab>('login')
@@ -83,6 +84,10 @@ export default function AccountPage() {
       <Link to="/login" className="account-brand" aria-label="WORLDIFAKT sign in"><span className="account-wordmark" data-text="WORLDIFAKT">WORLDIFAKT</span><small>AI WORLDS MADE REAL</small></Link>
       <Link to="/world" className="account-guest">Explore as a guest <span aria-hidden="true">↗</span></Link>
     </header>
+    {dotsReview && <section className="account-environment" aria-label="Test environment">
+      <div><strong>TEST ENVIRONMENT · Dots</strong><p>This is the Dots test site. Use the main WORLDIFACT site for your usual sign-in and models.</p></div>
+      <a href="https://worldifact.xodobrox.workers.dev/login" referrerPolicy="no-referrer">Sign in to main WORLDIFACT <span aria-hidden="true">↗</span></a>
+    </section>}
     <div className="account-layout">
       <section className="account-hero" aria-label="WORLDIFAKT universe">
         <span className="account-kicker">FIVE WORLDS · ONE ACCOUNT</span>

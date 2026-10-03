@@ -20,21 +20,23 @@ const sourceCookie = token => '__Host-worldifact-access=' + token
 const bundle = await build({
   stdin: { contents: `import { handleMcpOAuth, getMcpOAuthSession } from './server/mcpOAuth.ts';
     import { mcpApi } from './server/mcp.ts';
+    import { accountApi } from './server/accounts.ts';
     export default { async fetch(request, bindings, context) {
       const env = { ...bindings, MCP_OAUTH_ENABLED: 'true', MCP_RESOURCE_URL: '${origin}/mcp',
         MCP_OAUTH_CLIENT_IDS: '${clientId}', MCP_OAUTH_REDIRECT_URIS: '${callback}',
         SUPABASE_URL: '${provider}', SUPABASE_ANON_KEY: 'sb_publishable_fixture_non_secret_key',
+        SUPABASE_GOOGLE_REDIRECT_READY: 'true',
         ACCOUNT_LIMITER: { async limit() { return { success: true }; } } };
       if (new URL(request.url).pathname === '/test/session') {
         const session = await getMcpOAuthSession(new Request('${origin}/mcp', request), env);
         return Response.json(session ? { userId: session.user.id, scopes: session.scopes, clientId: session.clientId,
           resource: session.resource, expiresAt: session.expiresAt } : null);
       }
-      return await handleMcpOAuth(request, env, fetch, context) || await mcpApi(request, env) || new Response('not found', {status:404});
+      return await handleMcpOAuth(request, env, fetch, context) || await accountApi(request, env) || await mcpApi(request, env) || new Response('not found', {status:404});
     } };`, resolveDir: fileURLToPath(new URL('..', import.meta.url)), sourcefile: 'mcp-oauth-fixture.ts' },
   bundle: true, write: false, format: 'esm', platform: 'neutral', mainFields: ['module', 'main'], external: ['cloudflare:workers'],
 })
-function fixture(t) {
+function fixture(t, { pkceExchange } = {}) {
   const calls = []
   let rejectedUser = null
   const mf = new Miniflare(convertV4MiniflareOptions({
@@ -46,6 +48,7 @@ function fixture(t) {
         redirect_uris: [callback], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'],
         token_endpoint_auth_method: 'private_key_jwt', token_endpoint_auth_methods_supported: ['none', 'private_key_jwt'],
       }, { headers: { 'Cache-Control': 'no-store' } })
+      if (pkceExchange && request.url === provider + '/auth/v1/token?grant_type=pkce') return pkceExchange(request)
       assert.equal(request.url, provider + '/auth/v1/user', 'No paid or unapproved endpoint may be reached')
       const token = request.headers.get('authorization')?.replace(/^Bearer /, '') || ''
       let claims; try { claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()) } catch { return Response.json({}, { status: 401 }) }
@@ -167,6 +170,69 @@ test('login continuation is same-browser, short-lived and resumes only a verifie
   assert.equal(resumed.status, 200)
   assert.match(await resumed.text(), /Approve connection/)
   assert.equal((await f.call(resume, { headers: { Cookie: cookies } })).status, 400)
+})
+
+test('Google PKCE login preserves the broker continuation and its separate browser-binding cookie', async t => {
+  let verifier, exchanges = 0
+  const f = fixture(t, { pkceExchange: async request => {
+    exchanges++
+    assert.equal(request.method, 'POST')
+    assert.deepEqual(await request.json(), { auth_code: 'fixture-google-authorization-code', code_verifier: verifier })
+    return Response.json({ access_token: access, refresh_token: 'inert-google-refresh-token', expires_in: 1800,
+      user: { id: userId, email: 'fixture@example.invalid', user_metadata: { display_name: '<Fixture account>' } } })
+  } })
+  const jar = new Map()
+  const remember = response => {
+    for (const raw of response.headers.getSetCookie()) {
+      const pair = raw.split(';')[0], separator = pair.indexOf('='), name = pair.slice(0, separator)
+      if (/max-age=0(?:;|$)/i.test(raw)) jar.delete(name)
+      else jar.set(name, pair.slice(separator + 1))
+    }
+  }
+  const cookies = () => [...jar].map(([name, value]) => name + '=' + value).join('; ')
+  const pending = await f.call(authorization().path)
+  assert.equal(pending.status, 303)
+  remember(pending)
+  const continuation = new URL(pending.headers.get('location'), origin).searchParams.get('next')
+  assert.match(continuation, /^\/oauth\/authorize\?continuation=[A-Za-z0-9_-]{43}$/)
+  const brokerCookie = jar.get('__Host-worldifact-mcp-login')
+  assert.ok(brokerCookie)
+  const start = await f.call('/api/account/oauth/google', { method: 'POST', headers: {
+    Origin: origin, Cookie: cookies(), 'Content-Type': 'application/json' }, body: JSON.stringify({ next: continuation }) })
+  assert.equal(start.status, 200)
+  remember(start)
+  const flow = JSON.parse(Buffer.from(jar.get('__Host-worldifact-google-flow'), 'base64url').toString())
+  verifier = flow.verifier
+  assert.equal(flow.next, continuation)
+  assert.equal(jar.get('__Host-worldifact-mcp-login'), brokerCookie)
+  const providerUrl = new URL((await start.json()).url)
+  assert.equal(providerUrl.origin, provider)
+  assert.equal(providerUrl.searchParams.get('provider'), 'google')
+  assert.equal(providerUrl.searchParams.get('code_challenge_method'), 's256')
+  assert.equal(providerUrl.searchParams.get('code_challenge'), createHash('sha256').update(verifier).digest('base64url'))
+  const callbackUrl = new URL(providerUrl.searchParams.get('redirect_to'))
+  assert.equal(callbackUrl.origin, origin)
+  assert.equal(callbackUrl.pathname, '/api/account/oauth/callback')
+  callbackUrl.searchParams.set('code', 'fixture-google-authorization-code')
+  const completed = await f.call(callbackUrl.pathname + callbackUrl.search, { headers: { Cookie: cookies() } })
+  assert.equal(completed.status, 303)
+  remember(completed)
+  const next = new URL(completed.headers.get('location'))
+  assert.equal(next.origin, origin)
+  assert.equal(next.pathname, '/login')
+  assert.equal(next.searchParams.get('oauth'), 'success')
+  assert.equal(next.searchParams.get('next'), continuation)
+  assert.equal(exchanges, 1)
+  assert.equal(jar.has('__Host-worldifact-google-flow'), false)
+  assert.equal(jar.get('__Host-worldifact-mcp-login'), brokerCookie)
+  assert.equal(jar.get('__Host-worldifact-access'), access)
+  assert.doesNotMatch(completed.headers.get('location'), /fixture-google-authorization-code|inert-google-refresh-token|inert_fixture_signature/)
+  const resumed = await f.call(next.searchParams.get('next'), { headers: { Cookie: cookies() } })
+  assert.equal(resumed.status, 200)
+  assert.match(await resumed.text(), /Approve connection/)
+  remember(resumed)
+  assert.equal(jar.has('__Host-worldifact-mcp-login'), false)
+  assert.equal(jar.get('__Host-worldifact-access'), access)
 })
 
 test('consent is bound to browser and signed-in account, rejects extra scopes, and denial grants nothing', async t => {

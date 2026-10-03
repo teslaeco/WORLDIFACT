@@ -87,6 +87,37 @@ References used for the initial investigation:
 
 ## Rollback and boundaries
 
-The branch remains a draft until the release gates are met. The isolated no-generation review endpoint is deployed and discovery was observed, but no production merge, approved OAuth account link or created plugin is claimed here. No production secret, provider limit, pricing, customer balance or Oracle runtime is changed by this review deployment. No paid generation is used for development or verification. If later released to production, set `MCP_OAUTH_ENABLED` to `false` to disable the broker and authenticated MCP while preserving browser account access, or revert the focused integration release. Existing generated files and receipts must be retained.
+The branch remains a draft until the release gates are met. The isolated no-generation review endpoint is deployed and discovery was observed, but no production merge or approved OAuth account link is claimed here. The owner-approved profile-only connection-test plugin was created; it still awaits account linking. No production secret, provider limit, pricing, customer balance or Oracle runtime is changed by this review deployment. No paid generation is used for development or verification. If later released to production, set `MCP_OAUTH_ENABLED` to `false` to disable the broker and authenticated MCP while preserving browser account access, or revert the focused integration release. Existing generated files and receipts must be retained.
 
 Final local and remote test evidence is recorded in `docs/CONTEST_STATUS.md` and the PR description.
+
+## Google login follow-up — pending callback configuration
+
+The owner requested Google login for the created connection-test plugin. The
+review deployment omits `SUPABASE_GOOGLE_REDIRECT_READY`, disabling its Google
+button. On 3 October 2026, a disposable Supabase PKCE authorization followed by
+standard cancellation returned to the existing Chess GitHub Pages site instead
+of the review callback. No Google request, account login or token exchange was
+performed. The shared Google provider is enabled, but the review callback is
+not accepted.
+
+Add this entry to the existing project's Authentication → URL Configuration →
+Redirect URLs, preserving the existing Site URL and redirect entries:
+
+`https://worldifact-dots-review.xodobrox.workers.dev/api/account/oauth/callback?state=*`
+
+The review configuration deliberately keeps Google disabled until
+the exact callback is verified. Supabase dashboard authentication is currently
+pending. The connected Supabase tools do not expose auth configuration changes.
+A real workerd regression covers signed-out Dots authorization → Google PKCE
+callback → verified browser session → the same broker consent continuation.
+All nine broker runtime tests pass with inert provider responses. This is not
+evidence of a completed Google login or linked ChatGPT account.
+
+The owner explicitly approved solving the dashboard CAPTCHA. Two secure email/password submissions reached an interactive challenge; after submitting the challenge answer, the dashboard returned to sign-in. A canonical settings-page check also returned to sign-in. The owner subsequently supplied a screenshot showing the dashboard error `Invalid login credentials`. This is a rejected dashboard login, not evidence that CAPTCHA alone caused the failure. Further automated sign-in attempts were stopped. No Supabase configuration was changed; the review Google flag remains disabled. The exact redirect entry can instead be added by the owner in their own Supabase dashboard and verified through the public cancellation probe before deployment.
+
+## Distinguish review from the main sign-in page
+
+The owner reported the disabled Google button as a main-site regression. Their screenshot includes the Dots Optional account-bar link, present in the review build and absent from the last deployed production header. Fresh production UI inspection showed an enabled Google button, then a verified signed-in account with its existing credit balance. This proves the observed production session is usable, not a newly completed Google exchange on every device. Personal account details and balance are intentionally omitted from this public record.
+
+The review login now displays a prominent test-environment notice and a fixed link to the main `/login`. Exact HTTPS-origin matching keeps the notice off production and unrelated hosts. The link sends no referrer and carries no OAuth continuation, state or other query parameters. It never transfers sessions or authorizes Dots. The shared provider callback remains a separate unresolved configuration gate.
