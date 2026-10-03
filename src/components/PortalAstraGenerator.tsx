@@ -58,6 +58,7 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
   const modelReady = health.generationReady === true && (selectedModel === 'astra'
     ? health.qualityModel === MODEL_CATALOG.astra.model && health.astraBlueprintReady === true
     : health.model === MODEL_CATALOG.sol.model && (selectedModel === 'sol' || health.draftModels?.includes('luna') === true))
+  const fundingBlocked = accountQuote.quote.state === 'blocked' && accountQuote.quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
   const funded = !accountQuote.checking && ['free', 'credits'].includes(accountQuote.quote.state)
   const canGenerate = !!current?.client && !current.problem && !recovery && !busy && !fileBusy && !referenceError && !loading && funded && modelReady && prompt.trim().length >= 3 && prompt.length <= 2000 && (selectedModel === 'astra' || !references.length) && (!health.accessRequired || accessCode.trim().length >= 32)
 
@@ -221,7 +222,7 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
           {recovery.state !== 'pending' && <button type="button" disabled={controlsLocked} onClick={prepareNewAttempt}>Prepare new paid attempt…</button>}
         </div>}
         <div className="portal-astra-buttons">
-          <button className="primary" type="button" disabled={!canGenerate} onClick={() => { void runRequest(false) }}>{busy ? 'Checking saved generation…' : `Generate ${MODEL_CATALOG[selectedModel].label} blueprint`}</button>
+          <button className="primary" type="button" disabled={fundingBlocked ? controlsLocked || loading || !accountQuote.canRefresh : !canGenerate} onClick={() => { if (fundingBlocked) { if (active() && !controlsLocked && accountQuote.canRefresh) { setHealthRevision(value => value + 1); accountQuote.refresh() } return } void runRequest(false) }}>{fundingBlocked ? accountQuote.checking ? 'Checking generation funding…' : 'Check generation funding · no charge' : busy ? 'Checking saved generation…' : `Generate ${MODEL_CATALOG[selectedModel].label} blueprint`}</button>
           <button type="button" disabled={controlsLocked || recovery?.state === 'pending' || prompt.trim().length < 3} onClick={generateDemo}>Generate DEMO · no API cost</button>
           {busy && <button type="button" onClick={() => operation.current?.controller.abort()}>Stop waiting</button>}
           <button type="button" disabled={controlsLocked} onClick={() => { setHealthRevision(value => value + 1); accountQuote.refresh() }}>Refresh availability</button>

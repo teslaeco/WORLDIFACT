@@ -556,7 +556,9 @@ test('one account snapshot blocks both ready Shop routes and forced form submiss
     for (const delivery of ['procedural-blueprint', 'detailed-mesh']) {
       h.byId('studio-deliverable').props.onChange({ target: { value: delivery } }); await h.settle()
       assert.equal(h.quote().quote.state, 'blocked')
-      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+      assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.type, 'button')
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
+    assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
       const status = h.all().find(n => n.props.className === 'shop-customer-status')
       assert.match(text(status), /Generation is unavailable for this account/)
       assert.match(text(status), /provider funding limit/)
@@ -612,7 +614,7 @@ test('healthy service refresh cannot erase cloud authentication failure or enabl
     assert.doesNotMatch(text(h.all()), /PRIVATE_AUTH_DETAIL/)
     await h.button('Refresh availability').props.onClick(); await h.settle()
     assert.match(text(h.all()), /Sign in again to recover your account models/)
-    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, true)
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
   } finally { h.close() }
@@ -631,7 +633,9 @@ test('late account A responses cannot enable generation after signout or account
     assert.equal(h.quote().quote.state, 'blocked')
     finishA(Response.json(fundedAccount)); await h.settle()
     assert.equal(h.quote().quote.state, 'blocked')
-    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.type, 'button')
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
+    assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 2)
     assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
   } finally { h.close() }
@@ -643,10 +647,10 @@ test('balance refresh invalidates the allowed quote while pending and ignores an
   const h = await harness({ ready: true, withExistingJob: false, accountLookup: () => ++count === 1 ? Response.json(fundedAccount) : new Promise(resolve => responses.push(resolve)) })
   try {
     h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook' } }); await h.settle()
-    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, false)
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
     await h.balanceChanged()
     assert.equal(h.quote().checking, true)
-    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, true)
     await h.balanceChanged()
     responses[1](Response.json(blockedAccount)); await h.settle()
     responses[0](Response.json(fundedAccount)); await h.settle()
@@ -662,7 +666,7 @@ test('mobile resume and back-forward restoration recheck admission before enabli
     const h = await harness({ ready: true, withExistingJob: false, accountLookup: () => ++count === 1 ? Response.json(fundedAccount) : new Promise(resolve => { finish = resolve }) })
     try {
       h.byId('studio-prompt').props.onChange({ target: { value: 'My retained mobile model draft' } }); await h.settle()
-      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, false)
+      assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
       await h.visibility('hidden')
       await h.pageShow(false)
       assert.equal(count, 1, 'hiding the page or an ordinary initial pageshow must not duplicate account reads')
@@ -670,11 +674,13 @@ test('mobile resume and back-forward restoration recheck admission before enabli
       else await h.pageShow(true)
       assert.equal(count, 2, `${restore} must perform a new read-only account check without relying on focus`)
       assert.equal(h.quote().checking, true)
-      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+      assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, true)
       finish(Response.json(blockedAccount)); await h.settle()
       assert.equal(h.quote().quote.state, 'blocked')
       assert.match(h.quote().quote.message, /provider funding limit/)
-      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+      assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.type, 'button')
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
+    assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
       assert.equal(h.byId('studio-prompt').props.value, 'My retained mobile model draft')
       assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0, 'resuming must not submit or retry a paid request')
     } finally { h.close() }
@@ -689,7 +695,7 @@ test('unknown account data and expired authentication fail closed without an end
       assert.ok(['pending', 'signin'].includes(h.quote().quote.state))
       assert.equal(h.quote().checking, false)
       assert.equal(h.quote().canRefresh, true)
-      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+      assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, true)
       assert.doesNotMatch(text(h.all()), /PRIVATE_AUTH_DETAIL/)
     } finally { h.close() }
   }
@@ -841,7 +847,7 @@ test('a blocked Shop automatically checks one historical funding page then uses 
   try {
     h.byId('studio-prompt').props.onChange({ target: { value: 'My retained funding recovery draft' } }); await h.settle()
     assert.equal(h.quote().quote.state, 'credits')
-    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, false)
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
     assert.equal(h.calls.filter(c => c.path === '/api/studio/reconcile-budget').length, 1)
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 2)
     assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
@@ -861,7 +867,7 @@ test('one-page funding review keeps a known denial visible, then manual refresh 
     assert.equal(h.quote().quote.reason, 'PROVIDER_BUDGET_EXHAUSTED')
     assert.equal(h.quote().quote.points, 250)
     assert.equal(h.quote().canRefresh, false)
-    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, true)
     finish(Response.json({ checked: 8, reconciled: 0, unresolved: 8, nextCursor: oldId, hasMore: true, paidGenerationRequested: false })); await h.settle()
     assert.equal(pages.length, 1, 'No automatic second page or paid retry')
     assert.equal(h.quote().checking, false)
@@ -886,7 +892,9 @@ test('hanging billing cannot hide funding refusal or prevent bounded historical 
     assert.equal(h.quote().quote.reason, 'PROVIDER_BUDGET_EXHAUSTED')
     assert.equal(h.quote().checking, false)
     assert.equal(h.quote().canRefresh, true)
-    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.type, 'button')
+    assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
+    assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
     assert.ok(h.delays.includes(40000), 'The auth deadline covers the upstream 25-second verification budget')
     assert.ok(h.delays.includes(90000), 'The complete review has a hard total deadline')
   } finally { h.close() }
@@ -906,5 +914,28 @@ test('timed-out funding review retains the original denial and ignores a late ap
     finish(Response.json({ checked: 1, reconciled: 1, unresolved: 0, nextCursor: null, hasMore: false, paidGenerationRequested: false })); await h.settle()
     assert.equal(h.quote().quote.reason, 'PROVIDER_BUDGET_EXHAUSTED')
     assert.equal(accountReads, 1, 'A late reply cannot continue a timed-out review')
+  } finally { h.close() }
+})
+
+test('blocked Shop primary action checks funding without submitting, even when the check restores eligibility', async () => {
+  let reviews = 0, released = false
+  const h = await harness({ ready: true, withExistingJob: false, accountLookup: () => Response.json(released ? fundedAccount : blockedAccount),
+    fundingLookup: () => { reviews++; if (reviews > 1) released = true; return Response.json({ checked: reviews > 1 ? 1 : 0, reconciled: reviews > 1 ? 1 : 0, unresolved: 0, nextCursor: null, hasMore: false, paidGenerationRequested: false }) },
+  })
+  try {
+    const primary = () => h.all().find(n => n.props.className === 'native-shop-generate')
+    assert.equal(primary().props.type, 'button')
+    assert.equal(primary().props.disabled, false)
+    assert.match(text(primary()), /Check generation funding · no charge/)
+    assert.match(h.quote().fundingReview, /No eligible earlier model reservations were found/)
+    assert.doesNotMatch(h.quote().fundingReview, /Earlier models were checked/)
+    h.byId('studio-prompt').props.onChange({ target: { value: 'My preserved violin draft' } }); await h.settle()
+    primary().props.onClick(); await h.settle()
+    assert.equal(reviews, 2)
+    assert.equal(h.quote().quote.state, 'credits')
+    assert.equal(primary().props.type, 'submit')
+    assert.equal(primary().props.disabled, false)
+    assert.equal(h.byId('studio-prompt').props.value, 'My preserved violin draft')
+    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0, 'Funding check never becomes a generation after eligibility changes')
   } finally { h.close() }
 })

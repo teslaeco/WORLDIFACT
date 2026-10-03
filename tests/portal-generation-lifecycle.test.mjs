@@ -163,7 +163,7 @@ test('each portal defaults to SOL and quotes the exact explicitly selected model
 test('health readiness and signed-in verified funding independently gate forced generation', async () => {
   for (const settings of [ { accountRead: () => Response.json(blocked) }, { accountRead: () => Response.json({ credits: 3000 }) }, { accountRead: () => Response.json({}, { status: 401 }) }, { initialOwner: null }, { health: { ...ready, model: 'gpt-6-astra' } }, { health: {} } ]) {
     const h = await harness(settings)
-    try { assert.equal(h.primary().props.disabled, true); h.primary().props.onClick(); await h.settle(); assert.equal(posts(h).length, 0) } finally { h.close() }
+    try { assert.equal(h.primary().props.disabled, h.quote().quote.reason !== 'PROVIDER_BUDGET_EXHAUSTED'); h.primary().props.onClick(); await h.settle(); assert.equal(posts(h).length, 0) } finally { h.close() }
   }
   for (const health of [{ ...ready, astraBlueprintReady: false }, { ...ready, qualityModel: 'gpt-6-sol' }]) {
     const h = await harness({ health })
@@ -248,7 +248,7 @@ test('lost POST response survives reload; read-only recovery stays enabled while
     assert.ok(!h.all().some(n => n.type === 'button' && text(n).includes('Prepare new paid attempt')))
     h.close(); reload = await harness({ store: h.store, io, accountRead: () => Response.json(blocked) })
     assert.equal(reload.calls.filter(c => c.path.startsWith('/api/blueprint')).length, 0)
-    assert.equal(reload.primary().props.disabled, true); assert.equal(reload.button('Recover same request').props.disabled, false)
+    assert.equal(reload.primary().props.disabled, false); assert.match(text(reload.primary()), /Check generation funding/); assert.equal(reload.button('Recover same request').props.disabled, false)
     const recover = reload.button('Recover same request').props.onClick; recover(); recover(); await reload.waitDone()
     assert.equal(posts(reload).length, 0); assert.equal(reload.calls.filter(c => c.path.startsWith('/api/blueprint/requests/')).length, 1)
     assert.equal(JSON.parse([...reload.store.values()][0]).recovery.id, saved.id); assert.match(reload.text(), /LIVE · GENERATED · gpt-6-sol/)
@@ -320,6 +320,23 @@ test('portal funding recovery checks earlier liabilities once and enables only a
     assert.equal(h.primary().props.disabled, false)
     assert.equal(h.calls.filter(c => c.path === '/api/studio/reconcile-budget').length, 1)
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 2)
+    assert.equal(posts(h).length, 0)
+  } finally { h.close() }
+})
+
+test('blocked portal primary action only checks funding and requires another explicit click to generate', async () => {
+  let reviews = 0, released = false
+  const h = await harness({ accountRead: () => Response.json(released ? funded : blocked), fundingRead: () => {
+    reviews++; released = reviews > 1
+    return Response.json({ checked: released ? 1 : 0, reconciled: released ? 1 : 0, unresolved: 0, nextCursor: null, hasMore: false, paidGenerationRequested: false })
+  } })
+  try {
+    assert.equal(h.primary().props.disabled, false)
+    assert.match(text(h.primary()), /Check generation funding · no charge/)
+    h.primary().props.onClick(); await h.settle()
+    assert.equal(reviews, 2)
+    assert.equal(h.quote().quote.state, 'credits')
+    assert.match(text(h.primary()), /Generate GPT-6 Sol blueprint/)
     assert.equal(posts(h).length, 0)
   } finally { h.close() }
 })

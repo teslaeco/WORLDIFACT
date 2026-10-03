@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { AccountEntitlements, entitlementCall, type EntitlementStorage } from '../server/entitlements.ts'
+import { demoBlueprint, assetSpecForBlueprint } from '../src/lib/blueprint.ts'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
 
 const ORIGIN = 'https://worldifact.test', ORACLE = 'https://fixture.trycloudflare.com'
@@ -196,4 +197,21 @@ test('historically valid uppercase job keys retain exact pagination order withou
   assert.equal(second.checked, 1); assert.equal(second.reconciled, 1); assert.equal(second.hasMore, false)
   assert.equal(f.lists.at(-1)?.startAfter, `job:${upper(64)}`)
   assert.deepEqual(f.calls.map(x => x.path), [`/v1/jobs/${eligible}/budget`])
+})
+
+test('authenticated mixed recovery includes completed Blueprint funding while making Oracle reads only for Studio', async () => {
+  const f = fixture(); await f.fund(); const id = idAt(100), studio = idAt(101)
+  await f.reserve(id, 'blueprint'); await f.call('/blueprint-dispatch', { id, fingerprint })
+  const blueprint = demoBlueprint('An inert blue tower'), job = f.store().get(`job:${id}`) as { at: number }
+  const blueprintSha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(blueprint)))), n => n.toString(16).padStart(2, '0')).join('')
+  await f.call('/blueprint-complete', { id, result: { mode: 'LIVE', provenance: 'GENERATED', blueprint, assetSpec: assetSpecForBlueprint(blueprint), requestId: id, model: 'gpt-6-sol', limitation: 'Inert saved fixture', delivery: { kind: 'procedural-blueprint', referenceCount: 0, fallbackUsed: false },
+    evidence: { providerResponseId: 'resp_owned_fixture', receivedAt: new Date(job.at).toISOString(), blueprintSha256, inputTokens: 1000, outputTokens: 100, totalTokens: 1100 } } })
+  await f.terminal(studio)
+  const before = Number(f.store().get(PROVIDER)), credits = f.store().get('balance')
+  const result = await (await f.sweep()).json()
+  assert.deepEqual(result, { checked: 2, reconciled: 2, unresolved: 0, nextCursor: null, hasMore: false, paidGenerationRequested: false })
+  assert.equal(f.store().get(PROVIDER), before + 26 + 154)
+  assert.equal(f.store().get('balance'), credits)
+  assert.deepEqual(f.calls.map(x => x.path), [`/v1/jobs/${studio}/budget`])
+  assert.doesNotMatch(JSON.stringify(result), /providerResponseId|sealId|Liability|resultSha256/)
 })

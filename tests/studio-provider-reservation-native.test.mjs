@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
+import { assetSpecForBlueprint, demoBlueprint } from '../src/lib/blueprint.ts'
 import { STUDIO_PRICING } from '../src/lib/studioPricing.ts'
 
 const NOW = Date.parse('2026-10-03T12:00:00Z')
@@ -23,7 +24,7 @@ test('native SQLite atomically fences undispatched Studio funding release agains
             get: key => storage.get(key),
             list: options => storage.list(options),
             put: async (key, value) => {
-              if (fault.armed && key.startsWith('job:') && value.state === 'failed') {
+              if (fault.armed && key.startsWith('job:') && (value.state === 'failed' || value.blueprintProviderReconciliation)) {
                 fault.armed = false;
                 throw new Error('Inert fixture terminal-write failure');
               }
@@ -214,6 +215,31 @@ test('native SQLite atomically fences undispatched Studio funding release agains
     await call(account, '/reserve', { id: legacy, channel: 'blueprint', profile: 'fast', fingerprint })
     await settle(account, legacy)
     assert.equal((await inspect(account, legacy)).providerCents, 1015, 'An old unversioned caller remains conservative')
+  })
+
+  await t.test('SQLite reconciles persisted completed Blueprint usage once, rolls back marker faults and preserves customer charges', async () => {
+    const account = 'fixture-blueprint-completed', id = crypto.randomUUID()
+    await seed(account)
+    await call(account, '/reserve', { id, channel: 'blueprint', profile: 'fast', fingerprint, blueprintDispatch: 'fenced-v1' })
+    assert.equal((await call(account, '/blueprint-dispatch', { id, fingerprint })).dispatch, true)
+    const blueprint = demoBlueprint('An inert green tower')
+    const blueprintSha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(blueprint)))), n => n.toString(16).padStart(2, '0')).join('')
+    const result = { mode: 'LIVE', provenance: 'GENERATED', blueprint, assetSpec: assetSpecForBlueprint(blueprint), requestId: id, model: 'gpt-6-sol', limitation: 'Inert persisted result; no provider call', delivery: { kind: 'procedural-blueprint', referenceCount: 0, fallbackUsed: false },
+      evidence: { providerResponseId: 'resp_native_fixture', receivedAt: new Date(NOW).toISOString(), blueprintSha256, inputTokens: 1000, outputTokens: 100, totalTokens: 1100 } }
+    assert.equal((await call(account, '/blueprint-complete', { id, result })).saved, true)
+    const before = await inspect(account, id)
+    assert.deepEqual(await call(account, '/provider-reconciliation-pending', {}), { ids: [], blueprintIds: [id], nextCursor: null, hasMore: false })
+    await call(account, '/fixture-arm-failure', {})
+    await call(account, '/reconcile-blueprint-provider', { id }, 503)
+    assert.deepEqual(await inspect(account, id), before)
+    const replies = await Promise.all(Array.from({ length: 8 }, () => call(account, '/reconcile-blueprint-provider', { id })))
+    assert.equal(replies.filter(reply => reply.repeated === false).length, 1)
+    const after = await inspect(account, id)
+    assert.equal(after.providerCents, 1041); assert.equal(after.credits, 1450)
+    assert.equal(after.job.blueprintProviderReconciliation.retainedCents, 9)
+    assert.deepEqual(await call(account, '/provider-reconciliation-pending', {}), { ids: [], blueprintIds: [], nextCursor: null, hasMore: false })
+    assert.equal((await call(account, '/reconcile-blueprint-provider', { id })).repeated, true)
+    assert.deepEqual(await inspect(account, id), after)
   })
 
   await t.test('terminal receipt marker failure rolls its provider credit back in actual SQLite before one safe retry', async () => {
