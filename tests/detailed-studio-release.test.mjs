@@ -26,3 +26,27 @@ test('missing ownership protection, invalid cost policy and missing reference su
   const noPolicy=await checkDetailedRuntime(env,async()=>Response.json({...detailedHealthFixture,astraOutputPolicy:'old'}))
   assert.equal(noPolicy.verifiedForGuardedRouting,false);assert.throws(()=>restoreDetailedConfig(config(),noPolicy))
 })
+
+test('read-only maintenance evidence distinguishes exact installed policies without exposing upstream fields', async () => {
+  const installed = {
+    worldifactCompletionPolicy: 'worldifact-reference-completion-v1', worldifactCompletionMaxContinuations: 1,
+    worldifactPrebuildPolicy: 'worldifact-cabinet-prebuild-v1', worldifactStandardContextPolicy: 'worldifact-standard-context-v1',
+  }
+  for (const [policies, expected] of [
+    [{}, { completionVerified: false, prebuildVerified: false, standardContextVerified: false }],
+    [installed, { completionVerified: true, prebuildVerified: true, standardContextVerified: true }],
+    [{ ...installed, worldifactCompletionMaxContinuations: true, worldifactStandardContextPolicy: 'unknown' },
+      { completionVerified: false, prebuildVerified: true, standardContextVerified: false }],
+  ]) {
+    const calls = []
+    const evidence = await checkDetailedRuntime(env, async (url, init) => {
+      calls.push(init.method)
+      return Response.json({ ...detailedHealthFixture, ...policies, unrelatedPrivateData: 'DO_NOT_LOG_UPSTREAM' })
+    })
+    assert.deepEqual(calls, ['GET'])
+    assert.deepEqual(evidence.maintenance, expected)
+    assert.doesNotMatch(JSON.stringify(evidence), /DO_NOT_LOG_UPSTREAM|unrelatedPrivateData/)
+    assert.equal(evidence.verifiedForGuardedRouting, true, 'diagnosis does not silently change the existing activation gate')
+    assert.equal(evidence.paidGenerationRequested, false)
+  }
+})

@@ -23,7 +23,8 @@ export interface EntitlementStorage {
 export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
-type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number }
+type StudioProviderReservation = { version: 1; source: 'ordinary'; amountCents: number; state: 'reserved' | 'released' }
+type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation }
 export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean }
 export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number }
 type StudioDispatchClaim = { dispatch: false } | { dispatch: true; deadline: number }
@@ -88,6 +89,23 @@ async function changeReservedCredits(storage: EntitlementStorage, delta: number)
 }
 async function settleReservedJob(storage: EntitlementStorage, id: string, job: Job, next: 'completed' | 'failed', now: number, failureCode?: StudioFailureCode) {
   if (job.state !== 'reserved') return { settled: true, repeated: true }
+  let providerReservation = job.studioProviderReservation
+  const model = job.model ?? (job.profile === 'fast' ? 'sol' : 'astra')
+  const economics = MODEL_ECONOMICS[model]
+  if (next === 'failed' && job.channel === 'studio' && job.kind === 'credits' && job.billingMode === 'hold-v1' &&
+      job.studioDispatch === 'ready-v1' && job.studioDispatchUntil === undefined && job.supportApprovalId === undefined && job.supplementalGrantId === undefined &&
+      typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint) && economics && job.cost === economics.creditsPerGeneration &&
+      providerReservation && typeof providerReservation === 'object' && !Array.isArray(providerReservation) && Object.keys(providerReservation).length === 4 &&
+      providerReservation.version === 1 && providerReservation.source === 'ordinary' && providerReservation.state === 'reserved' && providerReservation.amountCents === economics.maxProviderCents) {
+    // Only new ordinary-funded reservations carry this proof of the debit.
+    // Settlement and dispatch claim share this transaction: ready-v1 proves no
+    // Oracle POST was permitted, and the terminal row fences every later claim.
+    // Never infer unused funding from failure, a 404, legacy rows or support.
+    const remaining = await storage.get<number>(PROVIDER_BUDGET)
+    if (!Number.isSafeInteger(remaining) || !Number.isSafeInteger(Number(remaining) + providerReservation.amountCents)) throw new Error('Invalid provider reservation release')
+    await storage.put(PROVIDER_BUDGET, Number(remaining) + providerReservation.amountCents)
+    providerReservation = { ...providerReservation, state: 'released' }
+  }
   if (job.cost) {
     if (job.billingMode === 'hold-v1') {
       await changeReservedCredits(storage, -job.cost)
@@ -101,7 +119,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
     free[job.profile] = free[job.profile].filter(item => item.id !== id)
     await storage.put('usage', free)
   }
-  await storage.put(`job:${id}`, { ...job, state: next, updatedAt: now, ...(next === 'failed' && failureCode ? { failureCode } : {}) })
+  await storage.put(`job:${id}`, { ...job, ...(providerReservation ? { studioProviderReservation: providerReservation } : {}), state: next, updatedAt: now, ...(next === 'failed' && failureCode ? { failureCode } : {}) })
   return { settled: true, repeated: false }
 }
 
@@ -109,6 +127,8 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
 // Initialize once from remaining legacy credits; all later funding is in the same
 // transaction as a verified grant. These cents reserve worst-case provider cost,
 // not measured invoices. No restart, date rollover or credit refund replenishes them.
+// Only a new, explicitly recorded Studio reservation atomically fenced before
+// dispatch can release its provably unspent ordinary funding.
 const PROVIDER_BUDGET = 'provider-budget-cents:v1'
 async function providerBudget(storage: EntitlementStorage, legacyCredits: number) {
   const stored = await storage.get<number>(PROVIDER_BUDGET)
@@ -380,6 +400,7 @@ export class AccountEntitlements {
           if (!paid && free.fast.length >= 2) return { allowed: false, reason: 'FAST_DAILY_LIMIT' }
           let supportApprovalId: string | undefined
           let supplementalGrantId: string | undefined
+          let studioProviderReservation: StudioProviderReservation | undefined
           if (paid) {
             const remaining = await providerBudget(storage, credits)
             const ceiling = MODEL_ECONOMICS[model].maxProviderCents
@@ -410,9 +431,11 @@ export class AccountEntitlements {
             // Exactly +175 funding and -175 reservation, without an unsafe
             // intermediate integer or replenishing the pre-existing balance.
             await storage.put(PROVIDER_BUDGET, approved || supplementalApproved ? remaining : remaining - ceiling)
+            if (channel === 'studio' && fingerprint && !approved && !supplementalApproved)
+              studioProviderReservation = { version: 1, source: 'ordinary', amountCents: ceiling, state: 'reserved' }
           }
           const cloudHold = paid && channel === 'studio'
-          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
+          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }

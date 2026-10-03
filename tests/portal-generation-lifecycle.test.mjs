@@ -77,6 +77,7 @@ async function harness({ store = new Map(), io = transport(), accountRead, healt
   }
   const timeout = (fn, delay) => { const id = ++serial; timers.set(id, { fn, delay }); return id }
   const globals = { fetch: fetcher, Headers, AbortController, AbortSignal, Event, Error, console,
+    document: Object.assign(new EventTarget(), { visibilityState: 'visible' }),
     window: Object.assign(events, { setTimeout: timeout, clearTimeout: id => timers.delete(id), confirm, localStorage: {
       getItem: key => store.get(key) ?? null, setItem: (key,value) => { if (storageWrite) storageWrite(); store.set(key,value) }, removeItem: key => store.delete(key),
     } }),

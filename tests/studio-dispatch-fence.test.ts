@@ -145,10 +145,28 @@ test('a terminal 404 poll wins while the original submission waits for global bu
     const result = await (await submitting).json() as { job: StudioJob; recoveryOnly: boolean }
     assert.equal(result.job.state, 'failed'); assert.equal(result.recoveryOnly, true)
     assert.equal(f.posts(), 0)
-    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 875, creator: 1, global: 1 }, 'Only the existing customer-hold settlement applies; no funding/quota restoration')
+    assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 1050, creator: 1, global: 1 }, 'A new ordinary reservation releases only its fenced, never-dispatched provider funding; attempt quotas remain consumed')
     await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
     assert.equal(f.posts(), 0, 'An exact replay cannot replace a fenced submission')
   } finally { gate.resolve(); await submitting; Date.now = now }
+})
+
+test('global allowance rejection releases a new ordinary reservation before any dispatch claim or Oracle POST', async () => {
+  const f = fixture(); await f.fund(); const receipt = await f.prepare(), original = f.env.GENERATION_BUDGET!
+  f.env.GENERATION_BUDGET = { idFromName: name => original.idFromName(name), get(key) {
+    const object = original.get(key)
+    return { fetch: request => new URL(request.url).pathname === '/reserve-studio'
+      ? Promise.resolve(Response.json({ allowed: false, reason: 'exhausted' }, { status: 429 }))
+      : object.fetch(request) }
+  } }
+  const response = await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  assert.equal(response.status, 429)
+  assert.equal((await response.json() as { failureCode: string }).failureCode, 'STUDIO_ALLOWANCE_UNAVAILABLE')
+  assert.equal(f.posts(), 0)
+  assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 1050, creator: 1, global: 0 })
+  await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+  assert.equal(f.posts(), 0)
+  assert.deepEqual(await f.counters(), { balance: 1500, held: 0, provider: 1050, creator: 1, global: 0 })
 })
 
 test('a dispatch claim whose acknowledgement arrives after terminal closure cannot send its original POST or a replacement', async () => {

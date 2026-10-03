@@ -29,6 +29,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const evidence = await checkDetailedRuntime(process.env)
     const restored = restoreDetailedConfig(config, evidence)
     await writeFile(process.argv[2], JSON.stringify(restored, null, 2) + '\n', { mode: 0o600 })
+    console.log(JSON.stringify({ oracleMaintenance: evidence.maintenance, paidGenerationRequested: false }))
     console.log('VERIFIED: account-bound Astra/Blender route restored with existing USD1.75 job guard, low-reasoning output policy and four reference views. Anonymous Oracle writes remain disabled. No job, AI call, charge or budget reset was performed; live visual quality remains UNVERIFIED.')
   } catch { console.error('DETAILED_RESTORE_NOT_VERIFIED: publication stopped; no generation requested.'); process.exitCode = 1 }
 }
