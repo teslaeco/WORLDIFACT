@@ -53,10 +53,24 @@ Only these exact source sets are admitted:
 
 Unknown sources, partial installations and installed STANDARD-context variants
 are refused. Historical packages remain untouched. The copied maintenance fence
-changes only the admitted source manifests; the original pidfd guardian, process,
+admits the reviewed source manifests and proven inherited journal streams; the original pidfd guardian, process,
 cgroup, session, database, cancellation-consent and exact-worker recovery gates
 are preserved. The installed proof covers all eight sources, including
 `studio_pricing.py` and `terminal_budget.py`.
+
+The maintenance check distinguishes the application listener from inherited
+systemd journal output. Only stdout/stderr descriptors with matching unit
+configuration, reciprocal AF_UNIX kernel peers, stable cookies and a VFS identity
+bound to the root-owned `/run/systemd/journal/stdout` socket are exempted.
+The proof is replayed while frozen and immediately before stopping the exact
+worker. Accepted TCP connections, additional socket descriptors and unknown
+peers remain refused. Hosts without kernel UNIX socket diagnostics fail closed.
+Pipe/file output retains the original strict listener check.
+
+`inspect_maintenance.py` is an optional read-only fallback for a failed attempt.
+It verifies its launcher before using the existing connection routine and
+reports sanitized socket categories, service state and job-state counts. It does
+not install, restart, signal, generate models or change historical job rows.
 
 The launcher and installer are inert without explicit maintenance approval. The
 launcher requires an immutable reviewed 40-character Git commit, checks every

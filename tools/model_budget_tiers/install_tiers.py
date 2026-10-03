@@ -48,9 +48,9 @@ class Refused(base.InstallError):
         super().__init__(code)
 
 
-# The copied guardian changes only source-manifest admission. Its kernel,
-# process, cgroup, session, DB and exact-worker recovery gates are preserved.
-FENCE_SHA256 = 'e8c5d899e190dcbf26946a400f03db9749e191dcac14588d7409725b1d6212a9'
+# The guardian admits reviewed source ancestry and kernel-proven inherited
+# journal output. Its process, DB and exact-worker recovery gates are preserved.
+FENCE_SHA256 = '9d1f2d9e1c7d97d3368b72027e7221188b68bb9d0976f9da08e25c8fd2d50417'
 
 
 def maintenance_fence():

@@ -2,7 +2,19 @@
 
 Updated 3 October 2026.
 
-## IN VERIFICATION — explicitly approved Studio price tiers
+## CLOUDFLARE DEPLOYED / ORACLE PENDING — explicitly approved Studio price tiers
+
+PR #195 merged as `12149bd6c55d8de95044a4c41e55ccf87fed47c6`.
+Production run 37138372766 passed all 997 JavaScript tests and published
+Cloudflare version `ffc3edf8-e1e3-4b21-a51e-cced052125c9`.
+The original Oracle installation remains unconfirmed. The owner's 3 October
+Cloud Shell reports first showed `unsafe_job_history`; the subsequent read-only
+snapshot contained one cancelled, 60 failed and 80 succeeded rows, with no other
+states. After explicitly allowing cleanup of that one cancelled job, the
+installer stopped at `accepted_or_unknown_socket`. It did not report successful
+activation or request paid generation. See the maintenance follow-up in
+`docs/GENERATION_REPAIR_20261003.md`; do not infer worker activation from the
+Cloudflare release or classify the historical rows as visually approved models.
 
 The owner has now approved new detailed jobs at **250 points / maximum USD 2**
 or **500 points / maximum USD 4**. This supersedes the earlier undecided

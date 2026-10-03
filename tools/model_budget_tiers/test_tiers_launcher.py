@@ -91,7 +91,7 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual({path.name for path in root.iterdir()}, set(payload))
             adapted = subprocess.run([sys.executable, '-B', '-c',
                 "import install_tiers as i; f=i.maintenance_fence(); "
-                "assert f.EXPECTED==i.tiers_patch.EXPECTED; print('FLAT_FENCE_VERIFIED')"],
+                "assert f.EXPECTED==i.tiers_patch.EXPECTED; assert f._journal_helper().PATH=='/run/systemd/journal/stdout'; print('FLAT_FENCE_VERIFIED')"],
                 cwd=root, capture_output=True, text=True, timeout=10)
             self.assertEqual(adapted.returncode, 0, adapted.stderr)
             self.assertEqual(adapted.stdout.strip(), 'FLAT_FENCE_VERIFIED')
