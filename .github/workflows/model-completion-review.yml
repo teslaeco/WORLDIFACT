@@ -4,6 +4,7 @@ on:
     paths:
       - 'tools/model_completion/**'
       - 'tools/model_prebuild/**'
+      - 'tools/model_context/**'
       - 'tools/profit_guard/**'
       - 'tools/fast_preview/**'
       - '.github/workflows/model-completion-review.yml'
@@ -33,3 +34,10 @@ jobs:
         env:
           MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
         run: python3 -B -m unittest discover -s tools/model_prebuild -p 'test_*.py' -v
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Test complete STANDARD context and unchanged runtime gates
+        env:
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+        run: python3 -B -m unittest discover -s tools/model_context -p 'test_*.py' -v
