@@ -3,7 +3,7 @@ import { hasStudioBudgetConsent, studioBudgetFailureAdvice, studioBudgetSelectio
 import { detailedUnavailable, DETAILED_REFERENCE_LIMIT } from '../lib/detailedStudio'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { MODEL_CATALOG, type DraftModel, type GenerationModel } from '../lib/modelCatalog'
+import { type DraftModel, type GenerationModel } from '../lib/modelCatalog'
 import OracleModelPreview from '../components/OracleModelPreview'
 import DemoShopPreview from '../components/DemoShopPreview'
 import ShopManufacturingOptions from '../components/ShopManufacturingOptions'
