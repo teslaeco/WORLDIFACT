@@ -658,6 +658,148 @@ class ReadOnlyEvidence(unittest.TestCase):
                 fence._unit(operations, fence.WORKER)
 
 
+class UnitCompatibility(unittest.TestCase):
+    """Only inert systemctl/busctl output, including the v252 omission shape."""
+    def setUp(self):
+        self.source = Path('/synthetic/froge-connector')
+        self.value = unit(fence.WORKER, self.source)
+        self.parent = dict(Id='app.slice', LoadState='loaded', ActiveState='active',
+                           ControlGroup='/user.slice/user-1000.slice/user@1000.service/app.slice')
+        self.calls = []
+        self.bus_output = None
+        self.bus_error = None
+        self.operations = type('Ops', (), {})()
+        self.operations.command = self.command
+
+    def command(self, args, timeout):
+        self.assertEqual(timeout, fence.COMMAND_SECONDS)
+        self.calls.append(args)
+        if args[0] == 'busctl':
+            self.assertEqual(args[:5], ['busctl', '--user', '--auto-start=no', 'get-property', 'org.freedesktop.systemd1'])
+            self.assertEqual(args[6], 'org.freedesktop.systemd1.Service')
+            self.assertTrue(set(args[7:]) <= set(fence.OPTIONAL_EXEC))
+            if self.bus_error: raise self.bus_error
+            return self.bus_output if self.bus_output is not None else '\n'.join('a(sasbttttuii) 0' for _ in args[7:])
+        self.assertEqual(args[:3], ['systemctl', '--user', 'show'])
+        if args[3] == 'app.slice':
+            self.assertEqual(args[4], '--property=Id,LoadState,ActiveState,ControlGroup')
+            value = self.parent
+        else:
+            self.assertIn(args[3], (fence.WORKER, fence.TUNNEL))
+            self.assertEqual(args[4], '--property=' + ','.join(fence.PROPERTIES))
+            value = self.value
+        return '\n'.join(key + '=' + value for key, value in value.items())
+
+    def read(self, name=fence.WORKER):
+        return fence._unit(self.operations, name)
+
+    def with_slice(self, name=fence.WORKER):
+        self.value = unit(name, self.source)
+        self.value.update(Requires='basic.target sysinit.target app.slice', Slice='app.slice',
+                          ControlGroup=self.parent['ControlGroup'] + '/' + name)
+
+    def test_six_omitted_hooks_require_six_typed_zero_arrays_for_each_fixed_object(self):
+        for name, encoded in ((fence.WORKER, 'froge_2dworker_2eservice'), (fence.TUNNEL, 'froge_2dtunnel_2eservice')):
+            self.value = unit(name, self.source)
+            for key in fence.OPTIONAL_EXEC: del self.value[key]
+            result = self.read(name)
+            self.assertTrue(all(result[key] == '' for key in fence.OPTIONAL_EXEC))
+            self.assertEqual(self.calls[-1][5], '/org/freedesktop/systemd1/unit/' + encoded)
+            self.assertEqual(self.calls[-1][7:], list(fence.OPTIONAL_EXEC))
+
+    def test_only_missing_optional_hooks_are_queried(self):
+        del self.value['ExecStop']
+        self.read()
+        self.assertEqual(self.calls[-1][7:], ['ExecStop'])
+
+    def test_present_empty_hooks_need_no_bus_query(self):
+        self.read()
+        self.assertEqual(len(self.calls), 1)
+
+    def test_nonempty_wrong_type_count_and_malformed_typed_results_refuse(self):
+        del self.value['ExecStop']
+        for raw in ('', 'as 0', 'a(sasbttttuii) 1 PRIVATE_HOOK',
+                    'a(sasbttttuii) 0\na(sasbttttuii) 0', 'a(sasbttttuii) 0 PRIVATE',
+                    'PRIVATE_ERROR\na(sasbttttuii) 0'):
+            with self.subTest(raw=raw):
+                self.bus_output = raw
+                with self.assertRaises(fence.FenceRefused) as error: self.read()
+                self.assertEqual(error.exception.code, 'unit_hooks_unproven')
+                self.assertNotIn('PRIVATE', str(error.exception))
+
+    def test_bus_missing_or_failed_refuses_without_fallback(self):
+        del self.value['ExecStop']
+        for error in (FileNotFoundError('private'), subprocess.TimeoutExpired('private', 3), subprocess.CalledProcessError(1, 'private')):
+            self.bus_error = error
+            with self.assertRaises(fence.FenceRefused) as result: self.read()
+            self.assertEqual(result.exception.code, 'unit_hooks_unproven')
+
+    def test_missing_essential_properties_are_never_filled(self):
+        original = dict(self.value)
+        for key in set(fence.PROPERTIES) - set(fence.OPTIONAL_EXEC):
+            self.value = dict(original); del self.value[key]; self.calls.clear()
+            with self.assertRaises(fence.FenceRefused) as error: self.read()
+            self.assertEqual(error.exception.code, 'unit_unreadable')
+            self.assertEqual(len(self.calls), 1)
+
+    def test_nonempty_hooks_still_fail_policy(self):
+        for key in fence.OPTIONAL_EXEC:
+            self.value[key] = 'private hook'
+            with self.assertRaises(fence.FenceRefused): fence._unit_policy(self.read(), self.source)
+            self.value[key] = ''
+
+    def test_fixed_app_slice_requires_actual_immediate_parent(self):
+        for name in (fence.WORKER, fence.TUNNEL):
+            self.with_slice(name)
+            fence._unit_policy(self.read(name), self.source, worker=name == fence.WORKER)
+            self.assertEqual(self.calls[-1][3], 'app.slice')
+
+    def test_lookalike_nested_traversal_and_wrong_parent_refuse(self):
+        self.with_slice()
+        for group in ('/user/other.slice/' + fence.WORKER,
+                      self.parent['ControlGroup'] + '/nested/' + fence.WORKER,
+                      '/user/../app.slice/' + fence.WORKER,
+                      '/different/app.slice/' + fence.WORKER):
+            self.value['ControlGroup'] = group
+            with self.assertRaises(fence.FenceRefused) as error: self.read()
+            self.assertEqual(error.exception.code, 'unit_slice_service_group_mismatch')
+
+    def test_missing_unloaded_or_changed_slice_refuses(self):
+        self.with_slice()
+        original = dict(self.parent)
+        for key, value in (('Id', 'private.slice'), ('LoadState', 'not-found'), ('ActiveState', 'inactive'),
+                           ('ControlGroup', '/user/../app.slice'), ('ControlGroup', ''), ('ControlGroup', '/user//app.slice')):
+            self.parent = {**original, key: value}
+            with self.assertRaises(fence.FenceRefused): self.read()
+        self.parent = original; self.value['Slice'] = 'private.slice'
+        with self.assertRaises(fence.FenceRefused): self.read()
+
+    def test_unknown_dependency_still_refuses_without_disclosing_its_name(self):
+        for names, kind in (('PRIVATE.service', 'service'), ('PRIVATE.target', 'target'),
+                            ('PRIVATE.slice', 'slice'), ('PRIVATE.socket', 'socket'),
+                            ('PRIVATE.mount', 'mount'), ('PRIVATE.extension', 'other'),
+                            ('PRIVATE.service PRIVATE.slice', 'mixed')):
+            self.with_slice(); self.value['Requires'] += ' ' + names
+            with self.assertRaises(fence.FenceRefused) as error: fence._unit_policy(self.read(), self.source)
+            self.assertEqual(error.exception.code, 'unit_requires_unknown_' + kind)
+            self.assertNotIn('PRIVATE', str(error.exception))
+
+    def test_active_or_nonzero_pid_without_group_refuses_during_snapshot(self):
+        for active, pid in (('active', '45678'), ('active', '0'), ('inactive', '45678'), ('deactivating', '45678')):
+            self.with_slice(); self.value.update(ActiveState=active, MainPID=pid, ControlGroup='')
+            with self.assertRaises(fence.FenceRefused) as error: self.read()
+            self.assertEqual(error.exception.code, 'unit_slice_service_group_missing')
+
+    def test_stopped_unit_can_be_observed_but_not_admitted_as_running(self):
+        self.with_slice(); self.value.update(ActiveState='inactive', SubState='dead', MainPID='0', ControlGroup='')
+        self.assertEqual(self.read()['MainPID'], '0')
+        with self.assertRaises(fence.FenceRefused): fence._unit_policy(self.read(), self.source)
+
+    def test_unknown_unit_name_never_reaches_bus_or_systemctl(self):
+        with self.assertRaises(fence.FenceRefused): self.read('private.service')
+        self.assertEqual(self.calls, [])
+
+
 class GuardStateMachine(unittest.TestCase):
     """All process signals and service observations in this class are mocks."""
     def setUp(self):

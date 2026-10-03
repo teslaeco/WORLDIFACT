@@ -152,7 +152,7 @@ FILES.update({
     'context_policy.py': ('tools/model_context/context_policy.py', 'f705ad5b6188871038d938f4eac8a379759f0796'),
     'context_patch.py': ('tools/model_context/context_patch.py', '6ed419f784f891e51bae8fc93de480a1ac31088a'),
     'install_context.py': ('tools/model_context/install_context.py', 'bda3b2b8e8220408973ee7a8054504b54ad97223'),
-    'maintenance_fence.py': ('tools/model_context/maintenance_fence.py', 'b06110b6c9f2bfd55de6d580afcea2011d7cb7f7'),
+    'maintenance_fence.py': ('tools/model_context/maintenance_fence.py', 'd90d7b84abfb952f5056ce33e529aa0a19ea4e25'),
     'verification_scope.py': ('tools/model_context/verification_scope.py', '677c577db69ece8d9757fa81bb62633bc134c17d'),
     'offline_standard.py': ('tools/model_context/offline_standard.py', '41bcc6b2cf5fa8aa79e7da7eca9a85c6b09c8edc'),
 })

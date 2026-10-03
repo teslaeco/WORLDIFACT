@@ -156,15 +156,42 @@ The read-only login1 property is documented in the official
 [systemd login1 interface](https://github.com/systemd/systemd/blob/main/man/org.freedesktop.login1.xml).
 No setting is modified to satisfy this precondition.
 
+## systemd property compatibility
+
+The strict service snapshot includes `Slice`. Some systemctl versions omit an
+empty structured Exec property even with `--all`: the
+[v252 printer](https://github.com/systemd/systemd/blob/v252/src/systemctl/systemctl-show.c#L1180)
+prints these arrays only inside its element loop. Absence alone is never accepted.
+For the six optional hooks, one read-only, fixed-object `busctl get-property`
+call must return exactly one `a(sasbttttuii) 0` value per missing hook.
+[Multiple-property reads](https://github.com/systemd/systemd/blob/v252/man/busctl.xml#L115)
+preserve each value's type and order. Unsupported, missing, malformed or nonempty
+replies refuse maintenance; every other missing service property still refuses.
+This typed proof is repeated by the same snapshot path before and during the
+existing freeze and identity checks. It does not depend on inferred version behavior.
+
+In addition to the existing basic/sysinit dependencies, only the literal
+`app.slice` dependency is eligible. systemd
+[adds Requires for a service's configured slice](https://github.com/systemd/systemd/blob/v252/src/core/unit.c#L1371).
+The service must report `Slice=app.slice`; the fixed app.slice unit must be
+loaded and active; and the service's cgroup must be that actual slice cgroup's
+immediate child with the exact service basename. An absent cgroup is accepted
+only while observing a zero-PID stopped/stopping service, never an active one.
+Unknown Requires dependencies produce a fixed category refusal code, without
+printing arbitrary names or private unit values. These reads add no service
+configuration, signal, permission or budget changes.
+
 ## Current offline installer validation
 
-The integrated maintenance draft passed 133 focused tests across context,
+The integrated maintenance draft passed 147 focused tests across context,
 transaction/rollback, marker enforcement, pidfd guardian, owned descendant
 scope, pinned launcher and waited-cell verifier behavior. The unchanged
 completion and prebuild compatibility suites also passed 148 and 45 tests,
-respectively: 326 Python checks in total. The 13 additional consent checks cover
+respectively: 340 Python checks in total. The 13 additional consent checks cover
 explicit approval, private identity binding, default refusal, active/unknown and
 changed-cancellation races, resource refusal, receipt truth and rollback.
+Fourteen compatibility cases cover explicit typed hook evidence, exact slice
+binding, missing essential properties, private-value redaction and refusals.
 Compilation, exact package blob checks
 and diff checks passed. These counts describe local synthetic/kernel fixtures;
 they are not target-service or actual CLI/MCP/Blender installation evidence.
