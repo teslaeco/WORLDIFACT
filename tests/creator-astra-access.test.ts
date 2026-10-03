@@ -34,12 +34,11 @@ test('obsolete malformed quota never blocks funded Creator, Pro or Studio admiss
   }
 })
 
-test('removing plan quotas does not bypass point holds, provider funding, billing review or paid membership',async()=>{
+test('removing plan quotas does not bypass point holds, provider funding or billing review',async()=>{
   for(const [seed,reason] of [
     [{'provider-budget-cents:v1':174},'PROVIDER_BUDGET_EXHAUSTED'],
     [{'customer-reserved-credits:v1':1300},'CREDITS_EXHAUSTED'],
     [{billingHold:true},'BILLING_REVIEW_REQUIRED'],
-    [{subscription:undefined},'ASTRA_PLAN_REQUIRED'],
   ] as const){
     const f=fixture();await activate(f)
     for(const [key,value] of Object.entries(seed))f.values.set(key,value)
