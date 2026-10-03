@@ -87,8 +87,26 @@ def _source(source, started=None, expected_sources=None):
             refuse('loaded_source_unproven', 'Source changed since this process started.')
 
 
+def allowed_job_history(connection, allow_cancelled_cleanup=False, expected_cancelled=None):
+    """Permit only the single consented cancellation; never change a job row."""
+    if type(allow_cancelled_cleanup) is not bool:
+        refuse('cancelled_consent_invalid', 'Cancellation cleanup requires an explicit boolean consent.')
+    row = connection.execute("SELECT COUNT(*) FROM jobs WHERE state IS NULL OR state NOT IN ('succeeded','failed','cancelled')").fetchone()
+    if row is None or row[0] != 0:
+        refuse('unsafe_job_history', 'Nonterminal or unknown jobs prevent maintenance.')
+    rows = connection.execute("SELECT id FROM jobs WHERE state='cancelled' LIMIT 2").fetchall()
+    if rows and not allow_cancelled_cleanup:
+        refuse('unsafe_job_history', 'Cancelled jobs require explicit cleanup interruption consent.')
+    identities = tuple(row[0] for row in rows)
+    if len(identities) > 1 or any(not isinstance(value, str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', value) for value in identities):
+        refuse('cancelled_scope_changed', 'Only one explicitly consented cancelled job is supported.')
+    if expected_cancelled is not None and identities != expected_cancelled:
+        refuse('cancelled_scope_changed', 'Cancelled job identity changed during maintenance.')
+    return identities
+
+
 @contextmanager
-def database_gate(source, *, frozen=False, timeout=0.25):
+def database_gate(source, *, frozen=False, timeout=0.25, allow_cancelled_cleanup=False, expected_cancelled=None):
     """Never rewrites jobs, including cancelled history. Frozen gate holds admission."""
     path = Path(source) / 'state/jobs.sqlite'
     _regular(path, 128 * 1024 * 1024)
@@ -98,10 +116,8 @@ def database_gate(source, *, frozen=False, timeout=0.25):
                                      uri=True, timeout=timeout)
         if frozen:
             connection.execute('BEGIN IMMEDIATE')
-        row = connection.execute("SELECT COUNT(*) FROM jobs WHERE state IS NULL OR state NOT IN ('succeeded','failed')").fetchone()
-        if row is None or row[0] != 0:
-            refuse('unsafe_job_history', 'Nonterminal, cancelled or unknown jobs prevent maintenance.')
-        yield
+        identities = allowed_job_history(connection, allow_cancelled_cleanup, expected_cancelled)
+        yield identities
     except sqlite3.Error as error:
         raise FenceRefused('database_unproven', 'The job admission gate could not be proven.') from error
     finally:
@@ -352,6 +368,12 @@ def _default_term(pid):
 
 
 def _guard_stop(config, pidfd, deadline):
+    allow = config.get('allow_cancelled_cleanup', False)
+    identities = config.get('cancelled_job_ids', [])
+    if (type(allow) is not bool or not isinstance(identities, list) or len(identities) > 1
+            or identities and not allow
+            or any(not isinstance(value, str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', value) for value in identities)):
+        refuse('cancelled_consent_invalid', 'The guarded stop requires the same bounded cleanup consent.')
     operations = _GuardOperations(config['source'])
     _same_files(config['files'])
     _source(operations.source, expected_sources=config['expected_sources'])
@@ -598,8 +620,9 @@ class Lease:
 def quiesce(operations):
     """Yield only after the exact old worker has cleanly exited and is inactive.
 
-    Requires exclusive authorized maintenance. No optional flag relaxes any
-    invariant. Unsupported target evidence is a typed, conservative refusal.
+    Requires exclusive authorized maintenance. Explicit consent permits only
+    the bound cancelled job; process/resource invariants remain unchanged.
+    Unsupported target evidence is a typed, conservative refusal.
     """
     source = Path(operations.source)
     guard = None
@@ -621,8 +644,10 @@ def quiesce(operations):
                 any(not re.fullmatch('[a-f0-9]{64}', digest) for digest in expected_sources.values())):
             refuse('invalid_reviewed_manifest', 'A complete reviewed source manifest is required.')
         _source(source, expected_sources=expected_sources)
-        with database_gate(source):
-            pass
+        allow = getattr(operations, 'allow_cancelled_cleanup', False)
+        with database_gate(source, allow_cancelled_cleanup=allow,
+                           expected_cancelled=getattr(operations, 'cancelled_job_ids', None)) as identities:
+            operations.cancelled_job_ids = identities
         worker, tunnel = _unit(operations, WORKER), _unit(operations, TUNNEL)
         _unit_policy(worker, source)
         _unit_policy(tunnel, source, worker=False)
@@ -633,14 +658,15 @@ def quiesce(operations):
         _same_worker(operations, worker, pid, ticks, pidfd)
         config = {'source': str(source), 'pid': pid, 'ticks': ticks,
                   'worker': worker, 'tunnel': tunnel, 'files': files,
-                  'expected_sources': expected_sources}
+                  'expected_sources': expected_sources, 'allow_cancelled_cleanup': allow,
+                  'cancelled_job_ids': list(identities)}
         guard = _Guard(pidfd, config)
         guard.freeze(pid, ticks)
         _same_worker(operations, worker, pid, ticks, pidfd)
         _same_files(files)
         _source(source, started, expected_sources)
         _resources(pid, operations)
-        with database_gate(source, frozen=True):
+        with database_gate(source, frozen=True, allow_cancelled_cleanup=allow, expected_cancelled=identities):
             _same_worker(operations, worker, pid, ticks, pidfd)
             stop_attempted = True
             guard.stop()

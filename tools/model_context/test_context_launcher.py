@@ -34,6 +34,25 @@ class LauncherTests(unittest.TestCase):
         for value in ('main', 'v1', '../private', 'A' * 39, None):
             with self.assertRaises(launcher.LaunchError): launcher.source_commit(value)
         with self.assertRaises(launcher.LaunchError): launcher.script('inert', approved=False)
+
+    def test_cancelled_cleanup_requires_separate_approval_and_exact_boolean_propagation(self):
+        with patch.object(launcher,'package',side_effect=AssertionError('download')):
+            with self.assertRaises(SystemExit): launcher.main(['--allow-cancelled-cleanup'])
+        with self.assertRaises(launcher.LaunchError): launcher.script('inert',allow_cancelled_cleanup=True)
+        for invalid in (1,'true',None):
+            with self.assertRaises(launcher.LaunchError): launcher.script('inert',approved=True,allow_cancelled_cleanup=invalid)
+        for enabled in (False,True):
+            program=launcher.script('inert',approved=True,allow_cancelled_cleanup=enabled)
+            self.assertIn('ALLOW_CANCELLED_CLEANUP='+repr(enabled),program)
+            self.assertIn("(['--allow-cancelled-cleanup'] if ALLOW_CANCELLED_CLEANUP else [])",program)
+
+    def test_cli_threads_explicit_consent_into_remote_invocation(self):
+        for enabled in (False,True):
+            with patch.object(launcher,'package',return_value='inert'),patch.object(launcher,'connection',return_value=['INERT']),patch.object(launcher,'invoke',return_value=success()) as invoke:
+                args=['--source-commit',COMMIT,'--approve-service-maintenance']
+                if enabled: args.append('--allow-cancelled-cleanup')
+                launcher.main(args)
+            self.assertIn('ALLOW_CANCELLED_CLEANUP='+repr(enabled),invoke.call_args.args[1])
     def test_package_preserves_full_exact_file_set_and_refuses_byte_drift(self):
         values, manifest = self.fixtures()
         with patch.object(launcher, 'FILES', manifest):

@@ -87,16 +87,28 @@ An independent transient guardian freezes only the exact worker pidfd. Every
 thread must stop; only the two reviewed baseline threads and the single idle
 loopback listener are permitted. Accepted sockets, handler threads, descendants,
 containers, unknown source/unit state or **any cancelled/nonterminal/unknown
-row** refuse maintenance. Historical cancellations are not cleared or guessed
-inactive. The row check repeats under the SQLite admission lock.
+row** refuse maintenance by default. Historical cancellations are not cleared or
+guessed inactive. The row check repeats under the SQLite admission lock.
+
+The separate `--allow-cancelled-cleanup` flag requires
+`--approve-service-maintenance` too. It permits interruption of possible residual
+work or cleanup of at most one already-cancelled job. Its private identifier is
+bound at the first row check and must remain identical at the frozen check,
+activation and rollback. A second, replaced or newly cancelled job refuses.
+All nonterminal/NULL/unknown rows and all process/socket/container checks still
+refuse. The flag neither changes the cancelled row nor rewrites its artifacts,
+and does not prove that the cancellation is historical. The receipt records the
+strict consent boolean and `pidfd-origin-terminal-consent-v2`, never the job ID.
 
 With the pinned `Restart=on-failure` unit, verified default/unblocked SIGTERM and
 no forced restart/watchdog hooks, the guardian sends TERM+CONT to that pidfd
 only. No unit-name stop is used. The worker must exit cleanly and become inactive
 without a replacement invocation; the admission lock is then released. A
 succeeded/failed worker can still have pending atomic `timing.json` bookkeeping;
-that bounded metadata loss is the remaining normal stop tradeoff. Model/provider
-work cannot follow those exact terminal exits. Arbitrary concurrent admin,
+that bounded metadata loss is the remaining default stop tradeoff. Model/provider
+work cannot follow those exact succeeded/failed exits. With explicit cancelled
+cleanup consent, the cancelled job may instead have residual work interrupted;
+its history and files remain preserved by the installer. Arbitrary concurrent admin,
 whole-cgroup or host termination is outside this proof.
 
 Both genuine offline gates run **after** this stop, in a fresh private runtime
@@ -146,11 +158,14 @@ No setting is modified to satisfy this precondition.
 
 ## Current offline installer validation
 
-The integrated maintenance draft passed 120 focused tests across context,
+The integrated maintenance draft passed 133 focused tests across context,
 transaction/rollback, marker enforcement, pidfd guardian, owned descendant
 scope, pinned launcher and waited-cell verifier behavior. The unchanged
 completion and prebuild compatibility suites also passed 148 and 45 tests,
-respectively: 313 Python checks in total. Compilation, exact package blob checks
+respectively: 326 Python checks in total. The 13 additional consent checks cover
+explicit approval, private identity binding, default refusal, active/unknown and
+changed-cancellation races, resource refusal, receipt truth and rollback.
+Compilation, exact package blob checks
 and diff checks passed. These counts describe local synthetic/kernel fixtures;
 they are not target-service or actual CLI/MCP/Blender installation evidence.
 

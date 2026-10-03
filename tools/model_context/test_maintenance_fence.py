@@ -332,6 +332,36 @@ class DatabaseGates(unittest.TestCase):
             with fence.database_gate(self.source, frozen=True):
                 self.fail('Cancellation raced the preflight.')
 
+    def test_explicit_consent_is_single_identity_bound_and_never_allows_active_or_unknown(self):
+        identity='00000000-0000-4000-8000-000000000001'
+        for frozen in (False,True):
+            for state in ('cancelled','queued','generating','building','retrying','unknown',None):
+                with self.subTest(frozen=frozen,state=state):
+                    with sqlite3.connect(self.path) as db:
+                        db.execute('DELETE FROM jobs'); db.execute('INSERT INTO jobs VALUES (?,?)',(identity,state))
+                    before=self.path.read_bytes()
+                    if state=='cancelled':
+                        with fence.database_gate(self.source,frozen=frozen,allow_cancelled_cleanup=True,expected_cancelled=(identity,)) as bound:
+                            self.assertEqual(bound,(identity,))
+                    else:
+                        with self.assertRaises(fence.FenceRefused):
+                            with fence.database_gate(self.source,frozen=frozen,allow_cancelled_cleanup=True,expected_cancelled=(identity,)): pass
+                    self.assertEqual(self.path.read_bytes(),before)
+
+    def test_second_or_replaced_cancelled_job_refuses_even_with_consent(self):
+        first='00000000-0000-4000-8000-000000000001'; second='00000000-0000-4000-8000-000000000002'
+        for identities in ((second,),(first,second)):
+            with sqlite3.connect(self.path) as db:
+                db.execute('DELETE FROM jobs'); db.executemany('INSERT INTO jobs VALUES (?,?)',[(value,'cancelled') for value in identities])
+            with self.assertRaises(fence.FenceRefused) as error:
+                with fence.database_gate(self.source,frozen=True,allow_cancelled_cleanup=True,expected_cancelled=(first,)): pass
+            self.assertEqual(error.exception.code,'cancelled_scope_changed')
+
+    def test_truthy_nonboolean_consent_is_not_an_override(self):
+        for value in (1,'true',None):
+            with self.assertRaises(fence.FenceRefused):
+                with fence.database_gate(self.source,allow_cancelled_cleanup=value): pass
+
     def test_lock_contention_refuses_without_modifying_rows(self):
         with sqlite3.connect(self.path) as db:
             db.execute('BEGIN IMMEDIATE')
@@ -403,9 +433,11 @@ class MockIntegration(unittest.TestCase):
         class Guard:
             def __init__(self, pidfd, config):
                 self.config = config
+                owner.guard_config = config
                 operations.events.append(('guard-ready',))
             def freeze(self, pid, ticks):
                 operations.events.append(('freeze',))
+                if getattr(owner,'after_freeze',None): owner.after_freeze()
             def stop(self):
                 operations.events.append(('guard-stop',))
                 if owner.stop_error:
@@ -462,6 +494,39 @@ class MockIntegration(unittest.TestCase):
                 self.fail('Cancelled history admitted.')
         self.assertEqual(error.exception.code, 'unsafe_job_history')
         self.assertFalse(self.operations.events)
+
+    def test_explicit_cleanup_consent_reaches_guard_and_preserves_row(self):
+        identity='00000000-0000-4000-8000-000000000001'
+        self.operations.allow_cancelled_cleanup=True
+        path=self.operations.source/'state/jobs.sqlite'
+        with sqlite3.connect(path) as db: db.execute('INSERT INTO jobs VALUES (?,?)',(identity,'cancelled'))
+        before=path.read_bytes()
+        with fence.quiesce(self.operations) as lease:
+            self.assertIs(self.guard_config['allow_cancelled_cleanup'],True)
+            self.assertEqual(self.guard_config['cancelled_job_ids'],[identity])
+            self.assertEqual(self.operations.cancelled_job_ids,(identity,))
+            self.healthy(lease)
+        self.assertEqual(path.read_bytes(),before)
+
+    def test_enabled_scope_race_resumes_before_stop(self):
+        identity='00000000-0000-4000-8000-000000000001'
+        self.operations.allow_cancelled_cleanup=True
+        path=self.operations.source/'state/jobs.sqlite'
+        with sqlite3.connect(path) as db: db.execute('INSERT INTO jobs VALUES (?,?)',(identity,'cancelled'))
+        def replace():
+            with sqlite3.connect(path) as db: db.execute('UPDATE jobs SET id=?',('00000000-0000-4000-8000-000000000002',))
+        self.after_freeze=replace
+        with self.assertRaises(fence.FenceRefused) as error:
+            with fence.quiesce(self.operations): self.fail('replaced cancellation admitted')
+        self.assertEqual(error.exception.code,'cancelled_scope_changed')
+        self.assertTrue(self.closed); self.assertNotIn(('guard-stop',),self.operations.events)
+
+    def test_enabled_consent_never_bypasses_resource_rejection(self):
+        self.operations.allow_cancelled_cleanup=True
+        with patch.object(fence,'_resources',side_effect=fence.FenceRefused('work_survived','fixture')):
+            with self.assertRaises(fence.FenceRefused):
+                with fence.quiesce(self.operations): self.fail('resource proof bypassed')
+        self.assertTrue(self.closed); self.assertNotIn(('guard-stop',),self.operations.events)
 
     def test_resource_or_identity_refusal_leaves_original_tunnel_untouched(self):
         for gate in ('_resources', '_same_worker'):

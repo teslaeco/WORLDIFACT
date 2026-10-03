@@ -57,6 +57,8 @@ class FakeOperations:
     @contextmanager
     def quiesce(self):
         self.events.append('fence')
+        with installer.final_admission(self.source, self.allow_cancelled_cleanup, self.cancelled_job_ids) as identities:
+            self.cancelled_job_ids = identities
         yield self.lease
         self.events.append('leave-fence')
     def verify_stage(self, stage, workspace, lease):
@@ -80,7 +82,7 @@ class FakeOperations:
     def rollback_quiesce(self, expected, lease):
         self.events.append('refence-before-rollback')
         lease.assert_no_work()
-        with installer.final_admission(self.source): pass
+        with installer.final_admission(self.source, self.allow_cancelled_cleanup, self.cancelled_job_ids): pass
         yield lease
     def context_health(self, maintenance=False):
         self.events.append('new-health')
@@ -162,6 +164,52 @@ class InstallerTests(unittest.TestCase):
                 installer.install(self.source, self.backup, FakeOperations(self.source))
         self.assertEqual(tree(self.source), self.before)
 
+    def test_cancelled_flag_requires_separate_maintenance_approval(self):
+        with patch.object(installer.base, 'read_regular', side_effect=AssertionError('unexpected source access')):
+            with self.assertRaises(SystemExit): installer.main(['--allow-cancelled-cleanup'])
+            with self.assertRaisesRegex(installer.Refused, 'maintenance_approval_required'):
+                installer.install(self.source, self.backup, FakeOperations(self.source), allow_cancelled_cleanup=True)
+
+    def test_explicit_cancelled_consent_preserves_history_artifacts_and_receipt_truth(self):
+        cancelled='00000000-0000-4000-8000-000000000001'
+        with sqlite3.connect(self.source/'state/jobs.sqlite') as db: db.execute('INSERT INTO jobs VALUES (?,?)',(cancelled,'cancelled'))
+        before=tree(self.source); ops=FakeOperations(self.source)
+        outcome=installer.install(self.source,self.backup,ops,approved=True,allow_cancelled_cleanup=True)
+        self.assertTrue(outcome['activation_committed'])
+        self.assertEqual(ops.cancelled_job_ids,(cancelled,))
+        after=tree(self.source)
+        self.assertEqual({k:v for k,v in before.items() if k.startswith('state/')}, {k:v for k,v in after.items() if k.startswith('state/')})
+        proof=json.loads((self.source/context_policy.RECEIPT).read_text())
+        self.assertTrue(proof['cancelled_cleanup_interruption_approved'])
+        self.assertEqual(proof['maintenance_fence'],'pidfd-origin-terminal-consent-v2')
+        self.assertNotIn(cancelled,json.dumps(proof))
+        with patch.object(installer.prebuild_policy,'verified_health',return_value={'verified':True}):
+            self.assertTrue(context_policy.verified_health(self.source))
+            for invalid in (None,1,'true'):
+                proof['cancelled_cleanup_interruption_approved']=invalid
+                write(self.source/context_policy.RECEIPT,proof)
+                self.assertEqual(context_policy.verified_health(self.source),{})
+
+    def test_cancelled_consent_survives_rollback_without_rebinding(self):
+        cancelled='00000000-0000-4000-8000-000000000001'
+        with sqlite3.connect(self.source/'state/jobs.sqlite') as db: db.execute('INSERT INTO jobs VALUES (?,?)',(cancelled,'cancelled'))
+        before=tree(self.source); ops=FakeOperations(self.source,'health')
+        outcome=installer.install(self.source,self.backup,ops,approved=True,allow_cancelled_cleanup=True)
+        self.assertTrue(outcome['previous_source_restored'])
+        self.assertEqual(ops.cancelled_job_ids,(cancelled,)); self.assertEqual(tree(self.source),before)
+
+    def test_final_and_rollback_admission_refuse_changed_cancelled_identity_and_active_rows(self):
+        from maintenance_fence import FenceRefused
+        bound=('00000000-0000-4000-8000-000000000001',)
+        for state,identity in [('cancelled','00000000-0000-4000-8000-000000000002'),('queued',bound[0]),('building',bound[0]),('unknown',bound[0]),(None,bound[0])]:
+            with self.subTest(state=state):
+                with sqlite3.connect(self.source/'state/jobs.sqlite') as db:
+                    db.execute('DELETE FROM jobs'); db.execute('INSERT INTO jobs VALUES (?,?)',(identity,state))
+                before=(self.source/'state/jobs.sqlite').read_bytes()
+                with self.assertRaises(FenceRefused):
+                    with installer.final_admission(self.source,True,bound): self.fail('changed history admitted')
+                self.assertEqual((self.source/'state/jobs.sqlite').read_bytes(),before)
+
     def test_success_updates_only_reviewed_source_and_receipt_coverage(self):
         ops = FakeOperations(self.source)
         outcome = installer.install(self.source, self.backup, ops, approved=True)
@@ -177,6 +225,7 @@ class InstallerTests(unittest.TestCase):
         guard['sha256']['codex_runner.py'] = prior['sha256']['codex_runner.py']
         self.assertEqual(guard, prior)
         proof = json.loads((self.source / context_policy.RECEIPT).read_text())
+        self.assertIs(proof['cancelled_cleanup_interruption_approved'],False)
         self.assertEqual(set(proof['sha256']), context_policy.SOURCES)
         self.assertIn('context_policy.py', proof['sha256'])
         manifest = json.loads((self.backup / 'ORIGINAL_MANIFEST.json').read_text())
@@ -235,6 +284,18 @@ class InstallerTests(unittest.TestCase):
         with sqlite3.connect(self.source / 'state/jobs.sqlite') as db:
             self.assertEqual(db.execute("SELECT state FROM jobs WHERE id='new'").fetchone()[0], 'cancelled')
         self.assertNotIn('activation-committed', ops.events)
+
+    def test_enabled_cleanup_still_refuses_a_second_late_cancelled_row(self):
+        identity='00000000-0000-4000-8000-000000000001'
+        with sqlite3.connect(self.source/'state/jobs.sqlite') as db: db.execute('INSERT INTO jobs VALUES (?,?)',(identity,'cancelled'))
+        ops=FakeOperations(self.source,'new_cancelled')
+        with self.assertRaisesRegex(installer.Refused,'recovery_required'):
+            installer.install(self.source,self.backup,ops,approved=True,allow_cancelled_cleanup=True)
+        self.assertEqual(ops.cancelled_job_ids,(identity,))
+        self.assertTrue(installer.policy.maintenance_active(self.source))
+        self.assertNotIn('activation-committed',ops.events)
+        with sqlite3.connect(self.source/'state/jobs.sqlite') as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM jobs WHERE state='cancelled'").fetchone()[0],2)
 
     def test_existing_unknown_marker_is_never_removed_or_overridden(self):
         marker = self.source / installer.policy.MAINTENANCE

@@ -149,10 +149,10 @@ def connection(home=None):
 
 
 FILES.update({
-    'context_policy.py': ('tools/model_context/context_policy.py', 'a3ab0bfd50437717721115f6687d04dd36382f90'),
+    'context_policy.py': ('tools/model_context/context_policy.py', 'f705ad5b6188871038d938f4eac8a379759f0796'),
     'context_patch.py': ('tools/model_context/context_patch.py', '6ed419f784f891e51bae8fc93de480a1ac31088a'),
-    'install_context.py': ('tools/model_context/install_context.py', 'd3bf6e3ed4ca8590b9e8355ec479d9a03b9fb204'),
-    'maintenance_fence.py': ('tools/model_context/maintenance_fence.py', '3a5d13fe686a75d171b96b688879b6b2fb41ae5f'),
+    'install_context.py': ('tools/model_context/install_context.py', 'bda3b2b8e8220408973ee7a8054504b54ad97223'),
+    'maintenance_fence.py': ('tools/model_context/maintenance_fence.py', 'b06110b6c9f2bfd55de6d580afcea2011d7cb7f7'),
     'verification_scope.py': ('tools/model_context/verification_scope.py', '677c577db69ece8d9757fa81bb62633bc134c17d'),
     'offline_standard.py': ('tools/model_context/offline_standard.py', '41bcc6b2cf5fa8aa79e7da7eca9a85c6b09c8edc'),
 })
@@ -185,6 +185,7 @@ failed={'phase':'WORLDIFACT_STANDARD_CONTEXT_NOT_CONFIRMED','revision':REVISION,
         'previous_source_restored':None,'activation_committed':None,'refusal_code':'unconfirmed'}
 try:
     if APPROVED is not True:raise ValueError('approval absent')
+    if type(ALLOW_CANCELLED_CLEANUP) is not bool:raise ValueError('invalid cleanup consent')
     payload=json.loads(base64.b64decode(PAYLOAD,validate=True))
     if not isinstance(payload,dict) or set(payload)!=set(EXPECTED):raise ValueError('invalid package')
     files={}
@@ -200,7 +201,8 @@ try:
         fd=os.open(str(folder/name),os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
         with os.fdopen(fd,'wb') as stream:stream.write(raw);stream.flush();os.fsync(stream.fileno())
     with tempfile.TemporaryFile() as output:
-        process=subprocess.Popen([sys.executable,'-B',str(folder/'install_context.py'),'--approve-service-maintenance'],
+        process=subprocess.Popen([sys.executable,'-B',str(folder/'install_context.py'),'--approve-service-maintenance'] +
+            (['--allow-cancelled-cleanup'] if ALLOW_CANCELLED_CLEANUP else []),
             cwd=folder,stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT)
         def relay(number,_frame):
             if process.poll() is None:process.send_signal(number)
@@ -229,10 +231,11 @@ except (Exception,KeyboardInterrupt):
     print(json.dumps(failed,sort_keys=True),flush=True);raise SystemExit(1)
 '''
 
-def script(payload, approved=False):
+def script(payload, approved=False, allow_cancelled_cleanup=False):
     if approved is not True:raise LaunchError('Explicit maintenance approval is required.')
+    if type(allow_cancelled_cleanup) is not bool:raise LaunchError('Explicit cleanup consent must be boolean.')
     return ('EXPECTED='+repr({name:item[1] for name,item in FILES.items()})+'\nPAYLOAD='+repr(payload)
-            +'\nAPPROVED=True\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
+            +'\nAPPROVED=True\nALLOW_CANCELLED_CLEANUP='+repr(allow_cancelled_cleanup)+'\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
             +'\nOUTPUT_LIMIT='+repr(OUTPUT_LIMIT)+'\n'+REMOTE)
 
 def invoke(ssh, program):
@@ -249,14 +252,19 @@ def main(argv=None):
     parser=PrivateArgumentParser(description=__doc__,allow_abbrev=False)
     parser.add_argument('--source-commit')
     parser.add_argument('--approve-service-maintenance',action='store_true')
+    parser.add_argument('--allow-cancelled-cleanup',action='store_true')
     args=parser.parse_args(argv)
+    if args.allow_cancelled_cleanup and not args.approve_service_maintenance:
+        parser.error('--allow-cancelled-cleanup requires maintenance approval')
     if not args.approve_service_maintenance:
         print('PLAN ONLY. No download, OCI lookup, SSH, installation, service signal or model request.');return
     commit=source_commit(args.source_commit)
     print('Verifying the exact reviewed maintenance package.',flush=True)
     payload=package(commit)
-    program=script(payload,approved=True)
+    program=script(payload,approved=True,allow_cancelled_cleanup=args.allow_cancelled_cleanup)
     print('Running bounded STANDARD maintenance. The existing tunnel remains unchanged; no paid model request.',flush=True)
+    if args.allow_cancelled_cleanup:
+        print('Explicit consent: residual work of the single bound cancelled job may be interrupted. Its history and files are not rewritten.',flush=True)
     print('Offline verification can take up to 20 minutes; the installer has a 25-minute work deadline plus recovery time. Keep this session open.',flush=True)
     value=invoke(connection(),program)
     print(json.dumps(value,sort_keys=True))
