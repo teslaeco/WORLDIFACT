@@ -157,7 +157,7 @@ FILES.update({
     'receipt_terminal_budget.py': ('tools/model_budget_receipt/terminal_budget.py', '0d5a597aa2d4e37797e06a9866bb1f7902f35b7b'),
     'tiers_patch.py': ('tools/model_budget_tiers/tiers_patch.py', '7d664c7e94e20ea0fc142e4e7a2c6583d9cfb5fd'),
     'studio_pricing.py': ('tools/model_budget_tiers/studio_pricing.py', 'd02a12d73ecc377801cc6ed1029c0a2949447e93'),
-    'install_tiers.py': ('tools/model_budget_tiers/install_tiers.py', '9f76823369d1ebe9315e569d79f70c9a1906b01b'),
+    'install_tiers.py': ('tools/model_budget_tiers/install_tiers.py', '98dfc66b055f89bf9e9e3e39dc1cf7337d2ef07c'),
 })
 
 PHASES = {'ALREADY_VERIFIED', 'WORLDIFACT_STUDIO_PRICING_VERIFIED', 'WORLDIFACT_STUDIO_PRICING_NOT_CONFIRMED'}

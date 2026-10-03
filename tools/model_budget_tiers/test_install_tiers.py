@@ -11,6 +11,8 @@ import sqlite3
 import stat
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -518,6 +520,95 @@ class InstallerTests(unittest.TestCase):
             proof['offline_cabinet_pipeline'] = False
             write(self.source / studio_pricing.RECEIPT, proof)
             self.assertEqual(studio_pricing.verified_health(self.source), {})
+
+
+class StageDatabaseTests(unittest.TestCase):
+    """Exercise the real stage reset and pinned server's SQLite progress path.
+
+    Codex/Blender subprocess execution is a test double; this does not attest
+    the real offline pipeline. Source-bound receipt checks remain genuine.
+    """
+
+    def exercise_stage(self, cabinet_exit=0):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        stage, workspace = root / 'stage', root / 'workspace'
+        stage.mkdir(); workspace.mkdir()
+        live = root / 'live-source'
+        (live / 'state').mkdir(parents=True)
+        with sqlite3.connect(live / 'state/jobs.sqlite') as db:
+            db.execute('CREATE TABLE jobs(id TEXT,state TEXT)')
+            db.execute("INSERT INTO jobs VALUES ('existing-job','succeeded')")
+        live_before = tree(live)
+        original = before_sources()
+        for name in ('codex_runner.py', 'blender_mcp.py'):
+            (stage / name).write_bytes(original[name])
+        state = stage / 'state'
+        # Run the exact reviewed database/status functions, isolated from
+        # server startup, runtime imports, real jobs and external services.
+        module = ast.parse(original['server.py'])
+        callbacks = [node for node in module.body if isinstance(node, ast.FunctionDef)
+                     and node.name in ('database', 'status')]
+        self.assertEqual({node.name for node in callbacks}, {'database', 'status'})
+        scope = {'sqlite3': sqlite3, 'STATE': state, 'LOCK': threading.RLock(), 'time': time}
+        exec(compile(ast.Module(body=callbacks, type_ignores=[]), 'reviewed-server-status', 'exec'), scope)
+        receipt = {'sources': {name: hashlib.sha256(original[name]).hexdigest()
+                              for name in ('codex_runner.py', 'blender_mcp.py')},
+                   'cli_mcp_roundtrip': True, 'code_mode_roundtrip': True,
+                   'blender_build_roundtrip': True}
+        events = []
+
+        def generic_verify(_operations, _workspace):
+            scope['status']('generic-fixture', 'building', 'Synthetic progress')
+            with sqlite3.connect(state / 'jobs.sqlite') as db:
+                db.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?)',
+                           ('generic-fixture', 'Synthetic brief', 'building', '', 1, 1))
+            (state / 'generic-fixture-sentinel').write_text('Discard between fixtures')
+            write(stage / installer.base.RECEIPT, receipt)
+            events.append('generic-complete')
+
+        def cabinet_process(command, **kwargs):
+            self.assertEqual(command[-2:], ['--source', str(stage)])
+            # This is precisely the directory creation performed by the
+            # cabinet fixture before its real Blender progress callback.
+            (state / 'jobs' / 'synthetic-cabinet').mkdir(parents=True)
+            scope['status']('synthetic-cabinet', 'building', 'Synthetic progress')
+            with sqlite3.connect(state / 'jobs.sqlite') as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0], 0)
+                db.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?)',
+                           ('synthetic-cabinet', 'Synthetic brief', 'queued', '', 1, 1))
+            scope['status']('synthetic-cabinet', 'building', 'Blender progress callback')
+            with sqlite3.connect(state / 'jobs.sqlite') as db:
+                self.assertEqual(db.execute('SELECT state,detail FROM jobs').fetchone(),
+                                 ('building', 'Blender progress callback'))
+            self.assertFalse((state / 'generic-fixture-sentinel').exists())
+            self.assertFalse((state / 'config.json').exists())
+            events.append('cabinet-progress-verified')
+
+            def wait(timeout):
+                kwargs['stdout'].write(b'CABINET_FIRST_EXEC_REAL_PIPELINE_OK\n')
+                return cabinet_exit
+            return SimpleNamespace(wait=wait, poll=lambda: cabinet_exit)
+
+        operations = installer.Operations(live, root)
+        lease = SimpleNamespace(assert_no_work=lambda: events.append('no-live-work'))
+        with patch.object(installer.install_completion.Operations, 'verify', generic_verify), \
+                patch.object(installer.subprocess, 'Popen', side_effect=cabinet_process):
+            if cabinet_exit:
+                with self.assertRaisesRegex(installer.Refused, 'cabinet_pipeline_unverified'):
+                    operations._verify_stage(stage, workspace, lease)
+            else:
+                result = operations._verify_stage(stage, workspace, lease)
+                self.assertEqual(json.loads(result), receipt)
+        self.assertEqual(events[:3], ['generic-complete', 'no-live-work', 'cabinet-progress-verified'])
+        self.assertEqual(tree(live), live_before)
+
+    def test_cabinet_receives_fresh_schema_after_generic_state_is_removed(self):
+        self.exercise_stage()
+
+    def test_cabinet_nonzero_exit_still_refuses_after_schema_repair(self):
+        self.exercise_stage(cabinet_exit=1)
 
 
 class ReceiptAncestorInstallerTests(InstallerTests):

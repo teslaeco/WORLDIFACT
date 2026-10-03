@@ -11,7 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-LAUNCHER_SHA256 = 'd654c4ecc33440e82c92e41ad1028cc18353580abe630095bbecf4752cbffe5e'
+LAUNCHER_SHA256 = '659468a67259cf06cea933a8322b5d0e8e83212362d8294b7fed662b3dd3a003'
 OUTPUT_LIMIT = 32768
 
 # Fixed reviewed diagnostic code. Never import or execute helpers from the VM.

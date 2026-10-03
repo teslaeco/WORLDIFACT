@@ -299,6 +299,12 @@ class Operations(install_completion.Operations):
         # Entire state belongs to this fresh stage and contains synthetic data.
         base.safe_path(state)
         shutil.rmtree(state)
+        # The cabinet's real Blender progress callback also updates jobs.
+        # Restore only an empty synthetic schema, never the live database or
+        # generic fixture rows/configuration removed above.
+        state.mkdir(mode=0o700)
+        with sqlite3.connect(state / 'jobs.sqlite') as db:
+            db.execute('CREATE TABLE jobs (id TEXT PRIMARY KEY, prompt TEXT NOT NULL, state TEXT NOT NULL, detail TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL)')
         verifier = Path(previous.__file__).resolve().parent / 'offline_cabinet.py'
         raw = base.read_regular(verifier)
         compile(raw, 'offline_cabinet.py', 'exec')

@@ -207,3 +207,31 @@ socket diagnostics, so the real-kernel positive tests require mandatory Ubuntu C
 `npm run verify` failed in four existing test files and the build dependency fetch
 failed with `EAI_AGAIN`; neither is recorded as a pass. Hosted CI is the release
 gate. No successful Oracle activation is implied by this source correction.
+
+### Cabinet verification stage — owner result at 21:19
+
+The PR #196 launcher passed the journal socket gate on the original Oracle
+host. The next result was `cabinet_pipeline_unverified`, with
+`activation_committed: false`, `previous_source_restored: true`,
+`provider_limits_changed: false`, `job_rows_changed: false` and
+`paid_generation_requested: false`. The fallback reported active worker/tunnel,
+two worker tasks, no child/container processes, one loopback listener and journal
+stdio. Historical counts remained 1 cancelled, 60 failed and 80 succeeded.
+
+Code review found that `_verify_stage` creates an isolated SQLite jobs table for
+the generic fixture, then removes the entire stage state before the cabinet
+fixture without recreating that table. The cabinet fixture creates its job
+directory but its actual renderer status callback still needs the jobs table.
+The follow-up recreates only the empty synthetic stage database after cleanup.
+It does not copy or modify the live jobs database or change cabinet completion
+criteria. The original Oracle exception remains unobserved until its retained
+log is inspected or a corrected attempt completes. A read-only failure report
+returns allowlisted diagnostic codes and traceback locations, never raw logs.
+
+The regression uses the exact reviewed `server.database` and `server.status`
+functions against SQLite. Before repair, both cases failed with
+`OperationalError: no such table: jobs`; after repair, all 59 installer tests
+passed. Generic fixture rows are discarded, cabinet progress updates work, an
+unsuccessful cabinet subprocess still refuses installation, and a separate live
+database remains byte-identical. This confirms the fixture defect; it does not
+attest a real Oracle installation or a new model generation.

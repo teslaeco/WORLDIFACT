@@ -89,7 +89,8 @@ running or unknown job states and never rewrites cancellation history.
 
 Installation preserves a byte-and-mode backup, verifies the actual patched
 Codex/MCP/Blender generic and cabinet pipelines in an isolated stage with inert
-responses, binds the receipts, starts behind a maintenance marker and checks
+responses, recreates an empty synthetic jobs database between those fixtures,
+binds the receipts, starts behind a maintenance marker and checks
 authenticated local health. Before activation, failures restore original source
 and receipts. After the activation commit point, uncertain health is reported
 without automatically stopping or rolling back a worker that could accept work.
@@ -101,6 +102,12 @@ maintenance flags as false. The result records `legacy_provider_cap_micro_usd`
 as `1750000`; `provider_limits_changed` is true only for committed activation,
 false after pre-activation restoration, and null when activation is uncertain.
 Source publication and offline tests do not establish installation on Oracle.
+
+For a rolled-back `cabinet_pipeline_unverified` result,
+`inspect_cabinet_failure.py` can read the latest retained synthetic fixture log.
+It requires the matching restored-failure status, does not rerun maintenance,
+and returns only fixed diagnostic markers and allowlisted traceback locations.
+Raw logs, model history, configuration and credentials are not returned.
 
 ## Offline verification
 
