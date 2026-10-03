@@ -1,6 +1,25 @@
 # WORLDIFACT — TerraformingPlanet Astra heroine released
 
-Updated 2 October 2026.
+Updated 3 October 2026.
+
+## IN VERIFICATION — generation funding and mobile-resume repair (3 October 2026)
+
+The owner's current screenshots and authenticated production Shop show an account
+provider-funding refusal despite remaining customer points, alongside a separate
+earlier `ASTRA_COST_LIMIT` failure. The provider reservation ledger and customer
+points are distinct; no actual invoice cost or historical refund is inferred.
+
+The isolated follow-up fixes mobile/BFCache admission refresh and a reproduced
+future pre-dispatch reservation leak, while retaining the USD 1.75 cap and
+conservative handling of dispatched, uncertain, support and legacy jobs. It also
+replaces the timing-dependent completed-Blueprint replay assertion which stopped
+the latest main deployment before publication. See
+`docs/GENERATION_REPAIR_20261003.md` and the repair PR for exact release evidence.
+
+No paid model, support-grant activation or historical funding reset was performed.
+The separate Dots/MCP integration remains outside this production repair. The
+original Oracle runtime still requires evidence of the newer maintenance receipt;
+source merge alone is not an installation claim.
 
 ## VERIFIED — one bounded live Astra character generation
 

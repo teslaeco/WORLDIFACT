@@ -106,9 +106,9 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   }
   const timeout = (callback, delay) => { delays.push(delay); const id = ++serial; timers.set(id, callback); return id }
   const interval = () => ++serial
-  const events = new EventTarget(), downloads = [], anchors = new Set()
+  const events = new EventTarget(), pageEvents = new EventTarget(), downloads = [], anchors = new Set()
   const globals = { fetch: fetcher, URL, Blob, AbortSignal, AbortController, Event, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
-    document: { body: { appendChild: node => anchors.add(node) }, createElement: () => { const node = { click: () => downloads.push({ name: node.download, attached: anchors.has(node) }), remove: () => anchors.delete(node) }; return node } },
+    document: { visibilityState: 'visible', addEventListener: pageEvents.addEventListener.bind(pageEvents), removeEventListener: pageEvents.removeEventListener.bind(pageEvents), body: { appendChild: node => anchors.add(node) }, createElement: () => { const node = { click: () => downloads.push({ name: node.download, attached: anchors.has(node) }), remove: () => anchors.delete(node) }; return node } },
     window: { localStorage: storage, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: () => {}, addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events) } }
   const Component = await loadShopComponent({ react: hookReact, globals, adapters: {
     'react-router-dom': { useLocation: () => ({ pathname: '/shop', state: characterPrompt ? { worldPrompt: characterPrompt } : null }) },
@@ -132,6 +132,8 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   return { settle, calls, selected, storeData, archive, delays, downloads,
     async account(next) { accountState = next; dirty = true; await settle() },
     async balanceChanged() { events.dispatchEvent(new Event('worldifact:balance-changed')); await settle() },
+    async visibility(value) { globals.document.visibilityState = value; pageEvents.dispatchEvent(new Event('visibilitychange')); await settle() },
+    async pageShow(persisted) { const event = new Event('pageshow'); Object.defineProperty(event, 'persisted', { value: persisted }); events.dispatchEvent(event); await settle() },
     byId: id => node(n => n.props.id === id),
     button: label => node(n => n.type === 'button' && text(n).includes(label)),
     all: () => elements(tree),
@@ -646,6 +648,31 @@ test('balance refresh invalidates the allowed quote while pending and ignores an
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 3)
     assert.equal(h.calls.filter(c => c.path === '/api/billing/status').length, 3)
   } finally { h.close() }
+})
+
+test('mobile resume and back-forward restoration recheck admission before enabling another generation', async () => {
+  for (const restore of ['visible', 'pageshow']) {
+    let count = 0, finish
+    const h = await harness({ ready: true, withExistingJob: false, accountLookup: () => ++count === 1 ? Response.json(fundedAccount) : new Promise(resolve => { finish = resolve }) })
+    try {
+      h.byId('studio-prompt').props.onChange({ target: { value: 'My retained mobile model draft' } }); await h.settle()
+      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, false)
+      await h.visibility('hidden')
+      await h.pageShow(false)
+      assert.equal(count, 1, 'hiding the page or an ordinary initial pageshow must not duplicate account reads')
+      if (restore === 'visible') await h.visibility('visible')
+      else await h.pageShow(true)
+      assert.equal(count, 2, `${restore} must perform a new read-only account check without relying on focus`)
+      assert.equal(h.quote().checking, true)
+      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+      finish(Response.json(blockedAccount)); await h.settle()
+      assert.equal(h.quote().quote.state, 'blocked')
+      assert.match(h.quote().quote.message, /provider funding limit/)
+      assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+      assert.equal(h.byId('studio-prompt').props.value, 'My retained mobile model draft')
+      assert.equal(h.calls.filter(c => c.method === 'POST').length, 0, 'resuming must not submit or retry a paid request')
+    } finally { h.close() }
+  }
 })
 
 test('unknown account data and expired authentication fail closed without an endless cost spinner', async () => {

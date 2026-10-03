@@ -17,11 +17,19 @@ export function useGenerationQuote(model: QuotedModel, busy = false, detailed = 
   const request = useMemo(() => ({ owner, loading, busy, revision }), [owner, loading, busy, revision])
   const refresh = useCallback(() => setRevision(value => value + 1), [])
   useEffect(() => {
+    // Mobile app switching and back-forward cache restoration need not fire
+    // focus. Invalidate the old allowance before accepting another submission.
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) refresh() }
     window.addEventListener('worldifact:balance-changed', refresh)
     window.addEventListener('focus', refresh)
+    window.addEventListener('pageshow', onPageShow)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       window.removeEventListener('worldifact:balance-changed', refresh)
       window.removeEventListener('focus', refresh)
+      window.removeEventListener('pageshow', onPageShow)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [refresh])
   useEffect(() => {
