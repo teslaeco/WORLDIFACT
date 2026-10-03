@@ -5,6 +5,7 @@ on:
       - 'tools/model_completion/**'
       - 'tools/model_prebuild/**'
       - 'tools/model_context/**'
+      - 'tools/model_budget_receipt/**'
       - 'tools/profit_guard/**'
       - 'tools/fast_preview/**'
       - '.github/workflows/model-completion-review.yml'
@@ -41,3 +42,7 @@ jobs:
         env:
           MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
         run: python3 -B -m unittest discover -s tools/model_context -p 'test_*.py' -v
+      - name: Test immutable terminal budgets, real authorization route and maintenance rollback
+        env:
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+        run: python3 -B -m unittest discover -s tools/model_budget_receipt -p 'test_*.py' -v

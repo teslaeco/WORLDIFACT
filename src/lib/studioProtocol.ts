@@ -83,7 +83,7 @@ export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
 export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
 export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   ...ADMISSION_FAILURE_DETAILS,
-  ASTRA_COST_LIMIT: 'Astra stopped at this job’s cost limit. Reserved customer points were released; no automatic retry.',
+  ASTRA_COST_LIMIT: 'Astra’s cost protection stopped this job. Reserved customer points were released. Keep this job ID for review before starting another attempt; no automatic retry.',
   INVALID_MODEL_OUTPUT: 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.',
   STUDIO_TIMEOUT: 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.',
   ORACLE_JOB_FAILED: 'The Astra/Blender worker reported that this job failed. Reserved customer points were released. Keep this job ID for diagnosis; no automatic retry.',

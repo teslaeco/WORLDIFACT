@@ -461,7 +461,8 @@ test('failed model shows its safe diagnostic and copyable job ID without renderi
     const visible = text(h.all())
     assert.match(visible, new RegExp('Job ID: ' + oldId))
     assert.match(visible, /Reason: ASTRA_COST_LIMIT/)
-    assert.match(visible, /Astra stopped at this job’s cost limit/)
+    assert.match(visible, /Astra’s cost protection stopped this job/)
+    assert.doesNotMatch(visible, /model (?:is )?too (?:large|complex)|\$1\.75|500 points/i)
     assert.equal(visible.includes(h.selected.receipt.ticket), false)
     assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
   } finally { h.close() }

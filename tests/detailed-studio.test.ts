@@ -16,7 +16,7 @@ test('detailed readiness is measured, expires at the reviewed deadline and never
 })
 test('only fixed failure codes become customer-facing details',()=>{
   const a=parseStudioJob({job:{id:'fixture',state:'failed',failureCode:'ASTRA_COST_LIMIT',detail:'PRIVATE SECRET'}},'fixture')
-  assert.match(a.detail,/cost limit/);assert.doesNotMatch(a.detail,/PRIVATE/)
+  assert.match(a.detail,/cost protection/);assert.doesNotMatch(a.detail,/PRIVATE|model (?:is )?too (?:large|complex)|\$[0-9]|500 points/i)
   const b=parseStudioJob({job:{id:'fixture',state:'failed',failureCode:'PRIVATE SECRET',detail:'PRIVATE SECRET'}},'fixture')
   assert.doesNotMatch(JSON.stringify(b),/PRIVATE/)
 })

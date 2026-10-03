@@ -85,6 +85,10 @@ test('native SQLite atomically fences undispatched Studio funding release agains
   const settle = (account, id, status = 200) => call(account, '/settle', { id, state: 'failed', failureCode: 'ORACLE_BUSY' }, status)
   const dispatch = (account, id) => call(account, '/studio-dispatch', { id, fingerprint })
   const inspect = (account, id) => call(account, '/fixture-inspect?id=' + id)
+  const terminalReceipt = (id, maximumLiabilityMicroUsd = 420001) => ({ revision: 'worldifact-terminal-budget-v1', jobId: id,
+    model: 'gpt-6-astra', policyRevision: 'astra-low-reconciled-v2', capMicroUsd: 1750000, maximumLiabilityMicroUsd,
+    sealed: true, sealId: 'b'.repeat(64) })
+  const reconcile = (account, id, status = 200) => call(account, '/reconcile-studio-provider', { id, receipt: terminalReceipt(id) }, status)
 
   await t.test('failure before dispatch releases once and permanently denies later claims', async () => {
     const account = 'fixture-failure-first', id = crypto.randomUUID()
@@ -152,5 +156,49 @@ test('native SQLite atomically fences undispatched Studio funding release agains
     assert.equal(after.heldCredits, 0)
     assert.equal(after.job.state, 'failed')
     assert.equal(after.job.studioProviderReservation.state, 'released')
+  })
+
+  await t.test('sealed terminal liability reconciles exactly once under concurrent real SQLite transactions', async () => {
+    const account = 'fixture-terminal-reconcile', id = crypto.randomUUID()
+    await seed(account); await reserve(account, id); await dispatch(account, id); await settle(account, id)
+    const before = await inspect(account, id)
+    assert.equal(before.providerCents, 875)
+    const replies = await Promise.all(Array.from({ length: 12 }, () => reconcile(account, id)))
+    assert.equal(replies.filter(value => value.reconciled && value.repeated === false).length, 1)
+    const after = await inspect(account, id)
+    assert.equal(after.providerCents, 1007)
+    assert.equal(after.credits, before.credits); assert.equal(after.heldCredits, before.heldCredits)
+    assert.equal(after.creatorUsage, before.creatorUsage); assert.deepEqual(after.current, before.current)
+    assert.equal(after.job.studioProviderReconciliation.retainedCents, 43)
+    assert.equal((await call(account, '/job', { id })).providerBudgetPending, undefined)
+    assert.equal((await dispatch(account, id)).dispatch, false)
+    const foreign = await reconcile('fixture-foreign-reconcile', id)
+    assert.equal(foreign.reconciled, false); assert.equal(foreign.reason, 'NOT_OWNED')
+    await reconcile(account, id)
+    assert.deepEqual(await inspect(account, id), after)
+  })
+
+  await t.test('terminal receipt marker failure rolls its provider credit back in actual SQLite before one safe retry', async () => {
+    const account = 'fixture-reconcile-rollback', id = crypto.randomUUID()
+    await seed(account); await reserve(account, id); await dispatch(account, id); await settle(account, id)
+    const before = await inspect(account, id)
+    await call(account, '/fixture-arm-failure', {})
+    await reconcile(account, id, 503)
+    assert.deepEqual(await inspect(account, id), before)
+    assert.equal((await call(account, '/job', { id })).providerBudgetPending, true)
+    assert.equal((await reconcile(account, id)).repeated, false)
+    assert.equal((await inspect(account, id)).providerCents, 1007)
+    assert.equal((await reconcile(account, id)).repeated, true)
+    assert.equal((await inspect(account, id)).providerCents, 1007)
+  })
+
+  await t.test('an already returned pre-dispatch reservation cannot also claim terminal receipt credit', async () => {
+    const account = 'fixture-reconcile-returned', id = crypto.randomUUID()
+    await seed(account); await reserve(account, id); await settle(account, id)
+    const before = await inspect(account, id)
+    const results = await Promise.all(Array.from({ length: 4 }, () => reconcile(account, id)))
+    assert.ok(results.every(value => value.reconciled === false))
+    assert.deepEqual(await inspect(account, id), before)
+    assert.equal(before.providerCents, 1050)
   })
 })
