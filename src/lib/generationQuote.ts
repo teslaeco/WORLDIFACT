@@ -12,12 +12,14 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
   const tier = detailed && model === 'astra' ? budgetTier : undefined
   const points = tier ? STUDIO_PRICING[tier].points : MODEL_CATALOG[model].creditsPerGeneration
   const pendingAdmission = (): GenerationQuote => ({ state: 'pending', points: null, after: null, message: 'Your current generation availability could not be verified. No payment is inferred.' })
+  let admissionVerified = false
   if (tier) {
     const admission = object(object(object(value.studioAdmission).tiers)[tier]), pricing = object(admission.pricing), expected = STUDIO_PRICING[tier]
     if (pricing.revision !== expected.revision || pricing.tier !== tier || pricing.points !== expected.points || pricing.maxProviderCents !== expected.maxProviderCents) return pendingAdmission()
     if (admission.allowed === false && isAdmissionFailureCode(admission.reason))
       return { state: 'blocked', points, after: null, message: ADMISSION_FAILURE_DETAILS[admission.reason], reason: admission.reason }
     if (admission.allowed !== true || admission.reason !== undefined) return pendingAdmission()
+    admissionVerified = true
   }
   // New authenticated status can explain a refusal even when the displayed
   // point balance is high. Older servers omit this field and retain old checks.
@@ -27,21 +29,29 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
       return { state: 'blocked', points, after: null, message: ADMISSION_FAILURE_DETAILS[admission.reason], reason: admission.reason }
     if (admission.allowed !== true || admission.reason !== undefined)
       return { state: 'pending', points: null, after: null, message: 'Your current generation availability could not be verified. No payment is inferred.' }
+    admissionVerified = true
   }
   if (!integer(value.credits) || typeof subscription.active !== 'boolean' || costs.sol !== 50 || costs.astra !== 250 || (model === 'luna' && costs.luna !== 15))
     return { state: 'pending', points: null, after: null, message: 'Your current balance and generation cost could not be verified. No payment is inferred.' }
   if (value.billingReview !== false) return { state: 'blocked', points: null, after: null, message: 'Your account needs billing review before another generation.' }
   const spendable = integer(value.availableCredits) ? value.availableCredits : value.credits
   if (model === 'astra') {
-    const plans = object(object(billing).plans), pro = object(plans.pro), studio = object(plans.studio)
-    if (pro.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' || studio.blockedReason === 'ASTRA_COST_GUARD_REQUIRED')
-      return { state: 'blocked', points, after: null, message: 'ASTRA sales await a successful live generation/export test. The Oracle guard is installed; no automatic model substitution.' }
     if (!subscription.active || !['creator', 'pro', 'studio'].includes(String(subscription.plan)))
       return { state: 'blocked', points, after: null, message: 'ASTRA requires an active Creator, Pro or Studio plan. A top-up alone does not unlock ASTRA.' }
-    if (subscription.plan === 'creator' && (object(value.creatorAstra).active !== true || !integer(object(value.creatorAstra).remaining) || Number(object(value.creatorAstra).remaining) < 1))
-      return { state: 'blocked', points, after: null, message: 'Creator ASTRA needs active runtime verification and an unused monthly slot (up to six). Two attempts use 500 of your existing points, not bonus credits.' }
-    if (object(plans[String(subscription.plan)]).checkoutReady !== true)
-      return { state: 'blocked', points, after: null, message: 'ASTRA availability could not be verified. Your points are unchanged.' }
+    if (value.paidGenerationPolicy === 'paid-membership-no-quota-v1') {
+      // A current authenticated admission checks runtime and funded spend. Sales
+      // availability and the retired Creator counter do not gate paid generation.
+      if (!admissionVerified) return pendingAdmission()
+    } else {
+      // Keep old-server guards during a mixed deployment or stale response.
+      const plans = object(object(billing).plans), pro = object(plans.pro), studio = object(plans.studio)
+      if (pro.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' || studio.blockedReason === 'ASTRA_COST_GUARD_REQUIRED')
+        return { state: 'blocked', points, after: null, message: 'ASTRA sales await a successful live generation/export test. The Oracle guard is installed; no automatic model substitution.' }
+      if (subscription.plan === 'creator' && (object(value.creatorAstra).active !== true || !integer(object(value.creatorAstra).remaining) || Number(object(value.creatorAstra).remaining) < 1))
+        return { state: 'blocked', points, after: null, message: 'This account response still uses the previous Creator ASTRA allowance. Refresh availability to check the current policy; no generation has started.' }
+      if (object(plans[String(subscription.plan)]).checkoutReady !== true)
+        return { state: 'blocked', points, after: null, message: 'ASTRA availability could not be verified. Your points are unchanged.' }
+    }
   }
   if (model !== 'astra' && !subscription.active && spendable === 0) {
     if (!integer(free.fastRemaining)) return { state: 'pending', points: null, after: null, message: 'Your free allowance could not be verified.' }

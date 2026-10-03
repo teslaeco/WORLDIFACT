@@ -14,6 +14,7 @@ const newId = '87654321-1234-4234-8234-123456789abc'
 const admission = (allowed = true, reason) => ({ allowed, ...(reason ? { reason } : {}), tiers: Object.fromEntries(Object.entries(STUDIO_PRICING).map(([tier, pricing]) => [tier, { allowed, ...(reason ? { reason } : {}), pricing }])) })
 const fundedAccount = { credits: 3000, generationCosts: { luna: 15, sol: 50, astra: 250 }, subscription: { active: true, plan: 'pro' }, free: { fastRemaining: 2 }, billingReview: false, generationAdmission: { luna: { allowed: true }, sol: { allowed: true }, astra: { allowed: true } }, studioAdmission: admission() }
 const blockedAccount = { ...fundedAccount, generationAdmission: { luna: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, sol: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, astra: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } }, studioAdmission: admission(false, 'PROVIDER_BUDGET_EXHAUSTED') }
+const syncedMembership = () => Response.json({ state: 'active', activePlan: 'pro', canManage: true, canRetry: false })
 const makeReceipt = id => ({ id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` })
 const fastGeneration = {
   mode: 'LIVE', provenance: 'GENERATED', requestId: 'req_fast_fixture', model: 'gpt-6-sol',
@@ -57,7 +58,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, existingPricing, cloudLookup, accountLookup, billingLookup, fundingLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, existingPricing, cloudLookup, accountLookup, billingLookup, fundingLookup, membershipLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
   const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   if (blueprintRecovery) storeData.set('worldifact:blueprint-recovery:v1', JSON.stringify(blueprintRecovery))
@@ -70,6 +71,10 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     calls.push({ path, method, body: init.body })
     if (path === '/api/account/entitlements') return accountLookup ? accountLookup(accountState.user?.id, init) : Response.json(fundedAccount)
     if (path === '/api/studio/reconcile-budget') return fundingLookup ? fundingLookup(JSON.parse(init.body), init) : Response.json({ error: 'Unavailable in fixture' }, { status: 503 })
+    if (path === '/api/billing/recovery') {
+      assert.equal(method, 'POST'); assert.deepEqual(JSON.parse(init.body), { action: 'status' })
+      return membershipLookup ? membershipLookup(accountState.user?.id, init) : Response.json({ error: 'Unavailable in fixture' }, { status: 503 })
+    }
     if (path === '/api/billing/status' && billingLookup) return billingLookup(init)
     if (path === '/api/billing/status') return Response.json({ plans: { pro: { checkoutReady: true }, studio: { checkoutReady: true } } })
     if (path === '/api/studio/status') return Response.json(status)
@@ -181,7 +186,7 @@ test('an active job can have a next draft, but cannot be replaced or resubmitted
     h.button('Clear next-model draft').props.onClick(); await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, '')
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
   } finally { h.close() }
 })
 
@@ -221,7 +226,7 @@ test('new reference selection and draft clearing preserve the displayed old mode
     h.button('Clear next-model draft').props.onClick(); await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, '')
     assert.equal(h.description(), before)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
     assert.equal(h.archive.size, 1)
   } finally { h.close() }
 })
@@ -245,7 +250,7 @@ test('failed cloud job stays visible with its failure state instead of resetting
     assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Previous model did not finish'))
     assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
     assert.ok(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), 'terminal receipt remains selected until explicit dismissal')
-    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
   } finally { h.close() }
 })
 
@@ -268,7 +273,7 @@ test('unconfirmed old jobs display review state instead of an endless generation
     assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Model needs a status review'))
     assert.equal(h.all().some(node => node.type === 'p' && text(node).startsWith('Elapsed:')), false)
     assert.equal(h.all().find(node => node.type === 'button' && node.props.type === 'submit').props.disabled, true, 'Uncertain jobs must not be silently duplicated')
-    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
   } finally { h.close() }
 })
 
@@ -278,12 +283,12 @@ test('private character brief fills an empty Shop draft without a generation, an
   const fresh = await harness({ withExistingJob: false, characterPrompt })
   try {
     assert.equal(fresh.byId('studio-prompt').props.value, characterPrompt)
-    assert.equal(fresh.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(fresh.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
   } finally { fresh.close() }
   const recovered = await harness({ characterPrompt })
   try {
     assert.equal(recovered.byId('studio-prompt').props.value, 'Original brown chess knight')
-    assert.equal(recovered.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(recovered.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
   } finally { recovered.close() }
 })
 
@@ -301,7 +306,7 @@ test('Shop retains 3,500 characters and four views when the detailed worker is u
     assert.equal(h.byId('studio-photos').props.disabled,true,'Four detailed views are retained; extra images are not silently omitted')
     assert.equal(h.button('Generate Astra/Blender model').props.disabled,true)
     await h.form().props.onSubmit({preventDefault(){}});await h.settle()
-    assert.equal(h.calls.filter(c=>c.method==='POST').length,0)
+    assert.equal(h.calls.filter(c=>c.method==='POST'&&c.path!=='/api/billing/recovery').length,0)
   } finally { h.close() }
 })
 
@@ -352,7 +357,7 @@ test('reconciled succeeded Studio job loads the same GLB and never starts anothe
     await h.settle()
     assert.ok(h.calls.some(call => call.path.endsWith('/model') && call.method === 'GET'))
     assert.equal(h.calls.filter(call => call.path === '/api/studio/jobs' && call.method === 'POST').length, 0)
-    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
     assert.ok(h.all().some(node => node.props['data-testid'] === 'result-description'))
     assert.equal(h.all().some(node => node.type === 'p' && text(node).startsWith('Elapsed:')), false)
   } finally { h.close() }
@@ -377,7 +382,7 @@ test('confirmed empty cloud recovery shows labelled front preview and all exampl
     assert.ok(h.all().some(node => node.type === 'p' && text(node).includes('example preview is temporarily unavailable')))
     h.button('Front').props.onClick(); await h.settle()
     assert.equal(sample()?.props.src, `${origin}/assets/model-front.webp`)
-    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
   } finally { h.close() }
 })
 
@@ -394,11 +399,11 @@ test('a pending cloud lookup blocks both blueprint and detailed submissions unti
       assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
       assert.equal(h.button(detailed ? 'Generate Astra/Blender model' : 'Generate GPT-6 Astra blueprint').props.disabled, true)
       await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
-      assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+      assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
       finishLookup(Response.json({ current: { receipt: makeReceipt(oldId), prompt: h.selected.prompt, startedAt: h.selected.startedAt, financialState: 'reserved' } }))
       await h.settle()
       assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
-      assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+      assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
     } finally { h.close() }
   }
 })
@@ -421,7 +426,7 @@ test('repeated cloud lookup failures retain the recovery gate and retry GET unti
     }
     assert.equal(attempts, 6)
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
-    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
     assert.ok(h.delays.slice(0, 5).every(delay => delay >= 5000 && delay <= 120000))
     assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Checking whether your request was accepted…'))
   } finally { h.close() }
@@ -454,7 +459,7 @@ test('a late successful cloud lookup after leaving Shop cannot overwrite a newer
   finishLookup(Response.json({ current: { receipt: makeReceipt(oldId), prompt: h.selected.prompt, startedAt: h.selected.startedAt, financialState: 'reserved' } }))
   await h.settle()
   assert.deepEqual(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)), newer)
-  assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+  assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
   await assert.rejects(h.poll(), /Recovery should have scheduled a GET/)
 })
 
@@ -469,7 +474,7 @@ test('failed model shows its safe diagnostic and copyable job ID without renderi
     assert.match(visible, /Astra’s cost protection stopped this job/)
     assert.doesNotMatch(visible, /model (?:is )?too (?:large|complex)|\$1\.75|500 points/i)
     assert.equal(visible.includes(h.selected.receipt.ticket), false)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
   } finally { h.close() }
 })
 
@@ -481,7 +486,7 @@ test('a completed model whose preview download is interrupted never receives fai
     const visible = text(h.all())
     assert.match(visible, /Your model is complete/)
     assert.doesNotMatch(visible, /original failure reason was not saved/)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
   } finally { h.close() }
 })
 
@@ -495,7 +500,7 @@ test('reloading a detailed receipt preserves the detailed route and missing subm
     assert.match(visible, /The upload was not confirmed/)
     assert.match(visible, /Model submission was not confirmed/)
     assert.doesNotMatch(visible, /Previous model did not finish|original failure reason was not saved/)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
   } finally { h.close() }
 })
 
@@ -526,7 +531,7 @@ test('account refusal is shown as generation not started, without a model failur
         ? /No new Oracle submission or points reservation was made/
         : /No Oracle generation was submitted and no points were reserved for this request/)
       assert.doesNotMatch(visible, /Previous model did not finish|original failure reason was not saved|points were released/)
-      assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+      assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
     } finally { h.close() }
   }
 })
@@ -541,7 +546,7 @@ test('immediate HTTP429 funding refusal keeps the detailed request terminal with
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     const visible = text(h.all())
     assert.match(visible, /Generation was not started/)
-    assert.match(visible, /provider funding limit/)
+    assert.match(visible, /unreserved API funding/)
     assert.match(visible, /Reason: PROVIDER_BUDGET_EXHAUSTED/)
     assert.doesNotMatch(visible, /Previous model did not finish|PRIVATE_UPSTREAM_MESSAGE|Not enough available points|points were released/)
     assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 1)
@@ -561,13 +566,13 @@ test('one account snapshot blocks both ready Shop routes and forced form submiss
     assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
       const status = h.all().find(n => n.props.className === 'shop-customer-status')
       assert.match(text(status), /Generation is unavailable for this account/)
-      assert.match(text(status), /provider funding limit/)
+      assert.match(text(status), /unreserved API funding/)
       assert.doesNotMatch(text(status), /generation available/)
       await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     }
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 1)
     assert.equal(h.calls.filter(c => c.path === '/api/billing/status').length, 1)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
     assert.equal(h.byId('studio-prompt').props.disabled, false)
     assert.equal(h.byId('studio-photos').props.disabled, false)
   } finally { h.close() }
@@ -597,7 +602,7 @@ test('account startup waits for session resolution before discovery and signed-o
     assert.equal(h.quote().quote.state, 'signin')
     assert.equal(h.byId('studio-prompt').props.disabled, false)
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
     await h.account({ user: { id: 'owner-a' }, loading: false })
     assert.equal(h.quote().quote.state, 'credits')
     assert.equal(h.byId('studio-prompt').props.value, 'Keep this draft through sign-in')
@@ -616,7 +621,7 @@ test('healthy service refresh cannot erase cloud authentication failure or enabl
     assert.match(text(h.all()), /Sign in again to recover your account models/)
     assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, true)
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
   } finally { h.close() }
 })
 
@@ -637,7 +642,7 @@ test('late account A responses cannot enable generation after signout or account
     assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
     assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 2)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
   } finally { h.close() }
 })
 
@@ -677,12 +682,12 @@ test('mobile resume and back-forward restoration recheck admission before enabli
       assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, true)
       finish(Response.json(blockedAccount)); await h.settle()
       assert.equal(h.quote().quote.state, 'blocked')
-      assert.match(h.quote().quote.message, /provider funding limit/)
+      assert.match(h.quote().quote.message, /unreserved API funding/)
       assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.type, 'button')
     assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
     assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
       assert.equal(h.byId('studio-prompt').props.value, 'My retained mobile model draft')
-      assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0, 'resuming must not submit or retry a paid request')
+      assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0, 'resuming must not submit or retry a paid request')
     } finally { h.close() }
   }
 })
@@ -723,8 +728,8 @@ test('a saved rejected blueprint displays its reason instead of the example and 
       assert.equal(h.button('Recover same request').props.disabled, false)
       await h.button('Recover same request').props.onClick(); await h.settle()
       assert.equal(h.calls.some(c => c.path.startsWith('/api/blueprint')), false)
-      assert.match(text(h.all()), /provider funding limit/)
-      assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+      assert.match(text(h.all()), /unreserved API funding/)
+      assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
     } finally { h.close() }
   }
 })
@@ -752,7 +757,7 @@ test('downloading the verified current GLB uses its existing bytes and a documen
     await h.button('Download model · GLB').props.onClick(); await h.settle()
     assert.equal(h.calls.filter(c => c.path.endsWith('/model')).length, before)
     assert.deepEqual(h.downloads, [{ name: `WORLDIFACT-${oldId}.glb`, attached: true }])
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
   } finally { h.close() }
 })
 
@@ -765,7 +770,7 @@ test('extended detailed budget needs current draft consent and sends one bound 5
     assert.equal(h.quote().quote.points, 500); assert.equal(h.quote().quote.after, 2500)
     assert.equal(h.button('Generate Astra/Blender model').props.disabled, true)
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
     h.byId('studio-budget-consent').props.onChange({ target: { checked: true } }); await h.settle()
     assert.equal(h.button('Generate Astra/Blender model').props.disabled, false)
     h.byId('studio-prompt').props.onChange({ target: { value: 'Detailed silver chess knight with armor' } }); await h.settle()
@@ -805,7 +810,7 @@ test('input changes clear extended consent, and unavailable tier recovery requir
     assert.match(text(h.all()), /selected 500-point budget is no longer available/)
     h.button('Use standard model budget').props.onClick(); await h.settle()
     assert.equal(h.button('Generate Astra/Blender model · 250 points').props.disabled, false)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
     assert.equal(h.byId('studio-prompt').props.value, 'Detailed model with reference')
     assert.equal(h.all().filter(n => n.type === 'img' && n.props.alt?.startsWith('Your reference')).length, 1)
   } finally { h.close() }
@@ -834,7 +839,7 @@ test('editing next draft budget never relabels original recovered job pricing', 
     assert.doesNotMatch(text(h.all()), /Original job: 500 points/)
     assert.deepEqual(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).pricing, STUDIO_PRICING.standard)
     assert.equal(h.byId('studio-budget-consent').props.checked, false)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
   } finally { h.close() }
 })
 
@@ -850,7 +855,7 @@ test('a blocked Shop automatically checks one historical funding page then uses 
     assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
     assert.equal(h.calls.filter(c => c.path === '/api/studio/reconcile-budget').length, 1)
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 2)
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
     assert.equal(h.byId('studio-prompt').props.value, 'My retained funding recovery draft')
   } finally { h.close() }
 })
@@ -875,7 +880,7 @@ test('one-page funding review keeps a known denial visible, then manual refresh 
     h.quote().refresh(); await h.settle()
     assert.deepEqual(pages, [{ cursor: null }, { cursor: oldId }])
     assert.equal(h.quote().quote.state, 'credits')
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
   } finally { h.close() }
 })
 
@@ -936,6 +941,71 @@ test('blocked Shop primary action checks funding without submitting, even when t
     assert.equal(primary().props.type, 'submit')
     assert.equal(primary().props.disabled, false)
     assert.equal(h.byId('studio-prompt').props.value, 'My preserved violin draft')
-    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/studio/reconcile-budget').length, 0, 'Funding check never becomes a generation after eligibility changes')
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0, 'Funding check never becomes a generation after eligibility changes')
+  } finally { h.close() }
+})
+
+test('existing paid upgrade synchronizes Creator to Pro before the quote settles, without changing points or starting a model', async () => {
+  let upgraded = false, accountReads = 0
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false,
+    accountLookup: () => {
+      accountReads++
+      return Response.json({ ...fundedAccount, paidGenerationPolicy: 'paid-membership-no-quota-v1',
+        subscription: { active: true, plan: upgraded ? 'pro' : 'creator' },
+        generationAdmission: upgraded ? fundedAccount.generationAdmission : { astra: { allowed: false, reason: 'CREATOR_ASTRA_PERIOD_LIMIT' } },
+        studioAdmission: upgraded ? admission() : admission(false, 'CREATOR_ASTRA_PERIOD_LIMIT') })
+    },
+    membershipLookup: () => { upgraded = true; return syncedMembership() },
+    billingLookup: () => Response.json({ plans: { pro: { checkoutReady: false } } }),
+  })
+  try {
+    assert.equal(accountReads, 2)
+    assert.equal(h.calls.filter(c => c.path === '/api/billing/recovery').length, 1)
+    assert.equal(h.quote().checking, false)
+    assert.equal(h.quote().quote.state, 'credits'); assert.equal(h.quote().quote.after, 2750)
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    assert.equal(h.byId('studio-budget-tier').props.value, 'standard')
+    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/billing/recovery').length, 0)
+  } finally { h.close() }
+})
+
+test('membership recovery authentication expiry removes the previously readable generation quote', async () => {
+  const h = await harness({ ready: true, withExistingJob: false,
+    membershipLookup: () => Response.json({ error: 'Sign in' }, { status: 401 }),
+  })
+  try {
+    assert.equal(h.quote().quote.state, 'signin'); assert.equal(h.quote().quote.points, null)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/billing/recovery').length, 0)
+  } finally { h.close() }
+})
+
+test('a pending membership lookup cannot revive account A after switching to account B', async () => {
+  let resolveA
+  const pendingA = new Promise(resolve => { resolveA = resolve })
+  const h = await harness({ ready: true, withExistingJob: false,
+    membershipLookup: owner => owner === 'owner-a' ? pendingA : Response.json({ state: 'none', canManage: false, canRetry: false }),
+    accountLookup: owner => Response.json(owner === 'owner-a' ? fundedAccount : { ...fundedAccount, credits: 0, subscription: { active: false }, generationAdmission: { astra: { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' } }, studioAdmission: admission(false, 'ASTRA_PLAN_REQUIRED') }),
+  })
+  try {
+    await h.account({ user: { id: 'owner-b' }, loading: false })
+    assert.equal(h.quote().quote.reason, 'ASTRA_PLAN_REQUIRED')
+    resolveA(syncedMembership()); await h.settle()
+    assert.equal(h.quote().quote.reason, 'ASTRA_PLAN_REQUIRED')
+    assert.equal(h.quote().quote.after, null)
+    assert.equal(h.calls.filter(c => c.path === '/api/billing/recovery').length, 2)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/billing/recovery').length, 0)
+  } finally { h.close() }
+})
+
+test('logging out and back into the same account performs fresh membership recovery', async () => {
+  let recoveries = 0
+  const h = await harness({ ready: true, withExistingJob: false, membershipLookup: () => { recoveries++; return syncedMembership() } })
+  try {
+    assert.equal(recoveries, 1)
+    await h.account({ user: null, loading: false })
+    assert.equal(h.quote().quote.state, 'signin')
+    await h.account({ user: { id: 'owner-a' }, loading: false })
+    assert.equal(recoveries, 2); assert.equal(h.quote().quote.state, 'credits')
+    assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/billing/recovery').length, 0)
   } finally { h.close() }
 })

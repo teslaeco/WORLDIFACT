@@ -4,6 +4,41 @@ export const GENERATION_ACCOUNT_TIMEOUT_MS = 40_000
 type ReadTimers = { setTimeout: (callback: () => void, delay: number) => number; clearTimeout: (id: number) => void }
 const readTimers: ReadTimers = { setTimeout: (callback, delay) => Number(setTimeout(callback, delay)), clearTimeout: id => clearTimeout(id) }
 
+/** Reconcile the signed-in membership from existing Stripe payment evidence.
+ * This status action cannot create a checkout, payment or subscription.
+ */
+export function syncGenerationMembership(fetcher: typeof fetch, signal: AbortSignal, timers: ReadTimers = readTimers): Promise<'synced' | 'unavailable' | 'signin'> {
+  return new Promise(resolve => {
+    const controller = new AbortController()
+    let finished = false
+    let timeout: number
+    const finish = (result: 'synced' | 'unavailable' | 'signin') => {
+      if (finished) return
+      finished = true; timers.clearTimeout(timeout); signal.removeEventListener('abort', cancel); resolve(result)
+    }
+    const cancel = () => { controller.abort(); finish('unavailable') }
+    timeout = timers.setTimeout(cancel, 10_000)
+    signal.addEventListener('abort', cancel, { once: true })
+    if (signal.aborted) { cancel(); return }
+    void (async () => {
+      const response = await fetcher('/api/billing/recovery', { method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) })
+      if (response.status === 401) { finish('signin'); return }
+      if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) { finish('unavailable'); return }
+      const text = await response.text()
+      if (text.length > 4096) { finish('unavailable'); return }
+      const value = JSON.parse(text)
+      if (!value || typeof value !== 'object' || Array.isArray(value) ||
+          !['active', 'none', 'processing', 'review', 'payment_required'].includes(value.state) ||
+          typeof value.canManage !== 'boolean' || typeof value.canRetry !== 'boolean' ||
+          value.state === 'active' && !['creator', 'pro', 'studio'].includes(value.activePlan)) { finish('unavailable'); return }
+      // Never trust this response as a credit balance or open any returned URL.
+      // The caller must read authenticated entitlements again after settlement.
+      finish('synced')
+    })().catch(() => finish('unavailable'))
+  })
+}
+
 /** A single read-only snapshot feeds both the displayed quote and admission UI. */
 export async function readGenerationAccount(fetcher: typeof fetch, signal: AbortSignal, onPartial?: (value: GenerationAccountSnapshot) => void, timers: ReadTimers = readTimers): Promise<GenerationAccountSnapshot> {
   const snapshot: GenerationAccountSnapshot = { account: null, billing: null, authenticationRequired: false }

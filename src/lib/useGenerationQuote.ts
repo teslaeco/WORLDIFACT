@@ -1,7 +1,7 @@
 import type { StudioBudgetTier } from './studioPricing'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from './account'
-import { GENERATION_ACCOUNT_TIMEOUT_MS, readGenerationAccount, reconcileGenerationFunding, type GenerationAccountSnapshot } from './generationAccount'
+import { GENERATION_ACCOUNT_TIMEOUT_MS, readGenerationAccount, reconcileGenerationFunding, syncGenerationMembership, type GenerationAccountSnapshot } from './generationAccount'
 import { quoteGeneration, type GenerationQuote, type QuotedModel } from './generationQuote'
 
 type Request = { owner: string | null; loading: boolean; busy: boolean; revision: number }
@@ -15,12 +15,13 @@ export function useGenerationQuote(model: QuotedModel, busy = false, detailed = 
   const [revision, setRevision] = useState(0)
   const [reconciliationRequest, setReconciliationRequest] = useState<Request | null>(null)
   const fundingCursor = useRef<{ owner: string; cursor: string | null } | null>(null)
+  const membershipOwner = useRef<string | null>(null)
   const selected = useRef({ model, detailed, budgetTier })
   useEffect(() => { selected.current = { model, detailed, budgetTier } }, [model, detailed, budgetTier])
   // A new identity, balance revision or operation invalidates the previous
   // snapshot during render, before effects or a late response can reuse it.
   const request = useMemo(() => ({ owner, loading, busy, revision }), [owner, loading, busy, revision])
-  const refresh = useCallback(() => setRevision(value => value + 1), [])
+  const refresh = useCallback(() => { membershipOwner.current = null; setRevision(value => value + 1) }, [])
   useEffect(() => {
     // Mobile app switching and back-forward cache restoration need not fire
     // focus. Invalidate the old allowance before accepting another submission.
@@ -38,7 +39,8 @@ export function useGenerationQuote(model: QuotedModel, busy = false, detailed = 
     }
   }, [refresh])
   useEffect(() => {
-    if (!request.owner || request.loading || request.busy) return
+    if (!request.owner || request.loading) { membershipOwner.current = null; return }
+    if (request.busy) return
     const controller = new AbortController()
     let closed = false
     let latest: GenerationAccountSnapshot = { account: null, billing: null, authenticationRequired: false }
@@ -65,6 +67,23 @@ export function useGenerationQuote(model: QuotedModel, busy = false, detailed = 
     void (async () => {
       latest = await readGenerationAccount(fetch, controller.signal, updatePartial, timers)
       if (closed || latest.authenticationRequired) return
+      // The invoice can have granted points before an interrupted or delayed
+      // subscription update. Repair that projection from Stripe on entry and
+      // explicit refresh; busy->idle alone does not repeat billing recovery.
+      if (membershipOwner.current !== request.owner) {
+        deadline()
+        const synced = await syncGenerationMembership(fetch, controller.signal, timers)
+        if (closed) return
+        membershipOwner.current = request.owner
+        if (synced === 'signin') { latest = { account: null, billing: latest.billing, authenticationRequired: true }; return }
+        if (synced === 'synced') {
+          deadline()
+          const refreshed = await readGenerationAccount(fetch, controller.signal, undefined, timers)
+          if (closed) return
+          if (refreshed.account !== null || refreshed.authenticationRequired) { latest = refreshed; updatePartial(latest) }
+          if (latest.authenticationRequired) return
+        }
+      }
       const choice = selected.current
       if (quoteGeneration(choice.model, latest.account, latest.billing, true, choice.detailed, choice.budgetTier).reason !== 'PROVIDER_BUDGET_EXHAUSTED') return
       setReconciliationRequest(request)

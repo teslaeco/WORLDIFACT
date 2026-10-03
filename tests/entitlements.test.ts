@@ -13,6 +13,7 @@ function fixture() {
   const stores = new Map<string, EntitlementStorage>()
   const env: EntitlementEnv = {
     ENFORCE_ACCOUNT_ENTITLEMENTS: 'true',
+    ENABLE_ASTRA_PLANS: 'true',
     ACCOUNT_ENTITLEMENTS: { idFromName: name => name, get: key => {
       const name = String(key)
       if (!objects.has(name)) {
@@ -23,12 +24,12 @@ function fixture() {
           transaction<T>(callback: (storage: EntitlementStorage) => Promise<T>) { const current = previous.then(() => callback(storage)); previous = current.catch(() => undefined); return current },
         }
         stores.set(name, storage)
-        objects.set(name, new AccountEntitlements({ storage }, {}, () => now))
+        objects.set(name, new AccountEntitlements({ storage }, env, () => now))
       }
       return objects.get(name)!
     } },
   }
-  return { env, stores, setNow: (value: number) => { now = value }, now: () => now, recreate: () => { for (const [name, storage] of stores) objects.set(name, new AccountEntitlements({ storage }, {}, () => now)) } }
+  return { env, stores, setNow: (value: number) => { now = value }, now: () => now, recreate: () => { for (const [name, storage] of stores) objects.set(name, new AccountEntitlements({ storage }, env, () => now)) } }
 }
 async function grant(env: EntitlementEnv, credits = 1500, grantId = 'in_fixture') {
   await entitlementCall(env, USER, '/grant', { id: grantId, credits, subscriptionId: 'sub_fixture' })
@@ -57,10 +58,10 @@ test('FREE is Sol-only and never opens an Astra SLOW allowance', async () => {
   assert.equal((await reserveUserGeneration(env, USER, id(), 'fast')).allowed, true)
   assert.equal((await entitlementStatus(env, USER)).free.fastRemaining, 1)
 })
-test('Creator SOL buys exactly 30 Sol generations and cannot spend credits on Astra', async () => {
+test('Creator SOL buys exactly 30 Sol generations with shared funded Astra admission', async () => {
   const { env, now } = fixture()
   await grant(env); await subscribe(env, now(), { plan: 'creator' })
-  assert.equal((await reserveUserGeneration(env, USER, id(), 'slow')).reason, 'ASTRA_PLAN_REQUIRED')
+  assert.equal((await entitlementStatus(env, USER)).generationAdmission.astra.allowed, true)
   const job = id()
   const repeated = await Promise.all(Array.from({ length: 10 }, () => reserveUserGeneration(env, USER, job, 'fast')))
   assert.equal(repeated.filter(result => result.repeated === false).length, 1)
