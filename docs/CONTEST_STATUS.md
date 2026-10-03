@@ -2,12 +2,19 @@
 
 Updated 3 October 2026.
 
-## CLOUDFLARE DEPLOYED / ORACLE PENDING — explicitly approved Studio price tiers
+## ORACLE ACTIVATION VERIFIED — explicitly approved Studio price tiers
 
 PR #195 merged as `12149bd6c55d8de95044a4c41e55ccf87fed47c6`.
 Production run 37138372766 passed all 997 JavaScript tests and published
 Cloudflare version `ffc3edf8-e1e3-4b21-a51e-cced052125c9`.
-The original Oracle installation remains unconfirmed. The owner's 3 October
+The owner's 21:40 Cloud Shell screenshot on 3 October confirms
+`WORLDIFACT_STUDIO_PRICING_VERIFIED`, `activation_committed: true` and
+`provider_limits_changed: true` for the PR #197 launcher at
+`0ef1276ef239b98f1d973e57e72513bf66da1fd9`. The installation requested no paid
+generation and changed no historical job rows. This establishes successful
+Oracle activation, not a completed paid user generation or per-account funding.
+
+The owner's earlier 3 October
 Cloud Shell reports first showed `unsafe_job_history`; the subsequent read-only
 snapshot contained one cancelled, 60 failed and 80 succeeded rows, with no other
 states. After explicitly allowing cleanup of that one cancelled job, the
@@ -17,7 +24,8 @@ tests. The owner's 21:19 Cloud Shell result passed that gate, then reported
 `cabinet_pipeline_unverified`, `activation_committed: false` and
 `previous_source_restored: true`. Worker and tunnel returned active, job counts
 remained 1 cancelled / 60 failed / 80 succeeded, and no paid generation was
-requested. Oracle pricing activation remains unconfirmed. See the follow-up in
+requested. PR #197 repaired the missing synthetic cabinet database and the
+subsequent 21:40 attempt completed successfully. See the follow-up in
 `docs/GENERATION_REPAIR_20261003.md`; do not infer worker activation from the
 Cloudflare release or classify the historical rows as visually approved models.
 
@@ -29,9 +37,9 @@ start a job. Changed inputs invalidate the quote; recovery retains the original
 price and never starts another paid request.
 
 These tiers require the exact new Oracle pricing attestation, immutable job terms
-and matching provider guard. Until that original worker is updated and verified,
-the deployed client keeps the existing 250-point / USD 1.75 path; it does not
-advertise an unverified higher budget. Account funding remains atomic and capped
+and matching provider guard. The original worker's activation is now confirmed;
+the client still requires fresh readiness evidence before offering these tiers.
+Historical jobs retain their USD 1.75 provider ceiling. Account funding remains atomic and capped
 by the unchanged funded pool. Plan prices, point grants, 70% reserve allocation
 and historical support approvals are unchanged. No paid generation was used to
 validate this pricing change. See `docs/GENERATION_REPAIR_20261003.md` and this
