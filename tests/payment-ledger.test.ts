@@ -81,17 +81,18 @@ test('PayPal checkout ledger rejects foreign URLs, credentials, token mismatch a
   }
   assert.equal((await a.call('/paypal-get', { orderId: '../capture' })).status, 400)
 })
-test('One-time PayPal credits remain Sol-only and cannot be replayed after refund', async () => {
+test('One-time PayPal credits can fund Astra and cannot be replayed after refund', async () => {
   const a = ledger(), id = crypto.randomUUID()
   for (let i = 0; i < 3; i++) await a.call('/grant', { id: CAPTURE, credits: 1500 })
   assert.equal((await a.call('/status')).data.credits, 1500)
   assert.equal((await a.call('/status')).data.subscription.active, false)
   const astra = await a.call('/reserve', { id, profile: 'slow' })
-  assert.equal(astra.data.reason, 'ASTRA_PLAN_REQUIRED')
-  assert.equal((await a.call('/status')).data.credits, 1500)
+  assert.equal(astra.data.cost, 250)
+  assert.equal((await a.call('/status')).data.subscription.active, false)
+  assert.equal((await a.call('/status')).data.credits, 1250)
   await a.call('/revoke', { id: CAPTURE, credits: 1500 })
   await a.call('/grant', { id: CAPTURE, credits: 1500 })
-  assert.equal((await a.call('/status')).data.credits, 0)
+  assert.equal((await a.call('/status')).data.credits, -250)
 })
 test('Disputed payment puts nonnegative account balance on hold; reversed-before-paid leaves a tombstone', async () => {
   const a = ledger()
