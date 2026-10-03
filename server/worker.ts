@@ -6,7 +6,7 @@ import { studioApi } from "./studio.ts";
 import { avatarApi, type AvatarContext } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
 import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
-import { entitlementCall, entitlementApi, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
+import { entitlementCall, entitlementApi, markBlueprintDispatch, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
 import { billingApi, type BillingEnv } from './billing.ts';
 import { paypalApi, type PayPalEnv } from './paypal.ts';
 import { privateWorldApi } from './privateWorldApi.ts';
@@ -199,7 +199,8 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   let customerGenerationKind: 'free' | 'credits' | null = null;
   if (account) {
     try {
-      const reservation = await reserveUserGeneration(env, account.id, requestId, selectedModel === 'astra' ? 'slow' : 'fast', selectedModel, fingerprint);
+      const reservation = await reserveUserGeneration(env, account.id, requestId, selectedModel === 'astra' ? 'slow' : 'fast', selectedModel, fingerprint, undefined,
+        { channel: 'blueprint', blueprintDispatch: 'fenced-v1' });
       if (reservation.reason === 'REQUEST_PAYLOAD_MISMATCH') return json({ error: 'This request ID belongs to different inputs. No new charge was made.', code: 'REQUEST_PAYLOAD_MISMATCH', requestId }, 409);
       if (reservation.repeated) {
         const status = await entitlementCall<{ state: string; result?: GenerationResult; refunded?: boolean }>(env, account.id, '/blueprint-status', { id: requestId });
@@ -284,9 +285,20 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     }
   }
   try {
+    const payload = JSON.stringify(responseRequestBody);
+    if (account) {
+      let claim;
+      try { claim = await markBlueprintDispatch(env, account.id, requestId, fingerprint); }
+      catch { return json({ error: "Generation admission could not be confirmed. Recover this request; no replacement was started.", requestId }, 503); }
+      // The account transaction races with failed/expired settlement. Only one
+      // live claimant may dispatch, and a delayed acknowledgement is unusable.
+      // Keep the expiry check adjacent to fetch: no asynchronous work between.
+      if (!claim.dispatch || Date.now() >= claim.deadline)
+        return json({ error: "This request can no longer start. Recover its status; no replacement was started.", requestId }, 409);
+    }
     const upstream = await fetcher("https://api.openai.com/v1/responses", {
       method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(selectedModel === 'astra' ? 60_000 : 30_000),
-      body: JSON.stringify(responseRequestBody),
+      body: payload,
     });
     if (!upstream.ok) return json({ error: upstream.status === 429 ? "AI service is busy. Try again later." : "AI service could not complete the request.", requestId }, upstream.status === 429 ? 429 : 502);
     const body = await limitedBody(upstream as unknown as Request);
@@ -319,7 +331,8 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     return json({ error: e instanceof Error && ["TimeoutError", "AbortError"].includes(e.name) ? "Generation timed out. Previous scene is unchanged." : "Invalid AI result. Previous scene is unchanged.", requestId }, 502);
   } finally {
     // A synchronous blueprint request with no deliverable never consumes a
-    // customer's credit. The separate global provider-spend counter is retained.
+    // customer's credit. Claimed/uncertain provider spend remains reserved;
+    // only the account's atomic pre-dispatch fence can release unspent funding.
     if (!generationCompleted) await finishUser(false).catch(() => {});
   }
 }

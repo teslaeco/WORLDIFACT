@@ -2,6 +2,41 @@
 
 Updated 3 October 2026.
 
+## IN VERIFICATION — restore shared generation admission after account funding failures
+
+The owner's 21:48–21:51 screenshots show procedural Blueprint controls with an
+explicit exhausted provider-funding refusal or an unresolved account quote.
+The comparison model is dated 2 October, 00:46:40 Europe/Amsterdam (1.7 MB).
+That timestamp does not identify its deployed commit or establish its provider
+cost. The successful Oracle installation below did not verify these independent
+account/Blueprint paths.
+
+The repair reproduces a Blueprint reservation leak before the paid Responses
+request, and adds an explicitly versioned, atomic dispatch fence. Only new
+opted-in reservations proven not to have dispatched may return provider funding;
+legacy callers and uncertain paid calls retain their liabilities. Mixed-version
+deployment must not turn an old caller's request into a refundable reservation.
+
+An authenticated, bounded account-history check now retrieves immutable terminal
+Oracle budget receipts for eligible old Studio jobs, including jobs no longer
+pointed to by the current-job field. Pagination remains account-owned and no
+generation is submitted. Missing or conflicting evidence retains its debit.
+Both generation entry points use the same quote recovery; valid entitlement
+data survives auxiliary billing failures and loading has a finite deadline.
+
+There is no funding reset, point grant, payment, paid test, automatic retry or
+change to the approved 250-point/USD 2 and 500-point/USD 4 tiers. Historical
+Blueprint spend without sufficient evidence is not refunded. Production account
+recovery and a newly generated model remain unverified until observed separately.
+The executable task is recorded in `docs/CODEX_GENERATION_REPAIR_20261003.md`.
+Local verification passes lint, TypeScript, 1,041 tests, the real local HTTP
+smoke check and production build. The retained native Chromium regression is
+the sole local test failure because this executor has no Chromium/Chrome binary;
+it must pass in the full exact-head GitHub run before merge. Native workerd and
+SQLite tests ran successfully, including actual storage pagination, rollback,
+mixed-version dispatch and exact-once settlement. Merge and production deployment
+evidence are pending; no local or CI result is a paid user-generation result.
+
 ## ORACLE ACTIVATION VERIFIED — explicitly approved Studio price tiers
 
 PR #195 merged as `12149bd6c55d8de95044a4c41e55ccf87fed47c6`.

@@ -21,6 +21,7 @@ test('native SQLite atomically fences undispatched Studio funding release agains
           const fault = { armed: false };
           const wrap = storage => ({
             get: key => storage.get(key),
+            list: options => storage.list(options),
             put: async (key, value) => {
               if (fault.armed && key.startsWith('job:') && value.state === 'failed') {
                 fault.armed = false;
@@ -177,6 +178,42 @@ test('native SQLite atomically fences undispatched Studio funding release agains
     assert.equal(foreign.reconciled, false); assert.equal(foreign.reason, 'NOT_OWNED')
     await reconcile(account, id)
     assert.deepEqual(await inspect(account, id), after)
+  })
+
+  await t.test('SQLite history pages recover a dismissed terminal job without reading another account or reseeding funds', async () => {
+    const account = 'fixture-recovery-page', first = '00000000-0000-4000-8000-000000000001', last = '00000000-0000-4000-8000-000000000002'
+    await seed(account)
+    for (const id of [first, last]) { await reserve(account, id); await dispatch(account, id); await settle(account, id) }
+    await call(account, '/studio-current-clear', { id: last })
+    const page = await call(account, '/studio-provider-pending', {})
+    assert.deepEqual(page, { ids: [first, last], nextCursor: null, hasMore: false })
+    assert.deepEqual(await call(account, '/studio-provider-pending', { cursor: first }), { ids: [last], nextCursor: null, hasMore: false })
+    assert.deepEqual(await call('fixture-recovery-other', '/studio-provider-pending', {}), { ids: [], nextCursor: null, hasMore: false })
+    const before = await inspect(account, first)
+    await reconcile(account, first)
+    assert.deepEqual(await call(account, '/studio-provider-pending', {}), { ids: [last], nextCursor: null, hasMore: false })
+    const after = await inspect(account, first)
+    assert.equal(after.providerCents, before.providerCents + 132)
+    assert.equal(after.credits, before.credits)
+  })
+
+  await t.test('SQLite Blueprint opt-in fences a preflight refund atomically against late paid dispatch', async () => {
+    const account = 'fixture-blueprint-fence', id = crypto.randomUUID()
+    await seed(account)
+    await call(account, '/reserve', { id, channel: 'blueprint', profile: 'fast', fingerprint, blueprintDispatch: 'fenced-v1' })
+    const before = await inspect(account, id)
+    await call(account, '/fixture-arm-failure', {})
+    await settle(account, id, 503)
+    assert.deepEqual(await inspect(account, id), before, 'A failed job write rolls both customer and provider refunds back')
+    await Promise.all(Array.from({ length: 8 }, () => settle(account, id)))
+    assert.equal((await call(account, '/blueprint-dispatch', { id, fingerprint })).dispatch, false)
+    const after = await inspect(account, id)
+    assert.equal(after.providerCents, 1050); assert.equal(after.credits, 1500)
+    assert.equal(after.job.blueprintProviderReservation.state, 'released')
+    const legacy = crypto.randomUUID()
+    await call(account, '/reserve', { id: legacy, channel: 'blueprint', profile: 'fast', fingerprint })
+    await settle(account, legacy)
+    assert.equal((await inspect(account, legacy)).providerCents, 1015, 'An old unversioned caller remains conservative')
   })
 
   await t.test('terminal receipt marker failure rolls its provider credit back in actual SQLite before one safe retry', async () => {

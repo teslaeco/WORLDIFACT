@@ -20,6 +20,7 @@ export interface EntitlementEnv {
 export interface EntitlementStorage {
   get<T>(key: string): Promise<T | undefined>
   put(key: string, value: unknown): Promise<void>
+  list?<T>(options: { prefix: string; startAfter?: string; limit: number }): Promise<Map<string, T>>
   transaction<T>(callback: (storage: EntitlementStorage) => Promise<T>): Promise<T>
 }
 export type GenerationKind = 'fast' | 'slow'
@@ -27,13 +28,16 @@ type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
 type StudioProviderReservation = { version: 1; source: 'ordinary'; amountCents: number; state: 'reserved' | 'released' }
 type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalReservedCents: 175 | 200 | 400; retainedCents: number; releasedCents: number; at: number }
-type Job = { pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation }
+type Job = { pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation }
 export type Reservation = { pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean }
 export type JobAccess = { fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
+export type StudioProviderReconciliationPage = { ids: string[]; nextCursor: string | null; hasMore: boolean }
 export type StudioProviderReconciliationResult = { reconciled: boolean; repeated?: boolean; releasedCents?: number; retainedCents?: number; reason?: string }
 type StudioDispatchClaim = { dispatch: false } | { dispatch: true; deadline: number }
 export const STUDIO_DISPATCH_WINDOW_MS = 30_000
 export const STUDIO_ORACLE_TIMEOUT_MS = 25_000
+export const BLUEPRINT_DISPATCH_WINDOW_MS = 30_000
+const BLUEPRINT_JOB_WINDOW_MS = 10 * 60_000
 export type CurrentStudioJob = { pricing?: StudioPricing; id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
 export type ClosedMissingStudioJob = { closed: boolean; state: Job['state']; fingerprintMatches: boolean; failureCode?: StudioFailureCode }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
@@ -155,6 +159,21 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
     await storage.put(PROVIDER_BUDGET, Number(remaining) + providerReservation.amountCents)
     providerReservation = { ...providerReservation, state: 'released' }
   }
+  let blueprintReservation = job.blueprintProviderReservation
+  if (next === 'failed' && job.channel === 'blueprint' && job.kind === 'credits' && job.billingMode === undefined &&
+      job.blueprintDispatch === 'ready-v1' && job.blueprintDispatchUntil === undefined && !Object.hasOwn(job, 'pricing') &&
+      job.supportApprovalId === undefined && job.supplementalGrantId === undefined &&
+      typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint) && economics && job.cost === economics.points &&
+      blueprintReservation && typeof blueprintReservation === 'object' && !Array.isArray(blueprintReservation) && Object.keys(blueprintReservation).length === 4 &&
+      blueprintReservation.version === 1 && blueprintReservation.source === 'ordinary' && blueprintReservation.state === 'reserved' && blueprintReservation.amountCents === economics.maxProviderCents) {
+    // New writer evidence only: no paid /responses call can occur before this
+    // same transaction grants one-use dispatch. A failed ready row fences any
+    // delayed caller; an uncertain claimed call keeps its full provider debit.
+    const remaining = await storage.get<number>(PROVIDER_BUDGET)
+    if (!Number.isSafeInteger(remaining) || !Number.isSafeInteger(Number(remaining) + blueprintReservation.amountCents)) throw new Error('Invalid blueprint reservation release')
+    await storage.put(PROVIDER_BUDGET, Number(remaining) + blueprintReservation.amountCents)
+    blueprintReservation = { ...blueprintReservation, state: 'released' }
+  }
   if (job.cost) {
     if (job.billingMode === 'hold-v1') {
       await changeReservedCredits(storage, -job.cost)
@@ -168,7 +187,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
     free[job.profile] = free[job.profile].filter(item => item.id !== id)
     await storage.put('usage', free)
   }
-  await storage.put(`job:${id}`, { ...job, ...(providerReservation ? { studioProviderReservation: providerReservation } : {}), state: next, updatedAt: now, ...(next === 'failed' && failureCode ? { failureCode } : {}) })
+  await storage.put(`job:${id}`, { ...job, ...(providerReservation ? { studioProviderReservation: providerReservation } : {}), ...(blueprintReservation ? { blueprintProviderReservation: blueprintReservation } : {}), state: next, updatedAt: now, ...(next === 'failed' && failureCode ? { failureCode } : {}) })
   return { settled: true, repeated: false }
 }
 
@@ -391,6 +410,20 @@ export class AccountEntitlements {
           return { closed: true, state: 'failed', fingerprintMatches: true, failureCode: 'MISSING_SUBMISSION' } satisfies ClosedMissingStudioJob
         }))
       }
+      if (path === '/blueprint-dispatch') {
+        if (Object.keys(input).some(key => !['id', 'fingerprint'].includes(key)) ||
+            typeof input.id !== 'string' || !JOB_ID.test(input.id) || typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint))
+          return json({ error: 'Invalid Blueprint dispatch commitment' }, 400)
+        return json(await this.storage.transaction(async storage => {
+          const job = await storage.get<Job>(`job:${input.id}`)
+          if (!job || job.channel !== 'blueprint' || job.fingerprint !== input.fingerprint || job.state !== 'reserved' || job.blueprintDispatch !== 'ready-v1') return { dispatch: false }
+          const claimedAt = this.now()
+          if (!Number.isSafeInteger(job.at) || claimedAt < job.at || claimedAt >= job.at + BLUEPRINT_JOB_WINDOW_MS) return { dispatch: false }
+          const deadline = Math.min(claimedAt + BLUEPRINT_DISPATCH_WINDOW_MS, job.at + BLUEPRINT_JOB_WINDOW_MS)
+          await storage.put(`job:${input.id}`, { ...job, blueprintDispatch: 'claimed-v1', blueprintDispatchUntil: deadline })
+          return { dispatch: true, deadline }
+        }))
+      }
       if (path === '/studio-dispatch') {
         if (Object.keys(input).some(key => !['id', 'fingerprint'].includes(key)) ||
             typeof input.id !== 'string' || !JOB_ID.test(input.id) || typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint))
@@ -413,6 +446,9 @@ export class AccountEntitlements {
         if (input.fingerprint !== undefined && (typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint))) return json({ error: 'Invalid request fingerprint' }, 400)
         const fingerprint = input.fingerprint as string | undefined
         const channel = input.channel === undefined ? 'blueprint' : String(input.channel)
+        if (Object.hasOwn(input, 'blueprintDispatch') && (input.blueprintDispatch !== 'fenced-v1' || channel !== 'blueprint' || !fingerprint))
+          return json({ error: 'Invalid Blueprint dispatch protocol' }, 400)
+        const fencedBlueprint = input.blueprintDispatch === 'fenced-v1'
         if (!['blueprint','studio'].includes(channel)) return json({ error: 'Invalid generation channel' }, 400)
         const prompt = input.prompt === undefined ? undefined : String(input.prompt)
         if (prompt !== undefined && (prompt.length < 3 || prompt.length > 4000)) return json({ error: 'Invalid generation prompt' }, 400)
@@ -457,6 +493,7 @@ export class AccountEntitlements {
           let supportApprovalId: string | undefined
           let supplementalGrantId: string | undefined
           let studioProviderReservation: StudioProviderReservation | undefined
+          let blueprintProviderReservation: StudioProviderReservation | undefined
           if (paid) {
             const remaining = await providerBudget(storage, credits)
             const ceiling = pricing?.maxProviderCents ?? MODEL_ECONOMICS[model].maxProviderCents
@@ -489,9 +526,11 @@ export class AccountEntitlements {
             await storage.put(PROVIDER_BUDGET, approved || supplementalApproved ? remaining : remaining - ceiling)
             if (channel === 'studio' && fingerprint && !approved && !supplementalApproved)
               studioProviderReservation = { version: 1, source: 'ordinary', amountCents: ceiling, state: 'reserved' }
+            if (channel === 'blueprint' && fingerprint && fencedBlueprint)
+              blueprintProviderReservation = { version: 1, source: 'ordinary', amountCents: ceiling, state: 'reserved' }
           }
           const cloudHold = paid && channel === 'studio'
-          const job: Job = { ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
+          const job: Job = { ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), ...(blueprintProviderReservation ? { blueprintProviderReservation } : {}), ...(channel === 'blueprint' && fingerprint && fencedBlueprint ? { blueprintDispatch: 'ready-v1' as const } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
@@ -501,6 +540,27 @@ export class AccountEntitlements {
           return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold, ...(job.pricing ? { pricing: job.pricing } : {}) }
         })
         return json(result, result.allowed ? 200 : 429)
+      }
+      if (path === '/studio-provider-pending') {
+        if (Object.keys(input).some(key => key !== 'cursor') ||
+            input.cursor !== undefined && input.cursor !== null && (typeof input.cursor !== 'string' || !JOB_ID.test(input.cursor)))
+          return json({ error: 'Invalid reconciliation cursor' }, 400)
+        // Only this verified account's existing records are enumerated. Reading
+        // a page neither seeds funding nor infers payment from an old failure.
+        if (!this.storage.list) throw new Error('Account history listing unavailable')
+        const entries = await this.storage.list<Job>({ prefix: 'job:', ...(input.cursor ? { startAfter: `job:${input.cursor}` } : {}), limit: 64 })
+        const ids: string[] = []
+        let cursor: string | null = null, consumed = 0
+        for (const [key, job] of entries) {
+          if (!/^job:[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(key)) throw new Error('Invalid account job key')
+          cursor = key.slice(4); consumed++
+          // Older writers accepted uppercase UUIDs. Preserve their exact key
+          // for pagination, but Oracle's receipt protocol accepts lowercase IDs.
+          if (cursor === cursor.toLowerCase() && job && typeof job === 'object' && !Array.isArray(job) && providerBudgetPending(job)) ids.push(cursor)
+          if (ids.length === 8) break
+        }
+        const hasMore = consumed < entries.size || entries.size === 64
+        return json({ ids, nextCursor: hasMore ? cursor : null, hasMore } satisfies StudioProviderReconciliationPage)
       }
       if (path === '/reconcile-studio-provider') {
         if (Object.keys(input).length !== 2 || Object.keys(input).some(key => !['id', 'receipt'].includes(key)) ||
@@ -774,8 +834,8 @@ export async function entitlementStatus(env: EntitlementEnv, userId: string, ide
   return entitlementCall<EntitlementStatus>(env, userId, '/status', undefined, { identity, available: support.available, consumed: support.consumed, statusKnown: typeof support.available === 'boolean',
     supplemental: { available: supplemental.available, consumed: supplemental.consumed, statusKnown: typeof supplemental.available === 'boolean' } })
 }
-export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing }) {
-  const body = { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
+export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing; blueprintDispatch?: 'fenced-v1' }) {
+  const body = { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.blueprintDispatch ? { blueprintDispatch: metadata.blueprintDispatch } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
   const identity = metadata?.supportIdentity
   const initial = await entitlementCall<Reservation>(env, userId, '/reserve', body, { identity })
   if (initial.allowed || initial.reason !== 'PROVIDER_BUDGET_EXHAUSTED' || metadata?.pricing !== undefined || metadata?.channel !== 'studio' || profile !== 'slow' || (model !== undefined && model !== 'astra') || !fingerprint) return initial
@@ -801,6 +861,15 @@ export async function reserveUserGeneration(env: EntitlementEnv, userId: string,
   return reservation
 }
 export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, state: 'completed' | 'failed', failureCode?: StudioFailureCode) => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state, ...(failureCode ? { failureCode } : {}) })
+export async function pendingUserStudioProvider(env: EntitlementEnv, userId: string, cursor: string | null = null): Promise<StudioProviderReconciliationPage> {
+  const page = await entitlementCall<StudioProviderReconciliationPage>(env, userId, '/studio-provider-pending', { cursor })
+  if (!page || typeof page !== 'object' || Array.isArray(page) || Object.keys(page).length !== 3 ||
+      !Array.isArray(page.ids) || page.ids.length > 8 || page.ids.some(id => typeof id !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id)) ||
+      new Set(page.ids).size !== page.ids.length || typeof page.hasMore !== 'boolean' ||
+      (page.hasMore ? typeof page.nextCursor !== 'string' || !JOB_ID.test(page.nextCursor) || (cursor !== null && page.nextCursor <= cursor) : page.nextCursor !== null))
+    throw new EntitlementError('Account history could not be verified.')
+  return page
+}
 export async function reconcileUserStudioProvider(env: EntitlementEnv, userId: string, jobId: string, receipt: TerminalBudgetReceipt): Promise<StudioProviderReconciliationResult> {
   if (!validateTerminalBudgetReceipt(receipt, jobId)) throw new EntitlementError('The terminal provider receipt could not be verified.')
   return entitlementCall<StudioProviderReconciliationResult>(env, userId, '/reconcile-studio-provider', { id: jobId, receipt })
@@ -809,6 +878,16 @@ export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string
 export const currentUserStudioJob = (env: EntitlementEnv, userId: string) => entitlementCall<{ job: CurrentStudioJob | null }>(env, userId, '/studio-current', {})
 export const clearCurrentUserStudioJob = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<{ cleared: boolean }>(env, userId, '/studio-current-clear', { id: jobId })
 export const closeMissingStudioJob = (env: EntitlementEnv, userId: string, jobId: string, fingerprint: string, issued: number) => entitlementCall<ClosedMissingStudioJob>(env, userId, '/studio-close-missing', { id: jobId, fingerprint, issued })
+export async function markBlueprintDispatch(env: EntitlementEnv, userId: string, jobId: string, fingerprint: string): Promise<StudioDispatchClaim> {
+  const value = await entitlementCall<unknown>(env, userId, '/blueprint-dispatch', { id: jobId, fingerprint })
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const claim = value as Record<string, unknown>
+    if (claim.dispatch === false && Object.keys(claim).length === 1) return { dispatch: false }
+    if (claim.dispatch === true && Object.keys(claim).length === 2 && Number.isSafeInteger(claim.deadline) && Number(claim.deadline) > 0 && Number(claim.deadline) <= Date.now() + BLUEPRINT_DISPATCH_WINDOW_MS)
+      return { dispatch: true, deadline: Number(claim.deadline) }
+  }
+  throw new EntitlementError('The Blueprint dispatch acknowledgement could not be verified.')
+}
 export async function markStudioDispatch(env: EntitlementEnv, userId: string, jobId: string, fingerprint: string): Promise<StudioDispatchClaim> {
   const value = await entitlementCall<unknown>(env, userId, '/studio-dispatch', { id: jobId, fingerprint })
   if (value && typeof value === 'object' && !Array.isArray(value)) {
