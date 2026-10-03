@@ -5,6 +5,7 @@ import { AccountEntitlements, entitlementCall, entitlementStatus, reserveUserGen
 import { assetSpecForBlueprint, demoBlueprint } from '../src/lib/blueprint.ts'
 import { blueprintFingerprint, blueprintRequestId, BLUEPRINT_REFERENCE_BYTES } from '../src/lib/blueprintRequest.ts'
 import { BlueprintClient, BLUEPRINT_RECOVERY_KEY } from '../src/lib/blueprintClient.ts'
+import { ADMISSION_FAILURE_CODES, blueprintAdmissionDetail } from '../src/lib/generationAdmission.ts'
 
 const origin = 'https://worldifact.test', uid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', other = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lN8AAAAASUVORK5CYII='
@@ -151,4 +152,84 @@ test('Blueprint transport preserves the native fetch receiver for submission and
   await client.submit(payload())
   await client.recover()
   assert.equal(f.counts().providerCalls, 1)
+})
+
+test('actual provider funding refusal retains its reason with available customer points and no request', async () => {
+  const f = await fixture()
+  f.ledger().set('provider-budget-cents:v1', 0)
+  const before = structuredClone([...f.ledger()])
+  const id = crypto.randomUUID(), reply = await f.request(payload(), id)
+  assert.equal(reply.status, 429)
+  assert.deepEqual(await reply.json(), {
+    error: blueprintAdmissionDetail('PROVIDER_BUDGET_EXHAUSTED'),
+    failureCode: 'PROVIDER_BUDGET_EXHAUSTED', requestId: await blueprintRequestId(id), noCharge: true,
+  })
+  assert.equal(await f.balance(), 4500)
+  assert.deepEqual([...f.ledger()], before)
+  assert.deepEqual(f.counts(), { providerCalls: 0, preflights: 0, budgetCalls: 0 })
+})
+
+test('Blueprint exposes only fixed account denial reasons and preserves them through reload without a new call', async () => {
+  for (const reason of [...ADMISSION_FAILURE_CODES, 'JOB_CHANNEL_MISMATCH', 'PRIVATE_LEDGER_DETAIL']) {
+    const f = await fixture(), namespace = f.env.ACCOUNT_ENTITLEMENTS!
+    f.env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get: name => ({
+      async fetch(request: Request) {
+        if (new URL(request.url).pathname === '/reserve') return Response.json({ allowed: false, reason })
+        return namespace.get(name).fetch(request)
+      },
+    }) }
+    const data = new Map<string, string>()
+    const store = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => { data.set(k, v) }, removeItem: (k: string) => { data.delete(k) } }
+    let requests = 0
+    const fetcher = (async (url: unknown, init?: RequestInit) => {
+      requests++; assert.equal(String(url), '/api/blueprint')
+      return f.request(JSON.parse(String(init?.body)), new Headers(init?.headers).get('X-WORLDIFACT-Request')!)
+    }) as typeof fetch
+    const code = reason === 'PRIVATE_LEDGER_DETAIL' ? 'ACCOUNT_ADMISSION_UNAVAILABLE' : reason === 'JOB_CHANNEL_MISMATCH' ? 'ACCOUNT_REQUEST_CONFLICT' : reason as typeof ADMISSION_FAILURE_CODES[number]
+    const expected = blueprintAdmissionDetail(code)
+    const client = new BlueprintClient(store, fetcher)
+    await assert.rejects(client.submit(payload()), error => error instanceof Error && error.message === expected)
+    assert.equal(client.current()?.failureCode, code)
+    assert.equal(client.current()?.state, 'failed')
+    const restored = new BlueprintClient(store, fetcher)
+    await assert.rejects(restored.recover(), error => error instanceof Error && error.message === expected)
+    await assert.rejects(restored.submit(payload()), error => error instanceof Error && error.message === expected)
+    assert.equal(requests, 1, 'A definite unreserved refusal must not be reinterpreted as an unknown cloud job')
+    assert.equal(await f.balance(), 4500)
+    assert.deepEqual(f.counts(), { providerCalls: 0, preflights: 0, budgetCalls: 0 })
+    assert.doesNotMatch(data.get(BLUEPRINT_RECOVERY_KEY)!, /PRIVATE_LEDGER_DETAIL|MCC cabinet|alice-token/)
+    restored.reset(); assert.equal(restored.current(), null)
+  }
+})
+
+test('a denial code cannot mask uncertain acceptance or be restored on a pending request', async () => {
+  const data = new Map<string, string>()
+  const store = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => { data.set(k, v) }, removeItem: (k: string) => { data.delete(k) } }
+  let posts = 0, reads = 0
+  const client = new BlueprintClient(store, (async (_url: unknown, init?: RequestInit) => {
+    if (init?.method === 'POST') { posts++; return Response.json({ failureCode: 'PROVIDER_BUDGET_EXHAUSTED' }, { status: 503 }) }
+    reads++; return Response.json({ state: 'pending' })
+  }) as typeof fetch)
+  await assert.rejects(client.submit(payload()), /pending/)
+  assert.equal(client.current()?.state, 'pending'); assert.equal(client.current()?.failureCode, undefined)
+  assert.equal(posts, 1); assert.equal(reads, 1)
+  const pending = JSON.parse(data.get(BLUEPRINT_RECOVERY_KEY)!)
+  for (const invalid of [{ ...pending, failureCode: 'PROVIDER_BUDGET_EXHAUSTED' }, { ...pending, state: 'failed', failureCode: 'PRIVATE_DETAIL' }]) {
+    data.set(BLUEPRINT_RECOVERY_KEY, JSON.stringify(invalid))
+    assert.throws(() => client.current(), /metadata needs review/)
+  }
+})
+
+test('cancellation before Blueprint allocation creates no orphan receipt or request', async () => {
+  const data = new Map<string, string>()
+  const store = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value) }, removeItem: (key: string) => { data.delete(key) } }
+  let calls = 0
+  const client = new BlueprintClient(store, (async () => { calls++; throw new Error('No request should start') }) as typeof fetch)
+  const already = new AbortController(); already.abort()
+  await assert.rejects(client.submit(payload(), already.signal), { name: 'AbortError' })
+  assert.equal(client.current(), null); assert.equal(calls, 0)
+  const duringHash = new AbortController(), submission = client.submit(payload(), duringHash.signal)
+  duringHash.abort()
+  await assert.rejects(submission, { name: 'AbortError' })
+  assert.equal(client.current(), null); assert.equal(calls, 0)
 })

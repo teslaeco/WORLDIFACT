@@ -1,6 +1,8 @@
 # CODEX TASK — WORLDIFACT × OpenAI dots via official MCP/plugin integration
 
 Prepared: 2026-10-02
+
+Status reviewed 2026-10-03: implementation remains an unconnected draft in PR #170. See `DOTS_MCP_STATUS_20261003.md` for reproduced defects, repairs and unresolved provider/granular-authorization gates. Do not infer completion of the phases below from the presence of `/mcp` source code.
 Repository: `teslaeco/WORLDIFACT`
 Base commit: `e6521fab1542528142bc6e102d2dd6f98e486dd9`
 Target branch: `codex/dots-worldifact-mcp`

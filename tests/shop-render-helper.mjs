@@ -9,6 +9,7 @@ import { MemoryRouter } from 'react-router-dom'
 import * as portals from '../src/config/portals.ts'
 import * as references from '../src/config/references.ts'
 import * as protocol from '../src/lib/studioProtocol.ts'
+import * as generationAdmission from '../src/lib/generationAdmission.ts'
 import * as client from '../src/lib/studioClient.ts'
 import * as photos from '../src/lib/studioPhotos.ts'
 import * as archive from '../src/lib/studioArchive.ts'
@@ -21,14 +22,29 @@ import * as generationQuote from '../src/lib/generationQuote.ts'
 import * as modelCatalog from '../src/lib/modelCatalog.ts'
 import * as blueprintRequest from '../src/lib/blueprintRequest.ts'
 import * as blueprintClient from '../src/lib/blueprintClient.ts'
+import * as generationAccount from '../src/lib/generationAccount.ts'
 
-async function loadCostNotice() {
+async function loadQuoteHook(react, account, globals) {
+  const url = new URL('../src/lib/useGenerationQuote.ts', import.meta.url)
+  const source = await readFile(url, 'utf8'), module = { exports: {} }
+  const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
+  runInNewContext(code, { ...globals, module, exports: module.exports, require(id) {
+    if (id === 'react') return react
+    if (id === './account') return account
+    if (id === './generationAccount') return generationAccount
+    if (id === './generationQuote') return generationQuote
+    throw new Error(`Unexpected quote dependency: ${id}`)
+  } }, { filename: url.pathname, timeout: 1000 })
+  return module.exports
+}
+async function loadCostNotice(quoteHook) {
   const url = new URL('../src/components/GenerationCostNotice.tsx', import.meta.url)
   const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, { module, exports: module.exports, require(id) {
     if (id === '../lib/generationQuote') return generationQuote
     if (id === '../lib/modelCatalog') return modelCatalog
+    if (id === '../lib/useGenerationQuote') return quoteHook
     if (id === '../lib/account') return { useAccount: () => ({ user: null, loading: true }) }
     if (id.endsWith('.css')) return {}
     if (['react', 'react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
@@ -63,15 +79,19 @@ async function loadShopManufacturingOptions(react) {
 export async function loadShopComponent({ react = React, adapters = {}, globals = {} } = {}) {
   const url = new URL('../src/pages/ShopPage.tsx', import.meta.url)
   const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
-  const shopOptions = await loadShopManufacturingOptions(react), costNotice = await loadCostNotice()
+  const account = adapters['../lib/account'] || { useAccount: () => ({ user: null, loading: true }) }
+  const quoteHook = await loadQuoteHook(react, account, globals)
+  const shopOptions = await loadShopManufacturingOptions(react), costNotice = await loadCostNotice(quoteHook)
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, {
     crypto: globalThis.crypto, ...globals, module, exports: module.exports,
     require(id) {
       const modules = { '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
-        '../lib/studioProtocol': protocol, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
+        '../lib/studioProtocol': protocol, '../lib/generationAdmission': generationAdmission, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
         '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }
+      if (id === '../lib/account') return account
+      if (id === '../lib/useGenerationQuote') return quoteHook
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions
       if (id === '../components/GenerationCostNotice') return costNotice

@@ -12,6 +12,7 @@ import { billingApi, type BillingEnv } from './billing.ts';
 import { paypalApi, type PayPalEnv } from './paypal.ts';
 import { privateWorldApi } from './privateWorldApi.ts';
 import { decorApi } from './decor.ts';
+import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../src/lib/generationAdmission.ts';
 export { AccountEntitlements } from './entitlements.ts';
 import {
   astraGenerationSchema,
@@ -208,7 +209,11 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
         if (status.state === 'completed' && status.result) return json(status.result);
         return json({ error: status.refunded ? 'This attempt failed and its customer allowance was returned. No replacement was started.' : 'This same request is already being processed. Recover its status; no second charge was made.', requestId, state: status.state, refunded: status.refunded === true }, 409);
       }
-      if (!reservation.allowed) return json({ error: reservation.reason === 'CREDITS_EXHAUSTED' ? 'Your credits have run out. Open your account to top up.' : 'Your generation allowance has been used. Check your account for the next reset.', requestId, noCharge: true }, 429);
+      if (!reservation.allowed) {
+        const conflict = ['JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(reservation.reason ?? '');
+        const failureCode = isAdmissionFailureCode(reservation.reason) ? reservation.reason : conflict ? 'ACCOUNT_REQUEST_CONFLICT' : 'ACCOUNT_ADMISSION_UNAVAILABLE';
+        return json({ error: blueprintAdmissionDetail(failureCode), failureCode, requestId, noCharge: true }, 429);
+      }
       customerGenerationKind = reservation.kind ?? null;
     } catch { return json({ error: 'Your generation allowance could not be checked. No model was requested.', requestId }, 503); }
   }

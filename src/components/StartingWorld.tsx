@@ -9,6 +9,8 @@ import type { MoveAxes } from "../lib/gameControls";
 import { enteredPortal, nearestPortal, PORTAL_RADIUS } from "../lib/portalNavigation";
 import { createLakeEnvironment } from "../lib/lakeEnvironment";
 import { createPlayerAvatar, type AvatarChoice } from "../lib/playerAvatar";
+import { createWorldAvatarSlot } from "../lib/worldAvatarSlot";
+import { DEFAULT_WORLD_AVATAR } from "../lib/avatarPreloadLifecycle";
 import { avatarProgressLabel, subscribeAvatarProgress, type AvatarProgress } from "../lib/avatarAsset";
 import { createFanDrone, nextEquipmentMode, type EquipmentMode, type OutfitPreset } from "../lib/playerEquipment";
 import { fallingBodyY, FLIGHT_BODY_Y, FLIGHT_SPEED, inRiver, nextWaterMode, SWIM_SPEED, swimBodyY, WATER_LEVEL, type WaterMode } from "../lib/waterPhysics";
@@ -31,6 +33,7 @@ import {
   createGiantBuildingEntrance,
   createGiantBuildingInterior,
   loadGiantBuilding,
+  giantBuildingProgressLabel,
   nearGiantBuildingEntrance,
   nearGiantInteriorExit,
   resolveGiantBuildingCollision,
@@ -81,7 +84,7 @@ export default function StartingWorld({
   const zoom = useRef(4.8);
   const overview = useRef(false);
   const [music, setMusic] = useState(false);
-  const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>("terraformer");
+  const [avatarChoice, setAvatarChoice] = useState<AvatarChoice>(DEFAULT_WORLD_AVATAR);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [outfit, setOutfit] = useState<OutfitPreset>("original");
   const outfitRef = useRef<OutfitPreset>("original");
@@ -118,6 +121,9 @@ export default function StartingWorld({
   };
   const capture = useRef<(() => void) | null>(null);
   const avatarRuntime = useRef<ReturnType<typeof createPlayerAvatar> | null>(null);
+  const avatarSelection = useRef({ choice: avatarChoice, attempt: 0 });
+  const avatarInstaller = useRef<((choice: AvatarChoice, attempt: number) => void) | null>(null);
+  const retryBuilding = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!captureNotice) return;
     const timer = setTimeout(() => setCaptureNotice(""), 3000);
@@ -145,10 +151,15 @@ export default function StartingWorld({
     [driving, setDriving] = useState(false);
   const [avatarState, setAvatarState] = useState<"loading" | "ready" | "error">("loading");
   const [avatarAttempt, setAvatarAttempt] = useState(0);
+  useEffect(() => {
+    avatarSelection.current = { choice: avatarChoice, attempt: avatarAttempt };
+    avatarInstaller.current?.(avatarChoice, avatarAttempt);
+  }, [avatarChoice, avatarAttempt]);
   const [avatarProgress, setAvatarProgress] = useState<AvatarProgress | null>(null);
   useEffect(() => subscribeAvatarProgress(avatarChoice, setAvatarProgress), [avatarChoice, avatarAttempt]);
   const [textureFailed, setTextureFailed] = useState(false);
   const [sculptureFailed, setSculptureFailed] = useState(false);
+  const [buildingFailed, setBuildingFailed] = useState(false);
   const [buildingStatus, setBuildingStatus] = useState("Terrace tower: queued");
   const [ownerVehicleStatus, setOwnerVehicleStatus] = useState("Mars solar landship: queued");
   const [insideGiantBuilding, setInsideGiantBuilding] = useState(false);
@@ -182,6 +193,7 @@ export default function StartingWorld({
       setTextureFailed(false);
       setSculptureFailed(false);
       setBuildingStatus("Terrace tower: queued");
+      setBuildingFailed(false);
       setOwnerVehicleStatus("Mars solar landship: queued");
       setInsideGiantBuilding(false);
     });
@@ -277,44 +289,39 @@ export default function StartingWorld({
     runtimeObjects.current = objects;
     for (const o of objects) scene.add(o.group);
 
-    // The owner's attached terrace-tower GLB is represented by a compact source-derived
-    // GAME exterior. It is added after the core world/avatar so the landmark
-    // cannot delay the five portals or Queen startup.
+    // Preserve the exact owner-selected landmark, loaded independently from world startup.
     const giantEntrance = !lunar && !sea ? createGiantBuildingEntrance() : null;
     const giantInterior = !lunar && !sea ? createGiantBuildingInterior() : null;
     if (giantEntrance) scene.add(giantEntrance);
     if (giantInterior) scene.add(giantInterior);
     let giantBuildingDisposed = false;
-    const giantBuildingLoadTimer = giantEntrance ? window.setTimeout(() => {
-      queueMicrotask(() => setBuildingStatus("Terrace tower: building owner-derived exterior…"));
-      void (async () => {
-        let lastError: unknown;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const root = await loadGiantBuilding();
-            if (giantBuildingDisposed) { disposeObject(root); return; }
-            scene.add(root);
-            queueMicrotask(() => setBuildingStatus("Terrace tower: owner-derived model ready · GAME"));
-            return;
-          } catch (error) {
-            lastError = error;
-            if (attempt === 0 && !giantBuildingDisposed) {
-              queueMicrotask(() => setBuildingStatus("Terrace tower: retrying exterior build…"));
-              await new Promise(resolve => window.setTimeout(resolve, 850));
-            }
-          }
-        }
-        console.error("[WORLDIFACT Terrace Tower]", lastError);
-        if (!giantBuildingDisposed) {
-          const reason = lastError instanceof Error ? lastError.message.replace(/^Giant building GAME /, "").slice(0, 90) : "load failed";
-          queueMicrotask(() => setBuildingStatus(`Terrace tower exterior unavailable · ${reason} · generated GAME interior remains accessible`));
-        }
-      })();
-    }, mobile ? 900 : 450) : undefined;
+    let buildingRequest: AbortController | null = null;
+    const startBuildingLoad = () => {
+      if (giantBuildingDisposed || buildingRequest || !giantEntrance) return;
+      const request = new AbortController();
+      buildingRequest = request;
+      setBuildingFailed(false);
+      void loadGiantBuilding(fetch, {
+        signal: request.signal,
+        onProgress: progress => { if (!giantBuildingDisposed) setBuildingStatus(giantBuildingProgressLabel(progress)); },
+      }).then(root => {
+        if (giantBuildingDisposed) { disposeObject(root); return; }
+        scene.add(root);
+        retryBuilding.current = null;
+        setBuildingStatus("Terrace tower: exact owner model ready · GAME");
+      }).catch(error => {
+        if (giantBuildingDisposed) return;
+        console.error("[WORLDIFACT Terrace Tower]", error);
+        setBuildingFailed(true);
+        const reason = error instanceof Error ? error.message.slice(0, 110) : "Load interrupted.";
+        setBuildingStatus(`Terrace tower: ${reason} The meadow and portals remain available.`);
+      }).finally(() => { if (buildingRequest === request) buildingRequest = null; });
+    };
+    retryBuilding.current = giantEntrance ? startBuildingLoad : null;
+    const giantBuildingLoadTimer = giantEntrance ? window.setTimeout(startBuildingLoad, mobile ? 900 : 450) : undefined;
     if (!giantEntrance) queueMicrotask(() => setBuildingStatus("Terrace tower is available in the valley world"));
 
-    // The owner's second supplied vehicle is a static GAME model until a reviewed
-    // rig/drive setup exists. Load it separately so it cannot delay the Queen,
+    // The owner's drivable GAME vehicle loads separately so it cannot delay the avatar,
     // portals, or the existing photovoltaic explorer.
     let ownerVehicleDisposed = false;
     let ownerVehicleRuntime: RuntimeObject | null = null;
@@ -460,15 +467,39 @@ export default function StartingWorld({
         portal.g.add(sculpture);
       }
     }).catch(() => { if (!sculptureDisposed) setSculptureFailed(true); });
-    const avatar = createPlayerAvatar(avatarChoice, state => queueMicrotask(() => { if (!sculptureDisposed) setAvatarState(state); }));
+    let activeAvatarChoice = avatarSelection.current.choice;
+    let activeAvatarAttempt = avatarSelection.current.attempt;
+    let avatarEpoch = 0;
+    const makeAvatar = (choice: AvatarChoice) => {
+      const epoch = ++avatarEpoch;
+      return createPlayerAvatar(choice, state => queueMicrotask(() => {
+        if (!sculptureDisposed && avatarEpoch === epoch) setAvatarState(state);
+      }));
+    };
+    let avatar = makeAvatar(activeAvatarChoice);
+    const avatarSlot = createWorldAvatarSlot(scene, avatar);
     avatarRuntime.current = avatar;
     avatar.setOutfit(outfitRef.current);
     avatar.setFlightFans(false);
     queueMicrotask(() => setEquipmentStatus("stowed"));
-    scene.add(avatar.root);
     const fanDrone = createFanDrone();
     scene.add(fanDrone.root);
     let equipmentMode: EquipmentMode = "stowed";
+    const installAvatar = (choice: AvatarChoice, attempt: number) => {
+      if (choice === activeAvatarChoice && attempt === activeAvatarAttempt) return;
+      activeAvatarChoice = choice;
+      activeAvatarAttempt = attempt;
+      const next = makeAvatar(choice);
+      next.setOutfit(outfitRef.current);
+      next.setFlightFans(equipmentMode === "flight");
+      avatarSlot.replace(next);
+      avatar = next;
+      avatarRuntime.current = next;
+      input.current = {};
+      stick.current = { ...STILL };
+      jumpRequests.current = 0;
+    };
+    avatarInstaller.current = installAvatar;
     let waterMode: WaterMode = "land";
     let waterEnteredAt = 0;
     type Splash = { ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>; drops: { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; velocity: THREE.Vector3 }[]; age: number };
@@ -703,7 +734,7 @@ export default function StartingWorld({
       previous = now;
       elapsed += dt;
       const axes = movementAxes(input.current, stick.current);
-      const waitingForAvatar = avatarChoice !== "rapper" && !avatar.root.userData.avatarLoaded;
+      const waitingForAvatar = activeAvatarChoice !== "rapper" && !avatar.root.userData.avatarLoaded;
       const operating = ride ? backhoes.get(ride) : undefined;
       const movingBucket = operating?.enabled && operating.action !== "carry";
       const move = waitingForAvatar || boarding || overview.current || movingBucket || jump.preparation > 0 ? 0 : axes.forward;
@@ -1105,6 +1136,8 @@ export default function StartingWorld({
     return () => {
       sculptureDisposed = true;
       giantBuildingDisposed = true;
+      buildingRequest?.abort();
+      retryBuilding.current = null;
       ownerVehicleDisposed = true;
       if (giantBuildingLoadTimer !== undefined) clearTimeout(giantBuildingLoadTimer);
       if (ownerVehicleLoadTimer !== undefined) clearTimeout(ownerVehicleLoadTimer);
@@ -1128,7 +1161,8 @@ export default function StartingWorld({
       renderer.domElement.removeEventListener("webglcontextrestored", restored);
       clear();
       for (const [car, machine] of backhoes) if (sandSession.current?.key === sceneStructure) sandSession.current.loads.set(car.spec.id, { load: machine.load, enabled: machine.enabled, tool: machine.tool });
-      avatar.dispose();
+      avatarSlot.dispose();
+      if (avatarInstaller.current === installAvatar) avatarInstaller.current = null;
       if (avatarRuntime.current === avatar) avatarRuntime.current = null;
       rimInstaller.current = null; rimMounts.forEach(mount => mount.dispose()); rimMounts = [];
       runtimeObjects.current = [];
@@ -1138,7 +1172,7 @@ export default function StartingWorld({
       renderer.forceContextLoss();
       renderer.domElement.remove();
     };
-  }, [sceneStructure, activePortalId, avatarChoice, avatarAttempt]);
+  }, [sceneStructure, activePortalId]);
   useEffect(() => {
     const byId = new Map(blueprint.objects.map((o) => [o.id, o]));
     for (const runtime of runtimeObjects.current) {
@@ -1173,7 +1207,7 @@ export default function StartingWorld({
         {avatarState === "error" && <span role="alert">The original character could not load. <button type="button" onClick={() => setAvatarAttempt(value => value + 1)}>Retry character</button></span>}
         {textureFailed ? <span role="status">Scenery image unavailable. Movement remains available.</span> : null}
         {sculptureFailed ? <span role="status">Portal sculptures are unavailable. All five portals remain open.</span> : null}
-        <span role="status">{buildingStatus}</span>
+        <span role="status">{buildingStatus}{buildingFailed && <button type="button" onClick={() => retryBuilding.current?.()}>Retry building</button>}</span>
         <span role="status">{ownerVehicleStatus}</span>
         {insideGiantBuilding ? <span>Terrace Tower · GAME / GENERATED INTERIOR</span> : null}
       </div>

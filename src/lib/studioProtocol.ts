@@ -1,5 +1,6 @@
 // WORLDIFACT adapter to the existing Froge /v1/jobs contract; no new AI provider.
 // Reviewed reference: Froge-MPC-2-test @ d3f61b842dcfeda2ed794210caafc391919a75be.
+import { ADMISSION_FAILURE_CODES, ADMISSION_FAILURE_DETAILS } from './generationAdmission.ts'
 
 const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for every generated asset:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
 
@@ -17,15 +18,27 @@ export const INDUSTRIAL_ELECTRICAL_PROFILE = 'industrial-electrical-cabinet-v1' 
 export const REFERENCE_CHARACTER_PROFILE = 'reference-character-v1' as const
 export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE | typeof REFERENCE_CHARACTER_PROFILE
 
+const STANDARD_COMPLETION_INSTRUCTIONS = `WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:
+- Use Code Mode exec with the fully qualified tools.mcp__blender__ names below. Await every call and inspect its returned result; a tool error is not a completed step. Stay within the existing per-job USD 1.75 guard and tool/build limits. Do not start another job, change limits or substitute another generator.
+1. Call tools.mcp__blender__get_modeling_contract({}) once. Parse and retain the returned scene schema, geometry guide, reference mapping and current revision. Compare the actual reference images, then construct a complete scene using only supported fields and operations.
+2. Call tools.mcp__blender__build_model({scene_json:JSON.stringify(scene),expected_revision:revision}), using the actual current revision (0 before the first successful build). This API takes scene JSON, not Python. Generate repeated parts compactly in Code Mode rather than hand-writing thousands of vertices. Read the returned revision and report; do not stop merely because a GLB candidate exists.
+3. Call tools.mcp__blender__inspect_render({view,expected_revision:revision}) for front, side and back, plus face for a person/portrait and three-quarter for a cabinet. For each response, pass every image content block to image(block) so the actual rendered pixels are visible; reading text metadata or printing base64 is not visual inspection. Compare these images with the references and inspect depth, silhouette and physical detail.
+4. Call tools.mcp__blender__get_current_model({section:'summary',expected_revision:revision}). Check its actual report, scene and inspected_views. If a needed section is not inline, read its documented revision/SHA-bound pages. Never invent measurements or claim an unreported check passed. If necessary and allowed by remaining limits, use tools.mcp__blender__edit_model with the supported Python edit contract or rebuild the complete scene, then inspect the new revision again.
+5. Call tools.mcp__blender__finish_model({expected_revision:revision,accepted,issues,summary}) and await its successful result. Set accepted=true only after the current required views and structural checks pass with no unresolved issues; otherwise use accepted=false with specific issues and an honest draft summary. A build or textual final answer is not completion. Never claim success, finished review or final export without a successful finish_model result. If completion fails or the guard stops the run, report that failure rather than presenting the retained candidate as a finished model.`
+
 export const INDUSTRIAL_ELECTRICAL_INSTRUCTIONS = `WORLDIFACT INDUSTRIAL ELECTRICAL CABINET — TRUE 3D MODE:
 - Reconstruct the uploaded cabinet as a volumetric industrial assembly. Reference photos are geometry evidence, NEVER a texture to paste over a flat interior panel.
 - Do not use a photographed cabinet/interior as a base-color image on a plane, box face, backplate, door or other large visible surface. Labels and tiny markings may use decals; breakers, relays, terminals, ducts, rails, displays and wires must be actual 3D geometry.
 - Preserve the photographed enclosure proportions, open doors, frame depth, equipment positions and asymmetry. Keep front/side/detail views consistent.
-- Build separate visible geometry for: enclosure shell and doors; mounting plates/vertical supports; DIN rails; slotted wiring ducts; terminal strips; breaker/protection rows; contactors/relays/interface modules; controller/display modules; top cable entries; grounding hardware; door fan/control devices; fasteners/brackets; routed cable/wire bundles.
+- The FIRST build_model scene must already be a substantive, densely populated cabinet, not a coarse bootstrap, empty shell or collection of plain boxes expecting a later upgrade. Include the observed enclosure, populated equipment and routed wiring together in that first complete scene; later edits are for specific corrections, not for creating the missing subject.
+- Build separate visible geometry for: enclosure shell and doors; mounting plates/vertical supports; DIN rails; slotted wiring ducts; terminal strips; breaker/protection rows; contactors/relays/interface modules; controller/display modules; top cable entries; grounding hardware; door fan/control devices; fasteners/brackets; routed cable/wire bundles. Model only the features supported by the references, with conservative unseen-surface inference.
 - Components must project physically from mounting surfaces. Ducts need walls/depth, devices need bodies/terminals, and cable bundles need cylindrical/beveled 3D paths with visible stand-off from the backplate.
 - Target a dense service-ready visual assembly: multiple populated equipment rows/columns, at least 20 distinct visible component groups and at least 8 real 3D cable/wire runs when supported by the references. These are visual reconstruction targets, not an electrical engineering design claim.
 - Use realistic industrial spacing and routing: blue/brown/black/green-yellow conductors, terminal markers, gray ducts, metal rails, red/white/yellow protection hardware where visible. Do not invent dangerous functional ratings or claim the wiring is electrically commissioned.
-- Prefer repeated instanced/linked component geometry where suitable, but export a self-contained GAME GLB whose visible detail survives close inspection.
+- Use the actual modeling contract's tubes for bent conductors, extrusions/lofts for shaped channels and housings, lathes for round hardware and copies for repeated real components where appropriate. A single box may represent a plain panel, but cannot stand in for a populated device bank. Respect the contract's part/material limits; repeated source components can have many visible copies.
+- Exact cabinet export gate, ALL required in the self-contained GLB: renderedTriangles >= 20000; meshCount >= 8 distinct mesh definitions; substantialMeshCount >= 6 distinct meshes each containing at least 24 triangles; primitiveCount >= 8; materialCount >= 3; nodeCount >= 8. Linked copies contribute to rendered triangles and nodes, but do not create new distinct mesh definitions. Retain genuinely different component-family meshes rather than merging everything into one mesh.
+- Earn this detail through visible physical shapes: rounded terminals and fasteners, device recesses/projections, duct slots/walls, rail profiles and routed cylindrical wires. Never pad triangle counts with invisible/duplicate geometry, degenerate faces, gratuitous subdivision or relabelled copies; counts alone do not prove reference fidelity.
+- Export ordinary bounded mesh nodes, not EXT_mesh_gpu_instancing; realize GPU instances in the GAME copy if needed. Keep unique and rendered triangles each <= 3000000, nodes <= 5000 and the self-contained GLB <= 50000000 bytes, with embedded buffers/textures and the requested texture ceiling.
 - Before export, render a front-three-quarter review and verify that the interior still reads as hundreds of physical devices/wires, not a photo, decal or sparse cabinet shell. If it does not, repair geometry before export.
 - If the requested fidelity cannot be built, fail honestly rather than returning a flat photo-card or empty enclosure.`
 
@@ -58,9 +71,34 @@ export type PhotoView = typeof PHOTO_VIEWS[number]
 export type TextureLimit = 2048 | 4096 | 8192
 export type StudioPhoto = { name: string; view: PhotoView; dataUrl: string; subject?: string; textureMaxSize: TextureLimit }
 export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE }
+export const STUDIO_PREPARE_VERSION = 'studio-prepare-v1' as const
+// Allows the bounded full upload and admission checks to finish before an
+// absent submission is atomically fenced against any late paid dispatch.
+export const STUDIO_SUBMISSION_GRACE_MS = 5 * 60_000
+export type StudioPrepareMetadata = Pick<StudioInput, 'worldId' | 'prompt' | 'purpose' | 'textureMaxSize' | 'generationProfile'> & { photoCount: number }
+export type StudioPrepareManifest = StudioPrepareMetadata & { version: typeof STUDIO_PREPARE_VERSION; inputDigest: string }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string }
-export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: 'ASTRA_COST_LIMIT' | 'INVALID_MODEL_OUTPUT'; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
-export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
+export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
+export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
+export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
+export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
+  ...ADMISSION_FAILURE_DETAILS,
+  ASTRA_COST_LIMIT: 'Astra stopped at this job’s cost limit. Reserved customer points were released; no automatic retry.',
+  INVALID_MODEL_OUTPUT: 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.',
+  STUDIO_TIMEOUT: 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.',
+  ORACLE_JOB_FAILED: 'The Astra/Blender worker reported that this job failed. Reserved customer points were released. Keep this job ID for diagnosis; no automatic retry.',
+  ORACLE_JOB_INCOMPLETE: 'The generator stopped with an unfinished draft before completing model review and export. Reserved customer points were released; no automatic retry.',
+  ORACLE_JOB_MISSING: 'The worker could not find this submitted job after the recovery window. Reserved customer points were released. Keep this job ID for diagnosis; no automatic retry.',
+  MISSING_SUBMISSION: 'This prepared receipt has no matching account reservation or Oracle job after the recovery window. Model submission was not confirmed. Your draft is preserved; no automatic retry.',
+  ORACLE_SUBMISSION_REJECTED: 'The worker rejected this submission before generation started. Reserved customer points were released; no automatic retry.',
+  ORACLE_BUSY: 'The worker is still finishing another model and did not accept this submission. Reserved customer points were released; no automatic retry.',
+  RATE_LIMITED: 'The worker temporarily rate-limited this submission before generation started. Reserved customer points were released; no automatic retry.',
+  STORAGE_FULL: 'The worker has insufficient storage and did not accept this submission. Reserved customer points were released; no automatic retry.',
+  JOB_CAPACITY: 'The worker has reached its stored-job capacity and did not accept this submission. Reserved customer points were released; no automatic retry.',
+  STUDIO_ALLOWANCE_UNAVAILABLE: 'The generation allowance could not be reserved, so no Oracle generation was submitted. Reserved customer points were released; no automatic retry.',
+  ORACLE_CANCELLED: 'The worker reported that this job was cancelled. Reserved customer points were released; no automatic retry.',
+}
+export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; exportPreparationReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const keys = (value: Record<string, unknown>, names: string[]) => Object.keys(value).every(name => names.includes(name))
 
@@ -129,7 +167,7 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
     id, generationProfile: FAST_DRAFT_PROFILE,
     prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + MANUFACTURING_HARD_RULES,
   }
-  const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${input.purpose}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use a compact batched Blender script and verify the exported file. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; report open/non-manifold geometry, intersections, thin walls and fragile joints; never claim manufacturing approval.`
+  const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${input.purpose}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use the supported scene JSON contract for the complete first build, inspect actual renders and successfully call finish_model before claiming completion. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; report open/non-manifold geometry, intersections, thin walls and fragile joints; never claim manufacturing approval.`
   // The installed v33 photo contract accepts `side`, not `left`/`right`.
   // Keep image bytes, names and subject identity intact; preserve exact side
   // labels in ordered agent metadata rather than sending a rejected enum.
@@ -140,12 +178,30 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
     : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
   return { id, prompt: input.prompt + instruction,
-    agentInstructions: MANUFACTURING_HARD_RULES + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
+    agentInstructions: MANUFACTURING_HARD_RULES + '\n\n' + STANDARD_COMPLETION_INSTRUCTIONS + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
     ...(photos.length ? { photos } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(input)))
   return Array.from(new Uint8Array(bytes), v => v.toString(16).padStart(2, '0')).join('')
+}
+/** Preparation sends a bounded commitment, never a second copy of the images.
+ * Its metadata is only for preflight; the full POST is independently validated
+ * and must match this canonical input digest before anything is reserved. */
+export async function prepareStudioInput(input: StudioInput): Promise<StudioPrepareManifest> {
+  const canonical = validateStudioInput(input)
+  const { photos, ...metadata } = canonical
+  return { version: STUDIO_PREPARE_VERSION, inputDigest: await inputDigest(canonical), ...metadata, photoCount: photos.length }
+}
+export function validateStudioPrepareManifest(value: unknown): StudioPrepareManifest {
+  if (!record(value) || !keys(value, ['version', 'inputDigest', 'worldId', 'prompt', 'purpose', 'textureMaxSize', 'photoCount', 'generationProfile']) ||
+      value.version !== STUDIO_PREPARE_VERSION || typeof value.inputDigest !== 'string' || !/^[a-f0-9]{64}$/.test(value.inputDigest) ||
+      !Number.isSafeInteger(value.photoCount) || Number(value.photoCount) < 0 || Number(value.photoCount) > 4)
+    throw new Error('Invalid lightweight preparation manifest. No generation was submitted.')
+  const { photos: _photos, ...metadata } = validateStudioInput({ worldId: value.worldId, prompt: value.prompt, purpose: value.purpose,
+    textureMaxSize: value.textureMaxSize, generationProfile: value.generationProfile, photos: [] })
+  if (metadata.generationProfile === FAST_DRAFT_PROFILE && value.photoCount !== 0) throw new Error('FAST v1 does not support reference photos.')
+  return { version: STUDIO_PREPARE_VERSION, inputDigest: value.inputDigest, ...metadata, photoCount: Number(value.photoCount) }
 }
 export const JOB_DETAILS: Record<StudioJob['state'], string> = {
   pending: 'Checking whether the server accepted this same job. No replacement request is sent.',

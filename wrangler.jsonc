@@ -7,7 +7,7 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/mcp", "/mcp/*", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/*"]
   },
   "vars": {
     "OPENAI_MODEL": "gpt-6-astra",

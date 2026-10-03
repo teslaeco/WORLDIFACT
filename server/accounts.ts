@@ -7,10 +7,13 @@ export interface AccountEnv {
   SUPABASE_ANON_KEY?: string
   SUPABASE_RECOVERY_REDIRECT_READY?: string
   SUPABASE_GOOGLE_REDIRECT_READY?: string
+  MCP_RESOURCE_URL?: string
+  MCP_OAUTH_CLIENT_IDS?: string
+  MCP_OAUTH_REDIRECT_URIS?: string
   ACCOUNT_LIMITER?: AccountRateLimiter
   GENERATION_LIMITER?: AccountRateLimiter
 }
-export interface AccountUser { id: string; email: string; displayName: string }
+export interface AccountUser { id: string; email: string; displayName: string; readonly emailVerified?: boolean }
 export const CHESS_AUTH_URL = 'https://oiezgikconcyjvdeshdh.supabase.co'
 // Public, non-privileged publishable key read from the deployed Chess frontend.
 // This is NOT the service_role key. Auth and database RLS still enforce access.
@@ -53,6 +56,29 @@ function publicLegacyKey(key: string) {
   } catch { return false }
 }
 export function accountsConfigured(env: AccountEnv): boolean { try { config(env); return true } catch { return false } }
+/** Explicit operator pins; browser account readiness never enables MCP OAuth. */
+export function mcpOAuthConfig(env: AccountEnv) {
+  const unavailable = () => new AccountError('WORLDIFACT MCP OAuth is not configured. Connection setup is required.')
+  const resource = env.MCP_RESOURCE_URL || ''
+  const clientIds = (env.MCP_OAUTH_CLIENT_IDS || '').split(',').map(value => value.trim())
+  const redirectUris = (env.MCP_OAUTH_REDIRECT_URIS || '').split(',').map(value => value.trim())
+  try {
+    const url = new URL(resource)
+    if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash ||
+      url.pathname !== '/mcp' || url.href !== resource) throw unavailable()
+    if (clientIds.length > 10 || clientIds.some(id => !id || id.length > 512 || /[\s"<>]/.test(id))) throw unavailable()
+    if (redirectUris.length > 10 || redirectUris.some(value => {
+      const redirect = new URL(value)
+      return redirect.origin !== 'https://chatgpt.com' || redirect.username || redirect.password || redirect.search || redirect.hash ||
+        redirect.href !== value || !(redirect.pathname === '/connector_platform_oauth_redirect' ||
+          /^\/connector\/oauth\/[A-Za-z0-9_-]{1,180}$/.test(redirect.pathname))
+    })) throw unavailable()
+    return { resource, clientIds, redirectUris, issuer: config(env).base + '/auth/v1' }
+  } catch { throw unavailable() }
+}
+export function mcpOAuthConfigured(env: AccountEnv): boolean {
+  try { mcpOAuthConfig(env); return true } catch { return false }
+}
 function json(value: unknown, status = 200, cookies: string[] = []) {
   const headers = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', Vary: 'Cookie' })
   for (const cookie of cookies) headers.append('Set-Cookie', cookie)
@@ -123,18 +149,24 @@ async function upstream(env: AccountEnv, fetcher: typeof fetch, path: string, me
 async function responseJson(response: Response) {
   try { return await boundedJson(response, MAX_UPSTREAM_BODY) } catch { throw new AccountError('Account service returned an incomplete response.', 502) }
 }
-async function verifiedUser(env: AccountEnv, fetcher: typeof fetch, token: string): Promise<AccountUser | null> {
+async function verifiedUser(env: AccountEnv, fetcher: typeof fetch, token: string, includeEmailProof = false): Promise<AccountUser | null> {
   const response = await upstream(env, fetcher, '/user', 'GET', undefined, token)
   if ([400, 401, 403].includes(response.status)) { await response.body?.cancel(); return null }
   if (!response.ok) { await response.body?.cancel(); throw new AccountError('Account service is temporarily unavailable.') }
-  const user = publicUser(await responseJson(response))
+  const raw = await responseJson(response)
+  const user = publicUser(raw)
   if (!user) throw new AccountError('Account service returned an incomplete response.', 502)
+  // Only authoritative /user email confirmation is usable for support scope.
+  // Never trust user_metadata, phone confirmation or a client/JWT email claim.
+  // Keep this server-only proof out of session JSON and profile presentation.
+  if (includeEmailProof) Object.defineProperty(user, 'emailVerified', { value: raw.is_anonymous !== true && typeof raw.email_confirmed_at === 'string' &&
+    Number.isFinite(Date.parse(raw.email_confirmed_at)) && Date.parse(raw.email_confirmed_at) <= Date.now(), enumerable: false })
   return user
 }
 /** Verifies the access cookie with Supabase. Call /session to refresh before a retry. */
 export async function getVerifiedAccount(request: Request, env: AccountEnv, fetcher: typeof fetch = fetch): Promise<AccountUser | null> {
   const token = cookieValue(request, ACCESS_COOKIE)
-  return token ? verifiedUser(env, fetcher, token) : null
+  return token ? verifiedUser(env, fetcher, token, true) : null
 }
 function jwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split('.')
@@ -154,14 +186,14 @@ export async function getVerifiedOAuthAccount(request: Request, env: AccountEnv,
   if (!match) return null
   const token = match[1], claims = jwtPayload(token)
   if (!claims) return null
-  const { base } = config(env), now = Math.floor(Date.now() / 1000)
+  const oauthConfig = mcpOAuthConfig(env), now = Math.floor(Date.now() / 1000)
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
   const scopes = typeof claims.scope === 'string' ? new Set(claims.scope.split(/\s+/).filter(Boolean)) : new Set<string>()
-  if (claims.iss !== base + '/auth/v1' || !aud.includes('authenticated') ||
+  if (claims.iss !== oauthConfig.issuer || !aud.includes(oauthConfig.resource) ||
     typeof claims.exp !== 'number' || claims.exp <= now ||
-    (typeof claims.nbf === 'number' && claims.nbf > now + 30) ||
+    (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now)) ||
     typeof claims.sub !== 'string' || !UUID.test(claims.sub) ||
-    typeof claims.client_id !== 'string' || claims.client_id.length < 1 || claims.client_id.length > 512 ||
+    typeof claims.client_id !== 'string' || !oauthConfig.clientIds.includes(claims.client_id) ||
     !scopes.has('email') || !scopes.has('profile')) return null
   const user = await verifiedUser(env, fetcher, token)
   return user && user.id === claims.sub ? { user, token, clientId: claims.client_id } : null
@@ -297,17 +329,30 @@ async function googleCallback(request: Request, env: AccountEnv, fetcher: typeof
   }
 }
 const AUTHORIZATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-function trustedOpenAIRedirect(value: unknown) {
-  if (typeof value !== 'string' || value.length > 1024) return false
+function trustedOpenAIRedirect(value: unknown, env: AccountEnv, response = false) {
+  if (typeof value !== 'string' || value.length > 4096) return false
   try {
     const url = new URL(value)
-    return url.origin === 'https://chatgpt.com' &&
-      (url.pathname === '/connector_platform_oauth_redirect' || /^\/connector\/oauth\/[A-Za-z0-9_-]{1,180}$/.test(url.pathname)) &&
-      !url.username && !url.password
+    if (url.username || url.password || url.hash || (!response && url.search)) return false
+    const callback = url.origin + url.pathname
+    return mcpOAuthConfig(env).redirectUris.includes(callback)
   } catch { return false }
 }
+function authorizationDetails(value: Record<string, unknown>, id: string, env: AccountEnv) {
+  const client = value.client && typeof value.client === 'object' && !Array.isArray(value.client) ? value.client as Record<string, unknown> : null
+  const oauthConfig = mcpOAuthConfig(env)
+  if (value.authorization_id !== id || !trustedOpenAIRedirect(value.redirect_uri, env) ||
+    !client || typeof client.id !== 'string' || !oauthConfig.clientIds.includes(client.id) ||
+    (client.name !== undefined && (typeof client.name !== 'string' || client.name.length > 160)) ||
+    typeof value.scope !== 'string' || value.scope.length > 240)
+    throw new AccountError('The OAuth client could not be verified for WORLDIFACT.', 403)
+  const scopes = value.scope.split(/\s+/).filter(Boolean)
+  if (!scopes.includes('email') || !scopes.includes('profile') || scopes.some(scope => !['openid', 'email', 'profile'].includes(scope)))
+    throw new AccountError('The OAuth client requested unsupported permissions.', 403)
+  return { authorizationId: id, client: { id: client.id, name: typeof client.name === 'string' && client.name.trim() ? client.name.trim() : 'OpenAI' }, redirectUri: value.redirect_uri, scope: value.scope }
+}
 async function oauthAuthorization(request: Request, env: AccountEnv, fetcher: typeof fetch) {
-  if (!accountsConfigured(env)) throw new AccountError('WORLDIFACT OAuth is not configured.')
+  mcpOAuthConfig(env)
   const token = cookieValue(request, ACCESS_COOKIE)
   if (!token || !await verifiedUser(env, fetcher, token)) throw new AccountError('Sign in to WORLDIFACT before approving this connection.', 401)
   await limit(request, env, 'oauth-authorization')
@@ -319,24 +364,10 @@ async function oauthAuthorization(request: Request, env: AccountEnv, fetcher: ty
     if (!response.ok) { await response.body?.cancel(); throw new AccountError(response.status === 401 ? 'Sign in again before approving this connection.' : 'This OAuth authorization request is unavailable.', response.status === 401 ? 401 : 400) }
     const value = await responseJson(response)
     if (typeof value.redirect_url === 'string') {
-      if (!trustedOpenAIRedirect(value.redirect_url)) throw new AccountError('WORLDIFACT only approves the configured OpenAI connection.', 403)
+      if (!trustedOpenAIRedirect(value.redirect_url, env, true)) throw new AccountError('WORLDIFACT only approves the configured OpenAI connection.', 403)
       return json({ redirectUrl: value.redirect_url })
     }
-    const client = value.client && typeof value.client === 'object' && !Array.isArray(value.client) ? value.client as Record<string, unknown> : null
-    if (value.authorization_id !== ids[0] || typeof value.redirect_uri !== 'string' || !trustedOpenAIRedirect(value.redirect_uri) ||
-      !client || typeof client.id !== 'string' || client.id.length > 512 ||
-      (client.name !== undefined && (typeof client.name !== 'string' || client.name.length > 160)) ||
-      typeof value.scope !== 'string' || value.scope.length > 240)
-      throw new AccountError('The OAuth client could not be verified for WORLDIFACT.', 403)
-    const scopes = value.scope.split(/\s+/).filter(Boolean)
-    if (scopes.some(scope => !['openid', 'email', 'profile', 'phone'].includes(scope)))
-      throw new AccountError('The OAuth client requested unsupported permissions.', 403)
-    return json({
-      authorizationId: ids[0],
-      client: { id: client.id, name: typeof client.name === 'string' && client.name.trim() ? client.name.trim() : 'OpenAI', uri: typeof client.uri === 'string' ? client.uri.slice(0, 1024) : '' },
-      redirectUri: value.redirect_uri,
-      scope: value.scope,
-    })
+    return json(authorizationDetails(value, ids[0], env))
   }
   if (request.method !== 'POST') return json({ error: 'Use GET or POST.' }, 405)
   if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
@@ -349,11 +380,11 @@ async function oauthAuthorization(request: Request, env: AccountEnv, fetcher: ty
   const details = await upstream(env, fetcher, '/oauth/authorizations/' + encodeURIComponent(input.authorizationId), 'GET', undefined, token)
   if (!details.ok) { await details.body?.cancel(); throw new AccountError('This OAuth authorization request is unavailable.', 400) }
   const current = await responseJson(details)
-  if (typeof current.redirect_uri !== 'string' || !trustedOpenAIRedirect(current.redirect_uri)) throw new AccountError('WORLDIFACT only approves the configured OpenAI connection.', 403)
+  authorizationDetails(current, input.authorizationId, env)
   const response = await upstream(env, fetcher, '/oauth/authorizations/' + encodeURIComponent(input.authorizationId) + '/consent', 'POST', { action: input.action }, token)
   if (!response.ok) { await response.body?.cancel(); throw new AccountError('The OAuth decision could not be completed.', response.status === 401 ? 401 : 400) }
   const value = await responseJson(response)
-  if (!trustedOpenAIRedirect(value.redirect_url)) throw new AccountError('The OAuth redirect was rejected.', 403)
+  if (!trustedOpenAIRedirect(value.redirect_url, env, true)) throw new AccountError('The OAuth redirect was rejected.', 403)
   return json({ redirectUrl: value.redirect_url })
 }
 

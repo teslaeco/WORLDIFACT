@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { AccountEntitlements, entitlementCall, entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, type EntitlementStorage, type EntitlementEnv } from '../server/entitlements.ts'
+import { AccountEntitlements, closeMissingStudioJob, currentUserStudioJob, entitlementCall, entitlementStatus, reserveUserGeneration, settleUserGeneration, userJobAccess, type EntitlementStorage, type EntitlementEnv } from '../server/entitlements.ts'
 import { billingApi, verifyStripeSignature, type BillingEnv } from '../server/billing.ts'
+import { STUDIO_SUBMISSION_GRACE_MS } from '../src/lib/studioProtocol.ts'
 
 const USER = 'b8867f90-8703-4d20-b97e-4b6b4c24d142'
 const OTHER = '84d69075-9be3-4b70-b32c-b87bb714cae9'
@@ -27,7 +28,7 @@ function fixture() {
       return objects.get(name)!
     } },
   }
-  return { env, setNow: (value: number) => { now = value }, now: () => now, recreate: () => { for (const [name, storage] of stores) objects.set(name, new AccountEntitlements({ storage }, {}, () => now)) } }
+  return { env, stores, setNow: (value: number) => { now = value }, now: () => now, recreate: () => { for (const [name, storage] of stores) objects.set(name, new AccountEntitlements({ storage }, {}, () => now)) } }
 }
 async function grant(env: EntitlementEnv, credits = 1500, grantId = 'in_fixture') {
   await entitlementCall(env, USER, '/grant', { id: grantId, credits, subscriptionId: 'sub_fixture' })
@@ -71,6 +72,38 @@ test('Creator SOL buys exactly 30 Sol generations and cannot spend credits on As
   assert.equal(rest.filter(result => result.allowed).length, 29)
   assert.equal((await entitlementStatus(env, USER)).credits, 0)
 })
+test('Studio Astra uses a non-destructive credit hold until the cloud job settles', async () => {
+  const { env, now } = fixture()
+  await grant(env, 4500); await subscribe(env, now(), { plan: 'pro' })
+  const job = id(), fingerprint = 'a'.repeat(64)
+  const reserved = await reserveUserGeneration(env, USER, job, 'slow', undefined, fingerprint, 'standard', { channel: 'studio', prompt: 'Detailed MCC cabinet' })
+  assert.equal(reserved.allowed, true); assert.equal(reserved.cost, 250); assert.equal(reserved.held, true)
+  let state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4500)
+  assert.equal(state.reservedCredits, 250)
+  assert.equal(state.availableCredits, 4250)
+  const current = await currentUserStudioJob(env, USER)
+  assert.equal(current.job?.id, job)
+  assert.equal(current.job?.fingerprint, fingerprint)
+  assert.equal(current.job?.prompt, 'Detailed MCC cabinet')
+  const replay = await reserveUserGeneration(env, USER, job, 'slow', undefined, fingerprint, 'standard', { channel: 'studio', prompt: 'Detailed MCC cabinet' })
+  assert.equal(replay.repeated, true)
+  state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4500); assert.equal(state.reservedCredits, 250)
+
+  await settleUserGeneration(env, USER, job, 'failed')
+  state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4500); assert.equal(state.reservedCredits, 0); assert.equal(state.availableCredits, 4500)
+
+  const success = id()
+  await reserveUserGeneration(env, USER, success, 'slow', undefined, 'b'.repeat(64), 'standard', { channel: 'studio', prompt: 'Second detailed model' })
+  state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4500); assert.equal(state.reservedCredits, 250)
+  await settleUserGeneration(env, USER, success, 'completed')
+  state = await entitlementStatus(env, USER)
+  assert.equal(state.credits, 4250); assert.equal(state.reservedCredits, 0); assert.equal(state.availableCredits, 4250)
+})
+
 test('Only explicit failure refunds a Sol reservation once; completed jobs are terminal', async () => {
   const { env, now } = fixture()
   await grant(env); await subscribe(env, now(), { plan: 'creator' })
@@ -780,4 +813,93 @@ test('One-time packs add Sol credits but never unlock Astra', async () => {
   const sol = await reserveUserGeneration(f.env, USER, id(), 'fast')
   assert.equal(sol.allowed, true); assert.equal(sol.cost, 50)
   assert.equal((await entitlementStatus(f.env, USER)).credits, 1450)
+})
+
+
+test('Studio failure diagnostic is allowlisted, durable and immutable with its settlement', async () => {
+  const { env, now, recreate } = fixture()
+  await grant(env, 4500); await subscribe(env, now(), { plan: 'pro' })
+  const job = id()
+  await reserveUserGeneration(env, USER, job, 'slow', undefined, 'c'.repeat(64), 'standard', { channel: 'studio', prompt: 'Detailed model' })
+  const ledger = env.ACCOUNT_ENTITLEMENTS!.get(env.ACCOUNT_ENTITLEMENTS!.idFromName(`account:v1:${USER}`))
+  const invalid = await ledger.fetch(new Request('https://entitlements.internal/settle', { method: 'POST', body: JSON.stringify({ id: job, state: 'failed', failureCode: 'RAW_PRIVATE_KEY' }) }))
+  assert.equal(invalid.status, 400)
+  assert.equal((await invalid.json() as { error: string }).error, 'Invalid failure diagnostic')
+  assert.equal((await entitlementStatus(env, USER)).reservedCredits, 250)
+  const mismatched = await ledger.fetch(new Request('https://entitlements.internal/settle', { method: 'POST', body: JSON.stringify({ id: job, state: 'completed', failureCode: 'ASTRA_COST_LIMIT' }) }))
+  assert.equal(mismatched.status, 400)
+  await settleUserGeneration(env, USER, job, 'failed', 'ASTRA_COST_LIMIT')
+  recreate()
+  assert.equal((await userJobAccess(env, USER, job)).failureCode, 'ASTRA_COST_LIMIT')
+  assert.equal((await currentUserStudioJob(env, USER)).job?.failureCode, 'ASTRA_COST_LIMIT')
+  await settleUserGeneration(env, USER, job, 'failed', 'INVALID_MODEL_OUTPUT')
+  await settleUserGeneration(env, USER, job, 'completed')
+  assert.equal((await userJobAccess(env, USER, job)).failureCode, 'ASTRA_COST_LIMIT')
+  assert.equal((await userJobAccess(env, USER, job)).state, 'failed')
+  assert.equal((await entitlementStatus(env, USER)).credits, 4500)
+  assert.equal((await entitlementStatus(env, USER)).reservedCredits, 0)
+})
+
+test('missing Studio tombstone fences late reservation without touching funds, quota or another current job', async () => {
+  const { env, now, recreate, stores } = fixture()
+  await grant(env, 4500); await subscribe(env, now(), { plan: 'pro' })
+  const current = id(), missing = id(), fingerprint = 'd'.repeat(64)
+  await reserveUserGeneration(env, USER, current, 'slow', undefined, 'c'.repeat(64), 'standard', { channel: 'studio', prompt: 'Actual current model' })
+  const storage = stores.get(`account:v1:${USER}`)!
+  const beforeStatus = await entitlementStatus(env, USER)
+  const beforeFunding = await storage.get('provider-budget-cents:v1')
+  const beforeCurrent = await currentUserStudioJob(env, USER)
+  const closed = await closeMissingStudioJob(env, USER, missing, fingerprint, now() - STUDIO_SUBMISSION_GRACE_MS - 1)
+  assert.deepEqual(closed, { closed: true, state: 'failed', fingerprintMatches: true, failureCode: 'MISSING_SUBMISSION' })
+  const tombstone = await userJobAccess(env, USER, missing)
+  assert.equal(tombstone.state, 'failed'); assert.equal(tombstone.cost, 0); assert.equal(tombstone.held, false)
+  assert.equal(tombstone.failureCode, 'MISSING_SUBMISSION')
+  recreate()
+  const late = await reserveUserGeneration(env, USER, missing, 'slow', undefined, fingerprint, 'industrial-electrical-cabinet-v1', { channel: 'studio', prompt: 'Late detailed model with photographs' })
+  assert.equal(late.allowed, false); assert.equal(late.repeated, true); assert.equal(late.state, 'failed')
+  assert.deepEqual(await entitlementStatus(env, USER), beforeStatus)
+  assert.equal(await storage.get('provider-budget-cents:v1'), beforeFunding)
+  assert.deepEqual(await currentUserStudioJob(env, USER), beforeCurrent)
+  const mismatch = await reserveUserGeneration(env, USER, missing, 'slow', undefined, 'e'.repeat(64), 'standard', { channel: 'studio' })
+  assert.equal(mismatch.allowed, false); assert.equal(mismatch.reason, 'REQUEST_PAYLOAD_MISMATCH')
+  assert.equal((await userJobAccess(env, USER, missing)).failureCode, 'MISSING_SUBMISSION')
+  assert.equal((await userJobAccess(env, OTHER, missing)).owned, false)
+})
+
+test('close-missing never overwrites a reservation or a settled job that already won the transaction', async () => {
+  const { env, now, stores } = fixture()
+  await grant(env, 4500); await subscribe(env, now(), { plan: 'pro' })
+  const job = id(), fingerprint = 'a'.repeat(64)
+  await reserveUserGeneration(env, USER, job, 'slow', undefined, fingerprint, 'standard', { channel: 'studio', prompt: 'Reserved model' })
+  const storage = stores.get(`account:v1:${USER}`)!, before = await storage.get(`job:${job}`)
+  const result = await closeMissingStudioJob(env, USER, job, fingerprint, now() - STUDIO_SUBMISSION_GRACE_MS - 1)
+  assert.deepEqual(result, { closed: false, state: 'reserved', fingerprintMatches: true })
+  assert.deepEqual(await storage.get(`job:${job}`), before)
+  assert.equal((await entitlementStatus(env, USER)).reservedCredits, 250)
+  await settleUserGeneration(env, USER, job, 'completed')
+  const finished = await storage.get(`job:${job}`)
+  assert.deepEqual(await closeMissingStudioJob(env, USER, job, fingerprint, now() - STUDIO_SUBMISSION_GRACE_MS - 1), { closed: false, state: 'completed', fingerprintMatches: true })
+  assert.deepEqual(await storage.get(`job:${job}`), finished)
+  const foreignCommitment = await closeMissingStudioJob(env, USER, job, 'b'.repeat(64), now() - STUDIO_SUBMISSION_GRACE_MS - 1)
+  assert.equal(foreignCommitment.fingerprintMatches, false)
+  assert.deepEqual(await storage.get(`job:${job}`), finished)
+})
+
+test('missing-submission closure requires a bounded exact signed commitment and elapsed grace', async () => {
+  const { env, now } = fixture(), missing = id(), fingerprint = 'a'.repeat(64)
+  const ledger = env.ACCOUNT_ENTITLEMENTS!.get(env.ACCOUNT_ENTITLEMENTS!.idFromName(`account:v1:${USER}`))
+  for (const bad of [
+    { id: missing, fingerprint, issued: now(), extra: true }, { id: missing, fingerprint: 'invalid', issued: now() },
+    { id: missing, fingerprint, issued: -1 }, { id: 'invalid', fingerprint, issued: now() },
+    { id: missing, fingerprint, issued: String(now()) },
+  ]) {
+    const response = await ledger.fetch(new Request('https://entitlements.internal/studio-close-missing', { method: 'POST', body: JSON.stringify(bad) }))
+    assert.equal(response.status, 400)
+  }
+  await assert.rejects(closeMissingStudioJob(env, USER, missing, fingerprint, now()))
+  await assert.rejects(closeMissingStudioJob(env, USER, missing, fingerprint, now() + STUDIO_SUBMISSION_GRACE_MS))
+  assert.equal((await userJobAccess(env, USER, missing)).owned, false)
+  assert.equal((await entitlementStatus(env, USER)).credits, 0)
+  assert.equal((await entitlementStatus(env, USER)).reservedCredits, 0)
+  assert.deepEqual(await currentUserStudioJob(env, USER), { job: null })
 })

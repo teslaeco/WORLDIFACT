@@ -208,6 +208,7 @@ test('new password requires the recovery cookie and a verified user, then revoke
 
 test('OAuth consent proxy is session-bound and approves only OpenAI ChatGPT callbacks', async () => {
   const f = fixture(), authorizationId = '22222222-2222-4222-8222-222222222222'
+  Object.assign(f.env, { MCP_RESOURCE_URL: origin + '/mcp', MCP_OAUTH_CLIENT_IDS: 'chatgpt-dcr-client', MCP_OAUTH_REDIRECT_URIS: 'https://chatgpt.com/connector_platform_oauth_redirect' })
   const calls: string[] = []
   const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = String(input); calls.push(url)

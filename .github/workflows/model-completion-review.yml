@@ -1,0 +1,43 @@
+name: Verify model completion without paid API
+on:
+  pull_request:
+    paths:
+      - 'tools/model_completion/**'
+      - 'tools/model_prebuild/**'
+      - 'tools/model_context/**'
+      - 'tools/profit_guard/**'
+      - 'tools/fast_preview/**'
+      - '.github/workflows/model-completion-review.yml'
+permissions:
+  contents: read
+jobs:
+  completion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .model-completion-source
+          persist-credentials: false
+      - name: Compile exact maintenance package
+        run: python3 -m py_compile tools/model_completion/*.py
+      - name: Test exact source reconstruction, completion policy, rollback and safe launcher
+        env:
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+        run: python3 -B -m unittest discover -s tools/model_completion -p 'test_*.py' -v
+      - name: Test compact cabinet context, unchanged budgets and upgrade rollback
+        env:
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+        run: python3 -B -m unittest discover -s tools/model_prebuild -p 'test_*.py' -v
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Test complete STANDARD context and unchanged runtime gates
+        env:
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+        run: python3 -B -m unittest discover -s tools/model_context -p 'test_*.py' -v

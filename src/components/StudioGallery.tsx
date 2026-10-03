@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import OracleModelPreview from './OracleModelPreview'
-import { listStudioModels, readStudioModel, type StudioArchiveEntry } from '../lib/studioArchive'
+import { listStudioModels, readStudioModel, STUDIO_ARCHIVE_EVENT, STUDIO_ARCHIVE_SIGNAL_KEY, type StudioArchiveEntry } from '../lib/studioArchive'
 import { inspectGLB } from '../lib/glb'
+import { previewFileName } from '../lib/studioView'
 import './StudioGallery.css'
 
 type Props = { compact?: boolean }
@@ -18,6 +19,7 @@ function downloadBlob(blob: Blob, name: string) {
 
 export default function StudioGallery({ compact = false }: Props) {
   const previewUrl = useRef('')
+  const refreshVersion = useRef({ value: 0 })
   const [entries, setEntries] = useState<StudioArchiveEntry[]>([])
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<StudioArchiveEntry | null>(null)
@@ -27,16 +29,28 @@ export default function StudioGallery({ compact = false }: Props) {
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
+    const version = ++refreshVersion.current.value
     setLoading(true)
     setError('')
-    try { setEntries(await listStudioModels()) }
-    catch (e) { setError(e instanceof Error ? e.message : 'Could not read the model gallery on this device.') }
-    finally { setLoading(false) }
+    try {
+      const models = await listStudioModels()
+      if (version === refreshVersion.current.value) setEntries(models)
+    }
+    catch (e) { if (version === refreshVersion.current.value) setError(e instanceof Error ? e.message : 'Could not read the model gallery on this device.') }
+    finally { if (version === refreshVersion.current.value) setLoading(false) }
   }, [])
 
   useEffect(() => {
-    void refresh()
+    const refreshState = refreshVersion.current
+    const update = () => { void refresh() }
+    const storage = (event: StorageEvent) => { if (event.key === STUDIO_ARCHIVE_SIGNAL_KEY) update() }
+    update()
+    window.addEventListener(STUDIO_ARCHIVE_EVENT, update)
+    window.addEventListener('storage', storage)
     return () => {
+      refreshState.value++
+      window.removeEventListener(STUDIO_ARCHIVE_EVENT, update)
+      window.removeEventListener('storage', storage)
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
     }
   }, [refresh])
@@ -69,7 +83,7 @@ export default function StudioGallery({ compact = false }: Props) {
     try {
       const blob = await readStudioModel(item.id)
       inspectGLB(await blob.arrayBuffer())
-      downloadBlob(blob, `WORLDIFACT-${item.id}.glb`)
+      downloadBlob(blob, previewFileName({ id: item.id, origin: 'archive', label: item.prompt }))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'This saved GLB could not be downloaded.')
     } finally { setBusyId('') }
@@ -91,7 +105,7 @@ export default function StudioGallery({ compact = false }: Props) {
     {selected && url && <div className="studio-gallery-preview">
       <div className="studio-gallery-preview-copy">
         <strong>{selected.prompt}</strong>
-        <small>{(selected.byteLength / 1048576).toFixed(1)} MB · GLB · UNREVIEWED</small>
+        <small>{(selected.byteLength / 1048576).toFixed(1)} MB · GLB · UNREVIEWED · {selected.source === 'blueprint' ? `Procedural blueprint · ${selected.generation.model}` : 'Studio model'}</small>
       </div>
       <OracleModelPreview url={url} label={selected.prompt} customerMode />
     </div>}
@@ -101,12 +115,13 @@ export default function StudioGallery({ compact = false }: Props) {
     </label>
 
     {error && <p className="studio-gallery-error" role="alert">{error}</p>}
-    {!loading && entries.length === 0 && <p className="studio-gallery-empty">No completed models are saved in this browser yet. Open a finished SLOW result in AI Shop and it will be added here automatically.</p>}
+    {!loading && entries.length === 0 && <p className="studio-gallery-empty">No completed models are saved in this browser yet. Completed detailed Studio models and LIVE procedural blueprint GLBs from AI Shop are saved here automatically.</p>}
     {!loading && entries.length > 0 && filtered.length === 0 && <p className="studio-gallery-empty">No saved models match this search.</p>}
 
     <div className="studio-gallery-grid">
       {filtered.map(item => <article key={item.id}>
         <strong>{item.prompt}</strong>
+        <small>{item.source === 'blueprint' ? `Procedural blueprint · ${item.generation.model} · UNREVIEWED` : 'Studio model · UNREVIEWED'}</small>
         <small>{new Date(item.savedAt).toLocaleString()} · {(item.byteLength / 1048576).toFixed(1)} MB</small>
         <div className="studio-gallery-actions">
           <button type="button" disabled={!!busyId} onClick={() => void preview(item)}>{busyId === item.id ? 'Opening…' : 'Preview 3D'}</button>

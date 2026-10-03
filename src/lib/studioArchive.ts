@@ -1,8 +1,15 @@
 import type { SavedStudioJob } from './studioClient.ts'
 import { archiveWriteDecision } from './studioView.ts'
 import { FAST_DRAFT_PROFILE } from './studioProtocol.ts'
+import { validateGenerationResult, type GenerationResult } from './blueprint.ts'
 
-export type StudioArchiveEntry = { id: string; prompt: string; savedAt: string; byteLength: number; sha256: string; review: 'UNREVIEWED'; generationProfile?: typeof FAST_DRAFT_PROFILE }
+type ArchiveMetadata = { id: string; prompt: string; savedAt: string; byteLength: number; sha256: string; review: 'UNREVIEWED' }
+// Missing source is a historical Studio entry. A blueprint identity is local
+// provenance, never a signed Studio receipt or evidence of account ownership.
+export type StudioArchiveEntry = ArchiveMetadata & (
+  { source?: 'studio'; generationProfile?: typeof FAST_DRAFT_PROFILE; generation?: never } |
+  { source: 'blueprint'; generation: GenerationResult; generationProfile?: never }
+)
 export const STUDIO_ARCHIVE_EVENT = 'worldifact:studio-archive-changed'
 export const STUDIO_ARCHIVE_SIGNAL_KEY = 'worldifact-studio-archive-revision-v1'
 function notifyStudioArchiveChanged(id: string) {
@@ -13,33 +20,53 @@ function notifyStudioArchiveChanged(id: string) {
 function openArchive(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('worldifact-studio-models', 1)
+    let failed = false
     request.onupgradeneeded = () => {
       request.result.createObjectStore('metadata', { keyPath: 'id' })
       request.result.createObjectStore('models')
     }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(new Error('Device archive is unavailable. Download the original GLB to keep it.'))
-    request.onblocked = () => reject(new Error('Device archive is busy in another tab. Download the GLB to keep it.'))
+    request.onsuccess = () => {
+      if (failed) { request.result.close(); return }
+      request.result.onversionchange = () => request.result.close()
+      resolve(request.result)
+    }
+    request.onerror = () => { failed = true; reject(new Error('Device archive is unavailable. Download the original GLB to keep it.')) }
+    request.onblocked = () => { failed = true; reject(new Error('Device archive is busy in another tab. Close that tab or download the GLB to keep it.')) }
   })
 }
-export async function saveStudioModel(saved: SavedStudioJob, blob: Blob): Promise<StudioArchiveEntry> {
-  const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
-  const entry: StudioArchiveEntry = { id: saved.receipt.id, prompt: saved.prompt, savedAt: new Date().toISOString(), byteLength: blob.size,
-    sha256: Array.from(new Uint8Array(hash), v => v.toString(16).padStart(2, '0')).join(''), review: 'UNREVIEWED',
-    ...(saved.generationProfile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
+async function sha256(bytes: ArrayBuffer): Promise<string> {
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), v => v.toString(16).padStart(2, '0')).join('')
+}
+// Object-key order is not provider evidence. Compare its values without changing
+// the original saved envelope, prompt, timestamps or file bytes on a retry.
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  if (value && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`).join(',')}}`
+  return JSON.stringify(value)
+}
+async function writeModel(entry: StudioArchiveEntry, blob: Blob, signal?: AbortSignal): Promise<StudioArchiveEntry> {
+  signal?.throwIfAborted()
   const db = await openArchive()
   let stored = entry
   try {
+    signal?.throwIfAborted()
     await new Promise<void>((resolve, reject) => {
-      // Read/compare/write within one transaction. Existing originals, including
-      // older STANDARD entries without a profile field, are retained verbatim.
+      // One transaction serializes duplicate tabs/mounts and never overwrites a
+      // conflicting original. Cancellation rolls back both metadata and bytes.
       const tx = db.transaction(['metadata', 'models'], 'readwrite')
       const metadata = tx.objectStore('metadata')
       const lookup = metadata.get(entry.id)
-      let failure: Error | null = null
+      let failure: unknown = null
+      const abort = () => { failure = signal?.reason; tx.abort() }
+      const cleanup = () => signal?.removeEventListener('abort', abort)
+      signal?.addEventListener('abort', abort, { once: true })
       lookup.onsuccess = () => {
         try {
+          signal?.throwIfAborted()
           const existing = lookup.result as StudioArchiveEntry | undefined
+          if (existing && entry.source === 'blueprint' && (existing.source !== 'blueprint' || canonical(existing.generation) !== canonical(entry.generation))) {
+            throw new Error('Different generation evidence is already saved for this request. The original was not overwritten. Download this GLB separately.')
+          }
           if (archiveWriteDecision(existing, entry) === 'retain') { stored = existing!; return }
           metadata.add(entry)
           tx.objectStore('models').add(blob, entry.id)
@@ -48,12 +75,28 @@ export async function saveStudioModel(saved: SavedStudioJob, blob: Blob): Promis
           tx.abort()
         }
       }
-      tx.oncomplete = () => resolve()
-      tx.onabort = tx.onerror = () => reject(failure || new Error('The model could not be saved on this device. Download the GLB; no older models were deleted.'))
+      tx.oncomplete = () => { cleanup(); resolve() }
+      tx.onabort = tx.onerror = () => { cleanup(); reject(failure || new Error('The model could not be saved on this device. Download the GLB; no older models were deleted.')) }
     })
   } finally { db.close() }
   notifyStudioArchiveChanged(stored.id)
   return stored
+}
+export async function saveStudioModel(saved: SavedStudioJob, blob: Blob): Promise<StudioArchiveEntry> {
+  const entry: StudioArchiveEntry = { source: 'studio', id: saved.receipt.id, prompt: saved.prompt, savedAt: new Date().toISOString(), byteLength: blob.size,
+    sha256: await sha256(await blob.arrayBuffer()), review: 'UNREVIEWED',
+    ...(saved.generationProfile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
+  return writeModel(entry, blob)
+}
+/** Archive exactly the exported LIVE specification-derived GLB, locally only. */
+export async function saveBlueprintModel(result: GenerationResult, prompt: string, blob: Blob, signal?: AbortSignal): Promise<StudioArchiveEntry> {
+  signal?.throwIfAborted()
+  const generation = structuredClone(validateGenerationResult(result))
+  if (generation.mode !== 'LIVE' || generation.provenance !== 'GENERATED') throw new Error('Only a successful LIVE specification can be saved as a generated blueprint model.')
+  if (!blob.size) throw new Error('The generated GLB is empty. No archive entry was created.')
+  const [identity, hash] = await Promise.all([sha256(new TextEncoder().encode(generation.requestId).buffer), sha256(await blob.arrayBuffer())])
+  return writeModel({ source: 'blueprint', id: `blueprint:${identity}`, prompt, savedAt: new Date().toISOString(), byteLength: blob.size,
+    sha256: hash, review: 'UNREVIEWED', generation }, blob, signal)
 }
 export async function listStudioModels(): Promise<StudioArchiveEntry[]> {
   const db = await openArchive()
