@@ -50,6 +50,7 @@ test('high points do not override authenticated provider funding or Creator quot
       assert.equal(quote.state, 'blocked')
       assert.equal(quote.after, null)
       assert.equal(quote.message, ADMISSION_FAILURE_DETAILS[reason])
+      assert.equal(quote.reason, reason)
       assert.doesNotMatch(quote.message, /PRIVATE_LEDGER_VALUE|refund|released/i)
     }
   }
@@ -70,6 +71,7 @@ test('unknown or malformed admission cannot expose raw details or advertise spen
     assert.equal(quote.state, 'pending')
     assert.equal(quote.points, null)
     assert.equal(quote.after, null)
+    assert.equal(quote.reason, undefined)
     assert.doesNotMatch(quote.message, /PRIVATE_LEDGER_VALUE|3000|refund|released/i)
   }
 })

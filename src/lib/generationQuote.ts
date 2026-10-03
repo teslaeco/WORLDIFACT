@@ -1,7 +1,7 @@
 import { MODEL_CATALOG, type GenerationModel } from './modelCatalog.ts'
-import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode } from './generationAdmission.ts'
+import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from './generationAdmission.ts'
 export type QuotedModel = GenerationModel
-export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits' | 'blocked'; points: number | null; after: number | null; message: string }
+export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits' | 'blocked'; points: number | null; after: number | null; message: string; reason?: AdmissionFailureCode }
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const integer = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 /** Non-binding display only. The server rechecks identity, model and funds atomically. */
@@ -14,7 +14,7 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
   if (Object.hasOwn(value, 'generationAdmission')) {
     const admission = detailed && model === 'astra' && Object.hasOwn(value, 'studioAdmission') ? object(value.studioAdmission) : object(object(value.generationAdmission)[model])
     if (admission.allowed === false && isAdmissionFailureCode(admission.reason))
-      return { state: 'blocked', points, after: null, message: ADMISSION_FAILURE_DETAILS[admission.reason] }
+      return { state: 'blocked', points, after: null, message: ADMISSION_FAILURE_DETAILS[admission.reason], reason: admission.reason }
     if (admission.allowed !== true || admission.reason !== undefined)
       return { state: 'pending', points: null, after: null, message: 'Your current generation availability could not be verified. No payment is inferred.' }
   }
@@ -39,7 +39,7 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
       ? { state: 'free', points: 0, after: 0, message: `One free ${model.toUpperCase()} attempt: 0 points. SOL and LUNA share the daily allowance; the shared promotional pool is checked at submission.` }
       : { state: 'blocked', points, after: null, message: 'Your personal free allowance is used. Wait for its reset or use prepaid credits.' }
   }
-  if (spendable < points) return { state: 'blocked', points, after: null, message: 'Not enough available points for this model. No generation has started.' }
+  if (spendable < points) return { state: 'blocked', points, after: null, message: 'Not enough available points for this model. No generation has started.', reason: 'CREDITS_EXHAUSTED' }
   return { state: 'credits', points, after: spendable - points, message: integer(value.reservedCredits) && value.reservedCredits > 0
     ? `One explicit attempt. ${value.reservedCredits} points are already reserved for an active cloud job; this quote uses only currently available points.`
     : 'One explicit attempt. Detailed Studio jobs hold points until a valid model completes; generation never starts a card or subscription charge.' }

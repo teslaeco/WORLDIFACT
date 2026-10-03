@@ -2,7 +2,7 @@
 
 Updated 3 October 2026.
 
-## IN VERIFICATION — generation funding and mobile-resume repair (3 October 2026)
+## DEPLOYED — generation funding and mobile-resume repair (3 October 2026)
 
 The owner's current screenshots and authenticated production Shop show an account
 provider-funding refusal despite remaining customer points, alongside a separate
@@ -18,8 +18,27 @@ the latest main deployment before publication. See
 
 No paid model, support-grant activation or historical funding reset was performed.
 The separate Dots/MCP integration remains outside this production repair. The
-original Oracle runtime still requires evidence of the newer maintenance receipt;
-source merge alone is not an installation claim.
+original Oracle health confirmed completion and prebuild maintenance, but did not
+attest the STANDARD context policy. PR #193 merged as
+`caa439fbbca63e1da12515c59d07c6645751b722`; production run
+[37132224035](https://github.com/teslaeco/WORLDIFACT/actions/runs/37132224035)
+succeeded after all 937 tests. Source merge alone is not an Oracle installation claim.
+
+## IN VERIFICATION — return proven unused terminal provider reservations
+
+The owner requested removal of incorrect generation blocks while retaining the
+funded payment limit, and an explicitly accepted 500-point option for costlier
+work. The current approved Astra provider cap remains USD 1.75 and the price
+remains 250 points. No higher dollar cap has been inferred from 500 points or from
+the rejected USD 4 example; no additional customer charge is enabled.
+
+This follow-up separates funding refusal from insufficient points in the UI and
+adds exact-once account reconciliation from an authenticated, immutable Oracle
+terminal liability receipt. Missing, malformed or uncertain cost evidence retains
+the original reservation. The receipt must seal every future paid request for
+that same job; it is an upper-liability bound, not an invoice. Customer points,
+plan quotas and the operator cap are unchanged. See
+`docs/GENERATION_REPAIR_20261003.md` for activation and verification boundaries.
 
 ## VERIFIED — one bounded live Astra character generation
 
@@ -251,7 +270,7 @@ A newer reported job now has concrete backend evidence. Read-only authenticated 
 
 The exact quality report says `modelStatus=draft`, `automaticQualityAccepted=false`, no completed visual assessment and no finished agent outcome. Its three completed MCP calls were contract inspection, an invalid initial build call, and a successful sparse build; no render inspection, edit or finish call followed. The stored CLI diagnostic matches `stream disconnected before completion` and `max_output_tokens`. Gateway usage was known, but the old gateway did not classify this incomplete terminal response as an error. Source review confirmed that the runner retained its unfinished candidate and the Oracle server labelled retained drafts `succeeded`. The original per-call affordable token allocation still requires the bounded VM ledger diagnostic; it is not inferred from the output size alone.
 
-The local repair adds a complete-first-build contract, actual candidate-GLB feedback, explicit current-render/finish requirements and a WORLDIFACT-scoped runtime completion policy. It preserves the USD1.75 per-job cap and incomplete-response reservations. A tiny affordable output allocation cannot launch an unfinished structural build; a structurally passing candidate keeps the compact finish path. Only a clean, fully accounted CLI exit can receive one continuation inside the same gateway, job, original deadline, request/output/build limits and durable cost ledger. An incomplete provider response is terminal and is never automatically retried. Generic Froge/FAST behavior remains outside the scoped contract.
+The local repair adds a complete-first-build contract, actual candidate-GLB feedback, explicit current-render/finish requirements and a WORLDIFACT-scoped runtime completion policy. It preserves the USD 1.75 per-job cap and incomplete-response reservations. A tiny affordable output allocation cannot launch an unfinished structural build; a structurally passing candidate keeps the compact finish path. Only a clean, fully accounted CLI exit can receive one continuation inside the same gateway, job, original deadline, request/output/build limits and durable cost ledger. An incomplete provider response is terminal and is never automatically retried. Generic Froge/FAST behavior remains outside the scoped contract.
 
 The web adapter separately refuses to charge an execution that has no finished outcome, while preserving deliberately finished, unreviewed standard drafts subject to the unchanged structural gate. Previously settled account outcomes remain authoritative. This does not reopen or refund a historical job.
 
