@@ -1,3 +1,4 @@
+import type { StudioBudgetTier } from './studioPricing'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAccount } from './account'
 import { readGenerationAccount, type GenerationAccountSnapshot } from './generationAccount'
@@ -7,7 +8,7 @@ type Request = { owner: string | null; loading: boolean; busy: boolean; revision
 type Snapshot = GenerationAccountSnapshot & { request: Request }
 export type GenerationQuoteState = { quote: GenerationQuote; checking: boolean; canRefresh: boolean; refresh: () => void }
 
-export function useGenerationQuote(model: QuotedModel, busy = false, detailed = false): GenerationQuoteState {
+export function useGenerationQuote(model: QuotedModel, busy = false, detailed = false, budgetTier?: StudioBudgetTier): GenerationQuoteState {
   const { user, loading } = useAccount()
   const owner = user?.id ?? null
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
@@ -48,6 +49,6 @@ export function useGenerationQuote(model: QuotedModel, busy = false, detailed = 
   const checking = loading || busy || (!!owner && !current)
   const quote = loading || busy
     ? { state: 'pending' as const, points: null, after: null, message: loading ? 'Checking your account before generation.' : 'Checking current cost after this request. No new generation can start yet.' }
-    : quoteGeneration(model, current?.account, current?.billing, !!owner && !current?.authenticationRequired, detailed)
+    : quoteGeneration(model, current?.account, current?.billing, !!owner && !current?.authenticationRequired, detailed, budgetTier)
   return { quote, checking, canRefresh: !!owner && !loading && !busy && !checking, refresh }
 }

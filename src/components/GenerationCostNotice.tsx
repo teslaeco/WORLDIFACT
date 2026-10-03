@@ -1,21 +1,22 @@
+import { STUDIO_PRICING, type StudioBudgetTier } from '../lib/studioPricing'
 import { Link } from 'react-router-dom'
 import { type QuotedModel } from '../lib/generationQuote'
 import { useGenerationQuote, type GenerationQuoteState } from '../lib/useGenerationQuote'
 import './GenerationCostNotice.css'
 
-type Props = { model: QuotedModel; busy?: boolean; detailed?: boolean; accountQuote?: GenerationQuoteState }
+type Props = { model: QuotedModel; busy?: boolean; detailed?: boolean; budgetTier?: StudioBudgetTier; accountQuote?: GenerationQuoteState }
 export default function GenerationCostNotice(props: Props) {
   // A controlled Shop notice renders the exact snapshot used by its Generate
   // button. Other consumers keep their standalone read-only quote.
   return props.accountQuote ? <CostNotice {...props} accountQuote={props.accountQuote} /> : <ConnectedCostNotice {...props} />
 }
 function ConnectedCostNotice(props: Props) {
-  const accountQuote = useGenerationQuote(props.model, props.busy, props.detailed)
+  const accountQuote = useGenerationQuote(props.model, props.busy, props.detailed, props.budgetTier)
   return <CostNotice {...props} accountQuote={accountQuote} />
 }
-function CostNotice({ model, busy = false, detailed = false, accountQuote }: Props & { accountQuote: GenerationQuoteState }) {
+function CostNotice({ model, busy = false, detailed = false, budgetTier, accountQuote }: Props & { accountQuote: GenerationQuoteState }) {
   const { quote, checking, canRefresh, refresh } = accountQuote
-  const rate = model === 'luna' ? 15 : model === 'sol' ? 50 : 250
+  const rate = detailed && model === 'astra' && budgetTier ? STUDIO_PRICING[budgetTier].points : model === 'luna' ? 15 : model === 'sol' ? 50 : 250
   const fundingBlocked = quote.state === 'blocked' && quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
   return <section className="generation-cost-notice" aria-label="Selected model and cost before generation" aria-live="polite">
     <div><strong>{model === 'luna' ? 'GPT-6 LUNA' : model === 'sol' ? 'GPT-6 SOL' : 'GPT-6 ASTRA'}</strong><span>{rate} points / paid generation</span></div>

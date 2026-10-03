@@ -1,3 +1,4 @@
+import { STUDIO_PRICING, STUDIO_PRICING_REVISION } from '../src/lib/studioPricing.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { setImmediate as nextTick } from 'node:timers/promises'
@@ -10,8 +11,9 @@ import { ADMISSION_FAILURE_CODES } from '../src/lib/generationAdmission.ts'
 
 const oldId = '12345678-1234-4234-8234-123456789abc'
 const newId = '87654321-1234-4234-8234-123456789abc'
-const fundedAccount = { credits: 3000, generationCosts: { luna: 15, sol: 50, astra: 250 }, subscription: { active: true, plan: 'pro' }, free: { fastRemaining: 2 }, billingReview: false, generationAdmission: { luna: { allowed: true }, sol: { allowed: true }, astra: { allowed: true } }, studioAdmission: { allowed: true } }
-const blockedAccount = { ...fundedAccount, generationAdmission: { luna: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, sol: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, astra: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } }, studioAdmission: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } }
+const admission = (allowed = true, reason) => ({ allowed, ...(reason ? { reason } : {}), tiers: Object.fromEntries(Object.entries(STUDIO_PRICING).map(([tier, pricing]) => [tier, { allowed, ...(reason ? { reason } : {}), pricing }])) })
+const fundedAccount = { credits: 3000, generationCosts: { luna: 15, sol: 50, astra: 250 }, subscription: { active: true, plan: 'pro' }, free: { fastRemaining: 2 }, billingReview: false, generationAdmission: { luna: { allowed: true }, sol: { allowed: true }, astra: { allowed: true } }, studioAdmission: admission() }
+const blockedAccount = { ...fundedAccount, generationAdmission: { luna: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, sol: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, astra: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } }, studioAdmission: admission(false, 'PROVIDER_BUDGET_EXHAUSTED') }
 const makeReceipt = id => ({ id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` })
 const fastGeneration = {
   mode: 'LIVE', provenance: 'GENERATED', requestId: 'req_fast_fixture', model: 'gpt-6-sol',
@@ -55,13 +57,13 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, cloudLookup, accountLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
-  const selected = { receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, existingPricing, cloudLookup, accountLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
+  const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   if (blueprintRecovery) storeData.set('worldifact:blueprint-recovery:v1', JSON.stringify(blueprintRecovery))
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
-  const status = { detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
+  const status = { pricingRevision: STUDIO_PRICING_REVISION, tiersReady: pricingReady, detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
     reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000, detailedReferenceLimit: 4 }
   const fetcher = async (url, init = {}) => {
     const path = String(url), method = init.method || 'GET'
@@ -78,7 +80,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
       evidence: { providerResponseId: 'resp_ui_fixture', receivedAt: new Date().toISOString(), blueprintSha256: 'f'.repeat(64), inputTokens: null, outputTokens: null, totalTokens: null },
       delivery: { kind: 'procedural-blueprint', referenceCount: JSON.parse(init.body).references.length, fallbackUsed: false },
     })
-    if (path === '/api/studio/prepare') return Response.json(makeReceipt(newId))
+    if (path === '/api/studio/prepare') { const body = JSON.parse(init.body); return Response.json({ ...makeReceipt(newId), ...(body.pricingRevision ? { pricing: STUDIO_PRICING[body.budgetTier] } : {}) }) }
     if (method === 'POST' && submissionRejection) return Response.json({ error: 'PRIVATE_UPSTREAM_MESSAGE', failureCode: submissionRejection }, { status: submissionRejectionStatus })
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model') && artifactFailure) throw new TypeError('Interrupted artifact download')
@@ -129,7 +131,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   }
   const node = predicate => { const found = elements(tree).find(predicate); assert.ok(found, 'Expected actual component control was not rendered'); return found }
   await settle()
-  return { settle, calls, selected, storeData, archive, delays, downloads,
+  return { settle, calls, selected, storeData, archive, delays, downloads, status,
     async account(next) { accountState = next; dirty = true; await settle() },
     async balanceChanged() { events.dispatchEvent(new Event('worldifact:balance-changed')); await settle() },
     async visibility(value) { globals.document.visibilityState = value; pageEvents.dispatchEvent(new Event('visibilitychange')); await settle() },
@@ -567,7 +569,7 @@ test('one account snapshot blocks both ready Shop routes and forced form submiss
 })
 
 test('switching models recomputes costs from the same snapshot and distinguishes detailed admission', async () => {
-  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, accountLookup: () => Response.json({ ...fundedAccount, studioAdmission: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } }) })
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, accountLookup: () => Response.json({ ...fundedAccount, studioAdmission: admission(false, 'PROVIDER_BUDGET_EXHAUSTED') }) })
   try {
     h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook' } }); await h.settle()
     assert.equal(h.quote().quote.state, 'credits')
@@ -741,6 +743,88 @@ test('downloading the verified current GLB uses its existing bytes and a documen
     await h.button('Download model · GLB').props.onClick(); await h.settle()
     assert.equal(h.calls.filter(c => c.path.endsWith('/model')).length, before)
     assert.deepEqual(h.downloads, [{ name: `WORLDIFACT-${oldId}.glb`, attached: true }])
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+test('extended detailed budget needs current draft consent and sends one bound 500-point job', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, state: 'building' })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Detailed silver chess knight' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    h.byId('studio-budget-tier').props.onChange({ target: { value: 'extended' } }); await h.settle()
+    assert.equal(h.quote().quote.points, 500); assert.equal(h.quote().quote.after, 2500)
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    h.byId('studio-budget-consent').props.onChange({ target: { checked: true } }); await h.settle()
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, false)
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Detailed silver chess knight with armor' } }); await h.settle()
+    assert.equal(h.byId('studio-budget-consent').props.checked, false)
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, true)
+    h.byId('studio-budget-consent').props.onChange({ target: { checked: true } }); await h.settle()
+    const first = h.form().props.onSubmit({ preventDefault() {} }), duplicate = h.form().props.onSubmit({ preventDefault() {} })
+    await Promise.all([first, duplicate]); await h.settle()
+    const posts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
+    assert.equal(posts.length, 1)
+    const body = JSON.parse(posts[0].body)
+    assert.equal(body.pricingRevision, STUDIO_PRICING_REVISION); assert.equal(body.budgetTier, 'extended'); assert.equal(body.acceptedPoints, 500)
+    assert.deepEqual(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).pricing, STUDIO_PRICING.extended)
+    assert.match(text(h.all()), /Original job: 500 points/)
+    assert.equal(h.byId('studio-budget-consent').props.checked, false)
+  } finally { h.close() }
+})
+
+test('input changes clear extended consent, and unavailable tier recovery requires explicit standard choice', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Detailed model with reference' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    h.byId('studio-budget-tier').props.onChange({ target: { value: 'extended' } }); await h.settle()
+    const accept = async () => { h.byId('studio-budget-consent').props.onChange({ target: { checked: true } }); await h.settle() }
+    for (const [id, value] of [['studio-purpose', 'game'], ['studio-texture', 8192]]) {
+      await accept(); h.byId(id).props.onChange({ target: { value } }); await h.settle()
+      assert.equal(h.byId('studio-budget-consent').props.checked, false, id)
+    }
+    await accept()
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'front.jpg' }], value: 'front' } }); await h.settle()
+    assert.equal(h.byId('studio-budget-consent').props.checked, false)
+    await accept(); h.status.tiersReady = false
+    await h.button('Refresh availability').props.onClick(); await h.settle()
+    assert.equal(h.all().some(n => n.props.id === 'studio-budget-tier'), false)
+    assert.equal(h.button('Review model budget availability').props.disabled, true)
+    assert.match(text(h.all()), /selected 500-point budget is no longer available/)
+    h.button('Use standard model budget').props.onClick(); await h.settle()
+    assert.equal(h.button('Generate Astra/Blender model · 250 points').props.disabled, false)
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    assert.equal(h.byId('studio-prompt').props.value, 'Detailed model with reference')
+    assert.equal(h.all().filter(n => n.type === 'img' && n.props.alt?.startsWith('Your reference')).length, 1)
+  } finally { h.close() }
+})
+
+test('legacy ready server offers no new budget tiers and keeps legacy standard submission', async () => {
+  const h = await harness({ ready: true, detailedReady: true, pricingReady: false, withExistingJob: false })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Detailed brown knight' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    assert.equal(h.all().some(n => n.props.id === 'studio-budget-tier'), false)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const body = JSON.parse(h.calls.find(c => c.path === '/api/studio/jobs' && c.method === 'POST').body)
+    assert.equal(body.budgetTier, undefined); assert.equal(body.pricingRevision, undefined); assert.equal(body.acceptedPoints, undefined)
+  } finally { h.close() }
+})
+
+
+test('editing next draft budget never relabels original recovered job pricing', async () => {
+  const h = await harness({ ready: true, detailedReady: true, existingPricing: STUDIO_PRICING.standard })
+  try {
+    await h.poll()
+    h.byId('studio-budget-tier').props.onChange({ target: { value: 'extended' } }); await h.settle()
+    assert.equal(h.quote().quote.points, 500)
+    assert.match(text(h.all()), /Original job: 250 points · standard model budget/)
+    assert.doesNotMatch(text(h.all()), /Original job: 500 points/)
+    assert.deepEqual(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).pricing, STUDIO_PRICING.standard)
+    assert.equal(h.byId('studio-budget-consent').props.checked, false)
     assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
   } finally { h.close() }
 })

@@ -2,6 +2,24 @@
 
 Updated 3 October 2026.
 
+## IN VERIFICATION — explicitly approved Studio price tiers
+
+The owner has now approved new detailed jobs at **250 points / maximum USD 2**
+or **500 points / maximum USD 4**. This supersedes the earlier undecided
+500-point option below, not historical job terms. The extended tier requires
+explicit acceptance for the exact draft before a five-minute signed quote can
+start a job. Changed inputs invalidate the quote; recovery retains the original
+price and never starts another paid request.
+
+These tiers require the exact new Oracle pricing attestation, immutable job terms
+and matching provider guard. Until that original worker is updated and verified,
+the deployed client keeps the existing 250-point / USD 1.75 path; it does not
+advertise an unverified higher budget. Account funding remains atomic and capped
+by the unchanged funded pool. Plan prices, point grants, 70% reserve allocation
+and historical support approvals are unchanged. No paid generation was used to
+validate this pricing change. See `docs/GENERATION_REPAIR_20261003.md` and this
+change's PR for exact test, release and Oracle activation evidence.
+
 ## DEPLOYED — generation funding and mobile-resume repair (3 October 2026)
 
 The owner's current screenshots and authenticated production Shop show an account
@@ -24,13 +42,13 @@ attest the STANDARD context policy. PR #193 merged as
 [37132224035](https://github.com/teslaeco/WORLDIFACT/actions/runs/37132224035)
 succeeded after all 937 tests. Source merge alone is not an Oracle installation claim.
 
-## IN VERIFICATION — return proven unused terminal provider reservations
+## DEPLOYED — return proven unused terminal provider reservations
 
 The owner requested removal of incorrect generation blocks while retaining the
 funded payment limit, and an explicitly accepted 500-point option for costlier
-work. The current approved Astra provider cap remains USD 1.75 and the price
-remains 250 points. No higher dollar cap has been inferred from 500 points or from
-the rejected USD 4 example; no additional customer charge is enabled.
+work. At that repair's approval the Astra provider cap remained USD 1.75 and the
+price remained 250 points. The later explicit tier decision above supersedes
+that pending decision for new versioned jobs only.
 
 This follow-up separates funding refusal from insufficient points in the UI and
 adds exact-once account reconciliation from an authenticated, immutable Oracle
@@ -39,6 +57,12 @@ the original reservation. The receipt must seal every future paid request for
 that same job; it is an upper-liability bound, not an invoice. Customer points,
 plan quotas and the operator cap are unchanged. See
 `docs/GENERATION_REPAIR_20261003.md` for activation and verification boundaries.
+
+PR #194 merged as `8aa7dbc56f4f638af130fbe26c7b4a2b31656b70` and production run
+[37135396401](https://github.com/teslaeco/WORLDIFACT/actions/runs/37135396401)
+succeeded with all 955 JavaScript tests, including Chromium and real SQLite.
+Oracle receipt installation and actual historical funding recovery remain
+unverified; the Cloudflare deployment alone does not establish either.
 
 ## VERIFIED — one bounded live Astra character generation
 

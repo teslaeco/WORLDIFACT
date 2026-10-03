@@ -192,9 +192,9 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
     <section className="credits-plans" aria-label="Generation plans">
       <article><span className="credits-plan-tag">EXPLORE</span><h2>Free SOL / LUNA</h2><div className="credits-price"><strong>$0</strong><span>Try WORLDIFACT without exposing the platform to Astra costs.</span></div><ul><li><b>2 shared SOL / LUNA draft attempts</b> in every rolling 24 hours when funded SOL capacity is available</li><li>FAST draft downloads included</li><li><b>No free Astra fallback</b> — if SOL capacity is unavailable, no expensive Astra request is silently charged</li></ul>{balance && <div className="credits-remaining">Personal allowance: {balance.free.fastRemaining} shared drafts; funded capacity is checked at submission</div>}<Link className="credits-action secondary" to={user ? '/shop' : signInHref}>{user ? 'Create with SOL' : 'Create a free account'} ↗</Link></article>
       {([
-        ['creator','Creator SOL','$29.99','1,500 credits','2 ASTRA + 20 SOL, or up to 6 ASTRA attempts after activation','LUNA 15 · SOL 50 · ASTRA 250 credits'],
-        ['pro','Pro ASTRA','$99.99','4,500 credits','90 SOL, 300 LUNA or 18 ASTRA generations','LUNA 15 · SOL 50 · ASTRA 250 credits'],
-        ['studio','Studio ASTRA','$149.99','7,500 credits','150 SOL, 500 LUNA or 30 ASTRA generations','LUNA 15 · SOL 50 · ASTRA 250 credits'],
+        ['creator','Creator SOL','$29.99','1,500 credits','Points cover 2 standard ASTRA + 20 SOL, or up to 6 standard ASTRA attempts','LUNA 15 · SOL 50 · ASTRA from 250 points; API funding required'],
+        ['pro','Pro ASTRA','$99.99','4,500 credits','Points cover 90 SOL, 300 LUNA or 18 standard ASTRA attempts','LUNA 15 · SOL 50 · ASTRA from 250 points; API funding required'],
+        ['studio','Studio ASTRA','$149.99','7,500 credits','Points cover 150 SOL, 500 LUNA or 30 standard ASTRA attempts','LUNA 15 · SOL 50 · ASTRA from 250 points; API funding required'],
       ] as const).map(([id,name,price,credits,capacity,models]) => <article
         key={id}
         className={`credits-selectable-plan${selectedPlan === id && purchaseKind === 'subscription' ? ' credits-featured' : ''}`}
@@ -232,7 +232,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
     </section>
     <BillingRecovery enabled={!!user && !loading} onRefresh={refresh} />
     <section className="credits-trust" aria-label="Payment privacy"><strong>Secure checkout. Private payment details.</strong><p>Card and wallet details are entered with the payment provider. WORLDIFAKT does not collect your full card number or display the seller’s bank account details.</p></section>
-    <p className="credits-footnote">FAST is the SOL path. Detailed ASTRA generation costs 250 credits per attempt on eligible Creator, Pro and Studio accounts after runtime activation. The existing 1,500-credit Creator grant can fund two Astra attempts plus twenty Sol attempts, not thirty Sol plus free Astra. WORLDIFACT never silently falls back from SOL to ASTRA when the cheaper route is unavailable. A GAME model still needs separate validation for physical manufacturing.</p>
+    <p className="credits-footnote">FAST is the SOL path. Detailed ASTRA uses 250 points for the standard model budget or 500 points for the extended budget when that option is verified as available and explicitly accepted. Astra blueprints remain 250 points. Attempt counts above are points-based maxima, subject to remaining API funding, account limits and runtime activation. The existing 1,500-credit Creator grant can fund two Astra attempts plus twenty Sol attempts, not thirty Sol plus free Astra. WORLDIFACT never silently falls back from SOL to ASTRA when the cheaper route is unavailable. A GAME model still needs separate validation for physical manufacturing.</p>
     <footer><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/world">Back to the portals →</Link></footer>
   </main>
 }

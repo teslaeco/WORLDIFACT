@@ -7,6 +7,7 @@ import {
 } from '../server/entitlements.ts'
 import { getVerifiedAccount, type AccountEnv } from '../server/accounts.ts'
 import type { AstraSupportIdentity } from '../server/astraSupportOnce.ts'
+import { STUDIO_PRICING } from '../src/lib/studioPricing.ts'
 
 // Entirely synthetic, in-memory tests: no provider, billing service or production account.
 const OWNER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -281,7 +282,10 @@ test('support does not bypass billing review, plan activation, point holds, Crea
     const f = fixture({ seed: item.seed, astraEnabled: item.enabled }), store = f.store(), before = snapshot(store)
     const status = await f.status(), result = await f.reserve()
     assert.deepEqual(status.generationAdmission.astra, { allowed: false, reason: item.reason }, item.label)
-    assert.deepEqual(status.studioAdmission, { allowed: false, reason: item.reason }, item.label)
+    assert.deepEqual(status.studioAdmission, { allowed: false, reason: item.reason, tiers: {
+      standard: { allowed: false, reason: item.reason, pricing: STUDIO_PRICING.standard },
+      extended: { allowed: false, reason: item.reason, pricing: STUDIO_PRICING.extended },
+    } }, item.label)
     assert.equal(status.astraSupportOnce?.available, false, item.label)
     assert.equal(result.allowed, false, item.label); assert.equal(result.reason, item.reason, item.label)
     assert.deepEqual(snapshot(store), before, item.label)
@@ -465,7 +469,10 @@ test('authenticated owner status and job recovery never expose private approval 
   const initial = await entitlementApi(request(), f.env, fetcher)
   assert.equal(initial?.status, 200)
   const projected = await initial!.json() as SupportStatus
-  assert.deepEqual(projected.studioAdmission, { allowed: true })
+  assert.deepEqual(projected.studioAdmission, { allowed: true, tiers: {
+    standard: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', pricing: STUDIO_PRICING.standard },
+    extended: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', pricing: STUDIO_PRICING.extended },
+  } })
   assert.deepEqual(projected.generationAdmission.astra, { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' })
   assertPrivate(projected); assert.deepEqual(snapshot(store), before)
   await f.reserve(job)
@@ -538,7 +545,10 @@ test('only authoritative email_confirmed_at supplies private email proof; client
   assert.equal(JSON.stringify(user).includes('emailVerified'), false, 'Server proof must not enter public account/session JSON')
   const response = await entitlementApi(request, f.env, fetcher)
   const status = await response!.json() as SupportStatus
-  assert.deepEqual(status.studioAdmission, { allowed: true }); assertPrivate(status)
+  assert.deepEqual(status.studioAdmission, { allowed: true, tiers: {
+    standard: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', pricing: STUDIO_PRICING.standard },
+    extended: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', pricing: STUDIO_PRICING.extended },
+  } }); assertPrivate(status)
   assert.equal((await f.reserve(crypto.randomUUID(), OWNER, user)).allowed, true)
 })
 

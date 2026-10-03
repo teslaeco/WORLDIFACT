@@ -6,6 +6,7 @@ import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
 import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, reconcileUserStudioProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
+import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
 import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata } from '../src/lib/studioProtocol.ts'
 
@@ -32,9 +33,9 @@ const secretReady = (env: StudioEnv) => (env.OWNER_ACCESS_TOKEN?.length ?? 0) >=
 const keyOf = (env: StudioEnv) => crypto.subtle.importKey('raw', new TextEncoder().encode(env.OWNER_ACCESS_TOKEN!), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
 const hex = (value: ArrayBuffer) => Array.from(new Uint8Array(value), n => n.toString(16).padStart(2, '0')).join('')
 const signingBytes = (value: string, userId?: string) => new TextEncoder().encode(`WORLDIFACT-STUDIO-RECEIPT-v1:${value}${userId ? `:account:${userId}` : ''}`)
-async function receipt(env: StudioEnv, id: string, hash: string, userId?: string) {
+async function receipt(env: StudioEnv, id: string, hash: string, userId?: string, pricing?: StudioPricing) {
   const issued = Date.now(), payload = `${id}.${issued}.${hash}`
-  return { id, ticket: `${payload}.${hex(await crypto.subtle.sign('HMAC', await keyOf(env), signingBytes(payload, userId)))}`, createdAt: new Date(issued).toISOString() }
+  return { id, ticket: `${payload}.${hex(await crypto.subtle.sign('HMAC', await keyOf(env), signingBytes(payload, userId)))}`, createdAt: new Date(issued).toISOString(), ...(pricing ? { pricing } : {}) }
 }
 async function verifyReceipt(env: StudioEnv, token: string, id?: string, ownedHistory = false, userId?: string) {
   const match = RECEIPT.exec(token)
@@ -120,7 +121,7 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
   if (access?.providerBudgetPending === true) await reconcileProviderReservation(env, userId, id, fetcher)
   const detail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : JOB_DETAILS[state]
   return { id, state, detail, ...(failureCode ? { failureCode } : {}), downloadAllowed: access!.downloadAllowed,
-    previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed }
+    previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed, ...(access?.pricing ? { pricing: access.pricing } : {}) }
 }
 async function limitedJson(response: Request | Response, limit: number) {
   if (!response.headers.get('content-type')?.toLowerCase().startsWith('application/json')) throw new StudioError('Expected application/json.', 415)
@@ -191,7 +192,7 @@ async function reconcileProviderReservation(env: StudioEnv, userId: string, id: 
 function oracleFailureCode(value: Record<string, unknown>): StudioJob['failureCode'] {
   if (value.state === 'cancelled') return 'ORACLE_CANCELLED'
   if (value.state !== 'failed') return undefined
-  if (value.worldifactFailureCode === 'ORACLE_JOB_INCOMPLETE' || value.worldifactFailureCode === 'INVALID_MODEL_OUTPUT' || value.worldifactFailureCode === 'ASTRA_COST_LIMIT') return value.worldifactFailureCode
+  if (value.worldifactFailureCode === 'ORACLE_JOB_INCOMPLETE' || value.worldifactFailureCode === 'INVALID_MODEL_OUTPUT' || value.worldifactFailureCode === 'ASTRA_COST_LIMIT' || value.worldifactFailureCode === 'MODEL_BUDGET_EXCEEDED') return value.worldifactFailureCode
   return typeof value.detail === 'string' && /astra budget guard|WORLDIFACT_ASTRA_COST_GUARD|astra job budget exhausted/i.test(value.detail)
     ? 'ASTRA_COST_LIMIT' : 'ORACLE_JOB_FAILED'
 }
@@ -225,7 +226,7 @@ async function completedOracleStatus(env: StudioEnv, id: string, value: Record<s
   // A deliberately finished unreviewed model keeps the existing structural
   // acceptance path. Only an execution that never finished is rejected here.
   if (agent.finished === true) return value
-  const failureCode: StudioJob['failureCode'] = usage.error_code === 'WORLDIFACT_ASTRA_COST_GUARD' ? 'ASTRA_COST_LIMIT' : 'ORACLE_JOB_INCOMPLETE'
+  const failureCode: StudioJob['failureCode'] = value.worldifactFailureCode === 'MODEL_BUDGET_EXCEEDED' ? 'MODEL_BUDGET_EXCEEDED' : usage.error_code === 'WORLDIFACT_ASTRA_COST_GUARD' ? 'ASTRA_COST_LIMIT' : 'ORACLE_JOB_INCOMPLETE'
   return { ...value, state: 'failed', worldifactFailureCode: failureCode }
 }
 async function oracleJobStatus(env: StudioEnv, id: string, fetcher: typeof fetch, requireId: boolean) {
@@ -264,6 +265,7 @@ async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch
   if (!current.ready) throw new StudioError('The existing Astra/Blender worker is not ready.', 503)
   if (accountPolicy(env) && !current.costGuardReady) throw new StudioError('The detailed worker did not confirm the current Astra cost guard. No points were reserved.', 503)
   if (accountPolicy(env) && !current.outputPolicyReady) throw new StudioError('The detailed worker requires the reviewed Astra output policy. No points were reserved.', 503)
+  if (input.budgetTier !== undefined && (!userId || !accountPolicy(env) || !current.tiersReady)) throw new StudioError('The worker has not confirmed the selected Studio price and cost ceiling. Refresh availability; no points were reserved.', 503)
   if (trial && !current.fastBudgetReady) throw new StudioError('The approved cost guard is not confirmed. No paid request was sent.', 503)
   if (input.generationProfile === FAST_DRAFT_PROFILE && (!current.fastReady || !current.fastBudgetReady)) throw new StudioError('FAST DRAFT is not fully verified on the worker. No paid job was submitted; STANDARD remains available.', 409)
   if (input.photoCount && !current.photoReady) throw new StudioError('This worker has not confirmed photo input. Nothing was submitted.', 409)
@@ -334,6 +336,8 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       return json({ detailedReady: reason === 'READY' && state?.costGuardReady === true && state?.outputPolicyReady === true, detailedReferenceLimit: DETAILED_REFERENCE_LIMIT, costGuardReady: state?.costGuardReady === true, outputPolicyReady: state?.outputPolicyReady === true, accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
         photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, fastBudgetReady: state?.fastBudgetReady === true,
         exportPreparationReady: state?.exportPreparationReady === true,
+        tiersReady: reason === 'READY' && accountPolicy(env) && state?.tiersReady === true,
+        ...(reason === 'READY' && accountPolicy(env) && state?.tiersReady ? { pricingRevision: state.pricingRevision } : {}),
         fastOnly: trial, promptMaxLength: Math.min(4000, Math.max(3, (state?.promptMaxLength ?? 2000) - oracleStudioPayload('', { worldId: 'enchanted-ai-shop', prompt: '', purpose: 'figurine', textureMaxSize: 4096, photos: [] }).prompt.length)), allowance: pool })
     }
     if (!secretReady(env)) throw new StudioError('The job receipt service is not configured.', 503)
@@ -343,13 +347,14 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (!user) throw new StudioError('Sign in to recover your cloud model.', 401)
       const current = await currentUserStudioJob(env, user.id)
       if (!current.job) return json({ current: null })
-      const freshReceipt = await receipt(env, current.job.id, current.job.fingerprint, user.id)
+      const freshReceipt = await receipt(env, current.job.id, current.job.fingerprint, user.id, current.job.pricing)
       return json({ current: {
         receipt: freshReceipt,
         prompt: current.job.prompt,
         startedAt: new Date(current.job.at).toISOString(),
         financialState: current.job.state,
         reservedPoints: current.job.held ? current.job.cost : 0,
+        ...(current.job.pricing ? { pricing: current.job.pricing } : {}),
         ...(current.job.failureCode ? { failureCode: current.job.failureCode } : {}),
       } })
     }
@@ -378,20 +383,32 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       await preflight(request, env, fetcher, metadata, user?.id)
       const pool = await allowance(env)
       if (!pool.unlimited && pool.remaining === 0) throw new StudioError('The cumulative allowance is exhausted. No job was started.', 429)
-      return json(await receipt(env, crypto.randomUUID(), await boundDigest(digest, user?.id), user?.id))
+      return json(await receipt(env, crypto.randomUUID(), await boundDigest(digest, user?.id), user?.id, metadata.budgetTier === undefined ? undefined : studioPricingFor(metadata)))
     }
     if (url.pathname === '/api/studio/jobs' && request.method === 'POST') {
       await limit(request, env, 'submit')
       const user = await accountIdentity(request, env, fetcher)
-      const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', undefined, false, user?.id)
+      const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', undefined, !!user, user?.id)
       const idempotencyKey = request.headers.get('X-WORLDIFACT-Idempotency-Key')
       if (idempotencyKey && idempotencyKey !== auth.id) throw new StudioError('The generation idempotency key does not match this signed job. No new charge was made.', 409)
-      if (Date.now() - auth.issued > 30 * 60_000) throw new StudioError('This unsubmitted receipt expired. Review your inputs before preparing another.', 409)
       const input = await inputFrom(request)
       if (await boundInputDigest(input, user?.id) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
+      const pricing = input.budgetTier === undefined ? undefined : studioPricingFor(input)
+      // Previously admitted work retains its exact signed input and price even
+      // after a quote expires or the worker enters maintenance. Recovery must
+      // never create a new provider request or reserve customer points again.
+      if (user && pricing) {
+        const existing = await userJobAccess(env, user.id, auth.id)
+        if (existing.owned) {
+          if (existing.fingerprint !== auth.hash || existing.pricing?.revision !== pricing.revision || existing.pricing.tier !== pricing.tier || existing.pricing.points !== pricing.points || existing.pricing.maxProviderCents !== pricing.maxProviderCents)
+            throw new StudioError('This job belongs to a different input or price. Recover its original receipt.', 409)
+          return json({ job: await accountJob(env, user.id, auth.id, existing.state === 'failed' ? 'failed' : existing.state === 'completed' ? 'succeeded' : 'pending', fetcher), recoveryOnly: true }, 202)
+        }
+      }
+      if (Date.now() - auth.issued > (pricing ? 5 : 30) * 60_000) throw new StudioError('This unsubmitted receipt expired. Review your inputs and current price before preparing another.', 409)
       const checked = await preflight(request, env, fetcher, prepareMetadata(input), user?.id)
       if (user) {
-        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt, supportIdentity: user })
+        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt, supportIdentity: user, ...(pricing ? { pricing } : {}) })
         if (userReservation.repeated && userReservation.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed', fetcher), recoveryOnly: true }, 202)
         if (!userReservation.allowed) {
           const conflict = ['REQUEST_PAYLOAD_MISMATCH', 'JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(userReservation.reason ?? '')
@@ -434,7 +451,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         return json({ job: await accountJob(env, user?.id, auth.id, completed.state as StudioJob['state'], fetcher, oracleFailureCode(completed)) }, 202)
       } catch (error) {
         if (error instanceof StudioError) throw error
-        return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending } }, 202)
+        return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending, ...(pricing ? { pricing } : {}) } }, 202)
       }
     }
     const match = new RegExp(`^/api/studio/jobs/(${UUID})(?:/(model|exports/(?:pbr|fbx|blend)))?$`).exec(url.pathname)

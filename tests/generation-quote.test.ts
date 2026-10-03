@@ -86,3 +86,25 @@ test('an allowed admission still verifies costs and legacy accounts retain the e
   assert.equal(quoteGeneration('astra', { ...funded, generationAdmission, generationCosts: { sol: 50, astra: 1 } }, billing, true).state, 'pending')
   assert.equal(quoteGeneration('astra', { ...funded, generationAdmission }, billing, false).state, 'signin')
 })
+
+test('detailed tier quotes use exact tier admission while blueprint remains 250 points', async () => {
+  const { STUDIO_PRICING } = await import('../src/lib/studioPricing.ts')
+  const funded = { ...account, credits: 700, subscription: { active: true, plan: 'pro' },
+    generationAdmission: { astra: { allowed: true } }, studioAdmission: { allowed: true, tiers: {
+      standard: { allowed: true, pricing: STUDIO_PRICING.standard }, extended: { allowed: true, pricing: STUDIO_PRICING.extended },
+    } } }
+  assert.equal(quoteGeneration('astra', funded, billing, true, true, 'standard').after, 450)
+  const extended = quoteGeneration('astra', funded, billing, true, true, 'extended')
+  assert.equal(extended.points, 500); assert.equal(extended.after, 200)
+  assert.equal(quoteGeneration('astra', funded, billing, true, false, 'extended').points, 250)
+  assert.equal(quoteGeneration('astra', { ...funded, availableCredits: 499 }, billing, true, true, 'extended').reason, 'CREDITS_EXHAUSTED')
+  const refused = { ...funded, studioAdmission: { ...funded.studioAdmission, tiers: { ...funded.studioAdmission.tiers,
+    extended: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', pricing: STUDIO_PRICING.extended } } } }
+  assert.equal(quoteGeneration('astra', refused, billing, true, true, 'standard').state, 'credits')
+  assert.equal(quoteGeneration('astra', refused, billing, true, true, 'extended').reason, 'PROVIDER_BUDGET_EXHAUSTED')
+  for (const pricing of [undefined, STUDIO_PRICING.standard, { ...STUDIO_PRICING.extended, points: 250 }, { ...STUDIO_PRICING.extended, revision: 'old-policy' }]) {
+    const stale = { ...funded, studioAdmission: { tiers: { extended: { allowed: true, pricing } } } }
+    const quote = quoteGeneration('astra', stale, billing, true, true, 'extended')
+    assert.equal(quote.state, 'pending'); assert.equal(quote.points, null); assert.equal(quote.after, null)
+  }
+})

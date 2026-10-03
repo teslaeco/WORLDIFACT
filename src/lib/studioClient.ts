@@ -1,3 +1,4 @@
+import { isStudioPricing, studioPricingFor, type StudioPricing } from './studioPricing.ts'
 import { JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, prepareStudioInput, validateStudioInput, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
 import { canSubmitNewDraft } from './studioDraft.ts'
 
@@ -11,7 +12,7 @@ export const STUDIO_POLL_TIMEOUT_MS = 270_000
 export const STUDIO_CONNECTION_INTERRUPTED = 'The connection was interrupted while reading this job. Keep this receipt; recovery checks the same job without starting another generation.'
 export const STUDIO_RECEIPT_KEY = 'worldifact-studio-current-v1'
 export const STUDIO_RECEIPT_HISTORY_PREFIX = 'worldifact-studio-receipt-v1:'
-export type SavedStudioJob = { receipt: StudioReceipt; prompt: string; startedAt: string; rejection?: string; rejectionCode?: StudioJob['failureCode']; generationProfile?: typeof FAST_DRAFT_PROFILE }
+export type SavedStudioJob = { pricing?: StudioPricing; receipt: StudioReceipt; prompt: string; startedAt: string; rejection?: string; rejectionCode?: StudioJob['failureCode']; generationProfile?: typeof FAST_DRAFT_PROFILE }
 export type ReceiptStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type Fetcher = typeof fetch
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -20,7 +21,7 @@ export function readReceipt(value: unknown): StudioReceipt {
   if (!object(value) || typeof value.id !== 'string' || !uuid.test(value.id) || typeof value.ticket !== 'string' ||
     !new RegExp(`^${value.id}\\.[0-9]{13}\\.[a-f0-9]{64}\\.[a-f0-9]{64}$`).test(value.ticket) ||
     typeof value.createdAt !== 'string' || !Number.isFinite(Date.parse(value.createdAt))) throw new Error('Invalid job receipt. No generation was submitted.')
-  return { id: value.id, ticket: value.ticket, createdAt: value.createdAt }
+  return { id: value.id, ticket: value.ticket, createdAt: value.createdAt, ...(isStudioPricing(value.pricing) ? { pricing: { ...value.pricing } } : {}) }
 }
 export function readSavedStudioJob(store: ReceiptStore): SavedStudioJob | null {
   const text = store.getItem(STUDIO_RECEIPT_KEY)
@@ -30,7 +31,9 @@ export function readSavedStudioJob(store: ReceiptStore): SavedStudioJob | null {
 function parseSavedStudioJob(value: unknown): SavedStudioJob {
   if (!object(value) || typeof value.prompt !== 'string' || value.prompt.length > 4000 || typeof value.startedAt !== 'string' || !Number.isFinite(Date.parse(value.startedAt))) throw new Error('The saved job receipt is damaged. Do not submit a duplicate job.')
   const profile = generationProfile(value.generationProfile)
-  return { receipt: readReceipt(value.receipt), prompt: value.prompt, startedAt: value.startedAt,
+  const receipt = readReceipt(value.receipt)
+  return { receipt, prompt: value.prompt, startedAt: value.startedAt,
+    ...(isStudioPricing(value.pricing) ? { pricing: { ...value.pricing } } : receipt.pricing ? { pricing: { ...receipt.pricing } } : {}),
     ...(typeof value.rejection === 'string' && value.rejection.length <= 600 ? { rejection: value.rejection } : {}),
     ...(STUDIO_FAILURE_CODES.includes(value.rejectionCode as NonNullable<StudioJob['failureCode']>) ? { rejectionCode: value.rejectionCode as StudioJob['failureCode'] } : {}),
     ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
@@ -41,7 +44,7 @@ export function parseStudioJob(value: unknown, id: string): StudioJob {
   const reconciliationRequired = state === 'pending' && value.job.reconciliationRequired === true
   const failureCode = state === 'failed' && STUDIO_FAILURE_CODES.includes(value.job.failureCode as NonNullable<StudioJob['failureCode']>) ? value.job.failureCode as StudioJob['failureCode'] : undefined
   const failureDetail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : undefined
-  return { id, state, detail: failureDetail || (reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state]), ...(failureCode ? { failureCode } : {}),
+  return { id, state, ...(isStudioPricing(value.job.pricing) ? { pricing: { ...value.job.pricing } } : {}), detail: failureDetail || (reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state]), ...(failureCode ? { failureCode } : {}),
     ...(reconciliationRequired ? { reconciliationRequired: true } : {}),
     ...(typeof value.job.downloadAllowed === 'boolean' ? { downloadAllowed: value.job.downloadAllowed } : {}),
     ...(typeof value.job.previewOnly === 'boolean' ? { previewOnly: value.job.previewOnly } : {}),
@@ -96,12 +99,12 @@ export class StudioCoordinator {
   get current() { return this.saved }
   restore() {
     this.saved = readSavedStudioJob(this.store)
-    this.rejectedJob = this.saved?.rejection ? { id: this.saved.receipt.id, state: 'failed', detail: this.saved.rejectionCode ? STUDIO_FAILURE_DETAILS[this.saved.rejectionCode] : this.saved.rejection, ...(this.saved.rejectionCode ? { failureCode: this.saved.rejectionCode } : {}) } : null
+    this.rejectedJob = this.saved?.rejection ? { id: this.saved.receipt.id, ...(this.saved.pricing ? { pricing: this.saved.pricing } : {}), state: 'failed', detail: this.saved.rejectionCode ? STUDIO_FAILURE_DETAILS[this.saved.rejectionCode] : this.saved.rejection, ...(this.saved.rejectionCode ? { failureCode: this.saved.rejectionCode } : {}) } : null
     this.confirmedJob = this.rejectedJob
     return this.saved
   }
   async recoverCurrent(owner = '', signal?: AbortSignal): Promise<{ saved: SavedStudioJob; job: StudioJob } | null> {
-    if (this.saved) return { saved: this.saved, job: this.confirmedJob ?? { id: this.saved.receipt.id, state: 'pending', detail: JOB_DETAILS.pending } }
+    if (this.saved) return { saved: this.saved, job: this.confirmedJob ?? { id: this.saved.receipt.id, state: 'pending', detail: JOB_DETAILS.pending, ...(this.saved.pricing ? { pricing: this.saved.pricing } : {}) } }
     if (this.recovering || this.submitting) throw new Error('Wait for cloud recovery or submission to finish before changing jobs.')
     this.recovering = true
     try {
@@ -114,7 +117,9 @@ export class StudioCoordinator {
       if (!object(value.current) || typeof value.current.prompt !== 'string' || value.current.prompt.length > 4000 ||
         typeof value.current.startedAt !== 'string' || !Number.isFinite(Date.parse(value.current.startedAt)) ||
         !['reserved','completed','failed'].includes(String(value.current.financialState))) throw new Error('The cloud job recovery record is invalid.')
-      const saved: SavedStudioJob = { receipt: readReceipt(value.current.receipt), prompt: value.current.prompt, startedAt: value.current.startedAt }
+      const saved: SavedStudioJob = { receipt: readReceipt(value.current.receipt), prompt: value.current.prompt, startedAt: value.current.startedAt,
+        ...(isStudioPricing(value.current.pricing) ? { pricing: { ...value.current.pricing } } : {}) }
+      if (!saved.pricing && saved.receipt.pricing) saved.pricing = saved.receipt.pricing
       const financial = String(value.current.financialState)
       const job: StudioJob = financial === 'completed'
         ? { id: saved.receipt.id, state: 'succeeded', detail: JOB_DETAILS.succeeded }
@@ -123,6 +128,7 @@ export class StudioCoordinator {
           : { id: saved.receipt.id, state: 'pending', detail: JOB_DETAILS.pending }
       this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
       if (this.store.getItem(STUDIO_RECEIPT_KEY) !== JSON.stringify(saved)) throw new Error('The recovered cloud receipt could not be stored. No new generation was started.')
+      if (saved.pricing) job.pricing = saved.pricing
       this.saved = saved; this.confirmedJob = job; this.rejectedJob = null
       return { saved, job }
     } finally { this.recovering = false }
@@ -177,8 +183,14 @@ export class StudioCoordinator {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...accessHeaders(owner), ...previousHeaders }, body: prepareBody, signal: AbortSignal.timeout(STUDIO_PREPARE_TIMEOUT_MS),
       })
       const receipt = readReceipt(await responseJson(prepared))
+      if (snapshot.pricingRevision) {
+        const expected = studioPricingFor(snapshot)
+        if (!receipt.pricing || receipt.pricing.revision !== expected.revision || receipt.pricing.tier !== expected.tier || receipt.pricing.points !== expected.points || receipt.pricing.maxProviderCents !== expected.maxProviderCents)
+          throw new Error('The prepared receipt did not confirm your selected model budget and points. No generation was submitted; review availability before trying again.')
+      }
       if (previous?.receipt.id === receipt.id) throw new Error('A new model requires a new receipt. The previous model was not changed.')
       const saved: SavedStudioJob = { receipt, prompt: snapshot.prompt, startedAt: new Date().toISOString(),
+        ...(snapshot.pricingRevision ? { pricing: { ...studioPricingFor(snapshot) } } : {}),
         ...(snapshot.generationProfile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
       if (previous) this.preserveReceipt(previous)
       this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
@@ -190,18 +202,19 @@ export class StudioCoordinator {
           body, signal: AbortSignal.timeout(STUDIO_SUBMIT_TIMEOUT_MS),
         })
         const job = parseStudioJob(await responseJson(result), receipt.id)
+        if (!job.pricing && saved.pricing) job.pricing = saved.pricing
         this.confirmedJob = job; return job
       } catch (error) {
         // An explicit validation/auth/quota rejection is not uncertain provider
         // acceptance. Keep it terminal so a denied account does not poll forever.
         if (error instanceof StudioResponseError && ([400, 401, 403, 409, 422, 429].includes(error.status) || error.failureCode !== undefined)) {
-          this.rejectedJob = { id: receipt.id, state: 'failed', detail: error.message, ...(error.failureCode ? { failureCode: error.failureCode } : {}) }
+          this.rejectedJob = { id: receipt.id, ...(saved.pricing ? { pricing: saved.pricing } : {}), state: 'failed', detail: error.message, ...(error.failureCode ? { failureCode: error.failureCode } : {}) }
           this.confirmedJob = this.rejectedJob
           this.saved = { ...saved, rejection: error.message, ...(error.failureCode ? { rejectionCode: error.failureCode } : {}) }
           try { this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(this.saved)) } catch { /* Explicit rejection is still terminal in this tab. */ }
           return this.rejectedJob
         }
-        return { id: receipt.id, state: 'pending', detail: JOB_DETAILS.pending }
+        return { id: receipt.id, state: 'pending', detail: JOB_DETAILS.pending, ...(saved.pricing ? { pricing: saved.pricing } : {}) }
       }
     } finally { this.submitting = false }
   }
@@ -213,6 +226,7 @@ export class StudioCoordinator {
     })
     try {
       const job = parseStudioJob(await responseJson(response), saved.receipt.id)
+      if (!job.pricing && saved.pricing) job.pricing = saved.pricing
       if (this.saved?.receipt.id === job.id) this.confirmedJob = job
       return job
     } catch (error) {

@@ -89,7 +89,7 @@ that installation or establish that historical account funding was recovered.
 The existing original OCI Cloud Shell/SSH maintenance context remains required;
 no credential extraction or unrelated host is an alternative.
 
-## 500-point option: decision boundary
+## 500-point option: earlier decision boundary (superseded below)
 
 The owner requested an explicit 500-point consent option, not an automatic point
 debit or an unbounded API budget. The existing 250-point/USD 1.75 contract remains
@@ -124,3 +124,43 @@ review found and fixed incomplete request history being mistaken for zero spend.
 Its strict installer accepts only the verified prebuild ancestor; the separate
 STANDARD-context variant requires a composed reviewed upgrade. No target Oracle
 installation is claimed.
+
+## Approved price tiers — 3 October 2026 follow-up
+
+The owner subsequently fixed both new detailed Studio prices: 250 points with a
+USD 2 provider ceiling, or 500 points with a USD 4 ceiling. These are bounded
+generation attempts, not a guarantee that every elaborate model will finish.
+The UI presents the exact point price, requires explicit acceptance of 500
+points for the unchanged draft, and never automatically upgrades or retries.
+Only the authenticated worker's proven `MODEL_BUDGET_EXCEEDED` outcome explains
+that a model is too elaborate for the selected budget. Generic cost-guard,
+account funding, token-count, expiry and transport errors do not imply that.
+
+The canonical input and account-bound signed receipt include the exact tier,
+pricing revision and explicit acceptance. A new priced quote expires after five
+minutes. An already admitted matching job remains recoverable after that expiry
+or during maintenance under its original stored terms without another charge or
+Oracle submission. The ledger atomically checks both points and provider funding,
+reserves exactly 200 or 400 cents, and settles/reconciles only that job's matching
+immutable liability receipt. Historical 175-cent jobs keep their original terms.
+
+The shared provider pool is not enlarged by a higher point price. The existing
+70% allocation, plan prices, balances, minimum-margin rules and support grants
+remain unchanged. Available points alone therefore do not guarantee sufficient
+funded provider authority for another attempt. Unknown liabilities remain held.
+
+The new Oracle package persists immutable pricing outside mutable job artifacts
+under the provider reservation lock, before job admission. Both reservations and
+settlements use those same terms; sealing a terminal receipt permanently prevents
+future paid requests for the job. Health advertises the new exact tier contract
+only after the reviewed package is installed. Legacy health fields and omitted
+pricing input remain compatible with the prior USD 1.75 guard. The source update
+does not claim that the original Oracle worker has already been upgraded.
+
+PR #194's earlier reconciliation deployment succeeded at main
+`8aa7dbc56f4f638af130fbe26c7b4a2b31656b70`, run 37135396401, version
+`9e7f77b8-c313-4bc1-9fb1-de5b4871a2f2`, with all 955 JavaScript tests passing.
+This pricing follow-up's exact final checks and deployment belong to its PR.
+No paid model generation, balance reset, support-grant activation or card charge
+is part of this validation. Activation still requires the original authorized
+OCI Cloud Shell/SSH maintenance context and verification of the runtime contract.

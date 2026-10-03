@@ -6,7 +6,7 @@ import { parseStudioJob } from '../src/lib/studioClient.ts'
 import type { StudioStatus } from '../src/lib/studioProtocol.ts'
 
 test('detailed readiness is measured, expires at the reviewed deadline and never inferred from a blueprint',()=>{
-  assert.deepEqual(detailedRuntime(detailedHealthFixture,1790740000000),{costGuardReady:true,outputPolicyReady:true})
+  assert.deepEqual(detailedRuntime(detailedHealthFixture,1790740000000),{costGuardReady:true,outputPolicyReady:true,tiersReady:false})
   assert.equal(detailedRuntime(detailedHealthFixture,1793145600000).costGuardReady,false)
   assert.equal(detailedRuntime({generationReady:true,astraBlueprintReady:true}).outputPolicyReady,false)
   const status={ready:true,detailedReady:true,photoReady:true} as StudioStatus

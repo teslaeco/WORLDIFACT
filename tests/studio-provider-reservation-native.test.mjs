@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
+import { STUDIO_PRICING } from '../src/lib/studioPricing.ts'
 
 const NOW = Date.parse('2026-10-03T12:00:00Z')
 const ORIGIN = 'https://native-ledger.example.test'
@@ -81,7 +82,7 @@ test('native SQLite atomically fences undispatched Studio funding release agains
     await call(account, '/grant', { id: 'in_nativefixture', credits: 1500, subscriptionId: 'sub_nativefixture' })
     await call(account, '/subscription', { id: 'sub_nativefixture', until: NOW + 86400_000, active: true, revision: 1, plan: 'creator', grantId: 'in_nativefixture' })
   }
-  const reserve = (account, id) => call(account, '/reserve', { id, profile: 'slow', channel: 'studio', fingerprint, prompt: 'Inert native Studio fixture' })
+  const reserve = (account, id, pricing, status = 200) => call(account, '/reserve', { id, profile: 'slow', channel: 'studio', fingerprint, prompt: 'Inert native Studio fixture', ...(pricing ? { pricing } : {}) }, status)
   const settle = (account, id, status = 200) => call(account, '/settle', { id, state: 'failed', failureCode: 'ORACLE_BUSY' }, status)
   const dispatch = (account, id) => call(account, '/studio-dispatch', { id, fingerprint })
   const inspect = (account, id) => call(account, '/fixture-inspect?id=' + id)
@@ -201,4 +202,77 @@ test('native SQLite atomically fences undispatched Studio funding release agains
     assert.deepEqual(await inspect(account, id), before)
     assert.equal(before.providerCents, 1050)
   })
+
+  await t.test('tiered SQLite admission holds exact points and funding without increasing grant allocation', async () => {
+    for (const pricing of Object.values(STUDIO_PRICING)) {
+      const account = 'fixture-tier-' + pricing.tier, id = crypto.randomUUID()
+      await seed(account); await reserve(account, id, pricing)
+      const before = await inspect(account, id)
+      assert.equal(before.providerCents, 1050 - pricing.maxProviderCents)
+      assert.equal(before.heldCredits, pricing.points); assert.equal(before.credits, 1500)
+      assert.deepEqual(before.job.pricing, pricing)
+      assert.equal((await reserve(account, id, pricing)).repeated, true)
+      assert.equal((await reserve(account, id, undefined, 429)).reason, 'JOB_PRICING_MISMATCH')
+      assert.equal((await reserve(account, id, pricing.tier === 'standard' ? STUDIO_PRICING.extended : STUDIO_PRICING.standard, 429)).reason, 'JOB_PRICING_MISMATCH')
+      assert.deepEqual(await inspect(account, id), before)
+      await dispatch(account, id)
+      const settled = await Promise.all(Array.from({ length: 6 }, () => call(account, '/settle', { id, state: 'completed' })))
+      assert.equal(settled.filter(value => value.repeated === false).length, 1)
+      const after = await inspect(account, id)
+      assert.equal(after.credits, 1500 - pricing.points); assert.equal(after.heldCredits, 0)
+      assert.equal(after.providerCents, 1050 - pricing.maxProviderCents)
+      await settle(account, id)
+      assert.deepEqual(await inspect(account, id), after, 'Terminal completion cannot be refunded by a later failure')
+    }
+  })
+
+  await t.test('concurrent extended requests consume only existing SQLite funding and never oversubscribe500-point holds', async () => {
+    const account = 'fixture-tier-race'; await seed(account)
+    const ids = Array.from({ length: 12 }, () => crypto.randomUUID())
+    const responses = await Promise.all(ids.map(async id => {
+      const response = await mf.dispatchFetch(ORIGIN + '/reserve', { method: 'POST', headers: { 'X-Fixture-Account': account },
+        body: JSON.stringify({ id, profile: 'slow', channel: 'studio', fingerprint, pricing: STUDIO_PRICING.extended }) })
+      return response.json()
+    }))
+    assert.equal(responses.filter(value => value.allowed).length, 2)
+    assert.ok(responses.filter(value => !value.allowed).every(value => value.reason === 'PROVIDER_BUDGET_EXHAUSTED'))
+    const after = await inspect(account, ids.find((_, i) => responses[i].allowed))
+    assert.equal(after.providerCents, 250); assert.equal(after.credits, 1500); assert.equal(after.heldCredits, 1000)
+  })
+
+  await t.test('tiered terminal reconciliation binds the saved cap, rounds up, and commits its marker once in SQLite', async () => {
+    for (const pricing of Object.values(STUDIO_PRICING)) {
+      const account = 'fixture-tier-receipt-' + pricing.tier, id = crypto.randomUUID()
+      await seed(account); await reserve(account, id, pricing); await dispatch(account, id); await settle(account, id)
+      const proof = { ...terminalReceipt(id, 420001), policyRevision: 'astra-low-tiered-v1', capMicroUsd: pricing.maxProviderCents * 10000 }
+      assert.equal((await reconcile(account, id)).reason, 'RECEIPT_PRICING_MISMATCH')
+      const before = await inspect(account, id)
+      await call(account, '/fixture-arm-failure', {})
+      await call(account, '/reconcile-studio-provider', { id, receipt: proof }, 503)
+      assert.deepEqual(await inspect(account, id), before, 'A failed marker write cannot return any funds')
+      const replies = await Promise.all(Array.from({ length: 12 }, () => call(account, '/reconcile-studio-provider', { id, receipt: proof })))
+      assert.equal(replies.filter(value => value.repeated === false).length, 1)
+      const after = await inspect(account, id)
+      assert.equal(after.providerCents, 1007); assert.equal(after.credits, 1500); assert.equal(after.heldCredits, 0)
+      assert.equal(after.job.studioProviderReconciliation.originalReservedCents, pricing.maxProviderCents)
+      assert.equal(after.job.studioProviderReconciliation.retainedCents, 43)
+      assert.equal(after.job.studioProviderReconciliation.releasedCents, pricing.maxProviderCents - 43)
+    }
+  })
+
+  await t.test('pre-dispatch500-point failure rolls back on error, then returns the400-cent hold once', async () => {
+    const account = 'fixture-tier-return', id = crypto.randomUUID()
+    await seed(account); await reserve(account, id, STUDIO_PRICING.extended)
+    const before = await inspect(account, id)
+    await call(account, '/fixture-arm-failure', {}); await settle(account, id, 503)
+    assert.deepEqual(await inspect(account, id), before)
+    await Promise.all(Array.from({ length: 8 }, () => settle(account, id)))
+    assert.equal((await dispatch(account, id)).dispatch, false)
+    const after = await inspect(account, id)
+    assert.equal(after.providerCents, 1050); assert.equal(after.credits, 1500); assert.equal(after.heldCredits, 0)
+    const proof = { ...terminalReceipt(id, 0), policyRevision: 'astra-low-tiered-v1', capMicroUsd: 4000000 }
+    assert.equal((await call(account, '/reconcile-studio-provider', { id, receipt: proof })).reason, 'INELIGIBLE_RESERVATION')
+    assert.deepEqual(await inspect(account, id), after)
+  })
+
 })
