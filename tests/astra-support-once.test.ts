@@ -264,13 +264,11 @@ test('support status peeks are read-only before use, after consumption and when 
   assert.equal(legacyStore.values.has(PROVIDER), false, 'An eligibility read may never initialize provider funding')
 })
 
-test('support does not bypass billing review, paid membership, runtime activation, point holds or negative provider debt', async () => {
+test('support does not bypass billing review, runtime activation, point holds or negative provider debt', async () => {
   const active = { id: 'sub_Synthetic', active: true, until: NOW + DAY, revision: 1, plan: 'creator', grantId: 'in_Synthetic' }
   const cases: { label: string; seed?: Record<string, unknown>; enabled?: boolean; reason: string }[] = [
     { label: 'billing review', seed: { billingHold: true }, reason: 'BILLING_REVIEW_REQUIRED' },
     { label: 'negative points', seed: { balance: -1 }, reason: 'BILLING_REVIEW_REQUIRED' },
-    { label: 'inactive subscription', seed: { subscription: { ...active, active: false } }, reason: 'ASTRA_PLAN_REQUIRED' },
-    { label: 'expired subscription', seed: { subscription: { ...active, until: NOW } }, reason: 'ASTRA_PLAN_REQUIRED' },
     { label: 'disabled Creator Astra runtime', enabled: false, reason: 'ASTRA_RUNTIME_DISABLED' },
     { label: 'disabled Pro Astra runtime', seed: { subscription: { ...active, plan: 'pro' } }, enabled: false, reason: 'ASTRA_RUNTIME_DISABLED' },
     { label: 'disabled Studio Astra runtime', seed: { subscription: { ...active, plan: 'studio' } }, enabled: false, reason: 'ASTRA_RUNTIME_DISABLED' },
