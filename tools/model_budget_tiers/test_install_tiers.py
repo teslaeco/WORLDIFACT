@@ -158,12 +158,12 @@ class InstallerTests(unittest.TestCase):
         copied = installer.maintenance_fence()
         self.assertEqual(copied.EXPECTED, installer.tiers_patch.PREBUILD_EXPECTED)
         self.assertEqual(hashlib.sha256(Path(copied.__file__).read_bytes()).hexdigest(), installer.FENCE_SHA256)
-        # Narrow manifest adaptation must not alter the kernel/resource/DB guardian.
+        # Compare untouched guardian machinery; journal admission changes have dedicated tests.
         old = ast.parse(before)
         new = ast.parse(Path(copied.__file__).read_bytes())
         def methods(tree):
             return {node.name: ast.dump(node, include_attributes=False) for node in tree.body
-                    if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name != 'quiesce'}
+                    if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name not in {'quiesce', '_unit_policy', '_socket_idle', '_resources', '_guard_stop', '_journal_helper', '_fd_sockets', '_journal_snapshot'}}
         self.assertEqual(methods(old), methods(new))
         self.assertEqual(reviewed.read_bytes(), before)
         with patch.object(installer.base, 'read_regular', return_value=Path(copied.__file__).read_bytes() + b'\n'):

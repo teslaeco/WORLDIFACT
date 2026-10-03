@@ -149,14 +149,15 @@ def connection(home=None):
 
 
 FILES.update({
-    'maintenance_fence.py': ('tools/model_budget_tiers/maintenance_fence.py', 'f12d394885e32d53c03837052a92a17f914973f4'),
+    'journal_socket.py': ('tools/model_budget_tiers/journal_socket.py', 'ef1161d629908e81c28f40ecf631b75564315194'),
+    'maintenance_fence.py': ('tools/model_budget_tiers/maintenance_fence.py', '8e4b65da7857090a48f2d1a15f180a981541feab'),
     'verification_scope.py': ('tools/model_context/verification_scope.py', '677c577db69ece8d9757fa81bb62633bc134c17d'),
     'terminal_budget.py': ('tools/model_budget_tiers/terminal_budget.py', '315cb053f1fade24827b3da5859ce0dee590f9da'),
     'receipt_budget_patch.py': ('tools/model_budget_receipt/budget_patch.py', '011f70f85530948dc36929ab37603569480ce880'),
     'receipt_terminal_budget.py': ('tools/model_budget_receipt/terminal_budget.py', '0d5a597aa2d4e37797e06a9866bb1f7902f35b7b'),
     'tiers_patch.py': ('tools/model_budget_tiers/tiers_patch.py', '7d664c7e94e20ea0fc142e4e7a2c6583d9cfb5fd'),
     'studio_pricing.py': ('tools/model_budget_tiers/studio_pricing.py', 'd02a12d73ecc377801cc6ed1029c0a2949447e93'),
-    'install_tiers.py': ('tools/model_budget_tiers/install_tiers.py', 'ef03915ffe22d815e695e12f23f0d18c0ac8ab74'),
+    'install_tiers.py': ('tools/model_budget_tiers/install_tiers.py', '9f76823369d1ebe9315e569d79f70c9a1906b01b'),
 })
 
 PHASES = {'ALREADY_VERIFIED', 'WORLDIFACT_STUDIO_PRICING_VERIFIED', 'WORLDIFACT_STUDIO_PRICING_NOT_CONFIRMED'}

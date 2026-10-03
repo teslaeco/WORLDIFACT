@@ -164,3 +164,46 @@ This pricing follow-up's exact final checks and deployment belong to its PR.
 No paid model generation, balance reset, support-grant activation or card charge
 is part of this validation. Activation still requires the original authorized
 OCI Cloud Shell/SSH maintenance context and verification of the runtime contract.
+
+## Original Cloud Shell activation evidence — 3 October, evening
+
+PR #195 merged as `12149bd6c55d8de95044a4c41e55ccf87fed47c6` and
+Cloudflare release 37138372766 succeeded with 997 tests, zero skipped, and version
+`ffc3edf8-e1e3-4b21-a51e-cced052125c9`. This is application-release evidence only.
+
+The owner's original Cloud Shell verified launcher SHA-256
+`7248bce0ab366cf2f0984cd8ad4c092eec2b7722c9d1eb03099bf539a8ae39a9`.
+Its first installation attempt returned `unsafe_job_history` and no confirmed
+activation. A later read-only SQLite snapshot reported `cancelled=1`, `failed=60`
+and `succeeded=80`, with no other states. Those are stored states, not visual
+quality or financial-settlement attestations. The owner then ran the explicit
+single-cancelled-job cleanup option. That attempt returned
+`accepted_or_unknown_socket`, `activation_committed=null`,
+`job_rows_changed=false`, and `paid_generation_requested=false`.
+
+The socket refusal is before the admitted installation lease. The old checker
+counts every socket-backed descriptor, including systemd journal stdout/stderr,
+but recognizes only TCP/TCP6 and demands exactly one descriptor. Its pipe-based
+kernel fixtures did not cover journal streams. Inherited journal sockets are a
+candidate explanation, not remotely confirmed by the screenshot. Unknown or
+accepted request sockets must remain a refusal; an output-descriptor number or
+AF_UNIX alone is insufficient evidence to exempt it. No job, reservation, source,
+or financial guard may be reset to make installation proceed.
+
+### Journal socket maintenance correction
+
+The tier installer now exempts only inherited stdout/stderr sockets proven by
+kernel AF_UNIX peer/cookie/VFS evidence to terminate at the protected journal
+stdout socket. Accepted or unknown application sockets still refuse maintenance;
+the original freeze, pidfd, database and cancellation-consent checks remain.
+The package and guardian pin the new verifier. A checksum-pinned read-only
+diagnostic can run after a single failed installation attempt, without retrying
+maintenance or requesting a paid generation.
+
+Local verification: launcher 11/11 and diagnostic 8/8 passed; journal protocol and
+integration tests passed. This execution kernel does not provide usable AF_UNIX
+socket diagnostics, so the real-kernel positive tests require mandatory Ubuntu CI.
+`deploy:check` passed with temporary Wrangler log/config locations. Local
+`npm run verify` failed in four existing test files and the build dependency fetch
+failed with `EAI_AGAIN`; neither is recorded as a pass. Hosted CI is the release
+gate. No successful Oracle activation is implied by this source correction.
