@@ -65,6 +65,9 @@ function AccountStatusContent({ signedIn, loading }: { signedIn: boolean; loadin
     <div className="account-status-row">
       <Link to="/" className="account-status-brand">WORLDIFACT</Link>
       <div className="account-status-tools">
+        <Link to="/integrations/openai" className="account-status-dots" aria-label="Dots connection (optional)" title="Review Dots connection status and setup" aria-current={location.pathname === '/integrations/openai' ? 'page' : undefined}>
+          <span>Dots</span><small>Optional</small>
+        </Link>
         <Link to={signedIn ? '/account/credits' : signIn} className="account-status-credits" aria-live="polite">
           <span>Credits</span><strong>{loading ? 'Checking…' : !signedIn ? 'Sign in' : balance ? balance.credits.toLocaleString() : error ? 'Unavailable' : 'Checking…'}</strong>
         </Link>

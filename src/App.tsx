@@ -16,6 +16,8 @@ const AccountPage = lazy(async () => import('./pages/AccountPage'))
 const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
 const ModelsPage = lazy(async () => import('./pages/ModelsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
+const OAuthConsentPage = lazy(async () => import('./pages/OAuthConsentPage'))
+const OpenAIIntegrationPage = lazy(async () => import('./pages/OpenAIIntegrationPage'))
 
 function AvatarPreload() {
   const { pathname } = useLocation()
@@ -42,6 +44,8 @@ export default function App() {
         <Route path="/account/credits" element={<CreditsPage />} />
         <Route path="/account/models" element={<ModelsPage />} />
         <Route path="/account/reset" element={<ResetPasswordPage />} />
+        <Route path="/oauth/consent" element={<OAuthConsentPage />} />
+        <Route path="/integrations/openai" element={<OpenAIIntegrationPage />} />
         <Route path="/control" element={<ControlPage />} />
         <Route path="/portal/:portalId" element={<PortalPage />} />
         {['/chess', '/iss', '/planets', '/terra', '/shop'].map(path => (
@@ -61,6 +65,7 @@ export default function App() {
         <a href="/blog/astra-vs-meshy-rim/">Astra vs Meshy: rim case study</a>
         <a href="/compare/mcc/">MCC cabinet: Astra and Meshy evidence</a>
         <Link to="/control">Platform connections</Link>
+        <Link to="/integrations/openai">ChatGPT / Codex / dots</Link>
         <Link to="/privacy">Privacy and data</Link>
         <Link to="/terms">Preview terms</Link>
         <a href="https://github.com/teslaeco/WORLDIFACT" target="_blank" rel="noreferrer">Source and licences ↗</a>

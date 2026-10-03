@@ -2,6 +2,9 @@
 .account-status-row{max-width:1440px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
 .account-status-brand{color:#e2f4f8;font-weight:800;letter-spacing:.08em;text-decoration:none}
 .account-status-tools{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px}
+.account-status-dots{display:flex;align-items:center;gap:6px;min-height:42px;padding:8px 11px;border:1px solid #746394;border-radius:10px;color:#eee4ff;text-decoration:none;white-space:nowrap}
+.account-status-dots small{font-size:10px;color:#c7badb}
+.account-status-dots:hover,.account-status-dots[aria-current=page]{background:#352746;border-color:#b795de}
 .account-status-credits{display:flex;align-items:center;gap:12px;padding:8px 14px;border:1px solid #77caba;border-radius:10px;background:#173d3a;color:#fff;text-decoration:none;white-space:nowrap}
 .account-status-credits span{font-size:12px;text-transform:uppercase;letter-spacing:.07em}
 .account-status-credits strong{font-size:19px;font-variant-numeric:tabular-nums}

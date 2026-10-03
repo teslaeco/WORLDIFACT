@@ -23,6 +23,7 @@
     "predev": "node scripts/prepare-world-assets.mjs"
   },
   "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3",

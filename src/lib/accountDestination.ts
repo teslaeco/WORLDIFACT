@@ -5,6 +5,19 @@ export function safeAccountDestination(value: unknown): string {
     const url = new URL(value, 'https://worldifact.invalid')
     if (url.origin !== 'https://worldifact.invalid' || url.username || url.password) return '/world'
     if (url.pathname === '/world') return '/world'
+    if (url.pathname === '/integrations/openai' && !url.search && !url.hash) return '/integrations/openai'
+    if (url.pathname === '/oauth/authorize') {
+      const ids = url.searchParams.getAll('continuation')
+      if (url.hash || ids.length !== 1 || !/^[A-Za-z0-9_-]{43}$/.test(ids[0]) ||
+        [...url.searchParams.keys()].some(key => key !== 'continuation')) return '/world'
+      return `/oauth/authorize?continuation=${ids[0]}`
+    }
+    if (url.pathname === '/oauth/consent') {
+      const ids = url.searchParams.getAll('authorization_id')
+      if (ids.length !== 1 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ids[0]) ||
+        [...url.searchParams.keys()].some(key => key !== 'authorization_id')) return '/world'
+      return `/oauth/consent?authorization_id=${encodeURIComponent(ids[0])}`
+    }
     if (url.pathname !== '/account/credits') return '/world'
     const query = new URLSearchParams()
     const paypal = url.searchParams.get('paypal')

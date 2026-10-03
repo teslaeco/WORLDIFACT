@@ -205,3 +205,42 @@ test('new password requires the recovery cookie and a verified user, then revoke
   assert.match(f.calls.at(-1)!.url, /logout\?scope=global$/)
   for (const cookie of response.headers.getSetCookie()) assert.match(cookie, /Max-Age=0$/)
 })
+
+test('OAuth consent proxy is session-bound and approves only OpenAI ChatGPT callbacks', async () => {
+  const f = fixture(), authorizationId = '22222222-2222-4222-8222-222222222222'
+  Object.assign(f.env, { MCP_RESOURCE_URL: origin + '/mcp', MCP_OAUTH_CLIENT_IDS: 'chatgpt-dcr-client', MCP_OAUTH_REDIRECT_URIS: 'https://chatgpt.com/connector_platform_oauth_redirect' })
+  const calls: string[] = []
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = String(input); calls.push(url)
+    assert.equal(init?.redirect, 'manual')
+    if (url.endsWith('/auth/v1/user')) return Response.json(rawUser)
+    if (url.endsWith('/auth/v1/oauth/authorizations/' + authorizationId) && init?.method === 'GET') return Response.json({
+      authorization_id: authorizationId,
+      redirect_uri: 'https://chatgpt.com/connector_platform_oauth_redirect',
+      client: { id: 'chatgpt-dcr-client', name: 'ChatGPT', uri: 'https://chatgpt.com' },
+      scope: 'email profile',
+    })
+    if (url.endsWith('/auth/v1/oauth/authorizations/' + authorizationId + '/consent') && init?.method === 'POST') {
+      assert.deepEqual(JSON.parse(String(init.body)), { action: 'approve' })
+      return Response.json({ redirect_url: 'https://chatgpt.com/connector_platform_oauth_redirect?code=fixture&state=fixture' })
+    }
+    throw new Error('Unexpected OAuth fixture request: ' + url)
+  }) as typeof fetch
+  const details = await accountApi(f.request('oauth/authorization?authorization_id=' + authorizationId, 'GET', undefined, accessCookie), f.env, fetcher)
+  assert.equal(details?.status, 200)
+  const body = await details!.json() as { client: { name: string }; scope: string }
+  assert.equal(body.client.name, 'ChatGPT'); assert.equal(body.scope, 'email profile')
+  const approved = await accountApi(f.request('oauth/authorization', 'POST', { authorizationId, action: 'approve' }, accessCookie), f.env, fetcher)
+  assert.equal(approved?.status, 200)
+  assert.match(String((await approved!.json() as { redirectUrl: string }).redirectUrl), /^https:\/\/chatgpt\.com\/connector_platform_oauth_redirect/)
+  assert.equal(calls.filter(url => url.endsWith('/auth/v1/user')).length, 2)
+
+  const evil = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith('/auth/v1/user')) return Response.json(rawUser)
+    if (init?.method === 'GET') return Response.json({ authorization_id: authorizationId, redirect_uri: 'https://evil.test/callback', client: { id: 'evil', name: 'Evil' }, scope: 'email profile' })
+    throw new Error('No consent POST expected')
+  }) as typeof fetch
+  const rejected = await accountApi(f.request('oauth/authorization?authorization_id=' + authorizationId, 'GET', undefined, accessCookie), f.env, evil)
+  assert.equal(rejected?.status, 403)
+})

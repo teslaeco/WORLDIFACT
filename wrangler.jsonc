@@ -3,13 +3,19 @@
   "name": "worldifact",
   "main": "server/worker.ts",
   "compatibility_date": "2026-09-14",
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/mcp", "/mcp/*", "/oauth/authorize", "/oauth/token", "/oauth/token/*", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/*"]
   },
+  "kv_namespaces": [{"binding": "OAUTH_KV"}],
   "vars": {
+    "MCP_OAUTH_ENABLED": "true",
+    "MCP_RESOURCE_URL": "https://worldifact.xodobrox.workers.dev/mcp",
+    "MCP_OAUTH_CLIENT_IDS": "https://chatgpt.com/oauth/client.json",
+    "MCP_OAUTH_REDIRECT_URIS": "https://chatgpt.com/connector_platform_oauth_redirect",
     "OPENAI_MODEL": "gpt-6-astra",
     "OPENAI_FAST_MODEL": "gpt-6-sol",
     "FREE_SOL_SEED_JOBS": "10",
