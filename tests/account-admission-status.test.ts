@@ -23,7 +23,6 @@ test('authenticated admission projection distinguishes a funded balance from exh
     [{ 'provider-budget-cents:v1': 174 }, 'PROVIDER_BUDGET_EXHAUSTED'],
     [{ billingHold: true }, 'BILLING_REVIEW_REQUIRED'],
     [{ 'customer-reserved-credits:v1': 2800 }, 'CREDITS_EXHAUSTED'],
-    [{ subscription: { ...subscription, active: false } }, 'ASTRA_PLAN_REQUIRED'],
   ] as const) {
     const f = fixture({ ...base, ...extra }), before = structuredClone([...f.values])
     const status = await f.status()
@@ -48,10 +47,10 @@ test('a legacy eligibility read does not initialize budget and mirrors reserve f
   }
 })
 
-test('free eligibility and disabled runtime gate match reservation without implying Astra access', async () => {
+test('free eligibility and disabled runtime gate match reservation without inventing paid Astra funding', async () => {
   const free = fixture()
   assert.deepEqual((await free.status()).generationAdmission.sol, { allowed: true })
-  assert.deepEqual((await free.status()).generationAdmission.astra, { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' })
+  assert.deepEqual((await free.status()).generationAdmission.astra, { allowed: false, reason: 'FREE_SOL_ONLY' })
   for (let i = 0; i < 2; i++) await free.call('/reserve', { id: crypto.randomUUID(), profile: 'fast' })
   assert.deepEqual((await free.status()).generationAdmission.sol, { allowed: false, reason: 'FAST_DAILY_LIMIT' })
   for (const plan of ['creator', 'pro', 'studio']) {
