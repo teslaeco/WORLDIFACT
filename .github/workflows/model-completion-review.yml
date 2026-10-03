@@ -4,6 +4,8 @@ on:
     paths:
       - 'tools/model_completion/**'
       - 'tools/model_prebuild/**'
+      - 'tools/export_recovery/**'
+      - 'tools/export_diagnostics/**'
       - 'tools/profit_guard/**'
       - 'tools/fast_preview/**'
       - '.github/workflows/model-completion-review.yml'
@@ -33,3 +35,9 @@ jobs:
         env:
           MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
         run: python3 -B -m unittest discover -s tools/model_prebuild -p 'test_*.py' -v
+      - name: Test staged optional exports against the exact reviewed source without running a service
+        env:
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+        run: python3 -B -m unittest discover -s tools/export_recovery -p 'test_*.py' -v
+      - name: Test read-only offline snapshot diagnostics with synthetic data
+        run: python3 -B -m unittest discover -s tools/export_diagnostics -p 'test_*.py' -v
