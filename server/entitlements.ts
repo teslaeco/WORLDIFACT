@@ -321,7 +321,8 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
   const admission = (model: GenerationModel, detailed = false, pricing?: StudioPricing): { allowed: boolean; reason?: AdmissionFailureCode } => {
     const blocked = (reason: AdmissionFailureCode) => ({ allowed: false, reason })
     if (credits < 0 || billingHold === true) return blocked('BILLING_REVIEW_REQUIRED')
-    if (model === 'astra' && !subscriptionActive) return blocked('ASTRA_PLAN_REQUIRED')
+    // ASTRA generation is available to every signed-in account regardless of membership plan.
+    // Runtime, points and provider-spend guards remain authoritative.
     if (model === 'astra' && !astraEnabled) return blocked('ASTRA_RUNTIME_DISABLED')
     const paid = subscriptionActive || credits > 0
     if (paid && credits - reserved < (pricing?.points ?? MODEL_ECONOMICS[model].creditsPerGeneration)) return blocked('CREDITS_EXHAUSTED')
@@ -552,7 +553,8 @@ export class AccountEntitlements {
           const subscriptionActive = active(subscription, now)
           const model = selectedModel
           const cost = pricing?.points ?? MODEL_ECONOMICS[model].creditsPerGeneration
-          if (model === 'astra' && !subscriptionActive) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
+          // Do not gate ASTRA by membership plan. Runtime, points and provider-spend
+          // guards below still protect the service and prevent unbounded API spend.
           if (model === 'astra' && !this.astraEnabled) return { allowed: false, reason: 'ASTRA_RUNTIME_DISABLED' }
           const paid = subscriptionActive || credits > 0
           if (paid && credits - heldCredits < cost) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
