@@ -1,3 +1,4 @@
+import { STUDIO_PRICING } from '../src/lib/studioPricing.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
@@ -14,7 +15,7 @@ test('funding refusal offers a read-only refresh without a credits upsell or inv
     const billing = { plans: { pro: { checkoutReady: true } } }
     let refreshes = 0
     const refresh = () => { refreshes++ }
-    const render = (quote, canRefresh = true) => renderToStaticMarkup(createElement(MemoryRouter, null, createElement(Notice, { model: 'astra', detailed: true, accountQuote: { quote, checking: false, canRefresh, refresh } })))
+    const render = (quote, canRefresh = true, budgetTier) => renderToStaticMarkup(createElement(MemoryRouter, null, createElement(Notice, { model: 'astra', detailed: true, budgetTier, accountQuote: { quote, checking: false, canRefresh, refresh } })))
     const funding = quoteGeneration('astra', { ...account, generationAdmission: { astra: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', detail: 'PRIVATE_LEDGER' } } }, billing, true)
     assert.equal(funding.state, 'blocked')
     const html = render(funding)
@@ -34,5 +35,11 @@ test('funding refusal offers a read-only refresh without a credits upsell or inv
     const allowed = render(quoteGeneration('astra', account, billing, true))
     assert.match(allowed, /Balance after reservation/)
     assert.doesNotMatch(allowed, /Account funding review needed/)
+    const extended = quoteGeneration('astra', { ...account, studioAdmission: { tiers: { extended: { allowed: true, pricing: STUDIO_PRICING.extended } } } }, billing, true, true, 'extended')
+    const extendedHtml = render(extended, true, 'extended')
+    assert.match(extendedHtml, /500 points \/ paid generation/)
+    assert.match(extendedHtml, /This attempt: 500 points/)
+    assert.match(extendedHtml, /2255 points/)
+    assert.doesNotMatch(extendedHtml, /250 points \/ paid generation/)
   } finally { await vite.close() }
 })

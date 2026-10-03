@@ -1,3 +1,4 @@
+import * as studioPricing from '../src/lib/studioPricing.ts'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -87,7 +88,7 @@ async function harness({ store = new Map(), io = transport(), accountRead, healt
       abort() { this.onabort?.() }
     },
   }
-  const modules = { '../lib/blueprint': blueprint, '../lib/blueprintRequest': request, '../lib/scopedBlueprintClient': scoped, '../lib/generationAdmission': admission, '../lib/modelCatalog': models, '../lib/portalRouting': routing,
+  const modules = { '../lib/studioPricing': studioPricing, '../lib/blueprint': blueprint, '../lib/blueprintRequest': request, '../lib/scopedBlueprintClient': scoped, '../lib/generationAdmission': admission, '../lib/modelCatalog': models, '../lib/portalRouting': routing,
     '../lib/account': { useAccount: () => ({ user: owner ? { id: owner } : null, loading: accountLoading }) },
     './account': { useAccount: () => ({ user: owner ? { id: owner } : null, loading: accountLoading }) }, './generationAccount': accountReads, './generationQuote': quotes,
   }

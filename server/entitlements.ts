@@ -5,6 +5,7 @@ import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { MODEL_ECONOMICS, PLAN_CATALOG, modelAllowed, type PlanId, type GenerationModel } from './generationEconomics.ts'
 import { STUDIO_FAILURE_CODES, STUDIO_SUBMISSION_GRACE_MS, type StudioFailureCode, type StudioQualityProfile } from '../src/lib/studioProtocol.ts'
 import type { AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
+import { STUDIO_PRICING, isStudioPricing, type StudioPricing, type StudioBudgetTier } from '../src/lib/studioPricing.ts'
 import { astraSupportApproval, ASTRA_SUPPORT_ONCE_KEY, ASTRA_SUPPORT_NAMESPACE, ASTRA_SUPPORT_CENTS, type AstraSupportApproval, type AstraSupportClaim, type AstraSupportIdentity } from './astraSupportOnce.ts'
 import { astraSupplementalGrant, matchesAstraSupplementalClaim, ASTRA_SUPPLEMENTAL_KEY, ASTRA_SUPPLEMENTAL_NAMESPACE, ASTRA_SUPPLEMENTAL_CENTS, type AstraSupplementalGrant, type AstraSupplementalClaim } from './astraSupplementalGrant.ts'
 import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from './studioBudgetReceipt.ts'
@@ -25,22 +26,22 @@ export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
 type StudioProviderReservation = { version: 1; source: 'ordinary'; amountCents: number; state: 'reserved' | 'released' }
-type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalReservedCents: 175; retainedCents: number; releasedCents: number; at: number }
-type Job = { fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation }
-export type Reservation = { allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean }
-export type JobAccess = { owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
+type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalReservedCents: 175 | 200 | 400; retainedCents: number; releasedCents: number; at: number }
+type Job = { pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation }
+export type Reservation = { pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean }
+export type JobAccess = { fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
 export type StudioProviderReconciliationResult = { reconciled: boolean; repeated?: boolean; releasedCents?: number; retainedCents?: number; reason?: string }
 type StudioDispatchClaim = { dispatch: false } | { dispatch: true; deadline: number }
 export const STUDIO_DISPATCH_WINDOW_MS = 30_000
 export const STUDIO_ORACLE_TIMEOUT_MS = 25_000
-export type CurrentStudioJob = { id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
+export type CurrentStudioJob = { pricing?: StudioPricing; id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
 export type ClosedMissingStudioJob = { closed: boolean; state: Job['state']; fingerprintMatches: boolean; failureCode?: StudioFailureCode }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
 type PayPalCheckout = { id: string; created: number; orderId?: string; url?: string }
 export interface EntitlementStatus {
   generationAdmission: Record<GenerationModel, { allowed: boolean; reason?: AdmissionFailureCode }>
-  studioAdmission: { allowed: boolean; reason?: AdmissionFailureCode }
+  studioAdmission: { allowed: boolean; reason?: AdmissionFailureCode; tiers: Record<StudioBudgetTier, { allowed: boolean; reason?: AdmissionFailureCode; pricing: StudioPricing }> }
   astraSupportOnce?: { available: boolean; consumed: boolean; maximumProviderCents: 175 }
   astraSupplementalGrant?: { available: boolean; consumed: boolean; maximumProviderCents: 175 }
   credits: number
@@ -69,14 +70,29 @@ const validInteger = (value: unknown) => typeof value === 'number' && Number.isS
 function studioDispatchUntil(job: Job): number | undefined {
   return job.studioDispatch === 'claimed-v1' && Number.isSafeInteger(job.studioDispatchUntil) && Number(job.studioDispatchUntil) > job.at && Number(job.studioDispatchUntil) <= job.at + STUDIO_SUBMISSION_GRACE_MS ? job.studioDispatchUntil : undefined
 }
+function reservationTerms(job: Job): { points: number; maxProviderCents: number } | null {
+  if (!Object.hasOwn(job, 'pricing')) {
+    const economics = MODEL_ECONOMICS[job.model ?? (job.profile === 'fast' ? 'sol' : 'astra')]
+    return economics ? { points: economics.creditsPerGeneration, maxProviderCents: economics.maxProviderCents } : null
+  }
+  return isStudioPricing(job.pricing) && job.channel === 'studio' && job.profile === 'slow' &&
+    (job.model === undefined || job.model === 'astra') ? job.pricing : null
+}
+function samePricing(left: StudioPricing | undefined, right: StudioPricing | undefined): boolean {
+  return left === undefined && right === undefined || isStudioPricing(left) && isStudioPricing(right) &&
+    left.revision === right.revision && left.tier === right.tier && left.points === right.points && left.maxProviderCents === right.maxProviderCents
+}
 function terminalOrdinaryAstraReservation(job: Job): boolean {
+  const terms = reservationTerms(job)
+  if (!terms) return false
   if (!['failed', 'completed'].includes(job.state) || job.channel !== 'studio' || job.profile !== 'slow' ||
-      (job.model !== undefined && job.model !== 'astra') || job.kind !== 'credits' || job.billingMode !== 'hold-v1' || job.cost !== 250 ||
+      (job.model !== undefined && job.model !== 'astra') || job.kind !== 'credits' || job.billingMode !== 'hold-v1' || job.cost !== terms.points ||
       typeof job.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(job.fingerprint) || !Number.isSafeInteger(job.at) || job.at <= 0 ||
       !Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId')) return false
   if (Object.hasOwn(job, 'studioDispatch') && job.studioDispatch !== 'ready-v1' && job.studioDispatch !== 'claimed-v1') return false
   if (job.studioDispatch === 'claimed-v1' ? studioDispatchUntil(job) === undefined : Object.hasOwn(job, 'studioDispatchUntil')) return false
   if (!Object.hasOwn(job, 'studioProviderReservation')) {
+    if (Object.hasOwn(job, 'pricing')) return false
     // The historical hold-v1 Studio writer (8a38d1f) was introduced after the
     // provider ledger (73ff4e7). Its ordinary paid Astra admission atomically
     // debited exactly 175 cents before writing this 250-point held job. Support
@@ -88,16 +104,16 @@ function terminalOrdinaryAstraReservation(job: Job): boolean {
   }
   const reservation = job.studioProviderReservation
   return !!reservation && typeof reservation === 'object' && !Array.isArray(reservation) && Object.keys(reservation).length === 4 &&
-    reservation.version === 1 && reservation.source === 'ordinary' && reservation.amountCents === 175 && reservation.state === 'reserved'
+    reservation.version === 1 && reservation.source === 'ordinary' && reservation.amountCents === terms.maxProviderCents && reservation.state === 'reserved'
 }
 function providerBudgetPending(job: Job): boolean {
   return !Object.hasOwn(job, 'studioProviderReconciliation') && terminalOrdinaryAstraReservation(job)
 }
-function validProviderReconciliation(value: unknown, id: string): value is StudioProviderReconciliation {
+function validProviderReconciliation(value: unknown, id: string, job: Job): value is StudioProviderReconciliation {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const saved = value as StudioProviderReconciliation
-  return Object.keys(saved).length === 5 && validateTerminalBudgetReceipt(saved.receipt, id) && saved.originalReservedCents === 175 &&
-    saved.retainedCents === Math.ceil(saved.receipt.maximumLiabilityMicroUsd / 10_000) && saved.releasedCents === 175 - saved.retainedCents &&
+  return Object.keys(saved).length === 5 && validateTerminalBudgetReceipt(saved.receipt, id, job.pricing ?? null) && saved.originalReservedCents === reservationTerms(job)?.maxProviderCents &&
+    saved.retainedCents === Math.ceil(saved.receipt.maximumLiabilityMicroUsd / 10_000) && saved.releasedCents === saved.originalReservedCents - saved.retainedCents &&
     Number.isSafeInteger(saved.at) && saved.at > 0
 }
 export class EntitlementError extends Error {
@@ -124,11 +140,10 @@ async function changeReservedCredits(storage: EntitlementStorage, delta: number)
 async function settleReservedJob(storage: EntitlementStorage, id: string, job: Job, next: 'completed' | 'failed', now: number, failureCode?: StudioFailureCode) {
   if (job.state !== 'reserved') return { settled: true, repeated: true }
   let providerReservation = job.studioProviderReservation
-  const model = job.model ?? (job.profile === 'fast' ? 'sol' : 'astra')
-  const economics = MODEL_ECONOMICS[model]
+  const economics = reservationTerms(job)
   if (next === 'failed' && job.channel === 'studio' && job.kind === 'credits' && job.billingMode === 'hold-v1' &&
       job.studioDispatch === 'ready-v1' && job.studioDispatchUntil === undefined && job.supportApprovalId === undefined && job.supplementalGrantId === undefined &&
-      typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint) && economics && job.cost === economics.creditsPerGeneration &&
+      typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint) && economics && job.cost === economics.points &&
       providerReservation && typeof providerReservation === 'object' && !Array.isArray(providerReservation) && Object.keys(providerReservation).length === 4 &&
       providerReservation.version === 1 && providerReservation.source === 'ordinary' && providerReservation.state === 'reserved' && providerReservation.amountCents === economics.maxProviderCents) {
     // Only new ordinary-funded reservations carry this proof of the debit.
@@ -211,22 +226,25 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
     } catch { supplemental = null } // Optional grant lookups never hide ordinary admission.
   }
   const subscriptionActive = active(subscription, now)
-  const admission = (model: GenerationModel, detailed = false): { allowed: boolean; reason?: AdmissionFailureCode } => {
+  const admission = (model: GenerationModel, detailed = false, pricing?: StudioPricing): { allowed: boolean; reason?: AdmissionFailureCode } => {
     const blocked = (reason: AdmissionFailureCode) => ({ allowed: false, reason })
     if (credits < 0 || billingHold === true) return blocked('BILLING_REVIEW_REQUIRED')
     if (model === 'astra' && (!subscriptionActive || !modelAllowed(plan, 'astra') || (plan === 'creator' && !astraEnabled))) return blocked('ASTRA_PLAN_REQUIRED')
     if (model === 'astra' && plan === 'creator' && used >= 6) return blocked('CREATOR_ASTRA_PERIOD_LIMIT')
     const paid = subscriptionActive || credits > 0
-    if (paid && credits - reserved < MODEL_ECONOMICS[model].creditsPerGeneration) return blocked('CREDITS_EXHAUSTED')
+    if (paid && credits - reserved < (pricing?.points ?? MODEL_ECONOMICS[model].creditsPerGeneration)) return blocked('CREDITS_EXHAUSTED')
     if (!paid && model === 'astra') return blocked('FREE_SOL_ONLY')
     if (!paid && free.fast.length >= 2) return blocked('FAST_DAILY_LIMIT')
     if (paid && !Number.isSafeInteger(providerRemaining)) return blocked('ACCOUNT_ADMISSION_UNAVAILABLE')
-    if (paid && providerRemaining < MODEL_ECONOMICS[model].maxProviderCents && !(model === 'astra' && detailed && (supportAvailable || supplementalAvailable))) return blocked('PROVIDER_BUDGET_EXHAUSTED')
+    if (paid && providerRemaining < (pricing?.maxProviderCents ?? MODEL_ECONOMICS[model].maxProviderCents) && !(model === 'astra' && detailed && !pricing && (supportAvailable || supplementalAvailable))) return blocked('PROVIDER_BUDGET_EXHAUSTED')
     return { allowed: true }
   }
   return {
     generationAdmission: { luna: admission('luna'), sol: admission('sol'), astra: admission('astra') },
-    studioAdmission: admission('astra', true),
+    studioAdmission: { ...admission('astra', true), tiers: {
+      standard: { ...admission('astra', true, STUDIO_PRICING.standard), pricing: STUDIO_PRICING.standard },
+      extended: { ...admission('astra', true, STUDIO_PRICING.extended), pricing: STUDIO_PRICING.extended },
+    } },
     ...(support ? { astraSupportOnce: { available: supportAvailable && admission('astra', true).allowed, consumed: supportConsumed, maximumProviderCents: ASTRA_SUPPORT_CENTS } } : {}),
     ...(supplemental ? { astraSupplementalGrant: { available: supplementalAvailable && admission('astra', true).allowed, consumed: supplementalConsumed, maximumProviderCents: ASTRA_SUPPLEMENTAL_CENTS } } : {}),
     creatorAstra: { active: astraEnabled && active(subscription, now), remaining: Math.max(0, 6 - used), maximum: 6, recommended: 2, pointsForTwo: 500 },
@@ -340,7 +358,7 @@ export class AccountEntitlements {
         const job = await this.storage.get<Job>(`job:${pointer.id}`)
         if (!job || job.channel !== 'studio' || !job.fingerprint || !/^[a-f0-9]{64}$/.test(job.fingerprint)) return json({ job: null })
         return json({ job: { id: pointer.id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
-          updatedAt: job.updatedAt ?? job.at, state: job.state, cost: job.cost, held: job.billingMode === 'hold-v1' && job.state === 'reserved',
+          updatedAt: job.updatedAt ?? job.at, state: job.state, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.billingMode === 'hold-v1' && job.state === 'reserved',
           ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}) } satisfies CurrentStudioJob })
       }
       if (path === '/studio-current-clear') {
@@ -404,6 +422,9 @@ export class AccountEntitlements {
         const requestedModel = input.model ?? (profile === 'fast' ? 'sol' : 'astra')
         if (!['luna', 'sol', 'astra'].includes(String(requestedModel)) || (profile === 'slow') !== (requestedModel === 'astra')) return json({ error: 'Invalid model for generation route' }, 400)
         const selectedModel = requestedModel as GenerationModel
+        if (Object.hasOwn(input, 'pricing') && (!isStudioPricing(input.pricing) || channel !== 'studio' || selectedModel !== 'astra' || !fingerprint))
+          return json({ error: 'Invalid Studio pricing terms' }, 400)
+        const pricing = input.pricing as StudioPricing | undefined
         const result = await this.storage.transaction(async storage => {
           const existing = await storage.get<Job>(`job:${id}`)
           if (existing && existing.fingerprint !== fingerprint) return { allowed: false, repeated: true, reason: 'REQUEST_PAYLOAD_MISMATCH' }
@@ -411,16 +432,17 @@ export class AccountEntitlements {
             return { allowed: false, repeated: true, state: existing.state, cost: 0, kind: existing.kind, reason: 'JOB_ALREADY_FAILED' }
           if (existing && existing.profile === profile && (existing.model ?? (existing.profile === 'fast' ? 'sol' : 'astra')) !== selectedModel) return { allowed: false, reason: 'JOB_MODEL_MISMATCH' }
           if (existing && (existing.qualityProfile ?? 'standard') !== qualityProfile) return { allowed: false, reason: 'JOB_QUALITY_PROFILE_MISMATCH' }
+          if (existing && !samePricing(existing.pricing, pricing)) return { allowed: false, repeated: true, reason: 'JOB_PRICING_MISMATCH' }
           if (existing && (existing.channel ?? 'blueprint') !== channel) return { allowed: false, reason: 'JOB_CHANNEL_MISMATCH' }
           if (existing) return existing.profile !== profile
             ? { allowed: false, reason: 'JOB_PROFILE_MISMATCH' }
-            : { allowed: existing.state !== 'failed', repeated: true, state: existing.state, cost: existing.cost, kind: existing.kind, ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
+            : { allowed: existing.state !== 'failed', repeated: true, state: existing.state, cost: existing.cost, kind: existing.kind, ...(existing.pricing ? { pricing: existing.pricing } : {}), ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
           const credits = await balance(storage), heldCredits = await reservedCredits(storage), subscription = await storage.get<Subscription>('subscription')
           if (credits < 0 || await storage.get<boolean>('billingHold') === true) return { allowed: false, reason: 'BILLING_REVIEW_REQUIRED' }
           const subscriptionActive = active(subscription, now)
           const plan: PlanId = subscriptionActive ? subscription?.plan ?? 'creator' : 'creator'
           const model = selectedModel
-          const cost = MODEL_ECONOMICS[model].creditsPerGeneration
+          const cost = pricing?.points ?? MODEL_ECONOMICS[model].creditsPerGeneration
           if (model === 'astra' && (!subscriptionActive || !modelAllowed(plan, 'astra'))) return { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' }
           const creatorAstra = model === 'astra' && plan === 'creator'
           const period = subscription?.grantId ?? `${subscription?.id ?? 'none'}:${subscription?.until ?? 0}`
@@ -437,7 +459,7 @@ export class AccountEntitlements {
           let studioProviderReservation: StudioProviderReservation | undefined
           if (paid) {
             const remaining = await providerBudget(storage, credits)
-            const ceiling = MODEL_ECONOMICS[model].maxProviderCents
+            const ceiling = pricing?.maxProviderCents ?? MODEL_ECONOMICS[model].maxProviderCents
             const candidate = model === 'astra' && channel === 'studio' && fingerprint && remaining >= 0 && ceiling === ASTRA_SUPPORT_CENTS ? support() : null
             const claim = candidate ? await storage.get(ASTRA_SUPPORT_ONCE_KEY) : undefined
             const approved = candidate && claim === undefined && request.headers.get('X-WORLDIFACT-Support-Approval') === candidate.approvalId
@@ -469,14 +491,14 @@ export class AccountEntitlements {
               studioProviderReservation = { version: 1, source: 'ordinary', amountCents: ceiling, state: 'reserved' }
           }
           const cloudHold = paid && channel === 'studio'
-          const job: Job = { ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
+          const job: Job = { ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
           if (creatorAstra) await storage.put(`creator-astra:${period}`, used + 1)
           await storage.put(`job:${id}`, job)
           if (channel === 'studio') await storage.put(CURRENT_STUDIO_JOB, { id })
-          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold }
+          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold, ...(job.pricing ? { pricing: job.pricing } : {}) }
         })
         return json(result, result.allowed ? 200 : 429)
       }
@@ -489,21 +511,23 @@ export class AccountEntitlements {
           const job = await storage.get<Job>(`job:${id}`)
           if (!job) return { reconciled: false, reason: 'NOT_OWNED' }
           if (!terminalOrdinaryAstraReservation(job)) return { reconciled: false, reason: 'INELIGIBLE_RESERVATION' }
+          if (!validateTerminalBudgetReceipt(receipt, id, job.pricing ?? null)) return { reconciled: false, reason: 'RECEIPT_PRICING_MISMATCH' }
           if (Object.hasOwn(job, 'studioProviderReconciliation')) {
             const saved = job.studioProviderReconciliation
-            if (!validProviderReconciliation(saved, id)) return { reconciled: false, reason: 'UNVERIFIED_RECONCILIATION' }
+            if (!validProviderReconciliation(saved, id, job)) return { reconciled: false, reason: 'UNVERIFIED_RECONCILIATION' }
             if (Object.keys(receipt).some(key => receipt[key as keyof TerminalBudgetReceipt] !== saved.receipt[key as keyof TerminalBudgetReceipt]))
               return { reconciled: false, reason: 'RECEIPT_CONFLICT' }
             return { reconciled: true, repeated: true, releasedCents: saved.releasedCents, retainedCents: saved.retainedCents }
           }
-          const retainedCents = Math.ceil(receipt.maximumLiabilityMicroUsd / 10_000), releasedCents = 175 - retainedCents
+          const originalReservedCents = receipt.capMicroUsd / 10_000 as 175 | 200 | 400
+          const retainedCents = Math.ceil(receipt.maximumLiabilityMicroUsd / 10_000), releasedCents = originalReservedCents - retainedCents
           const remaining = await storage.get<number>(PROVIDER_BUDGET)
           if (!Number.isSafeInteger(remaining) || !Number.isSafeInteger(Number(remaining) + releasedCents)) throw new Error('Invalid provider reconciliation')
           // No lazy seed, customer credit change, grant, quota reset or paid call.
           // Rounding liability UP keeps uncertain/legacy Oracle holds funded.
           const reconciledAt = this.now()
           if (!Number.isSafeInteger(reconciledAt) || reconciledAt <= 0) throw new Error('Invalid reconciliation time')
-          const reconciliation: StudioProviderReconciliation = { receipt, originalReservedCents: 175, retainedCents, releasedCents, at: reconciledAt }
+          const reconciliation: StudioProviderReconciliation = { receipt, originalReservedCents, retainedCents, releasedCents, at: reconciledAt }
           await storage.put(PROVIDER_BUDGET, Number(remaining) + releasedCents)
           await storage.put(`job:${id}`, { ...job, studioProviderReconciliation: reconciliation })
           return { reconciled: true, repeated: false, releasedCents, retainedCents }
@@ -518,7 +542,7 @@ export class AccountEntitlements {
           const subscription = await this.storage.get<Subscription>('subscription')
           const allowed = job.state === 'completed' && (job.profile === 'fast' || active(subscription, now)) && await balance(this.storage) >= 0 && await this.storage.get<boolean>('billingHold') !== true
           const dispatchUntil = studioDispatchUntil(job)
-          return json({ owned: true, downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, held: job.billingMode === 'hold-v1' && job.state === 'reserved', ...(dispatchUntil ? { studioDispatchUntil: dispatchUntil } : {}), ...(providerBudgetPending(job) ? { providerBudgetPending: true } : {}) })
+          return json({ owned: true, ...(job.fingerprint ? { fingerprint: job.fingerprint } : {}), downloadAllowed: allowed, previewOnly: job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.billingMode === 'hold-v1' && job.state === 'reserved', ...(dispatchUntil ? { studioDispatchUntil: dispatchUntil } : {}), ...(providerBudgetPending(job) ? { providerBudgetPending: true } : {}) })
         }
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
         const next = input.state as 'completed' | 'failed'
@@ -750,11 +774,11 @@ export async function entitlementStatus(env: EntitlementEnv, userId: string, ide
   return entitlementCall<EntitlementStatus>(env, userId, '/status', undefined, { identity, available: support.available, consumed: support.consumed, statusKnown: typeof support.available === 'boolean',
     supplemental: { available: supplemental.available, consumed: supplemental.consumed, statusKnown: typeof supplemental.available === 'boolean' } })
 }
-export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity }) {
-  const body = { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}) }
+export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing }) {
+  const body = { id: jobId, profile, ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
   const identity = metadata?.supportIdentity
   const initial = await entitlementCall<Reservation>(env, userId, '/reserve', body, { identity })
-  if (initial.allowed || initial.reason !== 'PROVIDER_BUDGET_EXHAUSTED' || metadata?.channel !== 'studio' || profile !== 'slow' || (model !== undefined && model !== 'astra') || !fingerprint) return initial
+  if (initial.allowed || initial.reason !== 'PROVIDER_BUDGET_EXHAUSTED' || metadata?.pricing !== undefined || metadata?.channel !== 'studio' || profile !== 'slow' || (model !== undefined && model !== 'astra') || !fingerprint) return initial
   // Claim globally before adding account funding. Uncertain/failed account
   // admission never releases this claim; only this exact job can replay it.
   if (initial.supportEligible === true) {

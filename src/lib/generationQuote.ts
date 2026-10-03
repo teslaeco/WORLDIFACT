@@ -1,3 +1,4 @@
+import { STUDIO_PRICING, type StudioBudgetTier } from './studioPricing.ts'
 import { MODEL_CATALOG, type GenerationModel } from './modelCatalog.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from './generationAdmission.ts'
 export type QuotedModel = GenerationModel
@@ -5,13 +6,22 @@ export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits'
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const integer = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 /** Non-binding display only. The server rechecks identity, model and funds atomically. */
-export function quoteGeneration(model: QuotedModel, account: unknown, billing: unknown, signedIn: boolean, detailed = false): GenerationQuote {
+export function quoteGeneration(model: QuotedModel, account: unknown, billing: unknown, signedIn: boolean, detailed = false, budgetTier?: StudioBudgetTier): GenerationQuote {
   if (!signedIn) return { state: 'signin', points: null, after: null, message: 'Sign in to check your points and funded free allowance.' }
   const value = object(account), subscription = object(value.subscription), free = object(value.free), costs = object(value.generationCosts)
-  const points = MODEL_CATALOG[model].creditsPerGeneration
+  const tier = detailed && model === 'astra' ? budgetTier : undefined
+  const points = tier ? STUDIO_PRICING[tier].points : MODEL_CATALOG[model].creditsPerGeneration
+  const pendingAdmission = (): GenerationQuote => ({ state: 'pending', points: null, after: null, message: 'Your current generation availability could not be verified. No payment is inferred.' })
+  if (tier) {
+    const admission = object(object(object(value.studioAdmission).tiers)[tier]), pricing = object(admission.pricing), expected = STUDIO_PRICING[tier]
+    if (pricing.revision !== expected.revision || pricing.tier !== tier || pricing.points !== expected.points || pricing.maxProviderCents !== expected.maxProviderCents) return pendingAdmission()
+    if (admission.allowed === false && isAdmissionFailureCode(admission.reason))
+      return { state: 'blocked', points, after: null, message: ADMISSION_FAILURE_DETAILS[admission.reason], reason: admission.reason }
+    if (admission.allowed !== true || admission.reason !== undefined) return pendingAdmission()
+  }
   // New authenticated status can explain a refusal even when the displayed
   // point balance is high. Older servers omit this field and retain old checks.
-  if (Object.hasOwn(value, 'generationAdmission')) {
+  if (!tier && Object.hasOwn(value, 'generationAdmission')) {
     const admission = detailed && model === 'astra' && Object.hasOwn(value, 'studioAdmission') ? object(value.studioAdmission) : object(object(value.generationAdmission)[model])
     if (admission.allowed === false && isAdmissionFailureCode(admission.reason))
       return { state: 'blocked', points, after: null, message: ADMISSION_FAILURE_DETAILS[admission.reason], reason: admission.reason }

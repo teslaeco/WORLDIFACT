@@ -1,3 +1,5 @@
+import * as studioPricing from '../src/lib/studioPricing.ts'
+import * as studioTierSelection from '../src/lib/studioTierSelection.ts'
 import * as detailedStudio from '../src/lib/detailedStudio.ts'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -43,6 +45,7 @@ async function loadCostNotice(quoteHook) {
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, { module, exports: module.exports, require(id) {
     if (id === '../lib/generationQuote') return generationQuote
+    if (id === '../lib/studioPricing') return studioPricing
     if (id === '../lib/modelCatalog') return modelCatalog
     if (id === '../lib/useGenerationQuote') return quoteHook
     if (id === '../lib/account') return { useAccount: () => ({ user: null, loading: true }) }
@@ -86,7 +89,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
   runInNewContext(code, {
     crypto: globalThis.crypto, ...globals, module, exports: module.exports,
     require(id) {
-      const modules = { '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
+      const modules = { '../lib/studioPricing': studioPricing, '../lib/studioTierSelection': studioTierSelection, '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/generationAdmission': generationAdmission, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
         '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }

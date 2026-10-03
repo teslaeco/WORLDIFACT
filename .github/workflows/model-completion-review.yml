@@ -6,6 +6,7 @@ on:
       - 'tools/model_prebuild/**'
       - 'tools/model_context/**'
       - 'tools/model_budget_receipt/**'
+      - 'tools/model_budget_tiers/**'
       - 'tools/profit_guard/**'
       - 'tools/fast_preview/**'
       - '.github/workflows/model-completion-review.yml'
@@ -46,3 +47,8 @@ jobs:
         env:
           MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
         run: python3 -B -m unittest discover -s tools/model_budget_receipt -p 'test_*.py' -v
+
+      - name: Test immutable approved Studio tiers, legacy budgets, sealed receipts and maintenance rollback
+        env:
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+        run: python3 -B -m unittest discover -s tools/model_budget_tiers -p 'test_*.py' -v

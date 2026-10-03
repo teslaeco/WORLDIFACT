@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
-import { StudioCoordinator, type ReceiptStore, type SavedStudioJob } from '../lib/studioClient'
-import { STUDIO_POLL_MS, validateStudioInput, type StudioJob } from '../lib/studioProtocol'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { checkStudio, StudioCoordinator, type ReceiptStore, type SavedStudioJob } from '../lib/studioClient'
+import { STUDIO_POLL_MS, validateStudioInput, type StudioJob, type StudioStatus } from '../lib/studioProtocol'
 import { saveStudioModel } from '../lib/studioArchive'
 import { listWorldAssets, storeWorldAsset, type WorldAsset } from '../lib/privateWorldAssets'
 import { characterGenerationPrompt } from '../lib/editorTools'
-import { quoteGeneration, type GenerationQuote } from '../lib/generationQuote'
+import { useGenerationQuote } from '../lib/useGenerationQuote'
+import { detailedUnavailable } from '../lib/detailedStudio'
+import { STUDIO_PRICING, type StudioBudgetTier } from '../lib/studioPricing'
+import { hasStudioBudgetConsent, studioBudgetFailureAdvice, studioBudgetSelection, studioTiersReady } from '../lib/studioTierSelection'
 import type { PrivateWorld } from '../lib/privateWorld'
 import GenerationCostNotice from './GenerationCostNotice'
 
@@ -17,10 +20,19 @@ const terminal=(state?:string)=>['succeeded','failed','cancelled'].includes(stat
 export default function WorldCharacterStudio(p:Props){
   const latest=useRef(p);latest.current=p
   const client=useRef<StudioCoordinator|null>(null),alive=useRef(false),lock=useRef(false)
-  const [saved,setSaved]=useState<SavedStudioJob|null>(null),[job,setJob]=useState<StudioJob|null>(null),[busy,setBusy]=useState(false),[retry,setRetry]=useState(0),[error,setError]=useState(''),[notice,setNotice]=useState(''),[quote,setQuote]=useState<GenerationQuote|null>(null),[files,setFiles]=useState<WorldAsset[]>([])
+  const [saved,setSaved]=useState<SavedStudioJob|null>(null),[job,setJob]=useState<StudioJob|null>(null),[busy,setBusy]=useState(false),[retry,setRetry]=useState(0),[error,setError]=useState(''),[notice,setNotice]=useState(''),[status,setStatus]=useState<StudioStatus|null>(null),[files,setFiles]=useState<WorldAsset[]>([])
+  const [budgetTier,setBudgetTier]=useState<StudioBudgetTier>('standard')
+  const [acceptedBudgetRevision,setAcceptedBudgetRevision]=useState<object|null>(null)
+  const tiersReady=studioTiersReady(status),selectedTier=tiersReady?budgetTier:undefined
+  const prompt=characterGenerationPrompt(p.world)
+  const draftBudgetRevision=useMemo(()=>({owner:p.owner,worldId:p.world.id,prompt,budgetTier,tiersReady,pricingRevision:status?.pricingRevision}),[p.owner,p.world.id,prompt,budgetTier,tiersReady,status?.pricingRevision])
+  const budgetAccepted=hasStudioBudgetConsent(budgetTier,acceptedBudgetRevision,draftBudgetRevision)
+  const selectedPoints=selectedTier?STUDIO_PRICING[selectedTier].points:250
+  const accountQuote=useGenerationQuote('astra',busy,true,selectedTier),quote=accountQuote.quote
+  const runtimeProblem=detailedUnavailable(status,0)
   const binding=useRef({worldId:p.world.id,characterSnapshot:''})
   const bindingKey=`worldifact-character-binding:v1:${p.owner}:${p.world.id}`
-  async function refresh(){try{const [a,b]=await Promise.all([fetch('/api/account/entitlements',{cache:'no-store',signal:AbortSignal.timeout(15000)}),fetch('/api/billing/status',{cache:'no-store',signal:AbortSignal.timeout(15000)})]);if(!a.ok||!b.ok)throw new Error('Account availability could not be confirmed.');const q=quoteGeneration('astra',await a.json(),await b.json(),true,true);if(alive.current)setQuote(q)}catch{if(alive.current)setQuote(null)}}
+  async function refresh(){accountQuote.refresh();try{const value=await checkStudio();if(alive.current)setStatus(value)}catch{if(alive.current)setStatus(null)}}
   useEffect(()=>{alive.current=true;let closed=false;try{client.current=new StudioCoordinator(characterReceiptStore(window.localStorage,p.owner,p.world.id));const restored=client.current.restore();setSaved(restored);if(restored){try{const b=JSON.parse(window.localStorage.getItem(bindingKey)??'null');if(b?.jobId===restored.receipt.id&&b.worldId===p.world.id&&typeof b.characterSnapshot==='string')binding.current=b}catch{/* No speculative automatic adoption. */}}if(restored)setNotice('An existing character job was recovered. Checking it does not buy another generation.')}catch(e){setError(e instanceof Error?e.message:'Recovery storage is unavailable.')}
     void refresh();void listWorldAssets(p.owner).then(v=>{if(!closed)setFiles(v)}).catch(()=>{})
     return()=>{closed=true;alive.current=false;client.current=null}
@@ -51,18 +63,19 @@ export default function WorldCharacterStudio(p:Props){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[saved?.receipt.id,retry])
   async function generate(){
-    if(p.disabled||lock.current||!client.current||(saved&&!terminal(job?.state))||quote?.state!=='credits')return
+    if(p.disabled||lock.current||!client.current||(saved&&!terminal(job?.state))||quote.state!=='credits'||runtimeProblem||(budgetTier==='extended'&&(!tiersReady||!budgetAccepted)))return
     lock.current=true;setBusy(true);setError('');const api=client.current,id=p.world.id,actor=p.owner
     binding.current={worldId:id,characterSnapshot:JSON.stringify(p.world.character)}
-    try{const input=validateStudioInput({worldId:'ai-game-lab',prompt:characterGenerationPrompt(p.world),purpose:'game',textureMaxSize:4096,photos:[]});const result=await api.start(input,record=>{if(alive.current&&latest.current.world.id===id&&latest.current.owner===actor){window.localStorage.setItem(bindingKey,JSON.stringify({...binding.current,jobId:record.receipt.id}));setSaved(record);setJob(null)}},'',true);if(alive.current)setJob(result)}
+    try{const input=validateStudioInput({worldId:'ai-game-lab',prompt,purpose:'game',textureMaxSize:4096,photos:[],...(selectedTier?studioBudgetSelection(selectedTier,budgetAccepted):{})});const result=await api.start(input,record=>{if(alive.current&&latest.current.world.id===id&&latest.current.owner===actor){window.localStorage.setItem(bindingKey,JSON.stringify({...binding.current,jobId:record.receipt.id}));setSaved(record);setJob(null);setAcceptedBudgetRevision(null)}},'',true);if(alive.current)setJob(result)}
     catch(e){if(alive.current)setError(e instanceof Error?e.message:'Generation did not confirm; recover the saved receipt.')}
     finally{lock.current=false;if(alive.current){setBusy(false);void refresh()}}
   }
   return <section className="world-character-studio" aria-label="Character studio">
     <span className="private-eyebrow">YOUR CHARACTER</span><h2>A character in your world</h2><p>Your procedural preview is visible in Edit and Play. Clothes, hair and colors follow supported description presets; it is not an AI-generated detailed mesh.</p>
     <button onClick={p.onFocus}>Focus character</button><label>Use a library GLB as character<select value={p.world.character.assetId??''} disabled={p.disabled||busy} onChange={e=>p.onSetAsset(e.target.value||null)}><option value="">Procedural preview · no AI cost</option>{files.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
-    <details open><summary>Generate a detailed character here</summary><p>Astra → existing Codex runner → Blender MCP → your GLB. The existing account, job receipt and spend guards remain authoritative; no unmetered agent loop.</p><GenerationCostNotice model="astra" busy={busy} detailed/><button className="private-primary" disabled={p.disabled||busy||!client.current||quote?.state!=='credits'||!!saved&&!terminal(job?.state)} onClick={()=>void generate()}>{busy?'Working on this character…':'Generate character · 250 points'}</button>{quote?.state!=='credits'&&<p className="private-fine">{quote?.message??'Checking detailed generation availability. No request has been bought.'}</p>}<button disabled={busy} onClick={()=>void refresh()}>Refresh availability</button></details>
-    {saved&&<div className="private-proposal"><strong>Character job: {job?.state??'checking'}</strong><p>{job?.detail??'Receipt saved; waiting for server confirmation.'}</p><button disabled={busy} onClick={()=>job?.state==='succeeded'?void loadResult(saved,job):setRetry(v=>v+1)}>Recover this character job · no new generation</button></div>}
+    <details open><summary>Generate a detailed character here</summary><p>Astra → existing Codex runner → Blender MCP → your GLB. The existing account, job receipt and spend guards remain authoritative; no unmetered agent loop.</p>{!tiersReady&&budgetTier==='extended'&&<div role="status"><p>The selected 500-point budget is no longer available. Choose the standard budget explicitly to continue when it is available.</p><button disabled={busy||p.disabled} onClick={()=>{setBudgetTier('standard');setAcceptedBudgetRevision(null)}}>Use standard model budget · 250 points</button></div>}{tiersReady&&<fieldset disabled={busy||p.disabled}><legend>Detailed character budget</legend><label htmlFor="character-budget-tier">Points for one explicit attempt</label><select id="character-budget-tier" value={budgetTier} onChange={e=>{setBudgetTier(e.target.value as StudioBudgetTier);setAcceptedBudgetRevision(null)}}><option value="standard">Standard model budget · 250 points</option><option value="extended">Extended model budget · 500 points</option></select><p>Higher complexity may need the 500-point budget. This is not a measurement of this character; a higher budget does not guarantee completion or quality.</p>{budgetTier==='extended'&&<label htmlFor="character-budget-consent"><input id="character-budget-consent" type="checkbox" checked={budgetAccepted} onChange={e=>setAcceptedBudgetRevision(e.target.checked?draftBudgetRevision:null)}/>I explicitly accept 500 points for one attempt with this character description.</label>}<p>No automatic upgrade, paid retry or additional debit. Editing the description requires a new 500-point acceptance.</p></fieldset>}<GenerationCostNotice model="astra" busy={busy} detailed budgetTier={selectedTier} accountQuote={accountQuote}/>{runtimeProblem&&<p role="status">{runtimeProblem}</p>}<button className="private-primary" disabled={p.disabled||busy||!client.current||quote.state!=='credits'||!!runtimeProblem||(budgetTier==='extended'&&(!tiersReady||!budgetAccepted))||!!saved&&!terminal(job?.state)} onClick={()=>void generate()}>{busy?'Working on this character…':budgetTier==='extended'&&!tiersReady?'Review model budget availability':`Generate character · ${selectedPoints} points`}</button>{quote?.state!=='credits'&&<p className="private-fine">{quote?.message??'Checking detailed generation availability. No request has been bought.'}</p>}<button disabled={busy} onClick={()=>void refresh()}>Refresh availability</button></details>
+    {saved&&<div className="private-proposal"><strong>Character job: {job?.state??'checking'}</strong><p>{job?.detail??'Receipt saved; waiting for server confirmation.'}</p><p>{(job?.pricing??saved.pricing)?`Original job: ${(job?.pricing??saved.pricing)!.points} points · ${(job?.pricing??saved.pricing)!.tier} model budget. Recovery does not change this price.`:'Original job price is retained by the server; recovery does not apply the next draft’s price.'}</p><button disabled={busy} onClick={()=>job?.state==='succeeded'?void loadResult(saved,job):setRetry(v=>v+1)}>Recover this character job · no new generation</button></div>}
+    {studioBudgetFailureAdvice(job)&&<p>{studioBudgetFailureAdvice(job)}</p>}
     {notice&&<p role="status">{notice}</p>}{error&&<p className="private-error" role="alert">{error}</p>}
     <p className="private-fine">Generated results are checked as GLB before import. Static models do not become rigged merely by selecting them; existing animation clips are reused where present.</p>
   </section>

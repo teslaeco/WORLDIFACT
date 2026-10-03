@@ -1,6 +1,7 @@
 // WORLDIFACT adapter to the existing Froge /v1/jobs contract; no new AI provider.
 // Reviewed reference: Froge-MPC-2-test @ d3f61b842dcfeda2ed794210caafc391919a75be.
 import { ADMISSION_FAILURE_CODES, ADMISSION_FAILURE_DETAILS } from './generationAdmission.ts'
+import { studioPricingFor, validateStudioPricingSelection, type StudioPricing, type StudioPricingSelection } from './studioPricing.ts'
 
 const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for every generated asset:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
 
@@ -18,8 +19,8 @@ export const INDUSTRIAL_ELECTRICAL_PROFILE = 'industrial-electrical-cabinet-v1' 
 export const REFERENCE_CHARACTER_PROFILE = 'reference-character-v1' as const
 export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE | typeof REFERENCE_CHARACTER_PROFILE
 
-const STANDARD_COMPLETION_INSTRUCTIONS = `WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:
-- Use Code Mode exec with the fully qualified tools.mcp__blender__ names below. Await every call and inspect its returned result; a tool error is not a completed step. Stay within the existing per-job USD 1.75 guard and tool/build limits. Do not start another job, change limits or substitute another generator.
+const standardCompletionInstructions = (pricing?: StudioPricing) => `WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:
+- Use Code Mode exec with the fully qualified tools.mcp__blender__ names below. Await every call and inspect its returned result; a tool error is not a completed step. Stay within the ${pricing ? 'selected' : 'existing'} per-job USD ${((pricing?.maxProviderCents ?? 175) / 100).toFixed(2)} guard and tool/build limits. Do not start another job, change limits or substitute another generator.
 1. Call tools.mcp__blender__get_modeling_contract({}) once. Parse and retain the returned scene schema, geometry guide, reference mapping and current revision. Compare the actual reference images, then construct a complete scene using only supported fields and operations.
 2. Call tools.mcp__blender__build_model({scene_json:JSON.stringify(scene),expected_revision:revision}), using the actual current revision (0 before the first successful build). This API takes scene JSON, not Python. Generate repeated parts compactly in Code Mode rather than hand-writing thousands of vertices. Read the returned revision and report; do not stop merely because a GLB candidate exists.
 3. Call tools.mcp__blender__inspect_render({view,expected_revision:revision}) for front, side and back, plus face for a person/portrait and three-quarter for a cabinet. For each response, pass every image content block to image(block) so the actual rendered pixels are visible; reading text metadata or printing base64 is not visual inspection. Compare these images with the references and inspect depth, silhouette and physical detail.
@@ -70,20 +71,21 @@ export const PHOTO_VIEWS = ['front', 'three_quarter', 'side', 'left', 'right', '
 export type PhotoView = typeof PHOTO_VIEWS[number]
 export type TextureLimit = 2048 | 4096 | 8192
 export type StudioPhoto = { name: string; view: PhotoView; dataUrl: string; subject?: string; textureMaxSize: TextureLimit }
-export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE }
+export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE } & StudioPricingSelection
 export const STUDIO_PREPARE_VERSION = 'studio-prepare-v1' as const
 // Allows the bounded full upload and admission checks to finish before an
 // absent submission is atomically fenced against any late paid dispatch.
 export const STUDIO_SUBMISSION_GRACE_MS = 5 * 60_000
-export type StudioPrepareMetadata = Pick<StudioInput, 'worldId' | 'prompt' | 'purpose' | 'textureMaxSize' | 'generationProfile'> & { photoCount: number }
+export type StudioPrepareMetadata = Pick<StudioInput, 'worldId' | 'prompt' | 'purpose' | 'textureMaxSize' | 'generationProfile' | 'pricingRevision' | 'budgetTier' | 'acceptedPoints'> & { photoCount: number }
 export type StudioPrepareManifest = StudioPrepareMetadata & { version: typeof STUDIO_PREPARE_VERSION; inputDigest: string }
-export type StudioReceipt = { id: string; ticket: string; createdAt: string }
-export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
+export type StudioReceipt = { id: string; ticket: string; createdAt: string; pricing?: StudioPricing }
+export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'MODEL_BUDGET_EXCEEDED', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
 export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
-export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean }
+export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean; pricing?: StudioPricing }
 export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   ...ADMISSION_FAILURE_DETAILS,
   ASTRA_COST_LIMIT: 'Astra’s cost protection stopped this job. Reserved customer points were released. Keep this job ID for review before starting another attempt; no automatic retry.',
+  MODEL_BUDGET_EXCEEDED: 'This model is too elaborate for the selected generation budget. Reserved customer points were released; no automatic retry.',
   INVALID_MODEL_OUTPUT: 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.',
   STUDIO_TIMEOUT: 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.',
   ORACLE_JOB_FAILED: 'The Astra/Blender worker reported that this job failed. Reserved customer points were released. Keep this job ID for diagnosis; no automatic retry.',
@@ -98,7 +100,7 @@ export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   STUDIO_ALLOWANCE_UNAVAILABLE: 'The generation allowance could not be reserved, so no Oracle generation was submitted. Reserved customer points were released; no automatic retry.',
   ORACLE_CANCELLED: 'The worker reported that this job was cancelled. Reserved customer points were released; no automatic retry.',
 }
-export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; exportPreparationReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
+export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; exportPreparationReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; pricingRevision?: string; tiersReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const keys = (value: Record<string, unknown>, names: string[]) => Object.keys(value).every(name => names.includes(name))
 
@@ -131,13 +133,16 @@ export function jpegSize(bytes: Uint8Array): [number, number] {
   throw new Error('Reference JPEG dimensions could not be read.')
 }
 export function validateStudioInput(value: unknown): StudioInput {
-  if (!record(value) || !keys(value, ['worldId', 'prompt', 'purpose', 'textureMaxSize', 'photos', 'generationProfile']) ||
+  if (!record(value) || !keys(value, ['worldId', 'prompt', 'purpose', 'textureMaxSize', 'photos', 'generationProfile', 'pricingRevision', 'budgetTier', 'acceptedPoints']) ||
     typeof value.worldId !== 'string' || !['enchanted-ai-shop', 'ai-game-lab'].includes(value.worldId) ||
     typeof value.prompt !== 'string' || value.prompt.trim().length < 3 || value.prompt.length > 4000 ||
     typeof value.purpose !== 'string' || !['game', 'figurine', 'terrain', 'object'].includes(value.purpose) ||
     typeof value.textureMaxSize !== 'number' || ![2048, 4096, 8192].includes(value.textureMaxSize))
     throw new Error('Enter a 3–4000 character description, a supported purpose and a texture-size limit.')
   const profile = generationProfile(value.generationProfile)
+  const pricingSelection = validateStudioPricingSelection(value)
+  if (profile === FAST_DRAFT_PROFILE && (value.pricingRevision !== undefined || value.budgetTier !== undefined || value.acceptedPoints !== undefined))
+    throw new Error('Studio budget tiers apply only to detailed generation.')
   const source = value.photos === undefined ? [] : value.photos
   if (!Array.isArray(source) || source.length > 4) throw new Error('Use at most four reference photos.')
   if (profile === FAST_DRAFT_PROFILE && (source.length > 0 || value.textureMaxSize !== 2048 || value.purpose === 'terrain'))
@@ -160,13 +165,15 @@ export function validateStudioInput(value: unknown): StudioInput {
   })
   // Missing/explicit STANDARD must keep old canonical bytes and receipt hashes.
   return { worldId: value.worldId as StudioInput['worldId'], prompt: value.prompt.trim(), purpose: value.purpose as StudioInput['purpose'], textureMaxSize: value.textureMaxSize as TextureLimit, photos,
-    ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
+    ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}), ...pricingSelection }
 }
 export function oracleStudioPayload(id: string, input: StudioInput) {
   if (input.generationProfile === FAST_DRAFT_PROFILE) return {
     id, generationProfile: FAST_DRAFT_PROFILE,
     prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + MANUFACTURING_HARD_RULES,
   }
+  const selection = validateStudioPricingSelection(input)
+  const studioPricing = selection.budgetTier === undefined ? undefined : studioPricingFor(selection)
   const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${input.purpose}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use the supported scene JSON contract for the complete first build, inspect actual renders and successfully call finish_model before claiming completion. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; report open/non-manifold geometry, intersections, thin walls and fragile joints; never claim manufacturing approval.`
   // The installed v33 photo contract accepts `side`, not `left`/`right`.
   // Keep image bytes, names and subject identity intact; preserve exact side
@@ -177,8 +184,8 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   const qualityProfile = studioQualityProfile(input)
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
     : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
-  return { id, prompt: input.prompt + instruction,
-    agentInstructions: MANUFACTURING_HARD_RULES + '\n\n' + STANDARD_COMPLETION_INSTRUCTIONS + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
+  return { id, prompt: input.prompt + instruction, ...(studioPricing ? { studioPricing } : {}),
+    agentInstructions: MANUFACTURING_HARD_RULES + '\n\n' + standardCompletionInstructions(studioPricing) + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
     ...(photos.length ? { photos } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {
@@ -194,12 +201,12 @@ export async function prepareStudioInput(input: StudioInput): Promise<StudioPrep
   return { version: STUDIO_PREPARE_VERSION, inputDigest: await inputDigest(canonical), ...metadata, photoCount: photos.length }
 }
 export function validateStudioPrepareManifest(value: unknown): StudioPrepareManifest {
-  if (!record(value) || !keys(value, ['version', 'inputDigest', 'worldId', 'prompt', 'purpose', 'textureMaxSize', 'photoCount', 'generationProfile']) ||
+  if (!record(value) || !keys(value, ['version', 'inputDigest', 'worldId', 'prompt', 'purpose', 'textureMaxSize', 'photoCount', 'generationProfile', 'pricingRevision', 'budgetTier', 'acceptedPoints']) ||
       value.version !== STUDIO_PREPARE_VERSION || typeof value.inputDigest !== 'string' || !/^[a-f0-9]{64}$/.test(value.inputDigest) ||
       !Number.isSafeInteger(value.photoCount) || Number(value.photoCount) < 0 || Number(value.photoCount) > 4)
     throw new Error('Invalid lightweight preparation manifest. No generation was submitted.')
   const { photos: _photos, ...metadata } = validateStudioInput({ worldId: value.worldId, prompt: value.prompt, purpose: value.purpose,
-    textureMaxSize: value.textureMaxSize, generationProfile: value.generationProfile, photos: [] })
+    textureMaxSize: value.textureMaxSize, generationProfile: value.generationProfile, pricingRevision: value.pricingRevision, budgetTier: value.budgetTier, acceptedPoints: value.acceptedPoints, photos: [] })
   if (metadata.generationProfile === FAST_DRAFT_PROFILE && value.photoCount !== 0) throw new Error('FAST v1 does not support reference photos.')
   return { version: STUDIO_PREPARE_VERSION, inputDigest: value.inputDigest, ...metadata, photoCount: Number(value.photoCount) }
 }
