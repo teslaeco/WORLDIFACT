@@ -44,8 +44,9 @@ PROPERTIES = (
     'FragmentPath', 'DropInPaths', 'NRestarts', 'StopWhenUnneeded',
     'RestartUSec', 'RestartForceExitStatus', 'RestartPreventExitStatus',
     'SuccessExitStatus', 'Result', 'ExecMainCode', 'ExecMainStatus',
-    'ExecCondition', 'Wants', 'Requires', 'BindsTo', 'Conflicts',
+    'ExecCondition', 'Wants', 'Requires', 'BindsTo', 'Conflicts', 'Slice',
 )
+OPTIONAL_EXEC = ('ExecStartPre', 'ExecStartPost', 'ExecStop', 'ExecStopPost', 'ExecReload', 'ExecCondition')
 IDENTITY = ('MainPID', 'InvocationID', 'NRestarts')
 VOLATILE = {'ActiveState', 'SubState', 'MainPID', 'InvocationID', 'Job', 'NRestarts', 'ControlGroup', 'Result', 'ExecMainCode', 'ExecMainStatus'}
 
@@ -126,17 +127,69 @@ def database_gate(source, *, frozen=False, timeout=0.25, allow_cancelled_cleanup
             connection.close()
 
 
-def _unit(operations, name):
-    output = operations.command(['systemctl', '--user', 'show', name,
-                                 '--property=' + ','.join(PROPERTIES)], timeout=COMMAND_SECONDS)
+def _property_lines(output, permitted):
     result = {}
     for line in output.splitlines():
         key, separator, value = line.partition('=')
-        if not separator or key in result:
+        if not separator or key in result or key not in permitted:
             refuse('unit_unreadable', 'The complete service properties are required.')
         result[key] = value
-    if set(result) != set(PROPERTIES):
+    return result
+
+
+def _empty_exec_arrays(operations, name, missing):
+    # v252 systemctl-show.c prints Exec arrays only inside its element loop.
+    # Missing text is insufficient: require explicit, correctly typed empty
+    # values from the manager for every omitted hook, including after freeze.
+    objects = {WORKER: 'froge_2dworker_2eservice', TUNNEL: 'froge_2dtunnel_2eservice'}
+    try:
+        output = operations.command(['busctl', '--user', '--auto-start=no', 'get-property',
+            'org.freedesktop.systemd1', '/org/freedesktop/systemd1/unit/' + objects[name],
+            'org.freedesktop.systemd1.Service', *missing], timeout=COMMAND_SECONDS)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise FenceRefused('unit_hooks_unproven', 'Explicit empty service hooks could not be verified.') from error
+    if output.splitlines() != ['a(sasbttttuii) 0'] * len(missing):
+        refuse('unit_hooks_unproven', 'Every omitted service hook must be an explicit typed empty array.')
+
+
+def _app_slice(operations, unit, name):
+    # v252 unit_add_slice_dependencies adds Requires for the configured Slice.
+    # Permit only this fixed slice and prove its actual parent cgroup relation.
+    if unit['Slice'] != 'app.slice':
+        refuse('unit_slice_property_mismatch', 'The required application slice differs from the configured slice.')
+    keys = ('Id', 'LoadState', 'ActiveState', 'ControlGroup')
+    output = operations.command(['systemctl', '--user', 'show', 'app.slice',
+        '--property=' + ','.join(keys)], timeout=COMMAND_SECONDS)
+    parent = _property_lines(output, keys)
+    if set(parent) != set(keys) or parent['Id'] != 'app.slice':
+        refuse('unit_slice_identity_unproven', 'The implicit application slice could not be verified.')
+    if parent['LoadState'] != 'loaded' or parent['ActiveState'] != 'active':
+        refuse('unit_slice_not_active', 'The required application slice must be loaded and active.')
+    group = parent['ControlGroup']
+    if (not group.startswith('/') or '..' in group.split('/') or
+            group != str(Path(group)) or Path(group).name != 'app.slice'):
+        refuse('unit_slice_group_unproven', 'The application slice must have its canonical cgroup.')
+    if unit['ControlGroup']:
+        if unit['ControlGroup'] != group + '/' + name:
+            refuse('unit_slice_service_group_mismatch', 'The service must be an immediate child of its verified application slice.')
+    elif unit['MainPID'] != '0' or unit['ActiveState'] not in ('inactive', 'failed', 'deactivating'):
+        refuse('unit_slice_service_group_missing', 'A running service must have its verified cgroup.')
+
+
+def _unit(operations, name):
+    if name not in (WORKER, TUNNEL):
+        refuse('unit_unreadable', 'Only the two reviewed services are supported.')
+    output = operations.command(['systemctl', '--user', 'show', name,
+                                 '--property=' + ','.join(PROPERTIES)], timeout=COMMAND_SECONDS)
+    result = _property_lines(output, PROPERTIES)
+    missing = [key for key in PROPERTIES if key not in result]
+    if any(key not in OPTIONAL_EXEC for key in missing):
         refuse('unit_unreadable', 'The complete service properties are required.')
+    if missing:
+        _empty_exec_arrays(operations, name, missing)
+        result.update({key: '' for key in missing})
+    if 'app.slice' in result['Requires'].split():
+        _app_slice(operations, result, name)
     return result
 
 
@@ -178,9 +231,21 @@ def _unit_policy(unit, source, worker=True):
             refuse('unsupported_unit_' + key.lower(), 'Unsupported service semantics: ' + key + '.')
     if unit['Wants'] != ('froge-ollama.service' if worker else ''):
         refuse('unsupported_unit_wants', 'Only the pinned Ollama dependency is supported.')
-    if (not set(unit['Requires'].split()) <= {'basic.target', 'sysinit.target'} or
-            not set(unit['Conflicts'].split()) <= {'shutdown.target'}):
+    unknown = set(unit['Requires'].split()) - {'basic.target', 'sysinit.target', 'app.slice'}
+    if unknown:
+        # Fixed categories are sufficient for the refusal receipt; never print
+        # arbitrary dependency names, which may contain private project data.
+        kinds = {value.rsplit('.', 1)[-1] for value in unknown}
+        kind = next(iter(kinds)) if len(kinds) == 1 else 'mixed'
+        if kind not in ('service', 'target', 'slice', 'socket', 'mount', 'mixed'):
+            kind = 'other'
+        refuse('unit_requires_unknown_' + kind, 'An unreviewed dependency category prevents maintenance: ' + kind + '.')
+    if not set(unit['Conflicts'].split()) <= {'shutdown.target'}:
         refuse('unsupported_unit_dependencies', 'Unreviewed activation dependencies prevent maintenance.')
+    if 'app.slice' in unit['Requires'].split() and (
+            unit['Slice'] != 'app.slice' or
+            Path(unit['ControlGroup']).parts[-2:] != ('app.slice', name)):
+        refuse('unit_slice_unproven', 'The running service must use its verified application slice.')
     if unit['Job'] not in ('', '0'):
         refuse('unit_job_pending', 'A pending service job prevents maintenance.')
     if worker:
