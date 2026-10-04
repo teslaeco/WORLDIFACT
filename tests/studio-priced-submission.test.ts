@@ -104,6 +104,46 @@ test('reviewed runtime quotes and reserves only the exact selected standard or e
   }
 })
 
+test('Studio diagnostics identify the generation stage without recording private request data', async () => {
+  const f = fixture(); await f.fund()
+  const lines: string[] = [], original = console.info
+  console.info = (...values: unknown[]) => { lines.push(values.join(' ')) }
+  try {
+    const receipt = await f.prepare(input)
+    const response = await f.call('/api/studio/jobs', 'POST', input, receipt)
+    assert.equal(response.status, 202)
+    const diagnostics = lines.map(line => JSON.parse(line) as Record<string, unknown>)
+    assert.deepEqual(diagnostics.map(value => [value.stage, value.admission, value.oracleDispatch, value.workerStatus]), [
+      ['PREPARATION', 'PREPARED', 'NOT_ATTEMPTED', null],
+      ['ORACLE_DISPATCH', 'ADMITTED', 'CLAIMED', null],
+      ['ORACLE_DISPATCH', 'ADMITTED', 'RESPONSE', 200],
+    ])
+    assert.ok(diagnostics.every(value => value.event === 'worldifact.studio.generation' && value.requestId === receipt.id))
+    assert.doesNotMatch(lines.join('\n'), /blue chess rook|fixture@example|inert-oracle|owner-fixture|ticket/i)
+  } finally { console.info = original }
+})
+
+test('provider funding refusal is diagnosed before Oracle dispatch', async () => {
+  const f = fixture(); await f.fund()
+  await f.account().put('provider-budget-cents:v1', 174)
+  const lines: string[] = [], original = console.info
+  console.info = (...values: unknown[]) => { lines.push(values.join(' ')) }
+  try {
+    const receipt = await f.prepare(input)
+    const before = await f.balances()
+    const response = await f.call('/api/studio/jobs', 'POST', input, receipt)
+    assert.equal(response.status, 429)
+    assert.equal(f.submitted.length, 0)
+    assert.deepEqual(await f.balances(), before)
+    const diagnostics = lines.map(line => JSON.parse(line) as Record<string, unknown>)
+    assert.deepEqual(diagnostics.map(value => [value.stage, value.admission, value.reason, value.oracleDispatch]), [
+      ['PREPARATION', 'PREPARED', 'PREFLIGHT_ACCEPTED', 'NOT_ATTEMPTED'],
+      ['ADMISSION', 'REFUSED', 'PROVIDER_BUDGET_EXHAUSTED', 'NOT_ATTEMPTED'],
+    ])
+    assert.ok(diagnostics.every(value => value.requestId === receipt.id))
+  } finally { console.info = original }
+})
+
 test('missing, partial or incompatible additive attestation rejects new pricing without reserving anything', async () => {
   const valid = tierHealth()
   for (const changed of [

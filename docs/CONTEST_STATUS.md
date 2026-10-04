@@ -1,6 +1,42 @@
 # WORLDIFACT — TerraformingPlanet Astra heroine released
 
-Updated 3 October 2026.
+Updated 4 October 2026.
+
+## GENERATION RECOVERY AUDIT — repository fix applied, live drone remains unverified
+
+The 4 October audit in [`GENERATION_RECOVERY_AUDIT.md`](GENERATION_RECOVERY_AUDIT.md)
+traces detailed Astra Studio from signed browser receipt through account/provider
+admission and fenced Oracle dispatch to artifact validation and preview. The
+confirmed pricing regression was PR #195: its new-job ceilings were USD 2/USD 4,
+while existing funded Astra allocation remained USD 1.75 per 250 points. This
+could refuse an account before Oracle; it is not evidence of an Oracle/Blender
+failure. Merged PR #205 restored the legacy contract without resetting funding
+or changing previously admitted jobs.
+
+This local task branch adds an explicit legacy-policy deployment gate,
+post-deploy policy assertions and fixed-schema, redacted Studio lifecycle
+diagnostics. Focused fixture tests prove a provider-funding refusal has no
+Oracle POST and changes no account balances. These tests are not live
+generation evidence. The latest main release workflow passed as run
+[37170989080](https://github.com/teslaeco/WORLDIFACT/actions/runs/37170989080);
+that does not prove a new user job or preview.
+
+Local validation for this audit: 19 focused Studio tests passed; typecheck,
+lint (existing warnings), local HTTP smoke, direct Vite bundle build and
+Wrangler dry-run passed. The full suite had 1,079/1,080 passing: the sole
+failure is the existing ISS foundation test missing generated
+`public/apps/iss/vendor/examples/jsm/math/Octree.js`. `npm run verify` and
+`npm run build` stop before compilation because the asset preparation step
+cannot resolve its external ISS source domain. Full asset-ready CI remains
+required. `npm audit --omit=dev` found no vulnerable production dependencies;
+secret scanning found no secrets in changed files.
+
+The last recorded real Astra/Oracle/Blender artifact remains the historical
+one-shot GLB/BLEND recorded below, not the requested sci-fi drone. No new live
+request, Oracle job, or GLB was produced for this audit. Specific account
+funding, current secret values, Oracle VM/MCP/Blender runtime and production
+preview remain unverified from this checkout. No funding reset, paid retry,
+Cloudflare publication, push or merge was performed.
 
 ## IN VERIFICATION — paid membership refresh and removal of Creator attempt quota
 
