@@ -30,6 +30,17 @@ class StudioError extends Error {
 class InvalidStudioModelError extends StudioError {}
 class StudioVerificationBusyError extends StudioError {}
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
+type StudioDiagnostic = {
+  requestId: string
+  admission: 'PREPARED' | 'ADMITTED' | 'REFUSED' | 'RECOVERY_ONLY'
+  reason: string
+  oracleDispatch: 'NOT_ATTEMPTED' | 'CLAIM_REFUSED' | 'CLAIMED'
+  workerStatus: number | null
+}
+// Fixed fields only: never log prompts, account identifiers, receipts or provider errors.
+function logStudioDiagnostic(diagnostic: StudioDiagnostic) {
+  console.info(JSON.stringify({ event: 'worldifact.studio.generation', ...diagnostic }))
+}
 const secretReady = (env: StudioEnv) => (env.OWNER_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.OWNER_ACCESS_TOKEN?.length ?? 0) <= 256
 const keyOf = (env: StudioEnv) => crypto.subtle.importKey('raw', new TextEncoder().encode(env.OWNER_ACCESS_TOKEN!), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
 const hex = (value: ArrayBuffer) => Array.from(new Uint8Array(value), n => n.toString(16).padStart(2, '0')).join('')
@@ -411,7 +422,9 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       await preflight(request, env, fetcher, metadata, user?.id)
       const pool = await allowance(env)
       if (!pool.unlimited && pool.remaining === 0) throw new StudioError('The cumulative allowance is exhausted. No job was started.', 429)
-      return json(await receipt(env, crypto.randomUUID(), await boundDigest(digest, user?.id), user?.id, metadata.budgetTier === undefined ? undefined : studioPricingFor(metadata)))
+      const prepared = await receipt(env, crypto.randomUUID(), await boundDigest(digest, user?.id), user?.id, metadata.budgetTier === undefined ? undefined : studioPricingFor(metadata))
+      logStudioDiagnostic({ requestId: prepared.id, admission: 'PREPARED', reason: 'PREFLIGHT_ACCEPTED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
+      return json(prepared)
     }
     if (url.pathname === '/api/studio/jobs' && request.method === 'POST') {
       await limit(request, env, 'submit')
@@ -441,9 +454,13 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (!userReservation.allowed) {
           const conflict = ['REQUEST_PAYLOAD_MISMATCH', 'JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(userReservation.reason ?? '')
           const reason: AdmissionFailureCode = isAdmissionFailureCode(userReservation.reason) ? userReservation.reason : conflict ? 'ACCOUNT_REQUEST_CONFLICT' : 'ACCOUNT_ADMISSION_UNAVAILABLE'
+          logStudioDiagnostic({ requestId: auth.id, admission: 'REFUSED', reason, oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
           throw new StudioError(ADMISSION_FAILURE_DETAILS[reason], 429, reason)
         }
-        if (userReservation.repeated) return json({ job: await accountJob(env, user.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
+        if (userReservation.repeated) {
+          logStudioDiagnostic({ requestId: auth.id, admission: 'RECOVERY_ONLY', reason: 'EXISTING_ACCOUNT_RESERVATION', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
+          return json({ job: await accountJob(env, user.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
+        }
       }
       // Keep the operator budget independent from customer credits. A rejected
       // global reservation cannot create an Oracle job and releases customer credit.
@@ -454,6 +471,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (!reserved.ok || (await reserved.json() as { allowed?: boolean }).allowed !== true) throw new StudioError('The cumulative allowance is exhausted or unavailable. No new job was submitted.', reserved.status === 429 ? 429 : 503)
       } catch (error) {
         if (user) await settleUserGeneration(env, user.id, auth.id, 'failed', 'STUDIO_ALLOWANCE_UNAVAILABLE')
+        logStudioDiagnostic({ requestId: auth.id, admission: 'REFUSED', reason: 'STUDIO_ALLOWANCE_UNAVAILABLE', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
         throw new StudioError(STUDIO_FAILURE_DETAILS.STUDIO_ALLOWANCE_UNAVAILABLE, error instanceof StudioError ? error.status : 503, 'STUDIO_ALLOWANCE_UNAVAILABLE')
       }
       try {
@@ -463,10 +481,14 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (user) {
           const claim = await markStudioDispatch(env, user.id, auth.id, auth.hash)
           // No await between this expiry check and the actual Oracle fetch.
-          if (!claim.dispatch || Date.now() >= claim.deadline)
+          if (!claim.dispatch || Date.now() >= claim.deadline) {
+            logStudioDiagnostic({ requestId: auth.id, admission: 'RECOVERY_ONLY', reason: 'DISPATCH_FENCE_REFUSED', oracleDispatch: 'CLAIM_REFUSED', workerStatus: null })
             return json({ job: await accountJob(env, user.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
+          }
         }
+        logStudioDiagnostic({ requestId: auth.id, admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'CLAIMED', workerStatus: null })
         const response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: payload })
+        logStudioDiagnostic({ requestId: auth.id, admission: 'ADMITTED', reason: response.ok ? 'ORACLE_RESPONSE' : 'ORACLE_REJECTED', oracleDispatch: 'CLAIMED', workerStatus: response.status })
         if ([400, 409, 422, 429].includes(response.status)) {
           const failureCode = await submissionFailureCode(response)
           if (user) await settleUserGeneration(env, user.id, auth.id, 'failed', failureCode)
