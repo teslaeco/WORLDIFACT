@@ -147,6 +147,8 @@ jobs:
           assert.equal(status.photoReady,true);
           assert.equal(status.detailedReferenceLimit,4);
           assert.equal(status.accountRequired,true);
+          assert.equal(status.newJobPolicy,'legacy-usd175-v1');
+          assert.notEqual(status.tiersReady,true);
           const denied = await fetch(origin + '/api/studio/prepare', {method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({worldId:'enchanted-ai-shop',prompt:'Character reference routing guard probe',purpose:'game',textureMaxSize:4096,photos:[]})});
           assert.equal(denied.status,401);
           const fundingDenied = await fetch(origin + '/api/studio/reconcile-budget', {method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({cursor:null})});

@@ -11,7 +11,8 @@ export function restoreDetailedConfig(config, evidence) {
   if (config?.name !== 'worldifact' || v?.ENABLE_PAID_GENERATION !== 'true' || v.PUBLIC_PILOT !== 'true' ||
       v.ENFORCE_ACCOUNT_ENTITLEMENTS !== 'true' || v.ENABLE_ASTRA_PLANS !== 'true' ||
       v.ENABLE_STUDIO_JOBS !== 'false' || v.ENABLE_ORACLE_JOBS !== 'false' ||
-      v.OPENAI_MODEL !== 'gpt-6-astra' || v.ENABLE_APPROVED_FAST_TEST !== 'false')
+      v.OPENAI_MODEL !== 'gpt-6-astra' || v.ENABLE_APPROVED_FAST_TEST !== 'false' ||
+      v.STUDIO_NEW_JOB_POLICY !== 'legacy-usd175-v1')
     throw new Error('DETAILED_RESTORE_REQUIRES_REVIEWED_ACCOUNT_CONFIG')
   if (evidence?.verifiedForGuardedRouting !== true || evidence.runtime !== 'VERIFIED' ||
       evidence.model !== 'gpt-6-astra' || evidence.revision !== 'astra-usd175-v1' || evidence.maxProviderUsdPerJob !== 1.75 ||
@@ -30,6 +31,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const restored = restoreDetailedConfig(config, evidence)
     await writeFile(process.argv[2], JSON.stringify(restored, null, 2) + '\n', { mode: 0o600 })
     console.log(JSON.stringify({ oracleMaintenance: evidence.maintenance, paidGenerationRequested: false }))
-    console.log('VERIFIED: account-bound Astra/Blender route restored with existing USD1.75 job guard, low-reasoning output policy and four reference views. Anonymous Oracle writes remain disabled. No job, AI call, charge or budget reset was performed; live visual quality remains UNVERIFIED.')
+    console.log('VERIFIED: account-bound Astra/Blender route restored with the explicit legacy-usd175-v1 new-job policy, existing USD1.75 job guard, low-reasoning output policy and four reference views. Anonymous Oracle writes remain disabled. No job, AI call, charge or budget reset was performed; live visual quality remains UNVERIFIED.')
   } catch { console.error('DETAILED_RESTORE_NOT_VERIFIED: publication stopped; no generation requested.'); process.exitCode = 1 }
 }
