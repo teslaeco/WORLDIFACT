@@ -98,8 +98,3 @@
  .native-shop-form { order: 0; width: 100%; }
  .native-shop-preview { order: 1; width: 100%; box-sizing: border-box; }
 }
-
-.studio-budget-options { margin: 6px 0; min-width: 0; padding: 14px; border: 1px solid #54707c; border-radius: 9px; }
-.studio-budget-options legend { padding: 0 6px; font-weight: 700; }
-.native-shop-form .studio-budget-options label[for="studio-budget-consent"] { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; }
-.studio-budget-options input[type="checkbox"] { flex: none; }

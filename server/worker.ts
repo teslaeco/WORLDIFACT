@@ -6,12 +6,11 @@ import { studioApi } from "./studio.ts";
 import { avatarApi, type AvatarContext } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
 import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
-import { entitlementCall, entitlementApi, markBlueprintDispatch, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
+import { entitlementCall, entitlementApi, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
 import { billingApi, type BillingEnv } from './billing.ts';
 import { paypalApi, type PayPalEnv } from './paypal.ts';
 import { privateWorldApi } from './privateWorldApi.ts';
 import { decorApi } from './decor.ts';
-import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../src/lib/generationAdmission.ts';
 export { AccountEntitlements } from './entitlements.ts';
 import {
   astraGenerationSchema,
@@ -199,19 +198,14 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   let customerGenerationKind: 'free' | 'credits' | null = null;
   if (account) {
     try {
-      const reservation = await reserveUserGeneration(env, account.id, requestId, selectedModel === 'astra' ? 'slow' : 'fast', selectedModel, fingerprint, undefined,
-        { channel: 'blueprint', blueprintDispatch: 'fenced-v1' });
+      const reservation = await reserveUserGeneration(env, account.id, requestId, selectedModel === 'astra' ? 'slow' : 'fast', selectedModel, fingerprint);
       if (reservation.reason === 'REQUEST_PAYLOAD_MISMATCH') return json({ error: 'This request ID belongs to different inputs. No new charge was made.', code: 'REQUEST_PAYLOAD_MISMATCH', requestId }, 409);
       if (reservation.repeated) {
         const status = await entitlementCall<{ state: string; result?: GenerationResult; refunded?: boolean }>(env, account.id, '/blueprint-status', { id: requestId });
         if (status.state === 'completed' && status.result) return json(status.result);
         return json({ error: status.refunded ? 'This attempt failed and its customer allowance was returned. No replacement was started.' : 'This same request is already being processed. Recover its status; no second charge was made.', requestId, state: status.state, refunded: status.refunded === true }, 409);
       }
-      if (!reservation.allowed) {
-        const conflict = ['JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(reservation.reason ?? '');
-        const failureCode = isAdmissionFailureCode(reservation.reason) ? reservation.reason : conflict ? 'ACCOUNT_REQUEST_CONFLICT' : 'ACCOUNT_ADMISSION_UNAVAILABLE';
-        return json({ error: blueprintAdmissionDetail(failureCode), failureCode, requestId, noCharge: true }, 429);
-      }
+      if (!reservation.allowed) return json({ error: reservation.reason === 'CREDITS_EXHAUSTED' ? 'Your credits have run out. Open your account to top up.' : 'Your generation allowance has been used. Check your account for the next reset.', requestId, noCharge: true }, 429);
       customerGenerationKind = reservation.kind ?? null;
     } catch { return json({ error: 'Your generation allowance could not be checked. No model was requested.', requestId }, 503); }
   }
@@ -285,20 +279,9 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     }
   }
   try {
-    const payload = JSON.stringify(responseRequestBody);
-    if (account) {
-      let claim;
-      try { claim = await markBlueprintDispatch(env, account.id, requestId, fingerprint); }
-      catch { return json({ error: "Generation admission could not be confirmed. Recover this request; no replacement was started.", requestId }, 503); }
-      // The account transaction races with failed/expired settlement. Only one
-      // live claimant may dispatch, and a delayed acknowledgement is unusable.
-      // Keep the expiry check adjacent to fetch: no asynchronous work between.
-      if (!claim.dispatch || Date.now() >= claim.deadline)
-        return json({ error: "This request can no longer start. Recover its status; no replacement was started.", requestId }, 409);
-    }
     const upstream = await fetcher("https://api.openai.com/v1/responses", {
       method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(selectedModel === 'astra' ? 60_000 : 30_000),
-      body: payload,
+      body: JSON.stringify(responseRequestBody),
     });
     if (!upstream.ok) return json({ error: upstream.status === 429 ? "AI service is busy. Try again later." : "AI service could not complete the request.", requestId }, upstream.status === 429 ? 429 : 502);
     const body = await limitedBody(upstream as unknown as Request);
@@ -331,8 +314,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     return json({ error: e instanceof Error && ["TimeoutError", "AbortError"].includes(e.name) ? "Generation timed out. Previous scene is unchanged." : "Invalid AI result. Previous scene is unchanged.", requestId }, 502);
   } finally {
     // A synchronous blueprint request with no deliverable never consumes a
-    // customer's credit. Claimed/uncertain provider spend remains reserved;
-    // only the account's atomic pre-dispatch fence can release unspent funding.
+    // customer's credit. The separate global provider-spend counter is retained.
     if (!generationCompleted) await finishUser(false).catch(() => {});
   }
 }

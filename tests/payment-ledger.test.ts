@@ -11,13 +11,13 @@ function ledger() {
     async put(key, value) { entries.set(key, structuredClone(value)) },
     transaction<T>(fn: (storage: EntitlementStorage) => Promise<T>) { const next = queued.then(() => fn(storage)); queued = next.catch(() => undefined); return next },
   }
-  let object = new AccountEntitlements({ storage }, { ENABLE_ASTRA_PLANS: 'true' })
+  let object = new AccountEntitlements({ storage })
   return {
     async call(path: string, body?: unknown) {
       const response = await object.fetch(new Request(`https://ledger.test${path}`, { method: body === undefined ? 'GET' : 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) }))
       return { status: response.status, data: await response.json() as { id: string; url: string; saved: boolean; owned: boolean; cleared: boolean; credits: number; cost: number; billingReview: boolean; reason: string; downloadAllowed: boolean; subscription: { active: boolean } } }
     },
-    restart() { object = new AccountEntitlements({ storage }, { ENABLE_ASTRA_PLANS: 'true' }) },
+    restart() { object = new AccountEntitlements({ storage }) },
   }
 }
 const ORDER = '1AB23456CD789012E'
@@ -81,18 +81,17 @@ test('PayPal checkout ledger rejects foreign URLs, credentials, token mismatch a
   }
   assert.equal((await a.call('/paypal-get', { orderId: '../capture' })).status, 400)
 })
-test('One-time PayPal credits can fund Astra and cannot be replayed after refund', async () => {
+test('One-time PayPal credits remain Sol-only and cannot be replayed after refund', async () => {
   const a = ledger(), id = crypto.randomUUID()
   for (let i = 0; i < 3; i++) await a.call('/grant', { id: CAPTURE, credits: 1500 })
   assert.equal((await a.call('/status')).data.credits, 1500)
   assert.equal((await a.call('/status')).data.subscription.active, false)
   const astra = await a.call('/reserve', { id, profile: 'slow' })
-  assert.equal(astra.data.cost, 250)
-  assert.equal((await a.call('/status')).data.subscription.active, false)
-  assert.equal((await a.call('/status')).data.credits, 1250)
+  assert.equal(astra.data.reason, 'ASTRA_PLAN_REQUIRED')
+  assert.equal((await a.call('/status')).data.credits, 1500)
   await a.call('/revoke', { id: CAPTURE, credits: 1500 })
   await a.call('/grant', { id: CAPTURE, credits: 1500 })
-  assert.equal((await a.call('/status')).data.credits, -250)
+  assert.equal((await a.call('/status')).data.credits, 0)
 })
 test('Disputed payment puts nonnegative account balance on hold; reversed-before-paid leaves a tombstone', async () => {
   const a = ledger()

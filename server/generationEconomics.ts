@@ -12,10 +12,8 @@ export type PlanId = keyof typeof PLAN_CATALOG
 const ceilBps = (amountCents: number, bps: number) => Math.ceil(amountCents * bps / 10000)
 export function providerReserveCents(credits: number) {
   if (!Number.isSafeInteger(credits) || credits < 0) throw new Error('Invalid credit grant')
-  // Preserve the funded allocation: Luna 10/15, Sol 35/50 and blueprint Astra
-  // 175/250 cents per credit. Detailed Studio may reserve more per point, but
-  // admission must fit this existing funding. Never top up on pricing changes
-  // or point refunds.
+  // A single upper bound funds any permitted mix: Luna 10/15, Sol 35/50,
+  // Astra 175/250 cents per credit. Never reset this budget on point refunds.
   return Math.ceil(credits * 7 / 10)
 }
 export function planEconomics(planId: PlanId) {

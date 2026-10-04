@@ -3,7 +3,7 @@ import { detailedRuntime } from '../src/lib/detailedStudio.ts'
 import { checkAstraRuntime } from './check-astra-runtime.mjs'
 
 export async function checkDetailedRuntime(env, fetcher = fetch) {
-  let capability = null, maintenance = null
+  let capability = null
   const captured = async (url, init) => {
     const response = await fetcher(url, init)
     // checkAstraRuntime performs the bounded body read and config validation.
@@ -22,18 +22,11 @@ export async function checkDetailedRuntime(env, fetcher = fetch) {
     if (response.ok) {
       const value = JSON.parse(text)
       capability = { ...detailedRuntime(value), photoInput: value.photoInput === true, promptMaxLength: value.promptMaxLength === 5000 ? 5000 : 2000 }
-      // Only exact receipt-backed policy matches leave this authenticated read.
-      // Absence means unverified, not proof that an installation was attempted.
-      maintenance = {
-        completionVerified: value.worldifactCompletionPolicy === 'worldifact-reference-completion-v1' && value.worldifactCompletionMaxContinuations === 1,
-        prebuildVerified: value.worldifactPrebuildPolicy === 'worldifact-cabinet-prebuild-v1',
-        standardContextVerified: value.worldifactStandardContextPolicy === 'worldifact-standard-context-v1',
-      }
     }
     return new Response(text, { status: response.status, headers: response.headers })
   }
   const guard = await checkAstraRuntime(env, captured)
-  return { ...guard, detailed: capability, maintenance, verifiedForGuardedRouting: capability?.outputPolicyReady === true && capability?.photoInput === true, paidGenerationRequested: false }
+  return { ...guard, detailed: capability, verifiedForGuardedRouting: capability?.outputPolicyReady === true && capability?.photoInput === true, paidGenerationRequested: false }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try { console.log(JSON.stringify(await checkDetailedRuntime(process.env),null,2)) }
