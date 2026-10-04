@@ -2,41 +2,48 @@
 
 Updated 4 October 2026.
 
-## GENERATION RECOVERY AUDIT — repository fix applied, live drone remains unverified
+## GENERATION RECOVERY AUDIT — compatibility repair deployed; current user generation unverified
 
 The 4 October audit in [`GENERATION_RECOVERY_AUDIT.md`](GENERATION_RECOVERY_AUDIT.md)
 traces detailed Astra Studio from signed browser receipt through account/provider
 admission and fenced Oracle dispatch to artifact validation and preview. The
-confirmed pricing regression was PR #195: its new-job ceilings were USD 2/USD 4,
-while existing funded Astra allocation remained USD 1.75 per 250 points. This
-could refuse an account before Oracle; it is not evidence of an Oracle/Blender
-failure. Merged PR #205 restored the legacy contract without resetting funding
-or changing previously admitted jobs.
+confirmed historical pricing regression was PR #195
+(`12149bd6c55d8de95044a4c41e55ccf87fed47c6`): new detailed jobs required USD
+2/USD 4 while the existing funded Astra allocation remained USD 1.75/USD 3.50
+per 250/500 points. This could refuse a request before Oracle; it is not evidence
+of an Oracle/Blender failure. PR #205
+(`a97c196bdb553cb57d5fc3dde20d9b47f90f59b5`) restored legacy new-job terms
+without resetting funding or rewriting admitted jobs. PR #208
+(`8a25c1bec57e93a4cdbcf6b1f9cfb09f9ca083dc`) added the explicit deployment
+policy gate and redacted Studio lifecycle diagnostics.
 
-This local task branch adds an explicit legacy-policy deployment gate,
-post-deploy policy assertions and fixed-schema, redacted Studio lifecycle
-diagnostics. Focused fixture tests prove a provider-funding refusal has no
-Oracle POST and changes no account balances. These tests are not live
-generation evidence. The latest main release workflow passed as run
-[37170989080](https://github.com/teslaeco/WORLDIFACT/actions/runs/37170989080);
-that does not prove a new user job or preview.
+Cloudflare run [37212633617](https://github.com/teslaeco/WORLDIFACT/actions/runs/37212633617)
+deployed version `9996de56-6626-4e9e-b1e1-0ae0e813cbae` from current main.
+Post-deployment checks reported Studio ready with the legacy policy, detailed
+readiness, cost/output guards and four-view support; they did not make a paid
+generation request or inspect the target account's available provider funding.
+The deployed `/api/blueprint` is a separate direct OpenAI procedural-blueprint
+path, not the Oracle/Blender mesh route. Dots PR #170 remains a separate draft
+review worker, not part of current main's production generation path.
 
-Local validation for this audit: 19 focused Studio tests passed; typecheck,
-lint (existing warnings), local HTTP smoke, direct Vite bundle build and
-Wrangler dry-run passed. The full suite had 1,079/1,080 passing: the sole
-failure is the existing ISS foundation test missing generated
-`public/apps/iss/vendor/examples/jsm/math/Octree.js`. `npm run verify` and
-`npm run build` stop before compilation because the asset preparation step
-cannot resolve its external ISS source domain. Full asset-ready CI remains
-required. `npm audit --omit=dev` found no vulnerable production dependencies;
-secret scanning found no secrets in changed files.
+Existing fixture coverage includes successful simulated dispatch, explicit
+DEMO without an API key, LIVE refusal when unavailable, provider failures,
+provider-budget refusal before Oracle POST, unchanged account balances and
+idempotent recovery. The focused command passed 39/39 tests. Full `npm test`
+passed 1,079/1,080; the only failure is the retained ISS foundation test missing
+generated `public/apps/iss/vendor/examples/jsm/math/Octree.js`. `npm run lint`,
+`npm run typecheck` and `npm run test:http` passed (lint has existing warnings;
+HTTP smoke made no paid call). `npm run build` and `npm run verify` stop during
+asset preparation because `fix-iss-repair-game.terraformingplanet.chatgpt.site`
+cannot resolve (`ENOTFOUND`). `npm run deploy:check` could not run because the
+blocked build left `dist` absent. No alternate asset route was used.
 
-The last recorded real Astra/Oracle/Blender artifact remains the historical
-one-shot GLB/BLEND recorded below, not the requested sci-fi drone. No new live
-request, Oracle job, or GLB was produced for this audit. Specific account
-funding, current secret values, Oracle VM/MCP/Blender runtime and production
-preview remain unverified from this checkout. No funding reset, paid retry,
-Cloudflare publication, push or merge was performed.
+GitHub CI run [37212633609](https://github.com/teslaeco/WORLDIFACT/actions/runs/37212633609)
+and the Cloudflare publication both passed on main. This audit did not reproduce
+a new code defect or submit the requested sci-fi drone. The account's remaining
+provider funds/liabilities and any new user Oracle job remain unverified; the
+historical one-shot GLB/BLEND evidence below is not current-user proof. No balance
+reset, paid retry, merge or new production deployment was performed.
 
 ## IN VERIFICATION — paid membership refresh and removal of Creator attempt quota
 
