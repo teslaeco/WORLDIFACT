@@ -1,5 +1,41 @@
 # WORLDIFACT Dots/MCP repair — 3 October 2026
 
+## 4 October follow-up — isolated, read-only repair
+
+The owner reported that the review Google button remained gray. Its disabled
+state is caused by the missing review callback configuration described below,
+not the button color. `SUPABASE_GOOGLE_REDIRECT_READY` remains unset for review;
+the main site's configuration is unchanged.
+
+The login page now distinguishes checking, verified ready, explicitly
+unconfigured and temporarily unavailable capability states. The public config
+GET has a ten-second deadline, rejects redirects, and can be explicitly retried.
+Focus, mobile visibility and back-forward restoration recheck availability.
+An expired, replaced or unmounted read cannot reenable Google. These reads never
+start Google authorization, submit credentials, create a grant or generate a model.
+
+The review deployment now enables `MCP_READ_ONLY=true`. Its advertised and
+accepted scopes are `profile:read`, `worlds:read`, and `models:read`; write and
+generation tools are omitted and rejected. Tokens or pending codes containing
+disallowed scopes cannot retain write access. Existing own-account grants stay
+visible for revocation even when their prior scopes are no longer active.
+Default production-capable code remains separately gated and is not activated
+by this review. The isolated endpoint has no production ledger, so these scopes
+do not establish access to production worlds/models. Profile linking remains
+the first real no-spend connection check after callback configuration.
+
+The public readiness probe reports only the boolean Google capability alongside
+protocol and scope checks. A successful probe is not a Google exchange or an
+authenticated account link. The callback blocker and the recorded rejected
+dashboard login below remain unresolved; no additional dashboard login was
+attempted. No secret, Google enable flag or production deployment was changed.
+
+Six deterministic login lifecycle regressions and the existing login/OAuth tests
+pass (21 named tests total), including timeout fencing, explicit retry, invalid
+capability data, stale replies, page restoration and unmount cleanup. These are
+inert fixture tests, not browser or provider-login evidence. Exact-head CI and
+an actual Google-to-Dots account link remain required before production merge.
+
 ## Actual connection state
 
 PR #170 is a draft. Creating a Dot and its cloud computer did not connect it to WORLDIFACT. The MCP/OAuth implementation has not been merged into production, and a real account link has not been approved. This repair preserves the newer production fixes by merging main `7462a64` into the review branch. The owner subsequently requested completion of the optional connection; the current implementation uses a dedicated Worker OAuth broker, described below. The isolated review deployment and ChatGPT endpoint discovery are now observed; their exact evidence is recorded below.

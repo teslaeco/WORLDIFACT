@@ -11,7 +11,7 @@ export function dotsReviewConfig(base) {
     kv_namespaces: [{ binding: 'OAUTH_KV' }],
     ratelimits: [{ name: 'ACCOUNT_LIMITER', namespace_id: '5122028', simple: { limit: 20, period: 60 } }],
     vars: {
-      MCP_OAUTH_ENABLED: 'true',
+      MCP_OAUTH_ENABLED: 'true', MCP_READ_ONLY: 'true',
       MCP_RESOURCE_URL: 'https://worldifact-dots-review.xodobrox.workers.dev/mcp',
       MCP_OAUTH_CLIENT_IDS: base.vars.MCP_OAUTH_CLIENT_IDS,
       MCP_OAUTH_REDIRECT_URIS: base.vars.MCP_OAUTH_REDIRECT_URIS,

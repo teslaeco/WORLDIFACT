@@ -22,7 +22,7 @@ const permissionLabels: Record<string, string> = {
   'models:read': 'Read your model library and generation status',
   'models:generate': 'Start a 3D generation with your confirmation',
 }
-type Grant = { id: string; clientId: string; scopes: string[]; createdAt: number; expiresAt: number }
+type Grant = { id: string; clientId: string; scopes: string[]; active: boolean; createdAt: number; expiresAt: number }
 type AccountConnection = { configured: boolean; authorized: boolean; grants: Grant[]; reconnectAfterSeconds: number; refreshSupported: false }
 type AccountFlow = ReturnType<typeof accountFlow>
 function accountFlow(identity: string, attempt: number) {
@@ -32,8 +32,8 @@ function accountFlow(identity: string, attempt: number) {
 function readAccountConnection(value: unknown): AccountConnection {
   if (!object(value) || typeof value.configured !== 'boolean' || typeof value.authorized !== 'boolean' || !Array.isArray(value.grants) || value.grants.length > 100 || value.refreshSupported !== false || !Number.isSafeInteger(value.reconnectAfterSeconds) || Number(value.reconnectAfterSeconds) <= 0 || Number(value.reconnectAfterSeconds) > 3600) throw new Error('Account connection unavailable')
   const grants = value.grants.map(grant => {
-    if (!object(grant) || typeof grant.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(grant.id) || typeof grant.clientId !== 'string' || grant.clientId.length > 200 || !Array.isArray(grant.scopes) || scopesOf(grant.scopes).length !== grant.scopes.length || grant.scopes.some(scope => !Object.hasOwn(permissionLabels, scope)) || !Number.isSafeInteger(grant.createdAt) || !Number.isSafeInteger(grant.expiresAt) || Number(grant.createdAt) <= 0 || Number(grant.expiresAt) <= Number(grant.createdAt) || Number(grant.expiresAt) - Number(grant.createdAt) > Number(value.reconnectAfterSeconds) || Number(grant.expiresAt) > 4102444800) throw new Error('Account connection unavailable')
-    return { id: grant.id, clientId: grant.clientId, scopes: scopesOf(grant.scopes), createdAt: Number(grant.createdAt), expiresAt: Number(grant.expiresAt) }
+    if (!object(grant) || (grant.active !== undefined && typeof grant.active !== 'boolean') || typeof grant.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(grant.id) || typeof grant.clientId !== 'string' || grant.clientId.length > 200 || !Array.isArray(grant.scopes) || scopesOf(grant.scopes).length !== grant.scopes.length || grant.scopes.some(scope => !Object.hasOwn(permissionLabels, scope)) || !Number.isSafeInteger(grant.createdAt) || !Number.isSafeInteger(grant.expiresAt) || Number(grant.createdAt) <= 0 || Number(grant.expiresAt) <= Number(grant.createdAt) || Number(grant.expiresAt) - Number(grant.createdAt) > Number(value.reconnectAfterSeconds) || Number(grant.expiresAt) > 4102444800) throw new Error('Account connection unavailable')
+    return { id: grant.id, clientId: grant.clientId, scopes: scopesOf(grant.scopes), active: grant.active !== false, createdAt: Number(grant.createdAt), expiresAt: Number(grant.expiresAt) }
   })
   if (new Set(grants.map(grant => grant.id)).size !== grants.length) throw new Error('Account connection unavailable')
   return { configured: value.configured, authorized: value.authorized, grants, reconnectAfterSeconds: Number(value.reconnectAfterSeconds), refreshSupported: false }
@@ -116,7 +116,7 @@ export default function OpenAIIntegrationPage() {
       setPrivateState(previous => {
         if (previous?.flow !== flow || !previous.data) return previous
         const grants = previous.data.grants.filter(grant => grant.id !== id)
-        return { flow, data: { ...previous.data, grants, authorized: grants.some(grant => grant.expiresAt * 1000 > Date.now()) }, error: '', message: 'Authorization revoked. Reconnect from your OpenAI app if you want to use WORLDIFACT there again.' }
+        return { flow, data: { ...previous.data, grants, authorized: grants.some(grant => grant.active && grant.expiresAt * 1000 > Date.now()) }, error: '', message: 'Authorization revoked. Reconnect from your OpenAI app if you want to use WORLDIFACT there again.' }
       })
     } catch {
       if (flow.isActive() && revocation.current === operation) setPrivateState(previous => previous?.flow === flow ? { ...previous, error: 'Revocation could not be confirmed. Refresh the list before trying again.', message: '' } : previous)
@@ -186,7 +186,7 @@ export default function OpenAIIntegrationPage() {
         {privateView?.data && <>
           {!privateView.data.grants.length && <p>No authorizations are recorded for this account. Add WORLDIFACT from your OpenAI app and approve its connection request.</p>}
           <ul className="openai-integration-grants">{privateView.data.grants.map(grant => <li key={grant.id}>
-            <strong>{grant.expiresAt * 1000 <= now ? 'Expired · reconnect in OpenAI' : 'Authorization recorded'}</strong>
+            <strong>{grant.expiresAt * 1000 <= now ? 'Expired · reconnect in OpenAI' : !grant.active ? 'Inactive permissions · reconnect in OpenAI' : 'Authorization recorded'}</strong>
             <p>Approved {new Date(grant.createdAt * 1000).toLocaleString()}<br />Session expires {new Date(grant.expiresAt * 1000).toLocaleString()}.</p>
             <ul>{grant.scopes.map(scope => <li key={scope}>{permissionLabels[scope]}</li>)}</ul>
             <button type="button" disabled={accountBusy} onClick={() => void revokeGrant(grant.id)}>{accountBusy && revoking.id === grant.id ? 'Revoking…' : 'Revoke authorization'}</button>

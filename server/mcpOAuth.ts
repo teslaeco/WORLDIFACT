@@ -4,13 +4,17 @@ import type { AuthRequest, OAuthAuthorizationServer } from '@cloudflare/workers-
 /** Dedicated MCP credentials. Browser access/refresh tokens are never returned to an MCP client. */
 export const MCP_SCOPES = ['profile:read', 'worlds:read', 'worlds:write', 'models:read', 'models:generate'] as const
 export const MCP_BASE_SCOPES = ['profile:read'] as const
+export const MCP_READ_ONLY_SCOPES = ['profile:read', 'worlds:read', 'models:read'] as const
+export function mcpOAuthScopes(env: McpOAuthEnv): readonly typeof MCP_SCOPES[number][] {
+  return env.MCP_READ_ONLY === 'true' ? MCP_READ_ONLY_SCOPES : MCP_SCOPES
+}
 export interface McpOAuthKV {
   get<T = unknown>(key: string, options: { type: 'json' }): Promise<T | null>
   put(key: string, value: string, options?: { expirationTtl?: number; metadata?: unknown }): Promise<void>
   delete(key: string): Promise<void>
   list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<{ keys: { name: string; metadata?: unknown }[]; list_complete: boolean; cursor?: string }>
 }
-export interface McpOAuthEnv extends AccountEnv { MCP_OAUTH_ENABLED?: string; OAUTH_KV?: McpOAuthKV }
+export interface McpOAuthEnv extends AccountEnv { MCP_OAUTH_ENABLED?: string; MCP_READ_ONLY?: string; OAUTH_KV?: McpOAuthKV }
 export interface McpOAuthContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException?(): void }
 export interface McpOAuthSession { user: AccountUser; token: string; clientId: string; scopes: string[]; resource: string; expiresAt: number }
 type GrantProps = { userId: string; accessToken: string; expiresAt: number }
@@ -37,7 +41,7 @@ export function mcpOAuthBrokerConfig(env: McpOAuthEnv) {
     if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash || url.pathname !== '/mcp' || url.href !== resource) throw fail()
     if (clientIds.length > 10 || clientIds.some(value => !/^https:\/\/chatgpt\.com\/oauth\/(?:[A-Za-z0-9_-]{1,180}\/)?client\.json$/.test(value))) throw fail()
     if (redirectUris.length > 10 || redirectUris.some(value => !/^https:\/\/chatgpt\.com\/(?:connector_platform_oauth_redirect|connector\/oauth\/[A-Za-z0-9_-]{1,180})$/.test(value))) throw fail()
-    return { resource, issuer: url.origin, clientIds, redirectUris }
+    return { resource, issuer: url.origin, clientIds, redirectUris, scopes: mcpOAuthScopes(env) }
   } catch { throw fail() }
 }
 export function mcpOAuthBrokerConfigured(env: McpOAuthEnv) {
@@ -82,12 +86,13 @@ async function server(env: McpOAuthEnv) {
   return new OAuthAuthorizationServer<McpOAuthEnv>({
     issuer: config.issuer, resources: [config.resource], defaultResource: config.resource,
     authorizeEndpoint: '/oauth/authorize', tokenEndpoint: '/oauth/token',
-    clientIdMetadataDocumentEnabled: true, scopesSupported: [...MCP_SCOPES],
+    clientIdMetadataDocumentEnabled: true, scopesSupported: [...config.scopes],
     accessTokenTTL: 3600, refreshTokenTTL: 0, allowTokenExchangeGrant: false,
     cookiePrefix: '__Host-worldifact-mcp-',
-    tokenExchangeCallback({ grantType, props, clientId, userId, resource }) {
+    tokenExchangeCallback({ grantType, props, clientId, userId, resource, scope, requestedScope }) {
       if (grantType !== 'authorization_code' || !config.clientIds.includes(clientId) || resource !== config.resource ||
-        !validProps(props) || props.userId !== userId) throw new OAuthError('invalid_grant', { description: 'Reconnect your WORLDIFACT account.' })
+        !validProps(props) || props.userId !== userId ||
+        [...scope, ...requestedScope].some(value => !(config.scopes as readonly string[]).includes(value))) throw new OAuthError('invalid_grant', { description: 'Reconnect your WORLDIFACT account.' })
       const remaining = props.expiresAt - Math.floor(Date.now() / 1000) - 5
       if (remaining < 60) throw new OAuthError('invalid_grant', { description: 'The source session expired. Reconnect your WORLDIFACT account.' })
       return { accessTokenTTL: Math.min(3600, remaining), refreshTokenTTL: 0 }
@@ -105,7 +110,7 @@ export async function getMcpOAuthSession(request: Request, env: McpOAuthEnv, fet
   if (!validated || !validProps(validated.props) || !config.clientIds.includes(validated.clientId) ||
     validated.audience !== config.resource || validated.userId !== validated.props.userId ||
     validated.expiresAt <= now || validated.props.expiresAt <= now ||
-    validated.scope.some(scope => !(MCP_SCOPES as readonly string[]).includes(scope))) return null
+    validated.scope.some(scope => !(config.scopes as readonly string[]).includes(scope))) return null
   const internal = new Request(config.issuer + '/api/account/session', { headers: { Cookie: '__Host-worldifact-access=' + validated.props.accessToken } })
   const user = await getVerifiedAccount(internal, env, fetcher)
   if (!user || user.id !== validated.userId) return null
@@ -155,7 +160,7 @@ async function bodyText(request: Request) {
 function checkAuthorization(auth: AuthRequest, config: ReturnType<typeof mcpOAuthBrokerConfig>) {
   if (!config.clientIds.includes(auth.clientId) || !config.redirectUris.includes(auth.redirectUri) || auth.resource !== config.resource ||
     auth.codeChallengeMethod !== 'S256' || !auth.codeChallenge || !/^[A-Za-z0-9_-]{43}$/.test(auth.codeChallenge) ||
-    auth.responseType !== 'code' || auth.scope.some(scope => !(MCP_SCOPES as readonly string[]).includes(scope)))
+    auth.responseType !== 'code' || auth.scope.some(scope => !(config.scopes as readonly string[]).includes(scope)))
     throw new AccountError('This OpenAI connection request has unsupported settings or permissions.', 400)
 }
 async function consent(request: Request, env: McpOAuthEnv, oauth: OAuthAuthorizationServer<McpOAuthEnv>, fetcher: typeof fetch) {
@@ -198,7 +203,7 @@ async function consent(request: Request, env: McpOAuthEnv, oauth: OAuthAuthoriza
     const transaction = await helpers.beginConsent(auth)
     await kv.put('worldifact:consent:' + await hash(transaction.handle), JSON.stringify({ userId: session.user.id, scopes: auth.scope, expiresAt: Date.now() + 600_000 }), { expirationTtl: 600 })
     for (const value of transaction.headers.getSetCookie()) headers.append('Set-Cookie', value)
-    return html(`<h1>Connect WORLDIFACT to OpenAI</h1><p>Signed in as <strong>${escape(session.user.displayName)}</strong>${session.user.email ? ` (${escape(session.user.email)})` : ''}.</p><p>Client: <strong>${escape(details.clientName)}</strong>. Verified client domain: <strong>${escape(details.clientDomain || 'chatgpt.com')}</strong>. Return address: <strong>${escape(details.redirectHost)}</strong>.</p><form method="post" action="/oauth/authorize"><input type="hidden" name="handle" value="${escape(transaction.handle)}"><p>Choose the permissions for this connection:</p>${auth.scope.map(scope => `<label><input type="checkbox" name="scope" value="${escape(scope)}" checked>${escape(labels[scope])}</label>`).join('')}<small>Connecting is optional. Generating a model still requires an explicit request and approval of the quoted WORLDIFACT points. No payment or generation starts here. This connection lasts up to one hour; reconnect when your WORLDIFACT session expires. Disconnect at any time from OpenAI connections in your account.</small><button name="action" value="approve">Approve connection</button><button name="action" value="deny">Deny</button></form>`, headers)
+    return html(`<h1>Connect WORLDIFACT to OpenAI</h1><p>Signed in as <strong>${escape(session.user.displayName)}</strong>${session.user.email ? ` (${escape(session.user.email)})` : ''}.</p><p>Client: <strong>${escape(details.clientName)}</strong>. Verified client domain: <strong>${escape(details.clientDomain || 'chatgpt.com')}</strong>. Return address: <strong>${escape(details.redirectHost)}</strong>.</p><form method="post" action="/oauth/authorize"><input type="hidden" name="handle" value="${escape(transaction.handle)}"><p>Choose the permissions for this connection:</p>${auth.scope.map(scope => `<label><input type="checkbox" name="scope" value="${escape(scope)}" checked>${escape(labels[scope])}</label>`).join('')}<small>Connecting is optional. ${env.MCP_READ_ONLY === 'true' ? 'This connection can only read your profile, worlds and model status. It cannot save worlds or prepare or start generation.' : 'Generating a model still requires an explicit request and approval of the quoted WORLDIFACT points.'} No payment or generation starts here. This connection lasts up to one hour; reconnect when your WORLDIFACT session expires. Disconnect at any time from OpenAI connections in your account.</small><button name="action" value="approve">Approve connection</button><button name="action" value="deny">Deny</button></form>`, headers)
   }
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405)
   requireSameOrigin(request, config.issuer)
@@ -218,7 +223,7 @@ async function consent(request: Request, env: McpOAuthEnv, oauth: OAuthAuthoriza
     return new Response(null, { status: 303, headers: denied.headers })
   }
   const scopes = form.getAll('scope')
-  if (!scopes.length || new Set(scopes).size !== scopes.length || scopes.some(scope => !record.scopes.includes(scope))) throw new AccountError('Select only the permissions shown for this connection.', 400)
+  if (!scopes.length || new Set(scopes).size !== scopes.length || scopes.some(scope => !record.scopes.includes(scope) || !(config.scopes as readonly string[]).includes(scope))) throw new AccountError('Select only the permissions shown for this connection.', 400)
   const approved = await helpers.approveConsent(request, handle, { scope: scopes })
   checkAuthorization(approved.request, config)
   const completed = await helpers.completeAuthorization({ request: approved.request, userId: session.user.id,
@@ -245,8 +250,8 @@ async function connection(request: Request, env: McpOAuthEnv, oauth: OAuthAuthor
   const now = Math.floor(Date.now() / 1000)
   const grants = page.items.filter(grant => config.clientIds.includes(grant.clientId) && grant.resource === config.resource &&
     typeof grant.metadata?.expiresAt === 'number' && grant.metadata.expiresAt > now && (!grant.expiresAt || grant.expiresAt > now))
-    .map(grant => ({ id: grant.id, clientId: grant.clientId, scopes: grant.scope, createdAt: grant.createdAt, expiresAt: Math.min(grant.metadata.expiresAt, grant.expiresAt || Infinity) }))
-  return json({ configured: true, authorized: grants.length > 0, grants, reconnectAfterSeconds: 3600, refreshSupported: false })
+    .map(grant => ({ id: grant.id, clientId: grant.clientId, scopes: grant.scope, active: grant.scope.every(scope => (config.scopes as readonly string[]).includes(scope)), createdAt: grant.createdAt, expiresAt: Math.min(grant.metadata.expiresAt, grant.expiresAt || Infinity) }))
+  return json({ configured: true, authorized: grants.some(grant => grant.active), grants, reconnectAfterSeconds: 3600, refreshSupported: false })
 }
 
 export async function handleMcpOAuth(request: Request, env: McpOAuthEnv, fetcher: typeof fetch = fetch, context?: McpOAuthContext): Promise<Response | null> {

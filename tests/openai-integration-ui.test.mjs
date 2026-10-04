@@ -191,3 +191,19 @@ test('a decision that finishes after unmount never redirects', async () => {
   pending.resolve({ redirectUrl: 'https://chatgpt.com/late-decision' }); await h.settle()
   assert.deepEqual(h.redirects, [])
 })
+
+
+test('superseded write grants stay visibly inactive and can still be revoked', async () => {
+  const old = { ...grant(), scopes: ['profile:read', 'models:generate'], active: false }
+  const h = await harness('OpenAIIntegrationPage.tsx', integrationIo((path, init) => init.method === 'POST' ? Response.json({ revoked: true }) : connection([old])))
+  try {
+    assert.match(h.text(), /Inactive permissions · reconnect in OpenAI/)
+    assert.doesNotMatch(h.text(), /Authorization recorded/)
+    assert.equal(h.button('Revoke authorization').props.disabled, false)
+    h.button('Revoke authorization').props.onClick(); await h.settle()
+    assert.match(h.text(), /Authorization revoked/)
+    assert.equal(h.button('Revoke authorization'), undefined)
+    const mutation = h.requests.find(call => call.path === '/api/mcp/connection' && call.input?.method === 'POST')
+    assert.deepEqual(JSON.parse(mutation.input.body), { grantId: old.id })
+  } finally { h.close() }
+})

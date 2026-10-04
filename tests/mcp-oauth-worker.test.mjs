@@ -11,6 +11,7 @@ const callback = 'https://chatgpt.com/connector_platform_oauth_redirect'
 const provider = 'https://fixture.supabase.co'
 const userId = 'c8c332f2-d9b8-4c2c-ad42-5c433fbbfd88'
 const otherUser = '26a07b02-7f7a-4c0a-b7be-19d22c1a8286'
+const readOnlyScopes = ['profile:read', 'worlds:read', 'models:read']
 const defaultScopes = ['profile:read', 'worlds:read', 'worlds:write', 'models:read', 'models:generate']
 function sourceToken(id = userId, exp = Math.floor(Date.now() / 1000) + 1800) {
   return Buffer.from(JSON.stringify({ alg: 'fixture' })).toString('base64url') + '.' + Buffer.from(JSON.stringify({ sub: id, exp })).toString('base64url') + '.inert_fixture_signature'
@@ -22,7 +23,7 @@ const bundle = await build({
     import { mcpApi } from './server/mcp.ts';
     import { accountApi } from './server/accounts.ts';
     export default { async fetch(request, bindings, context) {
-      const env = { ...bindings, MCP_OAUTH_ENABLED: 'true', MCP_RESOURCE_URL: '${origin}/mcp',
+      const env = { ...bindings, MCP_OAUTH_ENABLED: 'true', MCP_READ_ONLY: request.headers.get('X-Fixture-Read-Only') || 'false', MCP_RESOURCE_URL: '${origin}/mcp',
         MCP_OAUTH_CLIENT_IDS: '${clientId}', MCP_OAUTH_REDIRECT_URIS: '${callback}',
         SUPABASE_URL: '${provider}', SUPABASE_ANON_KEY: 'sb_publishable_fixture_non_secret_key',
         SUPABASE_GOOGLE_REDIRECT_READY: 'true',
@@ -36,7 +37,7 @@ const bundle = await build({
     } };`, resolveDir: fileURLToPath(new URL('..', import.meta.url)), sourcefile: 'mcp-oauth-fixture.ts' },
   bundle: true, write: false, format: 'esm', platform: 'neutral', mainFields: ['module', 'main'], external: ['cloudflare:workers'],
 })
-function fixture(t, { pkceExchange } = {}) {
+function fixture(t, { pkceExchange, readOnly = false } = {}) {
   const calls = []
   let rejectedUser = null
   const mf = new Miniflare(convertV4MiniflareOptions({
@@ -57,9 +58,9 @@ function fixture(t, { pkceExchange } = {}) {
     },
   }))
   t.after(() => mf.dispose())
-  const call = (path, init = {}) => mf.dispatchFetch(origin + path, { redirect: 'manual', ...init })
+  const call = (path, init = {}) => mf.dispatchFetch(origin + path, { redirect: 'manual', ...init, headers: { ...Object.fromEntries(new Headers(init.headers)), 'X-Fixture-Read-Only': String(readOnly) } })
   const form = (path, values, cookie = '') => call(path, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded', ...(cookie ? { Cookie: cookie } : {}) }, body: new URLSearchParams(values).toString() })
-  return { mf, call, form, calls, reject(id) { rejectedUser = id } }
+  return { mf, call, form, calls, restrict() { readOnly = true }, reject(id) { rejectedUser = id } }
 }
 function authorization(scopes = defaultScopes) {
   const verifier = randomBytes(32).toString('base64url')
@@ -142,6 +143,60 @@ test('read-only consent yields an under-scoped MCP error and cannot be escalated
   assert.equal(response.status, 403)
   assert.match(response.headers.get('www-authenticate'), /insufficient_scope/)
   assert.match(response.headers.get('www-authenticate'), /worlds:read/)
+})
+
+test('read-only review grants only read permissions and rejects write scopes at consent and dispatch', async t => {
+  const f = fixture(t, { readOnly: true })
+  const metadata = await (await f.call('/.well-known/oauth-authorization-server')).json()
+  assert.deepEqual(metadata.scopes_supported, readOnlyScopes)
+  for (const scope of ['worlds:write', 'models:generate']) {
+    const denied = await f.call(authorization(['profile:read', scope]).path, { headers: { Cookie: sourceCookie(access) } })
+    assert.equal(denied.status, 400)
+  }
+  const page = await consentPage(f, { scopes: readOnlyScopes })
+  assert.doesNotMatch(page.html, /value="(?:worlds:write|models:generate)"/)
+  const tampered = new URLSearchParams({ handle: page.handle, action: 'approve' })
+  for (const scope of [...readOnlyScopes, 'models:generate']) tampered.append('scope', scope)
+  assert.equal((await f.form('/oauth/authorize', tampered, page.cookies)).status, 400)
+  const token = await exchange(f, await approve(f, page, readOnlyScopes), { scope: defaultScopes.join(' ') })
+  assert.equal(token.response.status, 200)
+  assert.deepEqual(token.value.scope.split(' '), readOnlyScopes)
+  const profile = await f.call('/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token.value.access_token },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_profile', arguments: {} } }) })
+  assert.equal(profile.status, 200)
+  assert.equal((await profile.json()).result.structuredContent.id, userId)
+  const before = f.calls.length
+  for (const name of ['save_my_world', 'prepare_3d_model', 'start_3d_model']) {
+    const denied = await f.call('/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token.value.access_token },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: {} } }) })
+    assert.equal(denied.status, 403)
+    assert.equal(denied.headers.get('www-authenticate'), null)
+  }
+  assert.equal(f.calls.length, before, 'Disabled tools do not reach account, world, billing or generation services')
+})
+
+test('switching to read-only invalidates broad credentials and pending codes while preserving revocation', async t => {
+  const pendingFixture = fixture(t)
+  const pending = await approve(pendingFixture, await consentPage(pendingFixture))
+  pendingFixture.restrict()
+  const pendingDenied = await exchange(pendingFixture, pending)
+  assert.equal(pendingDenied.response.status, 400)
+  assert.equal(pendingDenied.value.access_token, undefined)
+  const f = fixture(t)
+  const issued = await exchange(f, await approve(f, await consentPage(f)))
+  assert.equal(issued.response.status, 200)
+  assert.ok(await (await f.call('/test/session', { headers: { Authorization: 'Bearer ' + issued.value.access_token } })).json())
+  f.restrict()
+  assert.equal(await (await f.call('/test/session', { headers: { Authorization: 'Bearer ' + issued.value.access_token } })).json(), null)
+  const connections = await (await f.call('/api/mcp/connection', { headers: { Cookie: sourceCookie(access) } })).json()
+  assert.equal(connections.authorized, false)
+  assert.ok(connections.grants.length > 0, 'Superseded grants remain visible for disconnection')
+  assert.ok(connections.grants.every(grant => grant.active === false))
+  for (const grant of connections.grants) {
+    const revoked = await f.call('/api/mcp/connection', { method: 'POST', headers: { Cookie: sourceCookie(access), Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ grantId: grant.id }) })
+    assert.equal(revoked.status, 200)
+  }
+  assert.deepEqual((await (await f.call('/api/mcp/connection', { headers: { Cookie: sourceCookie(access) } })).json()).grants, [])
 })
 
 test('authorization rejects unpinned clients, callbacks, resources and absent S256 before granting access', async t => {

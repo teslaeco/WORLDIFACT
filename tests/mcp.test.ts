@@ -28,7 +28,7 @@ const built = await build({
 })
 const bundlePath = join(temporary, 'mcp.mjs')
 await writeFile(bundlePath, built.outputFiles[0].text)
-const { mcpApi, WORLDIFACT_MCP_TOOLS, MCP_SCOPES, mcpOAuthBrokerConfig, OAuthAuthorizationServer } = await import(pathToFileURL(bundlePath).href) as
+const { mcpApi, WORLDIFACT_MCP_TOOLS, MCP_SCOPES, MCP_READ_ONLY_SCOPES, mcpOAuthBrokerConfig, OAuthAuthorizationServer } = await import(pathToFileURL(bundlePath).href) as
   typeof import('../server/mcp.ts') & typeof import('../server/mcpOAuth.ts') & typeof import('@cloudflare/workers-oauth-provider')
 type TestEnv = StudioEnv & McpOAuthEnv
 
@@ -123,6 +123,34 @@ test('tool list marks private tools with OAuth and generation as consequential',
   assert.deepEqual(generation?.securitySchemes[0], { type: 'oauth2', scopes: ['models:generate'] })
   assert.equal(profile?._meta?.['openai/profile'], true)
   assert.equal(generation?.annotations.destructiveHint, true)
+})
+
+test('read-only MCP advertises only allowed scopes/tools and blocks hidden tools before any downstream call', async () => {
+  const review: TestEnv = { ...env, MCP_READ_ONLY: 'true', OAUTH_KV: oauthKv() }
+  let calls = 0
+  const fetcher = (async () => { calls++; throw new Error('No downstream work is allowed') }) as typeof fetch
+  for (const path of ['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/mcp/oauth-protected-resource']) {
+    const metadata = await mcpApi(new Request('https://worldifact.test' + path), review, fetcher)
+    assert.deepEqual((await metadata!.json() as { scopes_supported: string[] }).scopes_supported, [...MCP_READ_ONLY_SCOPES])
+  }
+  const listed = await mcpApi(message('tools/list'), review, fetcher)
+  const tools = (await listed!.json() as { result: { tools: { name: string }[] } }).result.tools
+  assert.deepEqual(tools.map(tool => tool.name), ['get_worldifact_status', 'get_profile', 'list_my_worlds', 'get_my_world', 'get_generation_status'])
+  const status = await mcpApi(message('tools/call', { name: 'get_worldifact_status' }), review, fetcher)
+  assert.deepEqual((await status!.json() as { result: { structuredContent: { oauthScopes: string[] } } }).result.structuredContent.oauthScopes, [...MCP_READ_ONLY_SCOPES])
+  // A credential issued before the restriction cannot restore a hidden capability.
+  const oldAccess = await token({}, review)
+  for (const name of ['save_my_world', 'prepare_3d_model', 'start_3d_model']) {
+    for (const credential of [undefined, oldAccess]) {
+      const denied = await mcpApi(message('tools/call', { name, arguments: {} }, credential), review, fetcher)
+      assert.equal(denied!.status, 403, name)
+      assert.equal(denied!.headers.get('WWW-Authenticate'), null, 'Do not request permission unavailable on this deployment')
+      assert.equal((await denied!.json() as { result: { isError: boolean } }).result.isError, true)
+    }
+  }
+  const legacyProfile = await mcpApi(message('tools/call', { name: 'get_profile' }, oldAccess), review, fetcher)
+  assert.equal(legacyProfile!.status, 401, 'Previously broad tokens are invalid once the deployment is read-only')
+  assert.equal(calls, 0)
 })
 
 test('public status works without provider calls', async () => {

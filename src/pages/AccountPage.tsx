@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { accountRequest, useAccount } from '../lib/account'
 import { safeAccountDestination } from '../lib/accountDestination'
 import { accountOAuthError } from '../lib/accountOAuthError'
+import { useGoogleSignInAvailability } from '../lib/useGoogleSignInAvailability'
 import BrandShowcase from '../components/BrandShowcase'
 import './AccountPage.css'
 
@@ -17,15 +18,10 @@ export default function AccountPage() {
   const oauth = new URLSearchParams(location.search).get('oauth')
   const [tab, setTab] = useState<Tab>('login')
   const [phase, setPhase] = useState<'idle' | 'submitting' | 'success'>(oauth === 'success' ? 'submitting' : 'idle')
-  const [googleReady, setGoogleReady] = useState<boolean | null>(null)
+  const google = useGoogleSignInAvailability()
   const [notice, setNotice] = useState(''), [error, setError] = useState(oauth === 'error' ? accountOAuthError(new URLSearchParams(location.search).get('reason')) : '')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
-  useEffect(() => {
-    let active = true
-    void accountRequest('/api/account/config').then(result => { if (active) setGoogleReady(result.googleReady === true) }).catch(() => { if (active) setGoogleReady(false) })
-    return () => { active = false }
-  }, [])
   const enter = useCallback(() => {
     if (timer.current) clearTimeout(timer.current)
     setPhase('success')
@@ -49,7 +45,7 @@ export default function AccountPage() {
   }, [oauth, refresh, enter])
   function changeTab(next: Tab) { if (phase !== 'idle') return; setTab(next); setError(''); setNotice('') }
   async function googleSignIn() {
-    if (phase !== 'idle' || !googleReady) return
+    if (phase !== 'idle' || google.state !== 'ready') return
     setPhase('submitting'); setError(''); setNotice('')
     try {
       const result = await accountRequest('/api/account/oauth/google', { next: destination })
@@ -111,8 +107,11 @@ export default function AccountPage() {
               <button role="tab" aria-selected={tab === 'login'} disabled={phase !== 'idle'} onClick={() => changeTab('login')}>Sign in</button>
               <button role="tab" aria-selected={tab === 'register'} disabled={phase !== 'idle'} onClick={() => changeTab('register')}>Create account</button>
             </div>
-            <button type="button" className="account-google" disabled={phase !== 'idle' || !googleReady} onClick={() => void googleSignIn()}><span className="account-google-mark" aria-hidden="true">G</span><span>Continue with Google</span><span aria-hidden="true">↗</span></button>
-            {googleReady === false && <p className="account-provider-status">Google sign-in is being configured. You can use email below.</p>}
+            <button type="button" className="account-google" disabled={phase !== 'idle' || google.state !== 'ready'} onClick={() => void googleSignIn()}><span className="account-google-mark" aria-hidden="true">G</span><span>Continue with Google</span><span aria-hidden="true">↗</span></button>
+            {google.state !== 'ready' && <div className="account-provider-status" role="status">
+              <p>{google.state === 'checking' ? 'Checking Google sign-in availability…' : google.state === 'unconfigured' ? 'Google sign-in is not enabled for this environment. You can use email below.' : 'Could not check Google sign-in. Try again or use email below.'}</p>
+              {google.state !== 'checking' && <button type="button" className="account-text-button" disabled={phase !== 'idle'} onClick={google.refresh}>Check Google availability again</button>}
+            </div>}
             <div className="account-divider"><span>or continue with email</span></div>
           </>}
           <form onSubmit={submit}>

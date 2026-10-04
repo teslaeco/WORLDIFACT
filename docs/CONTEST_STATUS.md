@@ -1,6 +1,26 @@
 # WORLDIFACT — TerraformingPlanet Astra heroine released
 
-Updated 2 October 2026.
+Updated 4 October 2026 for the isolated Dots review follow-up.
+
+## IN REVIEW — retryable Google readiness and read-only Dots
+
+This follow-up is based only on PR #170 head
+`9eccdd591f99d242cc81bd78e5ca12c803f4f0c4`; it is not a production rollback or
+a replacement for newer main-branch generation fixes. A failed or timed-out
+Google availability read now has an explicit read-only retry instead of being
+mislabelled as provider configuration. A fresh literal `googleReady: true` is
+still required before sign-in; late responses and mobile page restoration cannot
+reuse stale readiness. No OAuth flow starts from a readiness retry.
+
+The isolated review deployment is restricted to `profile:read`, `worlds:read`
+and `models:read`, including tool discovery, authorization and execution.
+Its Google callback flag remains unset. The shared Supabase review callback
+still needs an authorized configuration change and verification before Google
+can be enabled. No authenticated live Dots connection is claimed. The review
+has no production world/model ledger bindings; read-only scopes do not imply
+that existing production worlds or models are accessible from this endpoint.
+
+See `DOTS_MCP_STATUS_20261003.md` for the configuration blocker and verification.
 
 ## VERIFIED — one bounded live Astra character generation
 

@@ -5,11 +5,14 @@ import { pathToFileURL } from 'node:url'
 const PROTOCOL = '2025-06-18'
 const DEFAULT_ENDPOINT = 'https://worldifact.xodobrox.workers.dev/mcp'
 const REQUIRED_SCOPES = ['profile:read', 'worlds:read', 'worlds:write', 'models:read', 'models:generate']
+const READ_ONLY_SCOPES = ['profile:read', 'worlds:read', 'models:read']
+const READ_ONLY_TOOLS = ['get_worldifact_status', 'get_profile', 'list_my_worlds', 'get_my_world', 'get_generation_status']
+const sameScopes = (actual, expected) => actual.length === expected.length && expected.every(scope => actual.includes(scope))
 const TOOL_SCOPES = {
   get_profile: 'profile:read', list_my_worlds: 'worlds:read', get_my_world: 'worlds:read',
   save_my_world: 'worlds:write', create_or_update_world: 'worlds:write',
   list_my_models: 'models:read', get_generation_status: 'models:read', get_model_download: 'models:read',
-  start_3d_model: 'models:generate',
+  prepare_3d_model: 'models:generate', start_3d_model: 'models:generate',
 }
 const object = value => value && typeof value === 'object' && !Array.isArray(value)
 const strings = value => Array.isArray(value) && value.length > 0 && value.length <= 100 && value.every(item => typeof item === 'string' && item.length <= 128)
@@ -55,7 +58,7 @@ export async function checkMcpReadiness(endpoint = DEFAULT_ENDPOINT, fetcher = f
     checkedAt: new Date().toISOString(), endpoint: target.href,
     transport: 'NOT_VERIFIED', oauthConfiguration: 'NOT_VERIFIED', discovery: 'NOT_VERIFIED',
     authenticatedConnection: 'NOT_TESTED', tokenAudienceBinding: 'NOT_TESTED', paidGenerationRequested: false,
-    readyForConnectionTest: false, checks,
+    readyForConnectionTest: false, googleReady: null, accessMode: 'NOT_VERIFIED', checks,
   }
   let protocol = PROTOCOL
   const call = async (method, params, id) => {
@@ -89,6 +92,12 @@ export async function checkMcpReadiness(endpoint = DEFAULT_ENDPOINT, fetcher = f
     return value
   })
   if (!initialized) return report
+  const accountConfig = await step('account-config', async () => {
+    const value = await get(new URL('/api/account/config', target).href)
+    if (typeof value.googleReady !== 'boolean') throw failure('INVALID_GOOGLE_READINESS')
+    report.googleReady = value.googleReady
+    return true
+  })
   const notified = await step('notifications/initialized', async () => {
     const response = await fetcher(target.href, {
       method: 'POST', credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(15000),
@@ -125,14 +134,19 @@ export async function checkMcpReadiness(endpoint = DEFAULT_ENDPOINT, fetcher = f
     if (value.resource !== target.href || !strings(value.authorization_servers) || !strings(value.scopes_supported) || !value.bearer_methods_supported?.includes('header')) throw failure('INVALID_RESOURCE_METADATA')
     value.authorization_servers.forEach(publicHttps)
     if (!strings(status.oauthScopes) || status.oauthScopes.some(scope => !value.scopes_supported.includes(scope))) throw failure('STATUS_SCOPES_MISMATCH')
-    if (REQUIRED_SCOPES.some(scope => !value.scopes_supported.includes(scope) || !status.oauthScopes.includes(scope))) throw failure('GRANULAR_SCOPES_MISSING')
+    const readOnly = sameScopes(value.scopes_supported, READ_ONLY_SCOPES)
+    const requiredScopes = readOnly ? READ_ONLY_SCOPES : REQUIRED_SCOPES
+    if (requiredScopes.some(scope => !value.scopes_supported.includes(scope) || !status.oauthScopes.includes(scope))) throw failure('GRANULAR_SCOPES_MISSING')
+    if (readOnly && !sameScopes(status.oauthScopes, READ_ONLY_SCOPES)) throw failure('STATUS_SCOPES_MISMATCH')
     for (const tool of listed) {
+      if (readOnly && !READ_ONLY_TOOLS.includes(tool.name)) throw failure('READ_ONLY_TOOL_VIOLATION')
       for (const scheme of tool.securitySchemes || []) {
         if (scheme.type === 'oauth2' && (!strings(scheme.scopes) || scheme.scopes.some(scope => !value.scopes_supported.includes(scope)))) throw failure('TOOL_SCOPES_MISMATCH')
       }
       const requiredScope = TOOL_SCOPES[tool.name]
       if (requiredScope && (!Array.isArray(tool.securitySchemes) || !tool.securitySchemes.length || tool.securitySchemes.some(scheme => scheme.type !== 'oauth2' || !scheme.scopes?.includes(requiredScope)))) throw failure('TOOL_PERMISSION_MISMATCH')
     }
+    report.accessMode = readOnly ? 'READ_ONLY' : 'STANDARD'
     return value
   })
   if (!resource) return report
@@ -152,10 +166,11 @@ export async function checkMcpReadiness(endpoint = DEFAULT_ENDPOINT, fetcher = f
     if (!strings(value.code_challenge_methods_supported) || !value.code_challenge_methods_supported.includes('S256')) throw failure('PKCE_S256_MISSING')
     if (!strings(value.response_types_supported) || !value.response_types_supported.includes('code') || !strings(value.grant_types_supported) || !value.grant_types_supported.includes('authorization_code')) throw failure('AUTHORIZATION_CODE_FLOW_MISSING')
     if (!strings(value.scopes_supported) || resource.scopes_supported.some(scope => !value.scopes_supported.includes(scope))) throw failure('AUTHORIZATION_SCOPES_MISSING')
+    if (report.accessMode === 'READ_ONLY' && !sameScopes(value.scopes_supported, READ_ONLY_SCOPES)) throw failure('READ_ONLY_AUTHORIZATION_SCOPES_VIOLATION')
     return true
   })
   if (discovered) report.discovery = 'PUBLIC_METADATA_VERIFIED'
-  report.readyForConnectionTest = status.oauthConfigured && discovered === true
+  report.readyForConnectionTest = status.oauthConfigured && discovered === true && accountConfig === true
   return report
 }
 

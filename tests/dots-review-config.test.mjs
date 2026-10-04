@@ -10,6 +10,9 @@ test('Dots review is isolated from production credentials, account ledgers and p
   base.vars.STRIPE_SECRET_KEY = 'must-not-copy'
   const review = dotsReviewConfig(base)
   assert.equal(review.name, 'worldifact-dots-review')
+  assert.equal(review.vars.MCP_READ_ONLY, 'true')
+  assert.equal(base.vars.MCP_READ_ONLY, undefined)
+  assert.equal(review.vars.SUPABASE_GOOGLE_REDIRECT_READY, undefined)
   assert.notEqual(review.vars.MCP_RESOURCE_URL, base.vars.MCP_RESOURCE_URL)
   assert.deepEqual(review.kv_namespaces, [{ binding: 'OAUTH_KV' }])
   assert.equal(review.durable_objects, undefined)
