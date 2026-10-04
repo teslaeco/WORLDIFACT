@@ -24,6 +24,46 @@ export const REVIEWED_PATHS = Object.freeze([
   'tests/studio-priced-submission.test.ts',
 ].sort())
 
+export const FUNDING_BASE_COMMIT = '72c5ddf9d00f4049f79c55d503a6b6833ccaa1da'
+export const FUNDING_MARKER_PATH = 'ops/FUNDING_INSPECTION_RELEASE_20261004.json'
+export const FUNDING_MARKER_CONTENT = JSON.stringify({
+  release: 'generation-funding-inspection-20261004',
+  baseCommit: FUNDING_BASE_COMMIT,
+  preserveBilling: true,
+}, null, 2) + '\n'
+export const FUNDING_REVIEWED_PATHS = Object.freeze([
+  'docs/GENERATOR_UI_RESTORATION_20261004.md',
+  FUNDING_MARKER_PATH,
+  'scripts/select-pipeline-only-release.mjs',
+  'server/entitlements.ts',
+  'src/components/GenerationCostNotice.tsx',
+  'src/lib/generationFunding.ts',
+  'src/lib/loadGenerationFunding.ts',
+  'src/main.tsx',
+  'src/pages/GenerationFundingPage.css',
+  'src/pages/GenerationFundingPage.tsx',
+  'src/pages/ShopPage.tsx',
+  'tests/generation-funding-page.test.mjs',
+  'tests/generation-funding.test.ts',
+  'tests/pipeline-only-release.test.mjs',
+  'tests/prompt-model-ui.test.mjs',
+  'tests/shop-draft-lifecycle.test.mjs',
+  'tests/shop-render-helper.mjs',
+].sort())
+const fundingIntroductions = new Set([
+  'docs/GENERATOR_UI_RESTORATION_20261004.md',
+  'src/lib/generationFunding.ts',
+  'src/lib/loadGenerationFunding.ts',
+  'src/pages/GenerationFundingPage.css',
+  'src/pages/GenerationFundingPage.tsx',
+  'tests/generation-funding-page.test.mjs',
+  'tests/generation-funding.test.ts',
+])
+const scopes = [
+  { base: BASE_COMMIT, marker: MARKER_PATH, content: MARKER_CONTENT, paths: REVIEWED_PATHS },
+  { base: FUNDING_BASE_COMMIT, marker: FUNDING_MARKER_PATH, content: FUNDING_MARKER_CONTENT, paths: FUNDING_REVIEWED_PATHS },
+]
+
 function refuse() { throw new Error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED') }
 function git(cwd, args) {
   const result = spawnSync('git', ['--no-pager', ...args], {
@@ -40,8 +80,8 @@ function commit(cwd, revision, readGit) {
   return oid
 }
 
-/** Only this marker's addition at its reviewed parent selects billing preservation.
- * Its continued presence never changes the behavior of later ordinary releases.
+/** Only a fixed scope's marker addition at its reviewed parent preserves billing.
+ * Continued marker presence never changes later ordinary releases.
  * Missing history or any marker modification/deletion stops before secret setup.
  */
 export function selectPipelineOnlyRelease(cwd = process.cwd(), readGit = git) {
@@ -56,18 +96,32 @@ export function selectPipelineOnlyRelease(cwd = process.cwd(), readGit = git) {
     if (!/^[AMDT]$/.test(status) || !path) refuse()
     changes.push({ status, path })
   }
-  const marker = changes.find(change => change.path === MARKER_PATH)
-  if (!marker) {
-    if (parent === BASE_COMMIT || changes.some(change => change.status === 'A' && change.path === 'scripts/select-pipeline-only-release.mjs')) refuse()
+  const markedScopes = scopes.filter(scope => changes.some(change => change.path === scope.marker))
+  if (!markedScopes.length) {
+    if (scopes.some(scope => parent === scope.base) || changes.some(change => change.status === 'A' &&
+        (change.path === 'scripts/select-pipeline-only-release.mjs' || fundingIntroductions.has(change.path)))) refuse()
     return false
   }
-  if (marker.status !== 'A' || parent !== BASE_COMMIT) refuse()
+  if (markedScopes.length !== 1) refuse()
+  const scope = markedScopes[0]
+  const marker = changes.find(change => change.path === scope.marker)
+  if (marker.status !== 'A' || parent !== scope.base) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
-      JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(REVIEWED_PATHS)) refuse()
-  const entry = readGit(cwd, ['ls-tree', '-z', head, '--', MARKER_PATH])
+      JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
+  if (scope.marker === FUNDING_MARKER_PATH) {
+    const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
+    if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
+    const paths = entries.map(entry => {
+      const match = /^100644 blob [0-9a-f]{40}\t(.+)$/.exec(entry)
+      if (!match) refuse()
+      return match[1]
+    }).sort()
+    if (JSON.stringify(paths) !== JSON.stringify(scope.paths)) refuse()
+  }
+  const entry = readGit(cwd, ['ls-tree', '-z', head, '--', scope.marker])
   const match = /^100644 blob ([0-9a-f]{40})\t([^\0]+)\0$/.exec(entry)
-  if (!match || match[2] !== MARKER_PATH) refuse()
-  if (readGit(cwd, ['cat-file', 'blob', match[1]]) !== MARKER_CONTENT) refuse()
+  if (!match || match[2] !== scope.marker) refuse()
+  if (readGit(cwd, ['cat-file', 'blob', match[1]]) !== scope.content) refuse()
   return true
 }
 

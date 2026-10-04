@@ -587,7 +587,7 @@ test('one account snapshot blocks both ready Shop routes and forced form submiss
     assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
       const status = h.all().find(n => n.props.className === 'shop-customer-status')
       assert.match(text(status), /Generation is unavailable for this account/)
-      assert.match(text(status), /unreserved API funding/)
+      assert.match(text(status), /unreserved API funding/i)
       assert.doesNotMatch(text(status), /generation available/)
       await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     }
@@ -1055,5 +1055,55 @@ test('logging out and back into the same account performs fresh membership recov
     await h.account({ user: { id: 'owner-a' }, loading: false })
     assert.equal(recoveries, 2); assert.equal(h.quote().quote.state, 'credits')
     assert.equal(h.calls.filter(c => c.method === 'POST' && c.path !== '/api/billing/recovery').length, 0)
+  } finally { h.close() }
+})
+
+test('explicit detailed choice preserves draft and recovered preview, transfers focus, and waits for Generate', async () => {
+  const h = await harness({ ready: true, detailedReady: true, newJobPolicy: 'legacy-usd175-v1', pricingReady: false })
+  try {
+    await h.poll()
+    const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), original = h.description()
+    let focused = 0
+    h.byId('studio-deliverable').props.ref.current = { focus() { focused++ } }
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A planet Earth 3D model' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'procedural-blueprint' } }); await h.settle()
+    assert.equal(h.byId('studio-deliverable').props.value, 'procedural-blueprint', 'Choosing the old concept route remains explicit')
+    const choice = h.button('Use detailed 3D model')
+    assert.equal(choice.props.type, 'button', 'Native Enter/Space activates this choice without submitting its form')
+    choice.props.onClick(); choice.props.onClick(); await h.settle()
+    assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
+    assert.equal(focused, 2, 'Focus stays on the persistent select when the shortcut disappears')
+    assert.equal(h.byId('studio-prompt').props.value, 'A planet Earth 3D model')
+    assert.equal(h.byId('studio-mode').props.value, 'standard')
+    assert.equal(h.description(), original)
+    assert.match(text(h.all()), /250 points on success, with the original USD 1.75 API budget/)
+    assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Generate Astra\/Blender model · 250 points/)
+    await h.pageShow(true)
+    h.button('Recover this job / reload result').props.onClick(); await h.settle()
+    assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
+    assert.equal(h.description(), original)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'procedural-blueprint' } }); await h.settle()
+    assert.ok(h.button('Use detailed 3D model'))
+    h.button('Clear next-model draft').props.onClick(); await h.settle()
+    assert.equal(h.byId('studio-prompt').props.value, '')
+    assert.equal(h.byId('studio-deliverable').props.value, 'procedural-blueprint')
+    assert.equal(h.description(), original)
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
+  } finally { h.close() }
+})
+
+test('detailed choice cannot bypass account funding refusal or choose a premium model from FAST', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, accountLookup: () => Response.json(blockedAccount) })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A planet Earth 3D model' } }); await h.settle()
+    h.button('Use detailed 3D model').props.onClick(); await h.settle()
+    assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
+    assert.equal(h.quote().quote.reason, 'PROVIDER_BUDGET_EXHAUSTED')
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path)).length, 0)
+    h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
+    assert.equal(h.all().some(n => n.props['data-testid'] === 'choose-detailed-model'), false)
+    assert.equal(h.byId('studio-mode').props.value, FAST_DRAFT_PROFILE)
   } finally { h.close() }
 })

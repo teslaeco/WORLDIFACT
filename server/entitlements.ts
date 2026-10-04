@@ -9,6 +9,7 @@ import { STUDIO_PRICING, isStudioPricing, type StudioPricing, type StudioBudgetT
 import { astraSupportApproval, ASTRA_SUPPORT_ONCE_KEY, ASTRA_SUPPORT_NAMESPACE, ASTRA_SUPPORT_CENTS, type AstraSupportApproval, type AstraSupportClaim, type AstraSupportIdentity } from './astraSupportOnce.ts'
 import { astraSupplementalGrant, matchesAstraSupplementalClaim, ASTRA_SUPPLEMENTAL_KEY, ASTRA_SUPPLEMENTAL_NAMESPACE, ASTRA_SUPPLEMENTAL_CENTS, type AstraSupplementalGrant, type AstraSupplementalClaim } from './astraSupplementalGrant.ts'
 import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from './studioBudgetReceipt.ts'
+import type { GenerationFundingSnapshot } from '../src/lib/generationFunding.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
@@ -272,6 +273,116 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
 // Provably unspent funding can be released by a fenced pre-dispatch failure or
 // by an immutable authenticated terminal Oracle receipt. Unknown spend is held.
 const PROVIDER_BUDGET = 'provider-budget-cents:v1'
+const FUNDING_SCAN_LIMIT = 256
+const FUNDING_JOB_FIELDS = ['pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile', 'failureCode', 'supportApprovalId',
+  'supplementalGrantId', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'billingMode', 'state', 'studioDispatch', 'studioDispatchUntil',
+  'studioProviderReservation', 'studioProviderReconciliation', 'blueprintDispatch', 'blueprintDispatchUntil', 'blueprintProviderReservation', 'blueprintProviderReconciliation']
+function fundingJob(value: unknown): value is Job {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const job = value as Job
+  return Object.keys(job).every(key => FUNDING_JOB_FIELDS.includes(key)) && ['reserved', 'completed', 'failed'].includes(job.state) &&
+    ['fast', 'slow'].includes(job.profile) && ['credits', 'free'].includes(job.kind) && Number.isSafeInteger(job.at) && job.at > 0 &&
+    Number.isSafeInteger(job.cost) && job.cost >= 0 && (!Object.hasOwn(job, 'updatedAt') || Number.isSafeInteger(job.updatedAt) && Number(job.updatedAt) >= job.at) &&
+    (!Object.hasOwn(job, 'model') || typeof job.model === 'string' && ['luna', 'sol', 'astra'].includes(job.model)) &&
+    (!Object.hasOwn(job, 'channel') || job.channel === 'studio' || job.channel === 'blueprint') &&
+    (!Object.hasOwn(job, 'fingerprint') || typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint)) &&
+    (!Object.hasOwn(job, 'prompt') || typeof job.prompt === 'string' && job.prompt.length <= 4000) &&
+    (!Object.hasOwn(job, 'billingMode') || job.billingMode === 'hold-v1')
+}
+/** Recognize only the explicit ordinary reservation writer. Historical markerless rows stay unknown. */
+function recordedOrdinaryReservation(job: Job): StudioProviderReservation | null {
+  if (job.kind !== 'credits' || typeof job.fingerprint !== 'string' || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') ||
+      !Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at) return null
+  const terms = reservationTerms(job), model = job.model ?? (job.profile === 'slow' ? 'astra' : 'sol')
+  if (!terms || job.cost !== terms.points || (model === 'astra') !== (job.profile === 'slow')) return null
+  let marker: StudioProviderReservation | undefined, dispatch: Job['studioDispatch'], dispatchValid: boolean
+  if (job.channel === 'studio') {
+    if (job.profile !== 'slow' || model !== 'astra' || job.billingMode !== 'hold-v1' || Object.hasOwn(job, 'blueprintProviderReservation') || Object.hasOwn(job, 'blueprintProviderReconciliation') ||
+        Object.hasOwn(job, 'blueprintDispatch') || Object.hasOwn(job, 'blueprintDispatchUntil')) return null
+    marker = job.studioProviderReservation; dispatch = job.studioDispatch
+    dispatchValid = dispatch === 'ready-v1' ? !Object.hasOwn(job, 'studioDispatchUntil') : dispatch === 'claimed-v1' && studioDispatchUntil(job) !== undefined
+  } else if (job.channel === 'blueprint') {
+    if (Object.hasOwn(job, 'billingMode') || Object.hasOwn(job, 'pricing') || Object.hasOwn(job, 'studioProviderReservation') || Object.hasOwn(job, 'studioProviderReconciliation') ||
+        Object.hasOwn(job, 'studioDispatch') || Object.hasOwn(job, 'studioDispatchUntil')) return null
+    marker = job.blueprintProviderReservation; dispatch = job.blueprintDispatch
+    dispatchValid = dispatch === 'ready-v1' ? !Object.hasOwn(job, 'blueprintDispatchUntil') : dispatch === 'claimed-v1' && Number.isSafeInteger(job.blueprintDispatchUntil) &&
+      Number(job.blueprintDispatchUntil) > job.at && Number(job.blueprintDispatchUntil) <= job.at + BLUEPRINT_JOB_WINDOW_MS
+  } else return null
+  if (!dispatchValid || !marker || typeof marker !== 'object' || Array.isArray(marker) || Object.keys(marker).length !== 4 ||
+      marker.version !== 1 || marker.source !== 'ordinary' || marker.amountCents !== terms.maxProviderCents || !['reserved', 'released'].includes(marker.state)) return null
+  if (marker.state === 'released' && (job.state !== 'failed' || dispatch !== 'ready-v1')) return null
+  return marker
+}
+/** This projection can only read; it deliberately cannot call lazy initialization, settlement or provider services. */
+async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get' | 'list'>): Promise<GenerationFundingSnapshot> {
+  const [rawBalance, rawHeld, rawBudget, originalClaim, supplementalClaim] = await Promise.all([
+    storage.get('balance'), storage.get(CUSTOMER_RESERVED_CREDITS), storage.get(PROVIDER_BUDGET),
+    storage.get(ASTRA_SUPPORT_ONCE_KEY), storage.get(ASTRA_SUPPLEMENTAL_KEY),
+  ])
+  const credits = rawBalance === undefined ? 0 : validInteger(rawBalance) ? Number(rawBalance) : null
+  const held = rawHeld === undefined ? 0 : validInteger(rawHeld) && Number(rawHeld) >= 0 ? Number(rawHeld) : null
+  const available = credits !== null && held !== null && Number.isSafeInteger(credits - held) ? credits - held : null
+  const fallback = rawBudget === undefined && credits !== null ? Math.floor(Math.max(0, credits) * 7 / 10) : null
+  const snapshot: GenerationFundingSnapshot = {
+    version: 1, readOnly: true, currency: 'USD',
+    customerPoints: { status: available === null ? 'invalid' : 'known', balance: credits, held, available },
+    providerBudget: { status: rawBudget === undefined ? 'uninitialized' : validInteger(rawBudget) ? 'known' : 'invalid',
+      unreservedCents: validInteger(rawBudget) ? Number(rawBudget) : null, legacyDerivedFallbackCents: fallback !== null && Number.isSafeInteger(fallback) ? fallback : null },
+    ordinaryAstraMinimumCents: { blueprint: 175, unpricedDetailed: 175 },
+    jobs: { scanLimit: FUNDING_SCAN_LIMIT, scanned: 0, partial: true, scanStatus: 'unavailable',
+      states: { reserved: 0, completed: 0, failed: 0, unknown: 0 }, routes: { studio: 0, blueprint: 0, legacyBlueprint: 0, unknown: 0 },
+      evidence: { ordinaryTerminalStudioPending: 0, ordinaryCompletedBlueprintPending: 0, legacyReadyWithoutReservation: 0, legacyAllowanceRefusalCandidates: 0, supportGrantRecords: 0, markedReconciled: 0, unknown: 0 },
+      fundingEvidence: { unresolvedOrdinaryReservations: { records: 0, cents: 0 }, recordedPreDispatchReleases: { records: 0, cents: 0 },
+        recordedStudioReconciliations: { records: 0, releasedCents: 0, retainedLiabilityCents: 0 }, unknownAmountRecords: 0 } },
+    supportGrantClaims: { originalRecordPresent: originalClaim !== undefined, supplementalRecordPresent: supplementalClaim !== undefined },
+  }
+  if (!storage.list) return snapshot
+  const entries = await storage.list<unknown>({ prefix: 'job:', limit: FUNDING_SCAN_LIMIT })
+  const jobs = snapshot.jobs
+  if (!(entries instanceof Map)) { jobs.scanStatus = 'invalid'; return snapshot }
+  jobs.partial = entries.size >= FUNDING_SCAN_LIMIT
+  jobs.scanStatus = jobs.partial ? 'partial' : 'complete'
+  for (const [key, value] of entries) {
+    if (jobs.scanned === FUNDING_SCAN_LIMIT) break
+    jobs.scanned++
+    if (typeof key !== 'string' || !/^job:[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(key) || !fundingJob(value)) {
+      jobs.states.unknown++; jobs.routes.unknown++; jobs.evidence.unknown++; jobs.fundingEvidence.unknownAmountRecords++
+      continue
+    }
+    const job = value, id = key.slice(4), evidence = jobs.evidence, amounts = jobs.fundingEvidence
+    jobs.states[job.state]++
+    jobs.routes[job.channel ?? 'legacyBlueprint']++
+    const supportRecord = Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId')
+    const marked = Object.hasOwn(job, 'studioProviderReconciliation') || Object.hasOwn(job, 'blueprintProviderReconciliation')
+    const studioPending = id === id.toLowerCase() && providerBudgetPending(job)
+    const blueprintPending = !Object.hasOwn(job, 'blueprintProviderReconciliation') && completedOrdinaryBlueprint(job) !== null
+    if (supportRecord) evidence.supportGrantRecords++
+    if (marked) evidence.markedReconciled++
+    if (studioPending) evidence.ordinaryTerminalStudioPending++
+    if (blueprintPending) evidence.ordinaryCompletedBlueprintPending++
+    if (job.channel === 'studio' && job.studioDispatch === 'ready-v1' && !Object.hasOwn(job, 'studioProviderReservation') && !supportRecord) evidence.legacyReadyWithoutReservation++
+    if (studioPending && job.state === 'failed' && job.failureCode === 'STUDIO_ALLOWANCE_UNAVAILABLE' && (!Object.hasOwn(job, 'studioDispatch') || job.studioDispatch === 'ready-v1') &&
+        !Object.hasOwn(job, 'studioProviderReservation') && !Object.hasOwn(job, 'studioDispatchUntil')) evidence.legacyAllowanceRefusalCandidates++
+    let knownAmount = false
+    if (!supportRecord && terminalOrdinaryAstraReservation(job) && (!Object.hasOwn(job, 'studioProviderReservation') || recordedOrdinaryReservation(job) !== null) && !Object.hasOwn(job, 'blueprintProviderReconciliation') &&
+        validProviderReconciliation(job.studioProviderReconciliation, id, job)) {
+      const saved = job.studioProviderReconciliation
+      amounts.recordedStudioReconciliations.records++
+      amounts.recordedStudioReconciliations.releasedCents += saved.releasedCents
+      amounts.recordedStudioReconciliations.retainedLiabilityCents += saved.retainedCents
+      knownAmount = true
+    } else if (!marked) {
+      const marker = recordedOrdinaryReservation(job)
+      if (marker) {
+        const bucket = marker.state === 'released' ? amounts.recordedPreDispatchReleases : amounts.unresolvedOrdinaryReservations
+        bucket.records++; bucket.cents += marker.amountCents; knownAmount = true
+      }
+    }
+    if (!knownAmount && !supportRecord && job.kind === 'credits') amounts.unknownAmountRecords++
+    if (!supportRecord && !marked && !studioPending && !blueprintPending && !knownAmount) evidence.unknown++
+  }
+  return snapshot
+}
 async function providerBudget(storage: EntitlementStorage, legacyCredits: number) {
   const stored = await storage.get<number>(PROVIDER_BUDGET)
   if (stored !== undefined) {
@@ -360,6 +471,11 @@ export class AccountEntitlements {
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname, now = this.now()
     try {
+      if (path === '/generation-funding') {
+        if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
+        if (new URL(request.url).search) return json({ error: 'Query parameters are not supported.' }, 400)
+        return json(await this.storage.transaction(storage => generationFundingSnapshot(storage)))
+      }
       const support = () => astraSupportApproval(this.supportEnv.WORLDIFACT_ASTRA_SUPPORT_ONCE, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
       const supplemental = () => astraSupplementalGrant(this.supportEnv.WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
       if (path === '/astra-support-status' && request.method === 'GET') {
@@ -977,6 +1093,23 @@ export async function markStudioDispatch(env: EntitlementEnv, userId: string, jo
   throw new EntitlementError('The Studio dispatch acknowledgement could not be verified.')
 }
 export async function entitlementApi(request: Request, env: AccountEnv & EntitlementEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
+  if (new URL(request.url).pathname === '/api/account/generation-funding') {
+    const reply = (value: unknown, code = 200) => Response.json(value, { status: code,
+      headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie', 'X-Content-Type-Options': 'nosniff', ...(code === 405 ? { Allow: 'GET' } : {}) } })
+    if (request.method !== 'GET') return reply({ error: 'Use GET.' }, 405)
+    if (new URL(request.url).search) return reply({ error: 'Query parameters are not supported.' }, 400)
+    if (request.headers.get('Sec-Fetch-Site') === 'cross-site' || request.headers.has('Origin') && request.headers.get('Origin') !== new URL(request.url).origin)
+      return reply({ error: 'Same-origin account access required.' }, 403)
+    try {
+      const user = await getVerifiedAccount(request, env, fetcher)
+      if (!user) return reply({ error: 'Sign in to view your generation funding.' }, 401)
+      const limiter = env.ACCOUNT_LIMITER ?? env.GENERATION_LIMITER
+      if (!limiter) return reply({ error: 'Account protection is unavailable.' }, 503)
+      if (!(await limiter.limit({ key: `account:generation-funding:${user.id.toLowerCase()}` })).success)
+        return reply({ error: 'Please wait before reading generation funding again.' }, 429)
+      return reply(await entitlementCall<GenerationFundingSnapshot>(env, user.id, '/generation-funding'))
+    } catch { return reply({ error: 'Generation funding is temporarily unavailable.' }, 503) }
+  }
   if (new URL(request.url).pathname !== '/api/account/entitlements') return null
   if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
   try {

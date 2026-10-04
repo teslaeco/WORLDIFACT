@@ -5,12 +5,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { BASE_COMMIT, MARKER_PATH, MARKER_CONTENT, REVIEWED_PATHS, selectPipelineOnlyRelease } from '../scripts/select-pipeline-only-release.mjs'
+import {
+  BASE_COMMIT, MARKER_PATH, MARKER_CONTENT, REVIEWED_PATHS,
+  FUNDING_BASE_COMMIT, FUNDING_MARKER_PATH, FUNDING_MARKER_CONTENT, FUNDING_REVIEWED_PATHS,
+  selectPipelineOnlyRelease,
+} from '../scripts/select-pipeline-only-release.mjs'
 
 const head = '1'.repeat(40), blob = '2'.repeat(40)
 const changes = REVIEWED_PATHS.map(path => ({ status: path === MARKER_PATH ? 'A' : 'M', path }))
+const fundingChanges = FUNDING_REVIEWED_PATHS.map(path => ({ status: path === FUNDING_MARKER_PATH ? 'A' : 'M', path }))
 function evidence(overrides = {}) {
-  const data = { head, parent: BASE_COMMIT, changes, marker: MARKER_CONTENT, mode: '100644', ...overrides }
+  const data = { head, parent: BASE_COMMIT, changes, markerPath: MARKER_PATH, marker: MARKER_CONTENT, mode: '100644', ...overrides }
   const calls = []
   function readGit(cwd, args) {
     assert.equal(cwd, 'fixture')
@@ -27,8 +32,12 @@ function evidence(overrides = {}) {
       return data.raw ?? data.changes.map(({ status, path }) => `${status}\0${path}\0`).join('')
     }
     if (args[0] === 'ls-tree') {
-      assert.deepEqual(args, ['ls-tree', '-z', data.head, '--', MARKER_PATH])
-      return `${data.mode} blob ${blob}\t${MARKER_PATH}\0`
+      if (args.length > 5) {
+        assert.deepEqual(args, ['ls-tree', '-z', data.head, '--', ...FUNDING_REVIEWED_PATHS])
+        return data.tree ?? FUNDING_REVIEWED_PATHS.map(path => `100644 blob ${blob}\t${path}\0`).join('')
+      }
+      assert.deepEqual(args, ['ls-tree', '-z', data.head, '--', data.markerPath])
+      return `${data.mode} blob ${blob}\t${data.markerPath}\0`
     }
     assert.deepEqual(args, ['cat-file', 'blob', blob])
     return data.marker
@@ -36,6 +45,9 @@ function evidence(overrides = {}) {
   return { readGit, calls }
 }
 function select(overrides) { return selectPipelineOnlyRelease('fixture', evidence(overrides).readGit) }
+function selectFunding(overrides = {}) {
+  return select({ parent: FUNDING_BASE_COMMIT, changes: fundingChanges, markerPath: FUNDING_MARKER_PATH, marker: FUNDING_MARKER_CONTENT, ...overrides })
+}
 
 test('only the exact reviewed repair and canonical public marker preserve billing', () => {
   assert.equal(select(), true)
@@ -64,11 +76,48 @@ test('an initial repair or newly introduced selector cannot omit the marker and 
   assert.throws(() => select({ parent: '3'.repeat(40), changes: [{ status: 'A', path: 'scripts/select-pipeline-only-release.mjs' }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
 })
 
+test('the separate funding inspection scope preserves billing for exactly its 17 reviewed paths', () => {
+  assert.equal(selectFunding(), true)
+  assert.equal(readFileSync(new URL('../' + FUNDING_MARKER_PATH, import.meta.url), 'utf8'), FUNDING_MARKER_CONTENT)
+  assert.equal(FUNDING_REVIEWED_PATHS.length, 17)
+  assert.equal(FUNDING_REVIEWED_PATHS.includes(MARKER_PATH), false)
+  assert.equal(FUNDING_REVIEWED_PATHS.includes('.github/workflows/cloudflare.yml'), false)
+  assert.equal(FUNDING_REVIEWED_PATHS.includes('docs/CONTEST_STATUS.md'), false)
+})
+
+test('funding inspection refuses omitted markers, different parents, scope changes and any old marker change', () => {
+  for (const overrides of [
+    { changes: fundingChanges.filter(change => change.path !== FUNDING_MARKER_PATH) },
+    { parent: BASE_COMMIT }, { parent: '3'.repeat(40) },
+    { changes: [...fundingChanges, { status: 'M', path: 'server/billing.ts' }] },
+    { changes: fundingChanges.filter(change => change.path !== 'server/entitlements.ts') },
+    ...['A', 'M', 'D', 'T'].map(status => ({ changes: [...fundingChanges, { status, path: MARKER_PATH }] })),
+    ...['D', 'T', 'R100'].map(status => ({ changes: fundingChanges.map(change => change.path === 'server/entitlements.ts' ? { ...change, status } : change) })),
+    { parent: '3'.repeat(40), changes: [{ status: 'A', path: 'src/lib/generationFunding.ts' }] },
+    { parent: FUNDING_BASE_COMMIT, changes: [] },
+  ]) assert.throws(() => selectFunding(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('funding marker contents, marker edits and non-regular reviewed files fail closed', () => {
+  const tree = FUNDING_REVIEWED_PATHS.map(path => `100644 blob ${blob}\t${path}\0`).join('')
+  for (const overrides of [
+    { marker: FUNDING_MARKER_CONTENT + '\n' },
+    { marker: FUNDING_MARKER_CONTENT.replace('true', 'false') },
+    { marker: MARKER_CONTENT }, { mode: '120000' },
+    ...['M', 'D', 'T'].map(status => ({ parent: head, changes: [{ status, path: FUNDING_MARKER_PATH }] })),
+    ...['100755', '120000', '160000'].map(mode => ({ tree: tree.replace('100644', mode) })),
+    { tree: tree.replace(`blob ${blob}`, `commit ${blob}`) },
+    { tree: tree.replace('docs/GENERATOR_UI_RESTORATION_20261004.md', 'docs/other.md') },
+    { tree: tree.slice(0, -1) },
+  ]) assert.throws(() => selectFunding(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
 test('ordinary future releases retain the previous billing behavior without reading the stale marker', () => {
   const fixture = evidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path: 'README.md' }] })
   assert.equal(selectPipelineOnlyRelease('fixture', fixture.readGit), false)
   assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
   assert.equal(select({ parent: '3'.repeat(40), changes: [] }), false)
+  assert.equal(selectFunding({ parent: '3'.repeat(40), changes: [{ status: 'M', path: 'src/lib/generationFunding.ts' }] }), false)
 })
 
 test('missing history, malformed Git evidence and revision-like arguments cannot select a mode', () => {
@@ -103,6 +152,12 @@ test('actual local Git and CLI fail on missing history or extra arguments and de
     const ordinary = run(process.execPath, [script])
     assert.equal(ordinary.status, 0, ordinary.stderr)
     assert.equal(ordinary.stdout, 'preserve_billing=false\n')
+    const poisoned = spawnSync(process.execPath, [script], {
+      cwd: directory, encoding: 'utf8', timeout: 15000,
+      env: { ...env, GIT_DIR: '/missing/git', GIT_WORK_TREE: '/missing/tree', GIT_INDEX_FILE: '/missing/index', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.repositoryformatversion', GIT_CONFIG_VALUE_0: '999' },
+    })
+    assert.equal(poisoned.status, 0, poisoned.stderr)
+    assert.equal(poisoned.stdout, 'preserve_billing=false\n')
     const injection = run(process.execPath, [script, '--base', BASE_COMMIT])
     assert.equal(injection.status, 1)
     assert.equal(injection.stdout, '')

@@ -39,7 +39,7 @@ async function loadQuoteHook(react, account, globals) {
   } }, { filename: url.pathname, timeout: 1000 })
   return module.exports
 }
-async function loadCostNotice(quoteHook) {
+export async function loadCostNotice(quoteHook) {
   const url = new URL('../src/components/GenerationCostNotice.tsx', import.meta.url)
   const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
