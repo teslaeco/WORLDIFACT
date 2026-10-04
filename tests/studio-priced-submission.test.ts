@@ -38,6 +38,7 @@ function fixture() {
     return objects.get(name)!
   } }
   let runtime: Record<string, unknown> = tierHealth(), healthReads = 0, state: StudioJob['state'] = 'building', statusFields: Record<string, unknown> = {}
+  let postError = false, modelAvailable = true, postStatus = 200
   const submitted: Record<string, unknown>[] = []
   // Every outbound call is intercepted: these are Worker/ledger integration
   // tests, never paid-provider, authenticated-production or visual evidence.
@@ -45,11 +46,11 @@ function fixture() {
     const path = new URL(String(url)).pathname
     if (path === '/auth/v1/user') return Response.json({ id: new Headers(init?.headers).get('Authorization') === 'Bearer bob-token' ? bob : alice, email: 'fixture@example.test' })
     if (path === '/v1/health') { healthReads++; return Response.json(runtime) }
-    if (path === '/v1/jobs') { const body = JSON.parse(String(init?.body)); submitted.push(body); return Response.json({ id: body.id, state: 'building' }) }
+    if (path === '/v1/jobs') { const body = JSON.parse(String(init?.body)); submitted.push(body); if (postError) throw new Error('Private upstream transport detail'); return postStatus === 200 ? Response.json({ id: body.id, state: 'building' }) : Response.json({ error: 'Serwer wykonuje poprzedni model. Poczekaj na wynik lub anuluj tamto zlecenie.' }, { status: postStatus }) }
     if (path.endsWith('/budget')) return Response.json({}, { status: 404 })
     if (path.endsWith('/quality')) return Response.json({ revision: 6, state: 'succeeded', hasModel: true, modelStatus: 'draft', automaticQualityAccepted: false,
       agent: { finished: false }, agentUsage: { error_code: 'WORLDIFACT_ASTRA_COST_GUARD' } })
-    if (path.endsWith('/model')) { const bytes = detailedGLBFixture(); return new Response(bytes, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(bytes.length) } }) }
+    if (path.endsWith('/model')) { if (!modelAvailable) return Response.json({}, { status: 503 }); const bytes = detailedGLBFixture(); return new Response(bytes, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(bytes.length) } }) }
     if (/^\/v1\/jobs\/[a-f0-9-]+$/.test(path)) return Response.json({ id: path.split('/').pop(), state, ...statusFields })
     throw new Error('Unexpected fixture request: ' + path)
   }) as typeof fetch
@@ -62,6 +63,7 @@ function fixture() {
   const balances = async (id = alice) => ({ points: await account(id).get('balance'), held: await account(id).get('customer-reserved-credits:v1') ?? 0,
     provider: await account(id).get('provider-budget-cents:v1'), global: (await (await budget.fetch(new Request('https://budget.internal/status'))).json() as { used: number }).used })
   return { env, call, account, balances, submitted, healthReads: () => healthReads,
+    postError: (value: boolean) => { postError = value }, modelAvailable: (value: boolean) => { modelAvailable = value }, postStatus: (value: number) => { postStatus = value },
     runtime: (value: Record<string, unknown>) => { runtime = value }, state: (value: StudioJob['state']) => { state = value }, statusFields: (value: Record<string, unknown>) => { statusFields = value },
     restart: () => objects.clear(),
     async fund(id = alice) {
@@ -115,8 +117,10 @@ test('Studio diagnostics identify the generation stage without recording private
     const diagnostics = lines.map(line => JSON.parse(line) as Record<string, unknown>)
     assert.deepEqual(diagnostics.map(value => [value.stage, value.admission, value.oracleDispatch, value.workerStatus]), [
       ['PREPARATION', 'PREPARED', 'NOT_ATTEMPTED', null],
-      ['ORACLE_DISPATCH', 'ADMITTED', 'CLAIMED', null],
-      ['ORACLE_DISPATCH', 'ADMITTED', 'RESPONSE', 200],
+      ['RECEIVED', 'PREPARED', 'NOT_ATTEMPTED', null],
+      ['ADMITTED', 'ADMITTED', 'NOT_ATTEMPTED', null],
+      ['SENT_TO_PROVIDER', 'ADMITTED', 'CLAIMED', null],
+      ['PROVIDER_RESPONSE', 'ADMITTED', 'RESPONSE', 200],
     ])
     assert.ok(diagnostics.every(value => value.event === 'worldifact.studio.generation' && value.requestId === receipt.id))
     assert.doesNotMatch(lines.join('\n'), /blue chess rook|fixture@example|inert-oracle|owner-fixture|ticket/i)
@@ -138,9 +142,98 @@ test('provider funding refusal is diagnosed before Oracle dispatch', async () =>
     const diagnostics = lines.map(line => JSON.parse(line) as Record<string, unknown>)
     assert.deepEqual(diagnostics.map(value => [value.stage, value.admission, value.reason, value.oracleDispatch]), [
       ['PREPARATION', 'PREPARED', 'PREFLIGHT_ACCEPTED', 'NOT_ATTEMPTED'],
-      ['ADMISSION', 'REFUSED', 'PROVIDER_BUDGET_EXHAUSTED', 'NOT_ATTEMPTED'],
+      ['RECEIVED', 'PREPARED', 'INPUT_VALIDATED', 'NOT_ATTEMPTED'],
+      ['FAILED', 'REFUSED', 'PROVIDER_BUDGET_EXHAUSTED', 'NOT_ATTEMPTED'],
     ])
     assert.ok(diagnostics.every(value => value.requestId === receipt.id))
+  } finally { console.info = original }
+})
+
+test('funded MCC request completes only after model validation and replays without another dispatch', async () => {
+  const f = fixture(); await f.fund(); f.env.STUDIO_NEW_JOB_POLICY = 'legacy-usd175-v1'
+  const mcc = { ...input, purpose: 'object' as const, prompt: 'Create a realistic industrial MCC electrical cabinet with breakers, lights, PLC modules, cooling fans and detailed wiring.' }
+  await f.account().put('provider-budget-cents:v1', 175)
+  const lines: string[] = [], original = console.info
+  console.info = (...values: unknown[]) => { lines.push(values.join(' ')) }
+  try {
+    const receipt = await f.prepare(mcc)
+    assert.equal((await f.call('/api/studio/jobs', 'POST', mcc, receipt)).status, 202)
+    assert.equal(f.submitted.length, 1)
+    assert.equal(f.submitted[0].studioPricing, undefined)
+    assert.match(String(f.submitted[0].agentInstructions), /USD 1\.75/)
+    assert.deepEqual(await f.balances(), { points: 4500, held: 250, provider: 0, global: 1 })
+    assert.equal(lines.some(line => JSON.parse(line).stage === 'COMPLETED'), false)
+    f.state('succeeded'); f.modelAvailable(false)
+    assert.equal((await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt)).status, 502)
+    assert.equal(lines.some(line => ['COMPLETED', 'FAILED'].includes(JSON.parse(line).stage)), false, 'Unavailable bytes are uncertain, not model completion or failure')
+    f.modelAvailable(true)
+    const response = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt)
+    assert.equal((await response.json() as { job: StudioJob }).job.state, 'succeeded')
+    assert.deepEqual(await f.balances(), { points: 4250, held: 0, provider: 0, global: 1 })
+    const completed = JSON.parse(lines.at(-1)!)
+    assert.equal(completed.stage, 'COMPLETED'); assert.equal(completed.reason, 'MODEL_COMPLETED')
+    assert.equal(completed.oracleDispatch, 'UNKNOWN', 'A terminal observation never pretends to dispatch another model')
+    await f.call('/api/studio/jobs', 'POST', mcc, receipt)
+    assert.equal(f.submitted.length, 1)
+    assert.equal(lines.filter(line => JSON.parse(line).stage === 'SENT_TO_PROVIDER').length, 1)
+    assert.deepEqual(await f.balances(), { points: 4250, held: 0, provider: 0, global: 1 })
+    assert.doesNotMatch(lines.join('\n'), /electrical cabinet|fixture@example|inert-oracle|owner-fixture|ticket/i)
+  } finally { console.info = original }
+})
+
+test('lost provider response remains uncertain and a later durable failure has a safe terminal diagnostic', async () => {
+  const f = fixture(); await f.fund(); f.postError(true)
+  const lines: string[] = [], original = console.info
+  console.info = (...values: unknown[]) => { lines.push(values.join(' ')) }
+  try {
+    const receipt = await f.prepare(input)
+    const response = await f.call('/api/studio/jobs', 'POST', input, receipt)
+    assert.equal((await response.json() as { job: StudioJob }).job.state, 'pending')
+    assert.equal(f.submitted.length, 1)
+    assert.equal(lines.some(line => ['FAILED', 'COMPLETED', 'PROVIDER_RESPONSE'].includes(JSON.parse(line).stage)), false)
+    assert.equal(JSON.parse(lines.at(-1)!).reason, 'ORACLE_NO_RESPONSE')
+    assert.doesNotMatch(lines.join('\n'), /private upstream|fixture@example|ticket/i)
+    f.state('failed'); f.statusFields({ worldifactFailureCode: 'ASTRA_COST_LIMIT' })
+    const failed = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt)
+    assert.equal((await failed.json() as { job: StudioJob }).job.state, 'failed')
+    assert.equal(JSON.parse(lines.at(-1)!).stage, 'FAILED')
+    assert.equal(JSON.parse(lines.at(-1)!).reason, 'ASTRA_COST_LIMIT')
+    assert.deepEqual(await f.balances(), { points: 4500, held: 0, provider: 2975, global: 1 })
+    assert.equal(f.submitted.length, 1)
+  } finally { console.info = original }
+})
+
+test('a diagnostic sink exception cannot change model admission, dispatch or completion', async () => {
+  const f = fixture(); await f.fund()
+  const original = console.info
+  console.info = () => { throw new Error('Diagnostic sink unavailable') }
+  try {
+    const receipt = await f.prepare(input)
+    assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt)).status, 202)
+    f.state('succeeded')
+    const response = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt)
+    assert.equal((await response.json() as { job: StudioJob }).job.state, 'succeeded')
+    assert.equal(f.submitted.length, 1)
+    assert.deepEqual(await f.balances(), { points: 4250, held: 0, provider: 2975, global: 1 })
+  } finally { console.info = original }
+})
+
+test('explicit Oracle rejection records its actual response and refusal without requiring another poll', async () => {
+  const f = fixture(); await f.fund(); f.postStatus(409)
+  const lines: string[] = [], original = console.info
+  console.info = (...values: unknown[]) => { lines.push(values.join(' ')) }
+  try {
+    const receipt = await f.prepare(input)
+    const response = await f.call('/api/studio/jobs', 'POST', input, receipt)
+    assert.equal(response.status, 409)
+    assert.equal((await response.json() as { failureCode: string }).failureCode, 'ORACLE_BUSY')
+    assert.equal(f.submitted.length, 1)
+    const last = lines.slice(-2).map(line => JSON.parse(line))
+    assert.deepEqual(last.map(value => [value.stage, value.reason, value.workerStatus]), [
+      ['PROVIDER_RESPONSE', 'ORACLE_REJECTED', 409], ['FAILED', 'ORACLE_BUSY', 409],
+    ])
+    assert.equal(last[1].admission, 'REFUSED')
+    assert.deepEqual(await f.balances(), { points: 4500, held: 0, provider: 2975, global: 1 })
   } finally { console.info = original }
 })
 

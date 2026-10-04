@@ -23,10 +23,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
           cache: npm
+      - name: Verify one-time pipeline release scope before credential setup
+        id: billing_scope
+        run: node scripts/select-pipeline-only-release.mjs >> "$GITHUB_OUTPUT"
       - name: Check deployment input names and format
         run: node scripts/release-check.ts credentials
         env:
@@ -74,6 +79,7 @@ jobs:
           ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
           ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
       - name: Sync optional payment credentials without activating checkout
+        if: steps.billing_scope.outputs.preserve_billing == 'false'
         run: node scripts/connect-billing.ts
         env:
           STRIPE_CONFIG_SOURCE: ${{ vars.STRIPE_CONFIG_SOURCE }}
@@ -89,6 +95,7 @@ jobs:
           PAYPAL_WEBHOOK_ID: ${{ secrets.PAYPAL_WEBHOOK_ID }}
           PAYPAL_MERCHANT_ID: ${{ secrets.PAYPAL_MERCHANT_ID }}
       - name: Prepare verified subscription cancellation before activating Stripe
+        if: steps.billing_scope.outputs.preserve_billing == 'false'
         run: |
           node --input-type=module <<'JS'
           import { readFile } from 'node:fs/promises';
@@ -104,6 +111,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
       - name: Verify Stripe can open and expire an unpaid subscription checkout
+        if: steps.billing_scope.outputs.preserve_billing == 'false'
         run: |
           node --input-type=module <<'JS'
           import { readFile } from 'node:fs/promises';
@@ -117,6 +125,7 @@ jobs:
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
       - name: Verify Pro and Studio Stripe checkouts can open and expire without charge
+        if: steps.billing_scope.outputs.preserve_billing == 'false'
         run: node --experimental-strip-types scripts/check-stripe-astra-checkouts.ts
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
@@ -167,6 +176,7 @@ jobs:
           console.log('Read-only deployment diagnostic. No model request is made by this step.')
           JS
       - name: Verify activated Stripe readiness and payment request guards without a charge
+        if: steps.billing_scope.outputs.preserve_billing == 'false'
         run: |
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';

@@ -222,4 +222,4 @@ export const JOB_DETAILS: Record<StudioJob['state'], string> = {
   cancelled: 'This job was cancelled. No replacement generation is started.',
 }
 
-export const STUDIO_RECONCILIATION_DETAIL = 'The worker has not confirmed this job. Your allowance or credits remain reserved while its status is reviewed. Recover this same job; do not generate a duplicate.'
+export const STUDIO_RECONCILIATION_DETAIL = 'This signed job needs a status and access review. Keep this receipt and recover the same job; no new generation is started.'

@@ -277,6 +277,27 @@ test('unconfirmed old jobs display review state instead of an endless generation
   } finally { h.close() }
 })
 
+for (const state of ['succeeded', 'failed']) test(`${state} response needing reconciliation keeps the original Shop receipt and GET recovery`, async () => {
+  const h = await harness({ ready: true, state, failureCode: 'ORACLE_JOB_FAILED', reconciliationRequired: true, downloadAllowed: false })
+  try {
+    const beforeCalls = h.calls.length, saved = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), archived = h.archive.get(oldId)
+    await h.poll()
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Model needs a status review'))
+    assert.equal(h.all().some(node => node.type === 'p' && text(node).startsWith('Elapsed:')), false)
+    assert.equal(h.delays.at(-1), 60_000)
+    assert.ok(h.all().some(node => node.type === 'p' && /recover the same job/i.test(text(node))))
+    assert.equal(h.all().some(node => node.type === 'p' && /points were released|credits remain reserved/i.test(text(node))), false)
+    await h.deadline(60_000)
+    assert.equal(h.delays.at(-1), 60_000)
+    assert.deepEqual(h.calls.slice(beforeCalls).map(({ path, method }) => ({ path, method })), [
+      { path: `/api/studio/jobs/${oldId}`, method: 'GET' },
+      { path: `/api/studio/jobs/${oldId}`, method: 'GET' },
+    ], 'Recovery cannot request artifacts, new IDs, generation or accounting changes')
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), saved)
+    assert.equal(h.archive.get(oldId), archived)
+  } finally { h.close() }
+})
+
 
 test('private character brief fills an empty Shop draft without a generation, and never overwrites a recovered job', async () => {
   const characterPrompt = 'A silver-haired explorer with a teal jacket'

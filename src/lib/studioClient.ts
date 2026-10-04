@@ -41,10 +41,10 @@ function parseSavedStudioJob(value: unknown): SavedStudioJob {
 export function parseStudioJob(value: unknown, id: string): StudioJob {
   if (!object(value) || !object(value.job) || value.job.id !== id || typeof value.job.state !== 'string' || !Object.hasOwn(JOB_DETAILS, value.job.state)) throw new Error('The response does not belong to the current model. The previous model will not be substituted.')
   const state = value.job.state as StudioJob['state']
-  const reconciliationRequired = state === 'pending' && value.job.reconciliationRequired === true
+  const reconciliationRequired = value.job.reconciliationRequired === true
   const failureCode = state === 'failed' && STUDIO_FAILURE_CODES.includes(value.job.failureCode as NonNullable<StudioJob['failureCode']>) ? value.job.failureCode as StudioJob['failureCode'] : undefined
   const failureDetail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : undefined
-  return { id, state, ...(isStudioPricing(value.job.pricing) ? { pricing: { ...value.job.pricing } } : {}), detail: failureDetail || (reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : JOB_DETAILS[state]), ...(failureCode ? { failureCode } : {}),
+  return { id, state, ...(isStudioPricing(value.job.pricing) ? { pricing: { ...value.job.pricing } } : {}), detail: reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : failureDetail || JOB_DETAILS[state], ...(failureCode ? { failureCode } : {}),
     ...(reconciliationRequired ? { reconciliationRequired: true } : {}),
     ...(typeof value.job.downloadAllowed === 'boolean' ? { downloadAllowed: value.job.downloadAllowed } : {}),
     ...(typeof value.job.previewOnly === 'boolean' ? { previewOnly: value.job.previewOnly } : {}),

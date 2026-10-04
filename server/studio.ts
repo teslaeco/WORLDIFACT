@@ -9,7 +9,7 @@ import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioNewJobPolicy.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
-import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata } from '../src/lib/studioProtocol.ts'
+import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; STUDIO_NEW_JOB_POLICY?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
@@ -30,20 +30,21 @@ class StudioError extends Error {
 class InvalidStudioModelError extends StudioError {}
 class StudioVerificationBusyError extends StudioError {}
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
-type StudioDiagnosticReason = AdmissionFailureCode |
+type StudioDiagnosticReason = NonNullable<StudioJob['failureCode']> |
   'PREFLIGHT_ACCEPTED' | 'EXISTING_ACCOUNT_RESERVATION' | 'STUDIO_ALLOWANCE_UNAVAILABLE' |
   'ACCOUNT_AND_BUDGET_RESERVED' | 'DISPATCH_FENCE_REFUSED' | 'ORACLE_RESPONSE' |
-  'ORACLE_REJECTED' | 'ORACLE_NO_RESPONSE'
+  'ORACLE_REJECTED' | 'ORACLE_NO_RESPONSE' | 'INPUT_VALIDATED' | 'MODEL_COMPLETED' | 'MODEL_FAILED'
 type StudioDiagnostic = {
   requestId: string
-  stage: 'PREPARATION' | 'ADMISSION' | 'ORACLE_DISPATCH'
+  stage: 'PREPARATION' | 'ADMISSION' | 'ORACLE_DISPATCH' | 'RECEIVED' | 'ADMITTED' | 'SENT_TO_PROVIDER' | 'PROVIDER_RESPONSE' | 'COMPLETED' | 'FAILED'
   admission: 'PREPARED' | 'ADMITTED' | 'REFUSED' | 'RECOVERY_ONLY'
   reason: StudioDiagnosticReason
-  oracleDispatch: 'NOT_ATTEMPTED' | 'CLAIM_REFUSED' | 'CLAIMED' | 'NO_RESPONSE' | 'RESPONSE'
+  oracleDispatch: 'NOT_ATTEMPTED' | 'CLAIM_REFUSED' | 'CLAIMED' | 'NO_RESPONSE' | 'RESPONSE' | 'UNKNOWN'
   workerStatus: number | null
 }
 function logStudioDiagnostic(diagnostic: StudioDiagnostic) {
-  console.info(JSON.stringify({ event: 'worldifact.studio.generation', ...diagnostic }))
+  // Diagnostics must never change admission, dispatch or recovery behavior.
+  try { console.info(JSON.stringify({ event: 'worldifact.studio.generation', ...diagnostic })) } catch { /* Keep the authoritative request outcome. */ }
 }
 const secretReady = (env: StudioEnv) => (env.OWNER_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.OWNER_ACCESS_TOKEN?.length ?? 0) <= 256
 const keyOf = (env: StudioEnv) => crypto.subtle.importKey('raw', new TextEncoder().encode(env.OWNER_ACCESS_TOKEN!), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
@@ -135,6 +136,14 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
   if (access?.state === 'failed') { state = 'failed'; failureCode = access.failureCode }
   if (access?.state === 'completed') { state = 'succeeded'; failureCode = undefined }
   if (access?.providerBudgetPending === true) await reconcileProviderReservation(env, userId, id, fetcher)
+  // A provider success label is insufficient: completion is emitted only after
+  // the existing GLB gate and durable account settlement agree. Recovered
+  // terminal results are observations, not proof of a new provider dispatch.
+  if (access?.state === 'completed' || access?.state === 'failed') {
+    const completed = access.state === 'completed'
+    const reason = completed ? 'MODEL_COMPLETED' : failureCode && STUDIO_FAILURE_CODES.includes(failureCode) ? failureCode : 'MODEL_FAILED'
+    logStudioDiagnostic({ requestId: id, stage: completed ? 'COMPLETED' : 'FAILED', admission: 'RECOVERY_ONLY', reason, oracleDispatch: 'UNKNOWN', workerStatus: null })
+  }
   const detail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : JOB_DETAILS[state]
   return { id, state, detail, ...(failureCode ? { failureCode } : {}), downloadAllowed: access!.downloadAllowed,
     previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed, ...(access?.pricing ? { pricing: access.pricing } : {}) }
@@ -438,6 +447,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (idempotencyKey && idempotencyKey !== auth.id) throw new StudioError('The generation idempotency key does not match this signed job. No new charge was made.', 409)
       const input = await inputFrom(request)
       if (await boundInputDigest(input, user?.id) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
+      logStudioDiagnostic({ requestId: auth.id, stage: 'RECEIVED', admission: 'PREPARED', reason: 'INPUT_VALIDATED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
       const pricing = input.budgetTier === undefined ? undefined : studioPricingFor(input)
       // Previously admitted work retains its exact signed input and price even
       // after a quote expires or the worker enters maintenance. Recovery must
@@ -458,7 +468,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (!userReservation.allowed) {
           const conflict = ['REQUEST_PAYLOAD_MISMATCH', 'JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(userReservation.reason ?? '')
           const reason: AdmissionFailureCode = isAdmissionFailureCode(userReservation.reason) ? userReservation.reason : conflict ? 'ACCOUNT_REQUEST_CONFLICT' : 'ACCOUNT_ADMISSION_UNAVAILABLE'
-          logStudioDiagnostic({ requestId: auth.id, stage: 'ADMISSION', admission: 'REFUSED', reason, oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
+          logStudioDiagnostic({ requestId: auth.id, stage: 'FAILED', admission: 'REFUSED', reason, oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
           throw new StudioError(ADMISSION_FAILURE_DETAILS[reason], 429, reason)
         }
         if (userReservation.repeated) {
@@ -475,9 +485,10 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (!reserved.ok || (await reserved.json() as { allowed?: boolean }).allowed !== true) throw new StudioError('The cumulative allowance is exhausted or unavailable. No new job was submitted.', reserved.status === 429 ? 429 : 503)
       } catch (error) {
         if (user) await settleUserGeneration(env, user.id, auth.id, 'failed', 'STUDIO_ALLOWANCE_UNAVAILABLE')
-        logStudioDiagnostic({ requestId: auth.id, stage: 'ADMISSION', admission: 'REFUSED', reason: 'STUDIO_ALLOWANCE_UNAVAILABLE', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
+        logStudioDiagnostic({ requestId: auth.id, stage: 'FAILED', admission: 'REFUSED', reason: 'STUDIO_ALLOWANCE_UNAVAILABLE', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
         throw new StudioError(STUDIO_FAILURE_DETAILS.STUDIO_ALLOWANCE_UNAVAILABLE, error instanceof StudioError ? error.status : 503, 'STUDIO_ALLOWANCE_UNAVAILABLE')
       }
+      logStudioDiagnostic({ requestId: auth.id, stage: 'ADMITTED', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
       try {
         const payload = JSON.stringify(oracleStudioPayload(auth.id, input))
         // A poll may have closed the account reservation while the global
@@ -490,7 +501,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
             return json({ job: await accountJob(env, user.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
           }
         }
-        logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'CLAIMED', workerStatus: null })
+        logStudioDiagnostic({ requestId: auth.id, stage: 'SENT_TO_PROVIDER', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'CLAIMED', workerStatus: null })
         let response: Response
         try {
           response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: payload })
@@ -498,10 +509,11 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
           logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'ADMITTED', reason: 'ORACLE_NO_RESPONSE', oracleDispatch: 'NO_RESPONSE', workerStatus: null })
           throw error
         }
-        logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'ADMITTED', reason: response.ok ? 'ORACLE_RESPONSE' : 'ORACLE_REJECTED', oracleDispatch: 'RESPONSE', workerStatus: response.status })
+        logStudioDiagnostic({ requestId: auth.id, stage: 'PROVIDER_RESPONSE', admission: 'ADMITTED', reason: response.ok ? 'ORACLE_RESPONSE' : 'ORACLE_REJECTED', oracleDispatch: 'RESPONSE', workerStatus: response.status })
         if ([400, 409, 422, 429].includes(response.status)) {
           const failureCode = await submissionFailureCode(response)
           if (user) await settleUserGeneration(env, user.id, auth.id, 'failed', failureCode)
+          logStudioDiagnostic({ requestId: auth.id, stage: 'FAILED', admission: 'REFUSED', reason: failureCode, oracleDispatch: 'RESPONSE', workerStatus: response.status })
           throw new StudioError(STUDIO_FAILURE_DETAILS[failureCode], response.status, failureCode)
         }
         if (!response.ok) { await response.body?.cancel(); throw new Error('Unconfirmed acceptance') }

@@ -217,6 +217,32 @@ test('cloud timeout failure remains terminal and tells the user the held points 
   assert.match(job.detail, /points were released/i)
 })
 
+test('reconciliation survives every valid job state without claiming a hold or refund', () => {
+  for (const state of ['pending', 'queued', 'generating', 'retrying', 'building', 'succeeded', 'failed', 'cancelled']) {
+    const job = parseStudioJob({ job: { id, state, reconciliationRequired: true, downloadAllowed: false,
+      previewOnly: true, previewAvailable: false, failureCode: 'ORACLE_JOB_FAILED', detail: 'PRIVATE_UPSTREAM_MESSAGE' } }, id)
+    assert.equal(job.state, state)
+    assert.equal(job.reconciliationRequired, true, state)
+    assert.equal(job.downloadAllowed, false)
+    assert.equal(job.previewOnly, true)
+    assert.equal(job.previewAvailable, false)
+    assert.equal(job.failureCode, state === 'failed' ? 'ORACLE_JOB_FAILED' : undefined)
+    assert.match(job.detail, /same job/i)
+    assert.doesNotMatch(job.detail, /points were released|credits remain reserved|PRIVATE_UPSTREAM_MESSAGE/i)
+  }
+})
+
+test('reconciliation requires literal true and cannot validate another job or unknown state', () => {
+  for (const reconciliationRequired of [undefined, false, null, 'true', 1, {}]) {
+    const job = parseStudioJob({ job: { id, state: 'failed', reconciliationRequired, failureCode: 'STUDIO_TIMEOUT', downloadAllowed: false } }, id)
+    assert.equal(job.reconciliationRequired, undefined)
+    assert.equal(job.downloadAllowed, false)
+    assert.match(job.detail, /maximum recovery window/i)
+  }
+  assert.throws(() => parseStudioJob({ job: { id: crypto.randomUUID(), state: 'succeeded', reconciliationRequired: true } }, id))
+  assert.throws(() => parseStudioJob({ job: { id, state: 'published', reconciliationRequired: true } }, id))
+})
+
 test('legacy ownership 403 becomes same-job reconciliation instead of endless polling or paid replay', async () => {
   const storage = store()
   storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: new Date().toISOString() }))

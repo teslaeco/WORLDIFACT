@@ -1,6 +1,7 @@
 import * as studioPricing from '../src/lib/studioPricing.ts'
 import * as studioTierSelection from '../src/lib/studioTierSelection.ts'
 import * as detailedStudio from '../src/lib/detailedStudio.ts'
+import * as studioClient from '../src/lib/studioClient.ts'
 import { quoteGeneration } from '../src/lib/generationQuote.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -20,12 +21,28 @@ const compiled = ts.transpileModule(source, { fileName: sourceUrl.pathname,
 
 // Actual component effects and timers, with inert API/asset adapters. This does
 // not render WebGL or make a paid call, and does not stand in for model quality.
-async function harness(readStatus, { withExistingJob = true, ready = false, quoteOverride = null } = {}) {
+async function harness(readStatus, { withExistingJob = true, ready = false, quoteOverride = null, realClient = false } = {}) {
   const slots = [], effects = [], timers = new Map(), delays = []
   let tree, dirty = true, cursor = 0, serial = 0, polls = 0, posts = 0, loads = 0, adopted = 0, elapsed = 0, refreshes = 0
   const submitted = [], runtime = { ready, detailedReady: ready, tiersReady: ready, photoReady: true, pricingRevision: studioPricing.STUDIO_PRICING_REVISION }
-  const record = { receipt: { id: '12345678-1234-4234-8234-123456789abc', ticket: 'fixture', createdAt: new Date().toISOString() },
+  const id = '12345678-1234-4234-8234-123456789abc'
+  const record = { receipt: { id, ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}`, createdAt: new Date().toISOString() },
     prompt: 'Synthetic adult character', startedAt: new Date().toISOString() }
+  const savedKey = `worldifact-character:v2:fixture-owner:fixture-world:${studioClient.STUDIO_RECEIPT_KEY}`
+  const storeData = new Map(withExistingJob ? [[savedKey, JSON.stringify(record)]] : [])
+  const storage = { getItem: key => storeData.get(key) ?? null, setItem: (key, value) => storeData.set(key, value), removeItem: key => storeData.delete(key) }
+  const calls = []
+  const fetcher = async (url, init = {}) => {
+    const path = String(url), method = init.method || 'GET'
+    calls.push({ path, method })
+    if (method === 'POST') posts++
+    assert.equal(method, 'GET', 'Character recovery cannot perform a write')
+    assert.equal(new Headers(init.headers).get('X-WORLDIFACT-Job'), record.receipt.ticket)
+    if (path === `/api/studio/jobs/${id}/model`) { loads++; return new Response('Synthetic bytes; geometry is not under test') }
+    assert.equal(path, `/api/studio/jobs/${id}`, 'Recovery must use the original receipt and no accounting endpoint')
+    polls++
+    return Response.json({ job: { id, ...await readStatus(polls, elapsed) } })
+  }
   const react = { ...React,
     useRef(initial) { const index = cursor++; if (!slots[index]) slots[index] = { ref: { current: initial } }; return slots[index].ref },
     useState(initial) {
@@ -47,10 +64,12 @@ async function harness(readStatus, { withExistingJob = true, ready = false, quot
     fetch: async () => Response.json({}),
     setTimeout(callback, delay) { delays.push(delay); const id = ++serial; timers.set(id, { callback, delay }); return id },
     clearTimeout: id => timers.delete(id),
-    window: { localStorage: { getItem: () => null, setItem() {}, removeItem() {} } },
+    window: { localStorage: storage },
     require(id) {
       if (id === 'react') return react
       if (id === 'react/jsx-runtime') return localRequire(id)
+      if (id === '../lib/studioClient' && realClient) return { ...studioClient, checkStudio: async () => ({ ...runtime }),
+        StudioCoordinator: class extends studioClient.StudioCoordinator { constructor(store) { super(store, fetcher) } } }
       if (id === '../lib/studioClient') return { checkStudio: async () => ({ ...runtime }), StudioCoordinator: class {
         restore() { return withExistingJob ? record : null }
         async poll() { polls++; return { id: record.receipt.id, detail: 'Synthetic status', ...await readStatus(polls, elapsed) } }
@@ -81,7 +100,7 @@ async function harness(readStatus, { withExistingJob = true, ready = false, quot
   }
   await settle()
   return {
-    delays, timers, submitted, runtime, refreshes: () => refreshes, async quote(value) { quoteOverride = value; dirty = true; await settle() }, tree: () => tree, async edit(description) { props.world = { ...props.world, character: { ...props.world.character, description } }; dirty = true; await settle() }, counts: () => ({ polls, posts, loads, adopted }), settle,
+    delays, timers, submitted, runtime, calls, record, storeData, savedKey, refreshes: () => refreshes, async quote(value) { quoteOverride = value; dirty = true; await settle() }, tree: () => tree, async edit(description) { props.world = { ...props.world, character: { ...props.world.character, description } }; dirty = true; await settle() }, counts: () => ({ polls, posts, loads, adopted }), settle,
     async poll() { const next = timers.entries().next().value; assert.ok(next, 'Same-job recovery should be scheduled')
       timers.delete(next[0]); elapsed += next[1].delay; await next[1].callback(); await settle() },
     close() { for (const slot of slots) slot?.cleanup?.(); timers.clear() },
@@ -128,6 +147,24 @@ test('reconciliation keeps slow GET recovery without downloading an unapproved r
     await h.poll(); assert.equal(h.delays.at(-1), 60_000); assert.equal(h.counts().loads, 0)
     await h.poll(); assert.equal(h.delays.at(-1), 25_000)
     assert.equal(h.timers.size, 1); assert.equal(h.counts().posts, 0)
+  } finally { h.close() }
+})
+
+for (const state of ['succeeded', 'failed', 'cancelled', 'building']) test(`actual ${state} response keeps character reconciliation on the same receipt`, async () => {
+  const h = await harness(count => count <= 2
+    ? { state, failureCode: 'ORACLE_JOB_FAILED', reconciliationRequired: true, downloadAllowed: false }
+    : { state: 'building', reconciliationRequired: false, downloadAllowed: false }, { realClient: true })
+  try {
+    const saved = h.storeData.get(h.savedKey)
+    await h.poll(); await h.poll()
+    assert.deepEqual(h.delays, [800, 60_000, 60_000])
+    assert.equal(h.timers.size, 1)
+    assert.deepEqual(h.counts(), { polls: 2, posts: 0, loads: 0, adopted: 0 })
+    await h.poll()
+    assert.equal(h.delays.at(-1), 25_000, 'Clearing reconciliation returns to ordinary GET recovery')
+    assert.deepEqual(h.calls, Array.from({ length: 3 }, () => ({ path: `/api/studio/jobs/${h.record.receipt.id}`, method: 'GET' })))
+    assert.equal(h.storeData.get(h.savedKey), saved)
+    assert.deepEqual(h.counts(), { polls: 3, posts: 0, loads: 0, adopted: 0 })
   } finally { h.close() }
 })
 
