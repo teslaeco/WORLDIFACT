@@ -5,11 +5,15 @@ import App from './App'
 import './index.css'
 import './mobile-hotfix.css'
 import { AccountProvider } from './lib/account'
+import GenerationFundingPage from './pages/GenerationFundingPage'
+
+// Financial inspection must not mount normal account/billing recovery effects.
+const readOnlyFunding = window.location.pathname === '/account/generation-funding'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <AccountProvider><App /></AccountProvider>
+      {readOnlyFunding ? <GenerationFundingPage /> : <AccountProvider><App /></AccountProvider>}
     </BrowserRouter>
   </StrictMode>,
 )
