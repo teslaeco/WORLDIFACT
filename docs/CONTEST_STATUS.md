@@ -2,6 +2,45 @@
 
 Updated 3 October 2026.
 
+## IN VERIFICATION — restored legacy Studio admission and safe lifecycle diagnostics (4 October 2026)
+
+The regression window was narrowed to PR #195 (`12149bd6c55d8de95044a4c41e55ccf87fed47c6`),
+which changed new detailed Studio reservations from the last proven USD 1.75
+request contract to USD 2 / USD 4 tiers. Existing account provider pools were
+deliberately not topped up, so an account with less than the new tier minimum
+could receive `PROVIDER_BUDGET_EXHAUSTED` before the Oracle POST. The later
+membership and reconciliation work preserved that conservative refusal and was
+not the change that originally raised the admission requirement.
+
+PR #205 (`a97c196bdb553cb57d5fc3dde20d9b47f90f59b5`) is the current local baseline.
+It already restores the original new-job contract of 250 points and a maximum
+USD 1.75 provider reservation while preserving immutable recovery for jobs
+admitted under the newer tiers. This audit does not roll back account ledgers,
+dispatch fences, duplicate prevention, billing, authentication or Oracle code.
+
+The Studio Worker now writes one fixed-schema diagnostic at preparation,
+account admission, dispatch-claim and Oracle submission response boundaries.
+It contains only the generation UUID, an allowlisted admission reason, dispatch
+state and numeric worker HTTP status. It never includes prompts, account IDs,
+receipt tickets, provider messages or credentials. Regression coverage verifies
+both the lifecycle and absence of representative private values.
+
+The production release gate now refuses to enable the signed Studio route unless
+the generated deployment configuration explicitly carries
+`STUDIO_NEW_JOB_POLICY=legacy-usd175-v1`. The post-deployment read-only check also
+requires that exact policy and refuses an advertised tiered route. This closes
+the deployment gap where application tests could cover the restored USD 1.75
+path without proving that the selected production configuration activated it.
+
+This executor has no repository remote or production account session, and its
+environment does not contain `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+`ORACLE_ENDPOINT`, `ORACLE_API_TOKEN` or `OWNER_ACCESS_TOKEN`. Consequently it cannot deploy or perform the
+requested paid production prompt without bypassing existing access controls.
+No live request was submitted and no new GLB/BLEND was generated. The last
+verified real end-to-end artifact remains the 15,281,768-byte GLB and
+26,457,988-byte BLEND from exact source `a5c8266f7c4b5c3348d6913bd48e90d759917f0d`;
+that historical evidence does not prove the current production path.
+
 ## IN VERIFICATION — paid membership refresh and removal of Creator attempt quota
 
 At 22:59 the owner reported another generator-limit message and specifically

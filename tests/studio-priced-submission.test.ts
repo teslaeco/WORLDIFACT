@@ -104,6 +104,24 @@ test('reviewed runtime quotes and reserves only the exact selected standard or e
   }
 })
 
+test('Studio diagnostics expose only the request lifecycle and fixed statuses', async () => {
+  const f = fixture(); await f.fund(); f.env.STUDIO_NEW_JOB_POLICY = 'legacy-usd175-v1'; f.runtime({ ...detailedHealthFixture })
+  const lines: string[] = [], original = console.info
+  console.info = (...values: unknown[]) => { lines.push(values.join(' ')) }
+  try {
+    const receipt = await f.prepare(input)
+    assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt)).status, 202)
+    const diagnostics = lines.map(line => JSON.parse(line) as Record<string, unknown>)
+    assert.deepEqual(diagnostics.map(value => [value.admission, value.oracleDispatch, value.workerStatus]), [
+      ['PREPARED', 'NOT_ATTEMPTED', null],
+      ['ADMITTED', 'CLAIMED', null],
+      ['ADMITTED', 'CLAIMED', 200],
+    ])
+    assert.ok(diagnostics.every(value => value.event === 'worldifact.studio.generation' && value.requestId === receipt.id))
+    assert.doesNotMatch(lines.join('\n'), /blue chess rook|fixture@example|inert-oracle|owner-fixture|ticket/i)
+  } finally { console.info = original }
+})
+
 test('missing, partial or incompatible additive attestation rejects new pricing without reserving anything', async () => {
   const valid = tierHealth()
   for (const changed of [
