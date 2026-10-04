@@ -3,7 +3,8 @@ import type { StudioInput, StudioJob, StudioStatus } from './studioProtocol.ts'
 
 /** An advertised price is usable only after the exact server contract is ready. */
 export function studioTiersReady(status: StudioStatus | null): boolean {
-  return status?.ready === true && status.detailedReady === true && status.tiersReady === true && status.pricingRevision === STUDIO_PRICING_REVISION
+  return status?.ready === true && status.detailedReady === true && status.tiersReady === true && status.pricingRevision === STUDIO_PRICING_REVISION &&
+    (status.newJobPolicy === undefined || status.newJobPolicy === 'tiered-v1')
 }
 
 export function studioBudgetSelection(tier: StudioBudgetTier, accepted: boolean): Pick<StudioInput, 'budgetTier' | 'acceptedPoints' | 'pricingRevision'> {
@@ -16,9 +17,9 @@ export function hasStudioBudgetConsent(tier: StudioBudgetTier, acceptedRevision:
   return tier === 'standard' || acceptedRevision === currentRevision
 }
 
-export function studioBudgetFailureAdvice(job: StudioJob | null): string | null {
+export function studioBudgetFailureAdvice(job: StudioJob | null, tiersAvailable = true): string | null {
   if (job?.failureCode !== 'MODEL_BUDGET_EXCEEDED') return null
-  return job.pricing?.tier === 'extended'
+  return !tiersAvailable || job.pricing?.tier === 'extended'
     ? 'Simplify this draft before starting another explicit attempt. No automatic paid retry was started.'
     : 'Simplify this draft, or select and explicitly accept the 500-point budget when available. No automatic upgrade or paid retry was started.'
 }

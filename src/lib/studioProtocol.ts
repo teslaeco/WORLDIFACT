@@ -79,13 +79,14 @@ export const STUDIO_SUBMISSION_GRACE_MS = 5 * 60_000
 export type StudioPrepareMetadata = Pick<StudioInput, 'worldId' | 'prompt' | 'purpose' | 'textureMaxSize' | 'generationProfile' | 'pricingRevision' | 'budgetTier' | 'acceptedPoints'> & { photoCount: number }
 export type StudioPrepareManifest = StudioPrepareMetadata & { version: typeof STUDIO_PREPARE_VERSION; inputDigest: string }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string; pricing?: StudioPricing }
-export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'MODEL_BUDGET_EXCEEDED', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
+export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'MODEL_BUDGET_EXCEEDED', 'STUDIO_BUDGET_POLICY_CHANGED', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
 export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
 export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean; pricing?: StudioPricing }
 export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   ...ADMISSION_FAILURE_DETAILS,
   ASTRA_COST_LIMIT: 'Astra’s cost protection stopped this job. Reserved customer points were released. Keep this job ID for review before starting another attempt; no automatic retry.',
   MODEL_BUDGET_EXCEEDED: 'This model is too elaborate for the selected generation budget. Reserved customer points were released; no automatic retry.',
+  STUDIO_BUDGET_POLICY_CHANGED: 'New Astra models use 250 points with a USD 1.75 provider ceiling. This outdated budget was not submitted or reserved. Refresh availability and review a new request; existing jobs retain their original terms.',
   INVALID_MODEL_OUTPUT: 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.',
   STUDIO_TIMEOUT: 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.',
   ORACLE_JOB_FAILED: 'The Astra/Blender worker reported that this job failed. Reserved customer points were released. Keep this job ID for diagnosis; no automatic retry.',
@@ -100,7 +101,7 @@ export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   STUDIO_ALLOWANCE_UNAVAILABLE: 'The generation allowance could not be reserved, so no Oracle generation was submitted. Reserved customer points were released; no automatic retry.',
   ORACLE_CANCELLED: 'The worker reported that this job was cancelled. Reserved customer points were released; no automatic retry.',
 }
-export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; exportPreparationReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; pricingRevision?: string; tiersReady?: boolean; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
+export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; exportPreparationReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; pricingRevision?: string; tiersReady?: boolean; newJobPolicy?: 'legacy-usd175-v1' | 'tiered-v1' | null; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const keys = (value: Record<string, unknown>, names: string[]) => Object.keys(value).every(name => names.includes(name))
 

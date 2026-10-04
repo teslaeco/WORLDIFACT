@@ -26,7 +26,7 @@ function storage(): EntitlementStorage {
 }
 function fixture() {
   const env: StudioEnv = { OWNER_ACCESS_TOKEN: 'owner-fixture-'.repeat(4), ORACLE_ENDPOINT: 'https://worker.trycloudflare.com', ORACLE_API_TOKEN: 'inert-oracle-fixture',
-    PUBLIC_PILOT: 'true', ENABLE_STUDIO_JOBS: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true',
+    PUBLIC_PILOT: 'true', ENABLE_STUDIO_JOBS: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', STUDIO_NEW_JOB_POLICY: 'tiered-v1',
     GENERATION_LIMITER: { async limit() { return { success: true } } } }
   const budget = new GenerationBudget({ storage: storage() as BudgetStorage }, env)
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
@@ -221,4 +221,70 @@ test('unfinished retained drafts show complexity only for the precise Oracle bud
     assert.deepEqual(await f.balances(), { points: 4500, held: 0, provider: 2750, global: 1 }, 'Failure releases customer points but missing sealed evidence retains provider funding')
     assert.equal(f.submitted.length, 1)
   }
+})
+
+test('historical new-job policy offers only the original budget even on a tier-capable runtime', async () => {
+  const f = fixture(); await f.fund(); f.env.STUDIO_NEW_JOB_POLICY = 'legacy-usd175-v1'
+  const before = await f.balances()
+  const status = await (await f.call('/api/studio/status')).json() as Record<string, unknown>
+  assert.equal(status.ready, true); assert.equal(status.detailedReady, true)
+  assert.equal(status.newJobPolicy, 'legacy-usd175-v1'); assert.equal(status.tiersReady, false); assert.equal(status.pricingRevision, undefined)
+  for (const tier of ['standard', 'extended'] as const) for (const manifest of [false, true]) {
+    const body = selected(tier)
+    const response = await f.call('/api/studio/prepare', 'POST', manifest ? await prepareStudioInput(body) : body)
+    assert.equal(response.status, 409)
+    assert.equal((await response.json() as { failureCode: string }).failureCode, 'STUDIO_BUDGET_POLICY_CHANGED')
+  }
+  assert.deepEqual(await f.balances(), before); assert.equal(f.submitted.length, 0)
+  const receipt = await f.prepare(input); assert.equal(receipt.pricing, undefined)
+  assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt)).status, 202)
+  assert.deepEqual(await f.balances(), { points: 4500, held: 250, provider: 2975, global: 1 })
+  assert.equal(f.submitted[0].studioPricing, undefined)
+  assert.match(String(f.submitted[0].agentInstructions), /USD 1\.75/)
+})
+
+test('a priced receipt prepared before rollback cannot reserve or dispatch after the policy switch', async () => {
+  for (const tier of ['standard', 'extended'] as const) {
+    const f = fixture(); await f.fund(); const body = selected(tier), receipt = await f.prepare(body)
+    const before = await f.balances(); f.env.STUDIO_NEW_JOB_POLICY = 'legacy-usd175-v1'
+    const responses = await Promise.all(Array.from({ length: 6 }, () => f.call('/api/studio/jobs', 'POST', body, receipt)))
+    assert.ok(responses.every(response => response.status === 409))
+    assert.deepEqual(await f.balances(), before); assert.equal(f.submitted.length, 0)
+    assert.equal(await f.account().get(`job:${receipt.id}`), undefined)
+  }
+})
+
+test('admitted priced jobs retain exact replay, recovery, settlement and funding through rollback', async () => {
+  for (const tier of ['standard', 'extended'] as const) for (const outcome of ['failed', 'succeeded'] as const) {
+    const f = fixture(); await f.fund(); const body = selected(tier), receipt = await f.prepare(body), pricing = STUDIO_PRICING[tier]
+    assert.equal((await f.call('/api/studio/jobs', 'POST', body, receipt)).status, 202)
+    const before = await f.balances(), healthBefore = f.healthReads()
+    f.env.STUDIO_NEW_JOB_POLICY = 'legacy-usd175-v1'; f.restart()
+    const pendingReplay = await (await f.call('/api/studio/jobs', 'POST', body, receipt)).json() as { job: StudioJob; recoveryOnly: boolean }
+    assert.equal(pendingReplay.recoveryOnly, true); assert.deepEqual(pendingReplay.job.pricing, pricing)
+    assert.deepEqual(await f.balances(), before); assert.equal(f.healthReads(), healthBefore); assert.equal(f.submitted.length, 1)
+    f.state(outcome)
+    const completed = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt)).json() as { job: StudioJob }
+    assert.equal(completed.job.state, outcome); assert.deepEqual(completed.job.pricing, pricing)
+    const settled = await f.balances()
+    assert.equal(settled.points, outcome === 'succeeded' ? 4500 - pricing.points : 4500)
+    assert.equal(settled.held, 0); assert.equal(settled.provider, 3150 - pricing.maxProviderCents)
+    const current = await (await f.call('/api/studio/current')).json() as { current: { receipt: PricedReceipt; pricing: StudioPricing } }
+    assert.deepEqual(current.current.pricing, pricing); assert.deepEqual(current.current.receipt.pricing, pricing)
+    assert.equal((await f.call('/api/studio/jobs', 'POST', body, current.current.receipt)).status, 202)
+    assert.deepEqual(await f.balances(), settled); assert.equal(f.submitted.length, 1)
+    assert.equal((await f.call('/api/studio/jobs', 'POST', { ...body, prompt: body.prompt + ' changed' }, receipt)).status, 409)
+  }
+})
+
+test('unknown new-job policy refuses admission while already admitted pricing remains recoverable', async () => {
+  const f = fixture(); await f.fund(); const body = selected('extended'), receipt = await f.prepare(body)
+  await f.call('/api/studio/jobs', 'POST', body, receipt)
+  const before = await f.balances(); f.env.STUDIO_NEW_JOB_POLICY = 'unreviewed-policy'
+  const status = await (await f.call('/api/studio/status')).json() as Record<string, unknown>
+  assert.equal(status.ready, false); assert.equal(status.reason, 'STUDIO_POLICY_UNAVAILABLE'); assert.equal(status.tiersReady, false)
+  assert.equal((await f.call('/api/studio/prepare', 'POST', await prepareStudioInput(input))).status, 503)
+  const recovered = await (await f.call('/api/studio/jobs', 'POST', body, receipt)).json() as { recoveryOnly: boolean; job: StudioJob }
+  assert.equal(recovered.recoveryOnly, true); assert.deepEqual(recovered.job.pricing, STUDIO_PRICING.extended)
+  assert.deepEqual(await f.balances(), before); assert.equal(f.submitted.length, 1)
 })

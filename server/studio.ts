@@ -7,10 +7,11 @@ import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailur
 import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, pendingUserStudioProvider, reconcileUserStudioProvider, reconcileUserBlueprintProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
+import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioNewJobPolicy.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
 import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata } from '../src/lib/studioProtocol.ts'
 
-export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; GENERATION_BUDGET?: BudgetNamespace }
+export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; STUDIO_NEW_JOB_POLICY?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
 const STUDIO_JOB_WATCHDOG_MS = 35 * 60_000
 const RECEIPT = new RegExp(`^(${UUID})\\.([0-9]{13})\\.([a-f0-9]{64})\\.([a-f0-9]{64})$`)
@@ -263,6 +264,10 @@ async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch
     if (!await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
       await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Previous-Job') || '', undefined, false, userId)
   } else if (env.PUBLIC_PILOT !== 'true' && !await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!)) throw new StudioError('This generation window requires owner access.', 401)
+  const policy = studioNewJobPolicy(env.STUDIO_NEW_JOB_POLICY)
+  if (!policy) throw new StudioError('New model requests are awaiting a verified budget policy. Existing jobs can still be recovered.', 503)
+  if (policy === HISTORICAL_STUDIO_POLICY && input.budgetTier !== undefined)
+    throw new StudioError(STUDIO_FAILURE_DETAILS.STUDIO_BUDGET_POLICY_CHANGED, 409, 'STUDIO_BUDGET_POLICY_CHANGED')
   const current = await health(env, fetcher)
   if (!current.ready) throw new StudioError('The existing Astra/Blender worker is not ready.', 503)
   if (accountPolicy(env) && !current.costGuardReady) throw new StudioError('The detailed worker did not confirm the current Astra cost guard. No points were reserved.', 503)
@@ -334,12 +339,14 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const trial = pool?.fastOnly === true && env.ENABLE_APPROVED_FAST_TEST === 'true'
       const enabled = trial || (env.ENABLE_STUDIO_JOBS === 'true' && !!budgetSettings(env))
       const authorized = trial || env.PUBLIC_PILOT === 'true' || (secretReady(env) && await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
-      const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : (!pool.unlimited && pool.remaining === 0) ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : accountPolicy(env) && !state.costGuardReady ? 'ASTRA_COST_GUARD_REQUIRED' : accountPolicy(env) && !state.outputPolicyReady ? 'ASTRA_OUTPUT_POLICY_REQUIRED' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
+      const policy = studioNewJobPolicy(env.STUDIO_NEW_JOB_POLICY)
+      const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !policy ? 'STUDIO_POLICY_UNAVAILABLE' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : (!pool.unlimited && pool.remaining === 0) ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : accountPolicy(env) && !state.costGuardReady ? 'ASTRA_COST_GUARD_REQUIRED' : accountPolicy(env) && !state.outputPolicyReady ? 'ASTRA_OUTPUT_POLICY_REQUIRED' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
       return json({ detailedReady: reason === 'READY' && state?.costGuardReady === true && state?.outputPolicyReady === true, detailedReferenceLimit: DETAILED_REFERENCE_LIMIT, costGuardReady: state?.costGuardReady === true, outputPolicyReady: state?.outputPolicyReady === true, accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
         photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, fastBudgetReady: state?.fastBudgetReady === true,
         exportPreparationReady: state?.exportPreparationReady === true,
-        tiersReady: reason === 'READY' && accountPolicy(env) && state?.tiersReady === true,
-        ...(reason === 'READY' && accountPolicy(env) && state?.tiersReady ? { pricingRevision: state.pricingRevision } : {}),
+        newJobPolicy: policy,
+        tiersReady: policy === 'tiered-v1' && reason === 'READY' && accountPolicy(env) && state?.tiersReady === true,
+        ...(policy === 'tiered-v1' && reason === 'READY' && accountPolicy(env) && state?.tiersReady ? { pricingRevision: state.pricingRevision } : {}),
         fastOnly: trial, promptMaxLength: Math.min(4000, Math.max(3, (state?.promptMaxLength ?? 2000) - oracleStudioPayload('', { worldId: 'enchanted-ai-shop', prompt: '', purpose: 'figurine', textureMaxSize: 4096, photos: [] }).prompt.length)), allowance: pool })
     }
     if (!secretReady(env)) throw new StudioError('The job receipt service is not configured.', 503)
