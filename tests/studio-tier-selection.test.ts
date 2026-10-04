@@ -7,7 +7,7 @@ import type { StudioJob, StudioStatus } from '../src/lib/studioProtocol.ts'
 test('tier controls need exact readiness and consent belongs to one current draft revision', () => {
   const ready = { ready: true, detailedReady: true, tiersReady: true, pricingRevision: STUDIO_PRICING_REVISION } as StudioStatus
   assert.equal(studioTiersReady(ready), true)
-  for (const status of [null, { ...ready, ready: false }, { ...ready, detailedReady: false }, { ...ready, tiersReady: undefined }, { ...ready, tiersReady: 'true' }, { ...ready, pricingRevision: 'future-pricing' }])
+  for (const status of [null, { ...ready, ready: false }, { ...ready, detailedReady: false }, { ...ready, tiersReady: undefined }, { ...ready, tiersReady: 'true' }, { ...ready, pricingRevision: 'future-pricing' }, { ...ready, newJobPolicy: 'legacy-usd175-v1' }, { ...ready, newJobPolicy: null }, { ...ready, newJobPolicy: 'future-policy' }])
     assert.equal(studioTiersReady(status as StudioStatus | null), false)
   const original = {}, edited = {}
   assert.equal(hasStudioBudgetConsent('extended', null, original), false)
@@ -23,4 +23,5 @@ test('complexity advice belongs only to structured per-model budget failure', ()
     assert.equal(studioBudgetFailureAdvice({ ...job, failureCode }), null)
   assert.match(studioBudgetFailureAdvice({ ...job, failureCode: 'MODEL_BUDGET_EXCEEDED', pricing: STUDIO_PRICING.standard })!, /explicitly accept the 500-point budget/)
   assert.doesNotMatch(studioBudgetFailureAdvice({ ...job, failureCode: 'MODEL_BUDGET_EXCEEDED', pricing: STUDIO_PRICING.extended })!, /500/)
+  assert.doesNotMatch(studioBudgetFailureAdvice({ ...job, failureCode: 'MODEL_BUDGET_EXCEEDED', pricing: STUDIO_PRICING.standard }, false)!, /500|upgrade/)
 })

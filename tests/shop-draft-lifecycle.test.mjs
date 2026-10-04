@@ -58,13 +58,13 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, existingPricing, cloudLookup, accountLookup, billingLookup, fundingLookup, membershipLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, fundingLookup, membershipLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
   const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   if (blueprintRecovery) storeData.set('worldifact:blueprint-recovery:v1', JSON.stringify(blueprintRecovery))
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
-  const status = { pricingRevision: STUDIO_PRICING_REVISION, tiersReady: pricingReady, detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
+  const status = { newJobPolicy, pricingRevision: STUDIO_PRICING_REVISION, tiersReady: pricingReady, detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
     reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000, detailedReferenceLimit: 4 }
   const fetcher = async (url, init = {}) => {
     const path = String(url), method = init.method || 'GET'
@@ -825,6 +825,33 @@ test('legacy ready server offers no new budget tiers and keeps legacy standard s
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     const body = JSON.parse(h.calls.find(c => c.path === '/api/studio/jobs' && c.method === 'POST').body)
     assert.equal(body.budgetTier, undefined); assert.equal(body.pricingRevision, undefined); assert.equal(body.acceptedPoints, undefined)
+  } finally { h.close() }
+})
+
+test('historical new-job policy keeps the single 250-point form even when stale status advertises tiers', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, newJobPolicy: 'legacy-usd175-v1' })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Detailed brown knight' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    assert.equal(h.all().some(n => n.props.id === 'studio-budget-tier'), false)
+    assert.match(text(h.all()), /original USD 1\.75 API budget/)
+    assert.equal(h.quote().quote.points, 250)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const posts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
+    assert.equal(posts.length, 1)
+    const body = JSON.parse(posts[0].body)
+    assert.equal(body.budgetTier, undefined); assert.equal(body.pricingRevision, undefined); assert.equal(body.acceptedPoints, undefined)
+  } finally { h.close() }
+})
+
+test('historical new-job policy still presents and recovers an existing 500-point model at its saved price', async () => {
+  const h = await harness({ ready: true, detailedReady: true, existingPricing: STUDIO_PRICING.extended, newJobPolicy: 'legacy-usd175-v1' })
+  try {
+    await h.poll()
+    assert.equal(h.all().some(n => n.props.id === 'studio-budget-tier'), false)
+    assert.match(text(h.all()), /Original job: 500 points · extended model budget/)
+    assert.deepEqual(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).pricing, STUDIO_PRICING.extended)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 0)
   } finally { h.close() }
 })
 

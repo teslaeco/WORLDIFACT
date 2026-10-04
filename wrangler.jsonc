@@ -12,6 +12,7 @@
   "vars": {
     "OPENAI_MODEL": "gpt-6-astra",
     "OPENAI_FAST_MODEL": "gpt-6-sol",
+    "STUDIO_NEW_JOB_POLICY": "legacy-usd175-v1",
     "FREE_SOL_SEED_JOBS": "10",
     "ENABLE_ASTRA_PLANS": "false",
     "STRIPE_PLAN_CHANGE_CONFIGURATION_ID": "bpc_1UKstUBrIVB6dkxN5vfrUDa4",
