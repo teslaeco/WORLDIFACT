@@ -4,7 +4,7 @@ import { restoreDetailedConfig } from '../scripts/restore-detailed-studio-config
 import { checkDetailedRuntime } from '../scripts/check-detailed-studio-runtime.mjs'
 import { detailedHealthFixture } from './detailed-studio-fixture.ts'
 
-const config = () => ({name:'worldifact',vars:{ENABLE_PAID_GENERATION:'true',PUBLIC_PILOT:'true',ENFORCE_ACCOUNT_ENTITLEMENTS:'true',ENABLE_ASTRA_PLANS:'true',ENABLE_STUDIO_JOBS:'false',ENABLE_ORACLE_JOBS:'false',OPENAI_MODEL:'gpt-6-astra',ENABLE_APPROVED_FAST_TEST:'false',GENERATION_REQUEST_LIMIT:'unlimited',FREE_SOL_SEED_JOBS:'10'}})
+const config = () => ({name:'worldifact',vars:{ENABLE_PAID_GENERATION:'true',PUBLIC_PILOT:'true',ENFORCE_ACCOUNT_ENTITLEMENTS:'true',ENABLE_ASTRA_PLANS:'true',ENABLE_STUDIO_JOBS:'false',ENABLE_ORACLE_JOBS:'false',OPENAI_MODEL:'gpt-6-astra',ENABLE_APPROVED_FAST_TEST:'false',STUDIO_NEW_JOB_POLICY:'legacy-usd175-v1',GENERATION_REQUEST_LIMIT:'unlimited',FREE_SOL_SEED_JOBS:'10'}})
 const env = {ORACLE_ENDPOINT:'https://fixture-only.trycloudflare.com',ORACLE_API_TOKEN:'fixture-not-a-real-token-123456789012345678'}
 
 test('restoration requires a current authenticated GET and changes only the signed Studio route flag', async () => {
@@ -20,6 +20,9 @@ test('missing ownership protection, invalid cost policy and missing reference su
   const evidence=await checkDetailedRuntime(env,async()=>Response.json(detailedHealthFixture))
   for(const key of ['ENFORCE_ACCOUNT_ENTITLEMENTS','ENABLE_ASTRA_PLANS','ENABLE_PAID_GENERATION']){
     const changed=config();changed.vars[key]='false';assert.throws(()=>restoreDetailedConfig(changed,evidence))
+  }
+  for(const policy of [undefined,'tiered-v1','unknown']){
+    const changed=config();changed.vars.STUDIO_NEW_JOB_POLICY=policy;assert.throws(()=>restoreDetailedConfig(changed,evidence))
   }
   for(const value of [{...evidence,maxProviderUsdPerJob:20},{...evidence,verifiedForGuardedRouting:false},{...evidence,detailed:{...evidence.detailed,outputPolicyReady:false}},{...evidence,detailed:{...evidence.detailed,photoInput:false}},{}])assert.throws(()=>restoreDetailedConfig(config(),value))
   await assert.rejects(checkDetailedRuntime(env,async()=>new Response('{}',{status:503})),/NOT_VERIFIED/)
