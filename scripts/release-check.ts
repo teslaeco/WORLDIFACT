@@ -137,7 +137,6 @@ export async function checkPublishedRelease(deployment: Deployment,
   const sculptureAssets = [
     { path: "world-assets/polyhedron-led.gltf", types: ["model/gltf+json", "application/json"] },
     { path: "world-assets/polyhedron-led-poster.svg", types: ["image/svg+xml"] },
-    { path: "world-assets/giant-building/terrace-tower-e7e96cc3.glb.gz", types: ["application/gzip", "application/x-gzip", "application/octet-stream"] },
     { path: "world-assets/giant-building/terrace-tower-e7e96cc3.glb", types: ["model/gltf-binary", "application/octet-stream"] },
     { path: "world-assets/giant-building/terrace-tower-e7e96cc3.fbx", types: ["application/octet-stream", "application/vnd.autodesk.fbx"] },
     { path: "world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip", types: ["application/zip", "application/x-zip-compressed", "application/octet-stream"] },

@@ -13,7 +13,6 @@ function fixture() {
   const stores = new Map<string, EntitlementStorage>()
   const env: EntitlementEnv = {
     ENFORCE_ACCOUNT_ENTITLEMENTS: 'true',
-    ENABLE_ASTRA_PLANS: 'true',
     ACCOUNT_ENTITLEMENTS: { idFromName: name => name, get: key => {
       const name = String(key)
       if (!objects.has(name)) {
@@ -24,12 +23,12 @@ function fixture() {
           transaction<T>(callback: (storage: EntitlementStorage) => Promise<T>) { const current = previous.then(() => callback(storage)); previous = current.catch(() => undefined); return current },
         }
         stores.set(name, storage)
-        objects.set(name, new AccountEntitlements({ storage }, env, () => now))
+        objects.set(name, new AccountEntitlements({ storage }, {}, () => now))
       }
       return objects.get(name)!
     } },
   }
-  return { env, stores, setNow: (value: number) => { now = value }, now: () => now, recreate: () => { for (const [name, storage] of stores) objects.set(name, new AccountEntitlements({ storage }, env, () => now)) } }
+  return { env, stores, setNow: (value: number) => { now = value }, now: () => now, recreate: () => { for (const [name, storage] of stores) objects.set(name, new AccountEntitlements({ storage }, {}, () => now)) } }
 }
 async function grant(env: EntitlementEnv, credits = 1500, grantId = 'in_fixture') {
   await entitlementCall(env, USER, '/grant', { id: grantId, credits, subscriptionId: 'sub_fixture' })
@@ -49,19 +48,19 @@ test('FAST free quota is atomic, rolls over after24h, and survives Durable Objec
   assert.equal((await entitlementStatus(env, USER)).free.fastRemaining, 2)
   assert.equal((await reserveUserGeneration(env, USER, id(), 'fast')).allowed, true)
 })
-test('FREE without credits keeps Astra closed while Sol retains the free allowance', async () => {
+test('FREE is Sol-only and never opens an Astra SLOW allowance', async () => {
   const { env } = fixture()
   const slow = await reserveUserGeneration(env, USER, id(), 'slow')
   assert.equal(slow.allowed, false)
-  assert.equal(slow.reason, 'FREE_SOL_ONLY')
+  assert.equal(slow.reason, 'ASTRA_PLAN_REQUIRED')
   assert.equal((await entitlementStatus(env, USER)).free.slowRemaining, 0)
   assert.equal((await reserveUserGeneration(env, USER, id(), 'fast')).allowed, true)
   assert.equal((await entitlementStatus(env, USER)).free.fastRemaining, 1)
 })
-test('Creator SOL buys exactly 30 Sol generations with shared funded Astra admission', async () => {
+test('Creator SOL buys exactly 30 Sol generations and cannot spend credits on Astra', async () => {
   const { env, now } = fixture()
   await grant(env); await subscribe(env, now(), { plan: 'creator' })
-  assert.equal((await entitlementStatus(env, USER)).generationAdmission.astra.allowed, true)
+  assert.equal((await reserveUserGeneration(env, USER, id(), 'slow')).reason, 'ASTRA_PLAN_REQUIRED')
   const job = id()
   const repeated = await Promise.all(Array.from({ length: 10 }, () => reserveUserGeneration(env, USER, job, 'fast')))
   assert.equal(repeated.filter(result => result.repeated === false).length, 1)
@@ -806,15 +805,14 @@ test('Historical pack allowlist rejects invalid or excessive IDs and cannot auth
   assert.equal((await entitlementStatus(f.env, USER)).credits, 0)
 })
 
-test('One-time credit packs can fund Astra without changing membership', async () => {
+test('One-time packs add Sol credits but never unlock Astra', async () => {
   const f = billingFixture(); await entitlementCall(f.env, USER, '/customer', { customer: 'cus_fixture' })
   await billingApi(await signedEvent('checkout.session.completed', { id: 'cs_fixture' }), f.env, f.fetcher)
   const astra = await reserveUserGeneration(f.env, USER, id(), 'slow')
-  assert.equal(astra.allowed, true); assert.equal(astra.cost, 250)
-  assert.equal((await entitlementStatus(f.env, USER)).subscription.active, false)
+  assert.equal(astra.allowed, false); assert.equal(astra.reason, 'ASTRA_PLAN_REQUIRED')
   const sol = await reserveUserGeneration(f.env, USER, id(), 'fast')
   assert.equal(sol.allowed, true); assert.equal(sol.cost, 50)
-  assert.equal((await entitlementStatus(f.env, USER)).credits, 1200)
+  assert.equal((await entitlementStatus(f.env, USER)).credits, 1450)
 })
 
 

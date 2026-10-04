@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { billingApi, type BillingEnv } from '../server/billing.ts'
-import { AccountEntitlements, entitlementCall, entitlementStatus, type EntitlementStorage } from '../server/entitlements.ts'
+import { AccountEntitlements, entitlementStatus, type EntitlementStorage } from '../server/entitlements.ts'
 
 const uid = '11111111-1111-4111-8111-111111111111', customer = 'cus_Recovery', subId = 'sub_Recovery'
 type Json = Record<string, any>
@@ -19,7 +19,6 @@ function fixture() {
     const url = String(input), method = init?.method ?? 'GET'; calls.push({ url, method, body: String(init?.body ?? '') })
     if (url.endsWith('/auth/v1/user')) return state.authenticated ? Response.json({ id: uid, email: 'fixture@example.test', user_metadata: { name: 'Fixture' } }) : Response.json({}, { status: 401 })
     if (url.includes('/v1/subscriptions?')) return Response.json({ data: state.subscriptions, has_more: state.more })
-    if (url.endsWith('/v1/subscriptions/' + subId)) return Response.json(subscription)
     if (url.includes('/v1/invoices?')) return Response.json({ data: state.history, has_more: false })
     if (url.endsWith('/v1/invoices/in_Upgrade')) return Response.json(invoice)
     if (url.endsWith('/v1/invoices/in_Base')) return Response.json(base)
@@ -34,7 +33,7 @@ function fixture() {
     throw new Error('Unexpected provider operation ' + method + ' ' + url)
   }) as typeof fetch
   const call = (action = 'status', body: Json = { action }, origin = 'https://worldifact.test', path = '/api/billing/recovery') => billingApi(new Request('https://worldifact.test' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin, Cookie: '__Host-worldifact-access=fixture-token' }, body: JSON.stringify(body) }), env, fetcher)
-  return { map, env, calls, subscription, base, invoice, state, call, fetcher }
+  return { map, env, calls, subscription, base, invoice, state, call }
 }
 
 test('failed Pro upgrade restores only paid Creator period without duplicating credits or charging', async () => {
@@ -68,58 +67,6 @@ test('confirmed upgraded invoice grants Pro credits once, never from a return UR
   for (let i = 0; i < 2; i++) assert.equal((await f.call())?.status, 200)
   const balance = await entitlementStatus(f.env, uid)
   assert.equal(balance.credits, 5105); assert.equal(balance.subscription.active, true); assert.equal(balance.subscription.plan, 'pro')
-  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
-})
-test('existing status recovery repairs paid Pro points with a stale Creator projection without adding funding', async () => {
-  const f = fixture(), revision = Math.floor(Date.now() / 1000) * 1000
-  f.subscription.pending_update = null; f.subscription.items.data[0].price = 'price_Pro'
-  Object.assign(f.invoice, { paid: true, status: 'paid', amount_paid: 9999, amount_remaining: 0 })
-  f.map.set('subscription', { ...(f.map.get('subscription') as Json), active: true, revision })
-  // Payment and membership are separate durable calls. A delayed event may
-  // commit its idempotent grant while a newer Creator snapshot rejects its plan.
-  assert.equal((await entitlementCall<{ granted: boolean }>(f.env, uid, '/grant', { id: 'in_Upgrade', credits: 4500, subscriptionId: subId })).granted, true)
-  assert.deepEqual(await entitlementCall(f.env, uid, '/subscription', { id: subId, active: true, until: f.subscription.current_period_end * 1000, revision: revision - 1000, plan: 'pro', grantId: 'in_Upgrade' }), { updated: false })
-  assert.equal((await entitlementStatus(f.env, uid)).subscription.plan, 'creator')
-  const credits = f.map.get('balance'), funding = f.map.get('provider-budget-cents:v1')
-  for (let i = 0; i < 2; i++) {
-    assert.equal((await (await f.call())!.json() as Json).activePlan, 'pro')
-    assert.equal((await entitlementStatus(f.env, uid)).subscription.plan, 'pro')
-    assert.equal(f.map.get('balance'), credits)
-    assert.equal(f.map.get('provider-budget-cents:v1'), funding)
-  }
-  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
-})
-test('a retried paid-upgrade webhook repairs an interrupted membership write without repeating its grant', async () => {
-  const f = fixture()
-  f.subscription.pending_update = null; f.subscription.items.data[0].price = 'price_Pro'
-  Object.assign(f.invoice, { paid: true, status: 'paid', amount_paid: 9999, amount_remaining: 0 })
-  const get = f.env.ACCOUNT_ENTITLEMENTS!.get
-  let failMembershipWrite = true
-  f.env.ACCOUNT_ENTITLEMENTS!.get = id => {
-    const ledger = get(id)
-    return { fetch: request => {
-      if (new URL(request.url).pathname === '/subscription' && failMembershipWrite) {
-        failMembershipWrite = false
-        return Promise.resolve(Response.json({ error: 'Synthetic interrupted write' }, { status: 503 }))
-      }
-      return ledger.fetch(request)
-    } }
-  }
-  const webhook = async () => {
-    const created = Math.floor(Date.now() / 1000)
-    const payload = JSON.stringify({ id: 'evt_UpgradeRetry', type: 'invoice.paid', created, livemode: false, data: { object: { id: 'in_Upgrade' } } })
-    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(f.env.STRIPE_WEBHOOK_SECRET!), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-    const signature = Buffer.from(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${created}.${payload}`))).toString('hex')
-    return billingApi(new Request('https://worldifact.test/api/billing/webhook', { method: 'POST', headers: { 'Stripe-Signature': `t=${created},v1=${signature}`, 'Content-Type': 'application/json' }, body: payload }), f.env, f.fetcher)
-  }
-  assert.equal((await webhook())?.status, 503)
-  assert.equal(f.map.get('balance'), 5105)
-  assert.equal((await entitlementStatus(f.env, uid)).subscription.plan, 'creator')
-  const funding = f.map.get('provider-budget-cents:v1')
-  for (let i = 0; i < 2; i++) assert.equal((await webhook())?.status, 200)
-  assert.equal((await entitlementStatus(f.env, uid)).subscription.plan, 'pro')
-  assert.equal(f.map.get('balance'), 5105)
-  assert.equal(f.map.get('provider-budget-cents:v1'), funding)
   assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
 })
 test('an incomplete first payment has recovery but no paid access or credits', async () => {

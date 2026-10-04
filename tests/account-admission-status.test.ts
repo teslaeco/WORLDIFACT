@@ -18,11 +18,13 @@ function fixture(seed: Record<string, unknown> = {}, enabled = true) {
 const subscription = { id: 'sub_fixture', active: true, until: now + 86_400_000, revision: 1, plan: 'pro', grantId: 'in_fixture' }
 const base = { balance: 3000, subscription, 'provider-budget-cents:v1': 2100 }
 
-test('authenticated admission projection distinguishes a funded balance from exhausted provider or points without writes', async () => {
+test('authenticated admission projection distinguishes a funded balance from exhausted provider or Creator allowance without writes', async () => {
   for (const [extra, reason] of [
     [{ 'provider-budget-cents:v1': 174 }, 'PROVIDER_BUDGET_EXHAUSTED'],
+    [{ subscription: { ...subscription, plan: 'creator' }, 'creator-astra:in_fixture': 6 }, 'CREATOR_ASTRA_PERIOD_LIMIT'],
     [{ billingHold: true }, 'BILLING_REVIEW_REQUIRED'],
     [{ 'customer-reserved-credits:v1': 2800 }, 'CREDITS_EXHAUSTED'],
+    [{ subscription: { ...subscription, active: false } }, 'ASTRA_PLAN_REQUIRED'],
   ] as const) {
     const f = fixture({ ...base, ...extra }), before = structuredClone([...f.values])
     const status = await f.status()
@@ -47,17 +49,14 @@ test('a legacy eligibility read does not initialize budget and mirrors reserve f
   }
 })
 
-test('free eligibility and disabled runtime gate match reservation without inventing paid Astra funding', async () => {
+test('free eligibility and disabled Creator gate match reservation without implying Astra access', async () => {
   const free = fixture()
   assert.deepEqual((await free.status()).generationAdmission.sol, { allowed: true })
-  assert.deepEqual((await free.status()).generationAdmission.astra, { allowed: false, reason: 'FREE_SOL_ONLY' })
+  assert.deepEqual((await free.status()).generationAdmission.astra, { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' })
   for (let i = 0; i < 2; i++) await free.call('/reserve', { id: crypto.randomUUID(), profile: 'fast' })
   assert.deepEqual((await free.status()).generationAdmission.sol, { allowed: false, reason: 'FAST_DAILY_LIMIT' })
-  for (const plan of ['creator', 'pro', 'studio']) {
-    const disabled = fixture({ ...base, subscription: { ...subscription, plan } }, false)
-    assert.deepEqual((await disabled.status()).generationAdmission.astra, { allowed: false, reason: 'ASTRA_RUNTIME_DISABLED' })
-    assert.equal((await disabled.call('/reserve', { id: crypto.randomUUID(), profile: 'slow' })).reason, 'ASTRA_RUNTIME_DISABLED')
-  }
+  const disabled = fixture({ ...base, subscription: { ...subscription, plan: 'creator' } }, false)
+  assert.deepEqual((await disabled.status()).generationAdmission.astra, { allowed: false, reason: 'ASTRA_PLAN_REQUIRED' })
 })
 
 test('invalid provider state stays unverifiable and is never seeded by account reads', async () => {

@@ -57,9 +57,7 @@ test('shared world avatar picker offers the exact current Queen and archived rap
   assert.match(world, /Casual/);
   assert.match(world, /Rapper · MPC2 archive/);
   assert.match(world, /TerraformingPlanet Heroine · Astra \/ Blender/);
-  assert.match(world, /useState<AvatarChoice>\(DEFAULT_WORLD_AVATAR\)/);
-  const { DEFAULT_WORLD_AVATAR } = await import("../src/lib/avatarPreloadLifecycle.ts");
-  assert.equal(DEFAULT_WORLD_AVATAR, "terraformer");
+  assert.match(world, /useState<AvatarChoice>\(\"terraformer\"\)/);
   assert.match(player, /a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781/);
   assert.match(asset, /\/api\/avatar\/terraforming-heroine/);
   assert.match(css, /avatar-picker/);

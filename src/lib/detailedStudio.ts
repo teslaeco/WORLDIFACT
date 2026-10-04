@@ -1,5 +1,4 @@
 import type { StudioStatus } from './studioProtocol.ts'
-import { STUDIO_PRICING, STUDIO_PRICING_REVISION } from './studioPricing.ts'
 
 export const DETAILED_REFERENCE_LIMIT = 4
 export const ASTRA_GUARD_EXPIRY = 1793145600
@@ -13,12 +12,7 @@ export function detailedRuntime(value: Record<string, unknown>, now = Date.now()
     value.astraBudgetPreflight === 'input-tokens' && value.astraBudgetExpiry === ASTRA_GUARD_EXPIRY && now < ASTRA_GUARD_EXPIRY * 1000
   const outputPolicyReady = costGuardReady && value.astraOutputPolicy === ASTRA_OUTPUT_POLICY && value.astraReasoningEffort === 'low' &&
     value.astraMaxOutputTokens === 16000 && value.astraUsageSettlement === 'authenticated-completed-only'
-  const tiers = value.studioPricingTiers
-  const tiersReady = outputPolicyReady && value.studioPricingRevision === STUDIO_PRICING_REVISION && value.studioPricingMaintenance === false &&
-    Array.isArray(tiers) && tiers.length === 2 && Object.values(STUDIO_PRICING).every(expected => tiers.filter(item =>
-      item && typeof item === 'object' && !Array.isArray(item) && Object.keys(item).sort().join(',') === 'maxProviderCents,points,tier' &&
-      item.tier === expected.tier && item.points === expected.points && item.maxProviderCents === expected.maxProviderCents).length === 1)
-  return { costGuardReady, outputPolicyReady, tiersReady, ...(tiersReady ? { pricingRevision: STUDIO_PRICING_REVISION } : {}) }
+  return { costGuardReady, outputPolicyReady }
 }
 
 export function detailedUnavailable(status: StudioStatus | null, references: number): string | null {

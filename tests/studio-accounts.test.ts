@@ -20,13 +20,13 @@ function storage(): EntitlementStorage {
 }
 function fixture() {
   const env: StudioEnv = { OWNER_ACCESS_TOKEN: 'owner-test-'.repeat(5), ORACLE_ENDPOINT: 'https://worker.trycloudflare.com', ORACLE_API_TOKEN: 'test-oracle',
-    PUBLIC_PILOT: 'true', ENABLE_STUDIO_JOBS: 'true', ENABLE_ASTRA_PLANS: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true',
+    PUBLIC_PILOT: 'true', ENABLE_STUDIO_JOBS: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true',
     GENERATION_LIMITER: { async limit() { return { success: true } } } }
   const budget = new GenerationBudget({ storage: storage() as BudgetStorage }, env)
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const users = new Map<string, AccountEntitlements>()
   let reservationDenial: string | undefined
-  env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() }, env, () => Date.now())); const object = users.get(key)!; return { fetch: (request: Request) => reservationDenial && new URL(request.url).pathname === '/reserve' ? Promise.resolve(Response.json({ allowed: false, reason: reservationDenial }, { status: 429 })) : object.fetch(request) } } }
+  env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() }, {}, () => Date.now())); const object = users.get(key)!; return { fetch: (request: Request) => reservationDenial && new URL(request.url).pathname === '/reserve' ? Promise.resolve(Response.json({ allowed: false, reason: reservationDenial }, { status: 429 })) : object.fetch(request) } } }
   let modelStatus: 'draft' | 'reviewed' | undefined, qualityFailure = false
   let quality: Record<string, unknown> = { revision: 6, state: 'succeeded', hasModel: true, modelStatus: 'draft', automaticQualityAccepted: false, agent: {}, agentUsage: { completed: false, error_code: null }, visualReview: { assessment_completed: false, accepted: false, status: 'not_completed' } }
   let qualityReads = 0
@@ -736,7 +736,7 @@ test('an explicitly finished unreviewed standard draft keeps structural model de
 })
 
 test('Studio returns precise safe admission reasons without an Oracle request or a new account reservation', async () => {
-  const reasons = ['BILLING_REVIEW_REQUIRED', 'ASTRA_PLAN_REQUIRED', 'ASTRA_RUNTIME_DISABLED', 'CREATOR_ASTRA_PERIOD_LIMIT', 'CREDITS_EXHAUSTED', 'FREE_SOL_ONLY', 'FAST_DAILY_LIMIT', 'PROVIDER_BUDGET_EXHAUSTED'] as const
+  const reasons = ['BILLING_REVIEW_REQUIRED', 'ASTRA_PLAN_REQUIRED', 'CREATOR_ASTRA_PERIOD_LIMIT', 'CREDITS_EXHAUSTED', 'FREE_SOL_ONLY', 'FAST_DAILY_LIMIT', 'PROVIDER_BUDGET_EXHAUSTED'] as const
   for (const reason of reasons) {
     const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
     f.denyReservation(reason)

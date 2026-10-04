@@ -1,9 +1,8 @@
 import { validateGenerationResult, type GenerationResult } from './blueprint.ts'
 import { blueprintFingerprint, blueprintRequestId } from './blueprintRequest.ts'
-import { blueprintAdmissionDetail, isAdmissionFailureCode, type AdmissionFailureCode } from './generationAdmission.ts'
 
 export const BLUEPRINT_RECOVERY_KEY = 'worldifact:blueprint-recovery:v1'
-export type BlueprintRecovery = { id: string; fingerprint: string; model: string; state: 'pending' | 'completed' | 'failed'; createdAt: number; failureCode?: AdmissionFailureCode }
+export type BlueprintRecovery = { id: string; fingerprint: string; model: string; state: 'pending' | 'completed' | 'failed'; createdAt: number }
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type Payload = { prompt: string; model: string; [key: string]: unknown }
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
@@ -17,7 +16,7 @@ export class BlueprintClient {
     const raw = this.store.getItem(BLUEPRINT_RECOVERY_KEY)
     if (!raw) return null
     const value = JSON.parse(raw) as BlueprintRecovery
-    if (!value || !uuid.test(value.id) || !/^[a-f0-9]{64}$/.test(value.fingerprint) || !['sol', 'luna', 'astra'].includes(value.model) || !['pending', 'completed', 'failed'].includes(value.state) || !Number.isSafeInteger(value.createdAt) || (value.failureCode !== undefined && (!isAdmissionFailureCode(value.failureCode) || value.state !== 'failed'))) throw new Error('Generation recovery metadata needs review. No new paid request was started.')
+    if (!value || !uuid.test(value.id) || !/^[a-f0-9]{64}$/.test(value.fingerprint) || !['sol', 'luna', 'astra'].includes(value.model) || !['pending', 'completed', 'failed'].includes(value.state) || !Number.isSafeInteger(value.createdAt)) throw new Error('Generation recovery metadata needs review. No new paid request was started.')
     return value
   }
   private save(record: BlueprintRecovery) { this.store.setItem(BLUEPRINT_RECOVERY_KEY, JSON.stringify(record)) }
@@ -34,7 +33,6 @@ export class BlueprintClient {
   async recover(signal?: AbortSignal): Promise<GenerationResult> {
     const record = this.current()
     if (!record) throw new Error('There is no saved blueprint request to recover.')
-    if (record.state === 'failed' && record.failureCode) throw new Error(blueprintAdmissionDetail(record.failureCode))
     const response = await this.fetcher(`/api/blueprint/requests/${record.id}`, { cache: 'no-store', signal: signal ?? AbortSignal.timeout(15_000) })
     if (!response.ok) throw new Error('Your generation status is temporarily unavailable. Sign in to the original account and recover this request; no replacement was started.')
     const status = await response.json() as { state?: string; result?: unknown; refunded?: boolean }
@@ -46,13 +44,9 @@ export class BlueprintClient {
     throw new Error('This request is pending or its acceptance is not yet confirmed. Recover the same request; no second generation or charge has been started.')
   }
   async submit(payload: Payload, signal?: AbortSignal): Promise<GenerationResult> {
-    signal?.throwIfAborted()
     const fingerprint = await blueprintFingerprint(payload), previous = this.current()
     if (previous?.state === 'pending' && previous.fingerprint !== fingerprint) throw new Error('Different inputs cannot replace a pending paid request. Recover the existing request first.')
     if (previous?.state === 'pending' || previous?.fingerprint === fingerprint) return this.recover(signal)
-    // Cancellation before allocation is known not to have submitted anything.
-    // Do not strand a new durable request while an earlier local save/hash ran.
-    signal?.throwIfAborted()
     const record: BlueprintRecovery = { id: crypto.randomUUID(), fingerprint, model: payload.model, state: 'pending', createdAt: Date.now() }
     this.save(record) // Fail closed if durable browser recovery storage is unavailable.
     const response = await this.fetcher('/api/blueprint', {
@@ -63,9 +57,8 @@ export class BlueprintClient {
     const body: Record<string, unknown> = decoded && typeof decoded === 'object' && !Array.isArray(decoded) ? decoded as Record<string, unknown> : {}
     if (response.ok) return this.accept(body, record)
     if (body?.noCharge === true) {
-      const failureCode = isAdmissionFailureCode(body.failureCode) ? body.failureCode : undefined
-      this.save({ ...record, state: 'failed', ...(failureCode ? { failureCode } : {}) })
-      throw new Error(failureCode ? blueprintAdmissionDetail(failureCode) : String(body.error || 'The request was rejected before points were reserved.'))
+      this.save({ ...record, state: 'failed' })
+      throw new Error(String(body.error || 'The request was rejected before points were reserved.'))
     }
     // Read-only reconciliation is safe even when a POST response was lost or a
     // settlement response is uncertain. Never resubmit with a fresh UUID here.

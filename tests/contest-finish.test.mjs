@@ -41,9 +41,10 @@ test('portal UI labels LIVE and DEMO truthfully, stays usable when LIVE is gated
   assert.match(source, /LIVE · GENERATED/)
   assert.match(source, /DEMO · MOCK/)
   assert.match(source, /MAKE: VALIDATION REQUIRED/)
-  assert.match(source, /ScopedBlueprintClient/)
-  assert.match(source, /model: selectedModel/)
+  assert.match(source, /\/api\/blueprint/)
   assert.match(source, /Generate DEMO · no API cost/)
+  assert.match(source, /onClick=\{generatePrimary\}/)
+  assert.doesNotMatch(source, /disabled=\{busy \|\| !health\.generationReady\}/)
   assert.doesNotMatch(source, /OPENAI_API_KEY|ORACLE_API_TOKEN|CLOUDFLARE_API_TOKEN/)
 })
 

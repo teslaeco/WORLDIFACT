@@ -49,7 +49,6 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     ["/assets/lake.webp", "RIFF mock texture bytes"],
     ["/world-assets/polyhedron-led.gltf", '{"asset":{"version":"2.0"},"fixture":"bundled original model bytes"}'],
     ["/world-assets/polyhedron-led-poster.svg", '<svg xmlns="http://www.w3.org/2000/svg"><title>Exact model poster fixture</title></svg>'],
-    ["/world-assets/giant-building/terrace-tower-e7e96cc3.glb.gz", Buffer.from("gzip exact-owner-terrace-tower-fixture")],
     ["/world-assets/giant-building/terrace-tower-e7e96cc3.glb", Buffer.from("glTF exact-owner-terrace-tower-fixture")],
     ["/world-assets/giant-building/terrace-tower-e7e96cc3.fbx", Buffer.from("Kaydara FBX Binary exact-owner-fixture")],
     ["/world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip", Buffer.from("PK exact-owner-textures-fixture")],
@@ -75,7 +74,7 @@ async function fixture(t: { after: (callback: () => Promise<void>) => void }) {
     }) as typeof fetch);
     const asset = files.get(url.pathname);
     return new Response(asset ?? files.get("/index.html"), { headers: {
-      "Content-Type": !asset || url.pathname.endsWith(".html") ? "text/html" : (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".gltf") ? "model/gltf+json" : url.pathname.endsWith(".gz") ? "application/gzip" : url.pathname.endsWith(".glb") ? "model/gltf-binary" : url.pathname.endsWith(".fbx") ? "application/octet-stream" : url.pathname.endsWith(".zip") ? "application/zip" : url.pathname.endsWith(".svg") ? "image/svg+xml" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript"),
+      "Content-Type": !asset || url.pathname.endsWith(".html") ? "text/html" : (url.pathname.endsWith(".webp") ? "image/webp" : url.pathname.endsWith(".gltf") ? "model/gltf+json" : url.pathname.endsWith(".glb") ? "model/gltf-binary" : url.pathname.endsWith(".fbx") ? "application/octet-stream" : url.pathname.endsWith(".zip") ? "application/zip" : url.pathname.endsWith(".svg") ? "image/svg+xml" : url.pathname.endsWith(".css") ? "text/css" : "text/javascript"),
     } });
   };
   return { dist, files, requests, fetcher, retryDelaysMs: [], providerCalls: () => providerCalls };
@@ -85,10 +84,10 @@ test("release smoke verifies deep links and lazy assets and only sends DEMO with
   const f = await fixture(t);
   const result = await checkPublishedRelease({ origin, versionId }, f);
   assert.equal(result.htmlRoutes, 16);
-  assert.equal(result.verifiedAssets, 10);
+  assert.equal(result.verifiedAssets, 9);
   assert.equal(result.foundationAssets, 5);
   assert.equal(f.providerCalls(), 0);
-  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg", "/world-assets/giant-building/terrace-tower-e7e96cc3.glb.gz", "/world-assets/giant-building/terrace-tower-e7e96cc3.glb", "/world-assets/giant-building/terrace-tower-e7e96cc3.fbx", "/world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip"]) {
+  for (const path of ["/world", "/login", "/account/credits", "/world-assets/polyhedron-led.gltf", "/world-assets/polyhedron-led-poster.svg", "/world-assets/giant-building/terrace-tower-e7e96cc3.glb", "/world-assets/giant-building/terrace-tower-e7e96cc3.fbx", "/world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip"]) {
     assert.ok(f.requests.some(request => new URL(request.url).pathname === path), `${path} must be checked`);
   }
   const posts = f.requests.filter((request) => request.method === "POST");
@@ -210,7 +209,7 @@ test("release smoke detects a missing panorama served as HTML or a stale image",
 });
 
 test("release requires bundled sculpture and exact Terrace Tower files with exact build bytes and a valid content type", async (t) => {
-  for (const [path, mime] of [["/world-assets/polyhedron-led.gltf", "model/gltf+json"], ["/world-assets/polyhedron-led-poster.svg", "image/svg+xml"], ["/world-assets/giant-building/terrace-tower-e7e96cc3.glb.gz", "application/gzip"], ["/world-assets/giant-building/terrace-tower-e7e96cc3.glb", "model/gltf-binary"], ["/world-assets/giant-building/terrace-tower-e7e96cc3.fbx", "application/octet-stream"], ["/world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip", "application/zip"]]) {
+  for (const [path, mime] of [["/world-assets/polyhedron-led.gltf", "model/gltf+json"], ["/world-assets/polyhedron-led-poster.svg", "image/svg+xml"], ["/world-assets/giant-building/terrace-tower-e7e96cc3.glb", "model/gltf-binary"], ["/world-assets/giant-building/terrace-tower-e7e96cc3.fbx", "application/octet-stream"], ["/world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip", "application/zip"]]) {
     for (const variant of ["html", "stale", "wrong-mime", "missing"]) {
       const f = await fixture(t);
       const fetcher = async (url: URL, init: RequestInit) => url.pathname === path

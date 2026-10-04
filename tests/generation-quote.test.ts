@@ -50,7 +50,6 @@ test('high points do not override authenticated provider funding or Creator quot
       assert.equal(quote.state, 'blocked')
       assert.equal(quote.after, null)
       assert.equal(quote.message, ADMISSION_FAILURE_DETAILS[reason])
-      assert.equal(quote.reason, reason)
       assert.doesNotMatch(quote.message, /PRIVATE_LEDGER_VALUE|refund|released/i)
     }
   }
@@ -71,7 +70,6 @@ test('unknown or malformed admission cannot expose raw details or advertise spen
     assert.equal(quote.state, 'pending')
     assert.equal(quote.points, null)
     assert.equal(quote.after, null)
-    assert.equal(quote.reason, undefined)
     assert.doesNotMatch(quote.message, /PRIVATE_LEDGER_VALUE|3000|refund|released/i)
   }
 })
@@ -85,64 +83,4 @@ test('an allowed admission still verifies costs and legacy accounts retain the e
   assert.deepEqual(quoteGeneration('astra', { ...funded, generationAdmission }, billing, true), legacy)
   assert.equal(quoteGeneration('astra', { ...funded, generationAdmission, generationCosts: { sol: 50, astra: 1 } }, billing, true).state, 'pending')
   assert.equal(quoteGeneration('astra', { ...funded, generationAdmission }, billing, false).state, 'signin')
-})
-
-test('detailed tier quotes use exact tier admission while blueprint remains 250 points', async () => {
-  const { STUDIO_PRICING } = await import('../src/lib/studioPricing.ts')
-  const funded = { ...account, credits: 700, subscription: { active: true, plan: 'pro' },
-    generationAdmission: { astra: { allowed: true } }, studioAdmission: { allowed: true, tiers: {
-      standard: { allowed: true, pricing: STUDIO_PRICING.standard }, extended: { allowed: true, pricing: STUDIO_PRICING.extended },
-    } } }
-  assert.equal(quoteGeneration('astra', funded, billing, true, true, 'standard').after, 450)
-  const extended = quoteGeneration('astra', funded, billing, true, true, 'extended')
-  assert.equal(extended.points, 500); assert.equal(extended.after, 200)
-  assert.equal(quoteGeneration('astra', funded, billing, true, false, 'extended').points, 250)
-  assert.equal(quoteGeneration('astra', { ...funded, availableCredits: 499 }, billing, true, true, 'extended').reason, 'CREDITS_EXHAUSTED')
-  const refused = { ...funded, studioAdmission: { ...funded.studioAdmission, tiers: { ...funded.studioAdmission.tiers,
-    extended: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', pricing: STUDIO_PRICING.extended } } } }
-  assert.equal(quoteGeneration('astra', refused, billing, true, true, 'standard').state, 'credits')
-  assert.equal(quoteGeneration('astra', refused, billing, true, true, 'extended').reason, 'PROVIDER_BUDGET_EXHAUSTED')
-  for (const pricing of [undefined, STUDIO_PRICING.standard, { ...STUDIO_PRICING.extended, points: 250 }, { ...STUDIO_PRICING.extended, revision: 'old-policy' }]) {
-    const stale = { ...funded, studioAdmission: { tiers: { extended: { allowed: true, pricing } } } }
-    const quote = quoteGeneration('astra', stale, billing, true, true, 'extended')
-    assert.equal(quote.state, 'pending'); assert.equal(quote.points, null); assert.equal(quote.after, null)
-  }
-})
-
-test('current paid membership policy removes Creator quota and checkout gates, without expanding free or top-up access', () => {
-  const current = { ...account, paidGenerationPolicy: 'paid-membership-no-quota-v1', creatorAstra: { active: true, remaining: null, maximum: null }, generationAdmission: { astra: { allowed: true } } }
-  for (const plan of ['creator', 'pro', 'studio']) {
-    for (const unavailableSales of [null, {}, { plans: { pro: { blockedReason: 'ASTRA_COST_GUARD_REQUIRED' }, [plan]: { checkoutReady: false } } }]) {
-      const quote = quoteGeneration('astra', { ...current, subscription: { active: true, plan }, creatorAstra: { active: false, remaining: 0 } }, unavailableSales, true)
-      assert.equal(quote.state, 'credits'); assert.equal(quote.points, 250); assert.equal(quote.after, 1250)
-    }
-  }
-  for (const subscription of [{ active: false, plan: 'creator' }, { active: true, plan: 'invented' }])
-    assert.equal(quoteGeneration('astra', { ...current, subscription }, null, true).state, 'blocked')
-  assert.equal(quoteGeneration('astra', { ...current, availableCredits: 249 }, null, true).reason, 'CREDITS_EXHAUSTED')
-  assert.equal(quoteGeneration('astra', { ...current, billingReview: true }, null, true).state, 'blocked')
-  assert.equal(quoteGeneration('astra', current, null, false).state, 'signin')
-})
-
-test('new policy requires an explicit current admission and preserves all funded/runtime denials', () => {
-  const current = { ...account, paidGenerationPolicy: 'paid-membership-no-quota-v1' }
-  assert.equal(quoteGeneration('astra', current, billing, true).state, 'pending')
-  for (const reason of ['PROVIDER_BUDGET_EXHAUSTED', 'ASTRA_RUNTIME_DISABLED', 'BILLING_REVIEW_REQUIRED'] as const) {
-    const quote = quoteGeneration('astra', { ...current, generationAdmission: { astra: { allowed: false, reason } } }, billing, true)
-    assert.equal(quote.reason, reason); assert.equal(quote.after, null)
-  }
-  for (const paidGenerationPolicy of [undefined, 'funded-credits-v1', 'unknown-future-policy']) {
-    assert.equal(quoteGeneration('astra', { ...current, paidGenerationPolicy, creatorAstra: { active: true, remaining: 0 }, generationAdmission: { astra: { allowed: true } } }, billing, true).state, 'blocked')
-  }
-})
-
-test('paid Creator exact detailed tier admission keeps 250/500 prices and explicit funding denials', async () => {
-  const { STUDIO_PRICING } = await import('../src/lib/studioPricing.ts')
-  const current = { ...account, paidGenerationPolicy: 'paid-membership-no-quota-v1', studioAdmission: { tiers: {
-    standard: { allowed: true, pricing: STUDIO_PRICING.standard },
-    extended: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', pricing: STUDIO_PRICING.extended },
-  } } }
-  assert.equal(quoteGeneration('astra', current, null, true, true, 'standard').after, 1250)
-  const extended = quoteGeneration('astra', current, null, true, true, 'extended')
-  assert.equal(extended.points, 500); assert.equal(extended.reason, 'PROVIDER_BUDGET_EXHAUSTED')
 })

@@ -24,9 +24,6 @@ test('credit page exposes three profitable plans, safe checkout and preserved pa
     assert.match(html, /Studio ASTRA/)
     assert.match(html, /1,500 extra credits/)
     assert.match(html, /Pay once with PayPal/)
-    assert.match(html, /without an additional monthly attempt quota/)
-    assert.match(html, /Standard describes one model&#x27;s budget, not your membership plan/)
-    assert.doesNotMatch(html, /Free and Creator use|maximum six Astra|limited to six attempts|Pro and Studio unlock/)
     assert.match(html, /<button[^>]*disabled=""[^>]*>Subscribe \$29\.99 \/ month/)
     
     assert.match(html, /<button[^>]*disabled=""[^>]*>Check \$29\.99 USD PayPal payment/)

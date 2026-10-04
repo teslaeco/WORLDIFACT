@@ -426,33 +426,3 @@ test('account admission diagnostics remain allowlisted and distinct from submitt
   assert.equal(unknown.failureCode, undefined)
   assert.doesNotMatch(unknown.detail, /PRIVATE_LEDGER_VALUE/)
 })
-
-test('versioned extended receipt confirms pricing before submission and retains it through local and cloud recovery', async () => {
-  const { STUDIO_PRICING, STUDIO_PRICING_REVISION } = await import('../src/lib/studioPricing.ts')
-  const extended: StudioInput = { ...input, pricingRevision: STUDIO_PRICING_REVISION, budgetTier: 'extended', acceptedPoints: 500 }
-  const storage = store(), calls: string[] = []
-  const fake = (async (url, init) => {
-    calls.push(`${init?.method ?? 'GET'} ${url}`)
-    if (String(url).endsWith('/prepare')) return Response.json({ ...receipt, pricing: STUDIO_PRICING.extended })
-    if (String(url).endsWith('/current')) return Response.json({ current: { receipt: { ...receipt, pricing: STUDIO_PRICING.extended }, prompt: input.prompt, startedAt: receipt.createdAt, financialState: 'reserved', pricing: STUDIO_PRICING.extended } })
-    return Response.json({ job: { id, state: 'building', pricing: STUDIO_PRICING.extended } })
-  }) as typeof fetch
-  const client = new StudioCoordinator(storage, fake)
-  await client.start(extended, saved => assert.deepEqual(saved.pricing, STUDIO_PRICING.extended))
-  const restored = new StudioCoordinator(storage, fake)
-  assert.deepEqual(restored.restore()?.pricing, STUDIO_PRICING.extended)
-  assert.deepEqual((await restored.poll()).pricing, STUDIO_PRICING.extended)
-  const cloud = new StudioCoordinator(store(), fake), recovered = await cloud.recoverCurrent()
-  assert.deepEqual(recovered?.saved.pricing, STUDIO_PRICING.extended)
-  assert.deepEqual(recovered?.job.pricing, STUDIO_PRICING.extended)
-  assert.equal(calls.filter(call => call === 'POST /api/studio/jobs').length, 1)
-  for (const pricing of [undefined, STUDIO_PRICING.standard]) {
-    let submitted = false
-    const mismatch = new StudioCoordinator(store(), (async (url) => {
-      if (String(url).endsWith('/prepare')) return Response.json({ ...receipt, pricing })
-      submitted = true; return Response.json({ job: { id, state: 'building' } })
-    }) as typeof fetch)
-    await assert.rejects(mismatch.start(extended, () => {}), /did not confirm your selected model budget/)
-    assert.equal(submitted, false)
-  }
-})
