@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AccountServiceError } from './paymentError'
 
 export type AccountUser = { id: string; email: string; displayName: string }
@@ -20,22 +20,50 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AccountUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const lifecycle = useRef({ epoch: 0, mounted: true, signingOut: false })
   const refresh = useCallback(async () => {
+    const state = lifecycle.current
+    // A focus/timer lookup during logout can still observe its old cookie.
+    // Keep account views closed until that explicit logout has finished.
+    if (!state.mounted || state.signingOut) return null
+    const epoch = ++state.epoch
+    setLoading(true)
     try {
       const result = await accountRequest('/api/account/session')
       const next = result.user && typeof result.user.id === 'string' ? result.user as AccountUser : null
+      if (!state.mounted || state.signingOut || epoch !== state.epoch) return null
       setUser(next); setError(''); return next
-    } catch (e) { setUser(null); setError(e instanceof Error ? e.message : 'Could not check your session.'); return null }
-    finally { setLoading(false) }
+    } catch (e) {
+      if (state.mounted && !state.signingOut && epoch === state.epoch) {
+        setUser(null); setError(e instanceof Error ? e.message : 'Could not check your session.')
+      }
+      return null
+    } finally { if (state.mounted && !state.signingOut && epoch === state.epoch) setLoading(false) }
   }, [])
   useEffect(() => {
+    const state = lifecycle.current
+    state.mounted = true
     void refresh()
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void refresh() }, 240_000)
     const focus = () => { void refresh() }
     window.addEventListener('focus', focus)
-    return () => { window.clearInterval(timer); window.removeEventListener('focus', focus) }
+    return () => { state.mounted = false; state.epoch++; window.clearInterval(timer); window.removeEventListener('focus', focus) }
   }, [refresh])
-  const signOut = useCallback(async () => { await accountRequest('/api/account/logout', {}); setUser(null) }, [])
+  const signOut = useCallback(async () => {
+    const state = lifecycle.current
+    if (!state.mounted || state.signingOut) return
+    const epoch = ++state.epoch
+    state.signingOut = true
+    setUser(null); setLoading(true); setError('')
+    try { await accountRequest('/api/account/logout', {}) }
+    catch (e) {
+      if (state.mounted && epoch === state.epoch) setError(e instanceof Error ? e.message : 'Could not sign out.')
+      throw e
+    } finally {
+      state.signingOut = false
+      if (state.mounted) setLoading(false)
+    }
+  }, [])
   return <AccountContext value={{ user, loading, error, refresh, signOut }}>{children}</AccountContext>
 }
 

@@ -2,6 +2,46 @@
 
 Updated 4 October 2026.
 
+## LOCAL REVIEW — private account Studio model library (5 October 2026)
+
+Completed Studio ownership is already recorded on the account, but the model
+gallery previously listed only files in the current browser's IndexedDB. A
+successful model saved by another signed-in browser was therefore absent. Shop
+recovery also prioritizes its existing local receipt, so an older failed receipt
+can prevent that separate screen from discovering the newer completed result.
+
+This repair lists completed, fingerprint-bound Studio records for the verified
+account directly in the model gallery. Listing uses bounded read-only storage
+reads, no Oracle call, financial settlement, reconciliation, new reservation or
+funding change. Signed pagination and artifact-only receipts are account-bound
+and expire. Artifact access rechecks current completed ownership and existing
+download rights; missing or deleted records cannot use legacy receipt recovery.
+The existing Oracle stores the original GLB. This is not a new public asset store
+or a guarantee of permanent backup.
+
+The gallery preserves older local Studio and procedural Sol files as device
+copies. It does not infer account ownership from their titles or bytes, overwrite
+them, or fetch all cloud artifacts in the background. Only an explicitly selected
+model is fetched. A validated model selection in the account-library URL can
+locate a specific owned record independently of the current page and Shop's old
+local receipt. All models remain UNREVIEWED; export completion is not visual or
+manufacturing approval.
+
+Session refreshes now reject older responses and invalidate private account
+views at logout intent. Focus and timer refreshes cannot repopulate an account
+while logout is pending. Library responses identify the verified account, and
+the client rejects an envelope for another session instead of attributing it
+to stale UI state. These are client ordering and response-binding corrections;
+authentication endpoints, credentials and access permissions are unchanged.
+
+Ownership, signed pagination, deleted/failed records, delayed account changes,
+local archive preservation and lazy artifact access require regression tests
+and independent review. Exact-head hosted verification and the bounded release
+scope remain required before publication. The release must preserve dashboard
+variables and skip all five financial steps. No new paid generation, third
+support allowance, public model sharing or private model upload is part of this
+library repair.
+
 ## LOCAL REVIEW — one separately approved MCC attempt after runtime repair (5 October 2026)
 
 The compatible STANDARD context repair has an owner-provided verified activation
