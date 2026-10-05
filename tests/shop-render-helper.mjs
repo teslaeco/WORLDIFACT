@@ -17,6 +17,7 @@ import * as photos from '../src/lib/studioPhotos.ts'
 import * as archive from '../src/lib/studioArchive.ts'
 import * as view from '../src/lib/studioView.ts'
 import * as draft from '../src/lib/studioDraft.ts'
+import * as sessionDraft from '../src/lib/shopSessionDraft.ts'
 import * as glb from '../src/lib/glb.ts'
 import * as shopManufacturing from '../src/lib/shopManufacturing.ts'
 import * as blueprint from '../src/lib/blueprint.ts'
@@ -91,7 +92,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
     require(id) {
       const modules = { '../lib/studioPricing': studioPricing, '../lib/studioTierSelection': studioTierSelection, '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/generationAdmission': generationAdmission, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
-        '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
+        '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/shopSessionDraft': { ...sessionDraft, shopSessionStorage: () => { try { return globals.window?.sessionStorage ?? null } catch { return null } } }, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
         '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }
       if (id === '../lib/account') return account
       if (id === '../lib/useGenerationQuote') return quoteHook

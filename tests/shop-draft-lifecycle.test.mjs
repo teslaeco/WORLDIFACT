@@ -7,6 +7,7 @@ import { loadShopComponent } from './shop-render-helper.mjs'
 import * as clientModule from '../src/lib/studioClient.ts'
 import { blueprintRequestId } from '../src/lib/blueprintRequest.ts'
 import { FAST_DRAFT_PROFILE } from '../src/lib/studioProtocol.ts'
+import { SHOP_SESSION_DRAFT_KEY, saveShopSessionDraft } from '../src/lib/shopSessionDraft.ts'
 import { ADMISSION_FAILURE_CODES } from '../src/lib/generationAdmission.ts'
 
 const oldId = '12345678-1234-4234-8234-123456789abc'
@@ -58,11 +59,12 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, fundingLookup, membershipLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, fundingLookup, membershipLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery, sessionData = new Map(), sessionFailure, photoPrepare } = {}) {
   const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   if (blueprintRecovery) storeData.set('worldifact:blueprint-recovery:v1', JSON.stringify(blueprintRecovery))
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
+  const sessionStorage = { getItem: k => { if (sessionFailure === 'get') throw new Error('Session unavailable'); return sessionData.get(k) ?? null }, setItem: (k, v) => { if (sessionFailure === 'set') throw new Error('Session full'); sessionData.set(k, v) }, removeItem: k => { sessionData.delete(k) } }
   const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
   const status = { newJobPolicy, pricingRevision: STUDIO_PRICING_REVISION, tiersReady: pricingReady, detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
     reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000, detailedReferenceLimit: 4 }
@@ -108,7 +110,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     useEffect(callback, deps) {
       const index = cursor++, prior = slots[index]
       if (!prior || !deps || deps.some((v,i) => !Object.is(v, prior.deps?.[i]))) {
-        const next = { deps, cleanup: prior?.cleanup }; slots[index] = next
+        const next = { deps, callback, cleanup: prior?.cleanup }; slots[index] = next
         effects.push(() => { next.cleanup?.(); next.cleanup = callback() })
       }
     },
@@ -118,7 +120,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   const events = new EventTarget(), pageEvents = new EventTarget(), downloads = [], anchors = new Set()
   const globals = { fetch: fetcher, URL, Blob, AbortSignal, AbortController, Event, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
     document: { visibilityState: 'visible', addEventListener: pageEvents.addEventListener.bind(pageEvents), removeEventListener: pageEvents.removeEventListener.bind(pageEvents), body: { appendChild: node => anchors.add(node) }, createElement: () => { const node = { click: () => downloads.push({ name: node.download, attached: anchors.has(node) }), remove: () => anchors.delete(node) }; return node } },
-    window: { localStorage: storage, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: () => {}, addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events) } }
+    window: { localStorage: storage, get sessionStorage() { if (sessionFailure === 'access') throw new Error('Session access denied'); return sessionStorage }, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: () => {}, addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events) } }
   const Component = await loadShopComponent({ react: hookReact, globals, adapters: {
     'react-router-dom': { useLocation: () => ({ pathname: '/shop', state: characterPrompt ? { worldPrompt: characterPrompt } : null }) },
     '../lib/account': { useAccount: () => accountState },
@@ -127,7 +129,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
       saveStudioModel: async saved => { if (!archive.has(saved.receipt.id)) archive.set(saved.receipt.id, { id: saved.receipt.id, prompt: saved.prompt, savedAt: saved.startedAt, byteLength: blob.size, sha256: 'new-fixture', review: 'UNREVIEWED' }); return archive.get(saved.receipt.id) },
     },
-    '../lib/studioPhotos': { prepareStudioPhoto: async (file, size, view) => ({ name: file.name, view, dataUrl: 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64'), textureMaxSize: size }) },
+    '../lib/studioPhotos': { prepareStudioPhoto: photoPrepare || (async (file, size, view) => ({ name: file.name, view, dataUrl: 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64'), textureMaxSize: size })) },
   } })
   const settle = async () => {
     for (let i = 0; i < 24; i++) {
@@ -138,7 +140,8 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   }
   const node = predicate => { const found = elements(tree).find(predicate); assert.ok(found, 'Expected actual component control was not rendered'); return found }
   await settle()
-  return { settle, calls, selected, storeData, archive, delays, downloads, status,
+  return { settle, calls, selected, storeData, sessionData, archive, delays, downloads, status,
+    async replayEffects() { for (const slot of slots) if (slot?.callback) { slot.cleanup?.(); slot.cleanup = slot.callback() }; await settle() },
     async account(next) { accountState = next; dirty = true; await settle() },
     async balanceChanged() { events.dispatchEvent(new Event('worldifact:balance-changed')); await settle() },
     async visibility(value) { globals.document.visibilityState = value; pageEvents.dispatchEvent(new Event('visibilitychange')); await settle() },
@@ -1105,5 +1108,184 @@ test('detailed choice cannot bypass account funding refusal or choose a premium 
     h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
     assert.equal(h.all().some(n => n.props['data-testid'] === 'choose-detailed-model'), false)
     assert.equal(h.byId('studio-mode').props.value, FAST_DRAFT_PROFILE)
+  } finally { h.close() }
+})
+
+const sessionDraftFixture = (draft = {}, owner = 'owner-a') => {
+  const data = new Map()
+  saveShopSessionDraft({ getItem: k => data.get(k) ?? null, setItem: (k, v) => data.set(k, v), removeItem: k => data.delete(k) }, owner, {
+    prompt: 'My next detailed Earth model', profile: 'standard', cheapModel: 'sol', deliverable: 'detailed-mesh', purpose: 'figurine', textureLimit: 4096, budgetTier: 'standard', referenceCount: 0, ...draft,
+  })
+  return data
+}
+const generationPosts = h => h.calls.filter(c => c.method === 'POST' && !['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(c.path))
+
+test('explicit Detailed, FAST and Luna choices plus full prompt survive fresh mounts without submitting', async () => {
+  for (const mode of ['standard', FAST_DRAFT_PROFILE, 'luna']) {
+    const sessionData = new Map(), prompt = `Keep my ${mode} model\n` + 'x'.repeat(4100)
+    const first = await harness({ ready: true, withExistingJob: false, sessionData })
+    first.byId('studio-prompt').props.onChange({ target: { value: prompt } })
+    first.byId('studio-mode').props.onChange({ target: { value: mode } })
+    if (mode === 'standard') first.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } })
+    await first.settle(); first.close()
+    const next = await harness({ ready: true, withExistingJob: false, sessionData })
+    try {
+      assert.equal(next.byId('studio-prompt').props.value, prompt)
+      assert.equal(next.byId('studio-mode').props.value, mode)
+      assert.equal(next.byId('studio-deliverable').props.value, mode === 'standard' ? 'detailed-mesh' : 'procedural-blueprint')
+      assert.equal(generationPosts(first).length + generationPosts(next).length, 0)
+    } finally { next.close() }
+  }
+})
+
+test('restored draft wins over local receipt and strict effect replay while original signed job stays unchanged', async () => {
+  const sessionData = sessionDraftFixture({ prompt: 'Next Luna idea', profile: FAST_DRAFT_PROFILE, cheapModel: 'luna', deliverable: 'procedural-blueprint', textureLimit: 2048 })
+  const h = await harness({ ready: true, sessionData })
+  try {
+    const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    await h.replayEffects(); await h.poll()
+    assert.equal(h.byId('studio-prompt').props.value, 'Next Luna idea')
+    assert.equal(h.byId('studio-mode').props.value, 'luna')
+    assert.equal(h.byId('studio-deliverable').props.value, 'procedural-blueprint')
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.match(h.description(), /Original brown chess knight/)
+    assert.equal(generationPosts(h).length, 0)
+  } finally { h.close() }
+})
+
+test('late verified account and cloud recovery cannot overwrite a newer explicit draft', async () => {
+  let resolveCloud
+  const sessionData = sessionDraftFixture(), pending = new Promise(resolve => { resolveCloud = resolve })
+  const h = await harness({ ready: true, withExistingJob: false, sessionData, initialAccount: { user: null, loading: true }, cloudLookup: () => pending })
+  try {
+    assert.equal(h.byId('studio-prompt').props.value, '', 'Account-private draft stays hidden before verification')
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Newer explicit Luna text' } })
+    h.byId('studio-mode').props.onChange({ target: { value: 'luna' } }); await h.settle()
+    await h.account({ user: { id: 'owner-a' }, loading: false })
+    resolveCloud(Response.json({ current: { receipt: makeReceipt(oldId), prompt: 'Older submitted model', startedAt: new Date().toISOString(), financialState: 'reserved', reservedPoints: 250 } }))
+    await h.settle()
+    assert.equal(h.byId('studio-prompt').props.value, 'Newer explicit Luna text')
+    assert.equal(h.byId('studio-mode').props.value, 'luna')
+    assert.equal(h.byId('studio-deliverable').props.value, 'procedural-blueprint')
+    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
+    assert.equal(generationPosts(h).length, 0)
+  } finally { h.close() }
+})
+
+test('transient account errors preserve draft, confirmed account change clears it, and reset survives reload', async () => {
+  const sessionData = sessionDraftFixture(), h = await harness({ ready: true, sessionData })
+  try {
+    const savedDraft = sessionData.get(SHOP_SESSION_DRAFT_KEY), receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    await h.account({ user: null, loading: false, error: 'Temporary connection failure' })
+    assert.equal(sessionData.get(SHOP_SESSION_DRAFT_KEY), savedDraft)
+    await h.account({ user: { id: 'owner-a' }, loading: false, error: '' })
+    assert.equal(h.byId('studio-prompt').props.value, 'My next detailed Earth model')
+    await h.account({ user: { id: 'owner-b' }, loading: false, error: '' })
+    assert.equal(h.byId('studio-prompt').props.value, '')
+    assert.equal(JSON.parse(sessionData.get(SHOP_SESSION_DRAFT_KEY)).accountOwner, 'owner-b')
+    assert.doesNotMatch(sessionData.get(SHOP_SESSION_DRAFT_KEY), /My next detailed Earth model/)
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Account B draft' } }); await h.settle()
+    h.button('Clear description').props.onClick(); await h.settle()
+    assert.equal(JSON.parse(sessionData.get(SHOP_SESSION_DRAFT_KEY)).draft.prompt, '')
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    await h.account({ user: null, loading: false, error: '' })
+    assert.equal(sessionData.has(SHOP_SESSION_DRAFT_KEY), false)
+    assert.equal(generationPosts(h).length, 0)
+  } finally { h.close() }
+  const resetData = sessionDraftFixture({ prompt: '', deliverable: 'procedural-blueprint' })
+  const reset = await harness({ ready: true, sessionData: resetData })
+  try { assert.equal(reset.byId('studio-prompt').props.value, ''); assert.equal(generationPosts(reset).length, 0) } finally { reset.close() }
+})
+
+test('missing references block forced submission until all are reattached or explicit text-only choice', async () => {
+  const sessionData = sessionDraftFixture({ referenceCount: 2, budgetTier: 'extended' })
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, sessionData })
+  try {
+    assert.match(text(h.all()), /reference files cannot be restored/)
+    assert.equal(h.byId('studio-budget-consent').props.checked, false)
+    assert.equal(h.all().find(n => n.props.type === 'submit').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(generationPosts(h).length, 0)
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'first.png' }], value: '' } }); await h.settle()
+    assert.match(text(h.all()), /Reattach 1 missing reference view/)
+    assert.equal(JSON.parse(sessionData.get(SHOP_SESSION_DRAFT_KEY)).draft.referenceCount, 2)
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'second.png' }], value: '' } }); await h.settle()
+    assert.equal(h.all().some(n => n.props['data-testid'] === 'missing-draft-references'), false)
+    assert.doesNotMatch(sessionData.get(SHOP_SESSION_DRAFT_KEY), /first.png|second.png|data:image/)
+    assert.equal(generationPosts(h).length, 0)
+  } finally { h.close() }
+  const next = await harness({ ready: true, detailedReady: true, withExistingJob: false, sessionData })
+  try {
+    assert.match(text(next.all()), /Reattach 2 missing reference views/)
+    next.button('Continue with description only').props.onClick(); await next.settle()
+    assert.equal(next.all().some(n => n.props['data-testid'] === 'missing-draft-references'), false)
+    assert.equal(JSON.parse(sessionData.get(SHOP_SESSION_DRAFT_KEY)).draft.referenceCount, 0)
+    assert.equal(generationPosts(next).length, 0)
+  } finally { next.close() }
+})
+
+test('session access errors, quota errors and malformed values retain usable in-memory draft editing', async () => {
+  for (const sessionFailure of ['access', 'get', 'set', undefined]) {
+    const sessionData = new Map([[SHOP_SESSION_DRAFT_KEY, '{broken']])
+    const h = await harness({ ready: true, withExistingJob: false, sessionData, sessionFailure })
+    try {
+      h.byId('studio-prompt').props.onChange({ target: { value: 'Text stays editable' } })
+      h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+      assert.equal(h.byId('studio-prompt').props.value, 'Text stays editable')
+      assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
+      if (['access', 'set'].includes(sessionFailure)) assert.match(text(h.all()), /cannot save the draft/)
+      assert.equal(generationPosts(h).length, 0)
+    } finally { h.close() }
+  }
+})
+
+test('late photo preparation cannot put prior account references into the next account draft', async () => {
+  let finishPhoto
+  const pending = new Promise(resolve => { finishPhoto = resolve })
+  const h = await harness({ ready: true, withExistingJob: false, photoPrepare: () => pending })
+  try {
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'private-reference.png' }], value: '' } }); await h.settle()
+    await h.account({ user: { id: 'owner-b' }, loading: false })
+    finishPhoto({ name: 'private-reference.png', view: 'front', dataUrl: 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64'), textureMaxSize: 4096 })
+    await h.settle()
+    assert.equal(h.all().some(n => n.type === 'img' && /Your reference/.test(n.props.alt || '')), false)
+    assert.equal(JSON.parse(h.sessionData.get(SHOP_SESSION_DRAFT_KEY)).draft.referenceCount, 0)
+    assert.equal(generationPosts(h).length, 0)
+  } finally { h.close() }
+})
+
+test('reloading while reference decoding is pending preserves a missing-reference gate', async () => {
+  const sessionData = new Map(), pending = new Promise(() => {})
+  const h = await harness({ ready: true, withExistingJob: false, sessionData, photoPrepare: () => pending })
+  h.byId('studio-prompt').props.onChange({ target: { value: 'Keep all selected image views' } })
+  h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'still-decoding.png' }], value: '' } }); await h.settle()
+  assert.equal(JSON.parse(sessionData.get(SHOP_SESSION_DRAFT_KEY)).draft.referenceCount, 1)
+  h.close()
+  const next = await harness({ ready: true, withExistingJob: false, sessionData })
+  try {
+    assert.match(text(next.all()), /Reattach 1 missing reference view/)
+    assert.equal(next.all().find(n => n.props.type === 'submit').props.disabled, true)
+    await next.form().props.onSubmit({ preventDefault() {} }); await next.settle()
+    assert.equal(generationPosts(next).length, 0)
+  } finally { next.close() }
+})
+
+test('first verified identity restores saved mode before late account quote without overwriting its storage', async () => {
+  let finishQuote
+  const pending = new Promise(resolve => { finishQuote = resolve }), sessionData = sessionDraftFixture()
+  const original = sessionData.get(SHOP_SESSION_DRAFT_KEY)
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, sessionData, initialAccount: { user: null, loading: true }, accountLookup: () => pending })
+  try {
+    assert.equal(sessionData.get(SHOP_SESSION_DRAFT_KEY), original)
+    assert.equal(h.byId('studio-prompt').props.value, '')
+    await h.account({ user: { id: 'owner-a' }, loading: false })
+    assert.equal(h.byId('studio-prompt').props.value, 'My next detailed Earth model')
+    assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
+    h.byId('studio-prompt').props.onChange({ target: { value: 'An even newer detailed Earth' } }); await h.settle()
+    finishQuote(Response.json(fundedAccount)); await h.settle()
+    assert.equal(h.byId('studio-prompt').props.value, 'An even newer detailed Earth')
+    assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
+    assert.equal(JSON.parse(sessionData.get(SHOP_SESSION_DRAFT_KEY)).draft.prompt, 'An even newer detailed Earth')
+    assert.equal(generationPosts(h).length, 0)
   } finally { h.close() }
 })
