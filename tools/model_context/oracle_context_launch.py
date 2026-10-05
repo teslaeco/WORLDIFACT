@@ -149,12 +149,15 @@ def connection(home=None):
 
 
 FILES.update({
-    'context_policy.py': ('tools/model_context/context_policy.py', 'f705ad5b6188871038d938f4eac8a379759f0796'),
-    'context_patch.py': ('tools/model_context/context_patch.py', '6ed419f784f891e51bae8fc93de480a1ac31088a'),
-    'install_context.py': ('tools/model_context/install_context.py', 'bda3b2b8e8220408973ee7a8054504b54ad97223'),
-    'maintenance_fence.py': ('tools/model_context/maintenance_fence.py', 'd90d7b84abfb952f5056ce33e529aa0a19ea4e25'),
+    'context_policy.py': ('tools/model_context/context_policy.py', '204c7f432ca89fe51e59bca1893fc724596d3dcc'),
+    'context_patch.py': ('tools/model_context/context_patch.py', '28e263ce380a586b1214946518d0392bfc472d3a'),
+    'install_context.py': ('tools/model_context/install_context.py', 'cc56201a1c651d1ee24b36394a093c52471fbc5e'),
+    'maintenance_fence.py': ('tools/model_context/maintenance_fence.py', 'cd493c28f44979510364657667aa28b475657d79'),
     'verification_scope.py': ('tools/model_context/verification_scope.py', '677c577db69ece8d9757fa81bb62633bc134c17d'),
-    'offline_standard.py': ('tools/model_context/offline_standard.py', '41bcc6b2cf5fa8aa79e7da7eca9a85c6b09c8edc'),
+    'offline_standard.py': ('tools/model_context/offline_standard.py', '46f0f55a5b7d61e127a61bce95bdca1375abfbfe'),
+    'journal_socket.py': ('tools/model_context/journal_socket.py', 'ef1161d629908e81c28f40ecf631b75564315194'),
+    'studio_pricing.py': ('tools/model_budget_tiers/studio_pricing.py', 'd02a12d73ecc377801cc6ed1029c0a2949447e93'),
+    'terminal_budget.py': ('tools/model_budget_tiers/terminal_budget.py', '315cb053f1fade24827b3da5859ce0dee590f9da'),
 })
 
 PHASES = {'ALREADY_VERIFIED', 'WORLDIFACT_STANDARD_CONTEXT_VERIFIED', 'WORLDIFACT_STANDARD_CONTEXT_NOT_CONFIRMED'}

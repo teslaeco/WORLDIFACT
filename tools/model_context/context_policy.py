@@ -15,6 +15,7 @@ MAINTENANCE = '.worldifact-standard-maintenance.json'
 FENCE_REVISION = 'pidfd-origin-terminal-consent-v2'
 SOURCES = frozenset(('server.py', 'codex_runner.py', 'blender_mcp.py', 'astra_spend_v2.py',
                      'completion_policy.py', 'prebuild_policy.py', 'context_policy.py'))
+PRICING_SOURCES = SOURCES | {'studio_pricing.py', 'terminal_budget.py'}
 
 EXECUTION = '''The complete scene schema and geometry guide below describe build_model data, not a text-only final response.
 All original primitive and subject types remain available. Read the original modeling contract once into Code Mode store,
@@ -92,7 +93,7 @@ def verified_health(root=None):
         proof = completion_policy.read(root / RECEIPT, 16384)
         expected = proof.get('sha256')
         if (proof.get('revision') != REVISION or not isinstance(expected, dict)
-                or set(expected) != SOURCES or proof.get('maintenance_fence') != FENCE_REVISION
+                or set(expected) not in (SOURCES, PRICING_SOURCES) or proof.get('maintenance_fence') != FENCE_REVISION
                 or type(proof.get('cancelled_cleanup_interruption_approved')) is not bool
                 or proof.get('offline_generic_pipeline') is not True
                 or proof.get('offline_standard_pipeline') is not True):
@@ -106,6 +107,25 @@ def verified_health(root=None):
         from prebuild_policy import verified_health as prebuild_health
         if not prebuild_health(root):
             return {}
+        pricing_files = ('studio_pricing.py', 'terminal_budget.py',
+                         '.worldifact-studio-pricing-runtime.json', '.worldifact-terminal-budget-runtime.json')
+        has_pricing = any((root / name).exists() or (root / name).is_symlink() for name in pricing_files)
+        if has_pricing != (set(expected) == PRICING_SOURCES):
+            return {}
+        if has_pricing:
+            import studio_pricing
+            import terminal_budget
+            if not studio_pricing.verified_health(root) or not terminal_budget.verified_health(root):
+                return {}
+            overlay_hashes = {name: digest for name, digest in expected.items() if name != 'context_policy.py'}
+            for module in (studio_pricing, terminal_budget):
+                overlay = completion_policy.read(root / module.RECEIPT, 16384)
+                if (overlay.get('revision') != module.REVISION or overlay.get('sha256') != overlay_hashes
+                        or overlay.get('maintenance_fence') != FENCE_REVISION
+                        or type(overlay.get('cancelled_cleanup_interruption_approved')) is not bool
+                        or overlay.get('offline_generic_pipeline') is not True
+                        or overlay.get('offline_cabinet_pipeline') is not True):
+                    return {}
         return {'worldifactStandardContextPolicy': REVISION}
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         return {}

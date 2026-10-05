@@ -2,10 +2,14 @@
 from contextlib import redirect_stdout
 from copy import deepcopy
 import base64
+import ast
+import threading
+import time
 import io
 import json
 from pathlib import Path
 import subprocess
+import sqlite3
 import tempfile
 import types
 import unittest
@@ -256,10 +260,10 @@ console.log(programs.length);'''
             'visual-review.json': {'issues': gate.ISSUES, 'summary': gate.SUMMARY, 'model_revision': 1,
                                    'inspected_views': list(gate.VIEWS), 'accepted': False},
             'scene.json': gate.scene(),
-            'ledger.json': {'legacyHeld': 0, 'requests': 3, 'holds': {str(i): {'held': 6900, 'response': 'fixture'} for i in range(3)}},
+            'ledger.json': {'revision':'fixture-v1', 'legacyHeld': 0, 'requests': 3, 'holds': {str(i): {'held': 6900, 'response': 'fixture'} for i in range(3)}},
             'agent-usage.json': {'requests': 3, 'input_tokens': 300, 'output_tokens': 300,
                                  'unknown_usage': False, 'completed': True, 'error_code': None}}
-        spend = types.SimpleNamespace(legacy=types.SimpleNamespace(ledger_folder=lambda _folder: self.folder, STATE='ledger.json'),
+        spend = types.SimpleNamespace(CEILING_MICRO_USD=1750000, REVISION='fixture-v1', legacy=types.SimpleNamespace(ledger_folder=lambda _folder: self.folder, STATE='ledger.json'),
                                       validate_state=lambda value: value,
                                       used=lambda value: value['legacyHeld'] + sum(v['held'] for v in value['holds'].values()))
         completion = types.SimpleNamespace(profile=lambda _request: 'standard', assessment=lambda *_args: {'structural_passed': True})
@@ -271,7 +275,7 @@ console.log(programs.length);'''
         # request. Three execs plus three waits must prove all six charges.
         self.fixture.requests = self.fixture.counts = 6; self.fixture.waits = 3
         baseline_ledger = deepcopy(documents['ledger.json']); baseline_usage = deepcopy(documents['agent-usage.json'])
-        documents['ledger.json'] = {'legacyHeld': 0, 'requests': 6, 'holds': {str(i): {'held': 6900, 'response': 'fixture'} for i in range(6)}}
+        documents['ledger.json'] = {'revision':'fixture-v1', 'legacyHeld': 0, 'requests': 6, 'holds': {str(i): {'held': 6900, 'response': 'fixture'} for i in range(6)}}
         documents['agent-usage.json'].update(requests=6, input_tokens=600, output_tokens=600)
         save(); verify()
         documents['ledger.json'] = baseline_ledger; save()
@@ -319,6 +323,27 @@ class SafetyTests(unittest.TestCase):
         (self.root / 'server.py').unlink(); (self.root / 'server.py').symlink_to(self.root / 'missing')
         with self.assertRaisesRegex(gate.Refused, 'UNSAFE_FIXTURE_PATH'):
             gate.preflight(self.root)
+
+    def test_synthetic_job_schema_supports_real_progress_callback_and_never_reuses_state(self):
+        folder = gate.create_fixture_job(self.root)
+        database = self.root / 'state/jobs.sqlite'
+        with sqlite3.connect(database) as connection:
+            self.assertEqual([row[1] for row in connection.execute('PRAGMA table_info(jobs)')],
+                             ['id', 'prompt', 'state', 'detail', 'created', 'updated'])
+            row = connection.execute('SELECT * FROM jobs').fetchone()
+            self.assertEqual(row[:3], (folder.name, gate.PROMPT, 'generating'))
+        from test_context import before_sources
+        source = ast.parse(before_sources()['server.py'])
+        callbacks = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in ('database', 'status')]
+        self.assertEqual(len(callbacks), 2)
+        scope = {'STATE': self.root / 'state', 'LOCK': threading.RLock(), 'sqlite3': sqlite3, 'time': time}
+        exec(compile(ast.Module(body=callbacks, type_ignores=[]), 'exact-installed-progress', 'exec'), scope)
+        scope['status'](folder.name, 'building', 'Synthetic progress')
+        with sqlite3.connect(database) as connection:
+            self.assertEqual(connection.execute('SELECT state,detail FROM jobs').fetchone(), ('building', 'Synthetic progress'))
+        before = database.read_bytes()
+        with self.assertRaises(FileExistsError): gate.create_fixture_job(self.root)
+        self.assertEqual(database.read_bytes(), before)
 
     def test_network_guard_permits_only_loopback_connections(self):
         gate.no_remote('socket.connect', (None, ('127.0.0.1', 1234)))
