@@ -13,6 +13,7 @@ import {
   MCC_ONE_ATTEMPT_BASE_COMMIT, MCC_ONE_ATTEMPT_MARKER_PATH, MCC_ONE_ATTEMPT_MARKER_CONTENT, MCC_ONE_ATTEMPT_REVIEWED_PATHS,
   ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, ACCOUNT_MODEL_LIBRARY_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT, ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS,
   PROJECT_MCC_ATTEMPT_BASE_COMMIT, PROJECT_MCC_ATTEMPT_MARKER_PATH, PROJECT_MCC_ATTEMPT_MARKER_CONTENT, PROJECT_MCC_ATTEMPT_REVIEWED_PATHS,
+  CABINET_CONTEXT_BASE_COMMIT, CABINET_CONTEXT_MARKER_PATH, CABINET_CONTEXT_MARKER_CONTENT, CABINET_CONTEXT_REVIEWED_PATHS,
   selectPipelineOnlyRelease, selectPipelineReleaseOptions,
 } from '../scripts/select-pipeline-only-release.mjs'
 
@@ -29,6 +30,7 @@ const projectMccAttemptIntroductions = ['docs/ASTRA_PROJECT_BUDGET.md', 'server/
 const projectMccAttemptChanges = PROJECT_MCC_ATTEMPT_REVIEWED_PATHS.map(path => ({
   status: path === PROJECT_MCC_ATTEMPT_MARKER_PATH || projectMccAttemptIntroductions.includes(path) ? 'A' : 'M', path,
 }))
+const cabinetContextChanges = CABINET_CONTEXT_REVIEWED_PATHS.map(path => ({ status: path === CABINET_CONTEXT_MARKER_PATH ? 'A' : 'M', path }))
 const priorMarkers = [MARKER_PATH, FUNDING_MARKER_PATH, READONLY_QUOTE_MARKER_PATH, MCC_ONE_ATTEMPT_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_MARKER_PATH]
 const scopedPaths = new Map([
   [FUNDING_MARKER_PATH, FUNDING_REVIEWED_PATHS],
@@ -36,6 +38,7 @@ const scopedPaths = new Map([
   [MCC_ONE_ATTEMPT_MARKER_PATH, MCC_ONE_ATTEMPT_REVIEWED_PATHS],
   [ACCOUNT_MODEL_LIBRARY_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS],
   [PROJECT_MCC_ATTEMPT_MARKER_PATH, PROJECT_MCC_ATTEMPT_REVIEWED_PATHS],
+  [CABINET_CONTEXT_MARKER_PATH, CABINET_CONTEXT_REVIEWED_PATHS],
 ])
 function evidence(overrides = {}) {
   const data = { head, parent: BASE_COMMIT, changes, markerPath: MARKER_PATH, marker: MARKER_CONTENT, mode: '100644', ...overrides }
@@ -96,6 +99,13 @@ function projectMccAttemptEvidence(overrides = {}) {
 }
 function selectProjectMccAttempt(overrides = {}) {
   return selectPipelineReleaseOptions('fixture', projectMccAttemptEvidence(overrides).readGit)
+}
+
+function cabinetContextEvidence(overrides = {}) {
+  return evidence({ parent: CABINET_CONTEXT_BASE_COMMIT, changes: cabinetContextChanges, markerPath: CABINET_CONTEXT_MARKER_PATH, marker: CABINET_CONTEXT_MARKER_CONTENT, ...overrides })
+}
+function selectCabinetContext(overrides = {}) {
+  return selectPipelineReleaseOptions('fixture', cabinetContextEvidence(overrides).readGit)
 }
 
 test('only the exact reviewed repair and canonical public marker preserve billing', () => {
@@ -412,6 +422,94 @@ test('rebased project-funded MCC introduction cannot fall through to ordinary bi
   }
   for (const path of ['server/astraProjectBudget.ts', 'server/entitlements.ts', 'server/studio.ts', 'docs/ASTRA_PROJECT_BUDGET.md']) {
     const fixture = projectMccAttemptEvidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path }] })
+    assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
+    assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
+  }
+})
+
+test('the cabinet prompt and saved-attempt correction preserves billing and remote vars for its canonical fifteen-file package', () => {
+  assert.deepEqual(selectCabinetContext(), { preserveBilling: true, preserveRemoteVars: true })
+  assert.equal(CABINET_CONTEXT_BASE_COMMIT, 'e36797e7b955ed3636a861caed842e576ed609c2')
+  assert.equal(readFileSync(new URL('../' + CABINET_CONTEXT_MARKER_PATH, import.meta.url), 'utf8'), CABINET_CONTEXT_MARKER_CONTENT)
+  assert.deepEqual(CABINET_CONTEXT_REVIEWED_PATHS, [
+    'docs/CONTEST_STATUS.md',
+    CABINET_CONTEXT_MARKER_PATH,
+    'scripts/select-pipeline-only-release.mjs',
+    'src/components/GenerationCostNotice.tsx',
+    'src/lib/studioProtocol.ts',
+    'src/pages/ShopPage.tsx',
+    'tests/generation-cost-notice.test.mjs',
+    'tests/pipeline-only-release.test.mjs',
+    'tests/portal-generation-lifecycle.test.mjs',
+    'tests/prompt-model-ui.test.mjs',
+    'tests/shop-draft-lifecycle.test.mjs',
+    'tests/shop-external.test.mjs',
+    'tests/studio-priced-submission.test.ts',
+    'tests/studio-pricing.test.ts',
+    'tests/studio-protocol-contract.test.ts',
+  ].sort())
+  for (const path of [...priorMarkers, PROJECT_MCC_ATTEMPT_MARKER_PATH, '.github/workflows/cloudflare.yml', 'server/astraRepairedMccGrant.ts',
+    'server/billing.ts', 'server/studio.ts', 'server/entitlements.ts', 'server/astraProjectBudget.ts', 'wrangler.jsonc', 'package.json', 'package-lock.json', 'ops/SOFTWARE_MODEL_PREVIEW_RELEASE_20261005.json']) {
+    assert.equal(CABINET_CONTEXT_REVIEWED_PATHS.includes(path), false, path)
+  }
+})
+
+test('cabinet context release refuses missing markers, wrong bases, missing history and any merge parent', () => {
+  for (const overrides of [
+    { changes: cabinetContextChanges.filter(change => change.path !== CABINET_CONTEXT_MARKER_PATH) },
+    { changes: cabinetContextChanges.map(change => change.path === CABINET_CONTEXT_MARKER_PATH ? { ...change, path: 'ops/OTHER_RELEASE.json' } : change) },
+    ...[BASE_COMMIT, FUNDING_BASE_COMMIT, READONLY_QUOTE_BASE_COMMIT, MCC_ONE_ATTEMPT_BASE_COMMIT, ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, '3'.repeat(40), null].map(parent => ({ parent })),
+    { parents: `${head} ${CABINET_CONTEXT_BASE_COMMIT} ${'3'.repeat(40)}\n` },
+    { parents: `${head}\n` },
+    { parents: `${head} ${'3'.repeat(40)}\n` },
+    { parent: CABINET_CONTEXT_BASE_COMMIT, changes: [] },
+  ]) assert.throws(() => selectCabinetContext(overrides))
+})
+
+test('cabinet context release refuses incomplete or expanded scope and every prior marker change', () => {
+  for (const overrides of [
+    ...['server/billing.ts', '.github/workflows/cloudflare.yml', 'server/astraRepairedMccGrant.ts', 'wrangler.jsonc',
+      'ops/UNREVIEWED_RELEASE.json', 'ops/SOFTWARE_MODEL_PREVIEW_RELEASE_20261005.json']
+      .map(path => ({ changes: [...cabinetContextChanges, { status: 'A', path }] })),
+    ...CABINET_CONTEXT_REVIEWED_PATHS.filter(path => path !== CABINET_CONTEXT_MARKER_PATH)
+      .map(path => ({ changes: cabinetContextChanges.filter(change => change.path !== path) })),
+    ...CABINET_CONTEXT_REVIEWED_PATHS.flatMap(path => ['D', 'T', 'R100'].map(status => ({
+      changes: cabinetContextChanges.map(change => change.path === path ? { ...change, status } : change),
+    }))),
+    ...[...priorMarkers, PROJECT_MCC_ATTEMPT_MARKER_PATH].flatMap(path => ['A', 'M', 'D', 'T'].map(status => ({ changes: [...cabinetContextChanges, { status, path }] }))),
+    { changes: [...cabinetContextChanges, cabinetContextChanges[0]] },
+  ]) assert.throws(() => selectCabinetContext(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('cabinet context release requires canonical marker contents and regular non-executable files', () => {
+  const tree = CABINET_CONTEXT_REVIEWED_PATHS.map(path => `100644 blob ${blob}\t${path}\0`).join('')
+  for (const overrides of [
+    { marker: CABINET_CONTEXT_MARKER_CONTENT + '\n' },
+    { marker: CABINET_CONTEXT_MARKER_CONTENT.replace(CABINET_CONTEXT_BASE_COMMIT, '3'.repeat(40)) },
+    { marker: CABINET_CONTEXT_MARKER_CONTENT.replace('cabinet-prompt-and-attempt-context-20261005', 'different-release') },
+    ...['preserveBilling', 'preserveRemoteVars'].map(key => ({ marker: CABINET_CONTEXT_MARKER_CONTENT.replace(`"${key}": true`, `"${key}": false`) })),
+    ...[MARKER_CONTENT, FUNDING_MARKER_CONTENT, READONLY_QUOTE_MARKER_CONTENT, MCC_ONE_ATTEMPT_MARKER_CONTENT, ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT].map(marker => ({ marker })),
+    ...['100755', '120000', '160000'].map(mode => ({ mode })),
+    ...CABINET_CONTEXT_REVIEWED_PATHS.flatMap(path => ['100755', '120000', '160000'].map(mode => ({
+      tree: tree.replace(`100644 blob ${blob}\t${path}\0`, `${mode} blob ${blob}\t${path}\0`),
+    }))),
+    { tree: tree.replace(`blob ${blob}`, `commit ${blob}`) },
+    { tree: tree.replace('src/lib/studioProtocol.ts', 'src/lib/other.ts') },
+    { tree: tree.replace('src/lib/studioProtocol.ts', 'src/pages/ShopPage.tsx') },
+    { tree: tree.slice(0, -1) },
+  ]) assert.throws(() => selectCabinetContext(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('rebased cabinet context preparation cannot fall through to ordinary billing without its marker', () => {
+  for (const path of ['scripts/select-pipeline-only-release.mjs']) {
+    assert.throws(() => selectCabinetContext({ parent: '3'.repeat(40), changes: [{ status: 'A', path }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  }
+  assert.throws(() => selectCabinetContext({ parent: '3'.repeat(40), changes: cabinetContextChanges.filter(change => change.path !== CABINET_CONTEXT_MARKER_PATH) }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  for (const status of ['A', 'M', 'D', 'T']) {
+    assert.throws(() => selectCabinetContext({ parent: '3'.repeat(40), changes: [{ status, path: CABINET_CONTEXT_MARKER_PATH }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  }
+  for (const path of ['server/astraProjectBudget.ts', 'server/entitlements.ts', 'server/studio.ts', 'docs/ASTRA_PROJECT_BUDGET.md']) {
+    const fixture = cabinetContextEvidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path }] })
     assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
     assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
   }

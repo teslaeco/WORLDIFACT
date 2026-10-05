@@ -136,6 +136,31 @@ export const PROJECT_MCC_ATTEMPT_REVIEWED_PATHS = Object.freeze([
   'tests/pipeline-only-release.test.mjs',
   'tests/studio-project-budget.test.ts',
 ].sort())
+export const CABINET_CONTEXT_BASE_COMMIT = 'e36797e7b955ed3636a861caed842e576ed609c2'
+export const CABINET_CONTEXT_MARKER_PATH = 'ops/CABINET_CONTEXT_RELEASE_20261005.json'
+export const CABINET_CONTEXT_MARKER_CONTENT = JSON.stringify({
+  release: 'cabinet-prompt-and-attempt-context-20261005',
+  baseCommit: CABINET_CONTEXT_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+}, null, 2) + '\n'
+export const CABINET_CONTEXT_REVIEWED_PATHS = Object.freeze([
+  'docs/CONTEST_STATUS.md',
+  CABINET_CONTEXT_MARKER_PATH,
+  'scripts/select-pipeline-only-release.mjs',
+  'src/components/GenerationCostNotice.tsx',
+  'src/lib/studioProtocol.ts',
+  'src/pages/ShopPage.tsx',
+  'tests/generation-cost-notice.test.mjs',
+  'tests/pipeline-only-release.test.mjs',
+  'tests/portal-generation-lifecycle.test.mjs',
+  'tests/prompt-model-ui.test.mjs',
+  'tests/shop-draft-lifecycle.test.mjs',
+  'tests/shop-external.test.mjs',
+  'tests/studio-priced-submission.test.ts',
+  'tests/studio-pricing.test.ts',
+  'tests/studio-protocol-contract.test.ts',
+].sort())
 const releaseIntroductions = new Set([
   'docs/GENERATOR_UI_RESTORATION_20261004.md',
   'src/lib/generationFunding.ts',
@@ -164,6 +189,7 @@ const scopes = [
   { base: MCC_ONE_ATTEMPT_BASE_COMMIT, marker: MCC_ONE_ATTEMPT_MARKER_PATH, content: MCC_ONE_ATTEMPT_MARKER_CONTENT, paths: MCC_ONE_ATTEMPT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, marker: ACCOUNT_MODEL_LIBRARY_MARKER_PATH, content: ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT, paths: ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: PROJECT_MCC_ATTEMPT_BASE_COMMIT, marker: PROJECT_MCC_ATTEMPT_MARKER_PATH, content: PROJECT_MCC_ATTEMPT_MARKER_CONTENT, paths: PROJECT_MCC_ATTEMPT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
+  { base: CABINET_CONTEXT_BASE_COMMIT, marker: CABINET_CONTEXT_MARKER_PATH, content: CABINET_CONTEXT_MARKER_CONTENT, paths: CABINET_CONTEXT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
 ]
 
 function refuse() { throw new Error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED') }
@@ -214,7 +240,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH) {
+  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

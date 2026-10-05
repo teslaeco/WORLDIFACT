@@ -2,7 +2,47 @@
 
 Updated 5 October 2026.
 
-## LOCAL REVIEW — one project-funded detailed cabinet attempt (5 October 2026)
+## LOCAL REVIEW — cabinet prompt and saved-attempt context (5 October 2026)
+
+The detailed Shop request uses a hidden default purpose of figurine. For an
+explicit industrial or electrical cabinet request, the Oracle adapter now
+appends the neutral word object instead. Incidental cabinet references and
+requests for miniatures retain their previous meaning. The normalized input,
+signed digest, preparation manifest, references, pricing and quality profile
+remain unchanged; this removes a contradictory instruction without promising
+that generated geometry or materials meet the requested realism.
+
+Shop now identifies the saved request and its receipt creation time. A displayed
+job must match that receipt. This device selection can differ from newer account
+models, so the existing account library remains the source for other completed
+results. A refused availability quote is labelled as applying to the next
+request. Expired or invalid recovery receipts do not establish a model failure.
+No receipt is replaced, no extra recovery request is issued, and no generation
+is submitted by these display changes.
+
+MODEL_BUDGET_EXCEEDED now reports inability to reserve the next API request
+within the model budget. It does not infer model complexity, actual invoiced
+spend or completed point settlement. Failure codes and financial behavior are
+unchanged. These fixes do not replenish provider funding or prove improved
+visual quality, and no additional paid test is part of this package.
+
+The application delta passed 1289 of 1290 local tests; the sole unavailable
+check was native Chromium startup, blocked by this environment's socket
+restriction. Lint, TypeScript, HTTP smoke, production build/postbuild and local
+Worker dry-run packaging passed. Focused independent review covered prompt and
+receipt integrity, saved-attempt lifecycle and factual failure wording. The
+final release scope and hosted browser check remain separate gates.
+
+The fifteen-file release candidate requires its exact reviewed parent and a
+single-parent commit, skips all five financial setup/check steps, and preserves
+existing dashboard variables through the already-reviewed deployment path.
+Wrong base, missing marker or a changed path set stops before credential setup.
+The existing workflow, configuration, account ledger, backend admission and
+all earlier release markers are untouched. Publication and live verification
+remain pending; no private prompts, identities, models or activation values
+are included in this documentation or the tests.
+
+## DEPLOYED — one project-funded detailed cabinet attempt (5 October 2026)
 
 This is a separately authorized, finite project API reservation for one detailed
 Studio request. The authority is bound to a verified immutable account UUID,
@@ -35,11 +75,11 @@ the normal UI request. A subsequent paid click requires the separately approved
 preflight and remains explicit. This limited attempt does not establish normal
 unlimited generation availability or guarantee the requested visual quality.
 
-Focused race/expiry/ownership tests, independent review and exact-head hosted
-checks remain required. The bounded release must skip all five financial steps
-and preserve dashboard variables; it must fail closed on the wrong base or
-changed file scope. No private account identity, activation JSON or model bytes
-are part of this package.
+The reviewed package was deployed in PR #217 from e36797e7 after all 1277
+hosted tests passed. Production run 37330809154 succeeded; all five financial
+steps were skipped and dashboard variables were preserved. This source release
+does not itself prove visual quality or ongoing ordinary funding availability.
+No private account identity, activation JSON or model bytes are in the package.
 
 ## DEPLOYED — private account Studio model library (5 October 2026)
 

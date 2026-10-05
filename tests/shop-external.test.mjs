@@ -75,7 +75,7 @@ test('mobile layout keeps creation controls first and internal archive out of si
 test('historical Oracle jobs recover while new Astra and FAST generation use blueprint paths', async () => {
   const source = await readFile(new URL('../src/pages/ShopPage.tsx', import.meta.url), 'utf8')
   const preview = await readFile(new URL('../src/components/DemoShopPreview.tsx', import.meta.url), 'utf8')
-  assert.match(source, /Previous model did not finish/)
+  assert.match(source, /Saved request did not finish/)
   assert.match(source, /Start a new model/)
   assert.match(source, /!terminal\(job\?\.state\) && !job\?\.reconciliationRequired && <p>Elapsed:/)
   assert.match(source, /This cloud job finished without a usable model/)

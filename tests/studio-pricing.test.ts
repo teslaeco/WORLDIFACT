@@ -108,9 +108,10 @@ test('detailed Studio pricing cannot be attached to FAST generation or preparati
   }
 })
 
-test('only precise model-budget failure says the model is too elaborate', () => {
+test('model-budget refusal describes request reservation without inferring complexity or settlement', () => {
   assert.ok(STUDIO_FAILURE_CODES.includes('MODEL_BUDGET_EXCEEDED'))
-  assert.match(STUDIO_FAILURE_DETAILS.MODEL_BUDGET_EXCEEDED, /model is too elaborate for the selected generation budget/)
-  assert.match(STUDIO_FAILURE_DETAILS.MODEL_BUDGET_EXCEEDED, /Reserved customer points were released; no automatic retry/)
+  assert.match(STUDIO_FAILURE_DETAILS.MODEL_BUDGET_EXCEEDED, /could not reserve the next API request/)
+  assert.match(STUDIO_FAILURE_DETAILS.MODEL_BUDGET_EXCEEDED, /no automatic retry/)
+  assert.doesNotMatch(STUDIO_FAILURE_DETAILS.MODEL_BUDGET_EXCEEDED, /too elaborate|points were released|invoice|larger budget/)
   assert.doesNotMatch(STUDIO_FAILURE_DETAILS.ASTRA_COST_LIMIT, /too elaborate/)
 })

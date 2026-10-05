@@ -1,10 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
 import {
   FAST_DRAFT_PROFILE, INDUSTRIAL_ELECTRICAL_PROFILE, PHOTO_VIEWS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS,
-  inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, type StudioInput,
+  inputDigest, oracleStudioPayload, prepareStudioInput, studioQualityProfile, validateStudioInput, type StudioInput,
 } from '../src/lib/studioProtocol.ts'
+import { STUDIO_PRICING, STUDIO_PRICING_REVISION } from '../src/lib/studioPricing.ts'
 
 const id = '33333333-3333-4333-8333-333333333333'
 // Container-only JPEG fixture. No provider, image-generation or network calls.
@@ -24,6 +26,92 @@ function standardPayload(input: StudioInput) {
   if (!('agentInstructions' in payload)) throw new Error('Expected STANDARD payload')
   return JSON.parse(JSON.stringify(payload)) as { id: string; prompt: string; agentInstructions: string; photos?: StudioInput['photos'] }
 }
+
+test('explicit cabinet descriptions override only the appended figurine default, including directly negated miniature labels', async () => {
+  for (const prompt of [
+    'An industrial electrical cabinet for a pump station, with two hinged doors.',
+    'Build a realistic industrial MCC electrical cabinet with a side service hatch.',
+    'Create an electrical control cabinet with a steel enclosure, not a figurine or miniature.',
+    'An electrical cabinet, not a miniature or a figurine, with a service latch.',
+    'Odtwórz szafę sterowniczą z dwoma drzwiami i korytkami przewodów.',
+    'Szafa elektryczna z panelem serwisowym, nie figurka ani miniatura.',
+  ]) {
+    for (const photos of [[], cabinet.photos]) {
+      const input = validateStudioInput({ ...cabinet, prompt: `  ${prompt}  `, purpose: 'figurine', photos })
+      const before = JSON.stringify(input), digest = await inputDigest(input)
+      input.photos.forEach(Object.freeze); Object.freeze(input.photos); Object.freeze(input)
+      const payload = standardPayload(input)
+      assert.ok(payload.prompt.startsWith(prompt + '\n\nWORLDIFACT: build the requested editable 3D object,'))
+      assert.doesNotMatch(payload.prompt, /editable 3D figurine|full-size|full-scale/)
+      assert.deepEqual(payload, standardPayload({ ...input, purpose: 'object' }), 'Only the appended kind changes')
+      assert.equal(studioQualityProfile(input), photos.length ? INDUSTRIAL_ELECTRICAL_PROFILE : 'standard')
+      assert.deepEqual(payload.photos, photos.length ? photos.map(photo => ['left', 'right'].includes(photo.view) ? { ...photo, view: 'side' } : photo) : undefined)
+      assert.equal(JSON.stringify(input), before)
+      assert.equal(input.purpose, 'figurine', 'The receipt-bound purpose stays unchanged')
+      assert.equal(await inputDigest(input), digest)
+      assert.equal((await prepareStudioInput(input)).inputDigest, digest)
+    }
+  }
+})
+
+test('miniatures, characters, furniture and individual components retain their requested figurine instruction', () => {
+  for (const prompt of [
+    'An electrical cabinet miniature for a railway diorama.',
+    'A control cabinet, not a figurine but a miniature at 1:24 scale.',
+    'An industrial cabinet at 1:12 scale with a tiny latch.',
+    'An industrial cabinet toy with plastic hinges.',
+    'Szafa sterownicza jako miniatura do makiety.',
+    'A character beside an electrical cabinet wearing a breaker badge.',
+    'An electrical cabinet beside an adult character.',
+    'A walnut furniture cabinet with a decorative brass handle.',
+    'A relay and a circuit breaker with legible terminal markings.',
+    'A circuit breaker for an industrial electrical cabinet.',
+  ]) {
+    const payload = standardPayload({ ...cabinet, purpose: 'figurine', prompt, photos: [] })
+    assert.ok(payload.prompt.startsWith(prompt + '\n\nWORLDIFACT: build the requested editable 3D figurine,'), prompt)
+  }
+})
+
+test('cabinet wording preserves selected price terms, legacy175 and the maximum prompt overhead', () => {
+  const input: StudioInput = { ...cabinet, purpose: 'figurine', photos: [],
+    prompt: ('An industrial electrical cabinet with service doors. ' + 'surface detail '.repeat(300)).slice(0, 4000) }
+  const legacy = oracleStudioPayload(id, input)
+  assert.ok('agentInstructions' in legacy)
+  assert.equal('studioPricing' in legacy, false)
+  assert.match(legacy.agentInstructions, /existing per-job USD 1\.75 guard/)
+  const generic = standardPayload({ ...input, prompt: 'An ornate ceramic jug.' })
+  assert.ok(legacy.prompt.length - input.prompt.length <= generic.prompt.length - 'An ornate ceramic jug.'.length)
+  assert.ok(legacy.prompt.length <= 5000)
+  for (const budgetTier of ['standard', 'extended'] as const) {
+    const selection = { pricingRevision: STUDIO_PRICING_REVISION, budgetTier, acceptedPoints: STUDIO_PRICING[budgetTier].points }
+    const payload = oracleStudioPayload(id, validateStudioInput({ ...input, ...selection }))
+    assert.ok('agentInstructions' in payload)
+    assert.deepEqual(payload.studioPricing, STUDIO_PRICING[budgetTier])
+    assert.match(payload.agentInstructions, new RegExp(`selected per-job USD ${budgetTier === 'standard' ? '2\\.00' : '4\\.00'} guard`))
+    assert.deepEqual(payload, oracleStudioPayload(id, validateStudioInput({ ...input, purpose: 'object', ...selection })))
+  }
+})
+
+test('unrelated canonical digests and complete Oracle wire payloads remain byte-compatible with the prior adapter', async () => {
+  const photos = [{ name: 'ceramic-reference.jpg', view: 'left' as const, dataUrl: jpeg, subject: 'Synthetic protocol reference', textureMaxSize: 4096 as const }]
+  // Synthetic fixtures captured from clean e36797e7; no user prompt, job or account data.
+  const cases = [
+    ['A glazed teal teapot with a rounded handle.', 'figurine', [], 'fde3023881c1f982415e5671a4a46cff1ce65cdeca4c6d8559e86f438fd44253', '8e2190799f5afb455de7bcfcc857b58fdbe80e1707546834fadac36924c4e975'],
+    ['An adult character wearing a circuit breaker badge.', 'figurine', photos, '8ab9a40689311eda50deaf971683d0529d04a538894de27027adc60649af327a', 'fc200276e417f7df73ce30817ea3097090cfdc157ae1b0c65aa50c3b0a8f652b'],
+    ['A 1:24 scale miniature electrical cabinet for a diorama.', 'figurine', photos, '7ca962cff4d8a507222099b0a435a55522b64ecbd75e2fbe100c7a3c9912014f', '458e0ee194562d7235ca11610fd85f84817c6e476d717c1b4ec2f3601795503f'],
+    ['An electrical cabinet with a narrow service door.', 'object', [], 'ac32eae3ea33f0f043b7a75b8971f8066ef2800d79a018aefac3deff926adf10', '80b8017d4077c1e5469d5558180cc3958cebb46b9acd9af53641cff99f6a1aaa'],
+    ['A rocky valley with a small wooden footbridge.', 'terrain', photos, '19ed565c69937a96fa1045281bf27fef032ec54bec88862c2dd2ffdf7fb1e255', '4582aa9999d1642350b0c114b033a4bf08fe832642afc7aea00f1ee7c9dc6843'],
+    ['A brass exploration drone with folding wings.', 'game', [], '7841686491ee4788183d5c5296b578c7c2c4667bbf59ce3cf431f622d25d4283', '33e63ed9b99f57cb8add508b6872d357a4232b8c41c8f8beaee0cf37607c7a37'],
+  ] as const
+  for (const [prompt, purpose, references, digest, payloadDigest] of cases) {
+    const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt: ` ${prompt} `, purpose, textureMaxSize: 4096, photos: references })
+    assert.equal(await inputDigest(input), digest, prompt)
+    assert.equal(createHash('sha256').update(JSON.stringify(oracleStudioPayload(id, input))).digest('hex'), payloadDigest, prompt)
+  }
+  const fast = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt: 'An industrial control cabinet with two doors.', purpose: 'figurine', photos: [], textureMaxSize: 2048, generationProfile: FAST_DRAFT_PROFILE })
+  assert.equal(await inputDigest(fast), 'd7d424db5ca5ddc2f64fb3ee9c05cd65126de33e745413bd8b6dd569df0efffd')
+  assert.equal(createHash('sha256').update(JSON.stringify(oracleStudioPayload(id, fast))).digest('hex'), 'cddf963e5c4af3d150b2c06c20da2afd5f807de54542526504cf36409e705fca')
+})
 
 test('cabinet Oracle payload requires a complete first build and real physical detail rather than a later box upgrade', () => {
   const payload = standardPayload(cabinet)

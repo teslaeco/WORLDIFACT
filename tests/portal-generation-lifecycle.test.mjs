@@ -134,7 +134,16 @@ async function harness({ store = new Map(), io = transport(), accountRead, healt
       }
       assert.fail('Expected inert POST was not reached; WebCrypto preparation did not finish')
     },
-    async waitDone() { for (let i = 0; i < 100; i++) { await settle(); if (!nodes(tree).some(n => n.type === 'button' && text(n) === 'Stop waiting')) return } assert.fail('Fixture operation did not settle') },
+    async waitDone() {
+      // WebCrypto can finish after many immediate ticks when the full suite is
+      // busy. Bound elapsed time, rather than racing a fixed tick count.
+      const deadline = performance.now() + 10_000
+      while (performance.now() < deadline) {
+        await settle()
+        if (!nodes(tree).some(n => n.type === 'button' && text(n) === 'Stop waiting')) return
+      }
+      assert.fail('Fixture operation did not settle within 10 seconds')
+    },
     close() { closed = true; for (const slot of slots) slot?.cleanup?.(); timers.clear() },
   }
 }
@@ -146,7 +155,7 @@ test('each portal defaults to SOL and quotes the exact explicitly selected model
       try {
         assert.equal(h.model().props.value, 'sol'); await h.select(model)
         assert.equal(h.quote().quote.points, models.MODEL_CATALOG[model].creditsPerGeneration)
-        assert.match(h.quoteMarkup(), new RegExp(`This attempt: ${models.MODEL_CATALOG[model].creditsPerGeneration} points`))
+        assert.match(h.quoteMarkup(), new RegExp(`Next generation: ${models.MODEL_CATALOG[model].creditsPerGeneration} points`))
         assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 1, 'The notice and button share one snapshot')
         assert.equal(h.primary().props.disabled, false)
         const click = h.primary().props.onClick; click(); click(); await h.waitDone()
