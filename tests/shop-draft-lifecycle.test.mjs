@@ -3,6 +3,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { setImmediate as nextTick } from 'node:timers/promises'
 import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
 import { loadShopComponent } from './shop-render-helper.mjs'
 import * as clientModule from '../src/lib/studioClient.ts'
 import { blueprintRequestId } from '../src/lib/blueprintRequest.ts'
@@ -57,8 +59,9 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
   const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
+  if (receiptCreatedAt) selected.receipt.createdAt = receiptCreatedAt
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   if (blueprintRecovery) storeData.set('worldifact:blueprint-recovery:v1', JSON.stringify(blueprintRecovery))
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
@@ -84,9 +87,11 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     })
     if (path === '/api/studio/prepare') { const body = JSON.parse(init.body); return Response.json({ ...makeReceipt(newId), ...(body.pricingRevision ? { pricing: STUDIO_PRICING[body.budgetTier] } : {}) }) }
     if (method === 'POST' && submissionRejection) return Response.json({ error: 'PRIVATE_UPSTREAM_MESSAGE', failureCode: submissionRejection }, { status: submissionRejectionStatus })
+    if (method === 'POST' && submissionResponse) return submissionResponse()
     if (method === 'POST') return Response.json({ job: { id: newId, state: 'building' } })
     if (path.endsWith('/model') && artifactFailure) throw new TypeError('Interrupted artifact download')
     if (path.endsWith('/model')) return new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } })
+    if (jobLookup) return jobLookup(path)
     return Response.json({ job: { id: path.endsWith(oldId) ? oldId : newId, state, failureCode, reconciliationRequired, ...(downloadAllowed === undefined ? {} : { downloadAllowed, previewOnly: !downloadAllowed, previewAvailable: downloadAllowed }) } })
   }
   const slots = [], effects = [], timers = new Map(), timerDelays = new Map(), delays = []
@@ -146,6 +151,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     fastDescription: () => text(node(n => n.props['data-testid'] === 'fast-result-description')),
     form: () => node(n => n.type === 'form'),
     quote: () => node(n => !!n.props.accountQuote).props.accountQuote,
+    quoteMarkup: () => renderToStaticMarkup(React.createElement(MemoryRouter, null, node(n => !!n.props.accountQuote))),
     async deadline(delay) { const id = [...timers.keys()].find(id => timerDelays.get(id) === delay); assert.ok(id); const callback = timers.get(id); timers.delete(id); callback(); await settle() },
     async poll() { const first = timers.entries().next().value; assert.ok(first, 'Recovery should have scheduled a GET'); timers.delete(first[0]); await first[1](); await settle() },
     close() { for (const slot of slots) slot?.cleanup?.(); timers.clear() },
@@ -243,10 +249,142 @@ test('failed cloud job stays visible with its failure state instead of resetting
   const h = await harness({ ready: true, state: 'failed' })
   try {
     await h.poll()
-    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Previous model did not finish'))
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Saved request did not finish'))
     assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
     assert.ok(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), 'terminal receipt remains selected until explicit dismissal')
     assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
+  } finally { h.close() }
+})
+
+test('an older failed device receipt is identified separately from a newer account model without replacing either', async () => {
+  const olderReceiptTime = '2026-09-01T12:00:00.000Z'
+  const newerAccountModel = { receipt: makeReceipt(newId), prompt: 'New silver spacecraft', startedAt: '2026-10-01T12:00:00.000Z', financialState: 'completed' }
+  const h = await harness({ ready: true, detailedReady: true, state: 'failed', failureCode: 'ASTRA_COST_LIMIT', receiptCreatedAt: olderReceiptTime,
+    cloudLookup: () => Response.json({ current: newerAccountModel }), accountLookup: () => Response.json(blockedAccount) })
+  try {
+    const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), archived = h.archive.get(oldId)
+    await h.poll()
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Another editable model idea' } }); await h.settle()
+    const identity = h.all().find(n => n.props['aria-label'] === 'Saved Shop request')
+    assert.match(text(identity), /Saved Shop request selected on this device/)
+    assert.match(text(identity), /may differ from your newest account model/)
+    assert.match(text(identity), /Last known status: failed/)
+    assert.match(text(identity), new RegExp('Job ID: ' + oldId))
+    assert.match(text(identity), /Original brown chess knight/)
+    assert.doesNotMatch(text(identity), /Another editable model idea|New silver spacecraft/)
+    assert.ok(elements(identity).some(n => n.props.to === '/account/models' && text(n).includes('Open account model library')))
+    assert.equal(elements(identity).find(n => n.type === 'time').props.dateTime, olderReceiptTime)
+    assert.match(text(h.all()), /Reason: ASTRA_COST_LIMIT/)
+    assert.match(text(h.all()), /Astra’s cost protection stopped this job/)
+    assert.match(h.quoteMarkup(), /Reason: PROVIDER_BUDGET_EXHAUSTED/)
+    assert.doesNotMatch(h.quoteMarkup(), /No Oracle generation was submitted|no points were reserved/)
+    await h.focus(); await h.pageShow(true)
+    h.button('Recover this job').props.onClick(); await h.settle(); await h.poll()
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.equal(h.archive.get(oldId), archived)
+    assert.equal(h.calls.some(c => c.path === '/api/studio/current'), false, 'A label must not silently discover or replace the selected receipt')
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+for (const state of ['queued', 'building', 'succeeded']) test(`an accepted ${state} job stays distinct from the blocked next quote after its one-use funding is consumed`, async () => {
+  let consumed = false
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, state,
+    accountLookup: () => Response.json(consumed ? blockedAccount : fundedAccount),
+    submissionResponse: () => { consumed = true; return Response.json({ job: { id: newId, state } }) },
+  })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Detailed synthetic model' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle(); await h.poll()
+    assert.equal(h.quote().quote.reason, 'PROVIDER_BUDGET_EXHAUSTED')
+    const identity = h.all().find(n => n.props['aria-label'] === 'Saved Shop request')
+    assert.match(text(identity), new RegExp('Job ID: ' + newId))
+    assert.match(text(identity), new RegExp('Last known status: ' + state))
+    assert.match(h.quoteMarkup(), /Next generation: 250 points/)
+    assert.doesNotMatch(text(h.all()) + h.quoteMarkup(), /No Oracle generation was submitted|no points were reserved|model generation has not started/i)
+    const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    await h.focus(); await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/prepare').length, 1)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 1)
+    assert.deepEqual(h.calls.filter(c => c.method !== 'GET').map(c => c.path), ['/api/studio/prepare', '/api/studio/jobs'])
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+  } finally { h.close() }
+})
+
+test('a lost submission response keeps acceptance unknown and recovers the same job while next funding is blocked', async () => {
+  let consumed = false
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, state: 'building',
+    accountLookup: () => Response.json(consumed ? blockedAccount : fundedAccount),
+    submissionResponse: () => { consumed = true; throw new TypeError('Synthetic lost submission response') },
+  })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Detailed synthetic model with lost response' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.match(text(h.all()), /Last known status: awaiting acceptance confirmation/)
+    assert.match(text(h.all()), /Checking whether your request was accepted/)
+    assert.doesNotMatch(text(h.all()) + h.quoteMarkup(), /No Oracle generation was submitted|no points were reserved|current model is being completed/i)
+    const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    h.button('Recover this job').props.onClick(); await h.settle(); await h.poll()
+    assert.match(text(h.all()), /Last known status: building/)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 1)
+    assert.deepEqual(h.calls.filter(c => c.method !== 'GET').map(c => c.path), ['/api/studio/prepare', '/api/studio/jobs'])
+  } finally { h.close() }
+})
+
+test('an expired recovery receipt does not label the unknown model as failed', async () => {
+  const h = await harness({ ready: true, detailedReady: true, accountLookup: () => Response.json(blockedAccount),
+    jobLookup: () => Response.json({ error: 'This job receipt expired. Keep your saved model.' }, { status: 401 }),
+  })
+  try {
+    const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    await h.poll()
+    assert.match(text(h.all()), /Saved request needs a recovery check/)
+    assert.match(text(h.all()), /Last known status: unknown/)
+    assert.match(text(h.all()), /The old model status is unknown/)
+    assert.doesNotMatch(text(h.all()) + h.quoteMarkup(), /Saved request did not finish|Last known status: failed|No Oracle generation was submitted/)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.deepEqual(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_HISTORY_PREFIX + oldId)), JSON.parse(receipt))
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+test('other next-request admission refusals preserve the accepted job and exact refusal reason', async () => {
+  for (const reason of ['CREDITS_EXHAUSTED', 'ASTRA_RUNTIME_DISABLED', 'ACCOUNT_ADMISSION_UNAVAILABLE']) {
+    const h = await harness({ ready: true, detailedReady: true, state: 'building',
+      accountLookup: () => Response.json({ ...fundedAccount, studioAdmission: admission(false, reason) }),
+    })
+    try {
+      await h.poll()
+      assert.match(text(h.all()), /Last known status: building/)
+      assert.match(h.quoteMarkup(), new RegExp('Reason: ' + reason))
+      assert.doesNotMatch(text(h.all()) + h.quoteMarkup(), /No Oracle generation was submitted|no points were reserved|generation has not started/i)
+      assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+    } finally { h.close() }
+  }
+})
+
+test('a worker refusal is scoped to the next generation while the saved accepted job keeps its status', async () => {
+  const h = await harness({ state: 'building', accountLookup: () => Response.json(blockedAccount) })
+  try {
+    await h.poll()
+    assert.match(text(h.all()), /Last known status: building/)
+    assert.match(text(h.all()), /Next generation: Astra\/Blender model generation is awaiting server activation/)
+    assert.match(text(h.all()), /Next generation unavailable\. Existing requests keep their own status and price/)
+    assert.doesNotMatch(text(h.all()) + h.quoteMarkup(), /No points reserved — model generation has not started|No Oracle generation was submitted/)
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+test('an invalid legacy receipt date remains preserved without rendering an invented date or submitting', async () => {
+  const h = await harness({ receiptCreatedAt: 'unknown-date' })
+  try {
+    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.createdAt, 'unknown-date')
+    assert.equal(h.all().some(n => n.type === 'time'), false)
+    assert.doesNotMatch(text(h.all()), /Invalid Date/)
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
   } finally { h.close() }
 })
 
@@ -516,7 +654,7 @@ test('reloading a detailed receipt preserves the detailed route and missing subm
     const visible = text(h.all())
     assert.match(visible, /The upload was not confirmed/)
     assert.match(visible, /Model submission was not confirmed/)
-    assert.doesNotMatch(visible, /Previous model did not finish|original failure reason was not saved/)
+    assert.doesNotMatch(visible, /Saved request did not finish|original failure reason was not saved/)
     assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
   } finally { h.close() }
 })
@@ -547,7 +685,7 @@ test('account refusal is shown as generation not started, without a model failur
       assert.match(visible, failureCode === 'ACCOUNT_REQUEST_CONFLICT'
         ? /No new Oracle submission or points reservation was made/
         : /No Oracle generation was submitted and no points were reserved for this request/)
-      assert.doesNotMatch(visible, /Previous model did not finish|original failure reason was not saved|points were released/)
+      assert.doesNotMatch(visible, /Saved request did not finish|original failure reason was not saved|points were released/)
       assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
     } finally { h.close() }
   }
@@ -565,7 +703,7 @@ test('immediate HTTP429 funding refusal keeps the detailed request terminal with
     assert.match(visible, /Generation was not started/)
     assert.match(visible, /unreserved API funding/)
     assert.match(visible, /Reason: PROVIDER_BUDGET_EXHAUSTED/)
-    assert.doesNotMatch(visible, /Previous model did not finish|PRIVATE_UPSTREAM_MESSAGE|Not enough available points|points were released/)
+    assert.doesNotMatch(visible, /Saved request did not finish|PRIVATE_UPSTREAM_MESSAGE|Not enough available points|points were released/)
     assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 1)
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).rejectionCode, 'PROVIDER_BUDGET_EXHAUSTED')
   } finally { h.close() }
@@ -582,7 +720,7 @@ test('one account snapshot blocks both ready Shop routes and forced form submiss
     assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
     assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
       const status = h.all().find(n => n.props.className === 'shop-customer-status')
-      assert.match(text(status), /Generation is unavailable for this account/)
+      assert.match(text(status), /Next generation is unavailable for this account/)
       assert.match(text(status), /unreserved API funding/i)
       assert.doesNotMatch(text(status), /generation available/)
       await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
@@ -757,12 +895,17 @@ test('signout and account switching pause automatic selected-job requests withou
     const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
     await h.account({ user: null, loading: false })
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.doesNotMatch(text(h.all().find(n => n.props['aria-label'] === 'Saved Shop request')), /Saved request description|Original brown chess knight/)
     await assert.rejects(h.poll(), /Recovery should have scheduled a GET/)
     await h.account({ user: { id: 'owner-b' }, loading: false })
     assert.match(text(h.all()), /Sign in to the original account to recover this model/)
+    const identity = h.all().find(n => n.props['aria-label'] === 'Saved Shop request')
+    assert.doesNotMatch(text(identity), /Saved request description|Original brown chess knight/)
+    assert.ok(elements(identity).some(n => n.props.to === '/account/models'))
     assert.equal(h.calls.filter(c => c.path.startsWith('/api/studio/jobs/')).length, 0)
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
     assert.equal(h.button('Recover this job').props.disabled, false)
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
   } finally { h.close() }
 })
 

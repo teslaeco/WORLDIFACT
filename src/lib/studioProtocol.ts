@@ -54,6 +54,13 @@ export const REFERENCE_CHARACTER_INSTRUCTIONS = `WORLDIFACT REFERENCE CHARACTER 
 
 const ELECTRICAL_CABINET_REQUEST = /(electrical\s+(?:control\s+)?cabinet|switchgear|motor\s+control\s+cent(?:er|re)|\bmcc\b|distribution\s+panel|control\s+panel|din\s*rail|terminal\s+block|breaker|contactor|relay|rozdzieln|szaf.{0,24}(?:elektr|sterown)|bezpiecznik|stycznik|przeka[źz]nik|listw.{0,20}zacisk|okablowan)/iu
 const CHARACTER_REQUEST = /(adult\s+(?:woman|man|female|male)|character|heroine|figurine|person|human|woman|girl|man|posta[cć]|kobiet|m[eę][żz]czyzn|figur[kc])/iu
+// Resolve only an explicit cabinet description against the Shop's figurine
+// default. These narrower hints do not select a quality profile or infer scale.
+const EXPLICIT_INDUSTRIAL_CABINET_REQUEST = /^(?:(?:create|build|make|model|generate|reconstruct)\s+)?(?:(?:a|an|the|this|realistic|detailed|photorealistic|full[- ]size|full[- ]scale)\s+)*(?:(?:industrial|electrical|mcc|switchgear|motor\s+control\s+cent(?:er|re))\s+)+(?:control\s+)?cabinet\b|^(?:(?:stw[oó]rz|zbuduj|wygeneruj|odtw[oó]rz|wymodeluj|model)\s+)?(?:(?:realistyczn[ąay]|szczeg[oó][łl]ow[ąay]|przemys[łl]ow[ąay]|tę|tą)\s+)*szaf(?:a|ę|ą|y|ie)\s+(?:elektryczn|sterownicz|rozdzielcz)\p{L}*/iu
+const EXPLICIT_MINIATURE_OR_CHARACTER_REQUEST = /\b(?:miniatures?|mini|figurines?|toys?|dioramas?|dollhouses?|tabletop|characters?|portraits?|people|persons?|humans?|adults?|women|woman|men|man|heroes?|heroines?)\b|\b(?:miniatur|figurk|figuryn|zabawk|dioram|posta[cć]|kobiet|m[eę][żz]czyzn)\p{L}*|\b1\s*[:/]\s*(?:[2-9]|\d{2,})\b/iu
+// Only direct negated labels are ignored by the classifier, never by the wire
+// prompt. A positive alternative after "but" still vetoes the default override.
+const NEGATED_MINIATURE_LABELS = /\bnot\s+(?:a\s+)?(?:figurine|miniature)(?:\s+(?:or|nor)\s+(?:a\s+)?(?:figurine|miniature))?\b|\bnie\s+(?:figurka|miniatura)(?:\s+ani\s+(?:figurka|miniatura))?\b/giu
 
 export function studioQualityProfile(input: Pick<StudioInput, 'prompt' | 'photos' | 'purpose'>): StudioQualityProfile {
   if (input.photos.length > 0 && ELECTRICAL_CABINET_REQUEST.test(input.prompt)) return INDUSTRIAL_ELECTRICAL_PROFILE
@@ -87,7 +94,7 @@ export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating'
 export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   ...ADMISSION_FAILURE_DETAILS,
   ASTRA_COST_LIMIT: 'Astra’s cost protection stopped this job. Reserved customer points were released. Keep this job ID for review before starting another attempt; no automatic retry.',
-  MODEL_BUDGET_EXCEEDED: 'This model is too elaborate for the selected generation budget. Reserved customer points were released; no automatic retry.',
+  MODEL_BUDGET_EXCEEDED: 'The worker could not reserve the next API request within this model’s budget. The attempt ended; no automatic retry was started.',
   STUDIO_BUDGET_POLICY_CHANGED: 'New Astra models use 250 points with a USD 1.75 provider ceiling. This outdated budget was not submitted or reserved. Refresh availability and review a new request; existing jobs retain their original terms.',
   INVALID_MODEL_OUTPUT: 'The generated file did not meet the required structural 3D detail gate. Reserved customer points were released; no procedural replacement.',
   STUDIO_TIMEOUT: 'The cloud job exceeded the maximum recovery window. Reserved customer points were released; no automatic retry.',
@@ -177,7 +184,9 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   }
   const selection = validateStudioPricingSelection(input)
   const studioPricing = selection.budgetTier === undefined ? undefined : studioPricingFor(selection)
-  const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${input.purpose}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use the supported scene JSON contract for the complete first build, inspect actual renders and successfully call finish_model before claiming completion. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; report open/non-manifold geometry, intersections, thin walls and fragile joints; never claim manufacturing approval.`
+  const requestedModelKind = input.purpose === 'figurine' && EXPLICIT_INDUSTRIAL_CABINET_REQUEST.test(input.prompt) && !EXPLICIT_MINIATURE_OR_CHARACTER_REQUEST.test(input.prompt.replace(NEGATED_MINIATURE_LABELS, ''))
+    ? 'object' : input.purpose
+  const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${requestedModelKind}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use the supported scene JSON contract for the complete first build, inspect actual renders and successfully call finish_model before claiming completion. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; report open/non-manifold geometry, intersections, thin walls and fragile joints; never claim manufacturing approval.`
   // The installed v33 photo contract accepts `side`, not `left`/`right`.
   // Keep image bytes, names and subject identity intact; preserve exact side
   // labels in ordered agent metadata rather than sending a rejected enum.

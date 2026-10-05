@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { createServer } from 'vite'
 import { quoteGeneration } from '../src/lib/generationQuote.ts'
+import { ADMISSION_FAILURE_CODES, ADMISSION_FAILURE_DETAILS } from '../src/lib/generationAdmission.ts'
 
 test('funding refusal offers a read-only refresh without a credits upsell or invented model estimate', async () => {
   const vite = await createServer({ server: { middlewareMode: true, watch: null, hmr: false, ws: false }, appType: 'custom', logLevel: 'error' })
@@ -20,6 +21,10 @@ test('funding refusal offers a read-only refresh without a credits upsell or inv
     assert.equal(funding.state, 'blocked')
     const html = render(funding)
     assert.match(html, /Account funding unavailable/)
+    assert.match(html, /Next generation: 250 points/)
+    assert.match(html, /Reason: PROVIDER_BUDGET_EXHAUSTED/)
+    assert.match(html, /does not report the status or charges of a saved request/)
+    assert.doesNotMatch(html, /No Oracle generation was submitted|no points were reserved/)
     assert.match(html, /not an estimate of your model/)
     assert.match(html, /reads your current allowance; it does not check or return funding from earlier models/)
     assert.doesNotMatch(html, /Earlier models were checked|No eligible earlier model reservations|unused funding was (?:confirmed|returned)/i)
@@ -40,8 +45,14 @@ test('funding refusal offers a read-only refresh without a credits upsell or inv
     const extended = quoteGeneration('astra', { ...account, studioAdmission: { tiers: { extended: { allowed: true, pricing: STUDIO_PRICING.extended } } } }, billing, true, true, 'extended')
     const extendedHtml = render(extended, true, 'extended')
     assert.match(extendedHtml, /500 points \/ paid generation/)
-    assert.match(extendedHtml, /This attempt: 500 points/)
+    assert.match(extendedHtml, /Next generation: 500 points/)
     assert.match(extendedHtml, /2255 points/)
     assert.doesNotMatch(extendedHtml, /250 points \/ paid generation/)
+
+    for (const reason of ADMISSION_FAILURE_CODES) {
+      const refusal = render({ state: 'blocked', points: 250, after: null, reason, message: ADMISSION_FAILURE_DETAILS[reason] })
+      assert.match(refusal, new RegExp('Reason: ' + reason))
+      assert.doesNotMatch(refusal, /No (?:new )?Oracle (?:generation|submission)|no points were reserved|points reservation was made|generation has (?:not )?started/i)
+    }
   } finally { await vite.close() }
 })

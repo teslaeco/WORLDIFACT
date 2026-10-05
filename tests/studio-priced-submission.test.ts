@@ -151,7 +151,7 @@ test('provider funding refusal is diagnosed before Oracle dispatch', async () =>
 
 test('funded MCC request completes only after model validation and replays without another dispatch', async () => {
   const f = fixture(); await f.fund(); f.env.STUDIO_NEW_JOB_POLICY = 'legacy-usd175-v1'
-  const mcc = { ...input, purpose: 'object' as const, prompt: 'Create a realistic industrial MCC electrical cabinet with breakers, lights, PLC modules, cooling fans and detailed wiring.' }
+  const mcc = { ...input, purpose: 'object' as const, prompt: 'Create a compact industrial control cabinet with relays, a fuse panel, a ventilation grille and organized cable channels.' }
   await f.account().put('provider-budget-cents:v1', 175)
   const lines: string[] = [], original = console.info
   console.info = (...values: unknown[]) => { lines.push(values.join(' ')) }
@@ -339,7 +339,7 @@ test('successful result and refreshed recovery receipt retain the original 500-p
   assert.equal(f.submitted.length, 1)
 })
 
-test('unfinished retained drafts show complexity only for the precise Oracle budget-exhaustion code', async () => {
+test('unfinished retained drafts describe request reservation only for the precise Oracle budget code', async () => {
   for (const precise of [true, false]) {
     const f = fixture(); await f.fund(); const body = selected('extended'), receipt = await f.prepare(body)
     await f.call('/api/studio/jobs', 'POST', body, receipt)
@@ -348,8 +348,9 @@ test('unfinished retained drafts show complexity only for the precise Oracle bud
     assert.equal(response.status, 200)
     const job = (await response.json() as { job: StudioJob }).job
     assert.equal(job.state, 'failed'); assert.equal(job.failureCode, precise ? 'MODEL_BUDGET_EXCEEDED' : 'ASTRA_COST_LIMIT')
-    if (precise) assert.match(job.detail, /too elaborate/)
-    else assert.doesNotMatch(job.detail, /too elaborate/)
+    if (precise) assert.match(job.detail, /could not reserve the next API request/)
+    else assert.doesNotMatch(job.detail, /could not reserve the next API request/)
+    assert.doesNotMatch(job.detail, /too elaborate/)
     assert.deepEqual(job.pricing, STUDIO_PRICING.extended)
     assert.deepEqual(await f.balances(), { points: 4500, held: 0, provider: 2750, global: 1 }, 'Failure releases customer points but missing sealed evidence retains provider funding')
     assert.equal(f.submitted.length, 1)

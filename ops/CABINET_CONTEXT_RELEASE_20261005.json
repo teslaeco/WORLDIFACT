@@ -1,0 +1,6 @@
+{
+  "release": "cabinet-prompt-and-attempt-context-20261005",
+  "baseCommit": "e36797e7b955ed3636a861caed842e576ed609c2",
+  "preserveBilling": true,
+  "preserveRemoteVars": true
+}
