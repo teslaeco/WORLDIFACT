@@ -12,6 +12,7 @@ import {
   READONLY_QUOTE_BASE_COMMIT, READONLY_QUOTE_MARKER_PATH, READONLY_QUOTE_MARKER_CONTENT, READONLY_QUOTE_REVIEWED_PATHS,
   MCC_ONE_ATTEMPT_BASE_COMMIT, MCC_ONE_ATTEMPT_MARKER_PATH, MCC_ONE_ATTEMPT_MARKER_CONTENT, MCC_ONE_ATTEMPT_REVIEWED_PATHS,
   ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, ACCOUNT_MODEL_LIBRARY_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT, ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS,
+  PROJECT_MCC_ATTEMPT_BASE_COMMIT, PROJECT_MCC_ATTEMPT_MARKER_PATH, PROJECT_MCC_ATTEMPT_MARKER_CONTENT, PROJECT_MCC_ATTEMPT_REVIEWED_PATHS,
   selectPipelineOnlyRelease, selectPipelineReleaseOptions,
 } from '../scripts/select-pipeline-only-release.mjs'
 
@@ -24,11 +25,17 @@ const accountModelLibraryIntroductions = ['src/lib/studioLibrary.ts', 'tests/acc
 const accountModelLibraryChanges = ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS.map(path => ({
   status: path === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || accountModelLibraryIntroductions.includes(path) ? 'A' : 'M', path,
 }))
+const projectMccAttemptIntroductions = ['docs/ASTRA_PROJECT_BUDGET.md', 'server/astraProjectBudget.ts', 'tests/astra-project-budget.test.ts', 'tests/studio-project-budget.test.ts']
+const projectMccAttemptChanges = PROJECT_MCC_ATTEMPT_REVIEWED_PATHS.map(path => ({
+  status: path === PROJECT_MCC_ATTEMPT_MARKER_PATH || projectMccAttemptIntroductions.includes(path) ? 'A' : 'M', path,
+}))
+const priorMarkers = [MARKER_PATH, FUNDING_MARKER_PATH, READONLY_QUOTE_MARKER_PATH, MCC_ONE_ATTEMPT_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_MARKER_PATH]
 const scopedPaths = new Map([
   [FUNDING_MARKER_PATH, FUNDING_REVIEWED_PATHS],
   [READONLY_QUOTE_MARKER_PATH, READONLY_QUOTE_REVIEWED_PATHS],
   [MCC_ONE_ATTEMPT_MARKER_PATH, MCC_ONE_ATTEMPT_REVIEWED_PATHS],
   [ACCOUNT_MODEL_LIBRARY_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS],
+  [PROJECT_MCC_ATTEMPT_MARKER_PATH, PROJECT_MCC_ATTEMPT_REVIEWED_PATHS],
 ])
 function evidence(overrides = {}) {
   const data = { head, parent: BASE_COMMIT, changes, markerPath: MARKER_PATH, marker: MARKER_CONTENT, mode: '100644', ...overrides }
@@ -83,6 +90,12 @@ function accountModelLibraryEvidence(overrides = {}) {
 }
 function selectAccountModelLibrary(overrides = {}) {
   return selectPipelineReleaseOptions('fixture', accountModelLibraryEvidence(overrides).readGit)
+}
+function projectMccAttemptEvidence(overrides = {}) {
+  return evidence({ parent: PROJECT_MCC_ATTEMPT_BASE_COMMIT, changes: projectMccAttemptChanges, markerPath: PROJECT_MCC_ATTEMPT_MARKER_PATH, marker: PROJECT_MCC_ATTEMPT_MARKER_CONTENT, ...overrides })
+}
+function selectProjectMccAttempt(overrides = {}) {
+  return selectPipelineReleaseOptions('fixture', projectMccAttemptEvidence(overrides).readGit)
 }
 
 test('only the exact reviewed repair and canonical public marker preserve billing', () => {
@@ -321,6 +334,84 @@ test('rebased account library preparation cannot omit its marker while later ord
   assert.throws(() => selectAccountModelLibrary({ parent: '3'.repeat(40), changes: accountModelLibraryChanges.filter(change => change.path !== ACCOUNT_MODEL_LIBRARY_MARKER_PATH) }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
   for (const path of ['src/lib/studioLibrary.ts', 'src/components/StudioGallery.tsx', 'server/studio.ts']) {
     const fixture = accountModelLibraryEvidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path }] })
+    assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
+    assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
+  }
+})
+
+test('the project-funded MCC attempt preserves billing and remote vars for its canonical ten-file package', () => {
+  assert.deepEqual(selectProjectMccAttempt(), { preserveBilling: true, preserveRemoteVars: true })
+  assert.equal(PROJECT_MCC_ATTEMPT_BASE_COMMIT, '77487a20cfba34e3694fa660f7aec8051353085a')
+  assert.equal(readFileSync(new URL('../' + PROJECT_MCC_ATTEMPT_MARKER_PATH, import.meta.url), 'utf8'), PROJECT_MCC_ATTEMPT_MARKER_CONTENT)
+  assert.deepEqual(PROJECT_MCC_ATTEMPT_REVIEWED_PATHS, [
+    'docs/ASTRA_PROJECT_BUDGET.md', 'docs/CONTEST_STATUS.md', PROJECT_MCC_ATTEMPT_MARKER_PATH,
+    'scripts/select-pipeline-only-release.mjs', 'server/astraProjectBudget.ts', 'server/entitlements.ts',
+    'server/studio.ts', 'tests/astra-project-budget.test.ts', 'tests/pipeline-only-release.test.mjs',
+    'tests/studio-project-budget.test.ts',
+  ].sort())
+  for (const path of [...priorMarkers, '.github/workflows/cloudflare.yml', 'server/astraRepairedMccGrant.ts',
+    'server/billing.ts', 'wrangler.jsonc', 'package.json', 'package-lock.json', 'ops/SOFTWARE_MODEL_PREVIEW_RELEASE_20261005.json']) {
+    assert.equal(PROJECT_MCC_ATTEMPT_REVIEWED_PATHS.includes(path), false, path)
+  }
+})
+
+test('project-funded MCC release refuses missing markers, wrong bases, missing history and any merge parent', () => {
+  for (const overrides of [
+    { changes: projectMccAttemptChanges.filter(change => change.path !== PROJECT_MCC_ATTEMPT_MARKER_PATH) },
+    { changes: projectMccAttemptChanges.map(change => change.path === PROJECT_MCC_ATTEMPT_MARKER_PATH ? { ...change, path: 'ops/OTHER_RELEASE.json' } : change) },
+    ...[BASE_COMMIT, FUNDING_BASE_COMMIT, READONLY_QUOTE_BASE_COMMIT, MCC_ONE_ATTEMPT_BASE_COMMIT, ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, '3'.repeat(40), null].map(parent => ({ parent })),
+    { parents: `${head} ${PROJECT_MCC_ATTEMPT_BASE_COMMIT} ${'3'.repeat(40)}\n` },
+    { parents: `${head}\n` },
+    { parents: `${head} ${'3'.repeat(40)}\n` },
+    { parent: PROJECT_MCC_ATTEMPT_BASE_COMMIT, changes: [] },
+  ]) assert.throws(() => selectProjectMccAttempt(overrides))
+})
+
+test('project-funded MCC release refuses incomplete or expanded scope and every prior marker change', () => {
+  for (const overrides of [
+    ...['server/billing.ts', '.github/workflows/cloudflare.yml', 'server/astraRepairedMccGrant.ts', 'wrangler.jsonc',
+      'ops/UNREVIEWED_RELEASE.json', 'ops/SOFTWARE_MODEL_PREVIEW_RELEASE_20261005.json']
+      .map(path => ({ changes: [...projectMccAttemptChanges, { status: 'A', path }] })),
+    ...PROJECT_MCC_ATTEMPT_REVIEWED_PATHS.filter(path => path !== PROJECT_MCC_ATTEMPT_MARKER_PATH)
+      .map(path => ({ changes: projectMccAttemptChanges.filter(change => change.path !== path) })),
+    ...PROJECT_MCC_ATTEMPT_REVIEWED_PATHS.flatMap(path => ['D', 'T', 'R100'].map(status => ({
+      changes: projectMccAttemptChanges.map(change => change.path === path ? { ...change, status } : change),
+    }))),
+    ...priorMarkers.flatMap(path => ['A', 'M', 'D', 'T'].map(status => ({ changes: [...projectMccAttemptChanges, { status, path }] }))),
+    { changes: [...projectMccAttemptChanges, projectMccAttemptChanges[0]] },
+  ]) assert.throws(() => selectProjectMccAttempt(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('project-funded MCC release requires canonical marker contents and regular non-executable files', () => {
+  const tree = PROJECT_MCC_ATTEMPT_REVIEWED_PATHS.map(path => `100644 blob ${blob}\t${path}\0`).join('')
+  for (const overrides of [
+    { marker: PROJECT_MCC_ATTEMPT_MARKER_CONTENT + '\n' },
+    { marker: PROJECT_MCC_ATTEMPT_MARKER_CONTENT.replace(PROJECT_MCC_ATTEMPT_BASE_COMMIT, '3'.repeat(40)) },
+    { marker: PROJECT_MCC_ATTEMPT_MARKER_CONTENT.replace('project-funded-mcc-one-attempt-20261005', 'different-release') },
+    ...['preserveBilling', 'preserveRemoteVars'].map(key => ({ marker: PROJECT_MCC_ATTEMPT_MARKER_CONTENT.replace(`"${key}": true`, `"${key}": false`) })),
+    ...[MARKER_CONTENT, FUNDING_MARKER_CONTENT, READONLY_QUOTE_MARKER_CONTENT, MCC_ONE_ATTEMPT_MARKER_CONTENT, ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT].map(marker => ({ marker })),
+    ...['100755', '120000', '160000'].map(mode => ({ mode })),
+    ...PROJECT_MCC_ATTEMPT_REVIEWED_PATHS.flatMap(path => ['100755', '120000', '160000'].map(mode => ({
+      tree: tree.replace(`100644 blob ${blob}\t${path}\0`, `${mode} blob ${blob}\t${path}\0`),
+    }))),
+    { tree: tree.replace(`blob ${blob}`, `commit ${blob}`) },
+    { tree: tree.replace('server/astraProjectBudget.ts', 'server/other.ts') },
+    { tree: tree.replace('server/astraProjectBudget.ts', 'server/entitlements.ts') },
+    { tree: tree.slice(0, -1) },
+  ]) assert.throws(() => selectProjectMccAttempt(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('rebased project-funded MCC introduction cannot fall through to ordinary billing without its marker', () => {
+  for (const path of ['scripts/select-pipeline-only-release.mjs', ...projectMccAttemptIntroductions]) {
+    assert.throws(() => selectProjectMccAttempt({ parent: '3'.repeat(40), changes: [{ status: 'A', path }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  }
+  assert.throws(() => selectProjectMccAttempt({ parent: '3'.repeat(40), changes: projectMccAttemptChanges.filter(change => change.path !== PROJECT_MCC_ATTEMPT_MARKER_PATH) }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  assert.throws(() => selectProjectMccAttempt({ parent: '3'.repeat(40), changes: projectMccAttemptChanges.filter(change => ![PROJECT_MCC_ATTEMPT_MARKER_PATH, 'scripts/select-pipeline-only-release.mjs'].includes(change.path)) }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  for (const status of ['A', 'M', 'D', 'T']) {
+    assert.throws(() => selectProjectMccAttempt({ parent: '3'.repeat(40), changes: [{ status, path: PROJECT_MCC_ATTEMPT_MARKER_PATH }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  }
+  for (const path of ['server/astraProjectBudget.ts', 'server/entitlements.ts', 'server/studio.ts', 'docs/ASTRA_PROJECT_BUDGET.md']) {
+    const fixture = projectMccAttemptEvidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path }] })
     assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
     assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
   }

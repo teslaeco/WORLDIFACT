@@ -9,6 +9,7 @@ import { STUDIO_PRICING, isStudioPricing, type StudioPricing, type StudioBudgetT
 import { astraSupportApproval, ASTRA_SUPPORT_ONCE_KEY, ASTRA_SUPPORT_NAMESPACE, ASTRA_SUPPORT_CENTS, type AstraSupportApproval, type AstraSupportClaim, type AstraSupportIdentity } from './astraSupportOnce.ts'
 import { astraSupplementalGrant, matchesAstraSupplementalClaim, ASTRA_SUPPLEMENTAL_KEY, ASTRA_SUPPLEMENTAL_NAMESPACE, ASTRA_SUPPLEMENTAL_CENTS, type AstraSupplementalGrant, type AstraSupplementalClaim } from './astraSupplementalGrant.ts'
 import { astraRepairedMccGrant, matchesAstraRepairedMccClaim, ASTRA_REPAIRED_MCC_KEY, ASTRA_REPAIRED_MCC_NAMESPACE, ASTRA_REPAIRED_MCC_CENTS, type AstraRepairedMccGrant, type AstraRepairedMccClaim } from './astraRepairedMccGrant.ts'
+import { astraProjectBudget, matchesAstraProjectBudgetRecord, matchesAstraProjectScope, isAstraProjectBudgetRecord, persistedAstraProjectBudget, ASTRA_PROJECT_BUDGET_KEY, ASTRA_PROJECT_BUDGET_NAMESPACE, ASTRA_PROJECT_BUDGET_CENTS, type AstraProjectBudget, type AstraProjectBudgetRecord } from './astraProjectBudget.ts'
 import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import type { GenerationFundingSnapshot } from '../src/lib/generationFunding.ts'
 
@@ -20,6 +21,7 @@ export interface EntitlementEnv {
   WORLDIFACT_ASTRA_SUPPORT_ONCE?: string
   WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT?: string
   WORLDIFACT_ASTRA_REPAIRED_MCC_GRANT?: string
+  WORLDIFACT_ASTRA_PROJECT_BUDGET?: string
 }
 export interface EntitlementStorage {
   get<T>(key: string): Promise<T | undefined>
@@ -33,8 +35,8 @@ type Subscription = { id: string; until: number; active: boolean; revision: numb
 type StudioProviderReservation = { version: 1; source: 'ordinary'; amountCents: number; state: 'reserved' | 'released' }
 type BlueprintProviderReconciliation = { revision: 'blueprint-bounded-output-v1'; model: GenerationModel; resultSha256: string; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number }
 type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalReservedCents: 175 | 200 | 400; retainedCents: number; releasedCents: number; at: number }
-type Job = { pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; repairedMccGrantId?: string; repairedMccClaim?: AstraRepairedMccClaim; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
-export type Reservation = { pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean }
+type Job = { pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; repairedMccGrantId?: string; repairedMccClaim?: AstraRepairedMccClaim; projectBudget?: AstraProjectBudgetRecord; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
+export type Reservation = { pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
 export type JobAccess = { fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
 export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean }
@@ -58,6 +60,7 @@ export interface EntitlementStatus {
   astraSupportOnce?: { available: boolean; consumed: boolean; maximumProviderCents: 175 }
   astraSupplementalGrant?: { available: boolean; consumed: boolean; maximumProviderCents: 175 }
   astraRepairedMccGrant?: { available: boolean; consumed: boolean; maximumProviderCents: 175 }
+  astraProjectBudget?: { available: boolean; committed: boolean; maximumProviderCents: 175; maxAttempts: 1 }
   credits: number
   reservedCredits: number
   availableCredits: number
@@ -124,7 +127,7 @@ function terminalOrdinaryAstraReservation(job: Job): boolean {
   if (!['failed', 'completed'].includes(job.state) || job.channel !== 'studio' || job.profile !== 'slow' ||
       (job.model !== undefined && job.model !== 'astra') || job.kind !== 'credits' || job.billingMode !== 'hold-v1' || job.cost !== terms.points ||
       typeof job.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(job.fingerprint) || !Number.isSafeInteger(job.at) || job.at <= 0 ||
-      !Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim')) return false
+      !Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim') || Object.hasOwn(job, 'projectBudget')) return false
   if (Object.hasOwn(job, 'studioDispatch') && job.studioDispatch !== 'ready-v1' && job.studioDispatch !== 'claimed-v1') return false
   if (job.studioDispatch === 'claimed-v1' ? studioDispatchUntil(job) === undefined : Object.hasOwn(job, 'studioDispatchUntil')) return false
   if (!Object.hasOwn(job, 'studioProviderReservation')) {
@@ -249,7 +252,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
   let providerReservation = job.studioProviderReservation
   const economics = reservationTerms(job)
   if (next === 'failed' && job.channel === 'studio' && job.kind === 'credits' && job.billingMode === 'hold-v1' &&
-      job.studioDispatch === 'ready-v1' && job.studioDispatchUntil === undefined && job.supportApprovalId === undefined && job.supplementalGrantId === undefined && !Object.hasOwn(job, 'repairedMccGrantId') && !Object.hasOwn(job, 'repairedMccClaim') &&
+      job.studioDispatch === 'ready-v1' && job.studioDispatchUntil === undefined && job.supportApprovalId === undefined && job.supplementalGrantId === undefined && !Object.hasOwn(job, 'repairedMccGrantId') && !Object.hasOwn(job, 'repairedMccClaim') && !Object.hasOwn(job, 'projectBudget') &&
       typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint) && economics && job.cost === economics.points &&
       providerReservation && typeof providerReservation === 'object' && !Array.isArray(providerReservation) && Object.keys(providerReservation).length === 4 &&
       providerReservation.version === 1 && providerReservation.source === 'ordinary' && providerReservation.state === 'reserved' && providerReservation.amountCents === economics.maxProviderCents) {
@@ -265,7 +268,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
   let blueprintReservation = job.blueprintProviderReservation
   if (next === 'failed' && job.channel === 'blueprint' && job.kind === 'credits' && job.billingMode === undefined &&
       job.blueprintDispatch === 'ready-v1' && job.blueprintDispatchUntil === undefined && !Object.hasOwn(job, 'pricing') &&
-      job.supportApprovalId === undefined && job.supplementalGrantId === undefined && !Object.hasOwn(job, 'repairedMccGrantId') && !Object.hasOwn(job, 'repairedMccClaim') &&
+      job.supportApprovalId === undefined && job.supplementalGrantId === undefined && !Object.hasOwn(job, 'repairedMccGrantId') && !Object.hasOwn(job, 'repairedMccClaim') && !Object.hasOwn(job, 'projectBudget') &&
       typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint) && economics && job.cost === economics.points &&
       blueprintReservation && typeof blueprintReservation === 'object' && !Array.isArray(blueprintReservation) && Object.keys(blueprintReservation).length === 4 &&
       blueprintReservation.version === 1 && blueprintReservation.source === 'ordinary' && blueprintReservation.state === 'reserved' && blueprintReservation.amountCents === economics.maxProviderCents) {
@@ -303,7 +306,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
 const PROVIDER_BUDGET = 'provider-budget-cents:v1'
 const FUNDING_SCAN_LIMIT = 256
 const FUNDING_JOB_FIELDS = ['pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile', 'failureCode', 'supportApprovalId',
-  'supplementalGrantId', 'repairedMccGrantId', 'repairedMccClaim', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'billingMode', 'state', 'studioDispatch', 'studioDispatchUntil',
+  'supplementalGrantId', 'repairedMccGrantId', 'repairedMccClaim', 'projectBudget', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'billingMode', 'state', 'studioDispatch', 'studioDispatchUntil',
   'studioProviderReservation', 'studioProviderReconciliation', 'blueprintDispatch', 'blueprintDispatchUntil', 'blueprintProviderReservation', 'blueprintProviderReconciliation']
 function fundingJob(value: unknown): value is Job {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -319,7 +322,7 @@ function fundingJob(value: unknown): value is Job {
 }
 /** Recognize only the explicit ordinary reservation writer. Historical markerless rows stay unknown. */
 function recordedOrdinaryReservation(job: Job): StudioProviderReservation | null {
-  if (job.kind !== 'credits' || typeof job.fingerprint !== 'string' || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim') ||
+  if (job.kind !== 'credits' || typeof job.fingerprint !== 'string' || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim') || Object.hasOwn(job, 'projectBudget') ||
       !Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at) return null
   const terms = reservationTerms(job), model = job.model ?? (job.profile === 'slow' ? 'astra' : 'sol')
   if (!terms || job.cost !== terms.points || (model === 'astra') !== (job.profile === 'slow')) return null
@@ -380,11 +383,11 @@ async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get'
     const job = value, id = key.slice(4), evidence = jobs.evidence, amounts = jobs.fundingEvidence
     jobs.states[job.state]++
     jobs.routes[job.channel ?? 'legacyBlueprint']++
-    const supportRecord = Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim')
+    const supportRecord = Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim') || Object.hasOwn(job, 'projectBudget')
     const marked = Object.hasOwn(job, 'studioProviderReconciliation') || Object.hasOwn(job, 'blueprintProviderReconciliation')
     const studioPending = id === id.toLowerCase() && providerBudgetPending(job)
     const blueprintPending = !Object.hasOwn(job, 'blueprintProviderReconciliation') && completedOrdinaryBlueprint(job) !== null
-    if (supportRecord) evidence.supportGrantRecords++
+    if (supportRecord && !Object.hasOwn(job, 'projectBudget')) evidence.supportGrantRecords++
     if (marked) evidence.markedReconciled++
     if (studioPending) evidence.ordinaryTerminalStudioPending++
     if (blueprintPending) evidence.ordinaryCompletedBlueprintPending++
@@ -436,7 +439,7 @@ async function usage(storage: EntitlementStorage, now: number) {
 }
 async function status(storage: EntitlementStorage, now: number, astraEnabled = false, support: AstraSupportApproval | null = null, globalAvailable = false, globalConsumed = false,
   supplemental: AstraSupplementalGrant | null = null, supplementalGlobalAvailable = false, supplementalGlobalConsumed = false, originalSupportConfigured = support !== null,
-  repaired: AstraRepairedMccGrant | null = null, repairedGlobalAvailable = false, repairedGlobalConsumed = false, originalConfigured = false, supplementalConfigured = false, repairedNow: () => number = () => now): Promise<EntitlementStatus> {
+  repaired: AstraRepairedMccGrant | null = null, repairedGlobalAvailable = false, repairedGlobalConsumed = false, originalConfigured = false, supplementalConfigured = false, repairedNow: () => number = () => now, project: AstraProjectBudget | null = null, projectGlobalAvailable = false, projectGlobalCommitted = false): Promise<EntitlementStatus> {
   const [credits, reserved, free, subscription, billingHold] = await Promise.all([balance(storage), reservedCredits(storage), usage(storage, now), storage.get<Subscription>('subscription'), storage.get<boolean>('billingHold')])
   const plan: PlanId = subscription?.plan ?? 'creator'
   // Historical Creator counters remain untouched for audit. Admission now uses
@@ -468,6 +471,16 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
       repairedAvailable = repairedGlobalAvailable && !repairedConsumed && !earlierPending && repairedNow() < Date.parse(repaired.expiresAt) && Number.isSafeInteger(providerRemaining) && providerRemaining >= 0
     } catch { repaired = null }
   }
+  let projectCommitted = false, projectAvailable = false
+  if (project) {
+    try {
+      const [record, pointer] = await Promise.all([storage.get(ASTRA_PROJECT_BUDGET_KEY), storage.get<{ id: string }>(CURRENT_STUDIO_JOB)])
+      const current = pointer ? await storage.get<Job>(`job:${pointer.id}`) : undefined
+      projectCommitted = projectGlobalCommitted || record !== undefined
+      projectAvailable = projectGlobalAvailable && !projectCommitted && current?.state !== 'reserved' &&
+        repairedNow() < Date.parse(project.expiresAt) && Number.isSafeInteger(providerRemaining) && providerRemaining >= 0
+    } catch { project = null }
+  }
   const subscriptionActive = active(subscription, now)
   const admission = (model: GenerationModel, detailed = false, pricing?: StudioPricing): { allowed: boolean; reason?: AdmissionFailureCode } => {
     const blocked = (reason: AdmissionFailureCode) => ({ allowed: false, reason })
@@ -480,7 +493,7 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
     if (!paid && model === 'astra') return blocked('FREE_SOL_ONLY')
     if (!paid && free.fast.length >= 2) return blocked('FAST_DAILY_LIMIT')
     if (paid && !Number.isSafeInteger(providerRemaining)) return blocked('ACCOUNT_ADMISSION_UNAVAILABLE')
-    if (paid && providerRemaining < (pricing?.maxProviderCents ?? MODEL_ECONOMICS[model].maxProviderCents) && !(model === 'astra' && detailed && !pricing && (supportAvailable || supplementalAvailable || repairedAvailable))) return blocked('PROVIDER_BUDGET_EXHAUSTED')
+    if (paid && providerRemaining < (pricing?.maxProviderCents ?? MODEL_ECONOMICS[model].maxProviderCents) && !(model === 'astra' && detailed && !pricing && (supportAvailable || supplementalAvailable || repairedAvailable || projectAvailable))) return blocked('PROVIDER_BUDGET_EXHAUSTED')
     return { allowed: true }
   }
   return {
@@ -493,6 +506,7 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
     ...(support ? { astraSupportOnce: { available: supportAvailable && admission('astra', true).allowed, consumed: supportConsumed, maximumProviderCents: ASTRA_SUPPORT_CENTS } } : {}),
     ...(supplemental ? { astraSupplementalGrant: { available: supplementalAvailable && admission('astra', true).allowed, consumed: supplementalConsumed, maximumProviderCents: ASTRA_SUPPLEMENTAL_CENTS } } : {}),
     ...(repaired ? { astraRepairedMccGrant: { available: repairedAvailable && admission('astra', true).allowed, consumed: repairedConsumed, maximumProviderCents: ASTRA_REPAIRED_MCC_CENTS } } : {}),
+    ...(project ? { astraProjectBudget: { available: projectAvailable && admission('astra', true).allowed, committed: projectCommitted, maximumProviderCents: ASTRA_PROJECT_BUDGET_CENTS, maxAttempts: 1 as const } } : {}),
     creatorAstra: { active: astraEnabled && subscriptionActive, remaining: null, maximum: null, recommended: 2, pointsForTwo: 500 },
     credits, reservedCredits: reserved, availableCredits: credits - reserved, generationCost: 50, generationCosts: { sol: 50, astra: 250, luna: 15 }, subscriptionGrant: PLAN_CATALOG[plan].credits,
     subscription: { active: active(subscription, now), plan, expiresAt: subscription?.until ? new Date(subscription.until).toISOString() : null },
@@ -549,6 +563,18 @@ export class AccountEntitlements {
       const support = () => astraSupportApproval(this.supportEnv.WORLDIFACT_ASTRA_SUPPORT_ONCE, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
       const supplemental = () => astraSupplementalGrant(this.supportEnv.WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
       const repaired = () => astraRepairedMccGrant(this.supportEnv.WORLDIFACT_ASTRA_REPAIRED_MCC_GRANT, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
+      const project = () => astraProjectBudget(this.supportEnv.WORLDIFACT_ASTRA_PROJECT_BUDGET, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now())
+      if (path === '/astra-project-budget-route' && request.method === 'GET') {
+        const record = await this.storage.get(ASTRA_PROJECT_BUDGET_KEY)
+        if (record !== undefined && !isAstraProjectBudgetRecord(record)) return json({ error: 'Project funding source is unavailable.' }, 503)
+        const account = request.headers.get('X-WORLDIFACT-Verified-Account'), fingerprint = request.headers.get('X-WORLDIFACT-Project-Fingerprint')
+        return json({ selected: matchesAstraProjectScope(record, account, fingerprint) || matchesAstraProjectScope(this.supportEnv.WORLDIFACT_ASTRA_PROJECT_BUDGET, account, fingerprint) })
+      }
+      if (path === '/astra-project-budget-status' && request.method === 'GET') {
+        const committed = await this.storage.get(ASTRA_PROJECT_BUDGET_KEY) !== undefined
+        const approved = project()
+        return json({ available: !!approved && !committed, committed: !!approved && committed })
+      }
       if (path === '/astra-support-status' && request.method === 'GET') {
         const approved = support(), consumed = approved ? await this.storage.get(ASTRA_SUPPORT_ONCE_KEY) !== undefined : false
         return json({ available: !!approved && !consumed, consumed })
@@ -570,13 +596,34 @@ export class AccountEntitlements {
         request.headers.get('X-WORLDIFACT-Supplemental-Available') === 'true', request.headers.get('X-WORLDIFACT-Supplemental-Consumed') === 'true', !!support(),
         request.headers.get('X-WORLDIFACT-Repaired-Mcc-Status') === 'known' ? repaired() : null,
         request.headers.get('X-WORLDIFACT-Repaired-Mcc-Available') === 'true', request.headers.get('X-WORLDIFACT-Repaired-Mcc-Consumed') === 'true',
-        !!this.supportEnv.WORLDIFACT_ASTRA_SUPPORT_ONCE, !!this.supportEnv.WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT, this.now)))
+        !!this.supportEnv.WORLDIFACT_ASTRA_SUPPORT_ONCE, !!this.supportEnv.WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT, this.now,
+        request.headers.get('X-WORLDIFACT-Project-Budget-Status') === 'known' ? project() : null,
+        request.headers.get('X-WORLDIFACT-Project-Budget-Available') === 'true', request.headers.get('X-WORLDIFACT-Project-Budget-Committed') === 'true')))
       if (path === '/billing' && request.method === 'GET') return json({ customer: await this.storage.get<string>('customer') ?? null })
       if (request.method !== 'POST') return json({ error: 'Not found' }, 404)
       const raw = await request.text()
       if (raw.length > (path === '/blueprint-complete' ? 120_000 : 8192)) return json({ error: 'Invalid internal request' }, 400)
       const input = JSON.parse(raw) as Record<string, unknown>
       if (!input || typeof input !== 'object' || Array.isArray(input)) return json({ error: 'Invalid internal request' }, 400)
+      if (path === '/astra-project-budget-claim') {
+        if (Object.keys(input).length !== 2 || Object.keys(input).some(key => !['id', 'fingerprint'].includes(key)) || typeof input.id !== 'string' || !JOB_ID.test(input.id) ||
+          typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint)) return json({ approved: false }, 400)
+        const id = input.id, fingerprint = input.fingerprint
+        return json(await this.storage.transaction(async storage => {
+          const existing = await storage.get(ASTRA_PROJECT_BUDGET_KEY)
+          const approved = project(), claimedAt = this.now()
+          if (!approved || approved.fingerprint !== fingerprint) return { approved: false }
+          if (existing !== undefined) return matchesAstraProjectBudgetRecord(existing, approved, claimedAt, id, fingerprint)
+            ? { approved: true, record: existing } : { approved: false }
+          const record: AstraProjectBudgetRecord = { ...approved, source: 'project', attemptsUsed: 1, reservedCents: ASTRA_PROJECT_BUDGET_CENTS, jobId: id, at: claimedAt }
+          if (!matchesAstraProjectBudgetRecord(record, approved, claimedAt, id, fingerprint)) return { approved: false }
+          await storage.put(ASTRA_PROJECT_BUDGET_KEY, record)
+          const current = project()
+          // Persisted maximum capacity is never released after a late response.
+          if (!current || !matchesAstraProjectBudgetRecord(record, current, this.now(), id, fingerprint)) return { approved: false }
+          return { approved: true, record }
+        }))
+      }
       if (path === '/astra-repaired-mcc-claim') {
         if (Object.keys(input).length !== 2 || Object.keys(input).some(key => !['id', 'fingerprint'].includes(key)) || typeof input.id !== 'string' || !JOB_ID.test(input.id) ||
           typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint)) return json({ approved: false }, 400)
@@ -734,6 +781,17 @@ export class AccountEntitlements {
                 !matchesAstraRepairedMccClaim(marker, grant, this.now(), String(input.id), String(input.fingerprint)) || marker.at !== claim.at) return { dispatch: false }
             repairedExpiry = Date.parse(claim.expiresAt)
           }
+          const projectJob = Object.hasOwn(job, 'projectBudget')
+          if (projectJob) {
+            const record = job.projectBudget, marker = await storage.get(ASTRA_PROJECT_BUDGET_KEY)
+            const approved = record ? persistedAstraProjectBudget(record, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now()) : null
+            if (!record || !approved || job.profile !== 'slow' || job.kind !== 'credits' || job.cost !== 250 || job.billingMode !== 'hold-v1' ||
+                Object.hasOwn(job, 'pricing') || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || repairedJob ||
+                Object.hasOwn(job, 'studioProviderReservation') || (job.qualityProfile ?? 'standard') !== 'standard' ||
+                !matchesAstraProjectBudgetRecord(record, approved, this.now(), String(input.id), String(input.fingerprint)) ||
+                !matchesAstraProjectBudgetRecord(marker, approved, this.now(), String(input.id), String(input.fingerprint)) || marker.at !== record.at) return { dispatch: false }
+            repairedExpiry = Date.parse(record.expiresAt)
+          }
           const claimedAt = this.now()
           if (!Number.isSafeInteger(job.at) || claimedAt < job.at || claimedAt >= job.at + STUDIO_SUBMISSION_GRACE_MS || claimedAt >= repairedExpiry) return { dispatch: false }
           const deadline = Math.min(claimedAt + STUDIO_DISPATCH_WINDOW_MS, job.at + STUDIO_SUBMISSION_GRACE_MS, repairedExpiry)
@@ -741,7 +799,7 @@ export class AccountEntitlements {
           // recovery-only; a delayed acknowledgement cannot launch after this
           // bounded deadline. Legacy rows cannot acquire dispatch permission.
           await storage.put(`job:${input.id}`, { ...job, studioDispatch: 'claimed-v1', studioDispatchUntil: deadline })
-          if (repairedJob && this.now() >= repairedExpiry) throw new Error('Repaired MCC dispatch expired before commit')
+          if ((repairedJob || projectJob) && this.now() >= repairedExpiry) throw new Error('Bounded MCC dispatch expired before commit')
           return { dispatch: true, deadline }
         }))
       }
@@ -793,76 +851,101 @@ export class AccountEntitlements {
           let supportApprovalId: string | undefined
           let supplementalGrantId: string | undefined
           let repairedMccClaim: AstraRepairedMccClaim | undefined
+          let projectBudgetRecord: AstraProjectBudgetRecord | undefined
           let studioProviderReservation: StudioProviderReservation | undefined
           let blueprintProviderReservation: StudioProviderReservation | undefined
           if (paid) {
-            // A possible repaired attempt reads the ordinary ledger without
-            // lazy initialization. Only an actual ordinary reservation may seed it.
+            // Separate support/project attempts only read the ordinary ledger.
+            // Only an actual ordinary reservation may initialize or debit it.
             const repairedConfiguration = repaired()
-            const readOnlyProvider = repairedConfiguration || request.headers.has('X-WORLDIFACT-Repaired-Mcc-Claim')
+            const projectConfiguration = project()
+            const projectMarker = await storage.get(ASTRA_PROJECT_BUDGET_KEY)
+            if (input.projectBudgetInputEligible === true && projectMarker !== undefined && !isAstraProjectBudgetRecord(projectMarker))
+              return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
+            const projectSelected = request.headers.get('X-WORLDIFACT-Project-Budget-Selected') === 'true' || request.headers.has('X-WORLDIFACT-Project-Budget-Record') ||
+              input.projectBudgetInputEligible === true && (matchesAstraProjectScope(projectMarker, request.headers.get('X-WORLDIFACT-Verified-Account'), fingerprint) ||
+                matchesAstraProjectScope(this.supportEnv.WORLDIFACT_ASTRA_PROJECT_BUDGET, request.headers.get('X-WORLDIFACT-Verified-Account'), fingerprint))
+            const readOnlyProvider = repairedConfiguration || projectSelected || request.headers.has('X-WORLDIFACT-Repaired-Mcc-Claim')
             const providerStored = readOnlyProvider ? await storage.get<number>(PROVIDER_BUDGET) : undefined
             const remaining = readOnlyProvider
               ? providerStored === undefined ? Math.floor(Math.max(0, credits) * 7 / 10) : providerStored
               : await providerBudget(storage, credits)
             if (!Number.isSafeInteger(remaining)) throw new Error('Invalid provider budget')
             const ceiling = pricing?.maxProviderCents ?? MODEL_ECONOMICS[model].maxProviderCents
-            const candidate = model === 'astra' && channel === 'studio' && fingerprint && remaining >= 0 && ceiling === ASTRA_SUPPORT_CENTS ? support() : null
-            const claim = candidate ? await storage.get(ASTRA_SUPPORT_ONCE_KEY) : undefined
-            const approved = candidate && claim === undefined && request.headers.get('X-WORLDIFACT-Support-Approval') === candidate.approvalId
-            const supplementalCandidate = remaining < ceiling && model === 'astra' && channel === 'studio' && fingerprint && remaining >= 0 && ceiling === ASTRA_SUPPLEMENTAL_CENTS &&
-              !(candidate && claim === undefined) ? supplemental() : null
-            const supplementalMarker = supplementalCandidate ? await storage.get(ASTRA_SUPPLEMENTAL_KEY) : undefined
-            const supplementalHeader = request.headers.get('X-WORLDIFACT-Supplemental-Claim')
-            const supplementalClaim: unknown = supplementalHeader && supplementalHeader.length <= 2048 ? JSON.parse(supplementalHeader) : null
-            const supplementalApproved = !!supplementalCandidate && supplementalMarker === undefined && matchesAstraSupplementalClaim(supplementalClaim, supplementalCandidate, this.now(), id, fingerprint!)
-            const repairedCandidate = repairedConfiguration && (remaining < ceiling || request.headers.has('X-WORLDIFACT-Repaired-Mcc-Claim')) && remaining >= 0 && !pricing && ceiling === ASTRA_REPAIRED_MCC_CENTS &&
-              model === 'astra' && channel === 'studio' && profile === 'slow' && qualityProfile === 'standard' && input.repairedMccInputEligible === true &&
-              fingerprint === repairedConfiguration.fingerprint && !approved && !supplementalApproved ? repairedConfiguration : null
-            let repairedMarker: unknown, earlierPending = true
-            if (repairedCandidate) {
-              const [old, extra, marker] = await Promise.all([storage.get(ASTRA_SUPPORT_ONCE_KEY), storage.get(ASTRA_SUPPLEMENTAL_KEY), storage.get(ASTRA_REPAIRED_MCC_KEY)])
-              repairedMarker = marker
-              earlierPending = !!this.supportEnv.WORLDIFACT_ASTRA_SUPPORT_ONCE && old === undefined || !!this.supportEnv.WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT && extra === undefined
-              if (old && typeof old === 'object' && 'approvalId' in old && old.approvalId === repairedCandidate.grantId ||
-                  extra && typeof extra === 'object' && 'grantId' in extra && extra.grantId === repairedCandidate.grantId) earlierPending = true
-            }
-            const repairedHeader = request.headers.get('X-WORLDIFACT-Repaired-Mcc-Claim')
-            const repairedClaim: unknown = repairedHeader && repairedHeader.length <= 2048 ? JSON.parse(repairedHeader) : null
-            const repairedApproved = !!repairedCandidate && !earlierPending && repairedMarker === undefined &&
-              matchesAstraRepairedMccClaim(repairedClaim, repairedCandidate, this.now(), id, fingerprint!)
-            if (request.headers.has('X-WORLDIFACT-Repaired-Mcc-Claim') && !repairedApproved) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
-            if (remaining < ceiling && !approved && !supplementalApproved && !repairedApproved) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED',
-              ...(candidate && claim === undefined ? { supportEligible: true } : {}), ...(supplementalCandidate && supplementalMarker === undefined ? { supplementalEligible: true } : {}),
-              ...(repairedCandidate && !earlierPending && repairedMarker === undefined && repaired() ? { repairedMccEligible: true } : {}) }
-
-            if (approved) {
-              // The singleton marker is independent of approval ID. Changing
-              // configuration, replaying, restarting or failure cannot refill it.
-              const record: AstraSupportClaim = { version: 1, approvalId: candidate.approvalId, amountCents: ASTRA_SUPPORT_CENTS, jobId: id, fingerprint: fingerprint!, at: this.now() }
-              await storage.put(ASTRA_SUPPORT_ONCE_KEY, record)
-              supportApprovalId = candidate.approvalId
-            }
-            if (supplementalApproved) {
-              // Copy the full immutable global provenance into the same atomic
-              // transaction as the hold and job, never into the original key.
-              await storage.put(ASTRA_SUPPLEMENTAL_KEY, supplementalClaim)
-              supplementalGrantId = supplementalCandidate.grantId
-            }
-            if (repairedApproved) {
-              repairedMccClaim = repairedClaim as AstraRepairedMccClaim
-              await storage.put(ASTRA_REPAIRED_MCC_KEY, repairedMccClaim)
+            if (projectSelected) {
+              // The exact approved draft exclusively uses its project source.
+              // Neither available ordinary funding nor older grants can replace it.
+              const pointer = await storage.get<{ id: string }>(CURRENT_STUDIO_JOB)
+              const currentJob = pointer ? await storage.get<Job>(`job:${pointer.id}`) : undefined
+              const candidate = projectConfiguration && remaining >= 0 && !pricing && ceiling === ASTRA_PROJECT_BUDGET_CENTS &&
+                model === 'astra' && channel === 'studio' && profile === 'slow' && qualityProfile === 'standard' && input.projectBudgetInputEligible === true &&
+                fingerprint === projectConfiguration.fingerprint && projectMarker === undefined && currentJob?.state !== 'reserved' ? projectConfiguration : null
+              if (!candidate) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
+              const header = request.headers.get('X-WORLDIFACT-Project-Budget-Record')
+              const record: unknown = header && header.length <= 2048 ? JSON.parse(header) : null
+              if (!header) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED', ...(project() ? { projectBudgetEligible: true } : {}) }
+              if (!matchesAstraProjectBudgetRecord(record, candidate, this.now(), id, fingerprint!)) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
+              projectBudgetRecord = record
+              await storage.put(ASTRA_PROJECT_BUDGET_KEY, projectBudgetRecord)
             } else {
-              // Preserve original and supplemental writers. The repaired
-              // attempt never writes, seeds or recredits this ordinary key.
-              await storage.put(PROVIDER_BUDGET, approved || supplementalApproved ? remaining : remaining - ceiling)
+              const candidate = model === 'astra' && channel === 'studio' && fingerprint && remaining >= 0 && ceiling === ASTRA_SUPPORT_CENTS ? support() : null
+              const claim = candidate ? await storage.get(ASTRA_SUPPORT_ONCE_KEY) : undefined
+              const approved = candidate && claim === undefined && request.headers.get('X-WORLDIFACT-Support-Approval') === candidate.approvalId
+              const supplementalCandidate = remaining < ceiling && model === 'astra' && channel === 'studio' && fingerprint && remaining >= 0 && ceiling === ASTRA_SUPPLEMENTAL_CENTS &&
+                !(candidate && claim === undefined) ? supplemental() : null
+              const supplementalMarker = supplementalCandidate ? await storage.get(ASTRA_SUPPLEMENTAL_KEY) : undefined
+              const supplementalHeader = request.headers.get('X-WORLDIFACT-Supplemental-Claim')
+              const supplementalClaim: unknown = supplementalHeader && supplementalHeader.length <= 2048 ? JSON.parse(supplementalHeader) : null
+              const supplementalApproved = !!supplementalCandidate && supplementalMarker === undefined && matchesAstraSupplementalClaim(supplementalClaim, supplementalCandidate, this.now(), id, fingerprint!)
+              const repairedCandidate = repairedConfiguration && (remaining < ceiling || request.headers.has('X-WORLDIFACT-Repaired-Mcc-Claim')) && remaining >= 0 && !pricing && ceiling === ASTRA_REPAIRED_MCC_CENTS &&
+                model === 'astra' && channel === 'studio' && profile === 'slow' && qualityProfile === 'standard' && input.repairedMccInputEligible === true &&
+                fingerprint === repairedConfiguration.fingerprint && !approved && !supplementalApproved ? repairedConfiguration : null
+              let repairedMarker: unknown, earlierPending = true
+              if (repairedCandidate) {
+                const [old, extra, marker] = await Promise.all([storage.get(ASTRA_SUPPORT_ONCE_KEY), storage.get(ASTRA_SUPPLEMENTAL_KEY), storage.get(ASTRA_REPAIRED_MCC_KEY)])
+                repairedMarker = marker
+                earlierPending = !!this.supportEnv.WORLDIFACT_ASTRA_SUPPORT_ONCE && old === undefined || !!this.supportEnv.WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT && extra === undefined
+                if (old && typeof old === 'object' && 'approvalId' in old && old.approvalId === repairedCandidate.grantId ||
+                    extra && typeof extra === 'object' && 'grantId' in extra && extra.grantId === repairedCandidate.grantId) earlierPending = true
+              }
+              const repairedHeader = request.headers.get('X-WORLDIFACT-Repaired-Mcc-Claim')
+              const repairedClaim: unknown = repairedHeader && repairedHeader.length <= 2048 ? JSON.parse(repairedHeader) : null
+              const repairedApproved = !!repairedCandidate && !earlierPending && repairedMarker === undefined &&
+                matchesAstraRepairedMccClaim(repairedClaim, repairedCandidate, this.now(), id, fingerprint!)
+              if (request.headers.has('X-WORLDIFACT-Repaired-Mcc-Claim') && !repairedApproved) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
+              if (remaining < ceiling && !approved && !supplementalApproved && !repairedApproved) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED',
+                ...(candidate && claim === undefined ? { supportEligible: true } : {}), ...(supplementalCandidate && supplementalMarker === undefined ? { supplementalEligible: true } : {}),
+                ...(repairedCandidate && !earlierPending && repairedMarker === undefined && repaired() ? { repairedMccEligible: true } : {}) }
+
+              if (approved) {
+                // The singleton marker is independent of approval ID. Changing
+                // configuration, replaying, restarting or failure cannot refill it.
+                const record: AstraSupportClaim = { version: 1, approvalId: candidate.approvalId, amountCents: ASTRA_SUPPORT_CENTS, jobId: id, fingerprint: fingerprint!, at: this.now() }
+                await storage.put(ASTRA_SUPPORT_ONCE_KEY, record)
+                supportApprovalId = candidate.approvalId
+              }
+              if (supplementalApproved) {
+                // Copy the full immutable global provenance into the same atomic
+                // transaction as the hold and job, never into the original key.
+                await storage.put(ASTRA_SUPPLEMENTAL_KEY, supplementalClaim)
+                supplementalGrantId = supplementalCandidate.grantId
+              }
+              if (repairedApproved) {
+                repairedMccClaim = repairedClaim as AstraRepairedMccClaim
+                await storage.put(ASTRA_REPAIRED_MCC_KEY, repairedMccClaim)
+              } else {
+                // Preserve original and supplemental writers. The repaired
+                // attempt never writes, seeds or recredits this ordinary key.
+                await storage.put(PROVIDER_BUDGET, approved || supplementalApproved ? remaining : remaining - ceiling)
+              }
+              if (channel === 'studio' && fingerprint && !approved && !supplementalApproved && !repairedApproved)
+                studioProviderReservation = { version: 1, source: 'ordinary', amountCents: ceiling, state: 'reserved' }
+              if (channel === 'blueprint' && fingerprint && fencedBlueprint)
+                blueprintProviderReservation = { version: 1, source: 'ordinary', amountCents: ceiling, state: 'reserved' }
             }
-            if (channel === 'studio' && fingerprint && !approved && !supplementalApproved && !repairedApproved)
-              studioProviderReservation = { version: 1, source: 'ordinary', amountCents: ceiling, state: 'reserved' }
-            if (channel === 'blueprint' && fingerprint && fencedBlueprint)
-              blueprintProviderReservation = { version: 1, source: 'ordinary', amountCents: ceiling, state: 'reserved' }
           }
           const cloudHold = paid && channel === 'studio'
-          const job: Job = { ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(repairedMccClaim ? { repairedMccGrantId: repairedMccClaim.grantId, repairedMccClaim } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), ...(blueprintProviderReservation ? { blueprintProviderReservation } : {}), ...(channel === 'blueprint' && fingerprint && fencedBlueprint ? { blueprintDispatch: 'ready-v1' as const } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
+          const job: Job = { ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(repairedMccClaim ? { repairedMccGrantId: repairedMccClaim.grantId, repairedMccClaim } : {}), ...(projectBudgetRecord ? { projectBudget: projectBudgetRecord } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), ...(blueprintProviderReservation ? { blueprintProviderReservation } : {}), ...(channel === 'blueprint' && fingerprint && fencedBlueprint ? { blueprintDispatch: 'ready-v1' as const } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
@@ -872,6 +955,11 @@ export class AccountEntitlements {
             const current = repaired()
             if (!current || !matchesAstraRepairedMccClaim(repairedMccClaim, current, this.now(), id, fingerprint!))
               throw new Error('Repaired MCC admission expired before account commit')
+          }
+          if (projectBudgetRecord) {
+            const current = project()
+            if (!current || !matchesAstraProjectBudgetRecord(projectBudgetRecord, current, this.now(), id, fingerprint!))
+              throw new Error('Project budget admission expired before account commit')
           }
           return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold, ...(job.pricing ? { pricing: job.pricing } : {}) }
         })
@@ -1102,7 +1190,8 @@ export class AccountEntitlements {
 /** This helper is server-only. Never accept a uid from a request parameter or body. */
 type SupportContext = { identity?: AstraSupportIdentity; available?: boolean; consumed?: boolean; approvalId?: string; statusKnown?: boolean;
   supplemental?: { available?: boolean; consumed?: boolean; statusKnown?: boolean; claim?: AstraSupplementalClaim };
-  repaired?: { available?: boolean; consumed?: boolean; statusKnown?: boolean; claim?: AstraRepairedMccClaim } }
+  repaired?: { available?: boolean; consumed?: boolean; statusKnown?: boolean; claim?: AstraRepairedMccClaim };
+  project?: { selected?: boolean; available?: boolean; committed?: boolean; statusKnown?: boolean; record?: AstraProjectBudgetRecord } }
 function internalHeaders(userId: string, support?: SupportContext) {
   return { 'X-WORLDIFACT-Verified-Account': userId.toLowerCase(),
     ...(support?.identity?.emailVerified === true ? { 'X-WORLDIFACT-Verified-Email': support.identity.email.toLowerCase() } : {}),
@@ -1117,7 +1206,12 @@ function internalHeaders(userId: string, support?: SupportContext) {
     ...(support?.repaired?.statusKnown === true ? { 'X-WORLDIFACT-Repaired-Mcc-Status': 'known' } : {}),
     ...(support?.repaired?.available === true ? { 'X-WORLDIFACT-Repaired-Mcc-Available': 'true' } : {}),
     ...(support?.repaired?.consumed === true ? { 'X-WORLDIFACT-Repaired-Mcc-Consumed': 'true' } : {}),
-    ...(support?.repaired?.claim ? { 'X-WORLDIFACT-Repaired-Mcc-Claim': JSON.stringify(support.repaired.claim) } : {}) }
+    ...(support?.repaired?.claim ? { 'X-WORLDIFACT-Repaired-Mcc-Claim': JSON.stringify(support.repaired.claim) } : {}),
+    ...(support?.project?.selected === true ? { 'X-WORLDIFACT-Project-Budget-Selected': 'true' } : {}),
+    ...(support?.project?.statusKnown === true ? { 'X-WORLDIFACT-Project-Budget-Status': 'known' } : {}),
+    ...(support?.project?.available === true ? { 'X-WORLDIFACT-Project-Budget-Available': 'true' } : {}),
+    ...(support?.project?.committed === true ? { 'X-WORLDIFACT-Project-Budget-Committed': 'true' } : {}),
+    ...(support?.project?.record ? { 'X-WORLDIFACT-Project-Budget-Record': JSON.stringify(support.project.record) } : {}) }
 }
 export async function entitlementCall<T>(env: EntitlementEnv, userId: string, path: string, body?: unknown, support?: SupportContext): Promise<T> {
   if (!ACCOUNT_ID.test(userId)) throw new EntitlementError('A verified account is required.', 401)
@@ -1196,21 +1290,76 @@ async function repairedMccCall(env: EntitlementEnv, userId: string, identity?: A
     return { claim }
   } catch { throw new EntitlementError('The repaired MCC allowance could not be confirmed. Keep the same job; do not start another.') }
 }
+async function projectBudgetSelected(env: EntitlementEnv, userId: string, fingerprint: string): Promise<boolean> {
+  if (!ACCOUNT_ID.test(userId) || !env.ACCOUNT_ENTITLEMENTS) throw new EntitlementError('A verified account allowance is required.')
+  if (env.ACCOUNT_LEDGER_MODE === 'sandbox') return false
+  const object = env.ACCOUNT_ENTITLEMENTS.get(env.ACCOUNT_ENTITLEMENTS.idFromName(ASTRA_PROJECT_BUDGET_NAMESPACE))
+  try {
+    const response = await object.fetch(new Request('https://entitlements.internal/astra-project-budget-route', {
+      headers: { ...internalHeaders(userId), 'X-WORLDIFACT-Project-Fingerprint': fingerprint }, signal: AbortSignal.timeout(5000),
+    }))
+    if (!response.ok) throw new Error('Unconfirmed project source')
+    const result = await response.json() as Record<string, unknown>
+    if (!result || typeof result !== 'object' || Array.isArray(result) || Object.keys(result).length !== 1 || typeof result.selected !== 'boolean') throw new Error('Invalid project source')
+    return result.selected
+  } catch { throw new EntitlementError('The project funding source could not be confirmed. Keep the same job; do not start another.') }
+}
+async function projectBudgetCall(env: EntitlementEnv, userId: string, body?: { id: string; fingerprint: string }): Promise<{ available?: boolean; committed?: boolean; record?: AstraProjectBudgetRecord }> {
+  if (!env.WORLDIFACT_ASTRA_PROJECT_BUDGET || (env.ACCOUNT_LEDGER_MODE !== undefined && env.ACCOUNT_LEDGER_MODE !== 'live')) return {}
+  if (!ACCOUNT_ID.test(userId) || !env.ACCOUNT_ENTITLEMENTS) throw new EntitlementError('A verified account allowance is required.')
+  const configuration = env.WORLDIFACT_ASTRA_PROJECT_BUDGET
+  const object = env.ACCOUNT_ENTITLEMENTS.get(env.ACCOUNT_ENTITLEMENTS.idFromName(ASTRA_PROJECT_BUDGET_NAMESPACE))
+  try {
+    const response = await object.fetch(new Request(`https://entitlements.internal/astra-project-budget-${body ? 'claim' : 'status'}`, {
+      method: body ? 'POST' : 'GET', headers: internalHeaders(userId), ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(5000),
+    }))
+    if (!response.ok) throw new Error('Unconfirmed project budget')
+    const result = await response.json() as Record<string, unknown>
+    if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid project budget')
+    if (!body) {
+      if (Object.keys(result).length !== 2 || typeof result.available !== 'boolean' || typeof result.committed !== 'boolean' || (result.available && result.committed)) throw new Error('Invalid project budget status')
+      return { available: result.available, committed: result.committed }
+    }
+    if (result.approved === false && Object.keys(result).length === 1) return {}
+    const record = result.record as AstraProjectBudgetRecord | undefined
+    const approved = astraProjectBudget(configuration, userId, env.ACCOUNT_LEDGER_MODE, record?.at as number)
+    if (result.approved !== true || Object.keys(result).length !== 2 || !approved || !matchesAstraProjectBudgetRecord(record, approved, record?.at as number, body.id, body.fingerprint)) throw new Error('Invalid project budget record')
+    return { record }
+  } catch { throw new EntitlementError('The project budget could not be confirmed. Keep the same job; do not start another.') }
+}
 export async function entitlementStatus(env: EntitlementEnv, userId: string, identity?: AstraSupportIdentity) {
-  const [support, supplemental, repaired] = await Promise.all([
+  const [support, supplemental, repaired, project] = await Promise.all([
     supportCall(env, userId, identity).catch(() => ({} as { available?: boolean; consumed?: boolean })),
     supplementalCall(env, userId, identity).catch(() => ({} as { available?: boolean; consumed?: boolean })),
     repairedMccCall(env, userId, identity).catch(() => ({} as { available?: boolean; consumed?: boolean })),
+    projectBudgetCall(env, userId).catch(() => ({} as { available?: boolean; committed?: boolean })),
   ]) // Optional support cannot hide ordinary account availability.
   return entitlementCall<EntitlementStatus>(env, userId, '/status', undefined, { identity, available: support.available, consumed: support.consumed, statusKnown: typeof support.available === 'boolean',
     supplemental: { available: supplemental.available, consumed: supplemental.consumed, statusKnown: typeof supplemental.available === 'boolean' },
-    repaired: { available: repaired.available, consumed: repaired.consumed, statusKnown: typeof repaired.available === 'boolean' } })
+    repaired: { available: repaired.available, consumed: repaired.consumed, statusKnown: typeof repaired.available === 'boolean' },
+    project: { available: project.available, committed: project.committed, statusKnown: typeof project.available === 'boolean' } })
 }
-export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing; blueprintDispatch?: 'fenced-v1'; repairedMccInputEligible?: boolean }) {
-  const body = { id: jobId, profile, ...(metadata?.repairedMccInputEligible === true ? { repairedMccInputEligible: true } : {}), ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.blueprintDispatch ? { blueprintDispatch: metadata.blueprintDispatch } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
+export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing; blueprintDispatch?: 'fenced-v1'; repairedMccInputEligible?: boolean; projectBudgetInputEligible?: boolean }) {
+  const body = { id: jobId, profile, ...(metadata?.projectBudgetInputEligible === true ? { projectBudgetInputEligible: true } : {}), ...(metadata?.repairedMccInputEligible === true ? { repairedMccInputEligible: true } : {}), ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.blueprintDispatch ? { blueprintDispatch: metadata.blueprintDispatch } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
   const identity = metadata?.supportIdentity
-  const initial = await entitlementCall<Reservation>(env, userId, '/reserve', body, { identity })
+  const selected = metadata?.projectBudgetInputEligible === true && metadata.channel === 'studio' && profile === 'slow' &&
+    (model === undefined || model === 'astra') && !!fingerprint && metadata.pricing === undefined
+    ? await projectBudgetSelected(env, userId, fingerprint) : false
+  const initial = await entitlementCall<Reservation>(env, userId, '/reserve', body, { identity, project: { selected } })
   if (initial.allowed || initial.reason !== 'PROVIDER_BUDGET_EXHAUSTED' || metadata?.pricing !== undefined || metadata?.channel !== 'studio' || profile !== 'slow' || (model !== undefined && model !== 'astra') || !fingerprint) return initial
+  if (selected && initial.projectBudgetEligible === true && metadata?.projectBudgetInputEligible === true) {
+    const project = await projectBudgetCall(env, userId, { id: jobId, fingerprint })
+    if (!project.record) return initial
+    const reservation = await entitlementCall<Reservation>(env, userId, '/reserve', body, { identity, project: { record: project.record } })
+    if (!reservation || typeof reservation !== 'object' || Array.isArray(reservation) || typeof reservation.allowed !== 'boolean' ||
+        (reservation.allowed && (reservation.cost !== 250 || reservation.kind !== 'credits' || Object.keys(reservation).length !== 5 ||
+          Object.keys(reservation).some(key => !['allowed', 'repeated', 'cost', 'kind', 'held', 'state'].includes(key)) ||
+          !(reservation.repeated === false && reservation.held === true && reservation.state === undefined ||
+            reservation.repeated === true && ['reserved', 'completed'].includes(String(reservation.state))))))
+      throw new EntitlementError('The project account reservation could not be confirmed. Keep the same job; do not start another.')
+    return reservation
+  }
+  if (selected) return initial
   // Claim globally before adding account funding. Uncertain/failed account
   // admission never releases this claim; only this exact job can replay it.
   if (initial.supportEligible === true) {

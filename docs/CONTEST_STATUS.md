@@ -1,8 +1,47 @@
 # WORLDIFACT — TerraformingPlanet Astra heroine released
 
-Updated 4 October 2026.
+Updated 5 October 2026.
 
-## LOCAL REVIEW — private account Studio model library (5 October 2026)
+## LOCAL REVIEW — one project-funded detailed cabinet attempt (5 October 2026)
+
+This is a separately authorized, finite project API reservation for one detailed
+Studio request. The authority is bound to a verified immutable account UUID,
+the full normalized account-bound input fingerprint, a canonical window of at
+most 24 hours, one attempt and a maximum provider cost of 175 cents. It is not
+an ordinary-funding reset, a five-attempt pool or a recurring spending policy.
+Private activation values remain outside the repository and are not active by
+publishing source alone.
+
+The fixed project namespace stores one typed immutable authority and job claim.
+Changing or removing configuration cannot rotate its identity, clear the spent
+attempt, transfer it to another account or renew the window. The matching draft
+selects project funding before ordinary funds or previous support authorities.
+An occupied or uncertain project claim cannot fall through to another funding
+source for that bound request. A reserved maximum is not a measured invoice.
+No automatic generation or paid retry is introduced.
+
+The existing 250-point hold remains: accepted completion debits it once, and
+failure releases it. The ordinary provider reserve and historical support
+records are preserved. Project-funded records cannot replenish ordinary funding
+through existing reconciliation. Status and quote reads do not seed or mutate
+any financial record. Existing authentication, rate limits, request identity,
+normalized-input validation, Oracle cost ceiling and once-only dispatch remain
+required.
+
+The private operator setting is a serialized JSON string in a Text binding,
+with no API credential or new persistent access. Its exact input fingerprint
+and fresh dates must be prepared only after the reviewed release and must match
+the normal UI request. A subsequent paid click requires the separately approved
+preflight and remains explicit. This limited attempt does not establish normal
+unlimited generation availability or guarantee the requested visual quality.
+
+Focused race/expiry/ownership tests, independent review and exact-head hosted
+checks remain required. The bounded release must skip all five financial steps
+and preserve dashboard variables; it must fail closed on the wrong base or
+changed file scope. No private account identity, activation JSON or model bytes
+are part of this package.
+
+## DEPLOYED — private account Studio model library (5 October 2026)
 
 Completed Studio ownership is already recorded on the account, but the model
 gallery previously listed only files in the current browser's IndexedDB. A
