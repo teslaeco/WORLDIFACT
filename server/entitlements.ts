@@ -37,6 +37,9 @@ type Job = { pricing?: StudioPricing; fingerprint?: string; prompt?: string; cha
 export type Reservation = { pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean }
 export type JobAccess = { fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
+export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean }
+type OwnedStudioLibraryPage = { models: OwnedStudioLibraryModel[]; nextCursor: string | null; hasMore: boolean }
+export const STUDIO_LIBRARY_SCAN_LIMIT = 64
 export type StudioProviderReconciliationResult = { reconciled: boolean; repeated?: boolean; releasedCents?: number; retainedCents?: number; reason?: string }
 type StudioDispatchClaim = { dispatch: false } | { dispatch: true; deadline: number }
 export const STUDIO_DISPATCH_WINDOW_MS = 30_000
@@ -78,6 +81,28 @@ const grantId = (value: unknown): value is string => typeof value === 'string' &
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
 const active = (subscription: Subscription | undefined, now: number) => !!subscription?.active && subscription.until > now
 const validInteger = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value)
+const libraryCursorKey = (value: unknown): value is string => typeof value === 'string' && value.startsWith('job:') && value.length <= 2048
+function completedLibraryJob(value: unknown, now: number): value is Job & { fingerprint: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const job = value as Job
+  return job.channel === 'studio' && job.state === 'completed' && ['fast', 'slow'].includes(job.profile) &&
+    ['free', 'credits'].includes(job.kind) && validInteger(job.cost) && job.cost >= 0 &&
+    typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint) &&
+    validInteger(job.at) && job.at > 0 && job.at <= now &&
+    (job.updatedAt === undefined || validInteger(job.updatedAt) && job.updatedAt >= job.at && job.updatedAt <= now) &&
+    (job.prompt === undefined || typeof job.prompt === 'string' && job.prompt.trim().length >= 3 && job.prompt.length <= 4000) &&
+    (job.pricing === undefined || isStudioPricing(job.pricing)) && job.failureCode === undefined
+}
+async function libraryPermissions(storage: EntitlementStorage, now: number) {
+  const [subscription, credits, billingHold] = await Promise.all([
+    storage.get<Subscription>('subscription'), balance(storage), storage.get<boolean>('billingHold'),
+  ])
+  return { subscribed: active(subscription, now), clear: credits >= 0 && billingHold !== true }
+}
+function libraryModel(id: string, job: Job & { fingerprint: string }, permissions: { subscribed: boolean; clear: boolean }): OwnedStudioLibraryModel {
+  return { id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
+    completedAt: job.updatedAt ?? job.at, downloadAllowed: permissions.clear && (job.profile === 'fast' || permissions.subscribed) }
+}
 function studioDispatchUntil(job: Job): number | undefined {
   return job.studioDispatch === 'claimed-v1' && Number.isSafeInteger(job.studioDispatchUntil) && Number(job.studioDispatchUntil) > job.at && Number(job.studioDispatchUntil) <= job.at + STUDIO_SUBMISSION_GRACE_MS ? job.studioDispatchUntil : undefined
 }
@@ -487,6 +512,35 @@ export class AccountEntitlements {
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname, now = this.now()
     try {
+      if (path === '/studio-library' || path.startsWith('/studio-library/')) {
+        if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
+        const params = new URL(request.url).searchParams
+        if (path !== '/studio-library') {
+          const id = path.slice('/studio-library/'.length)
+          if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id) || params.size) return json({ error: 'Invalid library model.' }, 400)
+          const job = await this.storage.get<unknown>(`job:${id}`)
+          return json({ model: completedLibraryJob(job, now) ? libraryModel(id, job, await libraryPermissions(this.storage, now)) : null })
+        }
+        if ([...params.keys()].some(key => key !== 'after') || params.getAll('after').length > 1 ||
+            params.has('after') && !libraryCursorKey(params.get('after'))) return json({ error: 'Invalid library cursor.' }, 400)
+        if (!this.storage.list) throw new Error('Account history listing unavailable')
+        // Read existing account rows only. No current-job pointer, migration,
+        // status projection, funding seed, reconciliation or provider request.
+        const after = params.get('after')
+        const entries = await this.storage.list<unknown>({ prefix: 'job:', ...(after ? { startAfter: after } : {}), limit: STUDIO_LIBRARY_SCAN_LIMIT })
+        const permissions = await libraryPermissions(this.storage, now)
+        const models: OwnedStudioLibraryModel[] = []
+        let cursor: string | null = null
+        for (const [key, value] of entries) {
+          if (!libraryCursorKey(key) || after && key <= after || cursor && key <= cursor) throw new Error('Invalid account history order')
+          cursor = key
+          if (/^job:[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(key) && completedLibraryJob(value, now))
+            models.push(libraryModel(key.slice(4), value, permissions))
+        }
+        models.sort((a, b) => b.completedAt - a.completedAt || b.id.localeCompare(a.id))
+        const hasMore = entries.size === STUDIO_LIBRARY_SCAN_LIMIT
+        return json({ models, nextCursor: hasMore ? cursor : null, hasMore } satisfies OwnedStudioLibraryPage)
+      }
       if (path === '/generation-funding') {
         if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
         if (new URL(request.url).search) return json({ error: 'Query parameters are not supported.' }, 400)
@@ -1207,6 +1261,8 @@ export async function reconcileUserStudioProvider(env: EntitlementEnv, userId: s
   return entitlementCall<StudioProviderReconciliationResult>(env, userId, '/reconcile-studio-provider', { id: jobId, receipt })
 }
 export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<JobAccess>(env, userId, '/job', { id: jobId })
+export const userStudioLibrary = (env: EntitlementEnv, userId: string, after: string | null) => entitlementCall<OwnedStudioLibraryPage>(env, userId, `/studio-library${after ? `?after=${encodeURIComponent(after)}` : ''}`)
+export const userStudioLibraryModel = (env: EntitlementEnv, userId: string, id: string) => entitlementCall<{ model: OwnedStudioLibraryModel | null }>(env, userId, `/studio-library/${id}`)
 export const currentUserStudioJob = (env: EntitlementEnv, userId: string) => entitlementCall<{ job: CurrentStudioJob | null }>(env, userId, '/studio-current', {})
 export const clearCurrentUserStudioJob = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<{ cleared: boolean }>(env, userId, '/studio-current-clear', { id: jobId })
 export const closeMissingStudioJob = (env: EntitlementEnv, userId: string, jobId: string, fingerprint: string, issued: number) => entitlementCall<ClosedMissingStudioJob>(env, userId, '/studio-close-missing', { id: jobId, fingerprint, issued })

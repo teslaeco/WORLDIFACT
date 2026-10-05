@@ -11,6 +11,7 @@ import {
   FUNDING_BASE_COMMIT, FUNDING_MARKER_PATH, FUNDING_MARKER_CONTENT, FUNDING_REVIEWED_PATHS,
   READONLY_QUOTE_BASE_COMMIT, READONLY_QUOTE_MARKER_PATH, READONLY_QUOTE_MARKER_CONTENT, READONLY_QUOTE_REVIEWED_PATHS,
   MCC_ONE_ATTEMPT_BASE_COMMIT, MCC_ONE_ATTEMPT_MARKER_PATH, MCC_ONE_ATTEMPT_MARKER_CONTENT, MCC_ONE_ATTEMPT_REVIEWED_PATHS,
+  ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, ACCOUNT_MODEL_LIBRARY_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT, ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS,
   selectPipelineOnlyRelease, selectPipelineReleaseOptions,
 } from '../scripts/select-pipeline-only-release.mjs'
 
@@ -19,10 +20,15 @@ const changes = REVIEWED_PATHS.map(path => ({ status: path === MARKER_PATH ? 'A'
 const fundingChanges = FUNDING_REVIEWED_PATHS.map(path => ({ status: path === FUNDING_MARKER_PATH ? 'A' : 'M', path }))
 const readonlyQuoteChanges = READONLY_QUOTE_REVIEWED_PATHS.map(path => ({ status: path === READONLY_QUOTE_MARKER_PATH ? 'A' : 'M', path }))
 const mccOneAttemptChanges = MCC_ONE_ATTEMPT_REVIEWED_PATHS.map(path => ({ status: path === MCC_ONE_ATTEMPT_MARKER_PATH ? 'A' : 'M', path }))
+const accountModelLibraryIntroductions = ['src/lib/studioLibrary.ts', 'tests/account-provider-lifecycle.test.mjs', 'tests/studio-library-gallery.test.mjs', 'tests/studio-library.test.ts']
+const accountModelLibraryChanges = ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS.map(path => ({
+  status: path === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || accountModelLibraryIntroductions.includes(path) ? 'A' : 'M', path,
+}))
 const scopedPaths = new Map([
   [FUNDING_MARKER_PATH, FUNDING_REVIEWED_PATHS],
   [READONLY_QUOTE_MARKER_PATH, READONLY_QUOTE_REVIEWED_PATHS],
   [MCC_ONE_ATTEMPT_MARKER_PATH, MCC_ONE_ATTEMPT_REVIEWED_PATHS],
+  [ACCOUNT_MODEL_LIBRARY_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS],
 ])
 function evidence(overrides = {}) {
   const data = { head, parent: BASE_COMMIT, changes, markerPath: MARKER_PATH, marker: MARKER_CONTENT, mode: '100644', ...overrides }
@@ -71,6 +77,12 @@ function mccOneAttemptEvidence(overrides = {}) {
 }
 function selectMccOneAttempt(overrides = {}) {
   return selectPipelineReleaseOptions('fixture', mccOneAttemptEvidence(overrides).readGit)
+}
+function accountModelLibraryEvidence(overrides = {}) {
+  return evidence({ parent: ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, changes: accountModelLibraryChanges, markerPath: ACCOUNT_MODEL_LIBRARY_MARKER_PATH, marker: ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT, ...overrides })
+}
+function selectAccountModelLibrary(overrides = {}) {
+  return selectPipelineReleaseOptions('fixture', accountModelLibraryEvidence(overrides).readGit)
 }
 
 test('only the exact reviewed repair and canonical public marker preserve billing', () => {
@@ -234,6 +246,81 @@ test('rebased MCC preparation cannot omit its marker and later ordinary edits re
   }
   for (const path of ['server/astraRepairedMccGrant.ts', 'server/entitlements.ts', 'server/studio.ts', 'docs/ASTRA_REPAIRED_MCC_GRANT.md']) {
     const fixture = mccOneAttemptEvidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path }] })
+    assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
+    assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
+  }
+})
+
+test('the private account library release preserves billing and remote vars for its canonical fifteen-file package', () => {
+  assert.deepEqual(selectAccountModelLibrary(), { preserveBilling: true, preserveRemoteVars: true })
+  assert.equal(ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, '1b8da59e2b5c3bb9856fe63e34bfd8c2793a05f1')
+  assert.equal(readFileSync(new URL('../' + ACCOUNT_MODEL_LIBRARY_MARKER_PATH, import.meta.url), 'utf8'), ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT)
+  assert.equal(ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS.length, 15)
+  for (const path of [MARKER_PATH, FUNDING_MARKER_PATH, READONLY_QUOTE_MARKER_PATH, MCC_ONE_ATTEMPT_MARKER_PATH,
+    '.github/workflows/cloudflare.yml', 'server/astraRepairedMccGrant.ts', 'server/billing.ts', 'wrangler.jsonc', 'package.json', 'package-lock.json']) {
+    assert.equal(ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS.includes(path), false, path)
+  }
+})
+
+test('account library release refuses missing or renamed markers, wrong parents and any merge parent', () => {
+  for (const overrides of [
+    { changes: accountModelLibraryChanges.filter(change => change.path !== ACCOUNT_MODEL_LIBRARY_MARKER_PATH) },
+    { changes: accountModelLibraryChanges.map(change => change.path === ACCOUNT_MODEL_LIBRARY_MARKER_PATH ? { ...change, path: 'ops/OTHER_RELEASE.json' } : change) },
+    ...[BASE_COMMIT, FUNDING_BASE_COMMIT, READONLY_QUOTE_BASE_COMMIT, MCC_ONE_ATTEMPT_BASE_COMMIT, '3'.repeat(40), null].map(parent => ({ parent })),
+    { parents: `${head} ${ACCOUNT_MODEL_LIBRARY_BASE_COMMIT} ${'3'.repeat(40)}\n` },
+    { parents: `${head}\n` },
+    { parents: `${head} ${'3'.repeat(40)}\n` },
+    { parent: ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, changes: [] },
+  ]) assert.throws(() => selectAccountModelLibrary(overrides))
+})
+
+test('account library release refuses incomplete or expanded paths, deletions, renames and type changes', () => {
+  for (const overrides of [
+    ...['server/billing.ts', '.github/workflows/cloudflare.yml', 'server/astraRepairedMccGrant.ts', 'wrangler.jsonc', 'ops/UNREVIEWED_RELEASE.json']
+      .map(path => ({ changes: [...accountModelLibraryChanges, { status: 'M', path }] })),
+    ...ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS.filter(path => path !== ACCOUNT_MODEL_LIBRARY_MARKER_PATH)
+      .map(path => ({ changes: accountModelLibraryChanges.filter(change => change.path !== path) })),
+    ...ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS.flatMap(path => ['D', 'T', 'R100'].map(status => ({
+      changes: accountModelLibraryChanges.map(change => change.path === path ? { ...change, status } : change),
+    }))),
+    { changes: [...accountModelLibraryChanges, accountModelLibraryChanges[0]] },
+  ]) assert.throws(() => selectAccountModelLibrary(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('account library release rejects every prior marker change and noncanonical new marker contents', () => {
+  for (const overrides of [
+    ...[MARKER_PATH, FUNDING_MARKER_PATH, READONLY_QUOTE_MARKER_PATH, MCC_ONE_ATTEMPT_MARKER_PATH]
+      .flatMap(path => ['A', 'M', 'D', 'T'].map(status => ({ changes: [...accountModelLibraryChanges, { status, path }] }))),
+    { marker: ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT + '\n' },
+    { marker: ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT.replace(ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, '3'.repeat(40)) },
+    { marker: ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT.replace('private-account-model-library-20261005', 'different-release') },
+    ...['preserveBilling', 'preserveRemoteVars'].map(key => ({ marker: ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT.replace(`"${key}": true`, `"${key}": false`) })),
+    ...[MARKER_CONTENT, FUNDING_MARKER_CONTENT, READONLY_QUOTE_MARKER_CONTENT, MCC_ONE_ATTEMPT_MARKER_CONTENT].map(marker => ({ marker })),
+    ...['A', 'M', 'D', 'T'].map(status => ({ parent: '3'.repeat(40), changes: [{ status, path: ACCOUNT_MODEL_LIBRARY_MARKER_PATH }] })),
+  ]) assert.throws(() => selectAccountModelLibrary(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('account library release requires every reviewed path to be a regular non-executable file', () => {
+  const tree = ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS.map(path => `100644 blob ${blob}\t${path}\0`).join('')
+  for (const overrides of [
+    ...['100755', '120000', '160000'].map(mode => ({ mode })),
+    ...ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS.flatMap(path => ['100755', '120000', '160000'].map(mode => ({
+      tree: tree.replace(`100644 blob ${blob}\t${path}\0`, `${mode} blob ${blob}\t${path}\0`),
+    }))),
+    { tree: tree.replace(`blob ${blob}`, `commit ${blob}`) },
+    { tree: tree.replace('src/lib/studioLibrary.ts', 'src/lib/other.ts') },
+    { tree: tree.replace('src/lib/studioLibrary.ts', 'src/lib/studioProtocol.ts') },
+    { tree: tree.slice(0, -1) },
+  ]) assert.throws(() => selectAccountModelLibrary(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('rebased account library preparation cannot omit its marker while later ordinary edits retain normal selection', () => {
+  for (const path of ['scripts/select-pipeline-only-release.mjs', ...accountModelLibraryIntroductions]) {
+    assert.throws(() => selectAccountModelLibrary({ parent: '3'.repeat(40), changes: [{ status: 'A', path }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  }
+  assert.throws(() => selectAccountModelLibrary({ parent: '3'.repeat(40), changes: accountModelLibraryChanges.filter(change => change.path !== ACCOUNT_MODEL_LIBRARY_MARKER_PATH) }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  for (const path of ['src/lib/studioLibrary.ts', 'src/components/StudioGallery.tsx', 'server/studio.ts']) {
+    const fixture = accountModelLibraryEvidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path }] })
     assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
     assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
   }

@@ -4,18 +4,19 @@ import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedSt
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
-import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, pendingUserStudioProvider, reconcileUserStudioProvider, reconcileUserBlueprintProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv } from './entitlements.ts'
+import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, pendingUserStudioProvider, reconcileUserStudioProvider, reconcileUserBlueprintProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, userStudioLibrary, userStudioLibraryModel, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv, type OwnedStudioLibraryModel } from './entitlements.ts'
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { astraRepairedMccGrant } from './astraRepairedMccGrant.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioNewJobPolicy.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
-import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata } from '../src/lib/studioProtocol.ts'
+import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata, type StudioLibraryModel, type StudioLibraryPage } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; STUDIO_NEW_JOB_POLICY?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
 const STUDIO_JOB_WATCHDOG_MS = 35 * 60_000
 const RECEIPT = new RegExp(`^(${UUID})\\.([0-9]{13})\\.([a-f0-9]{64})\\.([a-f0-9]{64})$`)
+const LIBRARY_TOKEN_TTL_MS = 15 * 60_000
 const EXPORTS: Record<string, { name: string; type: string; limit: number }> = {
   pbr: { name: 'textures-pbr.zip', type: 'application/zip', limit: 512 * 1024 * 1024 },
   fbx: { name: 'model.fbx', type: 'application/octet-stream', limit: 512 * 1024 * 1024 },
@@ -30,6 +31,9 @@ class StudioError extends Error {
 // describe an uncertain read and must remain recoverable under the same receipt.
 class InvalidStudioModelError extends StudioError {}
 class StudioVerificationBusyError extends StudioError {}
+class StudioLibraryReceiptExpiredError extends StudioError {
+  constructor() { super('This library download receipt expired. Refresh this saved model.', 401) }
+}
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
 type StudioDiagnosticReason = NonNullable<StudioJob['failureCode']> |
   'PREFLIGHT_ACCEPTED' | 'EXISTING_ACCOUNT_RESERVATION' | 'STUDIO_ALLOWANCE_UNAVAILABLE' |
@@ -50,20 +54,57 @@ function logStudioDiagnostic(diagnostic: StudioDiagnostic) {
 const secretReady = (env: StudioEnv) => (env.OWNER_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.OWNER_ACCESS_TOKEN?.length ?? 0) <= 256
 const keyOf = (env: StudioEnv) => crypto.subtle.importKey('raw', new TextEncoder().encode(env.OWNER_ACCESS_TOKEN!), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
 const hex = (value: ArrayBuffer) => Array.from(new Uint8Array(value), n => n.toString(16).padStart(2, '0')).join('')
-const signingBytes = (value: string, userId?: string) => new TextEncoder().encode(`WORLDIFACT-STUDIO-RECEIPT-v1:${value}${userId ? `:account:${userId}` : ''}`)
-async function receipt(env: StudioEnv, id: string, hash: string, userId?: string, pricing?: StudioPricing) {
+const signingBytes = (value: string, userId?: string, library = false) => new TextEncoder().encode(`${library ? 'WORLDIFACT-STUDIO-LIBRARY-ARTIFACT-v1' : 'WORLDIFACT-STUDIO-RECEIPT-v1'}:${value}${userId ? `:account:${userId}` : ''}`)
+async function receipt(env: StudioEnv, id: string, hash: string, userId?: string, pricing?: StudioPricing, library = false) {
   const issued = Date.now(), payload = `${id}.${issued}.${hash}`
-  return { id, ticket: `${payload}.${hex(await crypto.subtle.sign('HMAC', await keyOf(env), signingBytes(payload, userId)))}`, createdAt: new Date(issued).toISOString(), ...(pricing ? { pricing } : {}) }
+  return { id, ticket: `${library ? 'library.' : ''}${payload}.${hex(await crypto.subtle.sign('HMAC', await keyOf(env), signingBytes(payload, userId, library)))}`, createdAt: new Date(issued).toISOString(), ...(pricing ? { pricing } : {}) }
 }
-async function verifyReceipt(env: StudioEnv, token: string, id?: string, ownedHistory = false, userId?: string) {
-  const match = RECEIPT.exec(token)
+async function verifyReceipt(env: StudioEnv, token: string, id?: string, ownedHistory = false, userId?: string, allowLibrary = false) {
+  const library = token.startsWith('library.')
+  if (library && (!allowLibrary || !userId)) throw new StudioError('Library receipts authorize saved artifact downloads only.', 401)
+  const match = RECEIPT.exec(library ? token.slice('library.'.length) : token)
   if (!secretReady(env) || !match || (id && match[1] !== id)) throw new StudioError('A valid receipt for this job is required.', 401)
   const issued = Number(match[2])
-  if (issued > Date.now() + 30_000 || (!ownedHistory && Date.now() - issued > 7 * 24 * 3600_000)) throw new StudioError('This job receipt expired. Keep your saved model.', 401)
+  if (issued > Date.now() + 30_000 || (!library && !ownedHistory && Date.now() - issued > 7 * 24 * 3600_000)) throw new StudioError('This job receipt expired. Keep your saved model.', 401)
   const signature = Uint8Array.from(match[4].match(/../g)!, byte => parseInt(byte, 16))
-  const valid = await crypto.subtle.verify('HMAC', await keyOf(env), signature, signingBytes(`${match[1]}.${match[2]}.${match[3]}`, userId))
+  const valid = await crypto.subtle.verify('HMAC', await keyOf(env), signature, signingBytes(`${match[1]}.${match[2]}.${match[3]}`, userId, library))
   if (!valid) throw new StudioError('The job receipt is not valid.', 401)
-  return { id: match[1], issued, hash: match[3] }
+  if (library && Date.now() - issued >= LIBRARY_TOKEN_TTL_MS) throw new StudioLibraryReceiptExpiredError()
+  return { id: match[1], issued, hash: match[3], library }
+}
+const cursorBytes = (value: string, userId: string) => new TextEncoder().encode(`WORLDIFACT-STUDIO-LIBRARY-CURSOR-v1:/api/studio/library:account:${userId}:${value}`)
+async function libraryCursor(env: StudioEnv, userId: string, after: string) {
+  const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify({ after, issued: Date.now() })))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return `${encoded}.${hex(await crypto.subtle.sign('HMAC', await keyOf(env), cursorBytes(encoded, userId)))}`
+}
+async function verifyLibraryCursor(env: StudioEnv, userId: string, token: string) {
+  const invalid = () => new StudioError('This account library page expired or is invalid. Refresh your library.', 400)
+  if (token.length > 12_000) throw invalid()
+  const match = /^([A-Za-z0-9_-]+)\.([a-f0-9]{64})$/.exec(token)
+  if (!match) throw invalid()
+  const signature = Uint8Array.from(match[2].match(/../g)!, byte => parseInt(byte, 16))
+  if (!await crypto.subtle.verify('HMAC', await keyOf(env), signature, cursorBytes(match[1], userId))) throw invalid()
+  try {
+    const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(atob(match[1].replace(/-/g, '+').replace(/_/g, '/')), char => char.charCodeAt(0))))
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== 2 ||
+        typeof value.after !== 'string' || !value.after.startsWith('job:') || value.after.length > 2048 ||
+        !Number.isSafeInteger(value.issued) || value.issued > Date.now() + 30_000 || Date.now() - value.issued >= LIBRARY_TOKEN_TTL_MS) throw invalid()
+    return value.after as string
+  } catch { throw invalid() }
+}
+async function publicLibraryModel(env: StudioEnv, userId: string, model: OwnedStudioLibraryModel): Promise<StudioLibraryModel> {
+  return { id: model.id, prompt: model.prompt, createdAt: new Date(model.at).toISOString(), completedAt: new Date(model.completedAt).toISOString(),
+    receipt: await receipt(env, model.id, model.fingerprint, userId, undefined, true), review: 'UNREVIEWED', downloadAllowed: model.downloadAllowed }
+}
+async function libraryReadLimit(env: StudioEnv, userId: string) {
+  if (!env.ACCOUNT_LIMITER) throw new StudioError('The account library read limiter is unavailable.', 503)
+  try {
+    if (!(await env.ACCOUNT_LIMITER.limit({ key: `studio-library:${userId}` })).success)
+      throw new StudioError('Please wait before reading more saved models.', 429)
+  } catch (error) {
+    if (error instanceof StudioError) throw error
+    throw new StudioError('The account library read limiter is unavailable.', 503)
+  }
 }
 const accountPolicy = (env: StudioEnv) => env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true'
 async function accountIdentity(request: Request, env: StudioEnv, fetcher: typeof fetch) {
@@ -394,6 +435,27 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         fastOnly: trial, promptMaxLength: Math.min(4000, Math.max(3, (state?.promptMaxLength ?? 2000) - oracleStudioPayload('', { worldId: 'enchanted-ai-shop', prompt: '', purpose: 'figurine', textureMaxSize: 4096, photos: [] }).prompt.length)), allowance: pool })
     }
     if (!secretReady(env)) throw new StudioError('The job receipt service is not configured.', 503)
+    if (url.pathname === '/api/studio/library' || url.pathname.startsWith('/api/studio/library/')) {
+      if (request.method !== 'GET') throw new StudioError('Use GET to read your model library.', 405)
+      if (request.headers.get('Sec-Fetch-Site') === 'cross-site' || request.headers.get('Origin') && request.headers.get('Origin') !== url.origin)
+        throw new StudioError('Same-origin request required.', 403)
+      const user = await accountIdentity(request, env, fetcher)
+      if (!user) throw new StudioError('Sign in to read your saved cloud models.', 401)
+      await libraryReadLimit(env, user.id)
+      if (url.pathname !== '/api/studio/library') {
+        const id = url.pathname.slice('/api/studio/library/'.length)
+        if (!new RegExp(`^${UUID}$`).test(id) || url.search) throw new StudioError('Invalid saved model request.', 400)
+        const { model } = await userStudioLibraryModel(env, user.id, id)
+        if (!model) throw new StudioError('This saved model is not available in your account library.', 404)
+        return json({ accountId: user.id, model: await publicLibraryModel(env, user.id, model) })
+      }
+      if ([...url.searchParams.keys()].some(key => key !== 'cursor') || url.searchParams.getAll('cursor').length > 1)
+        throw new StudioError('Invalid account library request.', 400)
+      const after = url.searchParams.has('cursor') ? await verifyLibraryCursor(env, user.id, url.searchParams.get('cursor')!) : null
+      const page = await userStudioLibrary(env, user.id, after)
+      return json({ accountId: user.id, models: await Promise.all(page.models.map(model => publicLibraryModel(env, user.id, model))),
+        nextCursor: page.hasMore && page.nextCursor ? await libraryCursor(env, user.id, page.nextCursor) : null, hasMore: page.hasMore } satisfies StudioLibraryPage)
+    }
     if (url.pathname === '/api/studio/reconcile-budget' && request.method === 'POST') {
       await limit(request, env, 'reconcile-budget')
       const user = await accountIdentity(request, env, fetcher)
@@ -553,7 +615,16 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       // The HMAC receipt is account-bound. If the entitlement Durable Object lost
       // only its job row, keep recovery tied to this exact signed UUID instead of
       // spinning forever or starting another paid generation.
-      const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', match[1], !!user, user?.id)
+      const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', match[1], !!user, user?.id, !!match[2])
+      if (auth.library) {
+        // A library ticket only reads the existing completed artifact. Losing or
+        // changing the owned row revokes it; never enter legacy Oracle recovery.
+        const { model } = await userStudioLibraryModel(env, user!.id, auth.id)
+        if (!model || model.fingerprint !== auth.hash) throw new StudioError('This saved model is not available in your account library.', 403)
+        if (!model.downloadAllowed) throw new StudioError('This saved model requires eligible account access to download.', 403)
+        await limit(request, env, `artifact:${auth.id}:${match[2].replace('exports/', '')}`)
+        return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
+      }
       const access = user ? await userJobAccess(env, user.id, auth.id) : null
       // A preview/model read must not consume another format's download slot.
       // The verified receipt and fixed route grammar bound each independent key.
@@ -639,6 +710,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
     return json({ error: 'Studio route or method not found.' }, 404)
   } catch (e) {
     if (e instanceof StudioError || e instanceof EntitlementError) return json({ error: e.message,
+      ...(e instanceof StudioLibraryReceiptExpiredError ? { code: 'STUDIO_LIBRARY_RECEIPT_EXPIRED' } : {}),
       ...(e instanceof StudioError && e.failureCode ? { failureCode: e.failureCode } : {}) }, e.status)
     return json({ error: 'The request could not be confirmed. Preserve your inputs and receipt; never automatically resubmit a paid job.' }, 503)
   }

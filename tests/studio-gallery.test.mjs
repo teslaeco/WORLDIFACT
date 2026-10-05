@@ -16,5 +16,5 @@ test('model gallery is reachable from account, AI Shop and Game Lab', async () =
   assert.match(workbench, /StudioGallery/)
   assert.match(gallery, /Preview 3D/)
   assert.match(gallery, /Download GLB/)
-  assert.match(gallery, /device archive, not a cloud backup/i)
+  assert.match(gallery, /device archive is not a cloud backup/i)
 })
