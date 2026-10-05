@@ -27,19 +27,19 @@ test('cost notice has readable light text on an explicit dark surface', async ()
   assert.match(css, /max-width:1024px/)
 })
 
-test('compact funding notice keeps exact refusal and price visible with full review available in native details', async () => {
+test('compact funding notice keeps exact refusal and price visible with read-only availability details in native details', async () => {
   const CostNotice = (await loadCostNotice()).default
   const refusal = 'Not enough unreserved API funding for this model. No Oracle generation was submitted.'
-  const fundingReview = 'No eligible earlier model reservations were found. No unused funding was returned.'
-  const accountQuote = { quote: { state: 'blocked', reason: 'PROVIDER_BUDGET_EXHAUSTED', message: refusal, points: 250, after: null }, checking: false, canRefresh: true, refresh() { throw new Error('Rendering must not refresh') }, reconciling: false, fundingReview }
+  const accountQuote = { quote: { state: 'blocked', reason: 'PROVIDER_BUDGET_EXHAUSTED', message: refusal, points: 250, after: null }, checking: false, canRefresh: true, refresh() { throw new Error('Rendering must not refresh') } }
   const html = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(CostNotice, { model: 'astra', detailed: true, accountQuote })))
   const [visible, disclosure] = html.split('<details>')
   assert.match(visible, /This attempt: 250 points/)
   assert.ok(visible.includes(refusal), 'The actual refusal stays above the closed disclosure')
-  assert.doesNotMatch(visible, /Account funding review needed|No eligible earlier model reservations/)
+  assert.doesNotMatch(visible, /Account funding unavailable|No eligible earlier model reservations/)
   assert.match(visible, /type="button"[^>]*>Refresh availability/)
   assert.match(disclosure, /<summary>Model details and billing<\/summary>/)
-  assert.ok(disclosure.includes(fundingReview))
+  assert.match(disclosure, /reads your current allowance; it does not check or return funding from earlier models/)
+  assert.doesNotMatch(html, /Earlier models were checked|No eligible earlier model reservations|unused funding was (?:confirmed|returned)/i)
   assert.match(disclosure, /incurred or uncertain costs remain reserved/)
   assert.match(disclosure, /existing Blender worker/)
   assert.match(disclosure, /<a href="\/account\/generation-funding" target="_blank" rel="noopener noreferrer">Read-only funding details · opens in a new tab<\/a>/, 'The standalone page bypasses normal account hooks while a new tab preserves the in-memory Shop draft')

@@ -1,0 +1,6 @@
+{
+  "release": "generation-readonly-quote-20261005",
+  "baseCommit": "177c71098e9ccca3e18bedb505f2dd9932a9aab8",
+  "preserveBilling": true,
+  "preserveRemoteVars": true
+}
