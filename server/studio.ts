@@ -6,6 +6,7 @@ import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
 import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, pendingUserStudioProvider, reconcileUserStudioProvider, reconcileUserBlueprintProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv } from './entitlements.ts'
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
+import { astraRepairedMccGrant } from './astraRepairedMccGrant.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioNewJobPolicy.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
@@ -80,6 +81,25 @@ const boundInputDigest = async (input: StudioInput, userId?: string) => boundDig
 function prepareMetadata(input: StudioInput): StudioPrepareMetadata {
   const { photos, ...metadata } = input
   return { ...metadata, photoCount: photos.length }
+}
+function repairedMccInputEligible(input: StudioPrepareMetadata): boolean {
+  return input.worldId === 'enchanted-ai-shop' && input.photoCount === 0 &&
+    input.generationProfile === undefined && input.budgetTier === undefined &&
+    input.pricingRevision === undefined && input.acceptedPoints === undefined
+}
+async function checkRepairedMccPreparation(env: StudioEnv, user: Awaited<ReturnType<typeof accountIdentity>>, input: StudioPrepareMetadata, digest: string) {
+  if (!user || !astraRepairedMccGrant(env.WORLDIFACT_ASTRA_REPAIRED_MCC_GRANT, user.id, env.ACCOUNT_LEDGER_MODE, Date.now(), user.emailVerified ? user.email : null)) return
+  // This optional check reads eligibility only. Ordinary funding and either
+  // earlier allowance retain their existing input contract and never borrow
+  // the separate, exact-draft approval.
+  const status = await entitlementStatus(env, user.id, user)
+  const onlyRepairedMcc = status.astraRepairedMccGrant?.available === true && status.studioAdmission.allowed &&
+    !status.generationAdmission.astra.allowed && status.astraSupportOnce?.available !== true && status.astraSupplementalGrant?.available !== true
+  if (!onlyRepairedMcc) return
+  const approved = astraRepairedMccGrant(env.WORLDIFACT_ASTRA_REPAIRED_MCC_GRANT, user.id, env.ACCOUNT_LEDGER_MODE, Date.now(), user.emailVerified ? user.email : null)
+  if (!approved || !repairedMccInputEligible(input) || approved.fingerprint !== await boundDigest(digest, user.id)) {
+    throw new StudioError('This one-time allowance is reserved for the approved MCC draft. Restore its exact description and settings. No points were reserved.', 409)
+  }
 }
 async function accountAccess(env: StudioEnv, userId: string | undefined, id: string) {
   if (!userId) return null
@@ -432,6 +452,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
           metadata = prepareMetadata(input); digest = await inputDigest(input)
         }
       } catch (e) { throw new StudioError(e instanceof Error ? e.message : 'Invalid preparation manifest.', 400) }
+      await checkRepairedMccPreparation(env, user, metadata, digest)
       await preflight(request, env, fetcher, metadata, user?.id)
       const pool = await allowance(env)
       if (!pool.unlimited && pool.remaining === 0) throw new StudioError('The cumulative allowance is exhausted. No job was started.', 429)
@@ -463,7 +484,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (Date.now() - auth.issued > (pricing ? 5 : 30) * 60_000) throw new StudioError('This unsubmitted receipt expired. Review your inputs and current price before preparing another.', 409)
       const checked = await preflight(request, env, fetcher, prepareMetadata(input), user?.id)
       if (user) {
-        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt, supportIdentity: user, ...(pricing ? { pricing } : {}) })
+        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt, supportIdentity: user, repairedMccInputEligible: repairedMccInputEligible(prepareMetadata(input)), ...(pricing ? { pricing } : {}) })
         if (userReservation.repeated && userReservation.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed', fetcher), recoveryOnly: true }, 202)
         if (!userReservation.allowed) {
           const conflict = ['REQUEST_PAYLOAD_MISMATCH', 'JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(userReservation.reason ?? '')

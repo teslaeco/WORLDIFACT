@@ -2,6 +2,37 @@
 
 Updated 4 October 2026.
 
+## LOCAL REVIEW — one separately approved MCC attempt after runtime repair (5 October 2026)
+
+The compatible STANDARD context repair has an owner-provided verified activation
+receipt. That runtime change does not restore a consumed support allowance.
+This separate application patch adds one fixed, optional project-funded
+authority for one specifically approved MCC request. The private configuration
+binds a verified account and its exact canonical request fingerprint, USD 1.75,
+and a window no longer than 24 hours. Deployment does not activate the authority.
+
+Both older singleton claims and ordinary provider funds remain unchanged on
+the new-funded path. Its claim stays consumed after failure, expiry, restart,
+configuration rotation or lost acknowledgement. Ordinary-funded requests retain
+their existing path before a new support claim is obtained. The new request
+holds 250 points; accepted success charges those points once, failure releases
+that hold. Neither outcome adds support funds to ordinary provider funding.
+
+Preparation reads eligibility and rejects changes to the approved draft when
+this new allowance is the only available funding. Actual submission separately
+validates the full signed input, exact account-bound fingerprint and text-only
+legacy STANDARD route. Existing receipt recovery cannot create a replacement
+provider call. No Stripe, subscription, price, credential, runtime or historical
+job change is part of this patch. The one-time release scope must skip all five
+financial release steps and preserve existing private dashboard variables.
+
+Focused inert API tests exercise exact-draft preparation, tampered digests and
+metadata, ordinary-funded controls, success, failure, response loss and expiry.
+Durable-object race and preservation tests, aggregate checks, independent review
+and exact-head hosted CI remain release gates. No new paid model or visual
+success is inferred from these fixtures; activation and one intentional model
+submission remain separate from source publication.
+
 ## LOCAL VERIFICATION — read-only generation quotes (5 October 2026)
 
 The frontend correction based on deployed `177c71098e9ccca3e18bedb505f2dd9932a9aab8`
