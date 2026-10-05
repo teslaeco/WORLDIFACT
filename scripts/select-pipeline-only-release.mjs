@@ -116,6 +116,26 @@ export const ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS = Object.freeze([
   'tests/studio-library-gallery.test.mjs',
   'tests/studio-library.test.ts',
 ].sort())
+export const PROJECT_MCC_ATTEMPT_BASE_COMMIT = '77487a20cfba34e3694fa660f7aec8051353085a'
+export const PROJECT_MCC_ATTEMPT_MARKER_PATH = 'ops/PROJECT_MCC_ATTEMPT_RELEASE_20261005.json'
+export const PROJECT_MCC_ATTEMPT_MARKER_CONTENT = JSON.stringify({
+  release: 'project-funded-mcc-one-attempt-20261005',
+  baseCommit: PROJECT_MCC_ATTEMPT_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+}, null, 2) + '\n'
+export const PROJECT_MCC_ATTEMPT_REVIEWED_PATHS = Object.freeze([
+  'docs/ASTRA_PROJECT_BUDGET.md',
+  'docs/CONTEST_STATUS.md',
+  PROJECT_MCC_ATTEMPT_MARKER_PATH,
+  'scripts/select-pipeline-only-release.mjs',
+  'server/astraProjectBudget.ts',
+  'server/entitlements.ts',
+  'server/studio.ts',
+  'tests/astra-project-budget.test.ts',
+  'tests/pipeline-only-release.test.mjs',
+  'tests/studio-project-budget.test.ts',
+].sort())
 const releaseIntroductions = new Set([
   'docs/GENERATOR_UI_RESTORATION_20261004.md',
   'src/lib/generationFunding.ts',
@@ -132,6 +152,10 @@ const releaseIntroductions = new Set([
   'tests/account-provider-lifecycle.test.mjs',
   'tests/studio-library-gallery.test.mjs',
   'tests/studio-library.test.ts',
+  'docs/ASTRA_PROJECT_BUDGET.md',
+  'server/astraProjectBudget.ts',
+  'tests/astra-project-budget.test.ts',
+  'tests/studio-project-budget.test.ts',
 ])
 const scopes = [
   { base: BASE_COMMIT, marker: MARKER_PATH, content: MARKER_CONTENT, paths: REVIEWED_PATHS },
@@ -139,6 +163,7 @@ const scopes = [
   { base: READONLY_QUOTE_BASE_COMMIT, marker: READONLY_QUOTE_MARKER_PATH, content: READONLY_QUOTE_MARKER_CONTENT, paths: READONLY_QUOTE_REVIEWED_PATHS, preserveRemoteVars: true },
   { base: MCC_ONE_ATTEMPT_BASE_COMMIT, marker: MCC_ONE_ATTEMPT_MARKER_PATH, content: MCC_ONE_ATTEMPT_MARKER_CONTENT, paths: MCC_ONE_ATTEMPT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, marker: ACCOUNT_MODEL_LIBRARY_MARKER_PATH, content: ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT, paths: ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
+  { base: PROJECT_MCC_ATTEMPT_BASE_COMMIT, marker: PROJECT_MCC_ATTEMPT_MARKER_PATH, content: PROJECT_MCC_ATTEMPT_MARKER_CONTENT, paths: PROJECT_MCC_ATTEMPT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
 ]
 
 function refuse() { throw new Error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED') }
@@ -189,7 +214,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH) {
+  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {
