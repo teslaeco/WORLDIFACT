@@ -72,6 +72,17 @@ class LauncherTests(unittest.TestCase):
              patch.object(launcher, 'connection', side_effect=AssertionError('connection attempted')):
             with self.assertRaises(launcher.LaunchError):
                 launcher.main(['--source-commit', COMMIT, '--approve-service-maintenance'])
+    def test_historical_dependency_paths_keep_the_original_hashes(self):
+        expected = {
+            'context_patch.py': ('tools/model_budget_receipt/reviewed_context/context_patch.py', '6ed419f784f891e51bae8fc93de480a1ac31088a'),
+            'maintenance_fence.py': ('tools/model_budget_receipt/reviewed_context/maintenance_fence.py', 'd90d7b84abfb952f5056ce33e529aa0a19ea4e25'),
+        }
+        for name, pair in expected.items():
+            self.assertEqual(launcher.FILES[name], pair)
+            self.assertEqual(launcher.blob((ROOT / pair[0]).read_bytes()), pair[1])
+        self.assertFalse(any(path in ('tools/model_context/context_patch.py', 'tools/model_context/maintenance_fence.py')
+                             for path, _ in launcher.FILES.values()))
+
     def test_frozen_manifest_matches_repository_bytes(self):
         for name, (path, digest) in launcher.FILES.items():
             with self.subTest(name=name):
@@ -89,7 +100,8 @@ class LauncherTests(unittest.TestCase):
             self.assertIn('PLAN ONLY.', observed.stdout)
             self.assertEqual({path.name for path in root.iterdir()}, set(payload))
             adapted = subprocess.run([sys.executable, '-B', '-c',
-                "import install_budget as i; f=i.maintenance_fence(); "
+                "import install_budget as i, context_patch as c; from pathlib import Path; "
+                "assert Path(c.__file__).resolve()==Path('context_patch.py').resolve(); f=i.maintenance_fence(); "
                 "assert f.EXPECTED==i.budget_patch.EXPECTED; print('FLAT_FENCE_VERIFIED')"],
                 cwd=root, capture_output=True, text=True, timeout=10)
             self.assertEqual(adapted.returncode, 0, adapted.stderr)

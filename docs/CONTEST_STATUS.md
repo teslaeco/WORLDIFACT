@@ -499,7 +499,7 @@ The installer uses exact reviewed source ancestry, strict existing SSH access, a
 
 At this checkpoint the runtime package is under final offline review and has not been confirmed installed on the Oracle VM. Local fixtures and source tests are not generated-quality or visible-preview evidence. The user's completion criterion remains an actual generated model inspected in the real preview.
 
-## LOCAL ONLY — STANDARD context compatibility with installed pricing (5 October 2026)
+## DRAFT REVIEW — STANDARD context compatibility with installed pricing (5 October 2026)
 
 The no-photo MCC request is routed through STANDARD by the existing adapter.
 The observed Oracle runner still matches the pre-context `bc8db1e2…` source,
@@ -546,3 +546,15 @@ review is complete. No Oracle source installation, service restart, provider
 request, replacement job or financial reset was performed for this correction.
 Hosted checks and all target maintenance gates remain required before any
 authorized activation.
+
+PR214's initial head `fafe0c0e6b7d5dd8575be490738c4fbc576bc8a4` passed
+all 173 hosted STANDARD tests, including the four real socket cases, and all
+1,126 application tests, production build and credential-free packaging.
+The subsequent historical terminal-budget suite exposed shared dependency
+paths tied to older immutable hashes. Its exact original context/fence files
+are now retained under `tools/model_budget_receipt/reviewed_context/`; only
+lookup paths and the changed loader's own checksum are updated. No historical
+runtime semantics or guards are replaced. A pricing-suite comparison now uses
+that same hash-asserted historical source. Locally all 67 receipt tests, 148
+completion tests and 45 prebuild tests pass. The updated complete draft still
+requires exact-head hosted verification; no target activation is inferred.

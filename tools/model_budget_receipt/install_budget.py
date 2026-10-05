@@ -54,7 +54,7 @@ FENCE_SHA256 = 'abda1aac9abd8e994e070a59f356f929d2d0812f97f0b5a3398aef34984ad67a
 def maintenance_fence():
     path = HERE / 'maintenance_fence.py'
     if not path.exists():
-        path = HERE.parents[1] / 'tools/model_context/maintenance_fence.py'
+        path = HERE / 'reviewed_context/maintenance_fence.py'
     raw = base.read_regular(path)
     if hashlib.sha256(raw).hexdigest() != FENCE_SHA256:
         raise Refused('maintenance_fence_source_refused')

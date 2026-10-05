@@ -149,12 +149,12 @@ def connection(home=None):
 
 
 FILES.update({
-    'context_patch.py': ('tools/model_context/context_patch.py', '6ed419f784f891e51bae8fc93de480a1ac31088a'),
-    'maintenance_fence.py': ('tools/model_context/maintenance_fence.py', 'd90d7b84abfb952f5056ce33e529aa0a19ea4e25'),
+    'context_patch.py': ('tools/model_budget_receipt/reviewed_context/context_patch.py', '6ed419f784f891e51bae8fc93de480a1ac31088a'),
+    'maintenance_fence.py': ('tools/model_budget_receipt/reviewed_context/maintenance_fence.py', 'd90d7b84abfb952f5056ce33e529aa0a19ea4e25'),
     'verification_scope.py': ('tools/model_context/verification_scope.py', '677c577db69ece8d9757fa81bb62633bc134c17d'),
     'terminal_budget.py': ('tools/model_budget_receipt/terminal_budget.py', '0d5a597aa2d4e37797e06a9866bb1f7902f35b7b'),
     'budget_patch.py': ('tools/model_budget_receipt/budget_patch.py', '011f70f85530948dc36929ab37603569480ce880'),
-    'install_budget.py': ('tools/model_budget_receipt/install_budget.py', 'e5dc0639eb045f4ec71def28114c8d2b9adb7e72'),
+    'install_budget.py': ('tools/model_budget_receipt/install_budget.py', 'e651edb9924e0f2f1a95c4f5e9d1cffa0ed89e75'),
 })
 
 PHASES = {'ALREADY_VERIFIED', 'WORLDIFACT_TERMINAL_BUDGET_VERIFIED', 'WORLDIFACT_TERMINAL_BUDGET_NOT_CONFIRMED'}

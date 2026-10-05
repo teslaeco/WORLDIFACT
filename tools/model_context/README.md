@@ -263,3 +263,21 @@ tests. Its actual unpacked package defaults to inert PLAN ONLY. Independent
 source/package review is complete; exact-head hosted checks and genuine target
 verification remain separate gates. No installation, restart, paid generation
 or success verdict for the failed model follows from these local results.
+
+
+### Hosted verification and historical package isolation
+
+Initial PR214 head `fafe0c0e6b7d5dd8575be490738c4fbc576bc8a4` passed all
+173 STANDARD tests on the hosted runner, including the four real socket cases
+blocked locally. Its application workflow passed all 1,126 tests, production
+build and credential-free Worker packaging. The separate historical
+terminal-budget suite then correctly refused changed shared dependency hashes.
+
+That older package now keeps its original context/fence blobs under
+`tools/model_budget_receipt/reviewed_context/`, preserving original flat
+filenames, immutable hashes and runtime semantics. Its loader fallback and
+package paths use those exact copies. The pricing test compares against the
+same hash-asserted historical fence. All 67 receipt tests and the unchanged
+148 completion/45 prebuild tests pass locally; no test or gate was disabled.
+The updated draft's exact-head hosted checks remain required before command
+handoff. These results do not attest target installation or a paid model.
