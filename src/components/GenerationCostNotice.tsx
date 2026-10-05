@@ -15,18 +15,16 @@ function ConnectedCostNotice(props: Props) {
   return <CostNotice {...props} accountQuote={accountQuote} />
 }
 function CostNotice({ model, busy = false, detailed = false, budgetTier, accountQuote }: Props & { accountQuote: GenerationQuoteState }) {
-  const { quote, checking, canRefresh, refresh, reconciling, fundingReview } = accountQuote
+  const { quote, checking, canRefresh, refresh } = accountQuote
   const rate = detailed && model === 'astra' && budgetTier ? STUDIO_PRICING[budgetTier].points : model === 'luna' ? 15 : model === 'sol' ? 50 : 250
   const fundingBlocked = quote.state === 'blocked' && quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
   return <section className="generation-cost-notice" aria-label="Selected model and cost before generation" aria-live="polite">
     <div><strong>{model === 'luna' ? 'GPT-6 LUNA' : model === 'sol' ? 'GPT-6 SOL' : 'GPT-6 ASTRA'}</strong><span>{rate} points / paid generation</span></div>
     <p><b>{(checking || busy) && !fundingBlocked ? 'Checking current cost…' : quote.points === 0 ? 'This attempt: 0 points, subject to funded free capacity' : quote.points !== null ? `This attempt: ${quote.points} points` : 'Current cost: not yet verified'}</b>{quote.after !== null && !busy && <> · Balance after reservation: <strong>{quote.after} points</strong></>}</p>
     {['blocked', 'signin', 'pending'].includes(quote.state) && <p>{quote.message}{quote.state === 'signin' && <> <Link to="/account">Sign in →</Link></>}</p>}
-    {fundingBlocked && <button type="button" disabled={!canRefresh} onClick={refresh}>{reconciling ? 'Checking earlier model funding…' : 'Refresh availability'}</button>}
+    {fundingBlocked && <button type="button" disabled={!canRefresh} onClick={refresh}>{checking ? 'Checking availability…' : 'Refresh availability'}</button>}
     <details><summary>Model details and billing</summary>
-      {fundingBlocked && <p><strong>Account funding review needed.</strong> Keep your description and reference images while availability is reviewed. This refusal is not an estimate of your model’s required cost.</p>}
-      {fundingReview && <p>{fundingReview}</p>}
-      {reconciling && <p>Checking proven unused funding from earlier models. Your current funding limit remains in effect until the check finishes. No new model or payment is started.</p>}
+      {fundingBlocked && <p><strong>Account funding unavailable.</strong> Keep your description and reference images while you refresh availability. This reads your current allowance; it does not check or return funding from earlier models. This refusal is not an estimate of your model’s required cost.</p>}
       {fundingBlocked && <p><a href="/account/generation-funding" target="_blank" rel="noopener noreferrer">Read-only funding details · opens in a new tab</a></p>}
       {['free', 'credits'].includes(quote.state) && <p>{quote.message}</p>}
       <p>{detailed ? 'Astra works with the existing Blender worker to build an editable model. One job uses one points reservation even when it has several bounded AI/tool steps. All accepted reference views are included. Results require visual review; no procedural substitute or manufacturing approval.' : model !== 'astra' ? 'The selected model creates a validated specification with a lightweight procedural preview. It is not the detailed Oracle mesh workflow.' : 'ASTRA uses one bounded server-side call to create a validated blueprint/specification and a locally derived procedural GAME GLB. The separate multi-call Oracle/Blender mesh workflow remains beta. MAKE still requires validation.'}</p>

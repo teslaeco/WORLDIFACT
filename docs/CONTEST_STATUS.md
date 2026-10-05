@@ -2,6 +2,24 @@
 
 Updated 4 October 2026.
 
+## LOCAL VERIFICATION — read-only generation quotes (5 October 2026)
+
+The frontend correction based on deployed `177c71098e9ccca3e18bedb505f2dd9932a9aab8`
+removes automatic quote-time membership recovery and historical funding
+reconciliation. Startup, focus, mobile return, back-forward restoration, balance
+signals and explicit availability refresh now use only the existing authenticated
+GETs. Model, delivery, budget and prompt edits reuse that snapshot. The cost notice
+describes a current-allowance read and makes no claim that earlier funding was
+checked or returned. Explicit Account recovery and submitted-job recovery and
+settlement are unchanged; no server, billing, price, ledger or grant policy changes.
+
+All 92 focused quote, account-read, Shop/portal lifecycle and cost-notice tests pass
+with zero skips. They cover current Pro and supplemental Detailed admission,
+independent Blueprint refusals, stale membership projections, unavailable billing,
+identity changes, late responses and bounded fail-closed timeouts. These are inert
+fixtures, not proof that production account funding or live generation is repaired.
+Aggregate verification, independent review and release remain pending.
+
 ## GENERATION RECOVERY AUDIT — repository fix applied, live drone remains unverified
 
 The 4 October audit in [`GENERATION_RECOVERY_AUDIT.md`](GENERATION_RECOVERY_AUDIT.md)

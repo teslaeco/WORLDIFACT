@@ -1,19 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { readDeployment } from '../scripts/release-check.ts'
 import {
   BASE_COMMIT, MARKER_PATH, MARKER_CONTENT, REVIEWED_PATHS,
   FUNDING_BASE_COMMIT, FUNDING_MARKER_PATH, FUNDING_MARKER_CONTENT, FUNDING_REVIEWED_PATHS,
-  selectPipelineOnlyRelease,
+  READONLY_QUOTE_BASE_COMMIT, READONLY_QUOTE_MARKER_PATH, READONLY_QUOTE_MARKER_CONTENT, READONLY_QUOTE_REVIEWED_PATHS,
+  selectPipelineOnlyRelease, selectPipelineReleaseOptions,
 } from '../scripts/select-pipeline-only-release.mjs'
 
 const head = '1'.repeat(40), blob = '2'.repeat(40)
 const changes = REVIEWED_PATHS.map(path => ({ status: path === MARKER_PATH ? 'A' : 'M', path }))
 const fundingChanges = FUNDING_REVIEWED_PATHS.map(path => ({ status: path === FUNDING_MARKER_PATH ? 'A' : 'M', path }))
+const readonlyQuoteChanges = READONLY_QUOTE_REVIEWED_PATHS.map(path => ({ status: path === READONLY_QUOTE_MARKER_PATH ? 'A' : 'M', path }))
 function evidence(overrides = {}) {
   const data = { head, parent: BASE_COMMIT, changes, markerPath: MARKER_PATH, marker: MARKER_CONTENT, mode: '100644', ...overrides }
   const calls = []
@@ -33,8 +36,9 @@ function evidence(overrides = {}) {
     }
     if (args[0] === 'ls-tree') {
       if (args.length > 5) {
-        assert.deepEqual(args, ['ls-tree', '-z', data.head, '--', ...FUNDING_REVIEWED_PATHS])
-        return data.tree ?? FUNDING_REVIEWED_PATHS.map(path => `100644 blob ${blob}\t${path}\0`).join('')
+        const paths = data.markerPath === READONLY_QUOTE_MARKER_PATH ? READONLY_QUOTE_REVIEWED_PATHS : FUNDING_REVIEWED_PATHS
+        assert.deepEqual(args, ['ls-tree', '-z', data.head, '--', ...paths])
+        return data.tree ?? paths.map(path => `100644 blob ${blob}\t${path}\0`).join('')
       }
       assert.deepEqual(args, ['ls-tree', '-z', data.head, '--', data.markerPath])
       return `${data.mode} blob ${blob}\t${data.markerPath}\0`
@@ -47,6 +51,9 @@ function evidence(overrides = {}) {
 function select(overrides) { return selectPipelineOnlyRelease('fixture', evidence(overrides).readGit) }
 function selectFunding(overrides = {}) {
   return select({ parent: FUNDING_BASE_COMMIT, changes: fundingChanges, markerPath: FUNDING_MARKER_PATH, marker: FUNDING_MARKER_CONTENT, ...overrides })
+}
+function selectReadonlyQuote(overrides = {}) {
+  return select({ parent: READONLY_QUOTE_BASE_COMMIT, changes: readonlyQuoteChanges, markerPath: READONLY_QUOTE_MARKER_PATH, marker: READONLY_QUOTE_MARKER_CONTENT, ...overrides })
 }
 
 test('only the exact reviewed repair and canonical public marker preserve billing', () => {
@@ -112,12 +119,65 @@ test('funding marker contents, marker edits and non-regular reviewed files fail 
   ]) assert.throws(() => selectFunding(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
 })
 
+test('the read-only quote release preserves billing and remote vars for only its canonical marker and reviewed paths', () => {
+  assert.equal(selectReadonlyQuote(), true)
+  assert.equal(READONLY_QUOTE_BASE_COMMIT, '177c71098e9ccca3e18bedb505f2dd9932a9aab8')
+  assert.equal(readFileSync(new URL('../' + READONLY_QUOTE_MARKER_PATH, import.meta.url), 'utf8'), READONLY_QUOTE_MARKER_CONTENT)
+  assert.equal(READONLY_QUOTE_REVIEWED_PATHS.length, 11)
+  assert.equal(READONLY_QUOTE_REVIEWED_PATHS.includes('.github/workflows/cloudflare.yml'), true)
+  for (const path of [MARKER_PATH, FUNDING_MARKER_PATH, 'src/lib/account.tsx', 'server/billing.ts', 'server/entitlements.ts']) {
+    assert.equal(READONLY_QUOTE_REVIEWED_PATHS.includes(path), false, path)
+  }
+  assert.deepEqual(selectPipelineReleaseOptions('fixture', evidence({
+    parent: READONLY_QUOTE_BASE_COMMIT, changes: readonlyQuoteChanges,
+    markerPath: READONLY_QUOTE_MARKER_PATH, marker: READONLY_QUOTE_MARKER_CONTENT,
+  }).readGit), { preserveBilling: true, preserveRemoteVars: true })
+})
+
+test('read-only quote release refuses missing markers, different parents and changes outside the exact scope', () => {
+  for (const overrides of [
+    { changes: readonlyQuoteChanges.filter(change => change.path !== READONLY_QUOTE_MARKER_PATH) },
+    { parent: BASE_COMMIT }, { parent: FUNDING_BASE_COMMIT }, { parent: '3'.repeat(40) },
+    { changes: [...readonlyQuoteChanges, { status: 'M', path: 'server/billing.ts' }] },
+    { changes: readonlyQuoteChanges.filter(change => change.path !== 'src/lib/useGenerationQuote.ts') },
+    ...['D', 'T', 'R100'].map(status => ({ changes: readonlyQuoteChanges.map(change => change.path === 'src/lib/useGenerationQuote.ts' ? { ...change, status } : change) })),
+    ...[MARKER_PATH, FUNDING_MARKER_PATH].flatMap(path => ['A', 'M', 'D', 'T'].map(status => ({ changes: [...readonlyQuoteChanges, { status, path }] }))),
+    { parent: READONLY_QUOTE_BASE_COMMIT, changes: [] },
+    { parent: '3'.repeat(40), changes: readonlyQuoteChanges.filter(change => change.path !== READONLY_QUOTE_MARKER_PATH) },
+    ...['A', 'M', 'D', 'T'].map(status => ({ parent: '3'.repeat(40), changes: [{ status, path: 'scripts/select-pipeline-only-release.mjs' }] })),
+  ]) assert.throws(() => selectReadonlyQuote(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('read-only quote marker tampering and non-regular reviewed files fail closed', () => {
+  const tree = READONLY_QUOTE_REVIEWED_PATHS.map(path => `100644 blob ${blob}\t${path}\0`).join('')
+  for (const overrides of [
+    { marker: READONLY_QUOTE_MARKER_CONTENT + '\n' },
+    { marker: READONLY_QUOTE_MARKER_CONTENT.replace('true', 'false') },
+    { marker: READONLY_QUOTE_MARKER_CONTENT.replace('"preserveRemoteVars": true', '"preserveRemoteVars": false') },
+    { marker: MARKER_CONTENT }, { marker: FUNDING_MARKER_CONTENT }, { mode: '120000' },
+    ...['A', 'M', 'D', 'T'].map(status => ({ parent: head, changes: [{ status, path: READONLY_QUOTE_MARKER_PATH }] })),
+    ...['100755', '120000', '160000'].map(mode => ({ tree: tree.replace('100644', mode) })),
+    { tree: tree.replace(`blob ${blob}`, `commit ${blob}`) },
+    { tree: tree.replace('src/lib/useGenerationQuote.ts', 'src/lib/other.ts') },
+    { tree: tree.slice(0, -1) },
+  ]) assert.throws(() => selectReadonlyQuote(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('later read-only quote edits use normal billing behavior without reading any stale release marker', () => {
+  const fixture = evidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path: 'src/lib/useGenerationQuote.ts' }] })
+  assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
+  assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
+})
+
 test('ordinary future releases retain the previous billing behavior without reading the stale marker', () => {
   const fixture = evidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path: 'README.md' }] })
   assert.equal(selectPipelineOnlyRelease('fixture', fixture.readGit), false)
   assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
   assert.equal(select({ parent: '3'.repeat(40), changes: [] }), false)
   assert.equal(selectFunding({ parent: '3'.repeat(40), changes: [{ status: 'M', path: 'src/lib/generationFunding.ts' }] }), false)
+  assert.deepEqual(selectPipelineReleaseOptions('fixture', evidence().readGit), { preserveBilling: true, preserveRemoteVars: false })
+  assert.deepEqual(selectPipelineReleaseOptions('fixture', evidence({ parent: FUNDING_BASE_COMMIT, changes: fundingChanges, markerPath: FUNDING_MARKER_PATH, marker: FUNDING_MARKER_CONTENT }).readGit), { preserveBilling: true, preserveRemoteVars: false })
+  assert.deepEqual(selectPipelineReleaseOptions('fixture', evidence({ parent: '3'.repeat(40), changes: [] }).readGit), { preserveBilling: false, preserveRemoteVars: false })
 })
 
 test('missing history, malformed Git evidence and revision-like arguments cannot select a mode', () => {
@@ -151,13 +211,13 @@ test('actual local Git and CLI fail on missing history or extra arguments and de
     git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'ordinary release')
     const ordinary = run(process.execPath, [script])
     assert.equal(ordinary.status, 0, ordinary.stderr)
-    assert.equal(ordinary.stdout, 'preserve_billing=false\n')
+    assert.equal(ordinary.stdout, 'preserve_billing=false\npreserve_remote_vars=false\n')
     const poisoned = spawnSync(process.execPath, [script], {
       cwd: directory, encoding: 'utf8', timeout: 15000,
       env: { ...env, GIT_DIR: '/missing/git', GIT_WORK_TREE: '/missing/tree', GIT_INDEX_FILE: '/missing/index', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.repositoryformatversion', GIT_CONFIG_VALUE_0: '999' },
     })
     assert.equal(poisoned.status, 0, poisoned.stderr)
-    assert.equal(poisoned.stdout, 'preserve_billing=false\n')
+    assert.equal(poisoned.stdout, 'preserve_billing=false\npreserve_remote_vars=false\n')
     const injection = run(process.execPath, [script, '--base', BASE_COMMIT])
     assert.equal(injection.status, 1)
     assert.equal(injection.stdout, '')
@@ -168,6 +228,7 @@ test('workflow guards all five billing steps before credentials and keeps every 
   const workflow = readFileSync(new URL('../.github/workflows/cloudflare.yml', import.meta.url), 'utf8')
   const steps = workflow.split(/(?=^      - )/m).slice(1)
   const selectorIndex = steps.findIndex(step => step.includes('id: billing_scope'))
+  const deployStep = steps.find(step => step.includes('name: Deploy reviewed WORLDIFACT release'))
   assert.ok(selectorIndex > 0)
   assert.match(steps[0], /fetch-depth: 2/)
   assert.match(steps[selectorIndex], /run: node scripts\/select-pipeline-only-release\.mjs >> "\$GITHUB_OUTPUT"/)
@@ -176,9 +237,71 @@ test('workflow guards all five billing steps before credentials and keeps every 
   const billing = steps.filter(step => /connect-billing|prepare-stripe-portal|check-stripe-checkout|check-stripe-astra-checkouts|\/api\/billing\//.test(step))
   assert.equal(billing.length, 5)
   for (const step of billing) assert.match(step, /\n        if: steps\.billing_scope\.outputs\.preserve_billing == 'false'\n/)
-  for (const step of steps.filter(step => !billing.includes(step) && step !== steps[selectorIndex])) {
+  for (const step of steps.filter(step => !billing.includes(step) && step !== steps[selectorIndex] && step !== deployStep)) {
     assert.doesNotMatch(step, /billing_scope/)
     if (/secrets\./.test(step)) assert.ok(steps.indexOf(step) > selectorIndex)
   }
   for (const gate of ['npm run verify', './.github/actions/foundations', 'restore-detailed-studio-config.mjs', 'wrangler deploy --dry-run', 'wrangler deploy --config', 'release-check.ts smoke', 'status.costGuardReady,true', 'assert.equal(denied.status,401)', 'assert.equal(fundingDenied.status,401)', 'assert.equal(foreignFunding.status,403)']) assert.ok(workflow.includes(gate), gate)
+})
+
+test('only the guarded deploy preserves remote vars, suppresses private CLI output and retains its receipt', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/cloudflare.yml', import.meta.url), 'utf8')
+  const step = workflow.split(/(?=^      - )/m).find(part => part.includes('name: Deploy reviewed WORLDIFACT release'))
+  assert.ok(step)
+  assert.match(step, /WRANGLER_OUTPUT_FILE_PATH: \$\{\{ runner\.temp \}\}\/worldifact-deploy\.ndjson/)
+  const run = step.match(/        run: \|\n([\s\S]*?)        env:\n/)[1].replace(/^ {10}/gm, '')
+  const directory = mkdtempSync(join(tmpdir(), 'readonly-quote-release-deploy-'))
+  const capture = join(directory, 'invocation.json')
+  const privateFixture = 'PRIVATE_FIXTURE_VALUE'
+  try {
+    mkdirSync(join(directory, 'bin'))
+    const executable = join(directory, 'bin/npx')
+    writeFileSync(executable, `#!${process.execPath}\n` + `
+const fs = require('node:fs');
+fs.writeFileSync(process.env.FIXTURE_CAPTURE, JSON.stringify({
+  args: process.argv.slice(2),
+  log: process.env.WRANGLER_LOG,
+  writeLogs: process.env.WRANGLER_WRITE_LOGS,
+  metrics: process.env.WRANGLER_SEND_METRICS,
+  errors: process.env.WRANGLER_SEND_ERROR_REPORTS,
+}));
+console.log(JSON.stringify({ private: '${privateFixture}', stream: 'stdout' }));
+console.error(JSON.stringify({ private: '${privateFixture}', stream: 'stderr' }));
+if (process.env.FIXTURE_EXIT === '0') fs.writeFileSync(process.env.WRANGLER_OUTPUT_FILE_PATH,
+  JSON.stringify({ type: 'deploy', version: 1, worker_name: 'worldifact', version_id: 'fixture-version',
+    targets: ['https://worldifact.fixture.workers.dev'] }) + '\\n');
+process.exit(Number(process.env.FIXTURE_EXIT));
+`)
+    chmodSync(executable, 0o755)
+    for (const preserve of ['true', 'false']) {
+      for (const exit of ['0', '7']) {
+        const receipt = join(directory, `receipt-${preserve}-${exit}.ndjson`)
+        const command = run.replaceAll('${{ steps.billing_scope.outputs.preserve_remote_vars }}', preserve)
+          .replaceAll('${{ steps.mode.outputs.config }}', 'reviewed.wrangler.json')
+        const result = spawnSync('bash', ['-euo', 'pipefail', '-c', command], {
+          cwd: directory, encoding: 'utf8', timeout: 15000,
+          env: { PATH: join(directory, 'bin') + ':' + process.env.PATH, FIXTURE_CAPTURE: capture,
+            FIXTURE_EXIT: exit, WRANGLER_OUTPUT_FILE_PATH: receipt },
+        })
+        assert.equal(result.error, undefined)
+        assert.equal(result.status, exit === '0' ? 0 : preserve === 'true' ? 1 : 7)
+        const invocation = JSON.parse(readFileSync(capture, 'utf8'))
+        assert.deepEqual(invocation.args, ['wrangler', 'deploy', '--config', 'reviewed.wrangler.json', ...(preserve === 'true' ? ['--keep-vars'] : [])])
+        if (preserve === 'true') {
+          assert.deepEqual({ ...invocation, args: undefined }, { args: undefined, log: 'none', writeLogs: 'false', metrics: 'false', errors: 'false' })
+          assert.equal((result.stdout + result.stderr).includes(privateFixture), false)
+          if (exit !== '0') assert.match(result.stdout, /::error::Deployment failed/)
+        } else {
+          assert.deepEqual(Object.keys(invocation), ['args'])
+          assert.ok(result.stdout.includes(privateFixture))
+          assert.ok(result.stderr.includes(privateFixture))
+        }
+        if (exit === '0') {
+          const contents = readFileSync(receipt, 'utf8')
+          assert.deepEqual(readDeployment(contents), { origin: 'https://worldifact.fixture.workers.dev', versionId: 'fixture-version' })
+          assert.equal((result.stdout + result.stderr).includes('fixture-version'), false)
+        } else assert.equal(existsSync(receipt), false)
+      }
+    }
+  } finally { rmSync(directory, { recursive: true, force: true }) }
 })
