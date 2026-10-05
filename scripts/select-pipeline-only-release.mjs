@@ -71,7 +71,27 @@ export const READONLY_QUOTE_REVIEWED_PATHS = Object.freeze([
   'tests/prompt-model-ui.test.mjs',
   'tests/shop-draft-lifecycle.test.mjs',
 ].sort())
-const fundingIntroductions = new Set([
+export const MCC_ONE_ATTEMPT_BASE_COMMIT = 'c6422e9d22185d22ee4eae23dc61f4045dd6ca6f'
+export const MCC_ONE_ATTEMPT_MARKER_PATH = 'ops/MCC_ONE_ATTEMPT_RELEASE_20261005.json'
+export const MCC_ONE_ATTEMPT_MARKER_CONTENT = JSON.stringify({
+  release: 'mcc-one-attempt-allowance-20261005',
+  baseCommit: MCC_ONE_ATTEMPT_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+}, null, 2) + '\n'
+export const MCC_ONE_ATTEMPT_REVIEWED_PATHS = Object.freeze([
+  'docs/ASTRA_REPAIRED_MCC_GRANT.md',
+  'docs/CONTEST_STATUS.md',
+  MCC_ONE_ATTEMPT_MARKER_PATH,
+  'scripts/select-pipeline-only-release.mjs',
+  'server/astraRepairedMccGrant.ts',
+  'server/entitlements.ts',
+  'server/studio.ts',
+  'tests/astra-repaired-mcc-grant.test.ts',
+  'tests/pipeline-only-release.test.mjs',
+  'tests/studio-repaired-mcc.test.ts',
+].sort())
+const releaseIntroductions = new Set([
   'docs/GENERATOR_UI_RESTORATION_20261004.md',
   'src/lib/generationFunding.ts',
   'src/lib/loadGenerationFunding.ts',
@@ -79,11 +99,16 @@ const fundingIntroductions = new Set([
   'src/pages/GenerationFundingPage.tsx',
   'tests/generation-funding-page.test.mjs',
   'tests/generation-funding.test.ts',
+  'docs/ASTRA_REPAIRED_MCC_GRANT.md',
+  'server/astraRepairedMccGrant.ts',
+  'tests/astra-repaired-mcc-grant.test.ts',
+  'tests/studio-repaired-mcc.test.ts',
 ])
 const scopes = [
   { base: BASE_COMMIT, marker: MARKER_PATH, content: MARKER_CONTENT, paths: REVIEWED_PATHS },
   { base: FUNDING_BASE_COMMIT, marker: FUNDING_MARKER_PATH, content: FUNDING_MARKER_CONTENT, paths: FUNDING_REVIEWED_PATHS },
   { base: READONLY_QUOTE_BASE_COMMIT, marker: READONLY_QUOTE_MARKER_PATH, content: READONLY_QUOTE_MARKER_CONTENT, paths: READONLY_QUOTE_REVIEWED_PATHS, preserveRemoteVars: true },
+  { base: MCC_ONE_ATTEMPT_BASE_COMMIT, marker: MCC_ONE_ATTEMPT_MARKER_PATH, content: MCC_ONE_ATTEMPT_MARKER_CONTENT, paths: MCC_ONE_ATTEMPT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
 ]
 
 function refuse() { throw new Error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED') }
@@ -124,16 +149,17 @@ function selectReleaseScope(cwd, readGit) {
     // It must never silently select an ordinary deployment that mutates billing.
     if (scopes.some(scope => parent === scope.base) || changes.some(change =>
       change.path === 'scripts/select-pipeline-only-release.mjs' ||
-      (change.status === 'A' && fundingIntroductions.has(change.path)))) refuse()
+      (change.status === 'A' && releaseIntroductions.has(change.path)))) refuse()
     return null
   }
   if (markedScopes.length !== 1) refuse()
   const scope = markedScopes[0]
   const marker = changes.find(change => change.path === scope.marker)
   if (marker.status !== 'A' || parent !== scope.base) refuse()
+  if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH) {
+  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

@@ -10,6 +10,7 @@ import {
   BASE_COMMIT, MARKER_PATH, MARKER_CONTENT, REVIEWED_PATHS,
   FUNDING_BASE_COMMIT, FUNDING_MARKER_PATH, FUNDING_MARKER_CONTENT, FUNDING_REVIEWED_PATHS,
   READONLY_QUOTE_BASE_COMMIT, READONLY_QUOTE_MARKER_PATH, READONLY_QUOTE_MARKER_CONTENT, READONLY_QUOTE_REVIEWED_PATHS,
+  MCC_ONE_ATTEMPT_BASE_COMMIT, MCC_ONE_ATTEMPT_MARKER_PATH, MCC_ONE_ATTEMPT_MARKER_CONTENT, MCC_ONE_ATTEMPT_REVIEWED_PATHS,
   selectPipelineOnlyRelease, selectPipelineReleaseOptions,
 } from '../scripts/select-pipeline-only-release.mjs'
 
@@ -17,6 +18,12 @@ const head = '1'.repeat(40), blob = '2'.repeat(40)
 const changes = REVIEWED_PATHS.map(path => ({ status: path === MARKER_PATH ? 'A' : 'M', path }))
 const fundingChanges = FUNDING_REVIEWED_PATHS.map(path => ({ status: path === FUNDING_MARKER_PATH ? 'A' : 'M', path }))
 const readonlyQuoteChanges = READONLY_QUOTE_REVIEWED_PATHS.map(path => ({ status: path === READONLY_QUOTE_MARKER_PATH ? 'A' : 'M', path }))
+const mccOneAttemptChanges = MCC_ONE_ATTEMPT_REVIEWED_PATHS.map(path => ({ status: path === MCC_ONE_ATTEMPT_MARKER_PATH ? 'A' : 'M', path }))
+const scopedPaths = new Map([
+  [FUNDING_MARKER_PATH, FUNDING_REVIEWED_PATHS],
+  [READONLY_QUOTE_MARKER_PATH, READONLY_QUOTE_REVIEWED_PATHS],
+  [MCC_ONE_ATTEMPT_MARKER_PATH, MCC_ONE_ATTEMPT_REVIEWED_PATHS],
+])
 function evidence(overrides = {}) {
   const data = { head, parent: BASE_COMMIT, changes, markerPath: MARKER_PATH, marker: MARKER_CONTENT, mode: '100644', ...overrides }
   const calls = []
@@ -34,9 +41,13 @@ function evidence(overrides = {}) {
       assert.deepEqual(args, ['diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--name-status', '-z', data.parent, data.head, '--'])
       return data.raw ?? data.changes.map(({ status, path }) => `${status}\0${path}\0`).join('')
     }
+    if (args[0] === 'rev-list') {
+      assert.deepEqual(args, ['rev-list', '--parents', '-n', '1', data.head])
+      return data.parents ?? `${data.head} ${data.parent}\n`
+    }
     if (args[0] === 'ls-tree') {
       if (args.length > 5) {
-        const paths = data.markerPath === READONLY_QUOTE_MARKER_PATH ? READONLY_QUOTE_REVIEWED_PATHS : FUNDING_REVIEWED_PATHS
+        const paths = scopedPaths.get(data.markerPath)
         assert.deepEqual(args, ['ls-tree', '-z', data.head, '--', ...paths])
         return data.tree ?? paths.map(path => `100644 blob ${blob}\t${path}\0`).join('')
       }
@@ -54,6 +65,12 @@ function selectFunding(overrides = {}) {
 }
 function selectReadonlyQuote(overrides = {}) {
   return select({ parent: READONLY_QUOTE_BASE_COMMIT, changes: readonlyQuoteChanges, markerPath: READONLY_QUOTE_MARKER_PATH, marker: READONLY_QUOTE_MARKER_CONTENT, ...overrides })
+}
+function mccOneAttemptEvidence(overrides = {}) {
+  return evidence({ parent: MCC_ONE_ATTEMPT_BASE_COMMIT, changes: mccOneAttemptChanges, markerPath: MCC_ONE_ATTEMPT_MARKER_PATH, marker: MCC_ONE_ATTEMPT_MARKER_CONTENT, ...overrides })
+}
+function selectMccOneAttempt(overrides = {}) {
+  return selectPipelineReleaseOptions('fixture', mccOneAttemptEvidence(overrides).readGit)
 }
 
 test('only the exact reviewed repair and canonical public marker preserve billing', () => {
@@ -167,6 +184,59 @@ test('later read-only quote edits use normal billing behavior without reading an
   const fixture = evidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path: 'src/lib/useGenerationQuote.ts' }] })
   assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
   assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
+})
+
+test('the one-attempt MCC release preserves billing and remote vars for its fixed parent and ten-file package', () => {
+  assert.deepEqual(selectMccOneAttempt(), { preserveBilling: true, preserveRemoteVars: true })
+  assert.equal(MCC_ONE_ATTEMPT_BASE_COMMIT, 'c6422e9d22185d22ee4eae23dc61f4045dd6ca6f')
+  assert.equal(readFileSync(new URL('../' + MCC_ONE_ATTEMPT_MARKER_PATH, import.meta.url), 'utf8'), MCC_ONE_ATTEMPT_MARKER_CONTENT)
+  assert.equal(MCC_ONE_ATTEMPT_REVIEWED_PATHS.length, 10)
+  for (const path of [MARKER_PATH, FUNDING_MARKER_PATH, READONLY_QUOTE_MARKER_PATH, '.github/workflows/cloudflare.yml', 'server/billing.ts', 'wrangler.jsonc']) {
+    assert.equal(MCC_ONE_ATTEMPT_REVIEWED_PATHS.includes(path), false, path)
+  }
+})
+
+test('one-attempt MCC release refuses missing or renamed markers, changed parents and incomplete or expanded packages', () => {
+  for (const overrides of [
+    { changes: mccOneAttemptChanges.filter(change => change.path !== MCC_ONE_ATTEMPT_MARKER_PATH) },
+    { changes: mccOneAttemptChanges.map(change => change.path === MCC_ONE_ATTEMPT_MARKER_PATH ? { ...change, path: 'ops/OTHER_RELEASE.json' } : change) },
+    ...[BASE_COMMIT, FUNDING_BASE_COMMIT, READONLY_QUOTE_BASE_COMMIT, '3'.repeat(40)].map(parent => ({ parent })),
+    { parents: `${head} ${MCC_ONE_ATTEMPT_BASE_COMMIT} ${'3'.repeat(40)}\n` },
+    { parents: `${head}\n` },
+    { changes: [...mccOneAttemptChanges, { status: 'M', path: 'server/billing.ts' }] },
+    ...MCC_ONE_ATTEMPT_REVIEWED_PATHS.filter(path => path !== MCC_ONE_ATTEMPT_MARKER_PATH).map(path => ({ changes: mccOneAttemptChanges.filter(change => change.path !== path) })),
+    ...['D', 'T', 'R100'].map(status => ({ changes: mccOneAttemptChanges.map(change => change.path === 'server/entitlements.ts' ? { ...change, status } : change) })),
+    { parent: MCC_ONE_ATTEMPT_BASE_COMMIT, changes: [] },
+  ]) assert.throws(() => selectMccOneAttempt(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('one-attempt MCC release refuses every old marker change and noncanonical marker or file modes', () => {
+  const tree = MCC_ONE_ATTEMPT_REVIEWED_PATHS.map(path => `100644 blob ${blob}\t${path}\0`).join('')
+  for (const overrides of [
+    ...[MARKER_PATH, FUNDING_MARKER_PATH, READONLY_QUOTE_MARKER_PATH].flatMap(path => ['A', 'M', 'D', 'T'].map(status => ({ changes: [...mccOneAttemptChanges, { status, path }] }))),
+    { marker: MCC_ONE_ATTEMPT_MARKER_CONTENT + '\n' },
+    ...['preserveBilling', 'preserveRemoteVars'].map(key => ({ marker: MCC_ONE_ATTEMPT_MARKER_CONTENT.replace(`"${key}": true`, `"${key}": false`) })),
+    { marker: READONLY_QUOTE_MARKER_CONTENT },
+    ...['100755', '120000', '160000'].map(mode => ({ mode })),
+    ...MCC_ONE_ATTEMPT_REVIEWED_PATHS.flatMap(path => ['100755', '120000', '160000'].map(mode => ({ tree: tree.replace(`100644 blob ${blob}\t${path}\0`, `${mode} blob ${blob}\t${path}\0`) }))),
+    { tree: tree.replace(`blob ${blob}`, `commit ${blob}`) },
+    { tree: tree.replace('server/astraRepairedMccGrant.ts', 'server/other.ts') },
+    { tree: tree.slice(0, -1) },
+  ]) assert.throws(() => selectMccOneAttempt(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('rebased MCC preparation cannot omit its marker and later ordinary edits retain normal selection', () => {
+  for (const path of ['scripts/select-pipeline-only-release.mjs', 'server/astraRepairedMccGrant.ts', 'tests/astra-repaired-mcc-grant.test.ts', 'tests/studio-repaired-mcc.test.ts', 'docs/ASTRA_REPAIRED_MCC_GRANT.md']) {
+    assert.throws(() => selectMccOneAttempt({ parent: '3'.repeat(40), changes: [{ status: 'A', path }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  }
+  for (const status of ['A', 'M', 'D', 'T']) {
+    assert.throws(() => selectMccOneAttempt({ parent: '3'.repeat(40), changes: [{ status, path: MCC_ONE_ATTEMPT_MARKER_PATH }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  }
+  for (const path of ['server/astraRepairedMccGrant.ts', 'server/entitlements.ts', 'server/studio.ts', 'docs/ASTRA_REPAIRED_MCC_GRANT.md']) {
+    const fixture = mccOneAttemptEvidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path }] })
+    assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
+    assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
+  }
 })
 
 test('ordinary future releases retain the previous billing behavior without reading the stale marker', () => {
