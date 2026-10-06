@@ -2,7 +2,7 @@
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-6-astra
 # FAST/free/Creator blueprint path. Do not change to Astra as a fallback.
-OPENAI_FAST_MODEL=gpt-6.1-sol
+OPENAI_FAST_MODEL=gpt-6-sol
 # Enable only after the owner approves paid API use and a hard request ceiling/expiry.
 ENABLE_PAID_GENERATION=false
 # Contest pilot: when true, no login/access code is required, so keep a tiny global Durable Object ceiling and short expiry.

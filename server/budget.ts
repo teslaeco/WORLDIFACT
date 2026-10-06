@@ -1,3 +1,5 @@
+import { historicalBudgetBoundary, historicalInternalPath } from './historicalDataBoundary.ts';
+
 export interface BudgetEnv {
   GENERATION_REQUEST_LIMIT?: string;
   GENERATION_EXPIRES_AT?: string;
@@ -40,10 +42,11 @@ export function approvedFastSettings(env: BudgetEnv, until: unknown, now = Date.
 export class GenerationBudget {
   private storage: BudgetStorage;
   private env: BudgetEnv;
-  constructor(state: { storage: BudgetStorage }, env: BudgetEnv) { this.storage = state.storage; this.env = env; }
+  constructor(state: { storage: BudgetStorage }, env: BudgetEnv) { this.storage = historicalBudgetBoundary(state.storage); this.env = env; }
   async fetch(request: Request): Promise<Response> {
-    const path = new URL(request.url).pathname;
+    const path = historicalInternalPath(request, ['/status']);
     const reply = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
+    if (path === null) return reply({ allowed: false, error: 'Allowance version unavailable' }, 503);
     if (request.method === 'GET' && path === '/status') {
       try {
         const used = (await this.storage.get<number>('reserved-attempts')) ?? 0;

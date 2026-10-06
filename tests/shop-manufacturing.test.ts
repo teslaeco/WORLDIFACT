@@ -72,9 +72,8 @@ test('STANDARD and FAST Studio payloads both receive the manufacturing hard rule
   }
   for (const input of [standard, fast]) {
     const payload = oracleStudioPayload('12345678-1234-4234-8234-123456789abc', input)
-    const instructions = payload.prompt + ('agentInstructions' in payload ? payload.agentInstructions : '')
-    assert.match(instructions, /non-manifold/i)
-    assert.match(instructions, /zero-thickness/i)
-    assert.match(instructions, /B2B manufacturing partner accepts that exact revision/i)
+    assert.match(payload.prompt, /non-manifold/i)
+    assert.match(payload.prompt, /zero-thickness/i)
+    assert.match(payload.prompt, /B2B manufacturing partner accepts that exact revision/i)
   }
 })

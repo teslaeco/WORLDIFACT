@@ -1,9 +1,10 @@
+import { historicalInternalUrl } from '../server/historicalDataBoundary.ts'
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { GenerationBudget } from "../server/budget.ts";
 import type { BudgetStorage } from "../server/budget.ts";
 import { handle } from "../server/worker.ts";
-import { assetSpecForBlueprint, demoBlueprint, localSceneResult, validateGenerationResult } from "../src/lib/blueprint.ts";
+import { demoBlueprint, localSceneResult, validateGenerationResult } from "../src/lib/blueprint.ts";
 
 function state() {
   const data = new Map<string, number>();
@@ -19,13 +20,13 @@ function state() {
   };
   return { storage };
 }
-const reserve = () => new Request("https://budget.internal/reserve", { method: "POST" });
+const reserve = () => new Request(historicalInternalUrl('https://budget.internal', '/reserve'), { method: "POST" });
 const access = "preview-fixture-with-at-least-32-characters";
 const future = () => new Date(Date.now() + 60_000).toISOString();
 const blueprintRequest = (token = access) => new Request("https://worldifact.test/api/blueprint", {
   method: "POST",
   headers: { "Content-Type": "application/json", "X-WORLDIFACT-Access": token },
-  body: JSON.stringify({ prompt: "A small village", mode: "live", providerModel: "gpt-6.1-sol" }),
+  body: JSON.stringify({ prompt: "A small village", mode: "live" }),
 });
 function configured() {
   const env = {
@@ -132,7 +133,7 @@ test("health advertises LIVE with null remaining in ongoing unlimited mode", asy
   const health = await response.json() as { mode: string; generationReady: boolean; model: string | null; allowance: { remaining: null; unlimited: boolean } };
   assert.equal(health.mode, "READY");
   assert.equal(health.generationReady, true);
-  assert.equal(health.model, "gpt-6.1-sol");
+  assert.equal(health.model, "gpt-6-sol");
   assert.equal(health.allowance.remaining, null);
   assert.equal(health.allowance.unlimited, true);
 });
@@ -155,9 +156,9 @@ test("generation details identify exact content and usage without persisting acc
   const provider = (async (url: string | URL | Request) => String(url).endsWith("/v1/responses/input_tokens")
     ? Response.json({ object: "response.input_tokens", input_tokens: 1000 })
     : Response.json({
-      status: "completed", model: "gpt-6.1-sol", id: "resp_fixture_123",
+      status: "completed", model: "gpt-6-sol", id: "resp_fixture_123",
       usage: { input_tokens: 25, output_tokens: 50, total_tokens: 75 },
-      output: [{ content: [{ type: "output_text", text: JSON.stringify({ blueprint, assetSpec: assetSpecForBlueprint(blueprint) }) }] }],
+      output: [{ content: [{ type: "output_text", text: JSON.stringify(blueprint) }] }],
     })) as typeof fetch;
   const response = await handle(blueprintRequest(), configured(), provider);
   assert.equal(response.status, 200);

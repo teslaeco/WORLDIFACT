@@ -3,7 +3,6 @@ import { oracleOrigin } from './platform.ts';
 import type { PlatformEnv } from './platform.ts';
 
 export const NEPTUNE_QUEEN_JOB_ID = '99397623-e45c-48dc-95ec-6f84446a54d5';
-export const TERRAFORMING_HEROINE_JOB_ID = 'a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781';
 export const RAPPER_ARCHIVE_URL = 'https://froge-mpc-2-studio.terraformingplanet.chatgpt.site/models/rapper-v10.glb';
 export const MAX_AVATAR_GLB_BYTES = 48 * 1024 * 1024;
 export interface AvatarCache {
@@ -57,20 +56,17 @@ function wireResponse(body: ConstructorParameters<typeof Response>[0], headers: 
 export async function avatarApi(request: Request, env: PlatformEnv & { ASSETS?: AvatarAssets }, fetcher: typeof fetch = fetch,
   storage: AvatarCache | undefined = edgeCache(), context?: AvatarContext) {
   const url = new URL(request.url);
-  if (!['/api/avatar/neptune-queen', '/api/avatar/rapper-la', '/api/avatar/terraforming-heroine'].includes(url.pathname)) return null;
+  if (!['/api/avatar/neptune-queen', '/api/avatar/rapper-la'].includes(url.pathname)) return null;
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return Response.json({ error: 'Use GET or HEAD.' }, { status: 405, headers: { 'Cache-Control': 'no-store' } });
   }
   const queen = url.pathname === '/api/avatar/neptune-queen';
-  const heroine = url.pathname === '/api/avatar/terraforming-heroine';
-  const oracleBacked = queen || heroine;
-  const oracleJobId = queen ? NEPTUNE_QUEEN_JOB_ID : heroine ? TERRAFORMING_HEROINE_JOB_ID : null;
-  const origin = oracleBacked ? oracleOrigin(env.ORACLE_ENDPOINT) : null;
-  const unavailable = () => Response.json({ error: queen ? 'Current Neptune Queen avatar is temporarily unavailable.' : heroine ? 'TerraformingPlanet heroine is temporarily unavailable.' : 'Rapper avatar is temporarily unavailable.' },
-    { status: oracleBacked && (!origin || !env.ORACLE_API_TOKEN) ? 503 : 502, headers: { 'Cache-Control': 'no-store' } });
+  const origin = queen ? oracleOrigin(env.ORACLE_ENDPOINT) : null;
+  const unavailable = () => Response.json({ error: queen ? 'Current Neptune Queen avatar is temporarily unavailable.' : 'Rapper avatar is temporarily unavailable.' },
+    { status: queen && (!origin || !env.ORACLE_API_TOKEN) ? 503 : 502, headers: { 'Cache-Control': 'no-store' } });
   // Do not let an old cache entry bypass removal of the configured source.
-  if (oracleBacked && (!origin || !env.ORACLE_API_TOKEN)) return unavailable();
-  const source = oracleBacked ? `Oracle-job:${oracleJobId}` : 'Froge-MPC2:rapper-v10.glb';
+  if (queen && (!origin || !env.ORACLE_API_TOKEN)) return unavailable();
+  const source = queen ? `Oracle-job:${NEPTUNE_QUEEN_JOB_ID}` : 'Froge-MPC2:rapper-v10.glb';
   if (queen && env.ASSETS) {
     try { return await bundledQueenResponse(request, env.ASSETS, source); }
     catch { return unavailable(); } // A missing release must not trigger heavy Oracle compression.
@@ -78,7 +74,7 @@ export async function avatarApi(request: Request, env: PlatformEnv & { ASSETS?: 
   const gzip = avatarAcceptsGzip(request);
   // Canonical, versioned keys; no visitor cookies, tokens or arbitrary query strings.
   const cacheUrl = new URL(url.pathname, url.origin);
-  cacheUrl.search = new URLSearchParams({ revision: oracleBacked ? String(oracleJobId) : 'rapper-v10', encoding: gzip ? 'gzip' : 'identity', transport: '2' }).toString();
+  cacheUrl.search = new URLSearchParams({ revision: queen ? NEPTUNE_QUEEN_JOB_ID : 'rapper-v10', encoding: gzip ? 'gzip' : 'identity', transport: '2' }).toString();
   const key = new Request(cacheUrl);
   if (storage) {
     try {
@@ -98,9 +94,9 @@ export async function avatarApi(request: Request, env: PlatformEnv & { ASSETS?: 
     } catch { /* Cache unavailability must not prevent the authorized source GET. */ }
   }
   try {
-    const upstream = await fetcher(oracleBacked ? `${origin}/v1/jobs/${oracleJobId}/model` : RAPPER_ARCHIVE_URL, {
+    const upstream = await fetcher(queen ? `${origin}/v1/jobs/${NEPTUNE_QUEEN_JOB_ID}/model` : RAPPER_ARCHIVE_URL, {
       method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(60_000),
-      headers: oracleBacked ? { Accept: 'model/gltf-binary', 'Accept-Encoding': 'identity', Authorization: `Bearer ${env.ORACLE_API_TOKEN}` } : { Accept: 'model/gltf-binary,application/octet-stream', 'Accept-Encoding': 'identity' },
+      headers: queen ? { Accept: 'model/gltf-binary', 'Accept-Encoding': 'identity', Authorization: `Bearer ${env.ORACLE_API_TOKEN}` } : { Accept: 'model/gltf-binary,application/octet-stream', 'Accept-Encoding': 'identity' },
     });
     const bytes = await readGlb(upstream);
     // Transport compression is lossless: geometry, textures and decoded GLB stay exact.
@@ -109,10 +105,10 @@ export async function avatarApi(request: Request, env: PlatformEnv & { ASSETS?: 
       'Content-Type': 'model/gltf-binary', 'Content-Length': String(payload.byteLength),
       'Cache-Control': 'public, max-age=86400', 'Vary': 'Accept-Encoding',
       'X-Content-Type-Options': 'nosniff', 'X-WORLDIFACT-GLB-Length': String(bytes.byteLength),
-      'X-WORLDIFACT-Avatar': queen ? 'Neptune-Queen-current' : heroine ? 'TerraformingPlanet-Heroine-Astra' : 'Rapper-archive-v10',
+      'X-WORLDIFACT-Avatar': queen ? 'Neptune-Queen-current' : 'Rapper-archive-v10',
       'X-WORLDIFACT-Source': source, 'X-WORLDIFACT-Avatar-Cache': storage ? 'MISS' : 'BYPASS',
     });
-    if (oracleBacked) headers.set('X-WORLDIFACT-Source-Job', String(oracleJobId));
+    if (queen) headers.set('X-WORLDIFACT-Source-Job', NEPTUNE_QUEEN_JOB_ID);
     if (gzip) headers.set('Content-Encoding', 'gzip');
     if (storage) {
       // Store only fully validated originals, never HTML, partial bodies or failures.

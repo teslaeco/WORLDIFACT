@@ -1,3 +1,4 @@
+import { historicalInternalUrl, historicalBudgetNamespace } from '../server/historicalDataBoundary.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { GenerationBudget, APPROVED_FAST_TEST, FAST_TEST_END, approvedFastSettings, type BudgetStorage } from '../server/budget.ts'
@@ -16,7 +17,7 @@ function fixture(used = 6) {
     OWNER_ACCESS_TOKEN: 'fixture-owner-'.repeat(4), ORACLE_API_TOKEN: 'fixture-oracle-'.repeat(4), ORACLE_ENDPOINT: 'https://fixture.trycloudflare.com',
     GENERATION_LIMITER: { async limit() { return { success: true } } } }
   const object = new GenerationBudget({ storage }, env)
-  env.GENERATION_BUDGET = { idFromName: n => n, get: () => object }
+  env.GENERATION_BUDGET = historicalBudgetNamespace({ idFromName: n => n, get: () => object })
   let monetary = false, posts = 0
   const fetcher = (async (_url: string | URL | Request, init?: RequestInit) => {
     if (init?.method === 'POST') { posts++; return Response.json({ id: JSON.parse(String(init.body)).id, state: 'building' }) }
@@ -60,9 +61,9 @@ test('one activation adds exactly one reservation under concurrent clients and n
   now += 60_000
   const repeated = await (await f.activate()).json() as { expiresAt: string }
   assert.equal(repeated.expiresAt, first.expiresAt, 'replay cannot extend the approved window')
-  assert.equal((await f.object.fetch(new Request('https://internal/reserve',{method:'POST'}))).status,429)
-  assert.equal((await f.object.fetch(new Request('https://internal/reserve-studio',{method:'POST',body:JSON.stringify({id:crypto.randomUUID()})}))).status,429)
-  const attempts = await Promise.all(Array.from({length:10},()=>f.object.fetch(new Request('https://internal/reserve-studio',{method:'POST',body:JSON.stringify({id:crypto.randomUUID(),profile:FAST_DRAFT_PROFILE})}))))
+  assert.equal((await f.object.fetch(new Request(historicalInternalUrl('https://internal', '/reserve'),{method:'POST'}))).status,429)
+  assert.equal((await f.object.fetch(new Request(historicalInternalUrl('https://internal', '/reserve-studio'),{method:'POST',body:JSON.stringify({id:crypto.randomUUID()})}))).status,429)
+  const attempts = await Promise.all(Array.from({length:10},()=>f.object.fetch(new Request(historicalInternalUrl('https://internal', '/reserve-studio'),{method:'POST',body:JSON.stringify({id:crypto.randomUUID(),profile:FAST_DRAFT_PROFILE})}))))
   assert.equal(attempts.filter(r=>r.status===200).length,1); assert.equal(f.values.get('reserved-attempts'),7)
   await f.activate(); assert.equal(f.values.get('reserved-attempts'),7)
   now = Date.parse(first.expiresAt)+1

@@ -1,0 +1,59 @@
+{
+  "release": "full-mcc-historical-restoration-20261006",
+  "status": "blocked-pending-operational-review",
+  "baseCommit": "29b6b9af08d62baafddceb029652db321ec83273",
+  "historicalCommit": "58e04843cee9afa5f7a8427edf853fe3986f6d45",
+  "historicalTree": "b4a31ba454d744ace4e9625077d6c2f1e8517812",
+  "review": {
+    "sourceSnapshotSha256": null,
+    "reviewer": null,
+    "evidenceRef": null,
+    "approvedAt": null,
+    "expiresAt": null
+  },
+  "sourceBackup": {
+    "ref": "backup/pre-full-mcc-restore-20261006-1507",
+    "commit": "29b6b9af08d62baafddceb029652db321ec83273",
+    "verified": true,
+    "evidenceRef": "https://github.com/teslaeco/WORLDIFACT/tree/backup/pre-full-mcc-restore-20261006-1507"
+  },
+  "protectedStateBackup": {
+    "verifiedRestorable": false,
+    "manifestSha256": null,
+    "completedAt": null,
+    "evidenceRef": null
+  },
+  "quiescence": {
+    "allMutatingIngressPaused": false,
+    "studioInFlightReconciled": false,
+    "billingEventsDrained": false,
+    "startedAt": null,
+    "validUntil": null,
+    "evidenceRef": null
+  },
+  "runtimeReview": {
+    "fastModel": "gpt-6-sol",
+    "preserveOtherRemoteVars": true,
+    "keepVars": true,
+    "remoteNonSecretSnapshotSha256": null,
+    "paidGenerationFlagsReviewed": false,
+    "currentPaymentSettingsPreserved": false,
+    "newAstraPlanPolicyReviewed": false,
+    "historical175CentGateAcknowledged": false,
+    "evidenceRef": null
+  },
+  "protectedStateReview": {
+    "usersAndSupabaseUntouched": false,
+    "authIdentityAndSessionsPreserved": false,
+    "invoiceBridgePreserved": false,
+    "bindingsAndMigrationsUnchanged": false,
+    "financialBoundaryReviewed": false,
+    "evidenceRef": null
+  },
+  "prohibitedActions": {
+    "secretSynchronization": false,
+    "paymentSetup": false,
+    "paidTests": false,
+    "permanentDeletion": false
+  }
+}
