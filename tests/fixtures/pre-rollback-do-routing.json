@@ -1,0 +1,200 @@
+{
+  "revision": "9b2a5a9e48424e11d2d8ddc9b360ec110544a508",
+  "description": "Routing-only fixture extracted from the pre-rollback Durable Object fetch methods. Matched business handlers are not retained. Unknown-prefixed routes fall through without invoking any handler.",
+  "classes": {
+    "AccountEntitlements": {
+      "sourceFile": "server/entitlements.ts",
+      "sourceSha256": "26ff116607084d82a0b35872790fadc3b6ae8e770082c97944f4e5d8c5368882",
+      "guards": [
+        {
+          "condition": "path === '/overnight-test-status' || path === '/overnight-test-claim'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/studio-library' || path.startsWith('/studio-library/')",
+          "reject": false
+        },
+        {
+          "condition": "path === '/generation-funding'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/astra-project-budget-route' && request.method === 'GET'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/astra-project-budget-status' && request.method === 'GET'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/astra-support-status' && request.method === 'GET'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/astra-supplemental-status' && request.method === 'GET'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/astra-repaired-mcc-status' && request.method === 'GET'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/private-worlds' && request.method === 'POST'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/status' && request.method === 'GET'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/billing' && request.method === 'GET'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/astra-project-budget-claim'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/astra-repaired-mcc-claim'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/astra-supplemental-claim'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/astra-support-claim'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/blueprint-status' || path === '/blueprint-complete'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/studio-current'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/studio-current-clear'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/studio-close-missing'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/blueprint-dispatch'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/studio-dispatch'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/reserve' || path === '/reserve-overnight-test'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/studio-provider-pending' || path === '/provider-reconciliation-pending'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/reconcile-blueprint-provider'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/reconcile-studio-provider'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/settle' || path === '/job'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/customer'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/grant'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/revoke'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/subscription'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/paypal-reserve'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/paypal-order'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/paypal-get'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/paypal-clear'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/checkout-reserve'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/checkout-finish'",
+          "reject": false
+        },
+        {
+          "condition": "path === '/checkout-clear'",
+          "reject": false
+        }
+      ],
+      "fallbackHandler": false
+    },
+    "GenerationBudget": {
+      "sourceFile": "server/budget.ts",
+      "sourceSha256": "b71b301c402530b6cc8e91aaa90d8893ce24518d06ea25d40fea622519f9baa9",
+      "guards": [
+        {
+          "condition": "request.method === 'GET' && path === '/status'",
+          "reject": false
+        },
+        {
+          "condition": "request.method === 'GET' && path === '/promo-status'",
+          "reject": false
+        },
+        {
+          "condition": "request.method === 'POST' && path === '/promo-fund'",
+          "reject": false
+        },
+        {
+          "condition": "request.method === 'POST' && path === '/promo-revoke'",
+          "reject": false
+        },
+        {
+          "condition": "request.method === 'POST' && path === '/promo-reserve'",
+          "reject": false
+        },
+        {
+          "condition": "request.method === 'POST' && path === '/activate-approved-fast'",
+          "reject": false
+        },
+        {
+          "condition": "request.method !== 'POST' || !['/reserve', '/reserve-studio'].includes(path)",
+          "reject": true
+        },
+        {
+          "condition": "path === '/reserve-studio'",
+          "reject": false
+        }
+      ],
+      "fallbackHandler": true
+    }
+  }
+}

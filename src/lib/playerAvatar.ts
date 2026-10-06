@@ -8,8 +8,7 @@ import type { JumpAnimation } from './playerJump.ts';
 import { orientQueenForGameplay, polishQueenFootwear } from './queenDetails.ts';
 
 export const NEPTUNE_QUEEN_AVATAR_JOB = '99397623-e45c-48dc-95ec-6f84446a54d5';
-export const TERRAFORMING_HEROINE_AVATAR_JOB = 'a8e67f26-7f72-4e90-a0b2-4f0f6ad0e781';
-export type AvatarChoice = 'queen' | 'rapper' | 'terraformer';
+export type AvatarChoice = 'queen' | 'rapper';
 
 type Rig = {
   hips?: THREE.Bone; head?: THREE.Bone;
@@ -71,9 +70,7 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (st
   let disposed = false, gameRig: GameRig | null = null;
   rootState('loading');
   function rootState(state: 'loading' | 'ready' | 'error') { onState?.(state); }
-  const root = new THREE.Group();
-  root.name = choice === 'rapper' ? 'rapper-player' : choice === 'terraformer' ? 'terraforming-heroine-player' : 'neptune-queen-player';
-  root.userData.avatarSource = choice === 'rapper' ? 'froge-archive:rapper-v10.glb' : choice === 'terraformer' ? `oracle-job:${TERRAFORMING_HEROINE_AVATAR_JOB}` : `oracle-job:${NEPTUNE_QUEEN_AVATAR_JOB}`;
+  const root = new THREE.Group(); root.name = choice === 'rapper' ? 'rapper-player' : 'neptune-queen-player'; root.userData.avatarSource = choice === 'rapper' ? 'froge-archive:rapper-v10.glb' : `oracle-job:${NEPTUNE_QUEEN_AVATAR_JOB}`;
   const visualRoot = new THREE.Group(); visualRoot.name = "avatar-hip-pivot"; root.add(visualRoot);
   visualRoot.add(fallback.root);
   const equipment = createAvatarEquipment(visualRoot);
@@ -96,11 +93,11 @@ export function createPlayerAvatar(choice: AvatarChoice = 'queen', onState?: (st
       const { body: scaled, center } = avatarBodyBounds(model);
       model.position.x -= center.x; model.position.z -= center.z; model.position.y -= scaled.min.y;
       loadedBaseY = model.position.y;
-      model.name = choice === 'rapper' ? 'Rapper_archive_v10' : choice === 'terraformer' ? 'TerraformingPlanet_Heroine_Astra_a8e67f26' : 'Neptune_Queen_current_99397623';
+      model.name = choice === 'rapper' ? 'Rapper_archive_v10' : 'Neptune_Queen_current_99397623';
       // The original fan belongs to the character; it must not be hidden.
       model.traverse(part => { if (part instanceof THREE.Mesh) { part.castShadow = true; part.receiveShadow = true; } });
       fallback.root.visible = false; loaded = model; visualRoot.add(model); rig = findRig(model);
-      if (choice !== 'rapper' && !rig.leftLeg && !rig.rightLeg && !gltf.animations.length) {
+      if (choice === 'queen' && !rig.leftLeg && !rig.rightLeg && !gltf.animations.length) {
         // Bind only the original character, not the optional equipment overlays.
         equipment.root.removeFromParent();
         try { gameRig = bindStaticAvatar(visualRoot); } finally { visualRoot.add(equipment.root); }

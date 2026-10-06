@@ -1,3 +1,4 @@
+import { historicalBudgetNamespace } from '../server/historicalDataBoundary.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
@@ -17,7 +18,7 @@ function fixture(used = 5) {
   const env: StudioEnv = { OWNER_ACCESS_TOKEN: 'owner-test-'.repeat(5), ORACLE_ENDPOINT: 'https://review-worker.trycloudflare.com', ORACLE_API_TOKEN: 'oracle-test-only',
     ENABLE_STUDIO_JOBS: 'true', ENABLE_ORACLE_JOBS: 'false', PUBLIC_PILOT: 'true', GENERATION_REQUEST_LIMIT: '6', GENERATION_EXPIRES_AT: new Date(Date.now() + 3600_000).toISOString(), GENERATION_LIMITER: { async limit() { return { success: true } } } }
   const object = new GenerationBudget({ storage }, env)
-  env.GENERATION_BUDGET = { idFromName: name => name, get: () => object }
+  env.GENERATION_BUDGET = historicalBudgetNamespace({ idFromName: name => name, get: () => object })
   const calls: { url: string; init?: RequestInit }[] = []
   let acceptLost = false, photoReady = true, invalidModel = false
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -112,29 +113,6 @@ test('GLB and texture exports need the exact receipt and never trigger generatio
   assert.equal((await (await f.call(path + '/exports/pbr', 'GET', undefined, prepared.ticket)).arrayBuffer()).byteLength, 3)
   f.corruptModel(); assert.equal((await f.call(path + '/model', 'GET', undefined, prepared.ticket)).status, 502)
   assert.equal(posts(f).length, 0)
-})
-
-test('preview and format downloads keep independent bounded slots for each signed job', async () => {
-  const f = fixture(), hits = new Map<string, number>()
-  f.env.GENERATION_LIMITER = { async limit({ key }) {
-    const count = (hits.get(key) ?? 0) + 1; hits.set(key, count)
-    return { success: count <= 3 }
-  } }
-  const first = await data(f.call('/api/studio/prepare', 'POST', input))
-  const second = await data(f.call('/api/studio/prepare', 'POST', { ...input, prompt: 'A different ivory study' }))
-  const get = (job: Reply, route: string) => f.call(`/api/studio/jobs/${job.id}/${route}`, 'GET', undefined, job.ticket)
-  for (const route of ['model', 'model', 'exports/pbr', 'exports/fbx', 'exports/blend']) {
-    const response = await get(first, route)
-    assert.equal(response.status, 200, route); await response.arrayBuffer()
-  }
-  assert.equal((await get(first, 'model')).status, 200)
-  const upstreamBeforeDenied = f.calls.length
-  assert.equal((await get(first, 'model')).status, 429, 'Repeated downloads of the same format remain rate limited')
-  assert.equal(f.calls.length, upstreamBeforeDenied, 'A denied artifact request never reaches Oracle')
-  for (const route of ['model', 'exports/pbr', 'exports/fbx', 'exports/blend']) assert.equal((await get(second, route)).status, 200, route)
-  assert.equal((await f.call(`/api/studio/jobs/${second.id}/model`, 'GET', undefined, first.ticket)).status, 401)
-  assert.equal(posts(f).length, 0)
-  assert.equal(f.values.get('reserved-attempts'), 5)
 })
 
 test('invalid photos and unrecognized fields are rejected before contacting paid services', async () => {

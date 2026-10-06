@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { StudioCoordinator, STUDIO_RECEIPT_KEY, STUDIO_RECEIPT_HISTORY_PREFIX, type ReceiptStore } from '../src/lib/studioClient.ts'
 import { canSubmitNewDraft } from '../src/lib/studioDraft.ts'
-import { FAST_DRAFT_PROFILE, inputDigest, validateStudioInput, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
+import { FAST_DRAFT_PROFILE, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
 const oldId = '12345678-1234-4234-8234-123456789abc'
 const nextId = '87654321-1234-4234-8234-123456789abc'
 function receipt(id: string) { return { id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` } }
@@ -89,9 +89,7 @@ test('mutating a draft during free preparation cannot change its eventual paid r
   await result
   const preparation = f.calls.find(c => c.path === '/api/studio/prepare')!
   const submission = f.calls.find(c => c.path === '/api/studio/jobs')!
-  assert.equal(JSON.parse(preparation.body!).inputDigest, await inputDigest(validateStudioInput(nextInput)))
-  assert.deepEqual(JSON.parse(submission.body!), validateStudioInput(nextInput))
-  assert.equal(JSON.parse(preparation.body!).photoCount, 0)
+  assert.equal(submission.body, preparation.body)
   assert.equal(JSON.parse(submission.body!).prompt, nextInput.prompt)
   assert.equal(f.client.current?.prompt, nextInput.prompt)
 })

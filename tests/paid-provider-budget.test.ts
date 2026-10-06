@@ -1,3 +1,4 @@
+import { historicalInternalUrl } from '../server/historicalDataBoundary.ts'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { AccountEntitlements, type EntitlementStorage } from '../server/entitlements.ts'
@@ -10,12 +11,12 @@ function fixture(legacyCredits = 0) {
     async put(key, value) { values.set(key, structuredClone(value)) },
     transaction<T>(fn: (s: EntitlementStorage) => Promise<T>) { const next = queue.then(() => fn(storage)); queue = next.catch(() => {}); return next },
   }
-  let object = new AccountEntitlements({ storage }, { ENABLE_ASTRA_PLANS: 'true' })
+  let object = new AccountEntitlements({ storage })
   const call = async (path: string, body?: unknown) => {
-    const response = await object.fetch(new Request('https://internal' + path, { method: body === undefined ? 'GET' : 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) }))
+    const response = await object.fetch(new Request(historicalInternalUrl('https://internal', path), { method: body === undefined ? 'GET' : 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) }))
     return { status: response.status, data: await response.json() as Record<string, unknown> }
   }
-  return { values, call, restart: () => { object = new AccountEntitlements({ storage }, { ENABLE_ASTRA_PLANS: 'true' }) } }
+  return { values, call, restart: () => { object = new AccountEntitlements({ storage }) } }
 }
 
 test('thirty failed paid attempts cannot turn returned customer credits into unlimited provider spend', async () => {
@@ -69,22 +70,4 @@ test('a corrupt budget never becomes fresh funding', async () => {
   f.values.set('provider-budget-cents:v1', NaN)
   assert.equal((await f.call('/reserve', { id: crypto.randomUUID(), profile: 'fast' })).status, 503)
   assert.equal((await f.call('/status')).data.credits, 1500)
-})
-
-test('a paid Creator member past the old quota still requires sufficient provider funding', async () => {
-  const f = fixture()
-  await f.call('/grant', { id: 'in_CreatorPaid', credits: 3000, subscriptionId: 'sub_Creator' })
-  await f.call('/subscription', { id: 'sub_Creator', until: Date.now() + 86400_000, active: true, revision: 1, plan: 'creator', grantId: 'in_CreatorPaid' })
-  f.values.set('creator-astra:in_CreatorPaid', 6)
-  for (let index = 0; index < 12; index++) {
-    const id = crypto.randomUUID()
-    assert.equal((await f.call('/reserve', { id, profile: 'slow' })).data.allowed, true)
-    await f.call('/settle', { id, state: 'failed' })
-  }
-  assert.equal((await f.call('/status')).data.credits, 3000)
-  assert.equal(f.values.get('creator-astra:in_CreatorPaid'), 6, 'Historical quota is not reset or extended')
-  assert.equal(f.values.get('provider-budget-cents:v1'), 0)
-  assert.equal((await f.call('/reserve', { id: crypto.randomUUID(), profile: 'slow' })).data.reason, 'PROVIDER_BUDGET_EXHAUSTED')
-  f.restart()
-  assert.equal((await f.call('/reserve', { id: crypto.randomUUID(), profile: 'slow' })).data.reason, 'PROVIDER_BUDGET_EXHAUSTED')
 })

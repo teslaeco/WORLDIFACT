@@ -69,14 +69,12 @@ test('Chess visitors get a mobile-safe full-screen guest launch instead of a nes
   assert.doesNotMatch(html, /<iframe[^>]+src="\/apps\/chess\//)
 })
 
-test('historical Shop portal keeps the real model form and its separate world-blueprint drawer', async () => {
+test('direct PortalPage Shop renders the real native generation form, Astra surface and WORLDIFACT return', async () => {
   const html = await renderPortal('/shop')
   assert.match(html, /data-world="enchanted-ai-shop"/)
-  assert.match(html, /<summary>Create a world blueprint with GPT-6 Astra<\/summary>/)
-  assert.match(html, /AI model · Model AI/)
   assert.match(html, /Back to WORLDIFAKT/)
   assert.match(html, /id="studio-prompt"/)
-  assert.match(html, /Generate Astra\/Blender model/)
+  assert.match(html, /Generate SLOW model/)
   assert.match(html, /target="_blank"/)
   assert.doesNotMatch(html, /<iframe|target="_(top|self|parent)"|3D result appears here|FORGE-projekt/)
 })

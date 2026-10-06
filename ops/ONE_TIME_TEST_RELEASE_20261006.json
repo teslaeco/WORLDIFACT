@@ -1,6 +1,0 @@
-{
-  "release": "one-time-api-tests-20261006-044444",
-  "baseCommit": "d229a3e37f37bd85476dc3d8d969dd49fdae488d",
-  "preserveBilling": true,
-  "preserveRemoteVars": true
-}

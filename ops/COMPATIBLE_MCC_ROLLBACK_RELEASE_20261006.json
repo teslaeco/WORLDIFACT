@@ -1,8 +1,0 @@
-{
-  "release": "compatible-mcc-ui-rollback-20261006",
-  "baseCommit": "9b2a5a9e48424e11d2d8ddc9b360ec110544a508",
-  "preserveBilling": true,
-  "preserveRemoteVars": true,
-  "preserveSecrets": true,
-  "compatibleMccRollback": true
-}

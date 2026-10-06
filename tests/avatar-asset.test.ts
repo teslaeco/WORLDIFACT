@@ -33,15 +33,3 @@ test('logout discards cached originals and aborts an in-flight request', async (
     await assert.rejects(pending); assert.equal(signal!.aborted, true)
   } finally { clearAvatarAssets(); globalThis.fetch = original }
 })
-
-test('TerraformingPlanet heroine uses one authorized GET and shares its cached bytes', async () => {
-  const original = globalThis.fetch; clearAvatarAssets(); let calls = 0
-  globalThis.fetch = (async (url, init) => {
-    calls++; assert.equal(url, '/api/avatar/terraforming-heroine'); assert.equal(init?.credentials, 'same-origin'); assert.equal(init?.redirect, 'error')
-    return new Response(fixture())
-  }) as typeof fetch
-  try {
-    const first = loadAvatarBytes('terraformer'), second = loadAvatarBytes('terraformer')
-    assert.equal(first, second); assert.deepEqual(new Uint8Array(await first), fixture()); assert.equal(calls, 1)
-  } finally { clearAvatarAssets(); globalThis.fetch = original }
-})

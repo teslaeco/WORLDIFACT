@@ -36,7 +36,7 @@ for (const message of ['The job receipt is not valid.', 'This job receipt expire
   })
 }
 test('authentication, account mismatch and uncertain failures keep the selected job and never unlock a duplicate', async () => {
-  for (const [status, message] of [[401, 'Sign in with your shared WORLDIFACT / Cube Chess account to continue.'], [404, 'Job not found.'], [429, 'Please wait.'], [503, 'The job receipt is not valid.']] as const) {
+  for (const [status, message] of [[401, 'Sign in with your shared WORLDIFACT / Cube Chess account to continue.'], [403, 'This model belongs to a different account or has no account receipt.'], [404, 'Job not found.'], [429, 'Please wait.'], [503, 'The job receipt is not valid.']] as const) {
     const store = storage()
     let calls = 0
     const client = new StudioCoordinator(store, (async () => { calls++; return Response.json({ error: message }, { status }) }) as typeof fetch)
@@ -46,23 +46,6 @@ test('authentication, account mismatch and uncertain failures keep the selected 
     assert.equal(store.getItem(STUDIO_RECEIPT_HISTORY_PREFIX + id), null)
   }
 })
-test('account-ledger ownership mismatch enters same-job review and still blocks a duplicate', async () => {
-  const store = storage(); let calls = 0
-  const client = new StudioCoordinator(store, (async () => {
-    calls++
-    return Response.json({ error: 'This model belongs to a different account or has no account receipt.' }, { status: 403 })
-  }) as typeof fetch)
-  client.restore()
-  const job = await client.poll()
-  assert.equal(job.state, 'pending')
-  assert.equal(job.reconciliationRequired, true)
-  assert.equal(canSubmitNewDraft(id, job), false)
-  await assert.rejects(client.start(input, () => {}, '', true), /already selected/)
-  assert.equal(calls, 1)
-  assert.equal(client.current?.receipt.id, id)
-  assert.equal(store.getItem(STUDIO_RECEIPT_HISTORY_PREFIX + id), null)
-})
-
 test('age alone never releases a pending job and network loss is not a rejected receipt', async () => {
   const store = storage()
   const client = new StudioCoordinator(store, (async () => Response.json({ job: { id, state: 'pending' } })) as typeof fetch)

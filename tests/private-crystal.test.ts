@@ -1,4 +1,0 @@
-import {test} from 'node:test'
-import assert from 'node:assert/strict'
-import {CRYSTAL_FACES} from '../src/lib/crystal18.ts'
-test('the welcome jewel has exactly eighteen polygon faces and a closed manifold',()=>{assert.equal(CRYSTAL_FACES.length,18);assert.equal(CRYSTAL_FACES.filter(f=>f.length===3).length,16);assert.equal(CRYSTAL_FACES.filter(f=>f.length===8).length,2);const edges=new Map<string,number>(),vertices=new Set<number>();for(const face of CRYSTAL_FACES){face.forEach(v=>vertices.add(v));face.forEach((v,i)=>{const edge=[v,face[(i+1)%face.length]].sort((a,b)=>a-b).join(':');edges.set(edge,(edges.get(edge)??0)+1)})}assert.equal(vertices.size,16);assert.equal(edges.size,32);assert.equal(vertices.size-edges.size+CRYSTAL_FACES.length,2);assert.ok([...edges.values()].every(n=>n===2))})

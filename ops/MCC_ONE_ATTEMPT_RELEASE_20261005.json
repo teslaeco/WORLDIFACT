@@ -1,6 +1,0 @@
-{
-  "release": "mcc-one-attempt-allowance-20261005",
-  "baseCommit": "c6422e9d22185d22ee4eae23dc61f4045dd6ca6f",
-  "preserveBilling": true,
-  "preserveRemoteVars": true
-}

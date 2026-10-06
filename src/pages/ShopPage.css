@@ -87,19 +87,3 @@
 .chess-launch > div { max-width: 720px; }
 .chess-launch .foundation-actions { justify-content: center; }
 @media (max-width: 760px) { .demo-shop-canvas { height: 380px; } .chess-launch { min-height: 260px; padding: 18px; } }
-
-/* Keep long status text and native selects inside narrow phone columns. */
-.native-shop, .native-shop form, .native-shop-photos > div { box-sizing: border-box; min-width: 0; max-width: 100%; }
-.native-shop :is(input, select, textarea, button) { min-width: 0; max-width: 100%; }
-.native-shop :is(p, small, dd, a) { overflow-wrap: anywhere; }
-.native-shop-nav { position: static; }
-@media (max-width: 1000px) and (pointer: coarse) {
- .native-shop .native-shop-workspace { display: flex; flex-direction: column; }
- .native-shop-form { order: 0; width: 100%; }
- .native-shop-preview { order: 1; width: 100%; box-sizing: border-box; }
-}
-
-.studio-budget-options { margin: 6px 0; min-width: 0; padding: 14px; border: 1px solid #54707c; border-radius: 9px; }
-.studio-budget-options legend { padding: 0 6px; font-weight: 700; }
-.native-shop-form .studio-budget-options label[for="studio-budget-consent"] { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; }
-.studio-budget-options input[type="checkbox"] { flex: none; }

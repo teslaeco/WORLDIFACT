@@ -5,7 +5,9 @@ export interface ArchivedWorld {
   createdAt: string;
   result: GenerationResult;
 }
-const KEY = "worldifact.worlds.v1";
+// A fresh active workspace, not a dated data snapshot. The shared modern archive
+// stays untouched: its newer model/delivery records fail historical validation.
+const KEY = "worldifact-mcc-58e04843-20261006:worlds-v1";
 function archivedWorld(value: unknown): value is ArchivedWorld {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;

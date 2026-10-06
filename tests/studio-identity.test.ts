@@ -27,10 +27,3 @@ test('archive retries retain identical original bytes and refuse silently replac
   assert.throws(() => archiveWriteDecision(original, { ...original, byteLength: 1601 }), /not overwritten/)
   assert.equal(original.sha256, 'a'.repeat(64))
 })
-
-test('procedural archive filenames retain safe namespaced identity without accepting fake Studio job IDs', () => {
-  const id = `blueprint:${'a'.repeat(64)}`
-  assert.equal(previewFileName({ id, origin: 'archive', label: 'procedural' }), `WORLDIFACT-blueprint-${'a'.repeat(64)}.glb`)
-  assert.throws(() => previewFileName({ id, origin: 'job', label: 'not a Studio receipt' }))
-  for (const bad of ['blueprint:../../secret', `blueprint:${'a'.repeat(63)}`, `blueprint:${'z'.repeat(64)}`]) assert.throws(() => previewFileName({ id: bad, origin: 'archive', label: 'invalid' }))
-})

@@ -28,7 +28,7 @@ export function paymentErrorMessage(error: unknown): string {
   if (error instanceof AccountServiceError) {
     if (error.status === 401) return 'Your session has expired. Sign in again before purchasing.'
     if (error.status === 429) return 'Please wait a moment before trying to open checkout again.'
-    if (error.status === 409) return 'An existing payment or subscription needs attention. Use Payment methods and billing below to retry the existing payment, change your card, or manage your subscription. Do not start a second purchase.'
+    if (error.status === 409) return 'An existing payment or subscription needs attention. Refresh your balance and check your payment history before trying again.'
     if (error.paymentReference) return `Secure checkout could not be opened. Please contact support with reference: ${error.paymentReference}.`
   }
   return 'Secure checkout could not be opened. Please try again later.'
