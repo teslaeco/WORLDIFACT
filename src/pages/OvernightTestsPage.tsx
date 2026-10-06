@@ -6,6 +6,7 @@ import { exportBlueprintGlb } from '../lib/blueprintExport'
 import { inspectGLB } from '../lib/glb'
 import { OVERNIGHT_PANEL_EXPIRES, OVERNIGHT_PANEL_SLOTS, OvernightTestClient, type OvernightPanelRow, type OvernightPanelStatus } from '../lib/overnightTestClient'
 import { formatStudioGenerationDuration } from '../lib/studioProtocol'
+import { overnightTestDiagnostic } from '../lib/overnightTestDiagnostics'
 import './OvernightTestsPage.css'
 
 type Slot = typeof OVERNIGHT_PANEL_SLOTS[number]
@@ -57,16 +58,18 @@ export default function OvernightTestsPage() {
     setBusy('status')
     setError('')
     setNotice('')
+    let receiptRead = false
     try {
       const next = await scope.client.status()
       if (!scope.active()) return
+      receiptRead = true
       const nextRows = scope.client.rows()
       scope.status = next
       setStatus(next)
       setRows(nextRows)
       setNow(Date.now())
-    } catch {
-      if (scope.active()) setError('The owner-only test budget could not be verified. Sign in with the approved account, then refresh. No paid request was sent by this budget check.')
+    } catch (error) {
+      if (scope.active()) setError(`The owner-only test budget could not be verified. Diagnostic: ${receiptRead ? 'TEST_BROWSER_RECEIPT_STORAGE' : overnightTestDiagnostic(error)}. No paid request was sent by this budget check.`)
     } finally {
       scope.busy = false
       if (scope.active()) setBusy(null)
@@ -83,7 +86,7 @@ export default function OvernightTestsPage() {
     try {
       scope = { client: new OvernightTestClient(window.localStorage, fetch, owner, active), active, busy: false, status: null, urls: new Set(), timers: new Set() }
     } catch {
-      setError('This browser cannot preserve test receipts. Enable local storage before starting any paid test.')
+      setError('This browser cannot preserve test receipts. Diagnostic: TEST_BROWSER_RECEIPT_STORAGE. No paid request was sent.')
       return () => { closed = true }
     }
     sessionRef.current = scope

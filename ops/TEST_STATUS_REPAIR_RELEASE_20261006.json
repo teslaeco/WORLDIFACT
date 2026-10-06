@@ -1,0 +1,6 @@
+{
+  "release": "test-budget-status-native-fetch-repair-20261006",
+  "baseCommit": "2cc6b9f2071e4cec1e4d92edd69371f518d643de",
+  "preserveBilling": true,
+  "preserveRemoteVars": true
+}
