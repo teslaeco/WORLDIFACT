@@ -3,6 +3,7 @@ import type { GenerationResult } from './blueprint.ts'
 import { StudioCoordinator, STUDIO_RECEIPT_KEY, type ReceiptStore } from './studioClient.ts'
 import type { StudioJob } from './studioProtocol.ts'
 import { inspectGLB } from './glb.ts'
+import { isOvernightTestDiagnostic, OvernightTestStatusError, type OvernightTestDiagnostic } from './overnightTestDiagnostics.ts'
 
 export const OVERNIGHT_PANEL_EXPIRES = '2026-10-06T12:00:00.000Z'
 const approval = 'api-tests-20261006-044444-usd4'
@@ -47,7 +48,7 @@ export class OvernightTestClient {
   private now: () => number
   constructor(storage: ReceiptStore, fetcher: typeof fetch, accountId: string, active: () => boolean, now: () => number = Date.now) {
     if (!uuid.test(accountId)) throw new Error('Sign in to the approved account to view temporary tests.')
-    this.storage = storage; this.fetcher = fetcher; this.accountId = accountId; this.active = active; this.now = now
+    this.storage = storage; this.fetcher = fetcher.bind(globalThis); this.accountId = accountId; this.active = active; this.now = now
   }
   private assertActive() { if (!this.active()) throw new Error('The account changed. Reopen this panel in the original account; no replacement was started.') }
   private assertWindow() {
@@ -112,22 +113,29 @@ export class OvernightTestClient {
     return client
   }
   async status(): Promise<OvernightPanelStatus> {
-    const response = await this.request('/api/overnight-tests/status', { method: 'GET', signal: AbortSignal.timeout(40_000) })
-    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('This account does not have a verified temporary test allowance.')
-    const reader = response.body?.getReader()
-    if (!reader) throw new Error('The temporary test allowance could not be verified.')
-    const decoder = new TextDecoder(); let size = 0, text = ''
+    let diagnostic: OvernightTestDiagnostic = 'TEST_STATUS_TRANSPORT_FAILED'
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
     try {
+      const response = await this.request('/api/overnight-tests/status', { method: 'GET', signal: AbortSignal.timeout(40_000) })
+      diagnostic = response.status === 401 ? 'TEST_SIGN_IN_REQUIRED' : response.status === 429 ? 'TEST_STATUS_RATE_LIMITED' : 'TEST_STATUS_RESPONSE_INVALID'
+      if (!response.headers.get('content-type')?.includes('application/json') || !response.body) throw new OvernightTestStatusError(diagnostic)
+      reader = response.body.getReader()
+      const decoder = new TextDecoder(); let size = 0, text = ''
       for (;;) {
         const next = await reader.read(); this.assertActive()
         if (next.done) break
         size += next.value.byteLength
-        if (size > 8192) throw new Error('The temporary test allowance could not be verified.')
+        if (size > 8192) throw new OvernightTestStatusError('TEST_STATUS_RESPONSE_INVALID')
         text += decoder.decode(next.value, { stream: true })
       }
       this.assertActive()
-      return readOvernightPanelStatus(JSON.parse(text + decoder.decode()))
-    } catch (error) { await reader.cancel().catch(() => {}); throw error }
+      const value: unknown = JSON.parse(text + decoder.decode())
+      if (!response.ok) throw new OvernightTestStatusError(object(value) && isOvernightTestDiagnostic(value.diagnostic) ? value.diagnostic : diagnostic)
+      return readOvernightPanelStatus(value)
+    } catch (error) {
+      await reader?.cancel().catch(() => {})
+      throw error instanceof OvernightTestStatusError ? error : new OvernightTestStatusError(diagnostic)
+    }
   }
   rows(): OvernightPanelRow[] {
     return OVERNIGHT_PANEL_SLOTS.map(({ id: slot }) => {

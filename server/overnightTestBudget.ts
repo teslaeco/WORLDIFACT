@@ -1,5 +1,6 @@
 import { astraProjectBudget } from './astraProjectBudget.ts'
 import type { EntitlementStorage } from './entitlements.ts'
+import type { OvernightTestDiagnostic } from '../src/lib/overnightTestDiagnostics.ts'
 
 /** One separately authorized test run. None of these names derive from configuration. */
 export const OVERNIGHT_TEST_APPROVAL = 'api-tests-20261006-044444-usd4' as const
@@ -52,6 +53,23 @@ export function overnightTestAuthority(env: OvernightTestEnv, accountId: unknown
       issuedAt: OVERNIGHT_TEST_ISSUED, expiresAt: OVERNIGHT_TEST_EXPIRES, totalCents: OVERNIGHT_TEST_CENTS }), accountId, env.ACCOUNT_LEDGER_MODE, now, allowExpired)
   } catch { return null }
 }
+/** Diagnose a refused status read without exposing config values or changing them. */
+export function overnightTestStatusDiagnostic(env: OvernightTestEnv, accountId: unknown, now: number): OvernightTestDiagnostic | null {
+  if (overnightTestAuthority(env, accountId, now, true)) return null
+  if (env.ACCOUNT_LEDGER_MODE !== undefined && env.ACCOUNT_LEDGER_MODE !== 'live') return 'TEST_LEDGER_NOT_LIVE'
+  if (!Number.isSafeInteger(now) || now < Date.parse(OVERNIGHT_TEST_ISSUED)) return 'TEST_WINDOW_NOT_STARTED'
+  if (env.WORLDIFACT_OVERNIGHT_TEST_BUDGET !== undefined)
+    return typeof env.WORLDIFACT_OVERNIGHT_TEST_BUDGET === 'string' ? 'TEST_EXPLICIT_CONFIG_INVALID' : 'TEST_EXPLICIT_BINDING_TYPE'
+  const raw = env.WORLDIFACT_ASTRA_PROJECT_BUDGET
+  if (raw === undefined) return 'TEST_SELECTOR_MISSING'
+  if (typeof raw !== 'string') return 'TEST_SELECTOR_BINDING_TYPE'
+  if (raw.length > 1024) return 'TEST_SELECTOR_INVALID'
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (object(value) && typeof value.accountId === 'string' && typeof accountId === 'string' && value.accountId !== accountId.toLowerCase()) return 'TEST_ACCOUNT_NOT_APPROVED'
+  } catch { /* Only the fixed validation code leaves this function. */ }
+  return 'TEST_SELECTOR_INVALID'
+}
 export function overnightWorkflow(channel: unknown, model: unknown): OvernightWorkflow | null {
   if (channel === 'studio' && model === 'astra') return 'detailed-astra'
   if (channel === 'blueprint' && model === 'sol') return 'blueprint-sol'
@@ -98,10 +116,13 @@ export async function overnightTestPoolRoute(request: Request, storage: Entitlem
   if (request.method !== (status ? 'GET' : 'POST') || new URL(request.url).search) return reply({ approved: false }, 405)
   const accountId = request.headers.get('X-WORLDIFACT-Verified-Account')
   const authority = overnightTestAuthority(env, accountId, clock(), status)
-  if (!authority) return reply(status ? { available: false } : { approved: false }, 403)
+  if (!authority) return reply(status ? { available: false, diagnostic: overnightTestStatusDiagnostic(env, accountId, clock()) ?? 'TEST_SELECTOR_INVALID' } : { approved: false }, 403)
+  let diagnostic: OvernightTestDiagnostic = 'TEST_POOL_READ_UNAVAILABLE'
   try {
     if (status) {
-      const raw = await storage.get(OVERNIGHT_TEST_STATE), state = raw === undefined ? null : validatedState(raw, authority, clock())
+      const raw = await storage.get(OVERNIGHT_TEST_STATE)
+      diagnostic = 'TEST_POOL_STATE_INVALID'
+      const state = raw === undefined ? null : validatedState(raw, authority, clock())
       const used = state?.committedCents ?? 0
       const counts = Object.fromEntries(Object.keys(OVERNIGHT_TEST_WORKFLOWS).map(workflow => [workflow, state?.claims.filter(claim => claim.workflow === workflow).length ?? 0]))
       return reply({ available: clock() < Date.parse(authority.expiresAt) && used < 395, approvalId: authority.approvalId, expiresAt: authority.expiresAt,
@@ -130,5 +151,5 @@ export async function overnightTestPoolRoute(request: Request, storage: Entitlem
       return clock() < Date.parse(current.expiresAt) ? { approved: true, claim } : { approved: false }
     })
     return reply(result)
-  } catch { return reply({ error: 'Overnight test authority is unavailable.' }, 503) }
+  } catch { return reply({ error: 'Overnight test authority is unavailable.', ...(status ? { diagnostic } : {}) }, 503) }
 }

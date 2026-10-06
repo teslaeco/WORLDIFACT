@@ -134,3 +134,19 @@ instruction to bypass visible controls or extract authentication credentials.
 No normal customer gains an unbounded allowance. Authentication, billing review,
 customer-point availability, rate limits, Oracle readiness/concurrency checks,
 per-job cost guards, signed receipts and dispatch fences remain in force.
+
+## Status transport repair
+
+The browser status client binds native `fetch` to the browser global receiver,
+matching the existing Studio client. Calling an unbound native fetch as a client
+method can fail before any request is sent. A separate native Chromium regression
+uses only inert data URLs; hosted CI must run it. Local mocks alone are not native
+browser evidence.
+
+The visible status error includes a fixed diagnostic code for authentication,
+transport, private-setting type/validation, namespace/state reads, or local receipt
+storage. Codes contain no identity, setting value, receipt or token. These reads
+never create a claim or repair configuration. A JSON-typed or stale private
+binding remains rejected rather than being normalized or substituted silently.
+This repair retains the same approval, pool, cutoff and committed amount. It is
+released under its own exact-parent scope preserving billing and remote settings.

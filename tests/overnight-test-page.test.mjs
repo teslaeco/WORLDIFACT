@@ -8,6 +8,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ts from 'typescript'
 import { OVERNIGHT_PANEL_EXPIRES, OVERNIGHT_PANEL_SLOTS } from '../src/lib/overnightTestClient.ts'
+import * as testDiagnostics from '../src/lib/overnightTestDiagnostics.ts'
 import { inspectGLB } from '../src/lib/glb.ts'
 import { formatStudioGenerationDuration } from '../src/lib/studioProtocol.ts'
 
@@ -67,6 +68,7 @@ async function harness(options = {}) {
       if (id === 'react-router-dom') return { Link: 'a' }
       if (id === '../lib/account') return { useAccount: () => account }
       if (id === '../lib/overnightTestClient') return { OvernightTestClient: Client, OVERNIGHT_PANEL_EXPIRES, OVERNIGHT_PANEL_SLOTS }
+      if (id === '../lib/overnightTestDiagnostics') return testDiagnostics
       if (id === '../lib/blueprintExport') return { async exportBlueprintGlb(blueprint) { calls.push({ kind: 'local-export', title: blueprint.title }); return options.exportHandler ? options.exportHandler(blueprint) : glb() } }
       if (id === '../lib/glb') return { inspectGLB }
       if (id === '../lib/studioProtocol') return { formatStudioGenerationDuration }
@@ -124,7 +126,21 @@ test('status loading and failed refresh hide controls and never reveal raw servi
     assert.doesNotMatch(h.markup(), /<textarea|Start paid/)
     wait.reject(new Error('RAW_PROVIDER_SECRET')); await h.settle()
     assert.doesNotMatch(h.text(), /RAW_PROVIDER_SECRET|Start paid/)
+    assert.match(h.text(), /Diagnostic: TEST_STATUS_RESPONSE_INVALID/)
   } finally { h.close() }
+})
+
+test('the page shows fixed server diagnostic codes separately from local receipt-read failures', async () => {
+  const config = await harness({ statusHandler: () => { throw new testDiagnostics.OvernightTestStatusError('TEST_SELECTOR_BINDING_TYPE') } })
+  try { assert.match(config.text(), /Diagnostic: TEST_SELECTOR_BINDING_TYPE/); assert.doesNotMatch(config.markup(), /<textarea|Start paid/) }
+  finally { config.close() }
+  const storage = await harness()
+  try {
+    storage.failRows(); await storage.click('Refresh test budget')
+    assert.match(storage.text(), /Diagnostic: TEST_BROWSER_RECEIPT_STORAGE/)
+    assert.doesNotMatch(storage.text(), /PRIVATE_STORAGE_VALUE|Start paid/)
+    assert.ok(storage.calls.every(call => call.kind === 'status'))
+  } finally { storage.close() }
 })
 
 test('one explicit valid start is locked synchronously and retained; a pending slot blocks every replacement', async () => {

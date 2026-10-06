@@ -264,7 +264,33 @@ export const ONE_TIME_TEST_REVIEWED_PATHS = Object.freeze([
   'tests/overnight-test-namespace-native.test.mjs',
   'tests/overnight-test-page.test.mjs',
 ].sort())
+export const TEST_STATUS_REPAIR_BASE_COMMIT = '2cc6b9f2071e4cec1e4d92edd69371f518d643de'
+export const TEST_STATUS_REPAIR_MARKER_PATH = 'ops/TEST_STATUS_REPAIR_RELEASE_20261006.json'
+export const TEST_STATUS_REPAIR_MARKER_CONTENT = JSON.stringify({
+  release: 'test-budget-status-native-fetch-repair-20261006',
+  baseCommit: TEST_STATUS_REPAIR_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+}, null, 2) + '\n'
+export const TEST_STATUS_REPAIR_REVIEWED_PATHS = Object.freeze([
+  'docs/ONE_TIME_API_TESTS_20261006.md',
+  TEST_STATUS_REPAIR_MARKER_PATH,
+  'scripts/select-pipeline-only-release.mjs',
+  'server/entitlements.ts',
+  'server/overnightTestBudget.ts',
+  'src/lib/overnightTestClient.ts',
+  'src/lib/overnightTestDiagnostics.ts',
+  'src/pages/OvernightTestsPage.tsx',
+  'tests/overnight-status-diagnostics.test.ts',
+  'tests/overnight-test-namespace-native.test.mjs',
+  'tests/overnight-test-page.test.mjs',
+  'tests/studio-native-fetch-browser.test.mjs',
+  'tests/test-status-release.test.mjs',
+].sort())
 const releaseIntroductions = new Set([
+  'src/lib/overnightTestDiagnostics.ts',
+  'tests/overnight-status-diagnostics.test.ts',
+  'tests/test-status-release.test.mjs',
   'docs/ONE_TIME_API_TESTS_20261006.md',
   'server/overnightTestBudget.ts',
   'src/lib/overnightTestClient.ts',
@@ -327,6 +353,7 @@ const scopes = [
   { base: CABINET_CONTEXT_BASE_COMMIT, marker: CABINET_CONTEXT_MARKER_PATH, content: CABINET_CONTEXT_MARKER_CONTENT, paths: CABINET_CONTEXT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: GENERATION_RECOVERY_BASE_COMMIT, marker: GENERATION_RECOVERY_MARKER_PATH, content: GENERATION_RECOVERY_MARKER_CONTENT, paths: GENERATION_RECOVERY_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: ONE_TIME_TEST_BASE_COMMIT, marker: ONE_TIME_TEST_MARKER_PATH, content: ONE_TIME_TEST_MARKER_CONTENT, paths: ONE_TIME_TEST_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
+  { base: TEST_STATUS_REPAIR_BASE_COMMIT, marker: TEST_STATUS_REPAIR_MARKER_PATH, content: TEST_STATUS_REPAIR_MARKER_CONTENT, paths: TEST_STATUS_REPAIR_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
 ]
 
 function refuse() { throw new Error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED') }
@@ -377,7 +404,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH) {
+  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

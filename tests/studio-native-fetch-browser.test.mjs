@@ -110,3 +110,84 @@ test('native Chromium reproduces the old invocation error and accepts the repair
     console.log(actual)
   } finally { rmSync(profile, { recursive: true, force: true }) }
 })
+
+// Separate inert bundle: exercise the actual temporary-panel controller without
+// constructing Studio/Blueprint clients or starting/recovering any paid job.
+test('native Chromium reads the temporary test allowance with the repaired OvernightTestClient receiver', { timeout: 45_000 }, () => {
+  const candidates = [process.env.CHROME_BIN, 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'].filter(Boolean)
+  const browser = candidates.find(command => spawnSync(command, ['--version'], { encoding: 'utf8', timeout: 3000 }).status === 0)
+  assert.ok(browser, 'Chromium/Chrome is required for this browser-specific regression; do not report Node mocks as browser proof.')
+  const compile = name => ts.transpileModule(readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+  }).outputText.replace(/^export /gm, '')
+  const diagnostics = compile('overnightTestDiagnostics')
+  const client = compile('overnightTestClient').replace(/^import .+ from ['"]\.\/(?:blueprintClient|studioClient|glb|overnightTestDiagnostics)\.ts['"];?\s*$/gm, '')
+  assert.doesNotMatch(diagnostics + client, /^import /m, 'Unexpected new dependency: update the explicit temporary-panel fixture bundle.')
+  const exercise = `
+(async () => {
+  const result = document.getElementById('result');
+  const check = (condition, message) => { if (!condition) throw new Error(message); };
+  try {
+    const nativeFetch = globalThis.fetch;
+    let oldError;
+    try { await ({ fetcher: nativeFetch }).fetcher('data:application/json,%7B%7D'); }
+    catch (error) { oldError = error; }
+    check(oldError instanceof TypeError && /Illegal invocation/.test(oldError.message), 'Native fetch did not reproduce the original wrong-receiver defect');
+    const fixture = {
+      available: true,
+      approvalId: 'api-tests-20261006-044444-usd4',
+      expiresAt: '2026-10-06T12:00:00.000Z',
+      totalCents: 400,
+      committedCents: 0,
+      remainingCents: 400,
+      attempts: { 'detailed-astra': 0, 'blueprint-sol': 0, 'blueprint-luna': 0 },
+      noRecycling: true,
+    };
+    const calls = [], storageCalls = [], browserStorageWrites = [];
+    const store = {
+      getItem: key => { storageCalls.push({ method: 'getItem', key }); return null; },
+      setItem: (key, value) => { storageCalls.push({ method: 'setItem', key, value }); throw new Error('Status attempted to save a receipt'); },
+      removeItem: key => { storageCalls.push({ method: 'removeItem', key }); throw new Error('Status attempted to remove a receipt'); },
+    };
+    function fixtureFetch(path, init) {
+      calls.push({ path, method: init?.method || 'GET', receiverIsWindow: this === globalThis });
+      check(path === '/api/overnight-tests/status', 'Status requested an unexpected endpoint');
+      check(init?.method === 'GET' && init?.body === undefined, 'Status attempted a non-read-only request');
+      check(init.credentials === 'same-origin' && init.redirect === 'error' && init.cache === 'no-store', 'Status changed its protected request options');
+      // Deliberately forward the real receiver. An arrow or a Window-bound
+      // native call here would hide the actual controller's original defect.
+      return nativeFetch.call(this, 'data:application/json,' + encodeURIComponent(JSON.stringify(fixture)), { signal: init.signal });
+    }
+    const originalStorageMethods = new Map(['setItem', 'removeItem', 'clear'].map(method => [method, Storage.prototype[method]]));
+    for (const method of originalStorageMethods.keys()) Storage.prototype[method] = function () {
+      browserStorageWrites.push(method);
+      throw new Error('Status attempted to modify browser storage');
+    };
+    try {
+      const current = new OvernightTestClient(store, fixtureFetch, '12345678-1234-4234-8234-123456789abc', () => true, () => Date.parse('2026-10-06T05:00:00.000Z'));
+      const status = await current.status();
+      check(JSON.stringify(status) === JSON.stringify(fixture), 'Actual controller did not return the validated allowance fixture');
+      check(status.approvalId === 'api-tests-20261006-044444-usd4' && status.expiresAt === '2026-10-06T12:00:00.000Z', 'Status accepted the wrong approval or cutoff');
+      check(status.totalCents === 400 && status.remainingCents === 400 && status.noRecycling === true, 'Status changed the new 400-cent allowance');
+      check(calls.length === 1 && calls[0].path === '/api/overnight-tests/status' && calls[0].method === 'GET', 'Status performed more than one GET');
+      check(calls.every(call => call.method !== 'POST'), 'Status attempted a paid submission');
+      check(calls[0].receiverIsWindow, 'Actual controller did not bind its fetch receiver to Window');
+      check(storageCalls.length === 0 && browserStorageWrites.length === 0, 'Status touched receipt or browser storage');
+      result.textContent = 'PASS: native old error reproduced; actual OvernightTestClient.status validated the new 400-cent approval and cutoff with exactly one GET, no POST and no browser-storage writes; inert fixtures only.';
+    } finally {
+      for (const [method, original] of originalStorageMethods) Storage.prototype[method] = original;
+    }
+  } catch (error) { result.textContent = 'FAIL: ' + error.message; }
+})();`
+  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + diagnostics + '\n' + client + '\n' + exercise + '</script>'
+  const profile = mkdtempSync(join(tmpdir(), 'worldifact-native-overnight-fetch-'))
+  try {
+    const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking', '--no-first-run', '--no-default-browser-check',
+      '--host-resolver-rules=MAP * ~NOTFOUND', `--user-data-dir=${profile}`, '--dump-dom', '--virtual-time-budget=6000', 'data:text/html;base64,' + Buffer.from(html).toString('base64')],
+      { encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 })
+    assert.equal(run.status, 0, `Browser did not complete: ${run.error?.message || run.stderr.slice(-1500)}`)
+    const actual = run.stdout.match(/<pre id="result">([^<]*)<\/pre>/)?.[1] || 'No browser test result'
+    assert.match(actual, /^PASS:/, actual)
+    console.log(actual)
+  } finally { rmSync(profile, { recursive: true, force: true }) }
+})

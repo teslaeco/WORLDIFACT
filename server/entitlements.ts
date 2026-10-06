@@ -10,7 +10,8 @@ import { astraSupportApproval, ASTRA_SUPPORT_ONCE_KEY, ASTRA_SUPPORT_NAMESPACE, 
 import { astraSupplementalGrant, matchesAstraSupplementalClaim, ASTRA_SUPPLEMENTAL_KEY, ASTRA_SUPPLEMENTAL_NAMESPACE, ASTRA_SUPPLEMENTAL_CENTS, type AstraSupplementalGrant, type AstraSupplementalClaim } from './astraSupplementalGrant.ts'
 import { astraRepairedMccGrant, matchesAstraRepairedMccClaim, ASTRA_REPAIRED_MCC_KEY, ASTRA_REPAIRED_MCC_NAMESPACE, ASTRA_REPAIRED_MCC_CENTS, type AstraRepairedMccGrant, type AstraRepairedMccClaim } from './astraRepairedMccGrant.ts'
 import { astraProjectBudget, matchesAstraProjectBudgetRecord, matchesAstraProjectScope, isAstraProjectBudgetRecord, persistedAstraProjectBudget, ASTRA_PROJECT_BUDGET_KEY, ASTRA_PROJECT_BUDGET_NAMESPACE, ASTRA_PROJECT_BUDGET_CENTS, type AstraProjectBudget, type AstraProjectBudgetRecord } from './astraProjectBudget.ts'
-import { overnightTestPoolRoute, overnightTestAuthority, overnightWorkflow, matchesOvernightTestClaim, isOvernightTestClaim, OVERNIGHT_TEST_NAMESPACE, OVERNIGHT_TEST_APPROVAL, OVERNIGHT_TEST_WORKFLOWS, type OvernightTestClaim } from './overnightTestBudget.ts'
+import { overnightTestPoolRoute, overnightTestAuthority, overnightTestStatusDiagnostic, overnightWorkflow, matchesOvernightTestClaim, isOvernightTestClaim, OVERNIGHT_TEST_NAMESPACE, OVERNIGHT_TEST_APPROVAL, OVERNIGHT_TEST_WORKFLOWS, type OvernightTestClaim } from './overnightTestBudget.ts'
+import { isOvernightTestDiagnostic, type OvernightTestDiagnostic } from '../src/lib/overnightTestDiagnostics.ts'
 import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { boundBlueprintProviderModel } from './blueprintModelBinding.ts'
 import type { GenerationFundingSnapshot } from '../src/lib/generationFunding.ts'
@@ -278,7 +279,8 @@ function validFailedBlueprintReconciliation(job: Job, accountId: string | null, 
 }
 export class EntitlementError extends Error {
   status: number
-  constructor(message: string, status = 503) { super(message); this.status = status }
+  testDiagnostic?: OvernightTestDiagnostic
+  constructor(message: string, status = 503, testDiagnostic?: OvernightTestDiagnostic) { super(message); this.status = status; this.testDiagnostic = testDiagnostic }
 }
 async function balance(storage: EntitlementStorage) {
   const value = await storage.get<number>('balance') ?? 0
@@ -602,12 +604,23 @@ function overnightJobExpiry(job: Job, id: string, accountId: string | null, env:
   return Date.parse(authority.expiresAt)
 }
 async function overnightPoolCall(env: EntitlementEnv, userId: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
-  if (!ACCOUNT_ID.test(userId) || !env.ACCOUNT_ENTITLEMENTS || env.ACCOUNT_LEDGER_MODE !== undefined && env.ACCOUNT_LEDGER_MODE !== 'live') throw new EntitlementError('Live account test funding is unavailable.')
+  const statusRead = path === '/overnight-test-status'
+  if (!ACCOUNT_ID.test(userId) || !env.ACCOUNT_ENTITLEMENTS || env.ACCOUNT_LEDGER_MODE !== undefined && env.ACCOUNT_LEDGER_MODE !== 'live') throw new EntitlementError('Live account test funding is unavailable.', 503,
+    statusRead ? !ACCOUNT_ID.test(userId) ? 'TEST_ACCOUNT_NOT_APPROVED' : !env.ACCOUNT_ENTITLEMENTS ? 'TEST_POOL_BINDING_MISSING' : 'TEST_LEDGER_NOT_LIVE' : undefined)
+  if (statusRead) {
+    const diagnostic = overnightTestStatusDiagnostic(env, userId, Date.now())
+    if (diagnostic) throw new EntitlementError('The temporary test configuration could not be verified.', 503, diagnostic)
+  }
   const object = env.ACCOUNT_ENTITLEMENTS.get(env.ACCOUNT_ENTITLEMENTS.idFromName(OVERNIGHT_TEST_NAMESPACE))
-  const response = await object.fetch(new Request('https://entitlements.internal' + path, { method: body === undefined ? 'GET' : 'POST',
-    headers: internalHeaders(userId), ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000) }))
-  if (!response.ok) throw new EntitlementError('The overnight test authority is unavailable.')
-  return response.json() as Promise<Record<string, unknown>>
+  let response: Response
+  try { response = await object.fetch(new Request('https://entitlements.internal' + path, { method: body === undefined ? 'GET' : 'POST',
+    headers: internalHeaders(userId), ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000) })) }
+  catch (error) { if (!statusRead) throw error; throw new EntitlementError('The overnight test authority is unavailable.', 503, 'TEST_POOL_REQUEST_FAILED') }
+  if (!response.ok && !statusRead) throw new EntitlementError('The overnight test authority is unavailable.')
+  const result = await response.json() as Record<string, unknown>
+  if (!response.ok) throw new EntitlementError('The overnight test authority is unavailable.', 503,
+    statusRead ? isOvernightTestDiagnostic(result?.diagnostic) ? result.diagnostic : 'TEST_POOL_REQUEST_FAILED' : undefined)
+  return result
 }
 
 /** One internal Durable Object per verified existing Chess account UUID. No passwords or identity database. */
@@ -624,7 +637,7 @@ export class AccountEntitlements {
     const path = new URL(request.url).pathname, now = this.now()
     try {
       if (path === '/overnight-test-status' || path === '/overnight-test-claim') {
-        if (!this.overnightPoolNamespace) return json({ error: 'Wrong overnight budget namespace.' }, 403)
+        if (!this.overnightPoolNamespace) return json({ error: 'Wrong overnight budget namespace.', ...(path === '/overnight-test-status' ? { diagnostic: 'TEST_POOL_NAMESPACE_MISMATCH' } : {}) }, 403)
         return (await overnightTestPoolRoute(request, this.storage, this.supportEnv, this.now))!
       }
       if (path === '/studio-library' || path.startsWith('/studio-library/')) {
@@ -1599,22 +1612,28 @@ export async function markStudioDispatch(env: EntitlementEnv, userId: string, jo
 }
 export async function entitlementApi(request: Request, env: AccountEnv & EntitlementEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
   if (['/api/account/generation-funding', '/api/overnight-tests/status'].includes(new URL(request.url).pathname)) {
+    const statusRead = new URL(request.url).pathname === '/api/overnight-tests/status'
     const reply = (value: unknown, code = 200) => Response.json(value, { status: code,
       headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie', 'X-Content-Type-Options': 'nosniff', ...(code === 405 ? { Allow: 'GET' } : {}) } })
     if (request.method !== 'GET') return reply({ error: 'Use GET.' }, 405)
     if (new URL(request.url).search) return reply({ error: 'Query parameters are not supported.' }, 400)
     if (request.headers.get('Sec-Fetch-Site') === 'cross-site' || request.headers.has('Origin') && request.headers.get('Origin') !== new URL(request.url).origin)
       return reply({ error: 'Same-origin account access required.' }, 403)
+    let diagnostic: OvernightTestDiagnostic = 'TEST_AUTH_UNAVAILABLE'
     try {
       const user = await getVerifiedAccount(request, env, fetcher)
-      if (!user) return reply({ error: 'Sign in to view your generation funding.' }, 401)
+      if (!user) return reply({ error: 'Sign in to view your generation funding.', ...(statusRead ? { diagnostic: 'TEST_SIGN_IN_REQUIRED' } : {}) }, 401)
+      diagnostic = 'TEST_STATUS_PROTECTION_UNAVAILABLE'
       const limiter = env.ACCOUNT_LIMITER ?? env.GENERATION_LIMITER
-      if (!limiter) return reply({ error: 'Account protection is unavailable.' }, 503)
+      if (!limiter) return reply({ error: 'Account protection is unavailable.', ...(statusRead ? { diagnostic } : {}) }, 503)
       if (!(await limiter.limit({ key: `account:generation-funding:${user.id.toLowerCase()}` })).success)
-        return reply({ error: 'Please wait before reading generation funding again.' }, 429)
-      if (new URL(request.url).pathname === '/api/overnight-tests/status') return reply(await overnightPoolCall(env, user.id, '/overnight-test-status'))
+        return reply({ error: 'Please wait before reading generation funding again.', ...(statusRead ? { diagnostic: 'TEST_STATUS_RATE_LIMITED' } : {}) }, 429)
+      diagnostic = 'TEST_POOL_REQUEST_FAILED'
+      if (statusRead) return reply(await overnightPoolCall(env, user.id, '/overnight-test-status'))
       return reply(await entitlementCall<GenerationFundingSnapshot>(env, user.id, '/generation-funding'))
-    } catch { return reply({ error: 'Generation funding is temporarily unavailable.' }, 503) }
+    } catch (error) { return reply({ error: 'Generation funding is temporarily unavailable.', ...(statusRead ? {
+      diagnostic: error instanceof EntitlementError && isOvernightTestDiagnostic(error.testDiagnostic) ? error.testDiagnostic : diagnostic,
+    } : {}) }, 503) }
   }
   if (new URL(request.url).pathname !== '/api/account/entitlements') return null
   if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
