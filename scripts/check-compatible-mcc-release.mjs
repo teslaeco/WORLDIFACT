@@ -14,13 +14,16 @@ const types = {
   gltf: ['model/gltf+json', 'application/json'], glb: ['model/gltf-binary', 'application/octet-stream'],
   gz: ['application/gzip', 'application/x-gzip', 'application/octet-stream'],
 }
+// Public metadata copied from the exact pinned Terra foundation revision.
+// Keep every other hidden path forbidden, and verify these files like all assets.
+const reviewedPublicMarkers = new Set(['apps/terra/eclipse-live/.dual-countdown-release', 'apps/terra/eclipse-live/.placeholder'])
 async function localFiles(dist, relative = '') {
   const result = []
   for (const entry of await readdir(join(dist, relative), { withFileTypes: true })) {
     const path = relative ? `${relative}/${entry.name}` : entry.name
     // Wrangler consumes these deployment rules; they are not public assets.
     if (!relative && ['_headers', '_redirects', '.assetsignore'].includes(entry.name)) continue
-    requireCheck(!entry.isSymbolicLink() && /^[a-z\d_./+ -]+$/i.test(path) && !path.includes('..') && !path.startsWith('api/') && !path.split('/').some(part => part.startsWith('.')), 'Unreviewed release asset path.')
+    requireCheck(!entry.isSymbolicLink() && /^[a-z\d_./+ -]+$/i.test(path) && !path.includes('..') && !path.startsWith('api/') && (!path.split('/').some(part => part.startsWith('.')) || reviewedPublicMarkers.has(path)), 'Unreviewed release asset path.')
     if (entry.isDirectory()) result.push(...await localFiles(dist, path))
     else if (entry.isFile()) result.push(path)
     else throw new Error('Unreviewed release asset type.')
@@ -32,9 +35,8 @@ async function localFiles(dist, relative = '') {
  * All other requests are GETs for built static files/routes, with exact hashes.
  * No platform, Studio, funding, billing, payment or generation endpoint is used.
  */
-export async function checkCompatibleMccRelease(deployment, { dist = 'dist', fetcher = fetch, retryDelaysMs = [2000, 4000, 8000, 16000] } = {}) {
-  const { origin, versionId } = deployment
-  requireCheck(/^https:\/\/worldifact\.[a-z\d-]+\.workers\.dev$/.test(origin) && /^[a-z\d_-]{1,128}$/i.test(versionId), 'Invalid deployment receipt.')
+export async function checkCompatibleMccAssets(origin, { dist = 'dist', fetcher = fetch, retryDelaysMs = [2000, 4000, 8000, 16000] } = {}) {
+  requireCheck(/^https:\/\/worldifact\.[a-z\d-]+\.workers\.dev$/.test(origin), 'Invalid verification origin.')
   const get = path => fetcher(new URL(path, origin), {
     method: 'GET', redirect: 'manual', credentials: 'omit', signal: AbortSignal.timeout(20000),
     headers: { 'Cache-Control': 'no-cache' },
@@ -93,7 +95,13 @@ export async function checkCompatibleMccRelease(deployment, { dist = 'dist', fet
     for (let path = remaining.pop(); path; path = remaining.pop())
       await matching(`/${path}`, await readFile(join(dist, path)), types[path.split('.').at(-1)])
   }))
-  return { origin, versionId, htmlRoutes: routes.length, verifiedAssets: files.length }
+  return { origin, htmlRoutes: routes.length, verifiedAssets: files.length }
+}
+
+/** Deployment verification still requires a real version receipt. */
+export async function checkCompatibleMccRelease(deployment, options) {
+  requireCheck(typeof deployment?.versionId === 'string' && /^[a-z\d_-]{1,128}$/i.test(deployment.versionId), 'Invalid deployment receipt.')
+  return { ...await checkCompatibleMccAssets(deployment.origin, options), versionId: deployment.versionId }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
