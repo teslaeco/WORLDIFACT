@@ -14,6 +14,7 @@ import {
   ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, ACCOUNT_MODEL_LIBRARY_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT, ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS,
   PROJECT_MCC_ATTEMPT_BASE_COMMIT, PROJECT_MCC_ATTEMPT_MARKER_PATH, PROJECT_MCC_ATTEMPT_MARKER_CONTENT, PROJECT_MCC_ATTEMPT_REVIEWED_PATHS,
   CABINET_CONTEXT_BASE_COMMIT, CABINET_CONTEXT_MARKER_PATH, CABINET_CONTEXT_MARKER_CONTENT, CABINET_CONTEXT_REVIEWED_PATHS,
+  GENERATION_RECOVERY_BASE_COMMIT, GENERATION_RECOVERY_MARKER_PATH, GENERATION_RECOVERY_MARKER_CONTENT, GENERATION_RECOVERY_REVIEWED_PATHS,
   selectPipelineOnlyRelease, selectPipelineReleaseOptions,
 } from '../scripts/select-pipeline-only-release.mjs'
 
@@ -31,6 +32,8 @@ const projectMccAttemptChanges = PROJECT_MCC_ATTEMPT_REVIEWED_PATHS.map(path => 
   status: path === PROJECT_MCC_ATTEMPT_MARKER_PATH || projectMccAttemptIntroductions.includes(path) ? 'A' : 'M', path,
 }))
 const cabinetContextChanges = CABINET_CONTEXT_REVIEWED_PATHS.map(path => ({ status: path === CABINET_CONTEXT_MARKER_PATH ? 'A' : 'M', path }))
+const generationRecoveryIntroductions = ["docs/SOL61_BLUEPRINT_MIGRATION.md", "server/blueprintModelBinding.ts", "server/blueprintTerminalUsage.ts", "src/components/GenerationProgressOrb.css", "src/components/GenerationProgressOrb.tsx", "src/components/GenerationSculpture.tsx", "src/lib/generationProgressView.ts", "tests/blueprint-failed-provider-reconciliation.test.ts", "tests/blueprint-failed-reconciliation-native.test.mjs", "tests/blueprint-output-adjustment-preview.test.ts", "tests/fixtures/sol61-legacy-client.ts", "tests/fixtures/sol61-legacy-worker.ts", "tests/generation-progress-orb.test.mjs", "tests/generation-progress-view.test.ts", "tests/generation-sculpture-lifecycle.test.mjs", "tests/sol61-blueprint-migration.test.ts", "tests/sol61-mixed-deployment.test.ts", "tests/studio-generation-timing.test.ts"]
+const generationRecoveryChanges = GENERATION_RECOVERY_REVIEWED_PATHS.map(path => ({ status: path === GENERATION_RECOVERY_MARKER_PATH || generationRecoveryIntroductions.includes(path) ? 'A' : 'M', path }))
 const priorMarkers = [MARKER_PATH, FUNDING_MARKER_PATH, READONLY_QUOTE_MARKER_PATH, MCC_ONE_ATTEMPT_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_MARKER_PATH]
 const scopedPaths = new Map([
   [FUNDING_MARKER_PATH, FUNDING_REVIEWED_PATHS],
@@ -39,6 +42,7 @@ const scopedPaths = new Map([
   [ACCOUNT_MODEL_LIBRARY_MARKER_PATH, ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS],
   [PROJECT_MCC_ATTEMPT_MARKER_PATH, PROJECT_MCC_ATTEMPT_REVIEWED_PATHS],
   [CABINET_CONTEXT_MARKER_PATH, CABINET_CONTEXT_REVIEWED_PATHS],
+  [GENERATION_RECOVERY_MARKER_PATH, GENERATION_RECOVERY_REVIEWED_PATHS],
 ])
 function evidence(overrides = {}) {
   const data = { head, parent: BASE_COMMIT, changes, markerPath: MARKER_PATH, marker: MARKER_CONTENT, mode: '100644', ...overrides }
@@ -106,6 +110,13 @@ function cabinetContextEvidence(overrides = {}) {
 }
 function selectCabinetContext(overrides = {}) {
   return selectPipelineReleaseOptions('fixture', cabinetContextEvidence(overrides).readGit)
+}
+
+function generationRecoveryEvidence(overrides = {}) {
+  return evidence({ parent: GENERATION_RECOVERY_BASE_COMMIT, changes: generationRecoveryChanges, markerPath: GENERATION_RECOVERY_MARKER_PATH, marker: GENERATION_RECOVERY_MARKER_CONTENT, ...overrides })
+}
+function selectGenerationRecovery(overrides = {}) {
+  return selectPipelineReleaseOptions('fixture', generationRecoveryEvidence(overrides).readGit)
 }
 
 test('only the exact reviewed repair and canonical public marker preserve billing', () => {
@@ -510,6 +521,144 @@ test('rebased cabinet context preparation cannot fall through to ordinary billin
   }
   for (const path of ['server/astraProjectBudget.ts', 'server/entitlements.ts', 'server/studio.ts', 'docs/ASTRA_PROJECT_BUDGET.md']) {
     const fixture = cabinetContextEvidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path }] })
+    assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
+    assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
+  }
+})
+
+test('the integrated generation recovery preserves billing and remote vars for its canonical 64-file package', () => {
+  assert.deepEqual(selectGenerationRecovery(), { preserveBilling: true, preserveRemoteVars: true })
+  assert.equal(GENERATION_RECOVERY_BASE_COMMIT, 'ee107329fdd73d3ebe7678643dc01971b1bd6930')
+  assert.equal(readFileSync(new URL('../' + GENERATION_RECOVERY_MARKER_PATH, import.meta.url), 'utf8'), GENERATION_RECOVERY_MARKER_CONTENT)
+  assert.deepEqual(GENERATION_RECOVERY_REVIEWED_PATHS, [
+    '.dev.vars.example',
+    'docs/CONTEST_STATUS.md',
+    'docs/SOL61_BLUEPRINT_MIGRATION.md',
+    GENERATION_RECOVERY_MARKER_PATH,
+    'scripts/release-check.ts',
+    'scripts/select-pipeline-only-release.mjs',
+    'server/blueprintModelBinding.ts',
+    'server/blueprintTerminalUsage.ts',
+    'server/entitlements.ts',
+    'server/studio.ts',
+    'server/worker.ts',
+    'src/components/GenerationProgressOrb.css',
+    'src/components/GenerationProgressOrb.tsx',
+    'src/components/GenerationSculpture.tsx',
+    'src/components/StudioGallery.tsx',
+    'src/lib/blueprint.ts',
+    'src/lib/blueprintClient.ts',
+    'src/lib/generationFunding.ts',
+    'src/lib/generationProgressView.ts',
+    'src/lib/modelCatalog.ts',
+    'src/lib/studioClient.ts',
+    'src/lib/studioLibrary.ts',
+    'src/lib/studioProtocol.ts',
+    'src/pages/GenerationFundingPage.tsx',
+    'src/pages/InfoPage.tsx',
+    'src/pages/PrivateGameLab.tsx',
+    'src/pages/ShopPage.css',
+    'src/pages/ShopPage.tsx',
+    'tests/affordable-models.test.ts',
+    'tests/blueprint-accounts.test.ts',
+    'tests/blueprint-completed-provider-reconciliation.test.ts',
+    'tests/blueprint-failed-provider-reconciliation.test.ts',
+    'tests/blueprint-failed-reconciliation-native.test.mjs',
+    'tests/blueprint-model-archive.test.mjs',
+    'tests/blueprint-output-adjustment-preview.test.ts',
+    'tests/blueprint-provider-reservation.test.ts',
+    'tests/blueprint-repair.test.ts',
+    'tests/budget.test.ts',
+    'tests/contest-finish.test.mjs',
+    'tests/core.test.ts',
+    'tests/fixtures/sol61-legacy-client.ts',
+    'tests/fixtures/sol61-legacy-worker.ts',
+    'tests/game-lab-blueprint-recovery.test.mjs',
+    'tests/generation-economics.test.ts',
+    'tests/generation-funding-page.test.mjs',
+    'tests/generation-profile-client.test.mjs',
+    'tests/generation-progress-orb.test.mjs',
+    'tests/generation-progress-view.test.ts',
+    'tests/generation-sculpture-lifecycle.test.mjs',
+    'tests/p0-astra.test.ts',
+    'tests/pipeline-only-release.test.mjs',
+    'tests/portal-generation-lifecycle.test.mjs',
+    'tests/pricing-release-health.test.ts',
+    'tests/prompt-model-ui.test.mjs',
+    'tests/shop-draft-lifecycle.test.mjs',
+    'tests/shop-external.test.mjs',
+    'tests/shop-render-helper.mjs',
+    'tests/sol61-blueprint-migration.test.ts',
+    'tests/sol61-mixed-deployment.test.ts',
+    'tests/studio-accounts.test.ts',
+    'tests/studio-generation-timing.test.ts',
+    'tests/studio-library-gallery.test.mjs',
+    'tests/studio-library.test.ts',
+    'wrangler.jsonc',
+  ].sort())
+  for (const path of [...priorMarkers, PROJECT_MCC_ATTEMPT_MARKER_PATH, CABINET_CONTEXT_MARKER_PATH, '.github/workflows/cloudflare.yml', 'server/astraRepairedMccGrant.ts',
+    'server/billing.ts', 'server/accounts.ts', 'server/generationEconomics.ts', 'server/astraProjectBudget.ts', 'package.json', 'package-lock.json', 'ops/SOFTWARE_MODEL_PREVIEW_RELEASE_20261005.json']) {
+    assert.equal(GENERATION_RECOVERY_REVIEWED_PATHS.includes(path), false, path)
+  }
+})
+
+test('integrated generation release refuses missing markers, wrong bases, missing history and any merge parent', () => {
+  for (const overrides of [
+    { changes: generationRecoveryChanges.filter(change => change.path !== GENERATION_RECOVERY_MARKER_PATH) },
+    { changes: generationRecoveryChanges.map(change => change.path === GENERATION_RECOVERY_MARKER_PATH ? { ...change, path: 'ops/OTHER_RELEASE.json' } : change) },
+    ...[BASE_COMMIT, FUNDING_BASE_COMMIT, READONLY_QUOTE_BASE_COMMIT, MCC_ONE_ATTEMPT_BASE_COMMIT, ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, '3'.repeat(40), null].map(parent => ({ parent })),
+    { parents: `${head} ${GENERATION_RECOVERY_BASE_COMMIT} ${'3'.repeat(40)}\n` },
+    { parents: `${head}\n` },
+    { parents: `${head} ${'3'.repeat(40)}\n` },
+    { parent: GENERATION_RECOVERY_BASE_COMMIT, changes: [] },
+  ]) assert.throws(() => selectGenerationRecovery(overrides))
+})
+
+test('integrated generation release refuses incomplete or expanded scope and every prior marker change', () => {
+  for (const overrides of [
+    ...['server/billing.ts', '.github/workflows/cloudflare.yml', 'server/astraRepairedMccGrant.ts', 'server/accounts.ts',
+      'ops/UNREVIEWED_RELEASE.json', 'ops/SOFTWARE_MODEL_PREVIEW_RELEASE_20261005.json']
+      .map(path => ({ changes: [...generationRecoveryChanges, { status: 'A', path }] })),
+    ...GENERATION_RECOVERY_REVIEWED_PATHS.filter(path => path !== GENERATION_RECOVERY_MARKER_PATH)
+      .map(path => ({ changes: generationRecoveryChanges.filter(change => change.path !== path) })),
+    ...GENERATION_RECOVERY_REVIEWED_PATHS.flatMap(path => ['D', 'T', 'R100'].map(status => ({
+      changes: generationRecoveryChanges.map(change => change.path === path ? { ...change, status } : change),
+    }))),
+    ...[...priorMarkers, PROJECT_MCC_ATTEMPT_MARKER_PATH, CABINET_CONTEXT_MARKER_PATH].flatMap(path => ['A', 'M', 'D', 'T'].map(status => ({ changes: [...generationRecoveryChanges, { status, path }] }))),
+    { changes: [...generationRecoveryChanges, generationRecoveryChanges[0]] },
+  ]) assert.throws(() => selectGenerationRecovery(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('integrated generation release requires canonical marker contents and regular non-executable files', () => {
+  const tree = GENERATION_RECOVERY_REVIEWED_PATHS.map(path => `100644 blob ${blob}\t${path}\0`).join('')
+  for (const overrides of [
+    { marker: GENERATION_RECOVERY_MARKER_CONTENT + '\n' },
+    { marker: GENERATION_RECOVERY_MARKER_CONTENT.replace(GENERATION_RECOVERY_BASE_COMMIT, '3'.repeat(40)) },
+    { marker: GENERATION_RECOVERY_MARKER_CONTENT.replace('generation-evidence-and-fair-usage-20261005', 'different-release') },
+    ...['preserveBilling', 'preserveRemoteVars'].map(key => ({ marker: GENERATION_RECOVERY_MARKER_CONTENT.replace(`"${key}": true`, `"${key}": false`) })),
+    ...[MARKER_CONTENT, FUNDING_MARKER_CONTENT, READONLY_QUOTE_MARKER_CONTENT, MCC_ONE_ATTEMPT_MARKER_CONTENT, ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT].map(marker => ({ marker })),
+    ...['100755', '120000', '160000'].map(mode => ({ mode })),
+    ...GENERATION_RECOVERY_REVIEWED_PATHS.flatMap(path => ['100755', '120000', '160000'].map(mode => ({
+      tree: tree.replace(`100644 blob ${blob}\t${path}\0`, `${mode} blob ${blob}\t${path}\0`),
+    }))),
+    { tree: tree.replace(`blob ${blob}`, `commit ${blob}`) },
+    { tree: tree.replace('src/lib/studioProtocol.ts', 'src/lib/other.ts') },
+    { tree: tree.replace('src/lib/studioProtocol.ts', 'src/pages/ShopPage.tsx') },
+    { tree: tree.slice(0, -1) },
+  ]) assert.throws(() => selectGenerationRecovery(overrides), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+})
+
+test('rebased integrated generation preparation cannot fall through to ordinary billing without its marker', () => {
+  for (const path of ['scripts/select-pipeline-only-release.mjs', ...generationRecoveryIntroductions]) {
+    assert.throws(() => selectGenerationRecovery({ parent: '3'.repeat(40), changes: [{ status: 'A', path }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  }
+  assert.throws(() => selectGenerationRecovery({ parent: '3'.repeat(40), changes: generationRecoveryChanges.filter(change => change.path !== GENERATION_RECOVERY_MARKER_PATH) }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  assert.throws(() => selectGenerationRecovery({ parent: '3'.repeat(40), changes: generationRecoveryChanges.filter(change => ![GENERATION_RECOVERY_MARKER_PATH, 'scripts/select-pipeline-only-release.mjs'].includes(change.path)) }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  for (const status of ['A', 'M', 'D', 'T']) {
+    assert.throws(() => selectGenerationRecovery({ parent: '3'.repeat(40), changes: [{ status, path: GENERATION_RECOVERY_MARKER_PATH }] }), /PIPELINE_RELEASE_SCOPE_NOT_VERIFIED/)
+  }
+  for (const path of ['server/astraProjectBudget.ts', 'server/entitlements.ts', 'server/studio.ts', 'docs/ASTRA_PROJECT_BUDGET.md']) {
+    const fixture = generationRecoveryEvidence({ parent: '3'.repeat(40), changes: [{ status: 'M', path }] })
     assert.deepEqual(selectPipelineReleaseOptions('fixture', fixture.readGit), { preserveBilling: false, preserveRemoteVars: false })
     assert.deepEqual(fixture.calls.map(args => args[0]), ['rev-parse', 'rev-parse', 'diff'])
   }

@@ -701,7 +701,7 @@ test('a retained unfinished Oracle draft is never charged as a completed model e
   const account = await entitlementStatus(f.env, alice)
   assert.equal(account.credits, 4500); assert.equal(account.reservedCredits, 0)
   const repeat = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
-  assert.equal(repeat.job.failureCode, 'ORACLE_JOB_INCOMPLETE'); assert.equal(f.qualityReads(), 1)
+  assert.equal(repeat.job.failureCode, 'ORACLE_JOB_INCOMPLETE'); assert.equal(f.qualityReads(), 2, 'A later terminal recovery may read optional timing once')
   assert.equal((await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket)).status, 403)
 })
 
@@ -781,4 +781,30 @@ test('actual exhausted provider allowance does not masquerade as exhausted custo
   assert.equal((await reply.json() as { failureCode: string }).failureCode, 'PROVIDER_BUDGET_EXHAUSTED')
   assert.deepEqual(await entitlementStatus(f.env, alice), before)
   assert.equal(f.posts(), 0)
+})
+
+test('completed and failed owned recovery returns measured duration independently of account and receipt timestamps', async () => {
+  for (const failed of [false, true]) {
+    const f = fixture(); await f.subscribe()
+    const receipt = await f.prepare()
+    await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+    f.quality({ state: failed ? 'failed' : 'succeeded', agent: { finished: true, accepted: false }, timing: { total_seconds: 343.27, private: 'PRIVATE_TIMING' } })
+    if (failed) f.fail()
+    const outcome = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(outcome.job.state, failed ? 'failed' : 'succeeded')
+    assert.deepEqual(outcome.job.generationTiming, { source: 'oracle-worker', durationSeconds: 343.27 })
+    assert.equal(f.qualityReads(), 1, 'An existing completion quality read is reused without a timing retry')
+    assert.doesNotMatch(JSON.stringify(outcome), /PRIVATE_TIMING|total_seconds/)
+    const before = await entitlementStatus(f.env, alice)
+    const current = await (await f.call('/api/studio/current')).json() as { current: { generationTiming?: unknown } }
+    assert.deepEqual(current.current.generationTiming, outcome.job.generationTiming)
+    f.qualityFailure(true)
+    const recovered = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+    assert.equal(recovered.job.state, outcome.job.state)
+    assert.equal(recovered.job.failureCode, outcome.job.failureCode)
+    assert.equal(recovered.job.downloadAllowed, outcome.job.downloadAllowed)
+    assert.equal(recovered.job.generationTiming, undefined)
+    assert.deepEqual(await entitlementStatus(f.env, alice), before)
+    assert.equal(f.posts(), 1)
+  }
 })

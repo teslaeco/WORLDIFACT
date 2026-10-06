@@ -12,7 +12,7 @@ const prompt = '  Original private prompt\nBlue roof\tFour reference views  '
 test('real SOL/LUNA/ASTRA procedural exports save exact original bytes and complete provenance locally', async () => {
   const f = archiveStorage()
   try {
-    for (const model of ['gpt-6-sol', 'gpt-6-luna', 'gpt-6-astra']) {
+    for (const model of ['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra']) {
       const result = generation(model), original = structuredClone(result), buffer = await exportBlueprintGlb(result.blueprint)
       assert.ok(inspectGLB(buffer).triangles > 0)
       const blob = new Blob([buffer], { type: 'model/gltf-binary' }), entry = await saveBlueprintModel(result, prompt, blob)
@@ -27,8 +27,8 @@ test('real SOL/LUNA/ASTRA procedural exports save exact original bytes and compl
       result.blueprint.title = 'Later edit must not rewrite provenance'
       assert.deepEqual((await listStudioModels()).find(item => item.id === entry.id).generation, original)
     }
-    assert.equal((await listStudioModels()).length, 3)
-    assert.equal(f.events.length, 3); assert.ok(f.signals.every(item => item.key === STUDIO_ARCHIVE_SIGNAL_KEY))
+    assert.equal((await listStudioModels()).length, 4)
+    assert.equal(f.events.length, 4); assert.ok(f.signals.every(item => item.key === STUDIO_ARCHIVE_SIGNAL_KEY))
   } finally { f.close() }
 })
 

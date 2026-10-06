@@ -1,4 +1,4 @@
-import { STUDIO_MODEL_LIMIT, type StudioLibraryModel, type StudioLibraryPage } from './studioProtocol.ts'
+import { STUDIO_MODEL_LIMIT, readStudioGenerationTiming, type StudioLibraryModel, type StudioLibraryPage } from './studioProtocol.ts'
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
 const cursorPattern = /^[A-Za-z0-9_-]+\.[a-f0-9]{64}$/
@@ -9,6 +9,10 @@ const browserFetch: Fetcher = (input, init) => fetch(input, init)
 
 export const isStudioLibraryId = (value: string) => uuid.test(value)
 export class StudioLibraryAccountError extends Error {}
+/** A selected model may keep its still-valid receipt only for these transient
+ * metadata failures. Ownership, malformed responses and caller aborts still fail. */
+export class StudioLibraryMetadataUnavailableError extends Error {}
+export const isStudioLibraryTemporaryError = (error: unknown): boolean => error instanceof StudioLibraryMetadataUnavailableError
 
 class LibraryError extends Error {
   status: number
@@ -24,7 +28,8 @@ function parseModel(value: unknown): StudioLibraryModel {
     !new RegExp(`^library\\.${value.id}\\.[0-9]{13}\\.[a-f0-9]{64}\\.[a-f0-9]{64}$`).test(value.receipt.ticket)) {
     throw new Error('The account model record could not be verified. Refresh the gallery to try again.')
   }
-  return { id: value.id, prompt: value.prompt, createdAt: value.createdAt, completedAt: value.completedAt,
+  const generationTiming = readStudioGenerationTiming(value.generationTiming)
+  return { id: value.id, prompt: value.prompt, createdAt: value.createdAt, completedAt: value.completedAt, ...(generationTiming ? { generationTiming } : {}),
     review: 'UNREVIEWED', downloadAllowed: value.downloadAllowed,
     receipt: { id: value.id, ticket: value.receipt.ticket, createdAt: value.receipt.createdAt } }
 }
@@ -88,8 +93,26 @@ export async function listStudioLibrary(accountId: string, cursor: string | null
 export async function getStudioLibraryModel(accountId: string, id: string, signal: AbortSignal, fetcher: Fetcher = browserFetch): Promise<StudioLibraryModel> {
   if (!isStudioLibraryId(id)) throw new Error('This account model link is invalid.')
   const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(40_000)])
-  const response = await fetcher(`/api/studio/library/${id}`, options(requestSignal))
-  const value = await json(response, requestSignal)
+  let value: unknown
+  let response: Response | undefined
+  try {
+    response = await fetcher(`/api/studio/library/${id}`, options(requestSignal))
+    signal.throwIfAborted()
+    if (response.status === 401) {
+      await response.body?.cancel().catch(() => {})
+      throw new StudioLibraryAccountError('Sign in again to read your saved model.')
+    }
+    if (response.status === 429 || response.status >= 500 && response.status <= 599) {
+      await response.body?.cancel().catch(() => {})
+      throw new StudioLibraryMetadataUnavailableError('Saved model metadata is temporarily unavailable.')
+    }
+    value = await json(response, requestSignal)
+  } catch (error) {
+    signal.throwIfAborted()
+    if ((!response || response.ok) && (requestSignal.aborted || error instanceof TypeError || error instanceof DOMException && error.name === 'TimeoutError'))
+      throw new StudioLibraryMetadataUnavailableError('Saved model metadata is temporarily unavailable.')
+    throw error
+  }
   if (!accountId || !object(value) || value.accountId !== accountId) throw new StudioLibraryAccountError('Your signed-in account changed. Refresh your account before opening its models.')
   const model = parseModel(value.model)
   if (model.id !== id) throw new Error('The response belongs to a different model. No file was opened.')

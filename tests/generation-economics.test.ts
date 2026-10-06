@@ -5,7 +5,7 @@ import { FREE_PROMO_POLICY, MODEL_ECONOMICS, PLAN_CATALOG, PLAN_RESERVES_BPS, mo
 test('Astra is priced at exactly five times the SOL credit and provider ceiling', () => {
   assert.equal(MODEL_ECONOMICS.astra.creditsPerGeneration, MODEL_ECONOMICS.sol.creditsPerGeneration * 5)
   assert.equal(MODEL_ECONOMICS.astra.maxProviderCents, MODEL_ECONOMICS.sol.maxProviderCents * 5)
-  assert.equal(MODEL_ECONOMICS.sol.model, 'gpt-6-sol')
+  assert.equal(MODEL_ECONOMICS.sol.model, 'gpt-6.1-sol')
   assert.equal(MODEL_ECONOMICS.astra.model, 'gpt-6-astra')
 })
 

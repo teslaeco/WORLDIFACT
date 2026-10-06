@@ -1,19 +1,19 @@
-import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, blueprintReferences, blueprintDelivery, blueprintFingerprint, blueprintRequestId, DETAILED_MESH_BLOCKED } from '../src/lib/blueprintRequest.ts';
-import { ORACLE_WORLD_IDS, platformApi } from "./platform.ts";
-import type { PlatformEnv } from "./platform.ts";
-import { oracleJobApi } from "./oracle-jobs.ts";
-import { studioApi } from "./studio.ts";
-import { avatarApi, type AvatarContext } from "./avatar.ts";
-import { projectFileApi } from "./project-files.ts";
-import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
-import { entitlementCall, entitlementApi, markBlueprintDispatch, reserveUserGeneration, settleFailedBlueprint, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
-import { captureBlueprintTerminalUsage, type BlueprintTerminalUsage } from './blueprintTerminalUsage.ts';
-import { billingApi, type BillingEnv } from './billing.ts';
-import { paypalApi, type PayPalEnv } from './paypal.ts';
-import { privateWorldApi } from './privateWorldApi.ts';
-import { decorApi } from './decor.ts';
-import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../src/lib/generationAdmission.ts';
-export { AccountEntitlements } from './entitlements.ts';
+// Frozen ee107329 pre-migration source; import paths only relocated for offline rollout tests.
+import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, blueprintReferences, blueprintDelivery, blueprintFingerprint, blueprintRequestId, DETAILED_MESH_BLOCKED } from '../../src/lib/blueprintRequest.ts';
+import { ORACLE_WORLD_IDS, platformApi } from "../../server/platform.ts";
+import type { PlatformEnv } from "../../server/platform.ts";
+import { oracleJobApi } from "../../server/oracle-jobs.ts";
+import { studioApi } from "../../server/studio.ts";
+import { avatarApi, type AvatarContext } from "../../server/avatar.ts";
+import { projectFileApi } from "../../server/project-files.ts";
+import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from '../../server/accounts.ts';
+import { entitlementCall, entitlementApi, markBlueprintDispatch, reserveUserGeneration, settleUserGeneration, type EntitlementEnv } from '../../server/entitlements.ts';
+import { billingApi, type BillingEnv } from '../../server/billing.ts';
+import { paypalApi, type PayPalEnv } from '../../server/paypal.ts';
+import { privateWorldApi } from '../../server/privateWorldApi.ts';
+import { decorApi } from '../../server/decor.ts';
+import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../../src/lib/generationAdmission.ts';
+export { AccountEntitlements } from '../../server/entitlements.ts';
 import {
   astraGenerationSchema,
   assetSpecForBlueprint,
@@ -22,11 +22,11 @@ import {
   validateBlueprint,
   validateGenerationResult,
   type GenerationResult,
-} from "../src/lib/blueprint.ts";
-import { budgetSettings } from "./budget.ts";
-import { blueprintModel, blueprintReservationMicroUsd, MODEL_CATALOG, type BlueprintModel } from "../src/lib/modelCatalog.ts";
-import type { BudgetEnv, BudgetNamespace } from "./budget.ts";
-export { GenerationBudget } from "./budget.ts";
+} from "../../src/lib/blueprint.ts";
+import { budgetSettings } from "../../server/budget.ts";
+import { blueprintModel, blueprintReservationMicroUsd, MODEL_CATALOG, type BlueprintModel } from "../../src/lib/modelCatalog.ts";
+import type { BudgetEnv, BudgetNamespace } from "../../server/budget.ts";
+export { GenerationBudget } from "../../server/budget.ts";
 export interface Env extends BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
@@ -116,10 +116,10 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   }
   const configured = !!env.OPENAI_API_KEY && env.ENABLE_PAID_GENERATION === "true";
   const configuredModel = env.OPENAI_MODEL || "gpt-6-astra";
-  const fastModel = env.OPENAI_FAST_MODEL || "gpt-6.1-sol";
+  const fastModel = env.OPENAI_FAST_MODEL || "gpt-6-sol";
   const publicPilot = env.PUBLIC_PILOT === "true";
   const accessConfigured = publicPilot || ((env.GENERATION_ACCESS_TOKEN?.length ?? 0) >= 32 && (env.GENERATION_ACCESS_TOKEN?.length ?? 0) <= 256);
-  const generationConfigured = configured && !!env.GENERATION_LIMITER && !!env.GENERATION_BUDGET && !!budgetSettings(env) && accessConfigured && configuredModel === "gpt-6-astra" && fastModel === "gpt-6.1-sol";
+  const generationConfigured = configured && !!env.GENERATION_LIMITER && !!env.GENERATION_BUDGET && !!budgetSettings(env) && accessConfigured && configuredModel === "gpt-6-astra" && fastModel === "gpt-6-sol";
   if (url.pathname === "/api/health" && request.method === "GET") {
     let allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: true } | null = null;
     if (generationConfigured) {
@@ -144,7 +144,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     }
     const generationReady = generationConfigured && allowance?.enabled === true && (allowance.unlimited === true || (allowance.remaining ?? 0) > 0);
     return json({ mode: generationReady ? "READY" : "DEMO", generationReady, accessRequired: generationReady && !publicPilot,
-      publicPilot: generationReady && publicPilot, model: generationReady ? fastModel : null, qualityModel: generationReady ? configuredModel : null, draftModels: generationReady ? ["sol", "luna"] : [], lunaBlueprintReady: generationReady, astraBlueprintReady: generationReady && env.ENABLE_ASTRA_PLANS === "true", maxReferenceImageMb: 6, maxReferenceImages: BLUEPRINT_REFERENCE_LIMIT, promptMaxLength: BLUEPRINT_PROMPT_LIMIT, detailedMeshReady: false,
+      publicPilot: generationReady && publicPilot, model: generationReady ? fastModel : null, qualityModel: generationReady ? configuredModel : null, draftModels: generationReady ? ["sol", "luna"] : [], astraBlueprintReady: generationReady && env.ENABLE_ASTRA_PLANS === "true", maxReferenceImageMb: 6, maxReferenceImages: BLUEPRINT_REFERENCE_LIMIT, promptMaxLength: BLUEPRINT_PROMPT_LIMIT, detailedMeshReady: false,
       allowance });
   }
   if (url.pathname !== "/api/blueprint") return url.pathname.startsWith("/api/") ? json({ error: "Not found" }, 404) : (env.ASSETS?.fetch(request) ?? new Response("Not found", { status: 404 }));
@@ -154,7 +154,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   let input;
   try { input = await limitedBody(request); }
   catch (e) { return json({ error: e instanceof Error && e.message === "TOO_LARGE" ? "Request too large" : "Invalid request", noCharge: true }, e instanceof Error && e.message === "TOO_LARGE" ? 413 : 400); }
-  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some((k) => !["worldId", "prompt", "image", "references", "deliverable", "mode", "model", "providerModel"].includes(k)) ||
+  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some((k) => !["worldId", "prompt", "image", "references", "deliverable", "mode", "model"].includes(k)) ||
       typeof input.prompt !== "string" || input.prompt.trim().length < 3 || input.prompt.length > BLUEPRINT_PROMPT_LIMIT || !["demo", "live"].includes(input.mode))
     return json({ error: "Use a supported WORLDIFACT portal, 3–4000 characters and up to six references within 6 MB combined.", noCharge: true }, 400);
   let references;
@@ -176,26 +176,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   // A supplied Studio receipt UUID can never claim ownership via Blueprint.
   const requestSeed = suppliedRequestId || crypto.randomUUID();
   const requestId = await blueprintRequestId(requestSeed);
-  const fingerprint = await blueprintFingerprint({ worldId, prompt: input.prompt.trim(), model: selectedModel, deliverable, references,
-    ...(Object.hasOwn(input, 'providerModel') ? { providerModel: input.providerModel } : {}) });
-  const model = MODEL_CATALOG[selectedModel].model;
-  if (input.mode === 'live' && (Object.hasOwn(input, 'providerModel') && input.providerModel !== model || selectedModel === 'sol' && input.providerModel !== model)) {
-    // Old clients cannot consent to a new provider merely by sending alias Sol.
-    // This branch is recovery-only: it NEVER falls through into /reserve.
-    if (!Object.hasOwn(input, 'providerModel') && suppliedRequestId && env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true') {
-      try {
-        const owner = await getVerifiedAccount(request, env, fetcher);
-        if (owner) {
-          const status = await entitlementCall<{ state: string; owned?: boolean; result?: GenerationResult; refunded?: boolean; conflict?: boolean }>(env, owner.id,
-            '/blueprint-status', { id: requestId, fingerprint, expectedProviderModel: 'gpt-6-sol' });
-          if (status.state === 'completed' && status.result?.model === 'gpt-6-sol') return json(status.result);
-          if (status.owned !== false && status.state !== 'unknown' && status.state !== 'failed' || status.conflict)
-            return json({ error: 'Recover the original saved request. This older page cannot start the updated Sol model.', requestId, state: status.state }, 409);
-        }
-      } catch { return json({ error: 'Saved-request status is unavailable. Recover the original request before trying again.', requestId }, 503); }
-    }
-    return json({ error: 'Refresh this page, then explicitly prepare a new attempt to use GPT-6.1 Sol. No model request or new points reservation was made.', code: 'PROVIDER_MODEL_CONTRACT_REQUIRED', failureCode: 'ACCOUNT_ADMISSION_UNAVAILABLE', requestId, noCharge: true }, 409);
-  }
+  const fingerprint = await blueprintFingerprint({ worldId, prompt: input.prompt.trim(), model: selectedModel, deliverable, references });
   if (input.mode === "live" && !configured) return json({ error: "Live generation is unavailable. No substitute was generated.", requestId, noCharge: true }, 503);
   if (input.mode === "demo") {
     const blueprint = demoBlueprint(`${PORTAL_CONTEXT[worldId]} ${input.prompt}`);
@@ -212,14 +193,15 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (!publicPilot && !(await validAccess(request, env.GENERATION_ACCESS_TOKEN!))) return json({ error: "A valid preview access code is required.", requestId, noCharge: true }, 401);
   try { const { success } = await env.GENERATION_LIMITER!.limit({ key: request.headers.get("CF-Connecting-IP") || "unknown-client" }); if (!success) return json({ error: "Generation limit reached. Please try again later.", requestId, noCharge: true }, 429); }
   catch { return json({ error: "Generation limit service unavailable.", requestId, noCharge: true }, 503); }
-  if (!["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"].includes(model)) return json({ error: "Selected model requires review.", requestId, noCharge: true }, 503);
+  const model = MODEL_CATALOG[selectedModel].model;
+  if (!["gpt-6-sol", "gpt-6-luna", "gpt-6-astra"].includes(model)) return json({ error: "Selected model requires review.", requestId, noCharge: true }, 503);
   if (selectedModel === "astra" && env.ENABLE_ASTRA_PLANS !== "true") return json({ error: "ASTRA is not commercially enabled yet.", requestId, noCharge: true }, 503);
   if (selectedModel !== "astra" && references.length) return json({ error: "Sol and Luna are text-only. No image was discarded.", requestId, noCharge: true }, 400);
   let customerGenerationKind: 'free' | 'credits' | null = null;
   if (account) {
     try {
       const reservation = await reserveUserGeneration(env, account.id, requestId, selectedModel === 'astra' ? 'slow' : 'fast', selectedModel, fingerprint, undefined,
-        { channel: 'blueprint', blueprintDispatch: 'fenced-v1', providerModel: model });
+        { channel: 'blueprint', blueprintDispatch: 'fenced-v1' });
       if (reservation.reason === 'REQUEST_PAYLOAD_MISMATCH') return json({ error: 'This request ID belongs to different inputs. No new charge was made.', code: 'REQUEST_PAYLOAD_MISMATCH', requestId }, 409);
       if (reservation.repeated) {
         const status = await entitlementCall<{ state: string; result?: GenerationResult; refunded?: boolean }>(env, account.id, '/blueprint-status', { id: requestId });
@@ -231,20 +213,12 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
         const failureCode = isAdmissionFailureCode(reservation.reason) ? reservation.reason : conflict ? 'ACCOUNT_REQUEST_CONFLICT' : 'ACCOUNT_ADMISSION_UNAVAILABLE';
         return json({ error: blueprintAdmissionDetail(failureCode), failureCode, requestId, noCharge: true }, 429);
       }
-      if (reservation.providerModel !== model) {
-        await settleUserGeneration(env, account.id, requestId, 'failed');
-        return json({ error: 'The account model binding is not ready. No provider request was sent.', requestId, noCharge: true }, 503);
-      }
       customerGenerationKind = reservation.kind ?? null;
     } catch { return json({ error: 'Your generation allowance could not be checked. No model was requested.', requestId }, 503); }
   }
   let generationCompleted = false;
-  let terminalUsage: BlueprintTerminalUsage | undefined;
   async function finishUser(success: boolean) {
-    if (account) {
-      if (!success && terminalUsage) await settleFailedBlueprint(env, account.id, requestId, terminalUsage);
-      else await settleUserGeneration(env, account.id, requestId, success ? 'completed' : 'failed');
-    }
+    if (account) await settleUserGeneration(env, account.id, requestId, success ? 'completed' : 'failed');
   }
   const content: Record<string, unknown>[] = [{ type: "input_text", text: input.prompt }];
   for (const [index, reference] of references.entries()) {
@@ -273,7 +247,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     const tokenBody = await limitedBody(count as unknown as Request);
     const inputTokens = tokenBody.object === "response.input_tokens" && Number.isSafeInteger(tokenBody.input_tokens) && tokenBody.input_tokens >= 0 ? Number(tokenBody.input_tokens) : -1;
     if (inputTokens < 0) { await finishUser(false); return json({ error: "Cost preflight returned invalid usage. No generation request was sent.", requestId }, 503); }
-    // Conservative Standard Sol reservation: $6/M input + $17/M output, above current
+    // Conservative Standard Sol reservation: $5/M input + $17/M output, above current
     // long-context rates and regional uplift. This intentionally reserves more than list price.
     const worstMicroUsd = blueprintReservationMicroUsd(selectedModel, inputTokens);
     const ceilingMicroUsd = customerGenerationKind === 'free' ? 150_000 : MODEL_CATALOG[selectedModel].maxProviderCents * 10_000;
@@ -313,8 +287,6 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   }
   try {
     const payload = JSON.stringify(responseRequestBody);
-    let dispatchDeadline: number | undefined;
-    let dispatchedAt = Date.now();
     if (account) {
       let claim;
       try { claim = await markBlueprintDispatch(env, account.id, requestId, fingerprint); }
@@ -322,10 +294,8 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
       // The account transaction races with failed/expired settlement. Only one
       // live claimant may dispatch, and a delayed acknowledgement is unusable.
       // Keep the expiry check adjacent to fetch: no asynchronous work between.
-      dispatchedAt = Date.now();
-      if (!claim.dispatch || dispatchedAt >= claim.deadline)
+      if (!claim.dispatch || Date.now() >= claim.deadline)
         return json({ error: "This request can no longer start. Recover its status; no replacement was started.", requestId }, 409);
-      dispatchDeadline = claim.deadline;
     }
     const upstream = await fetcher("https://api.openai.com/v1/responses", {
       method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(selectedModel === 'astra' ? 60_000 : 30_000),
@@ -333,12 +303,6 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     });
     if (!upstream.ok) return json({ error: upstream.status === 429 ? "AI service is busy. Try again later." : "AI service could not complete the request.", requestId }, upstream.status === 429 ? 429 : 502);
     const body = await limitedBody(upstream as unknown as Request);
-    // Keep authenticated terminal usage before content checks can fail. A
-    // refusal, truncated output or invalid schema is still a paid response.
-    if (account && dispatchDeadline !== undefined) terminalUsage = captureBlueprintTerminalUsage(body, {
-      accountId: account.id.toLowerCase(), requestId, fingerprint, model, dispatchDeadline, dispatchedAt, receivedAt: Date.now(),
-      reservedCents: MODEL_CATALOG[selectedModel].maxProviderCents,
-    });
     if (body.status !== "completed" || body.model !== model) return json({ error: "AI response was incomplete. Previous scene is unchanged.", requestId }, 502);
     const parts = (body.output ?? []).flatMap((item: { content?: { type: string; text?: string }[] }) => item.content ?? []);
     if (parts.some((p: { type: string }) => p.type === "refusal")) return json({ error: "This request could not be generated. Try a different scene.", requestId }, 422);
@@ -368,9 +332,8 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     return json({ error: e instanceof Error && ["TimeoutError", "AbortError"].includes(e.name) ? "Generation timed out. Previous scene is unchanged." : "Invalid AI result. Previous scene is unchanged.", requestId }, 502);
   } finally {
     // A synchronous blueprint request with no deliverable never consumes a
-    // customer's credit. Unknown provider liability stays reserved. Verified
-    // terminal usage can release only the conservatively bounded unused part
-    // in the same account transaction as the one-time points refund.
+    // customer's credit. Claimed/uncertain provider spend remains reserved;
+    // only the account's atomic pre-dispatch fence can release unspent funding.
     if (!generationCompleted) await finishUser(false).catch(() => {});
   }
 }

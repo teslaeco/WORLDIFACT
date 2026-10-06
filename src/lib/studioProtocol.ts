@@ -86,11 +86,26 @@ export const STUDIO_SUBMISSION_GRACE_MS = 5 * 60_000
 export type StudioPrepareMetadata = Pick<StudioInput, 'worldId' | 'prompt' | 'purpose' | 'textureMaxSize' | 'generationProfile' | 'pricingRevision' | 'budgetTier' | 'acceptedPoints'> & { photoCount: number }
 export type StudioPrepareManifest = StudioPrepareMetadata & { version: typeof STUDIO_PREPARE_VERSION; inputDigest: string }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string; pricing?: StudioPricing }
-export type StudioLibraryModel = { id: string; prompt: string; createdAt: string; completedAt: string; receipt: StudioReceipt; review: 'UNREVIEWED'; downloadAllowed: boolean }
+export type StudioGenerationTiming = { source: 'oracle-worker'; durationSeconds: number }
+// Worker execution duration, never receipt age or account settlement latency.
+export function readStudioGenerationTiming(value: unknown): StudioGenerationTiming | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const timing = value as Record<string, unknown>
+  if (timing.source !== 'oracle-worker' || typeof timing.durationSeconds !== 'number' ||
+      !Number.isFinite(timing.durationSeconds) || timing.durationSeconds < 0 || timing.durationSeconds > 86_400) return undefined
+  return { source: 'oracle-worker', durationSeconds: timing.durationSeconds }
+}
+export function formatStudioGenerationDuration(timing?: StudioGenerationTiming): string {
+  const valid = readStudioGenerationTiming(timing)
+  if (!valid) return 'Duration unavailable'
+  const seconds = Math.round(valid.durationSeconds)
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+}
+export type StudioLibraryModel = { id: string; prompt: string; createdAt: string; completedAt: string; receipt: StudioReceipt; review: 'UNREVIEWED'; downloadAllowed: boolean; generationTiming?: StudioGenerationTiming }
 export type StudioLibraryPage = { accountId: string; models: StudioLibraryModel[]; nextCursor: string | null; hasMore: boolean }
 export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'MODEL_BUDGET_EXCEEDED', 'STUDIO_BUDGET_POLICY_CHANGED', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
 export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
-export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean; pricing?: StudioPricing }
+export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean; pricing?: StudioPricing; generationTiming?: StudioGenerationTiming }
 export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   ...ADMISSION_FAILURE_DETAILS,
   ASTRA_COST_LIMIT: 'Astra’s cost protection stopped this job. Reserved customer points were released. Keep this job ID for review before starting another attempt; no automatic retry.',

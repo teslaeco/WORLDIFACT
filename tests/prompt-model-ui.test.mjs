@@ -7,17 +7,21 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 
-test('model dropdown is visible and the price notice sits directly before prompt', async () => {
+test('one visible model picker follows prompt and delivery, with cost before Generate', async () => {
   const html = await renderShopMarkup()
   const picker = html.indexOf('class="shop-model-picker"')
   const select = html.indexOf('id="studio-mode"')
   const cost = html.indexOf('aria-label="Selected model and cost for the next generation"')
   const prompt = html.indexOf('id="studio-prompt"')
-  assert.ok(picker >= 0 && select > picker && cost > select && prompt > cost)
+  const delivery = html.indexOf('id="studio-deliverable"')
+  const generate = html.indexOf('class="native-shop-generate"')
+  assert.ok(prompt >= 0 && delivery > prompt && picker > delivery && select > picker && cost > select && generate > cost)
+  assert.equal((html.match(/id="studio-mode"/g) || []).length, 1)
+  assert.doesNotMatch(html, /class="shop-generation-mode"/)
   assert.doesNotMatch(html.slice(picker, select), /\bhidden(?:=|>|\s)/)
   assert.match(html, /AI model · Model AI/)
   assert.match(html, /GPT-6 ASTRA — 250 points/)
-  assert.match(html, /GPT-6 SOL — 50 points/)
+  assert.match(html, /GPT-6\.1 SOL — 50 points/)
 })
 test('cost notice has readable light text on an explicit dark surface', async () => {
   const css = await readFile(new URL('../src/components/GenerationCostNotice.css', import.meta.url), 'utf8')

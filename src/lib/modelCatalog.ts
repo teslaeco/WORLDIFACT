@@ -1,5 +1,7 @@
-/** Reviewed public catalogue, 2026-09-29. Model price is not whole-job cost.
- * Sources: https://developers.openai.com/api/docs/models/gpt-6-{astra,sol,luna}
+/** Reviewed public catalogue, 2026-10-05. Model price is not whole-job cost.
+ * Sources: https://developers.openai.com/api/docs/models/gpt-6.1-sol
+ * https://developers.openai.com/api/docs/models/gpt-6-astra
+ * https://developers.openai.com/api/docs/models/gpt-6-luna
  * No Terra API identifier has been verified. Never synthesize one.
  */
 export type GenerationModel = 'luna' | 'sol' | 'astra'
@@ -8,7 +10,7 @@ export type BlueprintModel = GenerationModel
 export const MODEL_CATALOG = Object.freeze({
   luna: Object.freeze({ model: 'gpt-6-luna', label: 'GPT-6 Luna', creditsPerGeneration: 15, maxProviderCents: 10,
     inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.5, path: 'blueprint', description: 'Economy procedural draft with shared material quality.' }),
-  sol: Object.freeze({ model: 'gpt-6-sol', label: 'GPT-6 Sol', creditsPerGeneration: 50, maxProviderCents: 35,
+  sol: Object.freeze({ model: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', creditsPerGeneration: 50, maxProviderCents: 35,
     inputUsdPerMillion: 2, outputUsdPerMillion: 10, path: 'blueprint', description: 'Balanced procedural scene and asset specifications.' }),
   astra: Object.freeze({ model: 'gpt-6-astra', label: 'GPT-6 Astra', creditsPerGeneration: 250, maxProviderCents: 175,
     inputUsdPerMillion: 10, outputUsdPerMillion: 50, path: 'blueprint', description: 'Premium single-call blueprint/spec generation with procedural GAME GLB. Detailed Oracle mesh generation remains a separate beta workflow.' }),

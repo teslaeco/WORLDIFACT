@@ -11,7 +11,7 @@ import { astraProjectBudget } from './astraProjectBudget.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioNewJobPolicy.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
-import { inputDigest, oracleStudioPayload, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata, type StudioLibraryModel, type StudioLibraryPage } from '../src/lib/studioProtocol.ts'
+import { inputDigest, oracleStudioPayload, readStudioGenerationTiming, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata, type StudioLibraryModel, type StudioLibraryPage, type StudioGenerationTiming } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; STUDIO_NEW_JOB_POLICY?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
@@ -184,7 +184,8 @@ async function validateCompletedModel(env: StudioEnv, userId: string, id: string
   outputChecks.set(key, check)
   try { return await check } finally { if (outputChecks.get(key) === check) outputChecks.delete(key) }
 }
-async function accountJob(env: StudioEnv, userId: string | undefined, id: string, state: StudioJob['state'], fetcher: typeof fetch = fetch, failureCode?: StudioJob['failureCode']): Promise<StudioJob> {
+type TimingObservation = { value?: StudioGenerationTiming }
+async function accountJob(env: StudioEnv, userId: string | undefined, id: string, state: StudioJob['state'], fetcher: typeof fetch = fetch, failureCode?: StudioJob['failureCode'], timingObservation?: TimingObservation): Promise<StudioJob> {
   if (!userId) return { id, state, detail: JOB_DETAILS[state] }
   const previous = await accountAccess(env, userId, id)
   if (previous?.state === 'failed') { state = 'failed'; failureCode = previous.failureCode }
@@ -223,7 +224,10 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
     logStudioDiagnostic({ requestId: id, stage: completed ? 'COMPLETED' : 'FAILED', admission: 'RECOVERY_ONLY', reason, oracleDispatch: 'UNKNOWN', workerStatus: null })
   }
   const detail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : JOB_DETAILS[state]
+  const generationTiming = access?.owned && ['completed', 'failed'].includes(access.state!)
+    ? timingObservation ? timingObservation.value : await oracleGenerationTiming(env, id, fetcher) : undefined
   return { id, state, detail, ...(failureCode ? { failureCode } : {}), downloadAllowed: access!.downloadAllowed,
+    ...(generationTiming ? { generationTiming } : {}),
     previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed, ...(access?.pricing ? { pricing: access.pricing } : {}) }
 }
 async function limitedJson(response: Request | Response, limit: number) {
@@ -270,11 +274,27 @@ async function allowance(env: StudioEnv) {
   return { used: Number(state.used), limit: unlimited ? null : Number(state.limit), remaining: unlimited ? null : Number(state.remaining), enabled: state.enabled,
     expiresAt: typeof state.expiresAt === 'string' ? state.expiresAt : null, unlimited, fastOnly: state.fastOnly === true }
 }
-async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init: RequestInit = {}) {
+async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init: RequestInit = {}, timeoutMs?: number) {
   const origin = oracleOrigin(env.ORACLE_ENDPOINT)
   if (!origin || !env.ORACLE_API_TOKEN) throw new StudioError('The existing Oracle connection is not configured.', 503)
-  return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(path.endsWith('/budget') ? 5000 : path.includes('/model') || path.includes('/exports/') ? 180_000 : STUDIO_ORACLE_TIMEOUT_MS),
+  return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs ?? (path.endsWith('/budget') ? 5000 : path.includes('/model') || path.includes('/exports/') ? 180_000 : STUDIO_ORACLE_TIMEOUT_MS)),
     headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: path.includes('/model') ? 'model/gltf-binary' : path.includes('/exports/') ? 'application/octet-stream, application/zip' : 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) } })
+}
+function qualityGenerationTiming(quality: Record<string, unknown>): StudioGenerationTiming | undefined {
+  if (quality.revision !== 6 || typeof quality.state !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(quality.state) ||
+      !quality.timing || typeof quality.timing !== 'object' || Array.isArray(quality.timing)) return undefined
+  return readStudioGenerationTiming({ source: 'oracle-worker', durationSeconds: (quality.timing as Record<string, unknown>).total_seconds })
+}
+/** Optional read-only metadata for an already-owned terminal job. Never infer
+ * runtime from receipt/ledger dates or let unavailable timing hide its outcome.
+ * Oracle writes timing after terminal status; a missing record stays unknown
+ * until a later explicit recovery/read, without an immediate retry. */
+async function oracleGenerationTiming(env: StudioEnv, id: string, fetcher: typeof fetch): Promise<StudioGenerationTiming | undefined> {
+  try {
+    const response = await oracle(env, `/v1/jobs/${id}/quality`, fetcher, {}, 5000)
+    if (!response.ok) { await response.body?.cancel(); return undefined }
+    return qualityGenerationTiming(await limitedJson(response, 262_144))
+  } catch { return undefined }
 }
 /** Only an authenticated, immutable terminal upper-liability receipt can return
  * unused provider funding. A failure label or missing ledger never means zero.
@@ -316,8 +336,8 @@ async function submissionFailureCode(response: Response): Promise<NonNullable<St
 }
 /** Oracle v33 preserves unfinished candidates under state=succeeded. A retained
  * draft is useful diagnostic evidence, never proof of a completed paid model. */
-async function completedOracleStatus(env: StudioEnv, id: string, value: Record<string, unknown>, fetcher: typeof fetch) {
-  if (value.state !== 'succeeded' || value.modelStatus !== 'draft') return value
+async function completedOracleStatus(env: StudioEnv, id: string, value: Record<string, unknown>, fetcher: typeof fetch): Promise<Record<string, unknown> & { timingObservation?: TimingObservation }> {
+  if (value.state !== 'succeeded' || value.modelStatus !== 'draft') return { ...value, timingObservation: undefined }
   const response = await oracle(env, `/v1/jobs/${id}/quality`, fetcher)
   if (!response.ok) { await response.body?.cancel(); throw new StudioError('The worker completion evidence is temporarily unavailable. Recover this same job.', 502) }
   const quality = await limitedJson(response, 262_144)
@@ -330,9 +350,10 @@ async function completedOracleStatus(env: StudioEnv, id: string, value: Record<s
   // diagnostics, original brief, generated scripts or images are retained.
   // A deliberately finished unreviewed model keeps the existing structural
   // acceptance path. Only an execution that never finished is rejected here.
-  if (agent.finished === true) return value
+  const timingObservation = { value: qualityGenerationTiming(quality) }
+  if (agent.finished === true) return { ...value, timingObservation }
   const failureCode: StudioJob['failureCode'] = value.worldifactFailureCode === 'MODEL_BUDGET_EXCEEDED' ? 'MODEL_BUDGET_EXCEEDED' : usage.error_code === 'WORLDIFACT_ASTRA_COST_GUARD' ? 'ASTRA_COST_LIMIT' : 'ORACLE_JOB_INCOMPLETE'
-  return { ...value, state: 'failed', worldifactFailureCode: failureCode }
+  return { ...value, state: 'failed', worldifactFailureCode: failureCode, timingObservation }
 }
 async function oracleJobStatus(env: StudioEnv, id: string, fetcher: typeof fetch, requireId: boolean) {
   const response = await oracle(env, `/v1/jobs/${id}`, fetcher)
@@ -357,7 +378,7 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
     promptMaxLength: state.promptMaxLength === 5000 ? 5000 : 2000 }
 }
 async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch, input: StudioPrepareMetadata, userId?: string) {
-  if (input.generationProfile === FAST_DRAFT_PROFILE) throw new StudioError('FAST uses the separate GPT-6 Sol blueprint path. The Astra Oracle worker will not accept FAST jobs.', 409)
+  if (input.generationProfile === FAST_DRAFT_PROFILE) throw new StudioError('FAST uses the separate GPT-6.1 Sol blueprint path. The Astra Oracle worker will not accept FAST jobs.', 409)
   const pool = await allowance(env)
   const trial = pool.fastOnly && env.ENABLE_APPROVED_FAST_TEST === 'true'
   if (!trial && (env.ENABLE_STUDIO_JOBS !== 'true' || !budgetSettings(env))) throw new StudioError('Model generation is disabled or its allowance has expired.', 503)
@@ -464,7 +485,8 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (!new RegExp(`^${UUID}$`).test(id) || url.search) throw new StudioError('Invalid saved model request.', 400)
         const { model } = await userStudioLibraryModel(env, user.id, id)
         if (!model) throw new StudioError('This saved model is not available in your account library.', 404)
-        return json({ accountId: user.id, model: await publicLibraryModel(env, user.id, model) })
+        const generationTiming = await oracleGenerationTiming(env, id, fetcher)
+        return json({ accountId: user.id, model: { ...await publicLibraryModel(env, user.id, model), ...(generationTiming ? { generationTiming } : {}) } })
       }
       if ([...url.searchParams.keys()].some(key => key !== 'cursor') || url.searchParams.getAll('cursor').length > 1)
         throw new StudioError('Invalid account library request.', 400)
@@ -498,6 +520,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (!user) throw new StudioError('Sign in to recover your cloud model.', 401)
       const current = await currentUserStudioJob(env, user.id)
       if (!current.job) return json({ current: null })
+      const generationTiming = ['completed', 'failed'].includes(current.job.state) ? await oracleGenerationTiming(env, current.job.id, fetcher) : undefined
       const freshReceipt = await receipt(env, current.job.id, current.job.fingerprint, user.id, current.job.pricing)
       return json({ current: {
         receipt: freshReceipt,
@@ -505,6 +528,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         startedAt: new Date(current.job.at).toISOString(),
         financialState: current.job.state,
         reservedPoints: current.job.held ? current.job.cost : 0,
+        ...(generationTiming ? { generationTiming } : {}),
         ...(current.job.pricing ? { pricing: current.job.pricing } : {}),
         ...(current.job.failureCode ? { failureCode: current.job.failureCode } : {}),
       } })
@@ -621,7 +645,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         const value = await limitedJson(response, 16_384)
         if (value.id !== auth.id || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new Error('Unconfirmed acceptance')
         const completed = await completedOracleStatus(env, auth.id, value, fetcher)
-        return json({ job: await accountJob(env, user?.id, auth.id, completed.state as StudioJob['state'], fetcher, oracleFailureCode(completed)) }, 202)
+        return json({ job: await accountJob(env, user?.id, auth.id, completed.state as StudioJob['state'], fetcher, oracleFailureCode(completed), completed.timingObservation) }, 202)
       } catch (error) {
         if (error instanceof StudioError) throw error
         return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending, ...(pricing ? { pricing } : {}) } }, 202)
@@ -668,7 +692,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       // Previously settled results are durable even if Oracle later stays offline.
       if (user && access?.owned && ['failed', 'completed'].includes(access.state!)) return json({ job: await accountJob(env, user.id, auth.id, access.state === 'completed' ? 'succeeded' : 'failed', fetcher) })
       const overdue = user && access?.owned && access.state === 'reserved' && access.at && Date.now() - access.at > STUDIO_JOB_WATCHDOG_MS
-      let value: Record<string, unknown> | null
+      let value: Awaited<ReturnType<typeof oracleJobStatus>>
       try {
         // Read a real terminal result first: a late browser return must still
         // recover a model that Oracle completed while this client was away.
@@ -723,7 +747,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         } })
       }
 
-      return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state'], fetcher, oracleFailureCode(value)) })
+      return json({ job: await accountJob(env, user?.id, auth.id, value.state as StudioJob['state'], fetcher, oracleFailureCode(value), value.timingObservation) })
     }
     return json({ error: 'Studio route or method not found.' }, 404)
   } catch (e) {

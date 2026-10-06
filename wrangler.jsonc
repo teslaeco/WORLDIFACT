@@ -11,7 +11,7 @@
   },
   "vars": {
     "OPENAI_MODEL": "gpt-6-astra",
-    "OPENAI_FAST_MODEL": "gpt-6-sol",
+    "OPENAI_FAST_MODEL": "gpt-6.1-sol",
     "STUDIO_NEW_JOB_POLICY": "legacy-usd175-v1",
     "FREE_SOL_SEED_JOBS": "10",
     "ENABLE_ASTRA_PLANS": "false",

@@ -161,7 +161,100 @@ export const CABINET_CONTEXT_REVIEWED_PATHS = Object.freeze([
   'tests/studio-pricing.test.ts',
   'tests/studio-protocol-contract.test.ts',
 ].sort())
+export const GENERATION_RECOVERY_BASE_COMMIT = 'ee107329fdd73d3ebe7678643dc01971b1bd6930'
+export const GENERATION_RECOVERY_MARKER_PATH = 'ops/GENERATION_RECOVERY_RELEASE_20261005.json'
+export const GENERATION_RECOVERY_MARKER_CONTENT = JSON.stringify({
+  release: 'generation-evidence-and-fair-usage-20261005',
+  baseCommit: GENERATION_RECOVERY_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+}, null, 2) + '\n'
+export const GENERATION_RECOVERY_REVIEWED_PATHS = Object.freeze([
+  '.dev.vars.example',
+  'docs/CONTEST_STATUS.md',
+  'docs/SOL61_BLUEPRINT_MIGRATION.md',
+  GENERATION_RECOVERY_MARKER_PATH,
+  'scripts/release-check.ts',
+  'scripts/select-pipeline-only-release.mjs',
+  'server/blueprintModelBinding.ts',
+  'server/blueprintTerminalUsage.ts',
+  'server/entitlements.ts',
+  'server/studio.ts',
+  'server/worker.ts',
+  'src/components/GenerationProgressOrb.css',
+  'src/components/GenerationProgressOrb.tsx',
+  'src/components/GenerationSculpture.tsx',
+  'src/components/StudioGallery.tsx',
+  'src/lib/blueprint.ts',
+  'src/lib/blueprintClient.ts',
+  'src/lib/generationFunding.ts',
+  'src/lib/generationProgressView.ts',
+  'src/lib/modelCatalog.ts',
+  'src/lib/studioClient.ts',
+  'src/lib/studioLibrary.ts',
+  'src/lib/studioProtocol.ts',
+  'src/pages/GenerationFundingPage.tsx',
+  'src/pages/InfoPage.tsx',
+  'src/pages/PrivateGameLab.tsx',
+  'src/pages/ShopPage.css',
+  'src/pages/ShopPage.tsx',
+  'tests/affordable-models.test.ts',
+  'tests/blueprint-accounts.test.ts',
+  'tests/blueprint-completed-provider-reconciliation.test.ts',
+  'tests/blueprint-failed-provider-reconciliation.test.ts',
+  'tests/blueprint-failed-reconciliation-native.test.mjs',
+  'tests/blueprint-model-archive.test.mjs',
+  'tests/blueprint-output-adjustment-preview.test.ts',
+  'tests/blueprint-provider-reservation.test.ts',
+  'tests/blueprint-repair.test.ts',
+  'tests/budget.test.ts',
+  'tests/contest-finish.test.mjs',
+  'tests/core.test.ts',
+  'tests/fixtures/sol61-legacy-client.ts',
+  'tests/fixtures/sol61-legacy-worker.ts',
+  'tests/game-lab-blueprint-recovery.test.mjs',
+  'tests/generation-economics.test.ts',
+  'tests/generation-funding-page.test.mjs',
+  'tests/generation-profile-client.test.mjs',
+  'tests/generation-progress-orb.test.mjs',
+  'tests/generation-progress-view.test.ts',
+  'tests/generation-sculpture-lifecycle.test.mjs',
+  'tests/p0-astra.test.ts',
+  'tests/pipeline-only-release.test.mjs',
+  'tests/portal-generation-lifecycle.test.mjs',
+  'tests/pricing-release-health.test.ts',
+  'tests/prompt-model-ui.test.mjs',
+  'tests/shop-draft-lifecycle.test.mjs',
+  'tests/shop-external.test.mjs',
+  'tests/shop-render-helper.mjs',
+  'tests/sol61-blueprint-migration.test.ts',
+  'tests/sol61-mixed-deployment.test.ts',
+  'tests/studio-accounts.test.ts',
+  'tests/studio-generation-timing.test.ts',
+  'tests/studio-library-gallery.test.mjs',
+  'tests/studio-library.test.ts',
+  'wrangler.jsonc',
+].sort())
 const releaseIntroductions = new Set([
+  'docs/SOL61_BLUEPRINT_MIGRATION.md',
+  'server/blueprintModelBinding.ts',
+  'server/blueprintTerminalUsage.ts',
+  'src/components/GenerationProgressOrb.css',
+  'src/components/GenerationProgressOrb.tsx',
+  'src/components/GenerationSculpture.tsx',
+  'src/lib/generationProgressView.ts',
+  'tests/blueprint-failed-provider-reconciliation.test.ts',
+  'tests/blueprint-failed-reconciliation-native.test.mjs',
+  'tests/blueprint-output-adjustment-preview.test.ts',
+  'tests/fixtures/sol61-legacy-client.ts',
+  'tests/fixtures/sol61-legacy-worker.ts',
+  'tests/generation-progress-orb.test.mjs',
+  'tests/generation-progress-view.test.ts',
+  'tests/generation-sculpture-lifecycle.test.mjs',
+  'tests/sol61-blueprint-migration.test.ts',
+  'tests/sol61-mixed-deployment.test.ts',
+  'tests/studio-generation-timing.test.ts',
+
   'docs/GENERATOR_UI_RESTORATION_20261004.md',
   'src/lib/generationFunding.ts',
   'src/lib/loadGenerationFunding.ts',
@@ -190,6 +283,7 @@ const scopes = [
   { base: ACCOUNT_MODEL_LIBRARY_BASE_COMMIT, marker: ACCOUNT_MODEL_LIBRARY_MARKER_PATH, content: ACCOUNT_MODEL_LIBRARY_MARKER_CONTENT, paths: ACCOUNT_MODEL_LIBRARY_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: PROJECT_MCC_ATTEMPT_BASE_COMMIT, marker: PROJECT_MCC_ATTEMPT_MARKER_PATH, content: PROJECT_MCC_ATTEMPT_MARKER_CONTENT, paths: PROJECT_MCC_ATTEMPT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: CABINET_CONTEXT_BASE_COMMIT, marker: CABINET_CONTEXT_MARKER_PATH, content: CABINET_CONTEXT_MARKER_CONTENT, paths: CABINET_CONTEXT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
+  { base: GENERATION_RECOVERY_BASE_COMMIT, marker: GENERATION_RECOVERY_MARKER_PATH, content: GENERATION_RECOVERY_MARKER_CONTENT, paths: GENERATION_RECOVERY_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
 ]
 
 function refuse() { throw new Error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED') }
@@ -240,7 +334,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH) {
+  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

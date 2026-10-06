@@ -19,7 +19,7 @@ function memory() {
 async function fixture() {
   let now=Date.now(),providerCalls=0,preflights=0,budgetCalls=0,mode='ok',sent:any
   const ledgers=new Map<string,ReturnType<typeof memory>>()
-  const env:Env={OPENAI_API_KEY:'fixture-only',OPENAI_MODEL:'gpt-6-astra',OPENAI_FAST_MODEL:'gpt-6-sol',ENABLE_PAID_GENERATION:'true',ENABLE_ASTRA_PLANS:'true',PUBLIC_PILOT:'true',GENERATION_REQUEST_LIMIT:'unlimited',ENFORCE_ACCOUNT_ENTITLEMENTS:'true',GENERATION_LIMITER:{async limit(){return {success:true}}},GENERATION_BUDGET:{idFromName:n=>n,get:()=>({async fetch(){budgetCalls++;return Response.json({allowed:true})}})}}
+  const env:Env={OPENAI_API_KEY:'fixture-only',OPENAI_MODEL:'gpt-6-astra',OPENAI_FAST_MODEL:'gpt-6.1-sol',ENABLE_PAID_GENERATION:'true',ENABLE_ASTRA_PLANS:'true',PUBLIC_PILOT:'true',GENERATION_REQUEST_LIMIT:'unlimited',ENFORCE_ACCOUNT_ENTITLEMENTS:'true',GENERATION_LIMITER:{async limit(){return {success:true}}},GENERATION_BUDGET:{idFromName:n=>n,get:()=>({async fetch(){budgetCalls++;return Response.json({allowed:true})}})}}
   env.ACCOUNT_ENTITLEMENTS={idFromName:n=>n,get:n=>{const key=String(n);if(!ledgers.has(key))ledgers.set(key,memory());return new AccountEntitlements({storage:ledgers.get(key)!.storage},env,()=>now)}}
   const provider=(async(url:string|URL|Request,init?:RequestInit)=>{
     const path=new URL(String(url)).pathname

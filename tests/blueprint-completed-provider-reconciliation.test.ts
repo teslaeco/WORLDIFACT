@@ -23,9 +23,9 @@ function fixture() {
   const fund = async () => { await call('/grant', { id: 'in_fixture', credits: 4500, subscriptionId: 'sub_fixture' }); await call('/subscription', { id: 'sub_fixture', active: true, until: NOW + 86400000, revision: 1, plan: 'pro', grantId: 'in_fixture' }) }
   const completed = async (model: GenerationModel = 'sol', legacy = false) => {
     const id = crypto.randomUUID()
-    await call('/reserve', { id, channel: 'blueprint', model, profile: model === 'astra' ? 'slow' : 'fast', fingerprint, ...(!legacy ? { blueprintDispatch: 'fenced-v1' } : {}) })
+    await call('/reserve', { id, channel: 'blueprint', model, profile: model === 'astra' ? 'slow' : 'fast', fingerprint, ...(!legacy ? { blueprintDispatch: 'fenced-v1', providerModel: MODEL_CATALOG[model].model } : {}) })
     if (!legacy) assert.equal((await call('/blueprint-dispatch', { id, fingerprint })).value.dispatch, true)
-    const blueprint = demoBlueprint('An inert green tower'), result = { mode: 'LIVE', provenance: 'GENERATED', blueprint, assetSpec: assetSpecForBlueprint(blueprint), requestId: id, model: MODEL_CATALOG[model].model, limitation: 'Inert fixture with no provider calls', delivery: { kind: 'procedural-blueprint', referenceCount: 0, fallbackUsed: false },
+    const blueprint = demoBlueprint('An inert green tower'), result = { mode: 'LIVE', provenance: 'GENERATED', blueprint, assetSpec: assetSpecForBlueprint(blueprint), requestId: id, model: legacy && model === 'sol' ? 'gpt-6-sol' : MODEL_CATALOG[model].model, limitation: 'Inert fixture with no provider calls', delivery: { kind: 'procedural-blueprint', referenceCount: 0, fallbackUsed: false },
       evidence: { providerResponseId: 'resp_fixture', receivedAt: new Date(NOW).toISOString(), blueprintSha256: await hash(blueprint), inputTokens: 1000, outputTokens: 100, totalTokens: 1100 } }
     assert.equal((await call('/blueprint-complete', { id, result })).value.saved, true)
     if (legacy) { const row = values.get(`job:${id}`) as Record<string, unknown>; delete row.channel; delete row.updatedAt }

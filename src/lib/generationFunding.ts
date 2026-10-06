@@ -28,6 +28,8 @@ export interface GenerationFundingSnapshot {
       markedReconciled: number
       unknown: number
     }
+    /** Read-only preview for existing v1 completed Blueprint evidence; never an applied credit. */
+    blueprintOutputAdjustment?: { scanLimit: 32; checked: number; candidates: number; potentialCents: number; unavailable: number; partial: boolean }
     /** Sums of recognized stored evidence in this scan only, never actual spend or refundable amounts.
      * Zero means no recognized evidence in that bucket; it does not establish zero account liability. */
     fundingEvidence: {
@@ -62,7 +64,9 @@ export function readGenerationFundingSnapshot(value: unknown): GenerationFunding
       (budget.status === 'known') !== (budget.unreservedCents !== null) || budget.status !== 'uninitialized' && budget.legacyDerivedFallbackCents !== null) return invalid()
   const minimum = object(root.ordinaryAstraMinimumCents, ['blueprint', 'unpricedDetailed'])
   if (minimum.blueprint !== 175 || minimum.unpricedDetailed !== 175) return invalid()
-  const jobs = object(root.jobs, ['scanLimit', 'scanned', 'partial', 'scanStatus', 'states', 'routes', 'evidence', 'fundingEvidence'])
+  const jobsKeys = ['scanLimit', 'scanned', 'partial', 'scanStatus', 'states', 'routes', 'evidence', 'fundingEvidence']
+  if (root.jobs && typeof root.jobs === 'object' && Object.hasOwn(root.jobs, 'blueprintOutputAdjustment')) jobsKeys.push('blueprintOutputAdjustment')
+  const jobs = object(root.jobs, jobsKeys)
   if (jobs.scanLimit !== 256 || !integer(jobs.scanned, 0, 256) || typeof jobs.partial !== 'boolean' || typeof jobs.scanStatus !== 'string' || !['complete', 'partial', 'unavailable', 'invalid'].includes(jobs.scanStatus) ||
       (jobs.scanStatus === 'complete') !== !jobs.partial || jobs.scanStatus === 'complete' && jobs.scanned === 256) return invalid()
   const counts = (input: unknown, keys: string[], sum = false) => {
@@ -80,6 +84,13 @@ export function readGenerationFundingSnapshot(value: unknown): GenerationFunding
     const bucket = object(funding[field], ['records', ...amountFields])
     if (!integer(bucket.records, 0, Number(jobs.scanned)) || amountFields.some(key => !integer(bucket[key], 0, Number(bucket.records) * 400)) ||
         amountFields.reduce((total, key) => total + Number(bucket[key]), 0) > Number(bucket.records) * 400) return invalid()
+  }
+  if (Object.hasOwn(jobs, 'blueprintOutputAdjustment')) {
+    const review = object(jobs.blueprintOutputAdjustment, ['scanLimit', 'checked', 'candidates', 'potentialCents', 'unavailable', 'partial'])
+    if (review.scanLimit !== 32 || !integer(review.checked, 0, Math.min(32, Number(jobs.scanned))) ||
+        !integer(review.unavailable, 0, Number(review.checked)) || !integer(review.candidates, 0, Number(review.checked) - Number(review.unavailable)) ||
+        !integer(review.potentialCents, 0, Number(review.candidates) * 175) ||
+        Number(review.potentialCents) < Number(review.candidates) || typeof review.partial !== 'boolean' || jobs.partial === true && review.partial !== true) return invalid()
   }
   const support = object(root.supportGrantClaims, ['originalRecordPresent', 'supplementalRecordPresent'])
   if (typeof support.originalRecordPresent !== 'boolean' || typeof support.supplementalRecordPresent !== 'boolean') return invalid()

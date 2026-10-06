@@ -2,7 +2,68 @@
 
 Updated 5 October 2026.
 
-## LOCAL REVIEW — cabinet prompt and saved-attempt context (5 October 2026)
+## LOCAL REVIEW — generation evidence, failed usage and model selection (5 October 2026)
+
+Failed customer-point settlement and provider cost are separate. Existing failed
+Studio holds are released once, while successfully completed jobs settle their
+original point cost. A failed or incomplete provider response does not establish
+zero spend or the full reserved cost. The new Blueprint path preserves valid,
+authenticated final usage before content validation can reject the output. Only
+strictly matched current ordinary reservations can release proven unused API
+capacity in the same transaction as failed-point settlement. Missing, malformed,
+uncertain, mismatched or non-default-tier evidence keeps its conservative hold.
+Historical support/project authorities and successful delivery remain unchanged.
+
+A separate read-only funding projection examines at most 32 existing completed
+Blueprint reconciliations within the bounded account scan. It verifies the old
+immutable result, hash, v1 marker and historical model terms before reporting a
+potential additional difference from final output usage. This reports aggregate
+counts and cents only; it changes no credits, receipts or financial history.
+Unverifiable and unscanned records remain explicitly unknown. No actual account
+recovery amount is claimed from synthetic tests or aggregate liability totals.
+
+Direct procedural Sol requests use the reviewed GPT-6.1 Sol model while retaining
+the 50-point and 35-cent ceiling. New receipts and owned jobs bind their exact
+provider model; historical GPT-6 Sol results remain attributable and recoverable.
+The fixed default-tier cost envelope covers reviewed long-context and regional
+rates. Detailed Oracle/Blender stays on its separately enforced Astra route.
+Provider access for a configured key and live output quality are not established
+by documentation or inert fixtures; no paid verification is part of this release.
+
+The Shop presents description and references, delivery, one model selection, and
+the existing cost/start controls in that order. Its progress ring reuses the
+homepage sculpture, supports reduced motion and pauses hidden/offscreen rendering.
+The worker exposes stages, not a measured completion percentage. The ring labels
+25%, 50% and 75% as estimated stage progress for acceptance, worker start and
+worker completion. It does not interpolate from elapsed time or retain a higher
+milestone when the reported stage moves backward. Unknown, failed and uncertain
+states show no percentage; 100% requires the same job's validated file and a
+successful save acknowledgement for that exact current file. Elapsed tracking
+time remains separate. This never implies visual or manufacturing acceptance.
+Saved terminal diagnostics stay attached to their selected job identity.
+
+Recorded worker generation time comes from Oracle's existing monotonic timing
+report, excluding upload and queue time. Only owned terminal recovery or an
+explicitly selected library model performs the optional five-second, 256-KiB
+quality read. The browser receives only a validated scalar duration. Missing or
+provisional timing remains optional and can refresh later. Receipt/account dates
+are not substituted for execution time, and library listing does not fetch every
+historical report. Temporary metadata failures may retain a valid artifact
+receipt; identity, permission, malformed-data, expiry and cancellation remain
+strict. Existing submitted-job settlement/recovery behavior remains in place.
+
+The integrated application aggregate passed 1440 of 1441 local tests. The only
+blocked check was native Chromium startup under the environment's socket
+restriction. Lint, TypeScript, HTTP smoke, production build/postbuild and local
+Worker dry-run packaging passed. Focused source groups have independent review;
+final package binding and hosted Chromium verification remain release gates.
+The 64-file scope is fixed to ee107329 with a single parent and must skip all five
+financial setup/checkout steps while preserving dashboard variables. Wrong
+parent, missing marker or changed path scope stops before credentials. This app package does not install the separate Oracle
+terminal-incomplete accounting prototype, change subscriptions, create funding or
+authorize new API spending. Ordinary generation remains subject to real admission.
+
+## DEPLOYED — cabinet prompt and saved-attempt context (5 October 2026)
 
 The detailed Shop request uses a hidden default purpose of figurine. For an
 explicit industrial or electrical cabinet request, the Oracle adapter now
@@ -38,9 +99,9 @@ single-parent commit, skips all five financial setup/check steps, and preserves
 existing dashboard variables through the already-reviewed deployment path.
 Wrong base, missing marker or a changed path set stops before credential setup.
 The existing workflow, configuration, account ledger, backend admission and
-all earlier release markers are untouched. Publication and live verification
-remain pending; no private prompts, identities, models or activation values
-are included in this documentation or the tests.
+all earlier release markers are untouched. The release and live no-cost asset/runtime checks passed. All five financial
+steps were skipped and dashboard variables preserved. No new private prompts,
+identities, models or activation values were introduced by the repair.
 
 ## DEPLOYED — one project-funded detailed cabinet attempt (5 October 2026)
 

@@ -106,3 +106,38 @@ test('actual entrypoint isolates the diagnostic route from all ordinary account 
     assert.equal(nodes.some(node => node.type === App), path !== '/account/generation-funding')
   }
 })
+
+
+test('stored-output assessment displays only a potential amount and retains a single read-only action', async () => {
+  const value = fixture()
+  value.jobs.scanned = 2
+  value.jobs.states.completed = 2
+  value.jobs.routes.blueprint = 2
+  value.jobs.evidence.markedReconciled = 2
+  value.jobs.blueprintOutputAdjustment = { scanLimit: 32, checked: 2, candidates: 1, potentialCents: 7, unavailable: 1, partial: false }
+  const h = await harness(() => Response.json(value))
+  try {
+    assert.match(h.text(), /1 verified records may support an additional \$0\.07/)
+    assert.match(h.text(), /No funds have been returned by this read/)
+    assert.match(h.text(), /1 could not be verified/)
+    assert.match(h.text(), /not a provider invoice, an applied refund or approval/)
+    assert.equal(h.calls.length, 1)
+    assert.equal(h.calls[0].init.method, 'GET')
+    assert.equal(h.calls[0].init.body, undefined)
+    await h.focus()
+    assert.doesNotMatch(h.text(), /\$0\.07/)
+  } finally { h.close() }
+})
+
+test('stored-output assessment refuses private fields and inconsistent positive amounts', async () => {
+  for (const extra of [{ privateJobIds: ['SHOULD_NOT_RENDER'] }, { checked: 33 }, { candidates: 1, potentialCents: 7 }]) {
+    const value = fixture()
+    value.jobs.blueprintOutputAdjustment = { scanLimit: 32, checked: 0, candidates: 0, potentialCents: 0, unavailable: 0, partial: false, ...extra }
+    const h = await harness(() => Response.json(value))
+    try {
+      assert.match(h.text(), /could not be verified/)
+      assert.doesNotMatch(h.text(), /SHOULD_NOT_RENDER|may support an additional/)
+      assert.equal(h.calls.length, 1)
+    } finally { h.close() }
+  }
+})
