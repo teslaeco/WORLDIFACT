@@ -69,13 +69,14 @@ test('Chess visitors get a mobile-safe full-screen guest launch instead of a nes
   assert.doesNotMatch(html, /<iframe[^>]+src="\/apps\/chess\//)
 })
 
-test('direct PortalPage Shop preserves its real model form without the removed world-blueprint duplicate', async () => {
+test('historical Shop portal keeps the real model form and its separate world-blueprint drawer', async () => {
   const html = await renderPortal('/shop')
-  assert.doesNotMatch(html, /data-world="enchanted-ai-shop"/)
+  assert.match(html, /data-world="enchanted-ai-shop"/)
+  assert.match(html, /<summary>Create a world blueprint with GPT-6 Astra<\/summary>/)
   assert.match(html, /AI model · Model AI/)
   assert.match(html, /Back to WORLDIFAKT/)
   assert.match(html, /id="studio-prompt"/)
-  assert.match(html, /Generate GPT-6 Astra blueprint/)
+  assert.match(html, /Generate Astra\/Blender model/)
   assert.match(html, /target="_blank"/)
   assert.doesNotMatch(html, /<iframe|target="_(top|self|parent)"|3D result appears here|FORGE-projekt/)
 })

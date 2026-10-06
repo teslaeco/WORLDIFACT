@@ -2,6 +2,24 @@
 
 Updated 6 October 2026.
 
+## REVIEW — compatible MCC-era presentation restoration (6 October 2026)
+
+The owner approved restoring the 29 September presentation from `58e04843`
+while retaining current accounting, saved models and Oracle protocol support.
+The working base is `9b2a5a9e`. See [the exact scope and compatibility
+exceptions](COMPATIBLE_MCC_RESTORATION.md).
+
+The historical Shop form, shared-world defaults and `/lab` / `/builder`
+workbench return without replacing the current server or stored account data.
+The cloud model library, separate private-world workspace, payment interfaces,
+current model bindings and recovery readers remain available. Provider funding
+and all existing spending limits stay unchanged. No paid generation is part of
+validation. This is not an Oracle runtime or database downgrade.
+
+Publication remains pending the combined-tree checks, independent review and
+exact-head GitHub CI. Record deployment and browser evidence only after the
+scoped no-financial-operations, preserve-variables release completes.
+
 ## LOCAL REVIEW — visible bounded model preview (6 October 2026)
 
 Browsers without WebGL previously showed an unavailable-device message instead

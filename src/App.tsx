@@ -50,8 +50,9 @@ export default function App() {
           <Route key={path} path={path} element={<PortalPage />} />
         ))}
         <Route path="/chess/shop" element={<Navigate to="/shop" replace />} />
-        <Route path="/lab" element={<PrivateGameLab />} />
-        <Route path="/builder" element={<PrivateGameLab />} />
+        <Route path="/lab" element={<WorkbenchPage kind="builder" />} />
+        <Route path="/builder" element={<WorkbenchPage kind="builder" />} />
+        <Route path="/account/worlds" element={<PrivateGameLab />} />
         <Route path="/make" element={<WorkbenchPage kind="make" />} />
         <Route path="/privacy" element={<InfoPage kind="privacy" />} />
         <Route path="/terms" element={<InfoPage kind="terms" />} />
@@ -60,6 +61,7 @@ export default function App() {
       <nav className="legal-nav" aria-label="Project information">
         <Link to="/login">Account</Link>
         <Link to="/account/models">My models</Link>
+        <Link to="/account/worlds">My saved worlds</Link>
         <a href="/blog/astra-vs-meshy-rim/">Astra vs Meshy: rim case study</a>
         <a href="/compare/mcc/">MCC cabinet: Astra and Meshy evidence</a>
         <Link to="/control">Platform connections</Link>

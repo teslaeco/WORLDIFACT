@@ -1,6 +1,6 @@
 import type { AvatarAsset } from './avatarAsset.ts'
 
-export const DEFAULT_WORLD_AVATAR = 'terraformer' satisfies AvatarAsset
+export const DEFAULT_WORLD_AVATAR = 'queen' satisfies AvatarAsset
 
 type Session = { loading: boolean; userId: string | null; pathname: string }
 type Assets = { clear: () => void; load: (choice: AvatarAsset) => Promise<ArrayBuffer> }

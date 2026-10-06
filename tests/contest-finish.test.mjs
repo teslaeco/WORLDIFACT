@@ -54,9 +54,9 @@ test('Game Lab primary generation action falls back to labelled no-cost DEMO ins
   assert.doesNotMatch(source, /disabled=\{busy \|\| !health\.generationReady\}/)
 })
 
-test('non-Shop portal generators remain expanded; the explicitly removed Shop duplicate stays absent', async () => {
+test('historical portal generators remain expanded, including the separate Shop blueprint drawer', async () => {
   const source = await readFile(new URL('../src/pages/PortalPage.tsx', import.meta.url), 'utf8')
-  assert.doesNotMatch(source, /<details open className="portal-generator-drawer portal-page">/)
+  assert.match(source, /<details open className="portal-generator-drawer portal-page">/)
   assert.match(source, /<details open className="portal-generator-drawer">/)
 })
 

@@ -733,7 +733,8 @@ test('workflow guards all five billing steps before credentials and keeps every 
   assert.equal(billing.length, 5)
   for (const step of billing) assert.match(step, /\n        if: steps\.billing_scope\.outputs\.preserve_billing == 'false'\n/)
   for (const step of steps.filter(step => !billing.includes(step) && step !== steps[selectorIndex] && step !== deployStep)) {
-    assert.doesNotMatch(step, /billing_scope/)
+    if (!step.includes('name: Select reviewed deployment configuration')) assert.doesNotMatch(step, /billing_scope/)
+    else assert.match(step, /steps\.billing_scope\.outputs\.compatible_mcc_rollback/)
     if (/secrets\./.test(step)) assert.ok(steps.indexOf(step) > selectorIndex)
   }
   for (const gate of ['npm run verify', './.github/actions/foundations', 'restore-detailed-studio-config.mjs', 'wrangler deploy --dry-run', 'wrangler deploy --config', 'release-check.ts smoke', 'status.costGuardReady,true', 'assert.equal(denied.status,401)', 'assert.equal(fundingDenied.status,401)', 'assert.equal(foreignFunding.status,403)']) assert.ok(workflow.includes(gate), gate)

@@ -14,6 +14,9 @@ import { readArchive, saveArchive } from "../lib/archive";
 import type { ArchivedWorld } from "../lib/archive";
 import { createWorldObject, disposeObject } from "../lib/worldGeometry";
 import { Group } from "three";
+import { ScopedBlueprintClient, type ScopedBlueprintRecovery } from "../lib/scopedBlueprintClient";
+import { useAccount } from "../lib/account";
+import GenerationCostNotice from "./GenerationCostNotice";
 
 function download(data: Blob, name: string) {
   const url = URL.createObjectURL(data),
@@ -25,6 +28,12 @@ function download(data: Blob, name: string) {
 }
 export default function WorldStudio() {
   const navigate = useNavigate();
+  const { user, loading: accountLoading } = useAccount();
+  const owner = user?.id ?? null;
+  const activeOwner = useRef(owner);
+  // Fence old handlers immediately when React observes a different account.
+  // eslint-disable-next-line react/refs
+  activeOwner.current = owner;
   const [blueprint, setBlueprint] = useState<WorldBlueprint>(() =>
     meadowBlueprint(),
   );
@@ -36,6 +45,9 @@ export default function WorldStudio() {
     [image, setImage] = useState<string | null>(null),
     [imageBusy, setImageBusy] = useState(false);
   const [accessCode, setAccessCode] = useState("");
+  const [accessRequired, setAccessRequired] = useState(false);
+  const [recovery, setRecovery] = useState<ScopedBlueprintRecovery | null>(null);
+  const client = useRef<ScopedBlueprintClient | null>(null);
   const [busy, setBusy] = useState(false),
     [seconds, setSeconds] = useState(0),
     [notice, setNotice] = useState(
@@ -48,25 +60,42 @@ export default function WorldStudio() {
     [lastResult, setLastResult] = useState<GenerationResult | null>(null);
   const abort = useRef<AbortController | null>(null);
   const imageRevision = useRef(0);
+  const readingImage = useRef(false);
   const sceneRevision = useRef(0);
   const generationRevision = useRef(0);
   const generationInFlight = useRef(false);
   const importRevision = useRef(0);
   const mounted = useRef(true);
   useEffect(() => {
-    mounted.current = true;
+    // Reset transient UI when the external account scope changes.
+    // eslint-disable-next-line react/set-state-in-effect
+    mounted.current = true; generationInFlight.current = false; setBusy(false); setImageBusy(false); setRecovery(null); client.current = null;
+    sceneRevision.current++;
+    setBlueprint(meadowBlueprint()); setLastResult(null); setSelected(""); setSearch(""); setMode("demo");
+    setPrompt("An open green meadow with a flowing river and a photovoltaic explorer.");
+    setImage(null); setAccessCode(""); setError(""); setSeconds(0); setLive(false); setAccessRequired(false);
+    setNotice("DEMO · local procedural meshes. Your original Julie and Queen files are not connected.");
     let alive = true;
+    try {
+      if (owner) {
+        client.current = new ScopedBlueprintClient(window.localStorage, fetch, owner, "historical-world-studio", () => mounted.current && activeOwner.current === owner);
+        setRecovery(client.current.current());
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Recovery storage is unavailable. No paid request can start.");
+    }
     const invalidatePending = () => {
       generationRevision.current++;
       generationInFlight.current = false;
       imageRevision.current++;
+      readingImage.current = false;
       importRevision.current++;
       abort.current?.abort();
     };
     fetch("/api/health")
       .then((r) => (r.ok ? r.json() : null))
       .then((v) => {
-        if (alive) setLive(!!v?.generationReady);
+        if (alive) { setLive(!!v?.astraBlueprintReady); setAccessRequired(!!v?.accessRequired); }
       })
       .catch(() => {
         if (alive) setLive(false);
@@ -76,7 +105,7 @@ export default function WorldStudio() {
       mounted.current = false;
       invalidatePending();
     };
-  }, []);
+  }, [owner]);
   useEffect(() => {
     if (!busy) return;
     const start = Date.now(),
@@ -94,7 +123,8 @@ export default function WorldStudio() {
     setSelected("");
     setNotice(`${result.mode} · ${result.limitation}`);
     try {
-      setArchive(saveArchive(result));
+      const existing = readArchive();
+      setArchive(existing.some(item => item.result.requestId === result.requestId) ? existing : saveArchive(result));
     } catch {
       setNotice(
         `${result.mode} · Scene ready. Device storage is full or unavailable; download your blueprint to keep it.`,
@@ -108,8 +138,8 @@ export default function WorldStudio() {
     setLastResult(result);
     setNotice(`DEMO · ${result.limitation}`);
   }
-  async function generate() {
-    if (generationInFlight.current || imageBusy) return;
+  async function generate(recoverOnly = false) {
+    if (generationInFlight.current || readingImage.current) return;
     generationInFlight.current = true;
     const generationId = ++generationRevision.current;
     setBusy(true);
@@ -120,9 +150,9 @@ export default function WorldStudio() {
     abort.current = controller;
     const timer = setTimeout(() => controller.abort(), 40000);
     try {
-      if (prompt.trim().length < 3 || prompt.length > 2000)
+      if (!recoverOnly && (prompt.trim().length < 3 || prompt.length > 2000))
         throw new Error("Use a prompt between 3 and 2000 characters.");
-      if (mode === "demo") {
+      if (mode === "demo" && !recoverOnly) {
         apply({
           mode: "DEMO",
           provenance: "MOCK",
@@ -133,47 +163,52 @@ export default function WorldStudio() {
             "Rule-based example; image references are not analyzed. GAME export contains procedural meshes; MAKE is not validated.",
         });
       } else {
-        const r = await fetch("/api/blueprint", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-WORLDIFACT-Access": accessCode.trim(),
-          },
-          body: JSON.stringify({ prompt, image, mode }),
-          signal: controller.signal,
-        });
-        const value = await r.json();
-        if (generationId !== generationRevision.current)
-          return;
-        if (!r.ok)
-          throw new Error(
-            value.error ||
-              "Generation failed. Your previous scene is unchanged.",
-          );
-        validateGenerationResult(value);
+        if (!owner || accountLoading) throw new Error("Sign in before requesting or recovering a blueprint.");
+        const transport = new ScopedBlueprintClient(window.localStorage, (input, init) => fetch(input, {
+          ...init,
+          headers: { ...Object.fromEntries(new Headers(init?.headers)), ...(accessCode.trim() ? { "X-WORLDIFACT-Access": accessCode.trim() } : {}) },
+        }), owner, "historical-world-studio", () => mounted.current && activeOwner.current === owner);
+        client.current = transport;
+        if (!recoverOnly) {
+          if (transport.current()) throw new Error("Recover the saved request or explicitly prepare a new paid attempt first.");
+          if (!live) throw new Error("Astra blueprint generation is not enabled. The no-cost demo is still available.");
+          if (accessRequired && accessCode.trim().length < 32) throw new Error("Enter the preview access code.");
+        }
+        const proposal = recoverOnly
+          ? await transport.recover(controller.signal)
+          : await transport.submit({ worldId: "ai-game-lab", prompt, image, mode: "live", model: "astra", deliverable: "procedural-blueprint" }, blueprint, controller.signal);
+        if (!mounted.current || activeOwner.current !== owner || controller.signal.aborted || generationId !== generationRevision.current) return;
+        const value = proposal.result;
         if (sceneRevision.current !== startingRevision)
           throw new Error(
-            "The scene changed while Astra was working. The returned scene was not applied; generate again when ready.",
+            "The scene changed while the request was running. The returned scene was not applied; recover the same request when ready.",
           );
         apply(value);
       }
     } catch (e) {
-      if (generationId === generationRevision.current)
+      if (mounted.current && activeOwner.current === owner && generationId === generationRevision.current)
         setError(
           e instanceof Error && e.name === "AbortError"
-            ? "Generation stopped. Your previous scene is unchanged."
+            ? "Stopped waiting. Your previous scene is unchanged. Recover the same request; no replacement was started."
             : e instanceof Error
               ? e.message
               : "Generation failed.",
         );
     } finally {
       clearTimeout(timer);
-      if (generationId === generationRevision.current) {
+      if (mounted.current && activeOwner.current === owner && generationId === generationRevision.current) {
         generationInFlight.current = false;
         if (abort.current === controller) abort.current = null;
         setBusy(false);
+        try { setRecovery(client.current?.current() ?? null); }
+        catch (e) { setError(e instanceof Error ? e.message : "Recovery storage needs review."); }
       }
     }
+  }
+  function newAttempt() {
+    if (generationInFlight.current || !client.current || !window.confirm("Prepare a NEW paid attempt for your next Create click? Recovering the saved result costs no additional points.")) return;
+    try { client.current.reset(true); setRecovery(null); setError(""); }
+    catch (e) { setError(e instanceof Error ? e.message : "Recovery could not be cleared."); }
   }
   async function importBlueprint(file?: File) {
     setError("");
@@ -208,10 +243,12 @@ export default function WorldStudio() {
     }
   }
   async function pickImage(file?: File) {
+    if (generationInFlight.current) return;
     const revision = ++imageRevision.current;
     setError("");
     setImage(null);
     setImageBusy(false);
+    readingImage.current = false;
     if (!file) return;
     if (
       !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
@@ -221,17 +258,20 @@ export default function WorldStudio() {
       return;
     }
     setImageBusy(true);
+    readingImage.current = true;
     const reader = new FileReader();
     reader.onload = () => {
       if (revision === imageRevision.current) {
         setImage(String(reader.result));
         setImageBusy(false);
+        readingImage.current = false;
       }
     };
     reader.onerror = () => {
       if (revision === imageRevision.current) {
         setError("Image could not be read.");
         setImageBusy(false);
+        readingImage.current = false;
       }
     };
     reader.onabort = reader.onerror;
@@ -376,7 +416,8 @@ export default function WorldStudio() {
               </option>
             </select>
           </label>
-          {mode === "live" ? (
+          {mode === "live" && <GenerationCostNotice model="astra" busy={busy} />}
+          {mode === "live" && accessRequired ? (
             <label>
               Preview access code
               <input
@@ -395,6 +436,7 @@ export default function WorldStudio() {
             Reference image · optional
             <input
               type="file"
+              key={owner ?? "signed-out"}
               accept="image/png,image/jpeg,image/webp"
               disabled={busy}
               onChange={(e) => pickImage(e.target.files?.[0])}
@@ -412,6 +454,7 @@ export default function WorldStudio() {
                   imageRevision.current++;
                   setImage(null);
                   setImageBusy(false);
+                  readingImage.current = false;
                 }}
                 disabled={busy}
               >
@@ -427,8 +470,8 @@ export default function WorldStudio() {
           {mode === "live" ? <small>Use only references you have permission to share. <Link to="/privacy">How your data is used</Link></small> : null}
           <button
             className="primary"
-            disabled={busy || imageBusy || (mode === "live" && accessCode.trim().length < 32)}
-            onClick={generate}
+            disabled={busy || imageBusy || (mode === "live" && (!owner || accountLoading || !!recovery || (accessRequired && accessCode.trim().length < 32)))}
+            onClick={() => void generate()}
           >
             {imageBusy
               ? "Reading reference…"
@@ -445,6 +488,7 @@ export default function WorldStudio() {
               <button onClick={() => abort.current?.abort()}>Cancel</button>
             </div>
           ) : null}
+          {recovery && <div role="status"><p>Saved request · {recovery.state}. Recovery does not start another paid generation.</p><button disabled={busy || imageBusy} onClick={() => void generate(true)}>Recover same request · no extra charge</button>{recovery.state !== "pending" && <button disabled={busy} onClick={newAttempt}>Prepare new paid attempt…</button>}</div>}
           {error ? (
             <p role="alert" className="error">
               {error}

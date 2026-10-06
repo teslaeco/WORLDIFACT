@@ -190,7 +190,7 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
   const controlsLocked = busy || fileBusy
   return <section className="portal-astra" aria-label={`${title} blueprint generator`}>
     <div className="portal-astra-head">
-      <div><span className="eyebrow">PORTAL BLUEPRINT · {worldId}</span><h2>Create inside this portal</h2></div>
+      <div><span className="eyebrow">{MODEL_CATALOG[selectedModel].label} · {worldId}</span><h2>Create inside this portal</h2></div>
       <span className={`pill ${live ? 'live' : ''}`}>{live ? 'LIVE · GENERATED' : result ? 'DEMO · MOCK' : 'LOCAL STARTER PREVIEW'}</span>
     </div>
     <p>The selected model creates a validated WorldBlueprint + AssetSpec and a procedural GAME preview. This is not detailed reference reconstruction; MAKE always requires external validation.</p>
@@ -199,6 +199,7 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
         <StartingWorld blueprint={blueprint} activePortalId={worldId} onPortalOpen={id => navigate(routeForPortal(id))} />
       </div>
       <div className="portal-astra-controls">
+        <label>Portal prompt<textarea rows={5} maxLength={2000} value={prompt} disabled={controlsLocked || !!recovery} onChange={event => { if (!operation.current && !fileOperation.current && !recovery) setPrompt(event.target.value) }} /></label>
         <label>Generation model<select aria-label="Generation model" value={selectedModel} disabled={controlsLocked || !!recovery} onChange={event => {
           if (!active() || operation.current || fileOperation.current || recovery) return
           const model = event.target.value
@@ -207,7 +208,6 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
           setSelectedModel(model as GenerationModel)
         }}>{(['luna', 'sol', 'astra'] as const).map(model => <option key={model} value={model}>{MODEL_CATALOG[model].label} · {MODEL_CATALOG[model].creditsPerGeneration} points per paid generation</option>)}</select></label>
         <GenerationCostNotice model={selectedModel} busy={busy} accountQuote={accountQuote} />
-        <label>Portal prompt<textarea rows={5} maxLength={2000} value={prompt} disabled={controlsLocked || !!recovery} onChange={event => { if (!operation.current && !fileOperation.current && !recovery) setPrompt(event.target.value) }} /></label>
         <label>Reference images · Astra only · max 6 MB combined<input type="file" multiple accept="image/png,image/jpeg,image/webp" disabled={controlsLocked || !!recovery || selectedModel !== 'astra'} onChange={event => { void chooseImages(event.target.files); event.target.value = '' }} /></label>
         <label className="scan-input">Scan with phone camera · BETA · Astra only<input type="file" accept="image/*" capture="environment" disabled={controlsLocked || !!recovery || selectedModel !== 'astra'} onChange={event => { void chooseImages(event.target.files); event.target.value = '' }} /></label>
         {references.map((reference, index) => <div className="portal-astra-reference" key={index}><img src={reference.dataUrl} alt={`Selected portal reference ${index + 1}`} /><button type="button" disabled={controlsLocked || !!recovery} onClick={() => { if (!operation.current && !fileOperation.current && !recovery) { setReferences(values => values.filter((_, position) => position !== index)); setReferenceError('') } }}>Remove reference {index + 1}</button></div>)}
