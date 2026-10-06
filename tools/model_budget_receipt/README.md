@@ -58,8 +58,8 @@ ordinary funding. Customer point settlement remains separate.
 Only the exact reviewed installed cabinet-prebuild ancestor is accepted. Unknown
 sources and already-installed STANDARD-context variants are refused; this
 package does not silently install, replace or remove the separate context
-optimization. The historical guard and installer sources in this repository
-remain unchanged. `budget_patch.py` adds the seal check to the actual installed
+optimization. The historical guard behavior remains unchanged; the installer loads its own
+pinned dependency copy. `budget_patch.py` adds the seal check to the actual installed
 v2 reserve path and the authenticated endpoint to the exact server source.
 
 The pinned Cloud Shell launcher and installer are inert without explicit
@@ -98,3 +98,20 @@ chain. Tests exercise actual flock races, actual patched reservation/settlement,
 the authenticated server handler with SQLite terminal states, immutable replay,
 missing evidence, source ancestry, installer rollback and flat launcher package
 integrity. They make no provider request and are not generated-model evidence.
+
+
+## Historical dependency isolation (5 October 2026)
+
+This package retains its original STANDARD-era fence and source manifest under
+`reviewed_context/`. The files are exact original Git blobs, not updated copies:
+`context_patch.py` is `6ed419f784f891e51bae8fc93de480a1ac31088a`, and
+`maintenance_fence.py` is `d90d7b84abfb952f5056ce33e529aa0a19ea4e25`.
+The evolving STANDARD context package does not supply either historical file.
+
+The repository installer fallback and the pinned launcher now read these two
+copies. Flat packages keep the original filenames and hashes; the guardian's
+separate interpreter therefore resolves its adjacent original context manifest.
+Only the loader's local fallback path and its own package checksum change.
+Missing or mutated historical files fail closed. This does not adopt the new
+pricing-aware STANDARD fence, relax historical maintenance rules, or authorize
+running the old installer against a PR195 runtime.

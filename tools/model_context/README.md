@@ -1,6 +1,6 @@
 # STANDARD context presentation repair
 
-Draft source and an explicitly gated maintenance installer. Default invocation
+Locally reviewed source and an explicitly gated maintenance installer. Default invocation
 is inert. No installation or target runtime attestation is claimed by this
 repository; maintenance never submits a paid model or replacement job, resets
 a ledger, or changes customer funding.
@@ -23,8 +23,9 @@ inspection exec. A later model turn must actually assess those pixels before
 editing or finishing. Current-revision render and finish gates are unchanged.
 This does not claim that any observed job had redundant render calls.
 
-Cabinet, reference-character, FAST and unmarked Froge task/guidance behavior is
-unchanged. The original MCP, renderer validator, spend policy, settlement,
+Explicit cabinet, reference-character, FAST and unmarked Froge task/guidance
+behavior is unchanged. The adapter routes a no-photo MCC cabinet brief through
+STANDARD; natural-language cabinet words do not select the cabinet profile. The original MCP, renderer validator, spend policy, settlement,
 completion/continuation rules, images, security and limits are unchanged.
 Display `$defs` references never enter the generated scene or canonical validator.
 
@@ -123,7 +124,11 @@ failure keeps live source unmodified and refuses restart until resolved.
 
 Only after these checks does the stopped live worker receive the narrow source
 patch and transactional guard/completion/prebuild/generic/context receipts.
-The new receipt covers `context_policy.py` and all six inherited core files.
+For the exact installed PR195 pricing variant, both terminal-budget and pricing
+receipts are also refreshed in that transaction. The new context receipt covers
+`context_policy.py`, all six inherited core files, and the two unchanged financial
+helpers when present. Their original verification facts and extra fields are
+preserved; their old cabinet attestation is not relabelled as a new cabinet run.
 Source/receipt drift prevents overwrite. Original bytes and modes are retained
 for rollback; no installed attestation is written before genuine stage proof.
 
@@ -203,3 +208,76 @@ The target must pass the strict visibility checks without that substitution.
 App/browser/deployment checks from the earlier source-only change are not a
 fresh installer validation. No remote execution or paid model is part of this
 local evidence.
+
+
+## 5 October: preserve the installed pricing and terminal-budget overlay
+
+The observed worker still has the old runner `bc8db1e2…`; the STANDARD
+presentation was not installed. Its server and spend are the reviewed PR195
+outputs `6892eeb8…` and `eafbf9d2…`, with immutable pricing terms and terminal
+seals. Running the earlier PREBUILD-only installer on this variant is not valid.
+
+The compatibility repair accepts exactly the original six-file PREBUILD variant
+or the observed eight-file PR195 variant. Both are reconstructed from the pinned
+public source lineage in tests; a PR194-only, partial, mixed, or byte-mutated
+variant refuses. Finite before/after manifests bind the initial fence and every
+rollback fence, including the packaged context helper. No hash supplied by the
+target can introduce another accepted variant.
+
+For PR195, the original pricing maintenance conditions are composed with the
+STANDARD marker for route admission, queued work and startup reconciliation.
+All existing pricing admission, terminal-budget routes and failure codes remain.
+The original spend, pricing, terminal-budget, MCP and completion helper bytes
+are unchanged. No job is upgraded from USD 1.75 to USD 2 or USD 4, and no existing
+USD 2/4 contract is rewritten. No customer balance, provider ledger, usage file,
+seal, saved candidate, job state or artifact is reset or repaired.
+
+The already-reviewed PR195 journal identity proof is reused byte-for-byte.
+Only inherited stdout/stderr streams with the same kernel-proven journal peers
+may accompany the sole idle listener. The initial snapshot, frozen replay and
+pre-TERM replay are retained. Duplicate descriptors, accepted TCP sockets,
+unknown sockets, changed journal cookies and missing visibility all refuse.
+Unit, cgroup, pidfd, container, cancellation, active-job, readiness-retry,
+possible-activation and recovery rules are otherwise unchanged.
+
+The genuine STANDARD gate now creates a complete fresh synthetic job row under
+its existing disposable six-column jobs schema, so the unchanged real Blender
+progress callback has valid state to update. It verifies the original USD 1.75
+no-terms accounting path and refuses a terms or seal file in that fixture. This
+is isolated fixture construction, not a live job-table migration. Actual pinned
+Codex/Code Mode/MCP/Blender execution on the target is still mandatory before
+activation and makes no provider request.
+
+Local verification at the source freeze: 151 context/transaction/offline/fence
+checks pass, including genuine helper readiness-chain evaluation and exact
+preservation of synthetic saved candidates, USD 1.75/2/4 terms, outstanding
+liabilities, seals and modes through success and rollback. Both overlay receipt
+writes have fault-injection rollback tests. The additional journal suite has
+eight passing inert checks; four real UNIX-socket/kernel fixtures remain blocked
+by this executor's `socket() ... Operation not permitted`, including after the
+permitted test-only escalation. They remain enabled and are not counted as
+passes. Historical completion and prebuild suites pass 148 and 45 tests. The
+unchanged tier suite has 127 passes and the same four host-blocked kernel tests.
+The combined launcher has 28 verified package pins and 10 passing transport
+tests. Its actual unpacked package defaults to inert PLAN ONLY. Independent
+source/package review is complete; exact-head hosted checks and genuine target
+verification remain separate gates. No installation, restart, paid generation
+or success verdict for the failed model follows from these local results.
+
+
+### Hosted verification and historical package isolation
+
+Initial PR214 head `fafe0c0e6b7d5dd8575be490738c4fbc576bc8a4` passed all
+173 STANDARD tests on the hosted runner, including the four real socket cases
+blocked locally. Its application workflow passed all 1,126 tests, production
+build and credential-free Worker packaging. The separate historical
+terminal-budget suite then correctly refused changed shared dependency hashes.
+
+That older package now keeps its original context/fence blobs under
+`tools/model_budget_receipt/reviewed_context/`, preserving original flat
+filenames, immutable hashes and runtime semantics. Its loader fallback and
+package paths use those exact copies. The pricing test compares against the
+same hash-asserted historical fence. All 67 receipt tests and the unchanged
+148 completion/45 prebuild tests pass locally; no test or gate was disabled.
+The updated draft's exact-head hosted checks remain required before command
+handoff. These results do not attest target installation or a paid model.

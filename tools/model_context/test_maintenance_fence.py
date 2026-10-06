@@ -268,7 +268,7 @@ print('FROZEN',flush=True);sys.stdin.readline()
                 self.assertEqual(error.exception.code, 'term_disposition_unproven')
 
     def test_clean_term_targets_only_disposable_pidfd_with_mocked_systemd(self):
-        fixture = self.fixture('before_spawn')
+        fixture = self.fixture('listener')
         guard = self.frozen(fixture)
         (fixture.path / 'go').touch()
         original = unit(fence.WORKER, fixture.path)
@@ -276,7 +276,7 @@ print('FROZEN',flush=True);sys.stdin.readline()
         tunnel = unit(fence.TUNNEL, fixture.path)
         config = {'source': str(fixture.path), 'files': {}, 'worker': original,
                   'tunnel': tunnel, 'pid': fixture.process.pid, 'ticks': fixture.ticks,
-                  'expected_sources': fence.EXPECTED}
+                  'expected_sources': fence.EXPECTED, 'journal': None}
         def snapshot(operations, name):
             if name == fence.TUNNEL:
                 return tunnel.copy()
@@ -451,7 +451,7 @@ class MockIntegration(unittest.TestCase):
         self.stack = self.enterContext(ExitStack())
         for name, value in {'_source': None, '_unit_files': {}, '_same_files': None,
                             '_running_identity': (123, 0), '_same_worker': None,
-                            '_resources': None, '_dead': True}.items():
+                            '_resources': None, '_journal_snapshot': None, '_dead': True}.items():
             self.stack.enter_context(patch.object(fence, name, return_value=value))
         self.stack.enter_context(patch.object(fence, '_Guard', Guard))
         self.stack.enter_context(patch.object(fence.os, 'pidfd_open', return_value=123456))
@@ -570,9 +570,45 @@ class MockIntegration(unittest.TestCase):
                 self.fail('Server-only ancestry override accepted.')
         self.assertEqual(error.exception.code, 'incomplete_reviewed_manifest')
 
+    def test_journal_initial_refusal_precedes_guard_or_freeze(self):
+        with patch.object(fence, '_journal_snapshot', side_effect=fence.FenceRefused('journal_peer_unproven', 'fixture')):
+            with self.assertRaises(fence.FenceRefused):
+                with fence.quiesce(self.operations): self.fail('Unknown journal admitted')
+        self.assertNotIn(('guard-ready',), self.operations.events)
+        self.assertNotIn(('freeze',), self.operations.events)
+        self.assertNotIn(('guard-stop',), self.operations.events)
+
+    def test_frozen_journal_proof_failure_resumes_without_stopping(self):
+        proof = {'fds': {'1': 55, '2': 55}, 'pairs': {'55': 'synthetic'}, 'vfs': [1, 2]}
+        def resources(pid, operations, worker, journal):
+            self.assertEqual(journal, proof)
+            self.assertIn(('freeze',), operations.events)
+            self.assertEqual(self.guard_config['journal'], proof)
+            raise fence.FenceRefused('journal_peer_unproven', 'changed synthetic peer')
+        with patch.object(fence, '_journal_snapshot', return_value=proof), patch.object(fence, '_resources', side_effect=resources):
+            with self.assertRaises(fence.FenceRefused):
+                with fence.quiesce(self.operations): self.fail('Changed frozen journal admitted')
+        self.assertTrue(self.closed)
+        self.assertNotIn(('guard-stop',), self.operations.events)
+
+    def test_both_pricing_and_prebuild_exact_rollback_manifests_preserve_journal_path(self):
+        import context_patch
+        helper = hashlib.sha256(Path(fence.__file__).with_name('context_policy.py').read_bytes()).hexdigest()
+        proof = {'fds': {'1': 55, '2': 55}, 'pairs': {'55': 'synthetic'}, 'vfs': [1, 2]}
+        for variant, original in (('PRICING', context_patch.PRICING_EXPECTED), ('PREBUILD', context_patch.EXPECTED)):
+            self.operations.units = {name: unit(name, self.operations.source) for name in (fence.WORKER, fence.TUNNEL)}
+            self.operations.events.clear()
+            self.operations.expected_source_sha256 = {**original, **context_patch.PATCHED_CORE[variant], 'context_policy.py': helper}
+            with patch.object(fence, '_journal_snapshot', return_value=proof), patch.object(fence, '_resources') as resources:
+                with fence.quiesce(self.operations) as lease: self.healthy(lease)
+                self.assertEqual(self.guard_config['journal'], proof)
+                self.assertEqual(resources.call_args.args[-1], proof)
+                self.assertTrue(self.operations.events.index(('freeze',)) < self.operations.events.index(('guard-stop',)))
+
     def test_full_staged_manifest_is_used_during_refence(self):
-        self.operations.expected_source_sha256 = {**fence.EXPECTED, 'server.py':'f'*64,
-            'codex_runner.py':'e'*64, 'context_policy.py':'d'*64}
+        import context_patch
+        self.operations.expected_source_sha256 = {**fence.EXPECTED, **context_patch.PATCHED_CORE['PREBUILD'],
+            'context_policy.py': hashlib.sha256(Path(fence.__file__).with_name('context_policy.py').read_bytes()).hexdigest()}
         with fence.quiesce(self.operations) as lease:
             self.healthy(lease)
         self.assertTrue(any(call.kwargs.get('expected_sources') == self.operations.expected_source_sha256
@@ -806,9 +842,9 @@ class GuardStateMachine(unittest.TestCase):
         source = Path('/synthetic/froge-connector')
         self.worker, self.tunnel = unit(fence.WORKER, source), unit(fence.TUNNEL, source)
         self.config = {'source': str(source), 'files': {}, 'worker': self.worker,
-            'tunnel': self.tunnel, 'pid': 45678, 'ticks': 123, 'expected_sources': fence.EXPECTED}
+            'tunnel': self.tunnel, 'pid': 45678, 'ticks': 123, 'expected_sources': fence.EXPECTED, 'journal': None}
         self.stack = self.enterContext(ExitStack())
-        for name in ('_source', '_same_files', '_same_worker', '_default_term', '_same_tunnel'):
+        for name in ('_source', '_same_files', '_same_worker', '_default_term', '_same_tunnel', '_socket_idle'):
             self.stack.enter_context(patch.object(fence, name))
         self.signals = self.stack.enter_context(patch.object(fence.signal, 'pidfd_send_signal'))
         self.stack.enter_context(patch.object(fence, '_dead', return_value=True))

@@ -648,3 +648,63 @@ The web adapter separately refuses to charge an execution that has no finished o
 The installer uses exact reviewed source ancestry, strict existing SSH access, atomic idle-queue maintenance, private backups, genuine offline Codex/MCP/Blender verification, receipt-bound health evidence and rollback. It makes no paid request. A separate, default-inert one-shot test helper is being prepared to reuse the original prompt and three photos on the VM; paid execution requires the owner's clarified budget approval. No new API key, credential grant, budget reset or customer-point debit is part of that test route.
 
 At this checkpoint the runtime package is under final offline review and has not been confirmed installed on the Oracle VM. Local fixtures and source tests are not generated-quality or visible-preview evidence. The user's completion criterion remains an actual generated model inspected in the real preview.
+
+## DRAFT REVIEW — STANDARD context compatibility with installed pricing (5 October 2026)
+
+The no-photo MCC request is routed through STANDARD by the existing adapter.
+The observed Oracle runner still matches the pre-context `bc8db1e2…` source,
+while its server/spend include the reviewed PR195 pricing and terminal-budget
+overlay. The previous PREBUILD-only context installer cannot safely represent
+that installed source. No profile classification, billing policy, original cap
+or historical outcome is changed by this local correction.
+
+The isolated repair based on deployed main `c6422e9d22185d22ee4eae23dc61f4045dd6ca6f`
+reuses the reviewed STANDARD presentation unchanged. It admits only the exact
+PREBUILD or observed PR195 source sets, preserves financial helper bytes and
+refreshes all affected source receipts transactionally, including both overlay
+receipts. Previous receipt facts/extras and file modes survive. Its fence reuses
+the exact existing journal peer proof and adds finite original/rollback manifests;
+process, unit, cgroup, socket, container, active-row, private single-cancellation,
+readiness, activation-latch and rollback protections remain enforced.
+
+Local source verification passes 151 focused context/transaction/offline/fence
+tests. These include the real helper readiness chain, preservation of the same
+saved synthetic candidate and USD 1.75/2/4 terms/ledgers/usage/seals, mutated-source
+and receipt refusal, and rollback on each overlay receipt write failure. The
+additional journal suite passes eight inert cases; four genuine UNIX-socket
+kernel fixtures are blocked by this executor's `Operation not permitted`, even
+after the permitted test-only escalation. They remain enabled. Historical
+completion/prebuild suites pass 148/45 checks, and the unchanged pricing suite
+passes 127 with those same four host-blocked journal fixtures.
+
+Repository lint and TypeScript pass. `npm run verify` reaches 1,125 passing tests
+and one blocked existing native Chromium socket-startup test; it is not reported
+as a full pass. Local DEMO HTTP/origin checks and TypeScript/Vite production
+bundling pass. The local postbuild/packaging process ended without a retrievable
+terminal result, so those phases are not reported as passed. Exact-head hosted
+tests and packaging remain required; this runtime package does not deploy the
+Cloudflare Worker.
+
+The STANDARD verifier still requires genuine pinned Codex/Code Mode/MCP/Blender
+execution on a disposable target stage before activation. Its new synthetic job
+row supplies the actual progress callback schema, and its accounting check stays
+on the original USD 1.75 no-terms path. These local fixtures do not prove target
+installation, real model quality, visual acceptance or budget sufficiency.
+All 28 combined launcher pins match the frozen source, its 10 tests pass, and
+the actual unpacked package defaults to inert PLAN ONLY. Independent source
+review is complete. No Oracle source installation, service restart, provider
+request, replacement job or financial reset was performed for this correction.
+Hosted checks and all target maintenance gates remain required before any
+authorized activation.
+
+PR214's initial head `fafe0c0e6b7d5dd8575be490738c4fbc576bc8a4` passed
+all 173 hosted STANDARD tests, including the four real socket cases, and all
+1,126 application tests, production build and credential-free packaging.
+The subsequent historical terminal-budget suite exposed shared dependency
+paths tied to older immutable hashes. Its exact original context/fence files
+are now retained under `tools/model_budget_receipt/reviewed_context/`; only
+lookup paths and the changed loader's own checksum are updated. No historical
+runtime semantics or guards are replaced. A pricing-suite comparison now uses
+that same hash-asserted historical source. Locally all 67 receipt tests, 148
+completion tests and 45 prebuild tests pass. The updated complete draft still
+requires exact-head hosted verification; no target activation is inferred.

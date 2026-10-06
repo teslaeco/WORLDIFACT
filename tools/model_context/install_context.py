@@ -33,6 +33,13 @@ import prebuild_policy
 import context_patch
 import context_policy as policy
 
+# Append so the reviewed context fence cannot be shadowed by the tier package.
+pricing_tools = HERE.parents[1] / 'tools/model_budget_tiers'
+if pricing_tools.is_dir():
+    sys.path.append(str(pricing_tools))
+import studio_pricing
+import terminal_budget
+
 base, cache = previous.base, previous.cache
 MAX_STAGE_BYTES = 64 * 1024**2
 VERIFY_TIMEOUT = 600
@@ -117,28 +124,53 @@ def wait_for_health(lease, check, timeout=30):
 
 
 def original_sources(source):
-    return {name: base.read_regular(source / name) for name in context_patch.EXPECTED}
+    names = set(context_patch.EXPECTED)
+    overlay = ('studio_pricing.py', 'terminal_budget.py', *context_patch.PRICING_RECEIPTS)
+    if any((source / name).exists() or (source / name).is_symlink() for name in overlay):
+        names = set(context_patch.PRICING_EXPECTED)
+    original = {name: base.read_regular(source / name) for name in names}
+    context_patch.reviewed_sources(original)
+    return original
 
 
 def receipt_updates(original, patched):
-    """Change source identities only; preserve all unrelated receipt fields."""
+    """Refresh every affected source identity; retain receipt facts and extras."""
+    names = context_patch.PRICING_EXPECTED if 'studio_pricing.py' in original else context_patch.EXPECTED
+    context_patch.reviewed_sources({name: original[name] for name in names})
+    expected = {name: hashlib.sha256(original[name]).hexdigest() for name in names}
     completion = json.loads(original[completion_policy.RECEIPT])
     prebuild = json.loads(original[prebuild_policy.RECEIPT])
     guard = json.loads(original[cache.legacy.RECEIPT])
-    expected = {name: hashlib.sha256(original[name]).hexdigest() for name in context_patch.EXPECTED}
-    if completion != {'revision': completion_policy.REVISION, 'sha256': {n: expected[n] for n in previous.prebuild_patch.EXPECTED}}:
+    def valid(proof, revision, coverage):
+        return (isinstance(proof, dict) and proof.get('revision') == revision
+                and proof.get('sha256') == {name: expected[name] for name in coverage})
+    if not valid(completion, completion_policy.REVISION, previous.prebuild_patch.EXPECTED):
         raise Refused('completion_receipt_refused')
-    if prebuild != {'revision': prebuild_policy.REVISION, 'sha256': expected}:
+    if not valid(prebuild, prebuild_policy.REVISION, context_patch.EXPECTED):
         raise Refused('prebuild_receipt_refused')
-    if guard.get('sha256', {}).get('codex_runner.py') != expected['codex_runner.py']:
+    if (not isinstance(guard, dict) or guard.get('revision') != cache.legacy.REVISION
+            or guard.get('sha256', {}).get('codex_runner.py') != expected['codex_runner.py']):
         raise Refused('guard_receipt_refused')
-    for receipt in (completion, prebuild):
+    if guard.get('outputPolicy') != {'revision': cache.policy.REVISION, 'sha256': expected['astra_spend_v2.py']}:
+        raise Refused('guard_output_receipt_refused')
+    receipts = {completion_policy.RECEIPT: completion, prebuild_policy.RECEIPT: prebuild,
+                cache.legacy.RECEIPT: guard}
+    if 'studio_pricing.py' in original:
+        for name, revision in ((terminal_budget.RECEIPT, terminal_budget.REVISION),
+                               (studio_pricing.RECEIPT, studio_pricing.REVISION)):
+            proof = json.loads(original[name])
+            if (not valid(proof, revision, context_patch.PRICING_EXPECTED)
+                    or proof.get('maintenance_fence') != policy.FENCE_REVISION
+                    or type(proof.get('cancelled_cleanup_interruption_approved')) is not bool
+                    or proof.get('offline_generic_pipeline') is not True
+                    or proof.get('offline_cabinet_pipeline') is not True):
+                raise Refused('pricing_receipt_refused')
+            receipts[name] = proof
+    for receipt in receipts.values():
         for name in ('server.py', 'codex_runner.py'):
-            receipt['sha256'][name] = hashlib.sha256(patched[name]).hexdigest()
-    guard['sha256']['codex_runner.py'] = hashlib.sha256(patched['codex_runner.py']).hexdigest()
-    return {name: (json.dumps(value, indent=2) + '\n').encode() for name, value in (
-        (completion_policy.RECEIPT, completion), (prebuild_policy.RECEIPT, prebuild),
-        (cache.legacy.RECEIPT, guard))}
+            if name in receipt['sha256']:
+                receipt['sha256'][name] = hashlib.sha256(patched[name]).hexdigest()
+    return {name: (json.dumps(value, indent=2) + '\n').encode() for name, value in receipts.items()}
 
 
 def stage_runtime(source, destination, patched, receipts):
@@ -185,7 +217,14 @@ class Operations(install_completion.Operations):
             raise Refused('unsupported_target')
         if self.source != self.home / 'froge-connector' or time.time() >= previous.previous.previous.policy.VALID_UNTIL:
             raise Refused('source_or_pricing_review_refused')
-        context_patch.changes(original_sources(self.source), (HERE / 'context_policy.py').read_bytes())
+        original = original_sources(self.source)
+        self.source_variant = context_patch.reviewed_sources(original)
+        self.expected_source_sha256 = {name: hashlib.sha256(raw).hexdigest() for name, raw in original.items()}
+        context_patch.changes(original, (HERE / 'context_policy.py').read_bytes())
+        if self.source_variant == 'PRICING':
+            if (not studio_pricing.verified_health(self.source) or not terminal_budget.verified_health(self.source)
+                    or studio_pricing.maintenance_active(self.source) or terminal_budget.maintenance_active(self.source)):
+                raise Refused('existing_pricing_receipt_refused')
         if not prebuild_policy.verified_health(self.source) or not base.receipt_matches(self.source):
             raise Refused('existing_receipt_refused')
         if base.read_regular(self.source / 'astra_spend.py') != Path(cache.legacy.__file__).read_bytes():
@@ -297,14 +336,9 @@ class Operations(install_completion.Operations):
     def context_health(self, maintenance=False):
         if policy.verified_health(self.source).get('worldifactStandardContextPolicy') != policy.REVISION:
             raise Refused('context_receipt_unverified')
-        config = json.loads(base.read_regular(self.source / 'state/config.json', 16384))
-        opener = previous.previous.urllib.request.build_opener(previous.previous.urllib.request.ProxyHandler({}), cache.legacy.NoRedirect())
-        request = previous.previous.urllib.request.Request('http://127.0.0.1:8765/v1/health', headers={'Authorization': 'Bearer ' + config['token']})
-        with opener.open(request, timeout=10) as response:
-            raw = response.read(16385)
-        if len(raw) > 16384:
-            raise Refused('context_health_unverified')
-        health = json.loads(raw)
+        health = self.read_health()
+        self.pricing_health(health)
+
         if (health.get('worldifactStandardContextPolicy') != policy.REVISION
                 or health.get('worldifactStandardMaintenance') is not maintenance
                 or health.get('ready') is not (not maintenance)
@@ -316,8 +350,31 @@ class Operations(install_completion.Operations):
                 or health.get('provider') != 'openai' or health.get('codexReady') is not True):
             raise Refused('context_health_unverified')
 
+    def read_health(self):
+        config = json.loads(base.read_regular(self.source / 'state/config.json', 16384))
+        opener = previous.previous.urllib.request.build_opener(previous.previous.urllib.request.ProxyHandler({}), cache.legacy.NoRedirect())
+        request = previous.previous.urllib.request.Request('http://127.0.0.1:8765/v1/health', headers={'Authorization': 'Bearer ' + config['token']})
+        with opener.open(request, timeout=10) as response:
+            raw = response.read(16385)
+        if len(raw) > 16384:
+            raise Refused('context_health_unverified')
+        health = json.loads(raw)
+        return health
+
+    def pricing_health(self, health):
+        if getattr(self, 'source_variant', None) == 'PRICING' or (self.source / 'studio_pricing.py').exists():
+            if (not studio_pricing.verified_health(self.source) or not terminal_budget.verified_health(self.source)
+                    or health.get('studioPricingRevision') != studio_pricing.REVISION
+                    or health.get('studioPricingTiers') != [dict(tier) for tier in studio_pricing.TIERS]
+                    or health.get('studioPricingMaintenance') is not False
+                    or health.get('worldifactTerminalBudgetPolicy') != terminal_budget.REVISION
+                    or health.get('worldifactTerminalBudgetMaintenance') is not False
+                    or studio_pricing.maintenance_active(self.source) or terminal_budget.maintenance_active(self.source)):
+                raise Refused('pricing_health_unverified')
+
     def previous_health(self):
         previous.check_health(self.source)
+        self.pricing_health(self.read_health())
 
 
 def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False):
@@ -342,9 +399,13 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
             raise Refused('unsafe_existing_context')
     operations.preflight()
     original = original_sources(source)
+    operations.source_variant = context_patch.reviewed_sources(original)
+    operations.expected_source_sha256 = {name: hashlib.sha256(raw).hexdigest() for name, raw in original.items()}
     changed = context_patch.changes(original, (HERE / 'context_policy.py').read_bytes())
     patched = {name: raw for name, raw in changed.items() if original.get(name) != raw}
     receipt_names = (completion_policy.RECEIPT, prebuild_policy.RECEIPT, cache.legacy.RECEIPT, base.RECEIPT)
+    if operations.source_variant == 'PRICING':
+        receipt_names += context_patch.PRICING_RECEIPTS
     original.update({name: base.read_regular(source / name, 16384) for name in receipt_names})
     receipts = receipt_updates(original, changed)
     workspace.mkdir(mode=0o700, parents=True, exist_ok=False)

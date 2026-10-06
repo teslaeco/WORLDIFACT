@@ -115,11 +115,11 @@ class InstallerTests(unittest.TestCase):
         write(self.source / installer.completion_policy.RECEIPT,
               {'revision': installer.completion_policy.REVISION, 'sha256': {n: hashes[n] for n in installer.previous.prebuild_patch.EXPECTED}})
         write(self.source / installer.prebuild_policy.RECEIPT,
-              {'revision': installer.prebuild_policy.REVISION, 'sha256': hashes})
+              {'revision': installer.prebuild_policy.REVISION, 'sha256': {n: hashes[n] for n in installer.context_patch.EXPECTED}})
         write(self.source / installer.cache.legacy.RECEIPT,
               {'revision': installer.cache.legacy.REVISION, 'sha256': {'codex_runner.py': hashes['codex_runner.py'],
                'fast_preview.py': 'unchanged-fixture', 'astra_spend.py': 'unchanged-fixture'},
-               'outputPolicy': {'revision': 'unchanged-fixture', 'sha256': hashes['astra_spend_v2.py']},
+               'outputPolicy': {'revision': installer.cache.policy.REVISION, 'sha256': hashes['astra_spend_v2.py']},
                'preserved_extra_field': 'do not remove'})
         write(self.source / installer.base.RECEIPT,
               {'sources': {n: hashes[n] for n in ('codex_runner.py', 'blender_mcp.py')},

@@ -23,6 +23,7 @@ import struct
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from unittest.mock import patch
 
@@ -338,6 +339,12 @@ def verify_result(folder, fixture, runner, spend, completion):
         raise Refused('SYNTHETIC_GEOMETRY_CHANGED')
     ledger_path = spend.legacy.ledger_folder(folder) / spend.legacy.STATE
     ledger = spend.validate_state(record(ledger_path))
+    # This gate deliberately remains on the original USD 1.75 no-terms path,
+    # including when unchanged PR195 tier helpers are installed in the stage.
+    if (spend.CEILING_MICRO_USD != 1750000 or ledger.get('revision') != spend.REVISION
+            or any((ledger_path.parent / name).exists() or (ledger_path.parent / name).is_symlink()
+                   for name in ('.worldifact-studio-pricing.json', '.worldifact-astra-terminal-budget.json'))):
+        raise Refused('FIXTURE_TERMS_CHANGED')
     if ledger['legacyHeld'] != 0 or ledger['requests'] != fixture.requests or len(ledger['holds']) != fixture.requests or any('response' not in hold for hold in ledger['holds'].values()) or spend.used(ledger) != 6900 * fixture.requests:
         raise Refused('CUMULATIVE_FIXTURE_ACCOUNTING_FAILED')
     usage = record(folder / 'agent-usage.json')
@@ -385,6 +392,20 @@ def cleanup(root, folder, processes, drain):
         raise Refused('CLEANUP_UNCONFIRMED')
 
 
+def create_fixture_job(root):
+    """Only a fresh stage gets synthetic progress rows; no live DB is copied."""
+    state = root / 'state'
+    state.mkdir(mode=0o700)
+    folder = state / 'jobs' / str(uuid.uuid4())
+    folder.mkdir(mode=0o700, parents=True)
+    with sqlite3.connect(state / 'jobs.sqlite') as database:
+        database.execute('CREATE TABLE jobs (id TEXT PRIMARY KEY, prompt TEXT NOT NULL, state TEXT NOT NULL, detail TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL)')
+        now = time.time()
+        database.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?)',
+                         (folder.name, PROMPT, 'generating', 'Synthetic offline fixture.', now, now))
+    return folder
+
+
 def run(source):
     root = preflight(source)
     sys.path.insert(0, str(root))
@@ -407,12 +428,9 @@ def run(source):
         raise Refused('STANDARD_CONTEXT_POLICY_REQUIRED')
     if parse_scene(json.dumps(scene()), PROMPT) != scene():
         raise Refused('SYNTHETIC_SCENE_INVALID')
-    state = root / 'state'; state.mkdir(mode=0o700)
-    folder = state / 'jobs' / str(uuid.uuid4()); folder.mkdir(mode=0o700, parents=True)
+    folder = create_fixture_job(root)
     processes = []
     try:
-        with sqlite3.connect(state / 'jobs.sqlite') as database:
-            database.execute('CREATE TABLE jobs (id TEXT PRIMARY KEY, prompt TEXT NOT NULL, state TEXT NOT NULL, detail TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL)')
         fixture = Fixture(runner, folder, context_policy.initial_task(folder, request), secrets.token_hex(8))
         original_popen = runner.subprocess.Popen
         def track(*args, **kwargs):

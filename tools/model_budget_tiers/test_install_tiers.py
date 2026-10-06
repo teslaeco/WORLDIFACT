@@ -155,8 +155,9 @@ class InstallerTests(unittest.TestCase):
         self.backup = self.root / 'backup'
 
     def test_fence_copy_is_pinned_and_preserves_guardian_operations(self):
-        reviewed = ROOT / 'tools/model_context/maintenance_fence.py'
+        reviewed = ROOT / 'tools/model_budget_receipt/reviewed_context/maintenance_fence.py'
         before = reviewed.read_bytes()
+        self.assertEqual(hashlib.sha256(before).hexdigest(), 'abda1aac9abd8e994e070a59f356f929d2d0812f97f0b5a3398aef34984ad67a')
         copied = installer.maintenance_fence()
         self.assertEqual(copied.EXPECTED, installer.tiers_patch.PREBUILD_EXPECTED)
         self.assertEqual(hashlib.sha256(Path(copied.__file__).read_bytes()).hexdigest(), installer.FENCE_SHA256)

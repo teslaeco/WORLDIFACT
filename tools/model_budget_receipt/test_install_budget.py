@@ -10,6 +10,7 @@ import shutil
 import sqlite3
 import stat
 import sys
+import subprocess
 import tempfile
 import unittest
 from types import SimpleNamespace
@@ -153,14 +154,14 @@ class InstallerTests(unittest.TestCase):
         self.backup = self.root / 'backup'
 
     def test_fence_adapter_is_exact_pinned_and_preserves_guardian_source(self):
-        import maintenance_fence as unchanged
-        before = Path(unchanged.__file__).read_bytes()
+        reviewed = installer.HERE / 'reviewed_context/maintenance_fence.py'
+        before = reviewed.read_bytes()
         adapted = installer.maintenance_fence()
         self.assertEqual(adapted.EXPECTED, installer.budget_patch.EXPECTED)
-        self.assertEqual(Path(adapted.__file__).resolve(), Path(unchanged.__file__).resolve())
+        self.assertEqual(Path(adapted.__file__).resolve(), reviewed.resolve())
         self.assertEqual(hashlib.sha256(before).hexdigest(), installer.FENCE_SHA256)
-        self.assertEqual(Path(unchanged.__file__).read_bytes(), before)
-        self.assertNotIn('terminal_budget.py', unchanged.quiesce.__wrapped__.__code__.co_consts)
+        self.assertEqual(reviewed.read_bytes(), before)
+        self.assertNotIn(b'terminal_budget.py', before)
         for changed in (before + b'\n', before.replace(b'context_policy.py', b'other_policy.py')):
             with patch.object(installer.base, 'read_regular', return_value=changed):
                 with self.assertRaisesRegex(installer.Refused, 'maintenance_fence_source_refused'):
@@ -172,6 +173,29 @@ class InstallerTests(unittest.TestCase):
              patch.object(installer, 'FENCE_SHA256', hashlib.sha256(changed).hexdigest()):
             with self.assertRaisesRegex(installer.Refused, 'maintenance_fence_adapter_refused'):
                 installer.maintenance_fence()
+
+    def test_historical_guard_subprocess_resolves_its_adjacent_original_patch(self):
+        archive = installer.HERE / 'reviewed_context'
+        original = (archive / 'context_patch.py').read_bytes()
+        self.assertEqual(hashlib.sha1(b'blob ' + str(len(original)).encode() + b'\0' + original).hexdigest(),
+                         '6ed419f784f891e51bae8fc93de480a1ac31088a')
+        # The real guard starts this exact file in a separate interpreter.
+        # A conflicting module in the working directory must never shadow its
+        # byte-pinned sibling. No guard descriptors or maintenance are supplied.
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'context_patch.py').write_text("raise RuntimeError('wrong dependency selected')\n")
+            result = subprocess.run([sys.executable, '-B', str(archive / 'maintenance_fence.py')],
+                                    cwd=directory, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr.strip(), 'This module has no standalone installer.')
+        self.assertEqual(result.stdout, '')
+
+    def test_missing_historical_fence_refuses_without_reading_current_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(installer, 'HERE', Path(directory)), \
+                 patch.object(installer.base, 'read_regular', wraps=installer.base.read_regular) as read:
+                with self.assertRaises(FileNotFoundError): installer.maintenance_fence()
+            read.assert_called_once_with(Path(directory) / 'reviewed_context/maintenance_fence.py')
 
     def test_adapted_fence_admits_only_the_complete_budget_rollback_manifest(self):
         fence = installer.maintenance_fence()

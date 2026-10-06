@@ -1,4 +1,4 @@
-"""Conservative, transient maintenance for the exact reviewed STANDARD context ancestors and rollback sources.
+"""Conservative, transient maintenance for the exact reviewed STANDARD ancestor.
 
 No mask, unit edit, database row edit, raw-PID signal, ptrace or process-memory
 inspection. Only the pinned simple worker with Restart=on-failure, default TERM
@@ -25,15 +25,13 @@ import stat
 import subprocess
 import sys
 import time
-import types
 
-from context_patch import EXPECTED, reviewed_manifest
+from context_patch import EXPECTED
 
 WORKER = 'froge-worker.service'
 TUNNEL = 'froge-tunnel.service'
 FREEZE_SECONDS = 20.0
 COMMAND_SECONDS = 3.0
-JOURNAL_SHA256 = '427f365b40264a71d1cdd208e94156617d3524518fc9f621485f4a91419fa54e'
 BASELINE_THREADS = 2  # Exact server: main + its one immortal queue worker.
 PROPERTIES = (
     'Id', 'LoadState', 'ActiveState', 'SubState', 'MainPID', 'InvocationID',
@@ -47,7 +45,6 @@ PROPERTIES = (
     'RestartUSec', 'RestartForceExitStatus', 'RestartPreventExitStatus',
     'SuccessExitStatus', 'Result', 'ExecMainCode', 'ExecMainStatus',
     'ExecCondition', 'Wants', 'Requires', 'BindsTo', 'Conflicts', 'Slice',
-    'StandardOutput', 'StandardError',
 )
 OPTIONAL_EXEC = ('ExecStartPre', 'ExecStartPost', 'ExecStop', 'ExecStopPost', 'ExecReload', 'ExecCondition')
 IDENTITY = ('MainPID', 'InvocationID', 'NRestarts')
@@ -358,82 +355,37 @@ def _cgroup_only(pid, operations):
         refuse('worker_cgroup_not_empty', 'Other cgroup processes prevent maintenance.')
 
 
-def _journal_helper():
-    path = Path(__file__).resolve().with_name('journal_socket.py')
-    raw, _ = _regular(path)
-    if hashlib.sha256(raw).hexdigest() != JOURNAL_SHA256:
-        refuse('journal_helper_unproven', 'The exact reviewed journal verifier is required.')
-    module = types.ModuleType('_worldifact_journal_socket')
-    exec(compile(raw, str(path), 'exec'), module.__dict__)
-    return module
-
-
-def _fd_sockets(pid):
-    sockets = {}
+def _socket_idle(pid):
+    # Accepted descriptors (including before Thread.start) are forbidden.
+    # The quick tunnel stays connected: a connection queued in the kernel
+    # after freeze is unaccepted and cannot execute while every thread is T.
+    # Default TERM discards that backlog before any worker code resumes.
+    sockets = []
     for fd in (Path('/proc') / str(pid) / 'fd').iterdir():
         target = os.readlink(fd)
         if target.startswith('socket:['):
-            if not re.fullmatch(r'socket:\[[1-9][0-9]*\]', target) or not fd.name.isdigit():
-                refuse('socket_unreadable', 'Complete socket descriptor visibility is required.')
-            sockets[fd.name] = int(target[8:-1])
-    return sockets
-
-
-def _journal_snapshot(pid, unit, expected=None):
-    before = _fd_sockets(pid)
-    if not {'1', '2'} & before.keys():
-        if expected is not None:
-            refuse('journal_stdio_unproven', 'The previously proven journal descriptors disappeared.')
-        return None
-    if unit.get('StandardOutput') != 'journal' or unit.get('StandardError') not in ('inherit', 'journal'):
-        refuse('unsupported_worker_stdio', 'Only inherited default-journal output streams are supported.')
-    if not {'1', '2'} <= before.keys():
-        refuse('journal_stdio_unproven', 'Both configured journal output descriptors must exist.')
-    fds = {key: before[key] for key in ('1', '2')}
-    if unit['StandardError'] == 'inherit' and fds['1'] != fds['2']:
-        refuse('journal_inheritance_unproven', 'Inherited stderr must share the exact stdout socket.')
-    try:
-        result = _journal_helper().prove(fds, expected)
-    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
-        if isinstance(error, FenceError):
-            raise
-        raise FenceRefused('journal_peer_unproven', 'Kernel journal peer identity could not be established.') from error
-    if _fd_sockets(pid) != before:
-        refuse('socket_changed', 'Worker socket descriptors changed during journal verification.')
-    return result
-
-
-def _socket_idle(pid, unit=None, journal=None):
-    # Only the exact inherited journal descriptors can be excluded. Accepted TCP
-    # connections, socket duplicates on any other fd and unknown sockets remain
-    # forbidden. Queued unaccepted connections cannot execute while frozen.
-    sockets = _fd_sockets(pid)
-    if journal is not None:
-        _journal_snapshot(pid, unit, journal)
-        if any(sockets.get(fd) != inode for fd, inode in journal['fds'].items()):
-            refuse('socket_changed', 'Inherited journal descriptors changed before socket admission.')
-        sockets = {fd: inode for fd, inode in sockets.items() if fd not in ('1', '2')}
+            sockets.append(target[8:-1])
     rows = []
     for kind in ('tcp', 'tcp6'):
         for line in (Path('/proc') / str(pid) / 'net' / kind).read_text().splitlines()[1:]:
             fields = line.split()
             if len(fields) < 10:
                 refuse('socket_unreadable', 'Complete socket visibility is required.')
-            if fields[9] in {str(inode) for inode in sockets.values()}:
+            if fields[9] in sockets:
                 rows.append((kind, fields))
     if len(sockets) != 1 or len(rows) != 1:
         refuse('accepted_or_unknown_socket', 'Accepted, pending or unidentified connections prevent maintenance.')
     kind, row = rows[0]
     if (kind != 'tcp' or row[1] != '0100007F:223D' or row[2] != '00000000:0000' or
-            row[3] != '0A' or int(row[9]) != next(iter(sockets.values()))):
-        refuse('socket_not_idle_listener', 'The sole application socket must be the reviewed loopback listener.')
+            row[3] != '0A' or row[9] != sockets[0]):
+        refuse('socket_not_idle_listener', 'The sole socket must be the reviewed loopback listener.')
 
 
-def _resources(pid, operations, worker=None, journal=None):
+def _resources(pid, operations):
     try:
         _no_children(pid, _baseline(pid))
         _cgroup_only(pid, operations)
-        _socket_idle(pid, worker, journal)
+        _socket_idle(pid)
         _podman_empty(operations)
     except (OSError, ValueError, KeyError) as error:
         raise FenceRefused('resource_visibility_unproven', 'Complete kernel and resource visibility is required.') from error
@@ -493,7 +445,6 @@ def _guard_stop(config, pidfd, deadline):
     _same_worker(operations, config['worker'], config['pid'], config['ticks'], pidfd)
     _same_tunnel(operations, config['tunnel'])
     _default_term(config['pid'])
-    _socket_idle(config['pid'], config['worker'], config['journal'])
     if time.monotonic() + COMMAND_SECONDS + 1 >= deadline:
         refuse('freeze_deadline', 'Too little guarded time remains to verify a clean exit.')
     # Only the proven pidfd is targeted. Default SIGTERM is a clean exit for a
@@ -751,8 +702,12 @@ def quiesce(operations):
         expected_sources = dict(getattr(operations, 'expected_source_sha256', EXPECTED))
         if getattr(operations, 'expected_server_sha256', None) is not None:
             expected_sources['server.py'] = operations.expected_server_sha256
-        if not reviewed_manifest(expected_sources):
-            refuse('incomplete_reviewed_manifest', 'An exact reviewed source or rollback manifest is required.')
+        if (expected_sources != EXPECTED and 'context_policy.py' not in expected_sources):
+            refuse('incomplete_reviewed_manifest', 'Changed source requires its complete reviewed manifest including context_policy.py.')
+        if (not set(EXPECTED) <= set(expected_sources) or
+                set(expected_sources) - set(EXPECTED) - {'context_policy.py'} or
+                any(not re.fullmatch('[a-f0-9]{64}', digest) for digest in expected_sources.values())):
+            refuse('invalid_reviewed_manifest', 'A complete reviewed source manifest is required.')
         _source(source, expected_sources=expected_sources)
         allow = getattr(operations, 'allow_cancelled_cleanup', False)
         with database_gate(source, allow_cancelled_cleanup=allow,
@@ -766,17 +721,16 @@ def quiesce(operations):
         ticks, started = _running_identity(source, pid, expected_sources)
         pidfd = os.pidfd_open(pid)
         _same_worker(operations, worker, pid, ticks, pidfd)
-        journal = _journal_snapshot(pid, worker)
         config = {'source': str(source), 'pid': pid, 'ticks': ticks,
                   'worker': worker, 'tunnel': tunnel, 'files': files,
                   'expected_sources': expected_sources, 'allow_cancelled_cleanup': allow,
-                  'cancelled_job_ids': list(identities), 'journal': journal}
+                  'cancelled_job_ids': list(identities)}
         guard = _Guard(pidfd, config)
         guard.freeze(pid, ticks)
         _same_worker(operations, worker, pid, ticks, pidfd)
         _same_files(files)
         _source(source, started, expected_sources)
-        _resources(pid, operations, worker, journal)
+        _resources(pid, operations)
         with database_gate(source, frozen=True, allow_cancelled_cleanup=allow, expected_cancelled=identities):
             _same_worker(operations, worker, pid, ticks, pidfd)
             stop_attempted = True
