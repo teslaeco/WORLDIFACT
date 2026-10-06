@@ -1,6 +1,47 @@
 # WORLDIFACT — TerraformingPlanet Astra heroine released
 
-Updated 5 October 2026.
+Updated 6 October 2026.
+
+## LOCAL REVIEW — visible bounded model preview (6 October 2026)
+
+Browsers without WebGL previously showed an unavailable-device message instead
+of a model preview. Existing account-loading and owner-change invalidation
+remains unchanged.
+
+This local patch reuses the previously reviewed, unpublished 5 October software
+preview implementation on deployed Shop base 62f9fa92. WebGL remains the first choice.
+When GPU setup, rendering or context fails, a bounded SVG renderer reads the same
+already-authorized local model Blob and projects its actual static geometry and
+base colors. The visible label says simplified and untextured; this is not a
+texture/PBR-quality claim, synthetic replacement or proof of manufacturing fitness.
+Unsupported or oversized geometry fails with a visible message and original-file
+guidance. No external model/image resources are fetched in either render path.
+
+Preview selection now focuses and scrolls to its inline region. Close releases
+the selected URL, cancels a pending selected-file operation and returns focus to
+the opening button. Download original GLB uses the existing authenticated lazy
+artifact path. Error guidance precedes the canvas, the failed canvas is hidden,
+and failed model loads stop the rendering loop. Account switching, loading,
+logout, metadata ownership and signed receipt checks are unchanged.
+
+The software path reads unchanged source bytes. No private model data, model
+identifiers or source artifacts are bundled or added to this repository.
+Local component tests use controlled DOM/GPU adapters; they do not establish
+browser/device or full textured visual acceptance. The initial aggregate passed
+1,604 of 1,606 tests; both failures were the existing native Chromium socket
+restriction. Those blocked browser tests were not retried or bypassed. After the
+Shop rebase and release guard, the final runnable suite passes 1,652/1,652.
+Independent preview/gallery/ownership/framing review passes 55/55 and release
+selector suites pass 66/66. Lint (warnings only), TypeScript, real local HTTP
+smoke, production build/postbuild, Worker dry-run packaging and diff checks pass.
+No paid generation, billing change, security setting or Oracle mutation is included.
+The earlier prototype's stale release marker is not reused. The new ten-file
+release envelope requires exact parent 62f9fa92 and a single-parent commit,
+preserves remote dashboard variables and skips all five financial setup/check
+steps. Missing/changed marker, extra paths, symlinks or a different parent fail
+before credential setup. Backend, account, workflow and deployment configuration
+remain byte-identical to that parent. Hosted exact-head verification is required
+before the separately authorized publication.
 
 ## LOCAL REVIEW — generation evidence, failed usage and model selection (5 October 2026)
 

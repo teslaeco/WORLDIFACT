@@ -31,6 +31,9 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
   currentOwner.current = owner
   const scope = useRef<CloudScope | null>(null)
   const previewUrl = useRef('')
+  const previewRegion = useRef<HTMLDivElement>(null)
+  const previewTrigger = useRef<HTMLButtonElement | null>(null)
+  const returnPreviewFocus = useRef(false)
   const operation = useRef<{ owner: string; controller: AbortController } | null>(null)
   const refreshVersion = useRef({ value: 0 })
   const [entries, setEntries] = useState<StudioArchiveEntry[]>([])
@@ -168,9 +171,31 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
   const error = [localError, cloudVisible ? cloud.error : '', activity.owner === owner ? activity.error : '',
     owner && target?.owner === owner && target.id === requestedModelId ? target.error : ''].filter(Boolean).join(' ')
 
-  async function open(item: Row, download: boolean) {
+  const selectedPreviewUrl = currentSelection?.url
+  useEffect(() => {
+    if (selectedPreviewUrl) {
+      previewRegion.current?.focus({ preventScroll: true })
+      previewRegion.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+    } else if (returnPreviewFocus.current) {
+      returnPreviewFocus.current = false
+      previewTrigger.current?.focus()
+    }
+  }, [selectedPreviewUrl])
+
+  function closePreview() {
+    operation.current?.controller.abort()
+    operation.current = null
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
+    previewUrl.current = ''
+    returnPreviewFocus.current = true
+    setSelected(null)
+    setActivity({ owner, busyId: '', error: '' })
+  }
+
+  async function open(item: Row, download: boolean, trigger?: HTMLButtonElement) {
     const activeOwner = owner
     if (currentOwner.current !== activeOwner || (item.origin === 'account' && !activeOwner)) return
+    if (!download) previewTrigger.current = trigger ?? null
     operation.current?.controller.abort()
     const active = { owner: activeOwner, controller: new AbortController() }
     operation.current = active
@@ -242,11 +267,15 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
       </div>
     </div>
 
-    {currentSelection && <div className="studio-gallery-preview">
+    {currentSelection && <div className="studio-gallery-preview" ref={previewRegion} tabIndex={-1} role="region" aria-label="Selected model preview">
       <div className="studio-gallery-preview-copy">
         <strong>{currentSelection.row.model.prompt}</strong>
         <small>Recorded worker generation time: {formatStudioGenerationDuration(currentSelection.row.origin === 'account' ? currentSelection.row.model.generationTiming : undefined)} · Excludes upload and queue time.</small>
         <small>{(currentSelection.byteLength / 1048576).toFixed(1)} MB · GLB · UNREVIEWED · {currentSelection.row.origin === 'account' ? 'Account model' : 'Device copy'}</small>
+      </div>
+      <div className="studio-gallery-actions">
+        <button type="button" disabled={!!busyId} onClick={() => void open(currentSelection.row, true)}>Download original GLB</button>
+        <button type="button" onClick={closePreview}>Close preview</button>
       </div>
       <OracleModelPreview url={currentSelection.url} label={currentSelection.row.model.prompt} customerMode />
     </div>}
@@ -276,7 +305,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
           <small>Stored only in this browser; account ownership is unverified.</small>
         </>}
         <div className="studio-gallery-actions">
-          <button type="button" disabled={!!busyId} onClick={() => void open(item, false)}>{busyId === item.key ? 'Opening…' : 'Preview 3D'}</button>
+          <button type="button" disabled={!!busyId} onClick={event => void open(item, false, event.currentTarget)}>{busyId === item.key ? 'Opening…' : 'Preview 3D'}</button>
           <button type="button" disabled={!!busyId} onClick={() => void open(item, true)}>Download GLB</button>
         </div>
       </article>)}

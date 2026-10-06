@@ -323,7 +323,32 @@ export const SHOP_TEST_FUNDING_REVIEWED_PATHS = Object.freeze([
   'tests/test-account-contract.test.ts',
   'tests/shop-test-funding-release.test.mjs',
 ].sort())
+export const MODEL_PREVIEW_BASE_COMMIT = '62f9fa9277c7923ed40fd11decfd4630f1043cae'
+export const MODEL_PREVIEW_MARKER_PATH = 'ops/MODEL_PREVIEW_RELEASE_20261006.json'
+export const MODEL_PREVIEW_MARKER_CONTENT = JSON.stringify({
+  release: 'bounded-original-model-preview-20261006',
+  baseCommit: MODEL_PREVIEW_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+}, null, 2) + '\n'
+export const MODEL_PREVIEW_REVIEWED_PATHS = Object.freeze([
+  "docs/CONTEST_STATUS.md",
+  "ops/MODEL_PREVIEW_RELEASE_20261006.json",
+  "scripts/select-pipeline-only-release.mjs",
+  "src/components/OracleModelPreview.tsx",
+  "src/components/StudioGallery.tsx",
+  "src/lib/softwareModelPreview.ts",
+  "tests/model-preview-release.test.mjs",
+  "tests/oracle-model-preview-lifecycle.test.mjs",
+  "tests/software-model-preview.test.ts",
+  "tests/studio-library-gallery.test.mjs"
+].sort())
 const releaseIntroductions = new Set([
+  'src/lib/softwareModelPreview.ts',
+  'tests/model-preview-release.test.mjs',
+  'tests/oracle-model-preview-lifecycle.test.mjs',
+  'tests/software-model-preview.test.ts',
+
   'src/lib/shopTestFunding.ts',
   'src/lib/testAccountContract.ts',
   'tests/shop-test-funding.test.ts',
@@ -385,6 +410,7 @@ const releaseIntroductions = new Set([
   'tests/studio-project-budget.test.ts',
 ])
 const scopes = [
+  { base: MODEL_PREVIEW_BASE_COMMIT, marker: MODEL_PREVIEW_MARKER_PATH, content: MODEL_PREVIEW_MARKER_CONTENT, paths: MODEL_PREVIEW_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: SHOP_TEST_FUNDING_BASE_COMMIT, marker: SHOP_TEST_FUNDING_MARKER_PATH, content: SHOP_TEST_FUNDING_MARKER_CONTENT, paths: SHOP_TEST_FUNDING_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: BASE_COMMIT, marker: MARKER_PATH, content: MARKER_CONTENT, paths: REVIEWED_PATHS },
   { base: FUNDING_BASE_COMMIT, marker: FUNDING_MARKER_PATH, content: FUNDING_MARKER_CONTENT, paths: FUNDING_REVIEWED_PATHS },
@@ -446,7 +472,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

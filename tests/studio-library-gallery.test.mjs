@@ -39,7 +39,7 @@ function local(jobId = otherId, prompt = 'Older MCC saved locally', source) {
 // archive reads. HTTP, React scheduling and object URLs are deterministic adapters;
 // this does not claim browser, WebGL or physical mobile verification.
 async function harness({ locals = [], owner = 'owner-a', loading = false, requestedModelId = '', compact = false, io, localBlob } = {}) {
-  const storage = archiveStorage(), slots = [], effects = [], calls = [], localReads = [], urls = new Map(), revoked = [], downloads = [], timers = []
+  const storage = archiveStorage(), slots = [], effects = [], calls = [], localReads = [], urls = new Map(), revoked = [], downloads = [], timers = [], focusEvents = []
   const archived = locals.map(entry => ({ ...entry }))
   for (const entry of archived) { storage.stores.get('metadata').set(entry.id, entry); storage.stores.get('models').set(entry.id, fixtureGLB(entry.prompt)) }
   const originalFiles = new Map(storage.stores.get('models'))
@@ -86,15 +86,21 @@ async function harness({ locals = [], owner = 'owner-a', loading = false, reques
   const source = await readFile(sourceUrl, 'utf8'), code = ts.transpileModule(source, { fileName: sourceUrl.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, { ...globals, module, exports: module.exports, require(key) { return modules[key] || (key.endsWith('.css') ? {} : require(key)) } })
   const Component = module.exports.default
-  const render = () => { dirty = false; cursor = 0; tree = Component({ requestedModelId, compact }) }
+  const render = () => {
+    dirty = false; cursor = 0; tree = Component({ requestedModelId, compact })
+    for (const node of nodes(tree)) if (node.props.ref) node.props.ref.current = {
+      focus(options) { focusEvents.push({ target: 'preview', action: 'focus', options }) },
+      scrollIntoView(options) { focusEvents.push({ target: 'preview', action: 'scroll', options }) },
+    }
+  }
   const settle = async () => { for (let i = 0; i < 16; i++) { if (dirty) render(); while (effects.length) effects.shift()(); await tick() } }
   const articles = () => nodes(tree).filter(node => node.type === 'article')
   const button = (label, article) => { const found = nodes(article || tree).find(node => node.type === 'button' && text(node) === label); assert.ok(found, `Missing ${label}`); return found }
   await settle()
-  return { calls, localReads, urls, revoked, downloads, localState, failedReceipt, storage, originalFiles, settle, text: () => text(tree), articles,
+  return { calls, localReads, urls, revoked, downloads, focusEvents, localState, failedReceipt, storage, originalFiles, settle, text: () => text(tree), articles,
     sessionRefreshes: () => sessionRefreshes,
     preview: () => nodes(tree).find(node => node.type === preview),
-    button, click(label, article) { button(label, article).props.onClick(); return settle() },
+    button, click(label, article) { button(label, article).props.onClick({ currentTarget: { focus() { focusEvents.push({ target: label, action: 'focus' }) } } }); return settle() },
     async account(nextOwner, nextLoading = false) { owner = nextOwner; loading = nextLoading; dirty = true; render(); const beforeEffects = text(tree), hadPreview = !!nodes(tree).find(node => node.type === preview); await settle(); return { beforeEffects, hadPreview } },
     async target(value) { requestedModelId = value; dirty = true; await settle() },
     async event() { globals.window.dispatchEvent(new CustomEvent(archive.STUDIO_ARCHIVE_EVENT, { detail: { id: 'fixture' } })); await settle() },
@@ -470,5 +476,49 @@ test('an expired original artifact receipt still requires a successful owned det
     assert.equal(h.downloads.length, 0)
     assert.equal(h.preview(), undefined)
     assert.ok(h.calls.every(call => call.method === 'GET'))
+  } finally { h.close() }
+})
+
+
+test('opened preview receives focus, keeps original download access and closes without modifying source files', async () => {
+  const h = await harness()
+  try {
+    await h.click('Preview 3D', h.articles()[0])
+    const firstUrl = h.preview().props.url
+    assert.deepEqual(h.focusEvents.map(event => event.action), ['focus', 'scroll'])
+    assert.equal(h.focusEvents[0].options.preventScroll, true)
+    assert.equal(h.focusEvents[1].options.behavior, 'instant')
+    await h.click('Download original GLB')
+    assert.equal(h.downloads.length, 1)
+    assert.equal(h.preview().props.url, firstUrl)
+    assert.deepEqual(await h.urls.get(h.downloads[0].url).arrayBuffer(), await fixtureGLB().arrayBuffer())
+    await h.click('Close preview')
+    assert.equal(h.preview(), undefined)
+    assert.ok(h.revoked.includes(firstUrl))
+    assert.equal(h.focusEvents.at(-1).target, 'Preview 3D')
+    assert.equal(h.articles().length, 1)
+    await h.click('Preview 3D', h.articles()[0])
+    assert.notEqual(h.preview().props.url, firstUrl)
+    assert.equal(h.focusEvents.at(-1).action, 'scroll')
+    assert.ok(h.calls.every(call => call.method === 'GET'))
+  } finally { h.close() }
+})
+
+test('closing a selected preview cancels delayed downloads and prevents a late save', async () => {
+  const pending = deferred(); let downloading = false
+  const h = await harness({ io: path => {
+    if (path === '/api/studio/library') return page([model()])
+    if (path === `/api/studio/library/${id}`) return Response.json({ accountId: 'owner-a', model: model() })
+    return downloading ? pending.promise : new Response(fixtureGLB())
+  } })
+  try {
+    await h.click('Preview 3D', h.articles()[0]); downloading = true
+    await h.click('Download original GLB')
+    const request = artifacts(h).at(-1)
+    await h.click('Close preview')
+    assert.equal(request.signal.aborted, true)
+    pending.resolve(new Response(fixtureGLB())); await h.settle()
+    assert.equal(h.preview(), undefined); assert.equal(h.downloads.length, 0)
+    assert.equal(h.urls.size, 0); assert.equal(h.button('Preview 3D', h.articles()[0]).props.disabled, false)
   } finally { h.close() }
 })
