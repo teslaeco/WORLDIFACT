@@ -21,7 +21,8 @@ function fixture() {
   }
   const ledgerRequests: { account: string; method: string; path: string }[] = []
   const lists: { account: string; prefix: string; startAfter?: string; limit: number }[] = []
-  const reads: string[] = [], external: string[] = []
+  const reads: string[] = [], external: string[] = [], qualityReads: string[] = []
+  let qualityResponse = () => Response.json({}, { status: 404 })
   let writes = 0, transactions = 0, artifactStatus = 200
   const objects = new Map<string, AccountEntitlements>()
   for (const [account, values] of rows) {
@@ -62,8 +63,15 @@ function fixture() {
       const account = token === 'Bearer alice-token' ? alice : token === 'Bearer bob-token' ? bob : null
       return Response.json(account ? { id: account, email: `${account === alice ? 'alice' : 'bob'}@example.test` } : {}, { status: account ? 200 : 401 })
     }
-    external.push(`${init?.method ?? 'GET'} ${url.pathname}`)
     assert.equal(init?.method ?? 'GET', 'GET')
+    if (url.pathname.endsWith('/quality')) {
+      qualityReads.push(url.pathname)
+      assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer test-private-oracle')
+      assert.equal(init?.redirect, 'manual')
+      assert.ok(init?.signal)
+      return qualityResponse()
+    }
+    external.push(`${init?.method ?? 'GET'} ${url.pathname}`)
     assert.match(url.pathname, /^\/v1\/jobs\/[a-f0-9-]+\/model$/)
     if (artifactStatus !== 200) return Response.json({ error: 'Missing artifact' }, { status: artifactStatus })
     const bytes = detailedGLBFixture()
@@ -76,7 +84,7 @@ function fixture() {
       ...(options.ticket ? { 'X-WORLDIFACT-Job': options.ticket } : {}), ...(options.body ? { 'Content-Type': 'application/json' } : {}),
     }, ...(options.body ? { body: JSON.stringify(options.body) } : {}) }), env, fetcher)
   }
-  return { env, rows, ledgerRequests, lists, reads, external, call,
+  return { env, rows, ledgerRequests, lists, reads, external, qualityReads, quality: (response: () => Response) => { qualityResponse = response }, call,
     model: async (id: string) => (await (await call(`/api/studio/library/${id}`)).json() as { model: StudioLibraryModel }).model,
     page: async (cursor?: string) => await (await call(`/api/studio/library${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)).json() as StudioLibraryPage,
     artifactStatus: (status: number) => { artifactStatus = status },
@@ -130,6 +138,7 @@ test('current completed model is discovered from all 58 account rows after the l
   assert.ok(!f.reads.includes('current-studio-job:v1'))
   assert.deepEqual([...values], before)
   assert.equal(f.external.length, 0, 'Opening metadata must never read model bytes, health or provider status')
+  assert.equal(f.qualityReads.length, 0, 'Library listing must never fan out to Oracle quality metadata')
   assert.doesNotMatch(JSON.stringify(page), /providerBudget|balance|subscription|supportApproval|fingerprint|trycloudflare|apiToken/)
   f.assertReadOnly()
 })
@@ -313,5 +322,60 @@ test('metadata pagination and receipt refresh use the existing account read limi
   assert.deepEqual([...counts.keys()], [`studio-library:${alice}`])
   assert.equal((await f.call(undefined, { user: 'bob' })).status, 200, 'Another account has an independent bounded read allowance')
   assert.equal(f.external.length, 0)
+  f.assertReadOnly()
+})
+
+test('selected owned library detail exposes only recorded worker duration and the list remains Oracle-free', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  const f = fixture(), id = idFor(1), values = f.rows.get(alice)!
+  values.set(`job:${id}`, completed())
+  const before = structuredClone([...values])
+  f.quality(() => Response.json({ revision: 6, state: 'succeeded', timing: { total_seconds: 343.27, ai_seconds: 300, private: 'PRIVATE_REPORT' }, agent: { summary: 'PRIVATE_REPORT' } }))
+  const page = await f.page()
+  assert.equal(page.models[0].generationTiming, undefined)
+  assert.equal(f.qualityReads.length, 0)
+  assert.equal((await f.call(`/api/studio/library/${id}`, { user: 'bob' })).status, 404)
+  assert.equal((await f.call(`/api/studio/library/${id}`, { user: null })).status, 401)
+  assert.equal(f.qualityReads.length, 0, 'Ownership is verified before optional provider metadata')
+  const model = await f.model(id)
+  assert.deepEqual(model.generationTiming, { source: 'oracle-worker', durationSeconds: 343.27 })
+  assert.deepEqual(f.qualityReads, [`/v1/jobs/${id}/quality`])
+  assert.doesNotMatch(JSON.stringify(model), /PRIVATE_REPORT|ai_seconds|agent|total_seconds/)
+  assert.equal(model.createdAt, page.models[0].createdAt)
+  assert.equal(model.completedAt, page.models[0].completedAt)
+  assert.equal(model.downloadAllowed, true)
+  assert.deepEqual([...values], before)
+  f.assertReadOnly()
+})
+
+test('missing, malformed, oversized and unavailable timing never hide an owned library result or change its permissions', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  const f = fixture(), id = idFor(1), values = f.rows.get(alice)!
+  values.set(`job:${id}`, completed())
+  const reports: unknown[] = [null, [], {}, { revision: 6, state: 'succeeded' },
+    ...[null, true, '343', -1, 86_401, NaN, Infinity, {}, []].map(total_seconds => ({ revision: 6, state: 'succeeded', timing: { total_seconds } })),
+    { revision: 5, state: 'succeeded', timing: { total_seconds: 30 } },
+    { revision: 6, state: ['succeeded'], timing: { total_seconds: 30 } },
+    { revision: 6, state: 'building', timing: { total_seconds: 30 } },
+    { revision: 6, state: 'succeeded', timing: [] }]
+  const replies = [...reports.map(report => () => Response.json(report)),
+    () => Response.json({}, { status: 503 }),
+    () => { throw new TypeError('PRIVATE_TRANSPORT') },
+    () => new Response('broken-json', { headers: { 'Content-Type': 'application/json' } }),
+    () => new Response('{}', { headers: { 'Content-Type': 'text/html' } }),
+    () => Response.json({ private: 'x'.repeat(262_145) }),
+    () => new Response('{}', { headers: { 'Content-Type': 'application/json', 'Content-Length': '262145' } })]
+  const before = structuredClone([...values])
+  for (const reply of replies) {
+    f.quality(reply)
+    const calls = f.qualityReads.length, model = await f.model(id)
+    assert.equal(model.id, id)
+    assert.equal(model.generationTiming, undefined)
+    assert.equal(model.downloadAllowed, true)
+    assert.equal(f.qualityReads.length, calls + 1, 'No automatic metadata retry')
+  }
+  f.quality(() => Response.json({ revision: 6, state: 'succeeded', timing: { total_seconds: 0 } }))
+  assert.equal((await f.model(id)).generationTiming?.durationSeconds, 0, 'A later explicit read can obtain a formerly missing record')
+  assert.deepEqual([...values], before)
   f.assertReadOnly()
 })

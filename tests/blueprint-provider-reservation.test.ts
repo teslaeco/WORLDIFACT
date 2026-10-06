@@ -34,7 +34,7 @@ async function fixture() {
   let beforeCount: (() => Promise<void>) | undefined
   let afterAccount: ((path: string, response: Response) => Promise<Response>) | undefined
   const env: Env = {
-    OPENAI_API_KEY: 'fixture-only-no-real-provider', OPENAI_MODEL: 'gpt-6-astra', OPENAI_FAST_MODEL: 'gpt-6-sol',
+    OPENAI_API_KEY: 'fixture-only-no-real-provider', OPENAI_MODEL: 'gpt-6-astra', OPENAI_FAST_MODEL: 'gpt-6.1-sol',
     ENABLE_PAID_GENERATION: 'true', ENABLE_ASTRA_PLANS: 'true', PUBLIC_PILOT: 'true', GENERATION_REQUEST_LIMIT: 'unlimited',
     ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', GENERATION_LIMITER: { async limit() { return { success: true } } },
     GENERATION_BUDGET: { idFromName: name => name, get: () => ({ async fetch() {
@@ -71,7 +71,7 @@ async function fixture() {
     revision: 1, plan: 'pro', grantId: 'in_blueprint_funding' })
   const call = (model: BlueprintModel = 'sol', seed: string = crypto.randomUUID()) => handle(new Request(origin + '/api/blueprint', {
     method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: '__Host-worldifact-access=fixture-token', 'X-WORLDIFACT-Request': seed },
-    body: JSON.stringify({ worldId: 'ai-game-lab', mode: 'live', model, prompt: 'A silver research tower' }),
+    body: JSON.stringify({ worldId: 'ai-game-lab', mode: 'live', model, providerModel: MODEL_CATALOG[model].model, prompt: 'A silver research tower' }),
   }), env, fetcher)
   const recover = (seed: string) => handle(new Request(origin + '/api/blueprint/requests/' + seed, {
     headers: { Cookie: '__Host-worldifact-access=fixture-token' },
@@ -152,6 +152,7 @@ test('a new Worker talking to a legacy account object never dispatches without a
       // conservative reservation. Exercise it with the real unversioned path.
       const input = await request.json() as Record<string, unknown>
       delete input.blueprintDispatch
+      delete input.providerModel
       return namespace.get(name).fetch(new Request(request.url, { method: request.method, headers: request.headers, body: JSON.stringify(input) }))
     }
     return namespace.get(name).fetch(request)
@@ -210,4 +211,17 @@ test('successful Blueprint dispatch retains its funding and replays the saved re
   assert.deepEqual(f.counts(), { countCalls: 1, generationCalls: 1, dispatchClaims: 1 })
   const job = f.ledger.get('job:' + await blueprintRequestId(seed)) as { blueprintDispatch?: string }
   assert.equal(job.blueprintDispatch, 'claimed-v1')
+})
+
+test('an account writer that does not acknowledge the exact model never reaches token counting or paid dispatch', async () => {
+  const f = await fixture(), before = f.funding()
+  f.afterAccount(async (path, response) => {
+    if (path !== '/reserve' || !response.ok) return response
+    const body = await response.json() as Record<string, unknown>
+    delete body.providerModel
+    return Response.json(body)
+  })
+  assert.equal((await f.call()).status, 503)
+  assert.equal(f.funding(), before); assert.equal(await f.credits(), 4500)
+  assert.deepEqual(f.counts(), { countCalls: 0, generationCalls: 0, dispatchClaims: 0 })
 })

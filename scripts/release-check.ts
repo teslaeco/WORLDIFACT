@@ -38,7 +38,7 @@ export function readDeployment(contents: string): Deployment {
 
 export function reviewedLiveHealth(health: Record<string, unknown>) {
   return health.mode === "READY" && health.generationReady === true &&
-    ["gpt-6-sol", "gpt-6-astra"].includes(String(health.model));
+    ["gpt-6.1-sol", "gpt-6-astra"].includes(String(health.model));
 }
 
 async function assetFiles(dist: string, relative = "assets"): Promise<string[]> {
@@ -116,7 +116,7 @@ export async function checkPublishedRelease(deployment: Deployment,
   const demoHealth = health.mode === "DEMO" && health.generationReady === false && health.model === null;
   const liveHealth = reviewedLiveHealth(health);
   requireCheck(demoHealth || liveHealth,
-    "Release health must be reviewed DEMO or authorized READY gpt-6-sol/gpt-6-astra.");
+    "Release health must be reviewed DEMO or authorized READY gpt-6.1-sol/gpt-6-astra.");
 
   const expectedHtml = await readFile(join(dist, "index.html"));
   requireCheck(/id=["']root["']/.test(expectedHtml.toString()), "Built app entry point is missing.");

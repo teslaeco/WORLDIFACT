@@ -7,7 +7,7 @@ const ACCESS = 'p0-preview-access-code-with-more-than-32-characters'
 const liveEnv = {
   OPENAI_API_KEY: 'test-key-not-real',
   OPENAI_MODEL: 'gpt-6-astra',
-  OPENAI_FAST_MODEL: 'gpt-6-sol',
+  OPENAI_FAST_MODEL: 'gpt-6.1-sol',
   ENABLE_PAID_GENERATION: 'true',
   GENERATION_ACCESS_TOKEN: ACCESS,
   GENERATION_REQUEST_LIMIT: '1',
@@ -25,7 +25,7 @@ const combinedProvider = (blueprint = demoBlueprint('moon workshop')) => {
   return (async (url: unknown, _init: RequestInit | undefined) => String(url).endsWith('/v1/responses/input_tokens')
     ? Response.json({ object: 'response.input_tokens', input_tokens: 1000 })
     : new Response(JSON.stringify({
-      status: 'completed', model: 'gpt-6-sol', id: 'resp_p0_stub',
+      status: 'completed', model: 'gpt-6.1-sol', id: 'resp_p0_stub',
       usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 },
       output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint, assetSpec }) }] }],
     }))) as typeof fetch
@@ -53,7 +53,7 @@ test('simulated LIVE Sol FAST result returns validated blueprint and AssetSpec',
     if (String(url).endsWith('/v1/responses/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 1000 })
     sent = JSON.parse(String(init?.body))
     return new Response(JSON.stringify({
-      status: 'completed', model: 'gpt-6-sol', id: 'resp_p0_stub',
+      status: 'completed', model: 'gpt-6.1-sol', id: 'resp_p0_stub',
       usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 },
       output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint, assetSpec }) }] }],
     }))
@@ -61,14 +61,14 @@ test('simulated LIVE Sol FAST result returns validated blueprint and AssetSpec',
   const response = await handle(new Request('https://worldifact.test/api/blueprint', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Access': ACCESS },
-    body: JSON.stringify({ prompt: 'moon workshop', mode: 'live' }),
+    body: JSON.stringify({ prompt: 'moon workshop', mode: 'live', providerModel: 'gpt-6.1-sol' }),
   }), liveEnv, provider)
   assert.equal(response.status, 200)
   const result = validateGenerationResult(await response.json())
   assert.equal(result.mode, 'LIVE')
   assert.equal(result.provenance, 'GENERATED')
   assert.equal(result.assetSpec?.make.validationStatus, 'validation-required')
-  assert.equal(sent.model, 'gpt-6-sol')
+  assert.equal(sent.model, 'gpt-6.1-sol')
   assert.deepEqual(sent.text.format.schema.required, ['blueprint', 'assetSpec'])
 })
 
@@ -95,7 +95,7 @@ test('public pilot removes login/access-code friction but keeps limiter and glob
   assert.equal(health.publicPilot, true)
   const response = await handle(new Request('https://worldifact.test/api/blueprint', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: 'public pilot rover', mode: 'live' }),
+    body: JSON.stringify({ prompt: 'public pilot rover', mode: 'live', providerModel: 'gpt-6.1-sol' }),
   }), env, combinedProvider())
   assert.equal(response.status, 200)
   assert.equal(limiterCalls, 1)

@@ -11,7 +11,9 @@ import { astraSupplementalGrant, matchesAstraSupplementalClaim, ASTRA_SUPPLEMENT
 import { astraRepairedMccGrant, matchesAstraRepairedMccClaim, ASTRA_REPAIRED_MCC_KEY, ASTRA_REPAIRED_MCC_NAMESPACE, ASTRA_REPAIRED_MCC_CENTS, type AstraRepairedMccGrant, type AstraRepairedMccClaim } from './astraRepairedMccGrant.ts'
 import { astraProjectBudget, matchesAstraProjectBudgetRecord, matchesAstraProjectScope, isAstraProjectBudgetRecord, persistedAstraProjectBudget, ASTRA_PROJECT_BUDGET_KEY, ASTRA_PROJECT_BUDGET_NAMESPACE, ASTRA_PROJECT_BUDGET_CENTS, type AstraProjectBudget, type AstraProjectBudgetRecord } from './astraProjectBudget.ts'
 import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from './studioBudgetReceipt.ts'
+import { boundBlueprintProviderModel } from './blueprintModelBinding.ts'
 import type { GenerationFundingSnapshot } from '../src/lib/generationFunding.ts'
+import { BLUEPRINT_RECONCILIATION_TERMS, blueprintRetainedCents, validateBlueprintTerminalUsage, type BlueprintTerminalUsage } from './blueprintTerminalUsage.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
@@ -33,10 +35,11 @@ export type GenerationKind = 'fast' | 'slow'
 type Usage = { id: string; at: number }
 type Subscription = { id: string; until: number; active: boolean; revision: number; plan?: PlanId; grantId?: string; terminal?: boolean }
 type StudioProviderReservation = { version: 1; source: 'ordinary'; amountCents: number; state: 'reserved' | 'released' }
-type BlueprintProviderReconciliation = { revision: 'blueprint-bounded-output-v1'; model: GenerationModel; resultSha256: string; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number }
+type FailedBlueprintProviderReconciliation = { revision: 'blueprint-failed-output-v1'; evidence: BlueprintTerminalUsage; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number }
+type BlueprintProviderReconciliation = { revision: 'blueprint-bounded-output-v1'; model: GenerationModel; resultSha256: string; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number } | FailedBlueprintProviderReconciliation
 type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalReservedCents: 175 | 200 | 400; retainedCents: number; releasedCents: number; at: number }
-type Job = { pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; repairedMccGrantId?: string; repairedMccClaim?: AstraRepairedMccClaim; projectBudget?: AstraProjectBudgetRecord; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
-export type Reservation = { pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
+type Job = { blueprintProviderModel?: string; pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; repairedMccGrantId?: string; repairedMccClaim?: AstraRepairedMccClaim; projectBudget?: AstraProjectBudgetRecord; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
+export type Reservation = { providerModel?: string; pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
 export type JobAccess = { fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
 export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean }
@@ -155,23 +158,16 @@ function validProviderReconciliation(value: unknown, id: string, job: Job): valu
     saved.retainedCents === Math.ceil(saved.receipt.maximumLiabilityMicroUsd / 10_000) && saved.releasedCents === saved.originalReservedCents - saved.retainedCents &&
     Number.isSafeInteger(saved.at) && saved.at > 0
 }
-// Immutable historical writer economics for blueprint-bounded-output-v1.
-// Future catalogue edits must never reinterpret an old markerless debit.
-const BLUEPRINT_RECONCILIATION_TERMS = Object.freeze({
-  luna: { model: 'gpt-6-luna', points: 15, capCents: 10, inputRate: 1, outputRate: 1 },
-  sol: { model: 'gpt-6-sol', points: 50, capCents: 35, inputRate: 6, outputRate: 17 },
-  astra: { model: 'gpt-6-astra', points: 250, capCents: 175, inputRate: 14, outputRate: 55 },
-})
 function completedOrdinaryBlueprint(job: Job): GenerationModel | null {
   const fields = ['fingerprint', 'channel', 'model', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'state',
-    'blueprintDispatch', 'blueprintDispatchUntil', 'blueprintProviderReservation', 'blueprintProviderReconciliation']
+    'blueprintDispatch', 'blueprintDispatchUntil', 'blueprintProviderReservation', 'blueprintProviderReconciliation', 'blueprintProviderModel']
   if (!job || typeof job !== 'object' || Array.isArray(job) || Object.keys(job).some(key => !fields.includes(key)) ||
       job.state !== 'completed' || job.kind !== 'credits' || !['fast', 'slow'].includes(job.profile) ||
       Object.hasOwn(job, 'channel') && job.channel !== 'blueprint' ||
       typeof job.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(job.fingerprint) || !Number.isSafeInteger(job.at) || job.at <= 0 ||
       Object.hasOwn(job, 'updatedAt') && (!Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at)) return null
   const model = job.model ?? (job.profile === 'fast' ? 'sol' : 'astra')
-  if (!Object.hasOwn(BLUEPRINT_RECONCILIATION_TERMS, model) || (model === 'astra') !== (job.profile === 'slow') || job.cost !== BLUEPRINT_RECONCILIATION_TERMS[model].points) return null
+  if (!boundBlueprintProviderModel(job) || !Object.hasOwn(BLUEPRINT_RECONCILIATION_TERMS, model) || (model === 'astra') !== (job.profile === 'slow') || job.cost !== BLUEPRINT_RECONCILIATION_TERMS[model].points) return null
   if (Object.hasOwn(job, 'blueprintDispatch')) {
     if (job.channel !== 'blueprint' || job.blueprintDispatch !== 'claimed-v1' || !Number.isSafeInteger(job.blueprintDispatchUntil) ||
         Number(job.blueprintDispatchUntil) <= job.at || Number(job.blueprintDispatchUntil) > job.at + BLUEPRINT_JOB_WINDOW_MS) return null
@@ -197,7 +193,7 @@ async function reconcileCompletedBlueprint(storage: EntitlementStorage, id: stri
   // It permits exactly one default-tier provider response, max4000 output,
   // without paid tools. A completed result is durable and cannot dispatch again.
   // A bare old Studio row or a failure label does not establish this proof.
-  if (result.mode !== 'LIVE' || result.requestId !== id || result.model !== BLUEPRINT_RECONCILIATION_TERMS[model].model ||
+  if (result.mode !== 'LIVE' || result.requestId !== id || result.model !== boundBlueprintProviderModel(job) ||
       result.delivery?.kind !== 'procedural-blueprint' || !usage || !Number.isSafeInteger(usage.inputTokens) ||
       !Number.isSafeInteger(usage.outputTokens) || !Number.isSafeInteger(usage.totalTokens) ||
       Number(usage.inputTokens) < 0 || Number(usage.inputTokens) > 32768 || Number(usage.outputTokens) < 0 || Number(usage.outputTokens) > 4000 ||
@@ -208,7 +204,7 @@ async function reconcileCompletedBlueprint(storage: EntitlementStorage, id: stri
   // Keep the ENTIRE 4000-token output ceiling and 2048 input framing margin;
   // no invoice, cache discount or zero-cost inference is needed for this bound.
   const terms = BLUEPRINT_RECONCILIATION_TERMS[model], originalReservedCents = terms.capCents
-  const retainedCents = Math.ceil(((Number(usage.inputTokens) + 2048) * terms.inputRate + 4000 * terms.outputRate) / 10_000)
+  const retainedCents = blueprintRetainedCents(model, Number(usage.inputTokens))
   if (retainedCents > originalReservedCents) return { reconciled: false, reason: 'UNVERIFIED_BLUEPRINT_LIABILITY' }
   const releasedCents = originalReservedCents - retainedCents, resultSha256 = await sha256Json(result)
   if (Object.hasOwn(job, 'blueprintProviderReconciliation')) {
@@ -225,6 +221,57 @@ async function reconcileCompletedBlueprint(storage: EntitlementStorage, id: stri
   await storage.put(PROVIDER_BUDGET, Number(remaining) + releasedCents)
   await storage.put(`job:${id}`, { ...job, blueprintProviderReconciliation: reconciliation })
   return { reconciled: true, repeated: false, retainedCents, releasedCents }
+}
+/** Read-only counterfactual for already reconciled historical completed output.
+ * It neither changes a v1 receipt nor authorizes any customer/provider credit. */
+export async function previewCompletedBlueprintOutputAdjustment(id: string, value: unknown, storedResult: unknown, now: number): Promise<number | null> {
+  if (!JOB_ID.test(id) || !Number.isSafeInteger(now) || !value || typeof value !== 'object' || Array.isArray(value)) return null
+  const job = value as Job, model = completedOrdinaryBlueprint(job)
+  if (!model || Object.hasOwn(job, 'blueprintProviderModel') || now < job.at || Object.hasOwn(job, 'updatedAt') && Number(job.updatedAt) > now) return null
+  const saved = job.blueprintProviderReconciliation
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved) || Object.keys(saved).length !== 7 || saved.revision !== 'blueprint-bounded-output-v1') return null
+  let result: GenerationResult
+  try { result = validateGenerationResult(storedResult) } catch { return null }
+  const terms = BLUEPRINT_RECONCILIATION_TERMS[model], evidence = result.evidence
+  const receivedAt = evidence ? Date.parse(evidence.receivedAt) : NaN
+  // Exact immutable historical model only. New model bindings or pricing must
+  // be reviewed separately and must never reinterpret an old completed debit.
+  if (result.mode !== 'LIVE' || result.requestId !== id || result.model !== terms.model || result.delivery?.kind !== 'procedural-blueprint' ||
+      !evidence || !Number.isSafeInteger(evidence.inputTokens) || !Number.isSafeInteger(evidence.outputTokens) || !Number.isSafeInteger(evidence.totalTokens) ||
+      Number(evidence.inputTokens) < 0 || Number(evidence.inputTokens) > 32768 || Number(evidence.outputTokens) < 0 || Number(evidence.outputTokens) > 4000 ||
+      evidence.totalTokens !== Number(evidence.inputTokens) + Number(evidence.outputTokens) ||
+      !Number.isSafeInteger(receivedAt) || receivedAt < job.at || receivedAt > now ||
+      Object.hasOwn(job, 'updatedAt') && receivedAt > Number(job.updatedAt) ||
+      await sha256Json(result.blueprint) !== evidence.blueprintSha256) return null
+  const oldRetained = blueprintRetainedCents(model, Number(evidence.inputTokens))
+  if (oldRetained > terms.capCents || saved.model !== model || saved.originalReservedCents !== terms.capCents || saved.retainedCents !== oldRetained ||
+      saved.releasedCents !== terms.capCents - oldRetained || saved.resultSha256 !== await sha256Json(result) ||
+      !Number.isSafeInteger(saved.at) || saved.at < receivedAt || saved.at < Number(job.updatedAt ?? job.at) || saved.at > now) return null
+  const outputBound = Math.ceil(((Number(evidence.inputTokens) + 2048) * terms.inputRate + Number(evidence.outputTokens) * terms.outputRate) / 10_000)
+  const potentialCents = oldRetained - outputBound
+  return Number.isSafeInteger(potentialCents) && potentialCents >= 0 ? potentialCents : null
+}
+function failedBlueprintLiability(job: Job, evidence: unknown, accountId: string | null, id: string, now: number) {
+  // Explicit current ordinary writer only. This is not a historical failure scan.
+  const model = completedOrdinaryBlueprint({ ...job, state: 'completed' })
+  if (!model || !['reserved', 'failed'].includes(job.state) || job.channel !== 'blueprint' ||
+      recordedOrdinaryReservation(job)?.state !== 'reserved' || !validateBlueprintTerminalUsage(evidence) ||
+      evidence.accountId !== accountId?.toLowerCase() || evidence.requestId !== id || evidence.fingerprint !== job.fingerprint ||
+      evidence.model !== boundBlueprintProviderModel(job) || evidence.reservedCents !== job.blueprintProviderReservation?.amountCents ||
+      evidence.dispatchDeadline !== job.blueprintDispatchUntil || evidence.dispatchedAt < job.at ||
+      !Number.isSafeInteger(now) || evidence.receivedAt > now) return null
+  const originalReservedCents = evidence.reservedCents, retainedCents = blueprintRetainedCents(model, evidence.inputTokens, evidence.outputTokens)
+  if (retainedCents > originalReservedCents) return null
+  return { originalReservedCents, retainedCents, releasedCents: originalReservedCents - retainedCents }
+}
+function validFailedBlueprintReconciliation(job: Job, accountId: string | null, id: string, now: number): boolean {
+  const saved = job.blueprintProviderReconciliation
+  if (job.state !== 'failed' || !saved || typeof saved !== 'object' || Array.isArray(saved) || Object.keys(saved).length !== 6 ||
+      saved.revision !== 'blueprint-failed-output-v1') return false
+  const liability = failedBlueprintLiability(job, saved.evidence, accountId, id, now)
+  return !!liability && saved.originalReservedCents === liability.originalReservedCents && saved.retainedCents === liability.retainedCents &&
+    saved.releasedCents === liability.releasedCents && Number.isSafeInteger(saved.at) && saved.at >= saved.evidence.receivedAt &&
+    saved.at <= now && saved.at === job.updatedAt
 }
 export class EntitlementError extends Error {
   status: number
@@ -307,7 +354,7 @@ const PROVIDER_BUDGET = 'provider-budget-cents:v1'
 const FUNDING_SCAN_LIMIT = 256
 const FUNDING_JOB_FIELDS = ['pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile', 'failureCode', 'supportApprovalId',
   'supplementalGrantId', 'repairedMccGrantId', 'repairedMccClaim', 'projectBudget', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'billingMode', 'state', 'studioDispatch', 'studioDispatchUntil',
-  'studioProviderReservation', 'studioProviderReconciliation', 'blueprintDispatch', 'blueprintDispatchUntil', 'blueprintProviderReservation', 'blueprintProviderReconciliation']
+  'studioProviderReservation', 'studioProviderReconciliation', 'blueprintDispatch', 'blueprintDispatchUntil', 'blueprintProviderReservation', 'blueprintProviderReconciliation', 'blueprintProviderModel']
 function fundingJob(value: unknown): value is Job {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const job = value as Job
@@ -316,6 +363,7 @@ function fundingJob(value: unknown): value is Job {
     Number.isSafeInteger(job.cost) && job.cost >= 0 && (!Object.hasOwn(job, 'updatedAt') || Number.isSafeInteger(job.updatedAt) && Number(job.updatedAt) >= job.at) &&
     (!Object.hasOwn(job, 'model') || typeof job.model === 'string' && ['luna', 'sol', 'astra'].includes(job.model)) &&
     (!Object.hasOwn(job, 'channel') || job.channel === 'studio' || job.channel === 'blueprint') &&
+    (!Object.hasOwn(job, 'blueprintProviderModel') || job.channel === 'blueprint' && !!boundBlueprintProviderModel(job)) &&
     (!Object.hasOwn(job, 'fingerprint') || typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint)) &&
     (!Object.hasOwn(job, 'prompt') || typeof job.prompt === 'string' && job.prompt.length <= 4000) &&
     (!Object.hasOwn(job, 'billingMode') || job.billingMode === 'hold-v1')
@@ -345,7 +393,7 @@ function recordedOrdinaryReservation(job: Job): StudioProviderReservation | null
   return marker
 }
 /** This projection can only read; it deliberately cannot call lazy initialization, settlement or provider services. */
-async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get' | 'list'>): Promise<GenerationFundingSnapshot> {
+async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get' | 'list'>, accountId: string | null, now: number): Promise<GenerationFundingSnapshot> {
   const [rawBalance, rawHeld, rawBudget, originalClaim, supplementalClaim] = await Promise.all([
     storage.get('balance'), storage.get(CUSTOMER_RESERVED_CREDITS), storage.get(PROVIDER_BUDGET),
     storage.get(ASTRA_SUPPORT_ONCE_KEY), storage.get(ASTRA_SUPPLEMENTAL_KEY),
@@ -367,12 +415,15 @@ async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get'
         recordedStudioReconciliations: { records: 0, releasedCents: 0, retainedLiabilityCents: 0 }, unknownAmountRecords: 0 } },
     supportGrantClaims: { originalRecordPresent: originalClaim !== undefined, supplementalRecordPresent: supplementalClaim !== undefined },
   }
+  const outputAdjustment = { scanLimit: 32 as const, checked: 0, candidates: 0, potentialCents: 0, unavailable: 0, partial: true }
+  Object.assign(snapshot.jobs, { blueprintOutputAdjustment: outputAdjustment })
   if (!storage.list) return snapshot
   const entries = await storage.list<unknown>({ prefix: 'job:', limit: FUNDING_SCAN_LIMIT })
   const jobs = snapshot.jobs
   if (!(entries instanceof Map)) { jobs.scanStatus = 'invalid'; return snapshot }
   jobs.partial = entries.size >= FUNDING_SCAN_LIMIT
   jobs.scanStatus = jobs.partial ? 'partial' : 'complete'
+  outputAdjustment.partial = jobs.partial
   for (const [key, value] of entries) {
     if (jobs.scanned === FUNDING_SCAN_LIMIT) break
     jobs.scanned++
@@ -385,10 +436,24 @@ async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get'
     jobs.routes[job.channel ?? 'legacyBlueprint']++
     const supportRecord = Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim') || Object.hasOwn(job, 'projectBudget')
     const marked = Object.hasOwn(job, 'studioProviderReconciliation') || Object.hasOwn(job, 'blueprintProviderReconciliation')
+    const failedBlueprintMarked = job.blueprintProviderReconciliation?.revision === 'blueprint-failed-output-v1' ||
+      job.channel === 'blueprint' && job.state === 'failed' && Object.hasOwn(job, 'blueprintProviderReconciliation')
+    const failedBlueprintVerified = failedBlueprintMarked && validFailedBlueprintReconciliation(job, accountId, id, now)
+    if (job.state === 'completed' && job.blueprintProviderReconciliation?.revision === 'blueprint-bounded-output-v1') {
+      if (outputAdjustment.checked === outputAdjustment.scanLimit) outputAdjustment.partial = true
+      else {
+        outputAdjustment.checked++
+        let potential: number | null = null
+        try { potential = await previewCompletedBlueprintOutputAdjustment(id, job, await storage.get(`blueprint-result:${id}`), now) } catch { /* Optional unreadable evidence stays unavailable. */ }
+        if (potential === null) outputAdjustment.unavailable++
+        else if (potential > 0) { outputAdjustment.candidates++; outputAdjustment.potentialCents += potential }
+      }
+    }
     const studioPending = id === id.toLowerCase() && providerBudgetPending(job)
     const blueprintPending = !Object.hasOwn(job, 'blueprintProviderReconciliation') && completedOrdinaryBlueprint(job) !== null
     if (supportRecord && !Object.hasOwn(job, 'projectBudget')) evidence.supportGrantRecords++
-    if (marked) evidence.markedReconciled++
+    if (marked && (!failedBlueprintMarked || failedBlueprintVerified)) evidence.markedReconciled++
+    if (failedBlueprintMarked && !failedBlueprintVerified) evidence.unknown++
     if (studioPending) evidence.ordinaryTerminalStudioPending++
     if (blueprintPending) evidence.ordinaryCompletedBlueprintPending++
     if (job.channel === 'studio' && job.studioDispatch === 'ready-v1' && !Object.hasOwn(job, 'studioProviderReservation') && !supportRecord) evidence.legacyReadyWithoutReservation++
@@ -401,6 +466,10 @@ async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get'
       amounts.recordedStudioReconciliations.records++
       amounts.recordedStudioReconciliations.releasedCents += saved.releasedCents
       amounts.recordedStudioReconciliations.retainedLiabilityCents += saved.retainedCents
+      knownAmount = true
+    } else if (failedBlueprintVerified) {
+      // Known verified evidence, already counted in markedReconciled. It is not
+      // a Studio receipt or an unresolved full reservation in this projection.
       knownAmount = true
     } else if (!marked) {
       const marker = recordedOrdinaryReservation(job)
@@ -558,7 +627,7 @@ export class AccountEntitlements {
       if (path === '/generation-funding') {
         if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
         if (new URL(request.url).search) return json({ error: 'Query parameters are not supported.' }, 400)
-        return json(await this.storage.transaction(storage => generationFundingSnapshot(storage)))
+        return json(await this.storage.transaction(storage => generationFundingSnapshot(storage, request.headers.get('X-WORLDIFACT-Verified-Account'), this.now())))
       }
       const support = () => astraSupportApproval(this.supportEnv.WORLDIFACT_ASTRA_SUPPORT_ONCE, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
       const supplemental = () => astraSupplementalGrant(this.supportEnv.WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
@@ -690,6 +759,9 @@ export class AccountEntitlements {
         return json(await this.storage.transaction(async storage => {
           const job = await storage.get<Job>(`job:${id}`)
           if (!job?.fingerprint) return { state: 'unknown', owned: false }
+          if (path === '/blueprint-status' && (Object.hasOwn(input, 'fingerprint') && input.fingerprint !== job.fingerprint ||
+              Object.hasOwn(input, 'expectedProviderModel') && input.expectedProviderModel !== boundBlueprintProviderModel(job)))
+            return { state: job.state, owned: true, conflict: true }
           // A stopped synchronous Worker cannot leave customer points reserved forever.
           // Completion and timeout reconciliation race in this same atomic transaction.
           if (job.state === 'reserved' && now - job.at > 10 * 60_000) {
@@ -697,7 +769,7 @@ export class AccountEntitlements {
             return { state: 'failed', refunded: true }
           }
           if (result && job.state === 'reserved') {
-            const expected = job.model === 'luna' ? 'gpt-6-luna' : job.profile === 'slow' ? 'gpt-6-astra' : 'gpt-6-sol'
+            const expected = boundBlueprintProviderModel(job)
             if (result.model !== expected) return { state: job.state, saved: false }
             await storage.put(`blueprint-result:${id}`, result)
             await settleReservedJob(storage, id, job, 'completed', now)
@@ -820,6 +892,9 @@ export class AccountEntitlements {
         const requestedModel = input.model ?? (profile === 'fast' ? 'sol' : 'astra')
         if (!['luna', 'sol', 'astra'].includes(String(requestedModel)) || (profile === 'slow') !== (requestedModel === 'astra')) return json({ error: 'Invalid model for generation route' }, 400)
         const selectedModel = requestedModel as GenerationModel
+        const providerModel = input.providerModel
+        if (Object.hasOwn(input, 'providerModel') && (channel !== 'blueprint' || !fencedBlueprint || !fingerprint || providerModel !== MODEL_ECONOMICS[selectedModel].model))
+          return json({ error: 'Invalid Blueprint provider model binding' }, 400)
         if (Object.hasOwn(input, 'pricing') && (!isStudioPricing(input.pricing) || channel !== 'studio' || selectedModel !== 'astra' || !fingerprint))
           return json({ error: 'Invalid Studio pricing terms' }, 400)
         const pricing = input.pricing as StudioPricing | undefined
@@ -945,7 +1020,7 @@ export class AccountEntitlements {
             }
           }
           const cloudHold = paid && channel === 'studio'
-          const job: Job = { ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(repairedMccClaim ? { repairedMccGrantId: repairedMccClaim.grantId, repairedMccClaim } : {}), ...(projectBudgetRecord ? { projectBudget: projectBudgetRecord } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), ...(blueprintProviderReservation ? { blueprintProviderReservation } : {}), ...(channel === 'blueprint' && fingerprint && fencedBlueprint ? { blueprintDispatch: 'ready-v1' as const } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
+          const job: Job = { ...(typeof providerModel === 'string' ? { blueprintProviderModel: providerModel } : {}), ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(repairedMccClaim ? { repairedMccGrantId: repairedMccClaim.grantId, repairedMccClaim } : {}), ...(projectBudgetRecord ? { projectBudget: projectBudgetRecord } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), ...(blueprintProviderReservation ? { blueprintProviderReservation } : {}), ...(channel === 'blueprint' && fingerprint && fencedBlueprint ? { blueprintDispatch: 'ready-v1' as const } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
@@ -961,7 +1036,7 @@ export class AccountEntitlements {
             if (!current || !matchesAstraProjectBudgetRecord(projectBudgetRecord, current, this.now(), id, fingerprint!))
               throw new Error('Project budget admission expired before account commit')
           }
-          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold, ...(job.pricing ? { pricing: job.pricing } : {}) }
+          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold, ...(job.blueprintProviderModel ? { providerModel: job.blueprintProviderModel } : {}), ...(job.pricing ? { pricing: job.pricing } : {}) }
         })
         return json(result, result.allowed ? 200 : 429)
       }
@@ -1037,6 +1112,7 @@ export class AccountEntitlements {
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
         const next = input.state as 'completed' | 'failed'
         if (input.failureCode !== undefined && (next !== 'failed' || !STUDIO_FAILURE_CODES.includes(input.failureCode as StudioFailureCode))) return json({ error: 'Invalid failure diagnostic' }, 400)
+        if (Object.hasOwn(input, 'blueprintTerminalUsage') && (next !== 'failed' || Object.hasOwn(input, 'failureCode'))) return json({ error: 'Invalid Blueprint usage settlement' }, 400)
         return json(await this.storage.transaction(async storage => {
           const job = await storage.get<Job>(`job:${id}`)
           if (!job) return { settled: false, reason: 'NOT_OWNED' }
@@ -1046,6 +1122,25 @@ export class AccountEntitlements {
           const dispatchUntil = studioDispatchUntil(job)
           if (job.state === 'reserved' && next === 'failed' && input.failureCode === 'ORACLE_JOB_MISSING' && dispatchUntil && this.now() < dispatchUntil + STUDIO_ORACLE_TIMEOUT_MS)
             return { settled: false }
+          if (job.state === 'reserved' && next === 'failed' && !Object.hasOwn(job, 'blueprintProviderReconciliation')) {
+            const settledAt = this.now(), evidence = input.blueprintTerminalUsage
+            const liability = failedBlueprintLiability(job, evidence, request.headers.get('X-WORLDIFACT-Verified-Account'), id, settledAt)
+            if (liability && validateBlueprintTerminalUsage(evidence)) {
+              // This optional read precedes all writes. Its failure leaves
+              // provider state untouched and must not cancel a points refund.
+              const remaining = await storage.get<number>(PROVIDER_BUDGET).catch(() => undefined)
+              if (Number.isSafeInteger(remaining) && Number.isSafeInteger(Number(remaining) + liability.releasedCents)) {
+                const marker: FailedBlueprintProviderReconciliation = { revision: 'blueprint-failed-output-v1', evidence, ...liability, at: settledAt }
+                // Refund points, persist proof and release only bounded unused
+                // ordinary capacity together, or roll all of them back.
+                const result = await settleReservedJob(storage, id, { ...job, blueprintProviderReconciliation: marker }, next, settledAt)
+                await storage.put(PROVIDER_BUDGET, Number(remaining) + liability.releasedCents)
+                return result
+              }
+              // An unusable provider ledger cannot cancel the existing points
+              // refund. Preserve its bytes and unknown liability; never reseed.
+            }
+          }
           // Terminal results are immutable. Transport uncertainty MUST NOT call /settle failed.
           return settleReservedJob(storage, id, job, next, now, input.failureCode as StudioFailureCode | undefined)
         }))
@@ -1339,8 +1434,8 @@ export async function entitlementStatus(env: EntitlementEnv, userId: string, ide
     repaired: { available: repaired.available, consumed: repaired.consumed, statusKnown: typeof repaired.available === 'boolean' },
     project: { available: project.available, committed: project.committed, statusKnown: typeof project.available === 'boolean' } })
 }
-export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing; blueprintDispatch?: 'fenced-v1'; repairedMccInputEligible?: boolean; projectBudgetInputEligible?: boolean }) {
-  const body = { id: jobId, profile, ...(metadata?.projectBudgetInputEligible === true ? { projectBudgetInputEligible: true } : {}), ...(metadata?.repairedMccInputEligible === true ? { repairedMccInputEligible: true } : {}), ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.blueprintDispatch ? { blueprintDispatch: metadata.blueprintDispatch } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
+export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { providerModel?: string; channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing; blueprintDispatch?: 'fenced-v1'; repairedMccInputEligible?: boolean; projectBudgetInputEligible?: boolean }) {
+  const body = { id: jobId, profile, ...(metadata?.providerModel !== undefined ? { providerModel: metadata.providerModel } : {}), ...(metadata?.projectBudgetInputEligible === true ? { projectBudgetInputEligible: true } : {}), ...(metadata?.repairedMccInputEligible === true ? { repairedMccInputEligible: true } : {}), ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.blueprintDispatch ? { blueprintDispatch: metadata.blueprintDispatch } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
   const identity = metadata?.supportIdentity
   const selected = metadata?.projectBudgetInputEligible === true && metadata.channel === 'studio' && profile === 'slow' &&
     (model === undefined || model === 'astra') && !!fingerprint && metadata.pricing === undefined
@@ -1394,6 +1489,7 @@ export async function reserveUserGeneration(env: EntitlementEnv, userId: string,
   return reservation
 }
 export const settleUserGeneration = (env: EntitlementEnv, userId: string, jobId: string, state: 'completed' | 'failed', failureCode?: StudioFailureCode) => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state, ...(failureCode ? { failureCode } : {}) })
+export const settleFailedBlueprint = (env: EntitlementEnv, userId: string, jobId: string, evidence: BlueprintTerminalUsage) => entitlementCall<{ settled: boolean; repeated?: boolean }>(env, userId, '/settle', { id: jobId, state: 'failed', blueprintTerminalUsage: evidence })
 export async function pendingUserStudioProvider(env: EntitlementEnv, userId: string, cursor: string | null = null): Promise<StudioProviderReconciliationPage> {
   const page = await entitlementCall<StudioProviderReconciliationPage>(env, userId, '/provider-reconciliation-pending', { cursor })
   if (!page || typeof page !== 'object' || Array.isArray(page) || Object.keys(page).length !== 4 ||

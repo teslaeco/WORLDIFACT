@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import OracleModelPreview from './OracleModelPreview'
 import { useAccount } from '../lib/account'
 import { listStudioModels, readStudioModel, STUDIO_ARCHIVE_EVENT, STUDIO_ARCHIVE_SIGNAL_KEY, type StudioArchiveEntry } from '../lib/studioArchive'
-import { getStudioLibraryModel, isStudioLibraryId, listStudioLibrary, readStudioLibraryModel, StudioLibraryAccountError } from '../lib/studioLibrary'
-import type { StudioLibraryModel } from '../lib/studioProtocol'
+import { getStudioLibraryModel, isStudioLibraryTemporaryError, isStudioLibraryId, listStudioLibrary, readStudioLibraryModel, StudioLibraryAccountError } from '../lib/studioLibrary'
+import { formatStudioGenerationDuration, type StudioLibraryModel } from '../lib/studioProtocol'
 import { inspectGLB } from '../lib/glb'
 import { previewFileName } from '../lib/studioView'
 import './StudioGallery.css'
@@ -80,7 +80,10 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
       const result = await listStudioLibrary(active.owner, replace ? null : active.cursor, AbortSignal.any([active.controller.signal, page.signal]))
       if (!valid()) return
       const models = new Map((replace ? [] : active.models).map(model => [model.id, model]))
-      for (const model of result.models) models.set(model.id, model)
+      for (const model of result.models) {
+        const timing = model.generationTiming ?? active.models.find(entry => entry.id === model.id)?.generationTiming
+        models.set(model.id, timing ? { ...model, generationTiming: timing } : model)
+      }
       active.models = [...models.values()]
       active.cursor = result.nextCursor
       setCloud({ owner: active.owner, models: active.models, cursor: active.cursor, loading: false, error: '' })
@@ -174,9 +177,34 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
     const valid = () => operation.current === active && currentOwner.current === activeOwner && !active.controller.signal.aborted
     setActivity({ owner: activeOwner, busyId: item.key, error: '' })
     try {
-      const blob = item.origin === 'account'
-        ? await readStudioLibraryModel(activeOwner, item.model, active.controller.signal)
-        : await readStudioModel(item.model.id)
+      let selectedItem = item
+      if (item.origin === 'account') {
+        // Detail is requested only for this explicitly opened model. Listing
+        // the library never fans out into historical worker status reads.
+        try {
+          const model = await getStudioLibraryModel(activeOwner, item.model.id, active.controller.signal)
+          if (!valid()) return
+          selectedItem = { ...item, model }
+          const account = scope.current
+          if (account?.owner === activeOwner) {
+            account.models = account.models.map(entry => entry.id === model.id ? model : entry)
+            setCloud(previous => previous.owner === activeOwner ? { ...previous, models: account.models } : previous)
+          }
+          setTarget(previous => previous?.owner === activeOwner && previous.id === model.id ? { ...previous, model } : previous)
+        } catch (e) {
+          if (!valid()) return
+          if (e instanceof StudioLibraryAccountError) {
+            invalidateAccount(activeOwner, e instanceof Error ? e.message : 'Sign in again to open your account models.')
+            return
+          }
+          if (!isStudioLibraryTemporaryError(e)) throw e
+          // Optional timing cannot disable a valid saved file. This receipt's
+          // ownership/expiry is still checked by the existing artifact GET.
+        }
+      }
+      const blob = selectedItem.origin === 'account'
+        ? await readStudioLibraryModel(activeOwner, selectedItem.model, active.controller.signal)
+        : await readStudioModel(selectedItem.model.id)
       if (!valid()) return
       const data = await blob.arrayBuffer()
       if (!valid()) return
@@ -186,7 +214,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
         const url = URL.createObjectURL(blob)
         previewUrl.current = url
-        setSelected({ owner: activeOwner, row: item, url, byteLength: blob.size })
+        setSelected({ owner: activeOwner, row: selectedItem, url, byteLength: blob.size })
       }
     } catch (e) {
       if (valid()) {
@@ -217,6 +245,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
     {currentSelection && <div className="studio-gallery-preview">
       <div className="studio-gallery-preview-copy">
         <strong>{currentSelection.row.model.prompt}</strong>
+        <small>Recorded worker generation time: {formatStudioGenerationDuration(currentSelection.row.origin === 'account' ? currentSelection.row.model.generationTiming : undefined)} · Excludes upload and queue time.</small>
         <small>{(currentSelection.byteLength / 1048576).toFixed(1)} MB · GLB · UNREVIEWED · {currentSelection.row.origin === 'account' ? 'Account model' : 'Device copy'}</small>
       </div>
       <OracleModelPreview url={currentSelection.url} label={currentSelection.row.model.prompt} customerMode />
@@ -238,10 +267,12 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         <small>{item.origin === 'account' ? 'Account model · Studio · UNREVIEWED' : item.model.source === 'blueprint' ? `Device copy · Procedural blueprint · ${item.model.generation.model} · UNREVIEWED` : 'Device copy · Studio · UNREVIEWED'}</small>
         {item.origin === 'account' ? <>
           {item.model.id === requestedModelId && <small>Requested model</small>}
-          <small>{new Date(item.model.completedAt).toLocaleString()} · GLB fetched when opened</small>
+          <small>Completed: {new Date(item.model.completedAt).toLocaleString()} · GLB fetched when opened</small>
+          <small>Recorded worker generation time: {formatStudioGenerationDuration(item.model.generationTiming)}{!item.model.generationTiming && ' · Open this model to check its recorded duration.'}</small>
           {!item.model.downloadAllowed && <small>This model is preserved on your account. Eligible account access is required to open its cloud file.</small>}
         </> : <>
           <small>{new Date(item.model.savedAt).toLocaleString()} · {(item.model.byteLength / 1048576).toFixed(1)} MB</small>
+          <small>Recorded worker generation time: {formatStudioGenerationDuration()}.</small>
           <small>Stored only in this browser; account ownership is unverified.</small>
         </>}
         <div className="studio-gallery-actions">

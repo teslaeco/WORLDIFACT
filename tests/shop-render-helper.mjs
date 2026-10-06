@@ -25,6 +25,22 @@ import * as modelCatalog from '../src/lib/modelCatalog.ts'
 import * as blueprintRequest from '../src/lib/blueprintRequest.ts'
 import * as blueprintClient from '../src/lib/blueprintClient.ts'
 import * as generationAccount from '../src/lib/generationAccount.ts'
+import * as progressView from '../src/lib/generationProgressView.ts'
+
+// Render the real progress markup; only decorative WebGL is replaced in Node.
+export async function loadProgressOrb() {
+  const url = new URL('../src/components/GenerationProgressOrb.tsx', import.meta.url)
+  const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
+  const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
+  runInNewContext(code, { module, exports: module.exports, require(id) {
+    if (id === '../lib/generationProgressView') return progressView
+    if (id === './GenerationSculpture') return { __esModule: true, default: () => React.createElement('img', { src: '/world-assets/polyhedron-led-poster.svg', alt: '', 'data-webgl-stub': true }) }
+    if (id.endsWith('.css')) return {}
+    if (['react', 'react/jsx-runtime'].includes(id)) return localRequire(id)
+    throw new Error(`Unexpected progress dependency: ${id}`)
+  } }, { filename: url.pathname, timeout: 1000 })
+  return module.exports
+}
 
 async function loadQuoteHook(react, account, globals) {
   const url = new URL('../src/lib/useGenerationQuote.ts', import.meta.url)
@@ -84,7 +100,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
   const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
   const account = adapters['../lib/account'] || { useAccount: () => ({ user: null, loading: true }) }
   const quoteHook = await loadQuoteHook(react, account, globals)
-  const shopOptions = await loadShopManufacturingOptions(react), costNotice = await loadCostNotice(quoteHook)
+  const shopOptions = await loadShopManufacturingOptions(react), costNotice = await loadCostNotice(quoteHook), progressOrb = await loadProgressOrb()
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, {
     crypto: globalThis.crypto, ...globals, module, exports: module.exports,
@@ -98,6 +114,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions
       if (id === '../components/GenerationCostNotice') return costNotice
+      if (id === '../components/GenerationProgressOrb') return progressOrb
       if (id === '../components/LiveSolPreview') return { __esModule: true, default: ({ prompt }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': 'live-fast' }, 'LIVE Sol blueprint-derived GLB') }
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
       if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt, mode }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': mode || 'demo' }, mode === 'live-fast' ? 'LIVE Sol procedural 3D draft' : 'DEMO local 3D preview') }

@@ -59,6 +59,12 @@ export default function GenerationFundingPage() {
       </dl>
       <p>Points and API funding are separate. The recorded pool is not an OpenAI invoice. These ordinary requirements do not evaluate a separate support allowance or authorize generation.</p>
       {snapshot.providerBudget.status === 'uninitialized' && <p>The provider record is absent. Its legacy calculation would be {money(snapshot.providerBudget.legacyDerivedFallbackCents)}; this read has not created it.</p>}
+      {snapshot.jobs.blueprintOutputAdjustment && <section aria-labelledby="blueprint-usage-review-title">
+        <h2 id="blueprint-usage-review-title">Stored blueprint usage review · read only</h2>
+        <p>{snapshot.jobs.blueprintOutputAdjustment.candidates} verified records may support an additional {money(snapshot.jobs.blueprintOutputAdjustment.potentialCents)} of unused API reserve. No funds have been returned by this read.</p>
+        <p>Checked {snapshot.jobs.blueprintOutputAdjustment.checked} older reconciliation records; {snapshot.jobs.blueprintOutputAdjustment.unavailable} could not be verified. {snapshot.jobs.blueprintOutputAdjustment.partial ? 'This assessment is incomplete.' : 'The bounded assessment completed.'} Unverifiable records remain unknown.</p>
+        <p>This compares stored final output usage with the original conservative reservation and historical model rates. It is not a provider invoice, an applied refund or approval to start another model.</p>
+      </section>}
       <h2>Reservation evidence</h2>
       <p>Scanned {snapshot.jobs.scanned} records; scan status: {snapshot.jobs.scanStatus}. {snapshot.jobs.partial ? 'The scan is incomplete.' : 'The bounded scan completed.'} Amounts below cover recognized evidence in this scan only. Unknown records are not assumed free, spent, or refundable.</p>
       <pre aria-label="Read-only reservation evidence">{JSON.stringify(snapshot.jobs, null, 2)}</pre>

@@ -10,7 +10,7 @@ const requestLabel='Request once · 15 points if credit-funded',recoverLabel='Re
 const storage=data=>({getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key)})
 async function verifiedResult(seed,model='luna') {
   const blueprint=demoBlueprint('Fixture solar rover')
-  return {mode:'LIVE',provenance:'GENERATED',blueprint,assetSpec:assetSpecForBlueprint(blueprint),requestId:await blueprintRequestId(seed),model:`gpt-6-${model}`,limitation:'Inert fixture; no live model was called.',evidence:{providerResponseId:'resp_editor_fixture',receivedAt:'2026-10-02T00:00:00.000Z',blueprintSha256:await blueprintFingerprint(blueprint),inputTokens:null,outputTokens:null,totalTokens:null},delivery:{kind:'procedural-blueprint',referenceCount:0,fallbackUsed:false}}
+  return {mode:'LIVE',provenance:'GENERATED',blueprint,assetSpec:assetSpecForBlueprint(blueprint),requestId:await blueprintRequestId(seed),model:model==='sol'?'gpt-6.1-sol':`gpt-6-${model}`,limitation:'Inert fixture; no live model was called.',evidence:{providerResponseId:'resp_editor_fixture',receivedAt:'2026-10-02T00:00:00.000Z',blueprintSha256:await blueprintFingerprint(blueprint),inputTokens:null,outputTokens:null,totalTokens:null},delivery:{kind:'procedural-blueprint',referenceCount:0,fallbackUsed:false}}
 }
 function transport({lose=false,pending,failed=false}={}) {
   const records=new Map(),calls=[]

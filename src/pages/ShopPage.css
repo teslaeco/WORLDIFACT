@@ -103,3 +103,31 @@
 .studio-budget-options legend { padding: 0 6px; font-weight: 700; }
 .native-shop-form .studio-budget-options label[for="studio-budget-consent"] { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; }
 .studio-budget-options input[type="checkbox"] { flex: none; }
+
+/* One primary flow: description/references, delivery, model, then cost and Generate. */
+.native-shop .native-shop-workspace { gap: clamp(24px, 4vw, 56px); }
+.native-shop-preview { background: #0b1918; border-color: #29443a; box-shadow: 0 20px 70px #0002; }
+.native-shop .native-shop-progress { padding: 4px 12px 18px; }
+.native-shop-progress > h2 { margin: 4px 0 12px; }
+.native-shop-form > h1 { letter-spacing: -.045em; margin-bottom: 14px; }
+.native-shop-form > p { color: #b8cbc1; }
+.native-shop-form form { gap: 12px; }
+.native-shop-form #studio-prompt { min-height: 150px; background: #0e201e; border-color: #496359; }
+.native-shop-form #studio-prompt-count { margin: -5px 0 0; color: #a6bfb2; font-size: .73rem; }
+.native-shop-form .shop-model-guidance { font-size: .79rem; line-height: 1.5; margin: 0 0 2px; color: #aac4b8; }
+.native-shop-form .native-shop-upload { border-style: dashed; background: #142822; }
+.native-shop-form .shop-model-picker { display: grid; gap: 10px; }
+.native-shop-form .generation-cost-notice { margin-top: 6px; }
+.native-shop-form details > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; font-size: .82rem; color: #bfd6ca; }
+.native-shop-form details > summary::before { content: '+'; font-size: 1.1rem; font-weight: 700; }
+.native-shop-form details[open] > summary::before { content: '−'; }
+.native-shop-form :is(.shop-detailed-choice,.shop-generation-help) { border-bottom: 1px solid #30483d; padding-bottom: 4px; }
+.native-shop-form .shop-saved-details, .native-shop-form .shop-availability-details { padding: 0 14px; background: #10231e; border-color: #375448; }
+.native-shop-form :is(.shop-saved-details,.shop-availability-details)[open] { padding-bottom: 14px; }
+.native-shop-form .native-shop-generate { background: #b9f3d6; border-color: #c8fbe2; color: #10271c; box-shadow: 0 6px 24px #91eab914; }
+.native-shop-form .native-shop-generate:disabled { opacity: .6; box-shadow: none; }
+@media (min-width: 761px) and (pointer: fine) { .native-shop-preview { position: sticky; top: 20px; } }
+@media (max-width: 760px), (max-width: 1000px) and (pointer: coarse) {
+ .native-shop .native-shop-workspace[data-working='true'] .native-shop-preview { order: 0; }
+ .native-shop .native-shop-workspace[data-working='true'] .native-shop-form { order: 1; }
+}

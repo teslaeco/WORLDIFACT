@@ -36,7 +36,7 @@ const request = (body: unknown, headers: Record<string, string> = {}) =>
   new Request("https://worldifact.test/api/blueprint", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-WORLDIFACT-Access": PREVIEW_TOKEN, ...headers },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body && typeof body === "object" && !Array.isArray(body) ? { providerModel: "gpt-6.1-sol", ...body } : body),
   });
 const live = {
   OPENAI_API_KEY: "test-key-not-real",
@@ -60,7 +60,7 @@ const ok = () =>
   new Response(
     JSON.stringify({
       status: "completed",
-      model: "gpt-6-sol",
+      model: "gpt-6.1-sol",
       id: "resp_test_stub",
       usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 },
       output: [
@@ -384,7 +384,7 @@ test("live response uses strict Responses format, server-only auth and validates
   const data = (await r.json()) as { mode: string; provenance: string };
   assert.equal(data.mode, "LIVE");
   assert.equal(data.provenance, "GENERATED");
-  assert.equal(body.model, "gpt-6-sol");
+  assert.equal(body.model, "gpt-6.1-sol");
   assert.equal(body.store, false);
   assert.equal(body.service_tier, "default");
   assert.equal(body.text.format.strict, true);
@@ -426,7 +426,7 @@ test("refusal and timeout return bounded safe errors", async () => {
         new Response(
           JSON.stringify({
             status: "completed",
-            model: "gpt-6-sol",
+            model: "gpt-6.1-sol",
             output: [{ content: [{ type: "refusal" }] }],
           }),
         ),

@@ -10,6 +10,7 @@ import * as archive from '../src/lib/studioArchive.ts'
 import * as library from '../src/lib/studioLibrary.ts'
 import * as glb from '../src/lib/glb.ts'
 import * as view from '../src/lib/studioView.ts'
+import * as protocol from '../src/lib/studioProtocol.ts'
 import { archiveStorage, generation } from './studio-archive-helper.mjs'
 
 const id = '5a7c9284-1234-4234-8234-123456789abc'
@@ -74,7 +75,7 @@ async function harness({ locals = [], owner = 'owner-a', loading = false, reques
       listStudioLibrary: (accountId, next, signal) => library.listStudioLibrary(accountId, next, signal, fetcher),
       getStudioLibraryModel: (accountId, key, signal) => library.getStudioLibraryModel(accountId, key, signal, fetcher),
       readStudioLibraryModel: (accountId, entry, signal) => library.readStudioLibraryModel(accountId, entry, signal, fetcher),
-    }, '../lib/glb': glb, '../lib/studioView': view,
+    }, '../lib/glb': glb, '../lib/studioView': view, '../lib/studioProtocol': protocol,
   }
   const globals = { Blob, Error, AbortController, AbortSignal, console,
     window: Object.assign(globalThis.window, { setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length } }),
@@ -124,7 +125,7 @@ test('fresh browser lists completed account models independently of an old faile
 test('all older local MCC and SOL records survive account listing, same-ID conflicts and cloud failure', async () => {
   let fail = false
   const originals = [local(id, 'Untrusted device copy with cloud ID'), local(otherId), local('blueprint:local-sol', 'Older SOL', 'blueprint')]
-  const h = await harness({ locals: originals, io: path => path === '/api/studio/library' ? fail ? Response.json({ error: 'Cloud list is temporarily unavailable' }, { status: 503 }) : page([model()]) : new Response(fixtureGLB()) })
+  const h = await harness({ locals: originals, io: path => path === '/api/studio/library' ? fail ? Response.json({ error: 'Cloud list is temporarily unavailable' }, { status: 503 }) : page([model()]) : path === `/api/studio/library/${id}` ? Response.json({ accountId: 'owner-a', model: model() }) : new Response(fixtureGLB()) })
   try {
     assert.equal(h.articles().length, 4); assert.match(h.text(), /Older SOL/); assert.match(h.text(), /ownership is unverified/)
     await h.click('Preview 3D', h.articles()[0])
@@ -181,23 +182,23 @@ test('expired library receipt refreshes once via owned metadata GET and never in
     assert.equal(new Headers(init.headers).get('X-WORLDIFACT-Job'), fresh.receipt.ticket)
     return new Response(fixtureGLB())
   } })
-  try { await h.click('Preview 3D', h.articles()[0]); assert.ok(h.preview()); assert.equal(opens, 2); assert.equal(refreshed, 1); assert.ok(h.calls.every(call => call.method === 'GET')) }
+  try { await h.click('Preview 3D', h.articles()[0]); assert.ok(h.preview()); assert.equal(opens, 2); assert.equal(refreshed, 2); assert.ok(h.calls.every(call => call.method === 'GET')) }
   finally { h.close() }
 })
 
 test('missing artifact, lost membership and unrelated authentication failures stay truthful without local substitution or retries', async () => {
   for (const [status, message] of [[404, 'This completed model file is unavailable'], [403, 'This saved model requires eligible account access to download.'], [401, 'Sign in to access your account models.']]) {
-    const h = await harness({ locals: [local(id)], io: path => path === '/api/studio/library' ? page([model()]) : Response.json({ error: message }, { status }) })
+    const h = await harness({ locals: [local(id)], io: path => path === '/api/studio/library' ? page([model()]) : path === `/api/studio/library/${id}` ? Response.json({ accountId: 'owner-a', model: model() }) : Response.json({ error: message }, { status }) })
     try {
       await h.click('Preview 3D', h.articles()[0]); assert.ok(h.text().includes(message)); assert.equal(artifacts(h).length, 1)
-      assert.equal(h.calls.length, 2); assert.equal(h.localReads.length, 0); assert.equal(h.preview(), undefined); assert.equal(h.downloads.length, 0)
+      assert.equal(h.calls.length, 3); assert.equal(h.localReads.length, 0); assert.equal(h.preview(), undefined); assert.equal(h.downloads.length, 0)
       assert.equal(h.storage.stores.get('models').size, 1)
     } finally { h.close() }
   }
 })
 
 test('account switch immediately hides private metadata and previews before effects; compact mounts handle logout too', async () => {
-  const h = await harness({ compact: true, io: (path, init, owner) => path === '/api/studio/library' ? page([model(owner === 'owner-a' ? id : otherId, `${owner} private model`)], null, owner) : new Response(fixtureGLB()) })
+  const h = await harness({ compact: true, io: (path, init, owner) => path === '/api/studio/library' ? page([model(owner === 'owner-a' ? id : otherId, `${owner} private model`)], null, owner) : path.startsWith('/api/studio/library/') ? Response.json({ accountId: owner, model: model(owner === 'owner-a' ? id : otherId, `${owner} private model`) }) : new Response(fixtureGLB()) })
   try {
     await h.click('Preview 3D', h.articles()[0]); assert.ok(h.preview())
     const switched = await h.account('owner-b')
@@ -225,11 +226,12 @@ test('late list and target metadata from an old account cannot populate the next
 })
 
 test('logout and account changes during download, body reads or receipt refresh abort old work without previews or saves', async () => {
-  for (const phase of ['artifact', 'body', 'receipt']) {
+  for (const phase of ['detail', 'artifact', 'body', 'receipt']) {
     const pending = deferred()
+    let detailReads = 0
     const h = await harness({ io: (path, init, owner) => {
       if (path === '/api/studio/library') return page(owner === 'owner-a' ? [model()] : [model(otherId, 'B model')], null, owner)
-      if (path === `/api/studio/library/${id}`) return pending.promise
+      if (path === `/api/studio/library/${id}`) return phase === 'detail' || (phase === 'receipt' && detailReads++ > 0) ? pending.promise : Response.json({ accountId: owner, model: model() })
       if (phase === 'receipt') return Response.json({ error: 'Expired', code: 'STUDIO_LIBRARY_RECEIPT_EXPIRED' }, { status: 401 })
       if (phase === 'body') return new Response(new ReadableStream({ async start(controller) { await pending.promise; controller.enqueue(new Uint8Array(await fixtureGLB().arrayBuffer())); controller.close() } }))
       return pending.promise
@@ -238,11 +240,11 @@ test('logout and account changes during download, body reads or receipt refresh 
       await h.click('Download GLB', h.articles()[0]); await h.account(null)
       assert.ok(h.calls.filter(call => call.path !== '/api/studio/library').every(call => call.signal.aborted))
       if (phase === 'artifact') pending.resolve(new Response(fixtureGLB()))
-      else if (phase === 'receipt') pending.resolve(Response.json({ accountId: 'owner-a', model: model() }))
+      else if (phase === 'receipt' || phase === 'detail') pending.resolve(Response.json({ accountId: 'owner-a', model: model() }))
       else pending.resolve()
       await h.settle()
       assert.equal(h.downloads.length, 0); assert.equal(h.urls.size, 0); assert.equal(h.storage.stores.get('models').size, 0)
-      assert.equal(artifacts(h).length, 1)
+      assert.equal(artifacts(h).length, phase === 'detail' ? 0 : 1)
     } finally { h.close() }
   }
 })
@@ -251,6 +253,7 @@ test('an old local arrayBuffer completion cannot open after logout or clear a ne
   const localBytes = deferred(), nextFile = deferred()
   const h = await harness({ locals: [local()], localBlob: async () => ({ size: 200, arrayBuffer: () => localBytes.promise }), io: (path, init, owner) => {
     if (path === '/api/studio/library') return page([model(owner === 'owner-a' ? id : thirdId, `${owner} model`)], null, owner)
+    if (path.startsWith('/api/studio/library/')) return Response.json({ accountId: owner, model: model(owner === 'owner-a' ? id : thirdId, `${owner} model`) })
     return nextFile.promise
   } })
   try {
@@ -288,14 +291,15 @@ test('malformed metadata, receipts, cursors and IDs cannot trigger arbitrary art
 })
 
 test('verified response ownership must match current context despite cross-tab cookie changes', async () => {
-  for (const phase of ['list', 'target', 'receipt']) {
+  for (const phase of ['list', 'target', 'detail', 'receipt']) {
+    let detailReads = 0
     const h = await harness({ requestedModelId: phase === 'target' ? id : '', io: path => {
-      if (path === '/api/studio/library') return phase === 'list' ? page([model(id, 'Account B private model')], null, 'owner-b') : page(phase === 'receipt' ? [model()] : [])
-      if (path === `/api/studio/library/${id}`) return Response.json({ accountId: 'owner-b', model: model(id, 'Account B private model') })
+      if (path === '/api/studio/library') return phase === 'list' ? page([model(id, 'Account B private model')], null, 'owner-b') : page(['receipt', 'detail'].includes(phase) ? [model()] : [])
+      if (path === `/api/studio/library/${id}`) return phase === 'receipt' && detailReads++ === 0 ? Response.json({ accountId: 'owner-a', model: model() }) : Response.json({ accountId: 'owner-b', model: model(id, 'Account B private model') })
       return Response.json({ error: 'Expired', code: 'STUDIO_LIBRARY_RECEIPT_EXPIRED' }, { status: 401 })
     } })
     try {
-      if (phase === 'receipt') await h.click('Preview 3D', h.articles()[0])
+      if (['receipt', 'detail'].includes(phase)) await h.click('Preview 3D', h.articles()[0])
       assert.doesNotMatch(h.text(), /Account B private/); assert.match(h.text(), /signed-in account changed/)
       assert.equal(h.preview(), undefined); assert.equal(h.downloads.length, 0)
       assert.equal(artifacts(h).length, phase === 'receipt' ? 1 : 0)
@@ -316,7 +320,7 @@ test('account loading masks old records immediately and duplicate target/page re
 
 test('proven cookie ownership change clears prior account rows and preview while preserving every local original', async () => {
   let cookieOwner = 'owner-a'
-  const h = await harness({ locals: [local()], io: path => path === '/api/studio/library' ? page([model(id, `${cookieOwner} private model`)], null, cookieOwner) : new Response(fixtureGLB()) })
+  const h = await harness({ locals: [local()], io: path => path === '/api/studio/library' ? page([model(id, `${cookieOwner} private model`)], null, cookieOwner) : path === `/api/studio/library/${id}` ? Response.json({ accountId: cookieOwner, model: model(id, `${cookieOwner} private model`) }) : new Response(fixtureGLB()) })
   try {
     await h.click('Preview 3D', h.articles()[0]); assert.ok(h.preview())
     cookieOwner = 'owner-b'; await h.click('Refresh')
@@ -340,10 +344,10 @@ test('identity mismatch from a deep link cancels an outstanding old-account list
 })
 
 test('receipt refresh detecting another account clears a prior preview and aborts the selected download', async () => {
-  let expire = false
+  let expire = false, detailReads = 0
   const h = await harness({ locals: [local()], io: path => {
     if (path === '/api/studio/library') return page([model()])
-    if (path === `/api/studio/library/${id}`) return Response.json({ accountId: 'owner-b', model: model(id, 'B private record') })
+    if (path === `/api/studio/library/${id}`) return detailReads++ < 2 ? Response.json({ accountId: 'owner-a', model: model() }) : Response.json({ accountId: 'owner-b', model: model(id, 'B private record') })
     return expire ? Response.json({ error: 'Expired', code: 'STUDIO_LIBRARY_RECEIPT_EXPIRED' }, { status: 401 }) : new Response(fixtureGLB())
   } })
   try {
@@ -353,5 +357,118 @@ test('receipt refresh detecting another account clears a prior preview and abort
     assert.equal(h.sessionRefreshes(), 1); assert.equal(h.urls.size, 0)
     assert.doesNotMatch(h.text(), /Completed MCC on this account|B private record/)
     assert.ok(h.calls.at(-1).signal.aborted)
+  } finally { h.close() }
+})
+
+
+test('only the explicitly opened account model reads worker duration and keeps it separate from legacy and local dates', async () => {
+  const completed = { ...model(), generationTiming: { source: 'oracle-worker', durationSeconds: 95.4 } }
+  const h = await harness({ locals: [local('blueprint:device', 'Local draft', 'blueprint')], io: path => {
+    if (path === '/api/studio/library') return page([model(), model(otherId, 'Legacy account model')])
+    if (path === `/api/studio/library/${id}`) return Response.json({ accountId: 'owner-a', model: completed })
+    if (path === `/api/studio/library/${otherId}`) return Response.json({ accountId: 'owner-a', model: model(otherId, 'Legacy account model') })
+    return new Response(fixtureGLB())
+  } })
+  try {
+    assert.equal(h.calls.length, 1, 'Listing models cannot fan out into timing reads')
+    assert.ok(h.articles().every(article => /Recorded worker generation time: Duration unavailable/.test(text(article))))
+    await h.click('Preview 3D', h.articles().find(article => text(article).includes('Completed MCC')))
+    assert.deepEqual(h.calls.map(call => call.path), ['/api/studio/library', `/api/studio/library/${id}`, `/api/studio/jobs/${id}/model`])
+    assert.match(text(h.articles().find(article => text(article).includes('Completed MCC'))), /Recorded worker generation time: 1m 35s/)
+    assert.match(text(h.articles().find(article => text(article).includes('Legacy account model'))), /Recorded worker generation time: Duration unavailable/)
+    assert.match(text(h.articles().find(article => text(article).includes('Local draft'))), /Recorded worker generation time: Duration unavailable/)
+    assert.match(h.text(), /1m 35s · Excludes upload and queue time/)
+    assert.doesNotMatch(h.text(), /Recorded worker generation time: 30m/)
+    await h.click('Refresh')
+    assert.match(text(h.articles().find(article => text(article).includes('Completed MCC'))), /Recorded worker generation time: 1m 35s/)
+    assert.equal(h.calls.filter(call => call.path.startsWith('/api/studio/library/')).length, 1)
+    await h.click('Preview 3D', h.articles().find(article => text(article).includes('Legacy account model')))
+    assert.match(h.text(), /Recorded worker generation time: Duration unavailable · Excludes upload and queue time/)
+    assert.equal(h.localReads.length, 0)
+    assert.equal(h.storage.events.length, 0)
+    assert.equal(h.localState.get('worldifact-studio-current-v1'), h.failedReceipt)
+    assert.equal(h.storage.stores.get('models').size, 1)
+    assert.ok(h.calls.every(call => call.method === 'GET'))
+  } finally { h.close() }
+})
+
+test('late selected-model duration is discarded on account change before any artifact read', async () => {
+  const detail = deferred()
+  const h = await harness({ io: (path, init, owner) => {
+    if (path === '/api/studio/library') return page([model(owner === 'owner-a' ? id : otherId, `${owner} model`)], null, owner)
+    return detail.promise
+  } })
+  try {
+    await h.click('Preview 3D', h.articles()[0])
+    await h.account('owner-b')
+    detail.resolve(Response.json({ accountId: 'owner-a', model: { ...model(id, 'owner-a model'), generationTiming: { source: 'oracle-worker', durationSeconds: 999 } } })); await h.settle()
+    assert.doesNotMatch(h.text(), /owner-a model|16m 39s/)
+    assert.match(h.text(), /owner-b model/)
+    assert.equal(artifacts(h).length, 0)
+    assert.equal(h.preview(), undefined)
+    assert.equal(h.downloads.length, 0)
+  } finally { h.close() }
+})
+
+test('temporary optional timing failures preserve the valid original receipt and leave duration unavailable', async () => {
+  for (const failure of ['network', 'timeout', 429, 500, 503, 504]) {
+    const h = await harness({ io: (path, init) => {
+      if (path === '/api/studio/library') return page([model()])
+      if (path === `/api/studio/library/${id}`) {
+        if (failure === 'network') throw new TypeError('Synthetic network failure')
+        if (failure === 'timeout') throw new DOMException('Synthetic timeout', 'TimeoutError')
+        return Response.json({ error: 'Temporary metadata failure' }, { status: failure })
+      }
+      assert.equal(new Headers(init.headers).get('X-WORLDIFACT-Job'), model().receipt.ticket)
+      return new Response(fixtureGLB())
+    } })
+    try {
+      await h.click('Download GLB', h.articles()[0])
+      assert.equal(h.downloads.length, 1, String(failure))
+      assert.equal(artifacts(h).length, 1)
+      assert.match(h.text(), /Recorded worker generation time: Duration unavailable/)
+      assert.equal(h.sessionRefreshes(), 0)
+      assert.ok(h.calls.every(call => call.method === 'GET'))
+    } finally { h.close() }
+  }
+})
+
+test('unauthenticated, forbidden, missing or unverified selected metadata never falls back to artifact access', async () => {
+  for (const failure of [401, 403, 404, 'malformed', 'wrong-id', 'wrong-owner']) {
+    const h = await harness({ locals: [local()], io: path => {
+      if (path === '/api/studio/library') return page([model()])
+      if (failure === 'malformed') return Response.json({ accountId: 'owner-a', model: { ...model(), receipt: { id } } })
+      if (failure === 'wrong-id') return Response.json({ accountId: 'owner-a', model: model(otherId) })
+      if (failure === 'wrong-owner') return Response.json({ accountId: 'owner-b', model: model(id, 'Other account private title') })
+      return Response.json({ error: 'Access cannot be verified' }, { status: failure })
+    } })
+    try {
+      await h.click('Download GLB', h.articles()[0])
+      assert.equal(artifacts(h).length, 0, String(failure))
+      assert.equal(h.downloads.length, 0)
+      assert.equal(h.preview(), undefined)
+      assert.doesNotMatch(h.text(), /Other account private/)
+      if (failure === 401 || failure === 'wrong-owner') {
+        assert.equal(h.sessionRefreshes(), 1)
+        assert.equal(h.articles().length, 1, 'Only local originals remain after ownership is lost')
+      }
+      assert.equal(h.storage.stores.get('models').size, 1)
+    } finally { h.close() }
+  }
+})
+
+test('an expired original artifact receipt still requires a successful owned detail refresh', async () => {
+  const h = await harness({ io: path => {
+    if (path === '/api/studio/library') return page([model()])
+    if (path === `/api/studio/library/${id}`) return Response.json({ error: 'Temporary metadata failure' }, { status: 503 })
+    return Response.json({ error: 'Expired receipt', code: 'STUDIO_LIBRARY_RECEIPT_EXPIRED' }, { status: 401 })
+  } })
+  try {
+    await h.click('Download GLB', h.articles()[0])
+    assert.equal(artifacts(h).length, 1)
+    assert.equal(h.calls.filter(call => call.path === `/api/studio/library/${id}`).length, 2)
+    assert.equal(h.downloads.length, 0)
+    assert.equal(h.preview(), undefined)
+    assert.ok(h.calls.every(call => call.method === 'GET'))
   } finally { h.close() }
 })

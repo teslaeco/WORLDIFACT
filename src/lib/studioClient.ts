@@ -1,5 +1,5 @@
 import { isStudioPricing, studioPricingFor, type StudioPricing } from './studioPricing.ts'
-import { JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, prepareStudioInput, validateStudioInput, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
+import { JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, prepareStudioInput, readStudioGenerationTiming, validateStudioInput, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
 import { canSubmitNewDraft } from './studioDraft.ts'
 
 // Upload is separate from provider execution: a large mobile request must not
@@ -44,7 +44,9 @@ export function parseStudioJob(value: unknown, id: string): StudioJob {
   const reconciliationRequired = value.job.reconciliationRequired === true
   const failureCode = state === 'failed' && STUDIO_FAILURE_CODES.includes(value.job.failureCode as NonNullable<StudioJob['failureCode']>) ? value.job.failureCode as StudioJob['failureCode'] : undefined
   const failureDetail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : undefined
+  const generationTiming = ['succeeded', 'failed', 'cancelled'].includes(state) ? readStudioGenerationTiming(value.job.generationTiming) : undefined
   return { id, state, ...(isStudioPricing(value.job.pricing) ? { pricing: { ...value.job.pricing } } : {}), detail: reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : failureDetail || JOB_DETAILS[state], ...(failureCode ? { failureCode } : {}),
+    ...(generationTiming ? { generationTiming } : {}),
     ...(reconciliationRequired ? { reconciliationRequired: true } : {}),
     ...(typeof value.job.downloadAllowed === 'boolean' ? { downloadAllowed: value.job.downloadAllowed } : {}),
     ...(typeof value.job.previewOnly === 'boolean' ? { previewOnly: value.job.previewOnly } : {}),
@@ -129,6 +131,8 @@ export class StudioCoordinator {
       this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
       if (this.store.getItem(STUDIO_RECEIPT_KEY) !== JSON.stringify(saved)) throw new Error('The recovered cloud receipt could not be stored. No new generation was started.')
       if (saved.pricing) job.pricing = saved.pricing
+      const generationTiming = financial !== 'reserved' ? readStudioGenerationTiming(value.current.generationTiming) : undefined
+      if (generationTiming) job.generationTiming = generationTiming
       this.saved = saved; this.confirmedJob = job; this.rejectedJob = null
       return { saved, job }
     } finally { this.recovering = false }

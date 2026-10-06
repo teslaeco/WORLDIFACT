@@ -18,7 +18,7 @@ const fundedAccount = { credits: 3000, generationCosts: { luna: 15, sol: 50, ast
 const blockedAccount = { ...fundedAccount, generationAdmission: { luna: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, sol: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, astra: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } }, studioAdmission: admission(false, 'PROVIDER_BUDGET_EXHAUSTED') }
 const makeReceipt = id => ({ id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` })
 const fastGeneration = {
-  mode: 'LIVE', provenance: 'GENERATED', requestId: 'req_fast_fixture', model: 'gpt-6-sol',
+  mode: 'LIVE', provenance: 'GENERATED', requestId: 'req_fast_fixture', model: 'gpt-6.1-sol',
   limitation: 'Sol generated a validated specification; visible geometry is a procedural draft.',
   blueprint: { version: 1, title: 'Fast rook draft', biome: 'valley', objects: [
     { id: 'fast-rook', name: 'Fast rook', kind: 'sculpture', x: 0, z: 0, scale: 1, rotation: 0, color: '#557799' },
@@ -59,13 +59,14 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, artifactFailure = false, solReady = ready, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, submittedAt, artifactFailure = false, artifactMalformed = false, archiveSaveFailure = false, withArchivedModel = true, solReady = ready, lunaReady = solReady, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, healthLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
   const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   if (receiptCreatedAt) selected.receipt.createdAt = receiptCreatedAt
+  if (submittedAt) selected.startedAt = submittedAt
   const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
   if (blueprintRecovery) storeData.set('worldifact:blueprint-recovery:v1', JSON.stringify(blueprintRecovery))
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
-  const calls = [], blob = modelBlob(), archive = new Map([[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]])
+  const calls = [], blob = artifactMalformed ? new Blob(['not a GLB']) : modelBlob(), archive = new Map(withArchivedModel ? [[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]] : [])
   const status = { newJobPolicy, pricingRevision: STUDIO_PRICING_REVISION, tiersReady: pricingReady, detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
     reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000, detailedReferenceLimit: 4 }
   const fetcher = async (url, init = {}) => {
@@ -78,9 +79,10 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     if (path === '/api/studio/status') return Response.json(status)
     if (path === '/api/studio/current' && cloudLookup) return cloudLookup()
     if (path === '/api/studio/current') return Response.json(cloudCurrent ? { current: { receipt: makeReceipt(oldId), prompt: selected.prompt, startedAt: selected.startedAt, financialState: 'reserved', reservedPoints: 250 } } : { current: null })
-    if (path === '/api/health') return Response.json({ generationReady: solReady || ready, model: solReady ? 'gpt-6-sol' : null, qualityModel: ready ? 'gpt-6-astra' : null, astraBlueprintReady: ready })
+    if (path === '/api/health' && healthLookup) return healthLookup()
+    if (path === '/api/health') return Response.json({ generationReady: solReady || lunaReady || ready, model: solReady ? 'gpt-6.1-sol' : null, lunaBlueprintReady: lunaReady, draftModels: [...(solReady ? ['sol'] : []), ...(lunaReady ? ['luna'] : [])], qualityModel: ready ? 'gpt-6-astra' : null, astraBlueprintReady: ready })
     if (path === '/api/blueprint' && method === 'POST') return Response.json({ ...fastGeneration,
-      model: 'gpt-6-' + JSON.parse(init.body).model,
+      model: JSON.parse(init.body).model === 'sol' ? 'gpt-6.1-sol' : 'gpt-6-' + JSON.parse(init.body).model,
       requestId: await blueprintRequestId(new Headers(init.headers).get('X-WORLDIFACT-Request')),
       evidence: { providerResponseId: 'resp_ui_fixture', receivedAt: new Date().toISOString(), blueprintSha256: 'f'.repeat(64), inputTokens: null, outputTokens: null, totalTokens: null },
       delivery: { kind: 'procedural-blueprint', referenceCount: JSON.parse(init.body).references.length, fallbackUsed: false },
@@ -114,18 +116,19 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     },
   }
   const timeout = (callback, delay) => { delays.push(delay); const id = ++serial; timers.set(id, callback); timerDelays.set(id, delay); return id }
-  const interval = () => ++serial
+  const intervals = new Map()
+  const interval = callback => { const id = ++serial; intervals.set(id, callback); return id }
   const events = new EventTarget(), pageEvents = new EventTarget(), downloads = [], anchors = new Set()
   const globals = { fetch: fetcher, URL, Blob, AbortSignal, AbortController, Event, console, setTimeout: timeout, clearTimeout: id => timers.delete(id),
     document: { visibilityState: 'visible', addEventListener: pageEvents.addEventListener.bind(pageEvents), removeEventListener: pageEvents.removeEventListener.bind(pageEvents), body: { appendChild: node => anchors.add(node) }, createElement: () => { const node = { click: () => downloads.push({ name: node.download, attached: anchors.has(node) }), remove: () => anchors.delete(node) }; return node } },
-    window: { localStorage: storage, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: () => {}, addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events) } }
+    window: { localStorage: storage, confirm: () => true, setTimeout: timeout, clearTimeout: id => timers.delete(id), setInterval: interval, clearInterval: id => intervals.delete(id), addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events) } }
   const Component = await loadShopComponent({ react: hookReact, globals, adapters: {
     'react-router-dom': { useLocation: () => ({ pathname: '/shop', state: characterPrompt ? { worldPrompt: characterPrompt } : null }) },
     '../lib/account': { useAccount: () => accountState },
     '../lib/studioClient': { ...clientModule, StudioCoordinator: class extends clientModule.StudioCoordinator { constructor(store) { super(store, fetcher) } }, checkStudio: () => clientModule.checkStudio(fetcher) },
     '../lib/studioArchive': {
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
-      saveStudioModel: async saved => { if (!archive.has(saved.receipt.id)) archive.set(saved.receipt.id, { id: saved.receipt.id, prompt: saved.prompt, savedAt: saved.startedAt, byteLength: blob.size, sha256: 'new-fixture', review: 'UNREVIEWED' }); return archive.get(saved.receipt.id) },
+      saveStudioModel: async saved => { if (archiveSaveFailure) throw new Error('Local recovery storage unavailable'); if (!archive.has(saved.receipt.id)) archive.set(saved.receipt.id, { id: saved.receipt.id, prompt: saved.prompt, savedAt: saved.startedAt, byteLength: blob.size, sha256: 'new-fixture', review: 'UNREVIEWED' }); return archive.get(saved.receipt.id) },
     },
     '../lib/studioPhotos': { prepareStudioPhoto: async (file, size, view) => ({ name: file.name, view, dataUrl: 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64'), textureMaxSize: size }) },
   } })
@@ -147,6 +150,8 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     byId: id => node(n => n.props.id === id),
     button: label => node(n => n.type === 'button' && text(n).includes(label)),
     all: () => elements(tree),
+    async clockTick() { for (const callback of intervals.values()) callback(); await settle() },
+    activeIntervals: () => intervals.size,
     description: () => text(node(n => n.props['data-testid'] === 'result-description')),
     fastDescription: () => text(node(n => n.props['data-testid'] === 'fast-result-description')),
     form: () => node(n => n.type === 'form'),
@@ -199,7 +204,7 @@ test('explicit FAST after completion sends one Sol blueprint POST and never subm
     const storedBefore = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
     h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook in FAST' } })
     h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
-    assert.equal(h.button('Generate GPT-6 Sol').props.disabled, false)
+    assert.equal(h.button('Generate GPT-6.1 Sol').props.disabled, false)
     const first = h.form().props.onSubmit({ preventDefault() {} })
     const duplicate = h.form().props.onSubmit({ preventDefault() {} })
     await Promise.all([first, duplicate]); await h.settle()
@@ -207,7 +212,7 @@ test('explicit FAST after completion sends one Sol blueprint POST and never subm
     const studioPosts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
     assert.equal(solPosts.length, 1)
     assert.equal(studioPosts.length, 0)
-    assert.deepEqual(JSON.parse(solPosts[0].body), { worldId: 'enchanted-ai-shop', prompt: 'A blue rook in FAST', mode: 'live', model: 'sol', deliverable: 'procedural-blueprint', references: [] })
+    assert.deepEqual(JSON.parse(solPosts[0].body), { worldId: 'enchanted-ai-shop', prompt: 'A blue rook in FAST', mode: 'live', model: 'sol', deliverable: 'procedural-blueprint', references: [], providerModel: 'gpt-6.1-sol' })
     assert.match(h.fastDescription(), /Compact procedural FAST draft/)
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), storedBefore)
     assert.equal(h.archive.get(oldId).sha256, 'original')
@@ -275,7 +280,14 @@ test('an older failed device receipt is identified separately from a newer accou
     assert.ok(elements(identity).some(n => n.props.to === '/account/models' && text(n).includes('Open account model library')))
     assert.equal(elements(identity).find(n => n.type === 'time').props.dateTime, olderReceiptTime)
     assert.match(text(h.all()), /Reason: ASTRA_COST_LIMIT/)
-    assert.match(text(h.all()), /Astra’s cost protection stopped this job/)
+    assert.match(text(identity), /Astra’s cost protection stopped this job/)
+    const formColumn = h.all().find(n => n.props.className === 'native-shop-form')
+    const previewColumn = h.all().find(n => n.props.className === 'native-shop-preview')
+    assert.ok(elements(formColumn).includes(identity), 'Saved failure and exact identity remain together in the form column on mobile')
+    assert.equal(elements(previewColumn).includes(identity), false)
+    assert.equal(formColumn.props.children.filter(n => React.isValidElement(n) && n.type === 'p').some(n => /Astra’s cost protection/.test(text(n))), false, 'No detached old failure may remain below the next quote')
+    assert.match(text(h.all().find(n => n.props.className === 'shop-customer-status shop-availability-details')), /Next generation is unavailable for this account/)
+    assert.doesNotMatch(text(h.all().find(n => n.props.className === 'shop-customer-status shop-availability-details')), /ASTRA_COST_LIMIT|Astra’s cost protection/)
     assert.match(h.quoteMarkup(), /Reason: PROVIDER_BUDGET_EXHAUSTED/)
     assert.doesNotMatch(h.quoteMarkup(), /No Oracle generation was submitted|no points were reserved/)
     await h.focus(); await h.pageShow(true)
@@ -719,7 +731,7 @@ test('one account snapshot blocks both ready Shop routes and forced form submiss
       assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.type, 'button')
     assert.equal(h.all().find(n => n.props.className === 'native-shop-generate').props.disabled, false)
     assert.match(text(h.all().find(n => n.props.className === 'native-shop-generate')), /Check generation funding/ )
-      const status = h.all().find(n => n.props.className === 'shop-customer-status')
+      const status = h.all().find(n => n.props.className === 'shop-customer-status shop-availability-details')
       assert.match(text(status), /Next generation is unavailable for this account/)
       assert.match(text(status), /unreserved API funding/i)
       assert.doesNotMatch(text(status), /generation available/)
@@ -1239,5 +1251,150 @@ test('detailed choice cannot bypass account funding refusal or choose a premium 
     h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
     assert.equal(h.all().some(n => n.props['data-testid'] === 'choose-detailed-model'), false)
     assert.equal(h.byId('studio-mode').props.value, FAST_DRAFT_PROFILE)
+  } finally { h.close() }
+})
+
+for (const state of ['succeeded', 'failed']) test(`recorded worker duration stays visible for the selected ${state} job and never uses receipt or submission age`, async () => {
+  const h = await harness({ ready: true, detailedReady: true, state, receiptCreatedAt: '2026-01-01T00:00:00.000Z', submittedAt: '2026-02-01T00:00:00.000Z',
+    jobLookup: () => Response.json({ job: { id: oldId, state, ...(state === 'failed' ? { failureCode: 'ASTRA_COST_LIMIT' } : {}), generationTiming: { source: 'oracle-worker', durationSeconds: 95.4 } } }),
+  })
+  try {
+    const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), archived = h.archive.get(oldId)
+    await h.poll()
+    const panel = () => h.all().find(n => n.props['aria-label'] === 'Saved Shop request')
+    assert.match(text(panel()), /Recorded worker generation time: 1m 35s/)
+    assert.match(text(panel()), /Excludes upload and queue time/)
+    assert.match(text(panel()), new RegExp(`Job ID: ${oldId} · Last known status: ${state}`))
+    assert.equal(h.activeIntervals(), 0)
+    await h.clockTick()
+    assert.match(text(panel()), /Recorded worker generation time: 1m 35s/)
+    assert.doesNotMatch(text(h.all()), /Elapsed since this request was tracked:/)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.equal(h.archive.get(oldId), archived)
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+for (const state of ['succeeded', 'failed']) test(`legacy ${state} job without worker timing shows unavailable rather than zero or receipt-derived duration`, async () => {
+  const h = await harness({ ready: true, state, receiptCreatedAt: '2026-01-01T00:00:00.000Z', submittedAt: '2026-02-01T00:00:00.000Z' })
+  try {
+    await h.poll()
+    const panel = h.all().find(n => n.props['aria-label'] === 'Saved Shop request')
+    assert.match(text(panel), /Recorded worker generation time: Duration unavailable/)
+    assert.doesNotMatch(text(panel), /Recorded worker generation time: 0s/)
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+test('an active saved request labels client elapsed separately and blocks next-generation readiness until terminal', async () => {
+  const h = await harness({ ready: true, detailedReady: true, state: 'building' })
+  try {
+    await h.poll()
+    const selected = h.all().find(n => n.props['aria-label'] === 'Saved Shop request')
+    assert.match(text(selected), /Elapsed since this request was tracked: .*Includes waiting; not worker generation time/)
+    assert.match(text(h.all()), /Recorded worker generation time: Duration unavailable/)
+    const availability = h.all().find(n => n.props.className === 'shop-customer-status shop-availability-details')
+    assert.match(text(availability), /Next generation is waiting for the selected request/)
+    assert.match(text(availability), new RegExp(`Recover selected job ${oldId}`))
+    assert.doesNotMatch(text(availability), /model generation available/)
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, true)
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+
+test('active saved-job orb uses its own state and never a fabricated completion percentage', async () => {
+  const h = await harness({ state: 'building', accountLookup: () => Response.json(blockedAccount) })
+  try {
+    await h.poll()
+    const orb = h.all().find(node => node.type?.name === 'GenerationProgressOrb')
+    assert.equal(orb.props.job.id, oldId)
+    assert.equal(orb.props.job.state, 'building')
+    assert.equal(orb.props.artifact, undefined)
+    const html = renderToStaticMarkup(orb)
+    assert.match(html, /role="progressbar"/)
+    assert.match(html, /aria-valuenow="50"/)
+    assert.match(html, /Estimated stage progress/)
+    assert.match(html, /includes upload and waiting/)
+    assert.equal(h.quote().quote.reason, 'PROVIDER_BUDGET_EXHAUSTED')
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+test('same-job valid saved model earns 100 percent without changing settlement or submitting work', async () => {
+  const h = await harness({ state: 'succeeded', withArchivedModel: false })
+  try {
+    await h.poll()
+    const orb = h.all().find(node => node.type?.name === 'GenerationProgressOrb' && node.props.compact)
+    assert.ok(orb)
+    assert.equal(orb.props.artifact.jobId, oldId)
+    assert.equal(orb.props.artifact.validated, true)
+    assert.equal(orb.props.artifact.saved, true)
+    assert.equal(h.archive.has(oldId), true)
+    assert.match(renderToStaticMarkup(orb), /aria-valuenow="100"/)
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+for (const failure of [{ archiveSaveFailure: true }, { artifactMalformed: true }]) {
+  test(`a completed worker cannot show 100 percent when ${Object.keys(failure)[0]}`, async () => {
+    const h = await harness({ state: 'succeeded', withArchivedModel: false, ...failure })
+    try {
+      await h.poll()
+      assert.equal(h.all().some(node => node.type?.name === 'GenerationProgressOrb' && node.props.compact), false)
+      assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+    } finally { h.close() }
+  })
+}
+
+
+test('Luna selection requires its own readiness instead of borrowing the Sol flag', async () => {
+  const h = await harness({ ready: true, solReady: true, lunaReady: false, withExistingJob: false })
+  try {
+    assert.equal(elements(h.byId('studio-mode')).find(node => node.type === 'option' && node.props.value === 'luna').props.disabled, true)
+    h.byId('studio-mode').props.onChange({ target: { value: 'luna' } }); await h.settle()
+    assert.equal(h.byId('studio-mode').props.value, 'standard')
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+test('explicit Luna readiness can select its concept route when Sol is not ready', async () => {
+  const h = await harness({ ready: false, solReady: false, lunaReady: true, withExistingJob: false })
+  try {
+    assert.equal(elements(h.byId('studio-mode')).find(node => node.type === 'option' && node.props.value === 'luna').props.disabled, false)
+    h.byId('studio-mode').props.onChange({ target: { value: 'luna' } }); await h.settle()
+    assert.equal(h.byId('studio-mode').props.value, 'luna')
+    assert.equal(h.byId('studio-deliverable').props.value, 'procedural-blueprint')
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+
+test('forced Luna submission stops when its own runtime readiness is revoked despite ready Sol', async () => {
+  let lunaAllowed = true
+  const h = await harness({ ready: true, withExistingJob: false, healthLookup: () => Response.json({ generationReady: true, model: 'gpt-6.1-sol', qualityModel: 'gpt-6-astra', astraBlueprintReady: true, lunaBlueprintReady: lunaAllowed, draftModels: ['sol', 'luna'] }) })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A compact lunar rover' } })
+    h.byId('studio-mode').props.onChange({ target: { value: 'luna' } }); await h.settle()
+    assert.equal(h.byId('studio-mode').props.value, 'luna')
+    assert.match(text(h.all()), /GPT-6 Luna draft generation available/)
+    lunaAllowed = false
+    h.button('Refresh availability').props.onClick(); await h.settle()
+    assert.equal(h.all().find(node => node.props.className === 'native-shop-generate').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+
+test('retained archive metadata cannot certify a conflicting or failed current save as 100 percent', async () => {
+  const h = await harness({ state: 'succeeded', withArchivedModel: true, archiveSaveFailure: true })
+  try {
+    await h.poll()
+    assert.equal(h.archive.has(oldId), true, 'The original archive entry remains intact')
+    assert.equal(h.archive.get(oldId).sha256, 'original')
+    assert.match(h.description(), /Original brown chess knight/, 'The new preview can still be shown')
+    assert.equal(h.all().some(node => node.type?.name === 'GenerationProgressOrb' && node.props.compact), false)
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
   } finally { h.close() }
 })

@@ -7,7 +7,7 @@ import { handle } from '../server/worker.ts'
 const post = body => new Request('https://worldifact.test/api/blueprint', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', Origin: 'https://worldifact.test' },
-  body: JSON.stringify(body),
+  body: JSON.stringify({ providerModel: body.model === 'astra' ? 'gpt-6-astra' : body.model === 'luna' ? 'gpt-6-luna' : 'gpt-6.1-sol', ...body }),
 })
 
 test('all five WORLDIFACT portal IDs share the validated blueprint endpoint', async () => {

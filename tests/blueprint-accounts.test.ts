@@ -26,7 +26,7 @@ function memory() {
 }
 function fixture(beforeProviderResponse?: () => Promise<void>) {
   let now = Date.now(), providerCalls = 0, authCalls = 0, fail = false
-  const env: Env = { OPENAI_API_KEY: 'test-only-never-sent-to-real-provider', OPENAI_MODEL: 'gpt-6-astra', OPENAI_FAST_MODEL: 'gpt-6-sol', ENABLE_PAID_GENERATION: 'true', ENABLE_ASTRA_PLANS: 'true',
+  const env: Env = { OPENAI_API_KEY: 'test-only-never-sent-to-real-provider', OPENAI_MODEL: 'gpt-6-astra', OPENAI_FAST_MODEL: 'gpt-6.1-sol', ENABLE_PAID_GENERATION: 'true', ENABLE_ASTRA_PLANS: 'true',
     PUBLIC_PILOT: 'true', GENERATION_REQUEST_LIMIT: 'unlimited', FREE_SOL_SEED_JOBS: '100', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true', GENERATION_LIMITER: { async limit() { return { success: true } } } }
   const global = memory(), budget = new GenerationBudget({ storage: global.storage as BudgetStorage }, env)
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
@@ -54,7 +54,7 @@ function fixture(beforeProviderResponse?: () => Promise<void>) {
     return Response.json({ id: 'resp_test_fixture', status: 'completed', model: requestBody.model, output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint: demoBlueprint('A silver research tower'), assetSpec: assetSpecForBlueprint(demoBlueprint('A silver research tower')) }) }] }] })
   }) as typeof fetch
   const call = (requestId: string = crypto.randomUUID(), user: 'alice' | 'bob' | null = 'alice', input = body) => handle(new Request(origin + '/api/blueprint', {
-    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': requestId, ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) }, body: JSON.stringify(input),
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': requestId, ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) }, body: JSON.stringify({ ...input, providerModel: input.model === 'luna' ? 'gpt-6-luna' : input.model === 'astra' ? 'gpt-6-astra' : 'gpt-6.1-sol' }),
   }), env, fetcher)
   return { env, call, providerCalls: () => providerCalls, authCalls: () => authCalls, used: () => global.values.get('reserved-attempts') ?? 0, fail: (value: boolean) => { fail = value }, advance: (ms: number) => { now += ms } }
 }

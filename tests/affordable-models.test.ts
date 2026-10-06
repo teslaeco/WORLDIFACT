@@ -70,7 +70,7 @@ test('selected Luna reaches only its own provider ID, and arbitrary models are r
     calls++;assert.equal(String(url),'https://api.openai.com/v1/responses');assert.equal(body.service_tier,'default')
     return Response.json({id:'resp_luna_fixture',status:'completed',model:'gpt-6-luna',usage:{input_tokens:1000,output_tokens:300,total_tokens:1300},output:[{content:[{type:'output_text',text:JSON.stringify({blueprint,assetSpec})}]}]})
   }) as typeof fetch
-  const request=(model:string)=>new Request('https://worldifact.test/api/blueprint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'one tree',mode:'live',model})})
+  const request=(model:string)=>new Request('https://worldifact.test/api/blueprint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'one tree',mode:'live',model,providerModel:model==='sol'?'gpt-6.1-sol':model==='luna'?'gpt-6-luna':'gpt-6-astra'})})
   assert.equal((await handle(request('terra'),env,provider)).status,400);assert.equal(calls,0)
   const response=await handle(request('luna'),env,provider);assert.equal(response.status,200);assert.equal((await response.json() as any).model,'gpt-6-luna');assert.equal(calls,1)
   assert.ok(draftReservationMicroUsd('luna',1000)<100000);assert.ok(draftReservationMicroUsd('sol',1000)<150000)

@@ -20,7 +20,7 @@ import * as routing from '../src/lib/portalRouting.ts'
 
 const funded = { credits: 3000, availableCredits: 3000, billingReview: false, generationCosts: { luna: 15, sol: 50, astra: 250 }, subscription: { active: true, plan: 'pro' }, free: { fastRemaining: 1 }, generationAdmission: { luna: { allowed: true }, sol: { allowed: true }, astra: { allowed: true } } }
 const blocked = { ...funded, generationAdmission: { luna: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, sol: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }, astra: { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' } } }
-const ready = { generationReady: true, model: 'gpt-6-sol', draftModels: ['sol', 'luna'], qualityModel: 'gpt-6-astra', astraBlueprintReady: true }
+const ready = { generationReady: true, model: 'gpt-6.1-sol', draftModels: ['sol', 'luna'], qualityModel: 'gpt-6-astra', astraBlueprintReady: true }
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 const text = n => n == null || typeof n === 'boolean' ? '' : Array.isArray(n) ? n.map(text).join('') : React.isValidElement(n) ? text(n.props.children) : String(n)
 const nodes = tree => { const values = []; const walk = n => { if (Array.isArray(n)) n.forEach(walk); else if (React.isValidElement(n)) { values.push(n); walk(n.props.children) } }; walk(tree); return values }
@@ -163,7 +163,7 @@ test('each portal defaults to SOL and quotes the exact explicitly selected model
         const sent = JSON.parse(posts(h)[0].body)
         assert.equal(sent.model, model); assert.equal(sent.worldId, worldId); assert.equal(sent.deliverable, 'procedural-blueprint'); assert.deepEqual(sent.references, [])
         assert.equal(h.store.size, 1); assert.equal(JSON.parse([...h.store.values()][0]).recovery.id, posts(h)[0].headers.get('X-WORLDIFACT-Request'))
-        assert.match(h.text(), new RegExp('LIVE · GENERATED · gpt-6-' + model))
+        assert.match(h.text(), new RegExp('LIVE · GENERATED · ' + models.MODEL_CATALOG[model].model.replaceAll('.', '\\.')))
       } finally { h.close() }
     }
   }
@@ -260,7 +260,7 @@ test('lost POST response survives reload; read-only recovery stays enabled while
     assert.equal(reload.primary().props.disabled, false); assert.match(text(reload.primary()), /Check generation funding/); assert.equal(reload.button('Recover same request').props.disabled, false)
     const recover = reload.button('Recover same request').props.onClick; recover(); recover(); await reload.waitDone()
     assert.equal(posts(reload).length, 0); assert.equal(reload.calls.filter(c => c.path.startsWith('/api/blueprint/requests/')).length, 1)
-    assert.equal(JSON.parse([...reload.store.values()][0]).recovery.id, saved.id); assert.match(reload.text(), /LIVE · GENERATED · gpt-6-sol/)
+    assert.equal(JSON.parse([...reload.store.values()][0]).recovery.id, saved.id); assert.match(reload.text(), /LIVE · GENERATED · gpt-6\.1-sol/)
     reload.button('Recover same request').props.onClick(); await reload.waitDone(); assert.equal(posts(reload).length, 0)
   } finally { h.close(); reload?.close() }
 })
@@ -339,7 +339,7 @@ test('blocked portal refresh reads current admission and requires another explic
     available = true
     h.primary().props.onClick(); await h.settle()
     assert.equal(h.quote().quote.state, 'credits')
-    assert.match(text(h.primary()), /Generate GPT-6 Sol blueprint/)
+    assert.match(text(h.primary()), /Generate GPT-6.1 Sol blueprint/)
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 3)
     assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
   } finally { h.close() }
