@@ -235,7 +235,49 @@ export const GENERATION_RECOVERY_REVIEWED_PATHS = Object.freeze([
   'tests/studio-library.test.ts',
   'wrangler.jsonc',
 ].sort())
+export const ONE_TIME_TEST_BASE_COMMIT = 'd229a3e37f37bd85476dc3d8d969dd49fdae488d'
+export const ONE_TIME_TEST_MARKER_PATH = 'ops/ONE_TIME_TEST_RELEASE_20261006.json'
+export const ONE_TIME_TEST_MARKER_CONTENT = JSON.stringify({
+  release: 'one-time-api-tests-20261006-044444',
+  baseCommit: ONE_TIME_TEST_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+}, null, 2) + '\n'
+export const ONE_TIME_TEST_REVIEWED_PATHS = Object.freeze([
+  'docs/ONE_TIME_API_TESTS_20261006.md',
+  ONE_TIME_TEST_MARKER_PATH,
+  'scripts/select-pipeline-only-release.mjs',
+  'server/entitlements.ts',
+  'server/overnightTestBudget.ts',
+  'server/studio.ts',
+  'server/worker.ts',
+  'src/App.tsx',
+  'src/lib/overnightTestClient.ts',
+  'src/pages/OvernightTestsPage.css',
+  'src/pages/OvernightTestsPage.tsx',
+  'tests/one-time-test-release.test.mjs',
+  'tests/one-time-test-renewal.test.ts',
+  'tests/overnight-test-admission.test.ts',
+  'tests/overnight-test-budget-native.test.mjs',
+  'tests/overnight-test-budget.test.ts',
+  'tests/overnight-test-client.test.ts',
+  'tests/overnight-test-namespace-native.test.mjs',
+  'tests/overnight-test-page.test.mjs',
+].sort())
 const releaseIntroductions = new Set([
+  'docs/ONE_TIME_API_TESTS_20261006.md',
+  'server/overnightTestBudget.ts',
+  'src/lib/overnightTestClient.ts',
+  'src/pages/OvernightTestsPage.css',
+  'src/pages/OvernightTestsPage.tsx',
+  'tests/one-time-test-release.test.mjs',
+  'tests/one-time-test-renewal.test.ts',
+  'tests/overnight-test-admission.test.ts',
+  'tests/overnight-test-budget-native.test.mjs',
+  'tests/overnight-test-budget.test.ts',
+  'tests/overnight-test-client.test.ts',
+  'tests/overnight-test-namespace-native.test.mjs',
+  'tests/overnight-test-page.test.mjs',
   'docs/SOL61_BLUEPRINT_MIGRATION.md',
   'server/blueprintModelBinding.ts',
   'server/blueprintTerminalUsage.ts',
@@ -284,6 +326,7 @@ const scopes = [
   { base: PROJECT_MCC_ATTEMPT_BASE_COMMIT, marker: PROJECT_MCC_ATTEMPT_MARKER_PATH, content: PROJECT_MCC_ATTEMPT_MARKER_CONTENT, paths: PROJECT_MCC_ATTEMPT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: CABINET_CONTEXT_BASE_COMMIT, marker: CABINET_CONTEXT_MARKER_PATH, content: CABINET_CONTEXT_MARKER_CONTENT, paths: CABINET_CONTEXT_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: GENERATION_RECOVERY_BASE_COMMIT, marker: GENERATION_RECOVERY_MARKER_PATH, content: GENERATION_RECOVERY_MARKER_CONTENT, paths: GENERATION_RECOVERY_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
+  { base: ONE_TIME_TEST_BASE_COMMIT, marker: ONE_TIME_TEST_MARKER_PATH, content: ONE_TIME_TEST_MARKER_CONTENT, paths: ONE_TIME_TEST_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
 ]
 
 function refuse() { throw new Error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED') }
@@ -334,7 +377,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH) {
+  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

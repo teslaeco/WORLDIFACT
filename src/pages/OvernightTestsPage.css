@@ -1,0 +1,31 @@
+.overnight-tests { max-width: 1180px; margin-inline: auto; padding-bottom: 5rem; }
+.overnight-tests .portal-header { flex-wrap: wrap; gap: 1rem; }
+.overnight-intro { max-width: 850px; margin: 2rem 0; }
+.overnight-intro h1 { margin: .35rem 0 1rem; font-size: clamp(1.8rem, 5vw, 2.7rem); }
+.overnight-intro p, .overnight-budget p, .overnight-slot p { line-height: 1.6; }
+.overnight-eyebrow { color: #b8d9e6; letter-spacing: .1em; font-size: .73rem; font-weight: 700; }
+.overnight-warning { padding: 1rem 1.15rem; border-left: 3px solid #edc779; background: #48391544; color: #f5dfb0; }
+.overnight-gate, .overnight-budget, .overnight-slot { border: 1px solid #50748a66; border-radius: 14px; padding: 1.3rem; background: #142333a8; }
+.overnight-refresh { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 1rem 0; }
+.overnight-tests button { min-height: 44px; padding: .7rem 1rem; border: 1px solid #7194a8; border-radius: 8px; background: #183b4e; color: #f0f9ff; font: inherit; cursor: pointer; line-height: 1.45; }
+.overnight-tests button:disabled { opacity: .5; cursor: not-allowed; }
+.overnight-tests button:not(:disabled):hover { background: #25546b; }
+.overnight-tests :is(button, textarea, a):focus-visible { outline: 3px solid #efd28e; outline-offset: 4px; }
+.overnight-budget { margin: 1.3rem 0; }
+.overnight-budget h2 { font-size: 1.25rem; }
+.overnight-budget dl { display: flex; flex-wrap: wrap; gap: 1.5rem 3rem; }
+.overnight-budget dt { color: #b7cbd8; font-size: .86rem; }
+.overnight-budget dd { margin: .35rem 0 0; font-weight: 700; font-size: 1.5rem; }
+.overnight-prompt { margin: 1.8rem 0; }
+.overnight-prompt label { display: block; font-weight: 700; margin-bottom: .65rem; }
+.overnight-prompt textarea { display: block; box-sizing: border-box; width: 100%; max-width: 850px; padding: 1rem; border: 1px solid #6f8d9d; border-radius: 9px; background: #0d1924; color: #f0f9ff; font: inherit; resize: vertical; }
+.overnight-prompt p { max-width: 850px; color: #b7cbd8; font-size: .9rem; line-height: 1.5; }
+.overnight-slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.overnight-slot h2 { margin: .5rem 0; }
+.overnight-state { color: #eed796; font-weight: 600; }
+.overnight-request { overflow-wrap: anywhere; color: #c6dbe5; font-size: .9rem; }
+.overnight-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.2rem; }
+.overnight-actions button { width: 100%; }
+.overnight-error { padding: 1rem; border: 1px solid #c87777; border-radius: 8px; background: #49282a; color: #ffe3df; line-height: 1.6; }
+.overnight-result { padding: .6rem 1rem; background: #203e4166; border-radius: 8px; }
+@media (max-width: 720px) { .overnight-slots { grid-template-columns: 1fr; } .overnight-budget dl { gap: 1.2rem 2rem; } }

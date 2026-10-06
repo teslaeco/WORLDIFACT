@@ -15,6 +15,7 @@ const ControlPage = lazy(async () => import('./pages/ControlPage'))
 const AccountPage = lazy(async () => import('./pages/AccountPage'))
 const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
 const ModelsPage = lazy(async () => import('./pages/ModelsPage'))
+const OvernightTestsPage = lazy(async () => import('./pages/OvernightTestsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
 function AvatarPreload() {
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/account" element={<AccountPage />} />
         <Route path="/account/credits" element={<CreditsPage />} />
         <Route path="/account/models" element={<ModelsPage />} />
+        <Route path="/account/overnight-tests" element={<OvernightTestsPage />} />
         <Route path="/account/reset" element={<ResetPasswordPage />} />
         <Route path="/control" element={<ControlPage />} />
         <Route path="/portal/:portalId" element={<PortalPage />} />

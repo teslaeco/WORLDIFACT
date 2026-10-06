@@ -7,6 +7,7 @@ import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailur
 import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, pendingUserStudioProvider, reconcileUserStudioProvider, reconcileUserBlueprintProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, userStudioLibrary, userStudioLibraryModel, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv, type OwnedStudioLibraryModel } from './entitlements.ts'
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { astraRepairedMccGrant } from './astraRepairedMccGrant.ts'
+import { overnightTestAuthority, OVERNIGHT_TEST_APPROVAL } from './overnightTestBudget.ts'
 import { astraProjectBudget } from './astraProjectBudget.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioNewJobPolicy.ts'
@@ -119,10 +120,16 @@ async function boundDigest(digest: string, userId?: string) {
   // per-user ledger reservation exists. Keep legacy hashes only while disabled.
   return userId ? hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`WORLDIFACT-ACCOUNT-JOB-v1:${userId}:${digest}`))) : digest
 }
-const boundInputDigest = async (input: StudioInput, userId?: string) => boundDigest(await inputDigest(input), userId)
+const fundingDigest = async (digest: string, overnightTest = false) => overnightTest ? hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${OVERNIGHT_TEST_APPROVAL}:${digest}`))) : digest
+const boundInputDigest = async (input: StudioInput, userId?: string, overnightTest = false) => boundDigest(await fundingDigest(await inputDigest(input), overnightTest), userId)
 function prepareMetadata(input: StudioInput): StudioPrepareMetadata {
   const { photos, ...metadata } = input
   return { ...metadata, photoCount: photos.length }
+}
+function checkOvernightPreparation(env: StudioEnv, userId: string | undefined, input: StudioPrepareMetadata) {
+  if (!userId || !accountPolicy(env) || !overnightTestAuthority(env, userId, Date.now())) throw new StudioError('The account-bound overnight test authority is unavailable or expired.', 403)
+  if (studioNewJobPolicy(env.STUDIO_NEW_JOB_POLICY) !== HISTORICAL_STUDIO_POLICY || input.generationProfile !== undefined || input.budgetTier !== undefined || input.pricingRevision !== undefined || input.acceptedPoints !== undefined)
+    throw new StudioError('Overnight detailed tests require the existing 175-cent STANDARD policy, without tier upgrades.', 409)
 }
 function repairedMccInputEligible(input: StudioPrepareMetadata): boolean {
   return input.worldId === 'enchanted-ai-shop' && input.photoCount === 0 &&
@@ -439,7 +446,7 @@ async function modelOrExport(env: StudioEnv, id: string, format: string, fetcher
   })
   return new Response(stream, { headers: { 'Content-Type': profile.type, 'Content-Length': String(size), 'Content-Disposition': `attachment; filename="WORLDIFACT-${id}-${profile.name}"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-WORLDIFACT-Provenance': 'GENERATED-UNREVIEWED' } })
 }
-export async function studioApi(request: Request, env: StudioEnv, fetcher: typeof fetch = fetch): Promise<Response> {
+export async function studioApi(request: Request, env: StudioEnv, fetcher: typeof fetch = fetch, overnightTest = false): Promise<Response> {
   const url = new URL(request.url)
   try {
     if (request.method !== 'GET' && request.headers.get('Origin') !== url.origin) throw new StudioError('Same-origin request required.', 403)
@@ -555,12 +562,15 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
           metadata = prepareMetadata(input); digest = await inputDigest(input)
         }
       } catch (e) { throw new StudioError(e instanceof Error ? e.message : 'Invalid preparation manifest.', 400) }
-      await checkRepairedMccPreparation(env, user, metadata, digest)
-      await checkProjectBudgetPreparation(env, user, metadata, digest)
+      if (overnightTest) checkOvernightPreparation(env, user?.id, metadata)
+      else {
+        await checkRepairedMccPreparation(env, user, metadata, digest)
+        await checkProjectBudgetPreparation(env, user, metadata, digest)
+      }
       await preflight(request, env, fetcher, metadata, user?.id)
       const pool = await allowance(env)
       if (!pool.unlimited && pool.remaining === 0) throw new StudioError('The cumulative allowance is exhausted. No job was started.', 429)
-      const prepared = await receipt(env, crypto.randomUUID(), await boundDigest(digest, user?.id), user?.id, metadata.budgetTier === undefined ? undefined : studioPricingFor(metadata))
+      const prepared = await receipt(env, crypto.randomUUID(), await boundDigest(await fundingDigest(digest, overnightTest), user?.id), user?.id, metadata.budgetTier === undefined ? undefined : studioPricingFor(metadata))
       logStudioDiagnostic({ requestId: prepared.id, stage: 'PREPARATION', admission: 'PREPARED', reason: 'PREFLIGHT_ACCEPTED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
       return json(prepared)
     }
@@ -571,8 +581,9 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const idempotencyKey = request.headers.get('X-WORLDIFACT-Idempotency-Key')
       if (idempotencyKey && idempotencyKey !== auth.id) throw new StudioError('The generation idempotency key does not match this signed job. No new charge was made.', 409)
       const input = await inputFrom(request)
-      if (await boundInputDigest(input, user?.id) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
+      if (await boundInputDigest(input, user?.id, overnightTest) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
       logStudioDiagnostic({ requestId: auth.id, stage: 'RECEIVED', admission: 'PREPARED', reason: 'INPUT_VALIDATED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
+      if (overnightTest) checkOvernightPreparation(env, user?.id, prepareMetadata(input))
       const pricing = input.budgetTier === undefined ? undefined : studioPricingFor(input)
       // Previously admitted work retains its exact signed input and price even
       // after a quote expires or the worker enters maintenance. Recovery must
@@ -588,7 +599,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (Date.now() - auth.issued > (pricing ? 5 : 30) * 60_000) throw new StudioError('This unsubmitted receipt expired. Review your inputs and current price before preparing another.', 409)
       const checked = await preflight(request, env, fetcher, prepareMetadata(input), user?.id)
       if (user) {
-        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt, supportIdentity: user, repairedMccInputEligible: repairedMccInputEligible(prepareMetadata(input)), projectBudgetInputEligible: repairedMccInputEligible(prepareMetadata(input)), ...(pricing ? { pricing } : {}) })
+        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { channel: 'studio', prompt: input.prompt, supportIdentity: user, ...(overnightTest ? { overnightTest: true } : { repairedMccInputEligible: repairedMccInputEligible(prepareMetadata(input)), projectBudgetInputEligible: repairedMccInputEligible(prepareMetadata(input)) }), ...(pricing ? { pricing } : {}) })
         if (userReservation.repeated && userReservation.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed', fetcher), recoveryOnly: true }, 202)
         if (!userReservation.allowed) {
           const conflict = ['REQUEST_PAYLOAD_MISMATCH', 'JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(userReservation.reason ?? '')

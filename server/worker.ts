@@ -23,6 +23,7 @@ import {
   validateGenerationResult,
   type GenerationResult,
 } from "../src/lib/blueprint.ts";
+import { OVERNIGHT_TEST_APPROVAL } from "./overnightTestBudget.ts";
 import { budgetSettings } from "./budget.ts";
 import { blueprintModel, blueprintReservationMicroUsd, MODEL_CATALOG, type BlueprintModel } from "../src/lib/modelCatalog.ts";
 import type { BudgetEnv, BudgetNamespace } from "./budget.ts";
@@ -77,7 +78,15 @@ async function limitedBody(request: Request) {
   return parsed;
 }
 export async function handle(request: Request, env: Env = {}, fetcher: typeof fetch = fetch, context?: AvatarContext): Promise<Response> {
-  const url = new URL(request.url);
+  let url = new URL(request.url);
+  let overnightTest = false;
+  if (url.pathname.startsWith('/api/overnight-tests/') && url.pathname !== '/api/overnight-tests/status') {
+    const routes: Record<string, string> = { '/api/overnight-tests/blueprint': '/api/blueprint', '/api/overnight-tests/studio/prepare': '/api/studio/prepare', '/api/overnight-tests/studio/jobs': '/api/studio/jobs' };
+    const target = routes[url.pathname];
+    if (!target || request.method !== 'POST' || url.search) return json({ error: 'Unsupported overnight test route.', noCharge: true }, 404);
+    if (env.ENFORCE_ACCOUNT_ENTITLEMENTS !== 'true') return json({ error: 'Account-bound overnight testing is unavailable.', noCharge: true }, 503);
+    url = new URL(target, url.origin); request = new Request(url, request); overnightTest = true;
+  }
   const privateWorld = await privateWorldApi(request, env, fetcher);
   if (privateWorld) return privateWorld;
   const decor = await decorApi(request, fetcher);
@@ -98,7 +107,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (avatar) return avatar;
   const projectFiles = await projectFileApi(request, env, fetcher);
   if (projectFiles) return projectFiles;
-  if (url.pathname === "/api/studio" || url.pathname.startsWith("/api/studio/")) return studioApi(request, env, fetcher);
+  if (url.pathname === "/api/studio" || url.pathname.startsWith("/api/studio/")) return studioApi(request, env, fetcher, overnightTest);
   if (url.pathname.startsWith("/api/oracle/jobs")) return oracleJobApi(request, env, fetcher);
   if (url.pathname === "/api/platform" || url.pathname.startsWith("/api/platform/")) return platformApi(request, env, fetcher);
   if (url.pathname.startsWith('/api/blueprint/requests/')) {
@@ -168,6 +177,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   let selectedModel: BlueprintModel;
   try { selectedModel = blueprintModel(input.model); }
   catch { return json({ error: "Choose Luna, Sol or Astra.", noCharge: true }, 400); }
+  if (overnightTest && (input.mode !== 'live' || selectedModel === 'astra')) return json({ error: 'Overnight blueprints allow the reviewed Sol or Luna workflow only.', noCharge: true }, 400);
   const worldId = requestedWorld as PortalId;
   const suppliedRequestId = request.headers.get('X-WORLDIFACT-Request');
   if (suppliedRequestId && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(suppliedRequestId))
@@ -177,7 +187,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   const requestSeed = suppliedRequestId || crypto.randomUUID();
   const requestId = await blueprintRequestId(requestSeed);
   const fingerprint = await blueprintFingerprint({ worldId, prompt: input.prompt.trim(), model: selectedModel, deliverable, references,
-    ...(Object.hasOwn(input, 'providerModel') ? { providerModel: input.providerModel } : {}) });
+    ...(Object.hasOwn(input, 'providerModel') ? { providerModel: input.providerModel } : {}), ...(overnightTest ? { overnightTest: OVERNIGHT_TEST_APPROVAL } : {}) });
   const model = MODEL_CATALOG[selectedModel].model;
   if (input.mode === 'live' && (Object.hasOwn(input, 'providerModel') && input.providerModel !== model || selectedModel === 'sol' && input.providerModel !== model)) {
     // Old clients cannot consent to a new provider merely by sending alias Sol.
@@ -219,7 +229,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (account) {
     try {
       const reservation = await reserveUserGeneration(env, account.id, requestId, selectedModel === 'astra' ? 'slow' : 'fast', selectedModel, fingerprint, undefined,
-        { channel: 'blueprint', blueprintDispatch: 'fenced-v1', providerModel: model });
+        { channel: 'blueprint', blueprintDispatch: 'fenced-v1', providerModel: model, ...(overnightTest ? { overnightTest: true } : {}) });
       if (reservation.reason === 'REQUEST_PAYLOAD_MISMATCH') return json({ error: 'This request ID belongs to different inputs. No new charge was made.', code: 'REQUEST_PAYLOAD_MISMATCH', requestId }, 409);
       if (reservation.repeated) {
         const status = await entitlementCall<{ state: string; result?: GenerationResult; refunded?: boolean }>(env, account.id, '/blueprint-status', { id: requestId });
