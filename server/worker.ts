@@ -7,6 +7,7 @@ import { avatarApi, type AvatarContext } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
 import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
 import { entitlementCall, entitlementApi, markBlueprintDispatch, reserveUserGeneration, settleFailedBlueprint, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
+import { hasTestAccountHeaders, testAccountMatches, readTestInputEnvelope } from '../src/lib/testAccountContract.ts';
 import { captureBlueprintTerminalUsage, type BlueprintTerminalUsage } from './blueprintTerminalUsage.ts';
 import { billingApi, type BillingEnv } from './billing.ts';
 import { paypalApi, type PayPalEnv } from './paypal.ts';
@@ -118,6 +119,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     try {
       const account = await getVerifiedAccount(request, env, fetcher);
       if (!account) return json({ error: 'Sign in to recover your own generation.' }, 401);
+      if (hasTestAccountHeaders(request.headers) && !testAccountMatches(request.headers, account.id)) return json({ error: 'The signed-in account changed. Recover from the original account.', diagnostic: 'TEST_ACCOUNT_NOT_APPROVED' }, 403);
       const requestId = await blueprintRequestId(seed);
       const status = await entitlementCall(env, account.id, '/blueprint-status', { id: requestId });
       return json(status);
@@ -163,6 +165,10 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   let input;
   try { input = await limitedBody(request); }
   catch (e) { return json({ error: e instanceof Error && e.message === "TOO_LARGE" ? "Request too large" : "Invalid request", noCharge: true }, e instanceof Error && e.message === "TOO_LARGE" ? 413 : 400); }
+  if (overnightTest) {
+    input = readTestInputEnvelope(input, request.headers);
+    if (!input) return json({ error: 'Refresh the test page to verify the account contract before starting.', failureCode: 'ACCOUNT_ADMISSION_UNAVAILABLE', noCharge: true }, 409);
+  }
   if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some((k) => !["worldId", "prompt", "image", "references", "deliverable", "mode", "model", "providerModel"].includes(k)) ||
       typeof input.prompt !== "string" || input.prompt.trim().length < 3 || input.prompt.length > BLUEPRINT_PROMPT_LIMIT || !["demo", "live"].includes(input.mode))
     return json({ error: "Use a supported WORLDIFACT portal, 3–4000 characters and up to six references within 6 MB combined.", noCharge: true }, 400);
@@ -196,6 +202,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
       try {
         const owner = await getVerifiedAccount(request, env, fetcher);
         if (owner) {
+          if ((overnightTest || hasTestAccountHeaders(request.headers)) && !testAccountMatches(request.headers, owner.id)) return json({ error: 'The signed-in account changed. Recover from the original account.', diagnostic: 'TEST_ACCOUNT_NOT_APPROVED', failureCode: 'ACCOUNT_ADMISSION_UNAVAILABLE', requestId, noCharge: true }, 409);
           const status = await entitlementCall<{ state: string; owned?: boolean; result?: GenerationResult; refunded?: boolean; conflict?: boolean }>(env, owner.id,
             '/blueprint-status', { id: requestId, fingerprint, expectedProviderModel: 'gpt-6-sol' });
           if (status.state === 'completed' && status.result?.model === 'gpt-6-sol') return json(status.result);
@@ -218,6 +225,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     try { account = await getVerifiedAccount(request, env, fetcher); }
     catch { return json({ error: 'The account service is temporarily unavailable.', requestId, noCharge: true }, 503); }
     if (!account) return json({ error: 'Sign in to generate a model.', accountRequired: true, requestId, noCharge: true }, 401);
+    if ((overnightTest || hasTestAccountHeaders(request.headers)) && !testAccountMatches(request.headers, account.id)) return json({ error: 'The signed-in account changed before submission. No new model was admitted.', failureCode: 'ACCOUNT_ADMISSION_UNAVAILABLE', diagnostic: 'TEST_ACCOUNT_NOT_APPROVED', requestId, noCharge: true }, 409);
   }
   if (!publicPilot && !(await validAccess(request, env.GENERATION_ACCESS_TOKEN!))) return json({ error: "A valid preview access code is required.", requestId, noCharge: true }, 401);
   try { const { success } = await env.GENERATION_LIMITER!.limit({ key: request.headers.get("CF-Connecting-IP") || "unknown-client" }); if (!success) return json({ error: "Generation limit reached. Please try again later.", requestId, noCharge: true }, 429); }

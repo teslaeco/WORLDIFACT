@@ -22,10 +22,10 @@ const STATUS_URL = 'https://worldifact.test/api/overnight-tests/status'
 const config = () => ({ version: 1, approvalId: APPROVAL, accountId: OWNER, issuedAt: ISSUED, expiresAt: EXPIRES, totalCents: 400 })
 const selector = () => ({ version: 1, accountId: OWNER, issuedAt: '2026-10-05T10:00:00.000Z', expiresAt: '2026-10-05T11:00:00.000Z',
   maxProviderCents: 175, maxAttempts: 1, fingerprint: 'a'.repeat(64) })
-const status = () => ({ available: true, approvalId: APPROVAL, expiresAt: EXPIRES, totalCents: 400,
+const status = () => ({ accountContract: 'approved-test-account-v1', commitments: [], available: true, approvalId: APPROVAL, expiresAt: EXPIRES, totalCents: 400,
   committedCents: 0, remainingCents: 400, attempts: { 'detailed-astra': 0, 'blueprint-sol': 0, 'blueprint-luna': 0 }, noRecycling: true })
 const noReceipts = {
-  getItem(): never { throw new Error('A status read must not read receipts') },
+  getItem() { return null },
   setItem(): never { throw new Error('A status read must not write receipts') },
   removeItem(): never { throw new Error('A status read must not remove receipts') },
 }
@@ -177,7 +177,7 @@ function apiFixture(options: { stored?: unknown; readError?: boolean; objectName
     assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer synthetic-access-fixture')
     return Response.json({ id: OWNER })
   }
-  const request = (authenticated = true) => new Request(STATUS_URL, { headers: authenticated ? { Cookie: '__Host-worldifact-access=synthetic-access-fixture' } : {} })
+  const request = (authenticated = true) => new Request(STATUS_URL, { headers: { 'X-WORLDIFACT-Expected-Account': OWNER, 'X-WORLDIFACT-Test-Contract': 'approved-test-account-v1', ...(authenticated ? { Cookie: '__Host-worldifact-access=synthetic-access-fixture' } : {}) } })
   const read = (authenticated = true, authFetcher = fetcher) => entitlementApi(request(authenticated), env, authFetcher)
   const unchanged = () => {
     assert.equal(calls.writes, 0); assert.equal(calls.transactions, 0); assert.equal(calls.unexpectedFetches, 0)

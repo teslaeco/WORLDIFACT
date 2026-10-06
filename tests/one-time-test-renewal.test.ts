@@ -202,7 +202,7 @@ test('new starts begin exactly at consent and both model dispatch paths close at
     const blueprint = await f.call(ACCOUNT, '/blueprint-dispatch', { id: sol, fingerprint: FINGERPRINT })
     assert.deepEqual(await blueprint.json(), { dispatch: false })
     await assert.rejects(reserveAstra(crypto.randomUUID()), /unavailable or expired/)
-    const status = await f.call(NAMESPACE, '/overnight-test-status'), data = readOvernightPanelStatus(await status.json())
+    const status = await f.call(NAMESPACE, '/overnight-test-status'), data = await status.json() as Record<string, unknown>
     assert.equal(status.status, 200); assert.equal(data.available, false); assert.equal(data.expiresAt, EXPIRES)
     assert.equal(data.approvalId, APPROVAL); assert.equal(data.committedCents, 385)
   }
@@ -210,13 +210,16 @@ test('new starts begin exactly at consent and both model dispatch paths close at
 })
 
 function panelStatus(patch: Record<string, unknown> = {}) {
-  return { available: true, approvalId: APPROVAL, expiresAt: EXPIRES, totalCents: 400, committedCents: 0, remainingCents: 400,
+  return { accountContract: 'approved-test-account-v1', commitments: [], available: true, approvalId: APPROVAL, expiresAt: EXPIRES, totalCents: 400, committedCents: 0, remainingCents: 400,
     attempts: { 'detailed-astra': 0, 'blueprint-sol': 0, 'blueprint-luna': 0 }, noRecycling: true, ...patch }
 }
 function panel() {
   const oldPrefix = `worldifact:overnight-tests:v1:${OLD_APPROVAL}:${OWNER}:`
+  const ordinaryReceipt = { id: JOB, createdAt: new Date(OLD_AT).toISOString(), ticket: `${JOB}.${OLD_AT}.${FINGERPRINT}.${'b'.repeat(64)}` }
   const values = new Map<string, string>([
-    [BLUEPRINT_RECOVERY_KEY, 'ordinary blueprint receipt'], [STUDIO_RECEIPT_KEY, 'ordinary studio receipt'],
+    [BLUEPRINT_RECOVERY_KEY, JSON.stringify({ id: JOB, fingerprint: FINGERPRINT, model: 'sol', state: 'completed', createdAt: OLD_AT })],
+    [STUDIO_RECEIPT_KEY, JSON.stringify({ receipt: ordinaryReceipt, prompt: 'Original ordinary request', startedAt: ordinaryReceipt.createdAt,
+      rejection: 'Definite admission refusal', rejectionCode: 'PROVIDER_BUDGET_EXHAUSTED' })],
     [STUDIO_RECEIPT_HISTORY_PREFIX + JOB, 'ordinary receipt history'],
     [oldPrefix + 'sol:' + BLUEPRINT_RECOVERY_KEY, JSON.stringify({ id: JOB, fingerprint: FINGERPRINT, model: 'sol', state: 'pending', createdAt: OLD_AT })],
     [oldPrefix + 'astra-1:' + STUDIO_RECEIPT_KEY, 'original overnight receipt'],
@@ -233,6 +236,12 @@ function panel() {
     if (method === 'GET' && path === '/api/overnight-tests/status') {
       if (expireAfterStatus) now = END
       return Response.json(status)
+    }
+    if (method === 'GET' && path === '/api/studio/current') {
+      const headers = new Headers(init.headers)
+      assert.equal(headers.get('X-WORLDIFACT-Expected-Account'), OWNER)
+      assert.equal(headers.get('X-WORLDIFACT-Test-Contract'), 'approved-test-account-v1')
+      return Response.json({ accountContract: 'approved-test-account-v1', current: null })
     }
     assert.equal(method, 'POST'); assert.equal(path, '/api/overnight-tests/blueprint')
     assert.equal(init.credentials, 'same-origin'); assert.equal(init.redirect, 'error')
@@ -253,7 +262,9 @@ test('renewed local receipt namespace preserves old pending run and ordinary rec
   for (const [key, value] of preserved) assert.equal(f.values.get(key), value)
   assert.ok(f.writes.length > 0)
   assert.ok(f.writes.every(key => key.startsWith(`worldifact:overnight-tests:v1:${APPROVAL}:${OWNER}:sol:`)))
-  assert.ok(f.reads.every(key => !preserved.has(key)), 'The fresh panel must not recover, reinterpret or disclose old-run or ordinary receipts')
+  assert.ok(f.reads.includes(BLUEPRINT_RECOVERY_KEY) && f.reads.includes(STUDIO_RECEIPT_KEY), 'The fresh panel must check current ordinary receipts without changing them')
+  assert.ok(f.reads.every(key => !preserved.has(key) || [BLUEPRINT_RECOVERY_KEY, STUDIO_RECEIPT_KEY].includes(key)), 'The fresh panel must not recover, reinterpret or disclose old-run or ordinary historical receipts')
+  assert.deepEqual(f.calls, ['GET /api/overnight-tests/status', 'GET /api/studio/current', 'POST /api/overnight-tests/blueprint'])
   const restored = f.make()
   assert.equal(restored.rows().find(value => value.slot === 'sol')?.id, row.id)
   await assert.rejects(restored.start('sol', 'A replacement observatory'), /Recover existing requests first/)

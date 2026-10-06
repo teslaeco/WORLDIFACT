@@ -12,6 +12,7 @@ import { astraRepairedMccGrant, matchesAstraRepairedMccClaim, ASTRA_REPAIRED_MCC
 import { astraProjectBudget, matchesAstraProjectBudgetRecord, matchesAstraProjectScope, isAstraProjectBudgetRecord, persistedAstraProjectBudget, ASTRA_PROJECT_BUDGET_KEY, ASTRA_PROJECT_BUDGET_NAMESPACE, ASTRA_PROJECT_BUDGET_CENTS, type AstraProjectBudget, type AstraProjectBudgetRecord } from './astraProjectBudget.ts'
 import { overnightTestPoolRoute, overnightTestAuthority, overnightTestStatusDiagnostic, overnightWorkflow, matchesOvernightTestClaim, isOvernightTestClaim, OVERNIGHT_TEST_NAMESPACE, OVERNIGHT_TEST_APPROVAL, OVERNIGHT_TEST_WORKFLOWS, type OvernightTestClaim } from './overnightTestBudget.ts'
 import { isOvernightTestDiagnostic, type OvernightTestDiagnostic } from '../src/lib/overnightTestDiagnostics.ts'
+import { TEST_ACCOUNT_CONTRACT, hasTestAccountHeaders, testAccountMatches } from '../src/lib/testAccountContract.ts'
 import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { boundBlueprintProviderModel } from './blueprintModelBinding.ts'
 import type { GenerationFundingSnapshot } from '../src/lib/generationFunding.ts'
@@ -54,7 +55,7 @@ export const STUDIO_DISPATCH_WINDOW_MS = 30_000
 export const STUDIO_ORACLE_TIMEOUT_MS = 25_000
 export const BLUEPRINT_DISPATCH_WINDOW_MS = 30_000
 const BLUEPRINT_JOB_WINDOW_MS = 10 * 60_000
-export type CurrentStudioJob = { pricing?: StudioPricing; id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
+export type CurrentStudioJob = { fundingSource?: 'ordinary' | typeof OVERNIGHT_TEST_APPROVAL | 'unknown'; pricing?: StudioPricing; id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
 export type ClosedMissingStudioJob = { closed: boolean; state: Job['state']; fingerprintMatches: boolean; failureCode?: StudioFailureCode }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
@@ -828,7 +829,10 @@ export class AccountEntitlements {
         if (!pointer?.id || !JOB_ID.test(pointer.id)) return json({ job: null })
         const job = await this.storage.get<Job>(`job:${pointer.id}`)
         if (!job || job.channel !== 'studio' || !job.fingerprint || !/^[a-f0-9]{64}$/.test(job.fingerprint)) return json({ job: null })
-        return json({ job: { id: pointer.id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
+        const fundingSource = !Object.hasOwn(job, 'overnightTest') ? 'ordinary' : isOvernightTestClaim(job.overnightTest) &&
+          job.overnightTest.jobId === pointer.id && job.overnightTest.accountId === request.headers.get('X-WORLDIFACT-Verified-Account') &&
+          job.overnightTest.fingerprint === job.fingerprint && job.overnightTest.workflow === 'detailed-astra' ? OVERNIGHT_TEST_APPROVAL : 'unknown'
+        return json({ job: { id: pointer.id, fundingSource, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
           updatedAt: job.updatedAt ?? job.at, state: job.state, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.billingMode === 'hold-v1' && job.state === 'reserved',
           ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}) } satisfies CurrentStudioJob })
       }
@@ -1623,13 +1627,15 @@ export async function entitlementApi(request: Request, env: AccountEnv & Entitle
     try {
       const user = await getVerifiedAccount(request, env, fetcher)
       if (!user) return reply({ error: 'Sign in to view your generation funding.', ...(statusRead ? { diagnostic: 'TEST_SIGN_IN_REQUIRED' } : {}) }, 401)
+      const expectedAccount = statusRead || hasTestAccountHeaders(request.headers)
+      if (expectedAccount && !testAccountMatches(request.headers, user.id)) return reply({ error: 'The signed-in account does not match this test page. Refresh the account before continuing.', diagnostic: 'TEST_ACCOUNT_NOT_APPROVED' }, 403)
       diagnostic = 'TEST_STATUS_PROTECTION_UNAVAILABLE'
       const limiter = env.ACCOUNT_LIMITER ?? env.GENERATION_LIMITER
       if (!limiter) return reply({ error: 'Account protection is unavailable.', ...(statusRead ? { diagnostic } : {}) }, 503)
       if (!(await limiter.limit({ key: `account:generation-funding:${user.id.toLowerCase()}` })).success)
         return reply({ error: 'Please wait before reading generation funding again.', ...(statusRead ? { diagnostic: 'TEST_STATUS_RATE_LIMITED' } : {}) }, 429)
       diagnostic = 'TEST_POOL_REQUEST_FAILED'
-      if (statusRead) return reply(await overnightPoolCall(env, user.id, '/overnight-test-status'))
+      if (statusRead) return reply({ ...await overnightPoolCall(env, user.id, '/overnight-test-status'), accountContract: TEST_ACCOUNT_CONTRACT })
       return reply(await entitlementCall<GenerationFundingSnapshot>(env, user.id, '/generation-funding'))
     } catch (error) { return reply({ error: 'Generation funding is temporarily unavailable.', ...(statusRead ? {
       diagnostic: error instanceof EntitlementError && isOvernightTestDiagnostic(error.testDiagnostic) ? error.testDiagnostic : diagnostic,
@@ -1640,6 +1646,8 @@ export async function entitlementApi(request: Request, env: AccountEnv & Entitle
   try {
     const user = await getVerifiedAccount(request, env, fetcher)
     if (!user) return json({ error: 'Sign in to view your allowance.' }, 401)
-    return json(await entitlementStatus(env, user.id, user))
+    const expectedAccount = hasTestAccountHeaders(request.headers)
+    if (expectedAccount && !testAccountMatches(request.headers, user.id)) return json({ error: 'The signed-in account changed. Refresh before continuing.', diagnostic: 'TEST_ACCOUNT_NOT_APPROVED' }, 403)
+    return json({ ...await entitlementStatus(env, user.id, user), ...(expectedAccount ? { accountContract: TEST_ACCOUNT_CONTRACT } : {}) })
   } catch (error) { return json({ error: error instanceof EntitlementError ? error.message : 'Account allowances are unavailable.' }, error instanceof EntitlementError ? error.status : 503) }
 }

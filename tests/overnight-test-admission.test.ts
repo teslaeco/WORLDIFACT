@@ -8,6 +8,7 @@ import { assetSpecForBlueprint, demoBlueprint } from '../src/lib/blueprint.ts'
 import { detailedHealthFixture } from './detailed-studio-fixture.ts'
 import type { StudioInput } from '../src/lib/studioProtocol.ts'
 import { OvernightTestClient } from '../src/lib/overnightTestClient.ts'
+import { TEST_ACCOUNT_CONTRACT, TEST_ACCOUNT_HEADER, TEST_CONTRACT_HEADER } from '../src/lib/testAccountContract.ts'
 
 const OWNER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const NOW = Date.parse('2026-10-06T05:00:00Z'), END = Date.parse('2026-10-06T12:00:00Z')
@@ -82,10 +83,18 @@ function fixture() {
     return Response.json({ id: 'resp_overnight_fixture', model: body.model, status: 'completed', usage: { input_tokens: 1000, output_tokens: 100, total_tokens: 1100 },
       output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint, assetSpec: assetSpecForBlueprint(blueprint) }) }] }] })
   }) as typeof fetch
-  const request = (path: string, method = 'GET', body?: unknown, extra: Record<string, string> = {}, token: string | null = 'owner-token') => handle(new Request(ORIGIN + path, {
-    method, headers: { Origin: ORIGIN, 'Content-Type': 'application/json', ...(token ? { Cookie: '__Host-worldifact-access=' + token } : {}), ...extra },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  }), env, fetcher)
+  const request = (path: string, method = 'GET', body?: unknown, extra: Record<string, string> = {}, token: string | null = 'owner-token') => {
+    const testRoute = path.startsWith('/api/overnight-tests/')
+    const wire = testRoute && method === 'POST' && body && typeof body === 'object' && !Object.hasOwn(body, 'testContract')
+      ? { testContract: TEST_ACCOUNT_CONTRACT, expectedAccountId: OWNER, input: body } : body
+    const headers = new Headers({ Origin: ORIGIN, 'Content-Type': 'application/json', ...(token ? { Cookie: '__Host-worldifact-access=' + token } : {}),
+      ...(testRoute ? { [TEST_ACCOUNT_HEADER]: OWNER, [TEST_CONTRACT_HEADER]: TEST_ACCOUNT_CONTRACT } : {}) })
+    for (const [key, value] of Object.entries(extra)) headers.set(key, value)
+    return handle(new Request(ORIGIN + path, {
+      method, headers,
+      ...(wire === undefined ? {} : { body: JSON.stringify(wire) }),
+    }), env, fetcher)
+  }
   const direct = (model = 'sol', seed = crypto.randomUUID(), path = '/api/overnight-tests/blueprint') => request(path, 'POST', {
     worldId: 'ai-game-lab', prompt: 'Offline silver tower', model, providerModel: model === 'sol' ? 'gpt-6.1-sol' : model === 'luna' ? 'gpt-6-luna' : 'gpt-6-astra', mode: 'live',
   }, { 'X-WORLDIFACT-Request': seed })

@@ -126,7 +126,8 @@ export async function overnightTestPoolRoute(request: Request, storage: Entitlem
       const used = state?.committedCents ?? 0
       const counts = Object.fromEntries(Object.keys(OVERNIGHT_TEST_WORKFLOWS).map(workflow => [workflow, state?.claims.filter(claim => claim.workflow === workflow).length ?? 0]))
       return reply({ available: clock() < Date.parse(authority.expiresAt) && used < 395, approvalId: authority.approvalId, expiresAt: authority.expiresAt,
-        totalCents: 400, committedCents: used, remainingCents: 400 - used, attempts: counts, noRecycling: true })
+        totalCents: 400, committedCents: used, remainingCents: 400 - used, attempts: counts, noRecycling: true,
+        commitments: (state?.claims ?? []).map(claim => ({ jobId: claim.jobId, workflow: claim.workflow, capCents: claim.capCents })) })
     }
     const raw = await request.text()
     if (raw.length > 512) return reply({ approved: false }, 400)

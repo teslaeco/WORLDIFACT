@@ -131,3 +131,7 @@
  .native-shop .native-shop-workspace[data-working='true'] .native-shop-preview { order: 0; }
  .native-shop .native-shop-workspace[data-working='true'] .native-shop-form { order: 1; }
 }
+
+.shop-test-funding { min-width: 0; border: 1px solid #557366; border-radius: 10px; padding: 14px; margin: 8px 0; background: #10271f; }
+.shop-test-funding legend { padding: 0 6px; font-weight: 750; }
+.shop-test-funding p { overflow-wrap: anywhere; font-size: .82rem; }
