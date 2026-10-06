@@ -11,7 +11,6 @@ import {
   Texture,
 } from "three";
 import {
-  assetSpecForBlueprint,
   demoBlueprint,
   localSceneResult,
   parseBlueprintJson,
@@ -36,7 +35,7 @@ const request = (body: unknown, headers: Record<string, string> = {}) =>
   new Request("https://worldifact.test/api/blueprint", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-WORLDIFACT-Access": PREVIEW_TOKEN, ...headers },
-    body: JSON.stringify(body && typeof body === "object" && !Array.isArray(body) ? { providerModel: "gpt-6.1-sol", ...body } : body),
+    body: JSON.stringify(body),
   });
 const live = {
   OPENAI_API_KEY: "test-key-not-real",
@@ -60,7 +59,7 @@ const ok = () =>
   new Response(
     JSON.stringify({
       status: "completed",
-      model: "gpt-6.1-sol",
+      model: "gpt-6-sol",
       id: "resp_test_stub",
       usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 },
       output: [
@@ -68,7 +67,7 @@ const ok = () =>
           content: [
             {
               type: "output_text",
-              text: JSON.stringify({ blueprint: demoBlueprint("village"), assetSpec: assetSpecForBlueprint(demoBlueprint("village")) }),
+              text: JSON.stringify(demoBlueprint("village")),
             },
           ],
         },
@@ -261,10 +260,10 @@ test("production profiles distinguish observed prices from blocked quotes", () =
     /Not recommended/,
   );
 });
-test("explicit DEMO without a configured key produces labelled local output without network", async () => {
+test("no configured key produces explicitly labelled DEMO without network", async () => {
   let calls = 0;
   const r = await handle(
-    request({ prompt: "village", mode: "demo" }),
+    request({ prompt: "village", mode: "live" }),
     {},
     makeFetch(() => {
       calls++;
@@ -278,8 +277,7 @@ test("a key alone never enables paid generation", async () => {
   const r = await handle(request({ prompt: "village", mode: "live" }), {
     OPENAI_API_KEY: "test",
   });
-  assert.equal(r.status, 503);
-  assert.equal(((await r.json()) as { noCharge: boolean }).noCharge, true);
+  assert.equal(((await r.json()) as { mode: string }).mode, "DEMO");
 });
 test("health never advertises LIVE for an unapproved model or missing limiter", async () => {
   for (const env of [
@@ -384,7 +382,7 @@ test("live response uses strict Responses format, server-only auth and validates
   const data = (await r.json()) as { mode: string; provenance: string };
   assert.equal(data.mode, "LIVE");
   assert.equal(data.provenance, "GENERATED");
-  assert.equal(body.model, "gpt-6.1-sol");
+  assert.equal(body.model, "gpt-6-sol");
   assert.equal(body.store, false);
   assert.equal(body.service_tier, "default");
   assert.equal(body.text.format.strict, true);
@@ -426,7 +424,7 @@ test("refusal and timeout return bounded safe errors", async () => {
         new Response(
           JSON.stringify({
             status: "completed",
-            model: "gpt-6.1-sol",
+            model: "gpt-6-sol",
             output: [{ content: [{ type: "refusal" }] }],
           }),
         ),

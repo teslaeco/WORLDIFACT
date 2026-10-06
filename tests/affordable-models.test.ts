@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { inflateSync } from 'node:zlib'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { MODEL_CATALOG, blueprintModel, blueprintReservationMicroUsd, draftModel, draftReservationMicroUsd } from '../src/lib/modelCatalog.ts'
+import { MODEL_CATALOG, draftModel, draftReservationMicroUsd } from '../src/lib/modelCatalog.ts'
 import { modelAllowed, planEconomics, providerReserveCents } from '../server/generationEconomics.ts'
 import { AccountEntitlements, type EntitlementStorage } from '../server/entitlements.ts'
 import { GenerationBudget, type BudgetStorage } from '../server/budget.ts'
@@ -29,8 +29,8 @@ test('approved model prices are tiered but every mix fits the reserved provider 
   assert.equal(MODEL_CATALOG.luna.creditsPerGeneration,15);assert.equal(MODEL_CATALOG.sol.creditsPerGeneration,50);assert.equal(MODEL_CATALOG.astra.creditsPerGeneration,250)
   for(const model of Object.values(MODEL_CATALOG))assert.ok(model.maxProviderCents/model.creditsPerGeneration<=0.7)
   for(const plan of ['creator','pro','studio'] as const)assert.ok(planEconomics(plan).marginBps>=3000)
-  assert.equal(modelAllowed('creator','luna'),true);assert.equal(modelAllowed('creator','astra'),true)
-  assert.equal(providerReserveCents(1500),1050);assert.throws(()=>draftModel('terra'));assert.throws(()=>draftModel('astra'));assert.equal(blueprintModel('astra'),'astra')
+  assert.equal(modelAllowed('creator','luna'),true);assert.equal(modelAllowed('creator','astra'),false)
+  assert.equal(providerReserveCents(1500),1050);assert.throws(()=>draftModel('terra'));assert.throws(()=>draftModel('astra'))
 })
 test('Luna quotes are visible, server-priced and conditional free quota is shared',()=>{
   const data={credits:900,generationCosts:{luna:15,sol:50,astra:250},subscription:{active:true,plan:'creator'},free:{fastRemaining:2},billingReview:false}
@@ -70,12 +70,10 @@ test('selected Luna reaches only its own provider ID, and arbitrary models are r
     calls++;assert.equal(String(url),'https://api.openai.com/v1/responses');assert.equal(body.service_tier,'default')
     return Response.json({id:'resp_luna_fixture',status:'completed',model:'gpt-6-luna',usage:{input_tokens:1000,output_tokens:300,total_tokens:1300},output:[{content:[{type:'output_text',text:JSON.stringify({blueprint,assetSpec})}]}]})
   }) as typeof fetch
-  const request=(model:string)=>new Request('https://worldifact.test/api/blueprint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'one tree',mode:'live',model,providerModel:model==='sol'?'gpt-6.1-sol':model==='luna'?'gpt-6-luna':'gpt-6-astra'})})
+  const request=(model:string)=>new Request('https://worldifact.test/api/blueprint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'one tree',mode:'live',model})})
   assert.equal((await handle(request('terra'),env,provider)).status,400);assert.equal(calls,0)
   const response=await handle(request('luna'),env,provider);assert.equal(response.status,200);assert.equal((await response.json() as any).model,'gpt-6-luna');assert.equal(calls,1)
   assert.ok(draftReservationMicroUsd('luna',1000)<100000);assert.ok(draftReservationMicroUsd('sol',1000)<150000)
-  assert.ok(blueprintReservationMicroUsd('astra',1000)<1_750_000)
-  assert.ok(blueprintReservationMicroUsd('astra',65536)>1_000_000)
 })
 test('procedural PNG encoding round-trips without document, canvas or network',()=>{
   const pixels=new Uint8Array([255,0,0,255,0,200,0,255]),png=rgbaPng(2,1,pixels)

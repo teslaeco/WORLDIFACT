@@ -30,12 +30,3 @@ test("portal building manifest identifies the exact existing Oracle artifact", (
   assert.equal(manifest.bytes, 21_047_056);
   assert.equal(manifest.source, "OWNER_GENERATED_WORLDIFACT_ORACLE_JOB");
 });
-
-test("owner tower retains all 110 meshes, 12 materials and 10 embedded textures without external dependencies", () => {
-  const original = readFileSync(DIRECT);
-  const doc = JSON.parse(original.subarray(20, 20 + original.readUInt32LE(12)).toString('utf8'));
-  assert.equal(doc.meshes.length, 110); assert.equal(doc.materials.length, 12); assert.equal(doc.images.length, 10);
-  assert.ok(doc.images.every((image: { uri?: string; bufferView?: number }) => !image.uri && Number.isInteger(image.bufferView)));
-  assert.ok(doc.buffers.every((buffer: { uri?: string }) => !buffer.uri));
-  assert.ok(doc.meshes.every((mesh: { primitives: unknown[] }) => mesh.primitives.length > 0));
-});

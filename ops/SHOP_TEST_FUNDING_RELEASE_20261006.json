@@ -1,6 +1,0 @@
-{
-  "release": "shop-existing-test-funding-20261006",
-  "baseCommit": "e36ca479d051deb9ff31297ccf12814b16c17220",
-  "preserveBilling": true,
-  "preserveRemoteVars": true
-}

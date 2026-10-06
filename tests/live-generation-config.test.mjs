@@ -10,7 +10,6 @@ const base = {
     ENABLE_PAID_GENERATION: 'false',
     PUBLIC_PILOT: 'false',
     ENABLE_ORACLE_JOBS: 'false',
-    ENABLE_ASTRA_PLANS: 'false',
     GENERATION_REQUEST_LIMIT: '0',
     GENERATION_EXPIRES_AT: '',
     ENABLE_APPROVED_FAST_TEST: 'true',
@@ -22,14 +21,12 @@ test('ongoing LIVE config is derived from disabled base without cumulative quota
   assert.equal(config.vars.OPENAI_MODEL, 'gpt-6-astra')
   assert.equal(config.vars.ENABLE_PAID_GENERATION, 'true')
   assert.equal(config.vars.PUBLIC_PILOT, 'true')
-  assert.equal(config.vars.ENABLE_ORACLE_JOBS, 'false')
-  assert.equal(config.vars.ENABLE_STUDIO_JOBS, 'false')
-  assert.equal(config.vars.ENABLE_ASTRA_PLANS, 'true')
+  assert.equal(config.vars.ENABLE_ORACLE_JOBS, 'true')
+  assert.equal(config.vars.ENABLE_STUDIO_JOBS, 'true')
   assert.equal(config.vars.ENABLE_APPROVED_FAST_TEST, 'false')
   assert.equal(config.vars.GENERATION_REQUEST_LIMIT, 'unlimited')
   assert.equal(config.vars.GENERATION_EXPIRES_AT, '')
   assert.equal(base.vars.ENABLE_PAID_GENERATION, 'false')
-  assert.equal(base.vars.ENABLE_ASTRA_PLANS, 'false')
 })
 
 test('ongoing LIVE config refuses an altered production base', () => {

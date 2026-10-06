@@ -1,12 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import LoadingFallback from './components/LoadingFallback'
 import AccountStatusBar from './components/AccountStatusBar'
 import { useAccount } from './lib/account'
 import { clearAvatarAssets, loadAvatarBytes } from './lib/avatarAsset'
-import { createAvatarPreloadLifecycle } from './lib/avatarPreloadLifecycle'
 
-const PrivateGameLab = lazy(async () => import('./pages/PrivateGameLab'))
 const HomePage = lazy(async () => import('./pages/HomePage'))
 const PortalPage = lazy(async () => import('./pages/PortalPage'))
 const InfoPage = lazy(async () => import('./pages/InfoPage'))
@@ -15,17 +13,16 @@ const ControlPage = lazy(async () => import('./pages/ControlPage'))
 const AccountPage = lazy(async () => import('./pages/AccountPage'))
 const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
 const ModelsPage = lazy(async () => import('./pages/ModelsPage'))
-const OvernightTestsPage = lazy(async () => import('./pages/OvernightTestsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
 function AvatarPreload() {
-  const { pathname } = useLocation()
-  const { user, loading } = useAccount()
-  const [preload] = useState(() => createAvatarPreloadLifecycle({ clear: clearAvatarAssets, load: loadAvatarBytes }))
-  // Initial session discovery and portal navigation must not cancel the world.
+  const { user } = useAccount()
+  // Use the login transition to prepare the exact original, not a low-detail copy.
   useEffect(() => {
-    preload.observe({ loading, userId: user?.id ?? null, pathname })
-  }, [preload, user?.id, loading, pathname])
+    clearAvatarAssets()
+    if (user) void loadAvatarBytes('queen').catch(() => { /* The world offers explicit retry. */ })
+    return clearAvatarAssets
+  }, [user?.id])
   return null
 }
 
@@ -42,7 +39,6 @@ export default function App() {
         <Route path="/account" element={<AccountPage />} />
         <Route path="/account/credits" element={<CreditsPage />} />
         <Route path="/account/models" element={<ModelsPage />} />
-        <Route path="/account/overnight-tests" element={<OvernightTestsPage />} />
         <Route path="/account/reset" element={<ResetPasswordPage />} />
         <Route path="/control" element={<ControlPage />} />
         <Route path="/portal/:portalId" element={<PortalPage />} />
@@ -50,8 +46,8 @@ export default function App() {
           <Route key={path} path={path} element={<PortalPage />} />
         ))}
         <Route path="/chess/shop" element={<Navigate to="/shop" replace />} />
-        <Route path="/lab" element={<PrivateGameLab />} />
-        <Route path="/builder" element={<PrivateGameLab />} />
+        <Route path="/lab" element={<WorkbenchPage kind="builder" />} />
+        <Route path="/builder" element={<WorkbenchPage kind="builder" />} />
         <Route path="/make" element={<WorkbenchPage kind="make" />} />
         <Route path="/privacy" element={<InfoPage kind="privacy" />} />
         <Route path="/terms" element={<InfoPage kind="terms" />} />

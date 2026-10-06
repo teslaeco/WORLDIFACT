@@ -7,7 +7,7 @@ import { handle } from '../server/worker.ts'
 const post = body => new Request('https://worldifact.test/api/blueprint', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', Origin: 'https://worldifact.test' },
-  body: JSON.stringify({ providerModel: body.model === 'astra' ? 'gpt-6-astra' : body.model === 'luna' ? 'gpt-6-luna' : 'gpt-6.1-sol', ...body }),
+  body: JSON.stringify(body),
 })
 
 test('all five WORLDIFACT portal IDs share the validated blueprint endpoint', async () => {
@@ -41,9 +41,10 @@ test('portal UI labels LIVE and DEMO truthfully, stays usable when LIVE is gated
   assert.match(source, /LIVE · GENERATED/)
   assert.match(source, /DEMO · MOCK/)
   assert.match(source, /MAKE: VALIDATION REQUIRED/)
-  assert.match(source, /ScopedBlueprintClient/)
-  assert.match(source, /model: selectedModel/)
+  assert.match(source, /\/api\/blueprint/)
   assert.match(source, /Generate DEMO · no API cost/)
+  assert.match(source, /onClick=\{generatePrimary\}/)
+  assert.doesNotMatch(source, /disabled=\{busy \|\| !health\.generationReady\}/)
   assert.doesNotMatch(source, /OPENAI_API_KEY|ORACLE_API_TOKEN|CLOUDFLARE_API_TOKEN/)
 })
 
@@ -54,9 +55,9 @@ test('Game Lab primary generation action falls back to labelled no-cost DEMO ins
   assert.doesNotMatch(source, /disabled=\{busy \|\| !health\.generationReady\}/)
 })
 
-test('non-Shop portal generators remain expanded; the explicitly removed Shop duplicate stays absent', async () => {
+test('contest portal generators are expanded by default for immediate review', async () => {
   const source = await readFile(new URL('../src/pages/PortalPage.tsx', import.meta.url), 'utf8')
-  assert.doesNotMatch(source, /<details open className="portal-generator-drawer portal-page">/)
+  assert.match(source, /<details open className="portal-generator-drawer portal-page">/)
   assert.match(source, /<details open className="portal-generator-drawer">/)
 })
 

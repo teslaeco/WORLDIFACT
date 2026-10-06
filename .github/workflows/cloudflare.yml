@@ -23,15 +23,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
           cache: npm
-      - name: Verify one-time pipeline release scope before credential setup
-        id: billing_scope
-        run: node scripts/select-pipeline-only-release.mjs >> "$GITHUB_OUTPUT"
       - name: Check deployment input names and format
         run: node scripts/release-check.ts credentials
         env:
@@ -54,12 +49,6 @@ jobs:
             echo 'mode=DEMO' >> "$GITHUB_OUTPUT"
             echo 'No ongoing LIVE marker: deploying reviewed disabled-cost base configuration.'
           fi
-      - name: Verify guarded detailed worker before restoring signed model route
-        if: steps.mode.outputs.mode == 'LIVE'
-        run: node scripts/restore-detailed-studio-config.mjs "${{ steps.mode.outputs.config }}"
-        env:
-          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
-          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
       - name: Dry-run selected deployment configuration
         run: npx wrangler deploy --dry-run --config "${{ steps.mode.outputs.config }}" --outdir .wrangler/preview
       - name: Verify and sync OpenAI secrets
@@ -79,7 +68,6 @@ jobs:
           ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
           ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
       - name: Sync optional payment credentials without activating checkout
-        if: steps.billing_scope.outputs.preserve_billing == 'false'
         run: node scripts/connect-billing.ts
         env:
           STRIPE_CONFIG_SOURCE: ${{ vars.STRIPE_CONFIG_SOURCE }}
@@ -95,7 +83,6 @@ jobs:
           PAYPAL_WEBHOOK_ID: ${{ secrets.PAYPAL_WEBHOOK_ID }}
           PAYPAL_MERCHANT_ID: ${{ secrets.PAYPAL_MERCHANT_ID }}
       - name: Prepare verified subscription cancellation before activating Stripe
-        if: steps.billing_scope.outputs.preserve_billing == 'false'
         run: |
           node --input-type=module <<'JS'
           import { readFile } from 'node:fs/promises';
@@ -111,7 +98,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
       - name: Verify Stripe can open and expire an unpaid subscription checkout
-        if: steps.billing_scope.outputs.preserve_billing == 'false'
         run: |
           node --input-type=module <<'JS'
           import { readFile } from 'node:fs/promises';
@@ -124,26 +110,8 @@ jobs:
           JS
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-      - name: Verify Pro and Studio Stripe checkouts can open and expire without charge
-        if: steps.billing_scope.outputs.preserve_billing == 'false'
-        run: node --experimental-strip-types scripts/check-stripe-astra-checkouts.ts
-        env:
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
       - name: Deploy reviewed WORLDIFACT release
-        run: |
-          if test "${{ steps.billing_scope.outputs.preserve_remote_vars }}" = 'true'; then
-            # Wrangler can print dashboard-only values in its configuration diff.
-            # Keep the deployment receipt, but discard potentially private CLI output.
-            if WRANGLER_LOG=none WRANGLER_WRITE_LOGS=false WRANGLER_SEND_METRICS=false WRANGLER_SEND_ERROR_REPORTS=false \
-              npx wrangler deploy --config "${{ steps.mode.outputs.config }}" --keep-vars > /dev/null 2>&1; then
-              echo 'Deployment command completed with remote variables preserved; strict receipt and asset verification follows.'
-            else
-              echo '::error::Deployment failed. Potentially private command output was suppressed.'
-              exit 1
-            fi
-          else
-            npx wrangler deploy --config "${{ steps.mode.outputs.config }}"
-          fi
+        run: npx wrangler deploy --config "${{ steps.mode.outputs.config }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -153,33 +121,6 @@ jobs:
         run: node scripts/release-check.ts smoke
         env:
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson
-      - name: Verify published detailed route without creating a model
-        if: steps.mode.outputs.mode == 'LIVE'
-        run: |
-          node --input-type=module <<'JS'
-          import assert from 'node:assert/strict';
-          const origin = 'https://worldifact.xodobrox.workers.dev';
-          const response = await fetch(origin + '/api/studio/status', {redirect:'error',signal:AbortSignal.timeout(20000)});
-          assert.equal(response.status,200);
-          const status = await response.json();
-          assert.equal(status.ready,true);
-          assert.equal(status.detailedReady,true);
-          assert.equal(status.costGuardReady,true);
-          assert.equal(status.outputPolicyReady,true);
-          assert.equal(status.photoReady,true);
-          assert.equal(status.detailedReferenceLimit,4);
-          assert.equal(status.accountRequired,true);
-          assert.equal(status.newJobPolicy,'legacy-usd175-v1');
-          assert.notEqual(status.tiersReady,true);
-          const denied = await fetch(origin + '/api/studio/prepare', {method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({worldId:'enchanted-ai-shop',prompt:'Character reference routing guard probe',purpose:'game',textureMaxSize:4096,photos:[]})});
-          assert.equal(denied.status,401);
-          const fundingDenied = await fetch(origin + '/api/studio/reconcile-budget', {method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({cursor:null})});
-          assert.equal(fundingDenied.status,401);
-          const foreignFunding = await fetch(origin + '/api/studio/reconcile-budget', {method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Origin:'https://example.invalid','Content-Type':'application/json'},body:JSON.stringify({cursor:null})});
-          assert.equal(foreignFunding.status,403);
-          console.log('PASS: published funding reconciliation requires same-origin authenticated ownership; no account change or provider generation.');
-          console.log('PASS: detailed route READY, four views, current cost/output guards, unauthenticated preparation rejected; no paid generation.');
-          JS
       - name: Report deployed generation capability without spending
         run: |
           node --input-type=module - <<'JS'
@@ -189,7 +130,6 @@ jobs:
           console.log('Read-only deployment diagnostic. No model request is made by this step.')
           JS
       - name: Verify activated Stripe readiness and payment request guards without a charge
-        if: steps.billing_scope.outputs.preserve_billing == 'false'
         run: |
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
@@ -212,10 +152,6 @@ jobs:
           assert.equal(status.cardReady, true);
           assert.equal(status.topupReady, true);
           assert.equal(status.checkoutReady, true);
-          assert.equal(status.plans?.pro?.checkoutReady, true);
-          assert.equal(status.plans?.studio?.checkoutReady, true);
-          assert.equal(status.plans?.pro?.amountCents, 9999);
-          assert.equal(status.plans?.studio?.amountCents, 14999);
           assert.equal(status.googlePay, 'eligible_devices');
           assert.deepEqual(status.price, { amount: 2999, currency: 'USD', credits: 1500, kind: 'one_time' });
           assert.deepEqual(status.subscriptionPrice, { amount: 2999, currency: 'USD', credits: 1500, kind: 'subscription', interval: 'month' });

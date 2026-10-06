@@ -8,7 +8,6 @@ export interface BillingEnv extends AccountEnv, EntitlementEnv {
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID?: string
-  STRIPE_PLAN_CHANGE_CONFIGURATION_ID?: string
   STRIPE_MODE?: string
   STRIPE_SUBSCRIPTION_PRICE_ID?: string
   STRIPE_PRO_PRICE_ID?: string
@@ -219,7 +218,7 @@ function exactInvoice(env: BillingEnv, invoice: Json): { plan: PlanId; credits: 
   const offer = subscriptionOffer(env, plan), lines = matchingLines(invoice, id)
   if (invoice.paid !== true || invoice.status !== 'paid' || invoice.amount_paid !== offer.amountCents || invoice.total !== offer.amountCents || invoice.currency !== 'usd'
     || lines.length !== 1 || line.quantity !== 1 || line.amount !== offer.amountCents || line.currency !== 'usd'
-    || !['subscription_create', 'subscription_cycle', 'subscription_update'].includes(String(invoice.billing_reason))) return null
+    || !['subscription_create', 'subscription_cycle'].includes(String(invoice.billing_reason))) return null
   return { plan, credits: offer.credits, amount: offer.amountCents, priceId: id }
 }
 async function checkCustomer(env: BillingEnv, uid: string, value: unknown) {
@@ -241,30 +240,14 @@ async function syncSubscription(env: BillingEnv, subscription: Json, revision: n
   let paid = false, grantId: string | undefined
   if (billingConfig(env).plans[plan] && resourceId(invoiceId, 'in') && subscription.status === 'active') {
     await verifiedPrice(env, 'subscription', fetcher, true, priceIdValue, plan)
-    let invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher)
-    // A failed pending upgrade replaces latest_invoice, not the already-paid base period.
-    // Recover only exact, authoritative payment evidence for the CURRENT plan and period.
-    const latest = exactInvoice(env, invoice)
-    if ((!latest || latest.plan !== plan) && (subscription.pending_update || invoice.billing_reason === 'subscription_update') && Number.isSafeInteger(end) && end > Date.now()) {
-      const history = await stripe(env, `/invoices?subscription=${subscription.id}&status=paid&limit=100`, fetcher)
-      const candidates = array(history.data).filter(candidate => {
-        const verified = exactInvoice(env, candidate)
-        const line = array(object(candidate.lines).data)[0]
-        const start = Number(object(line?.period).start) * 1000
-        return candidate.livemode === (env.STRIPE_MODE === 'live') && resourceId(candidate.id, 'in')
-          && idOf(candidate.customer) === idOf(subscription.customer) && subscriptionOf(candidate) === subscription.id
-          && verified?.plan === plan && Number(object(line?.period).end) * 1000 === end
-          && Number.isSafeInteger(start) && start <= Date.now() && start < end
-      })
-      if (history.has_more !== true && candidates.length === 1) invoice = candidates[0]
-    }
+    const invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher)
     const verified = exactInvoice(env, invoice)
     paid = !!verified && verified.plan === plan && subscriptionOf(invoice) === subscription.id
     if (paid && verified) {
       await checkCustomer(env, uid, invoice.customer)
-      grantId = idOf(invoice)
-      const grant = await entitlementCall<{ granted: boolean }>(env, uid, '/grant', { id: grantId, credits: verified.credits, subscriptionId: subscription.id })
-      if (grant.granted) await adjustFreeSolPromo(env, grantId, planEconomics(plan).fundedFreeSolJobs)
+      grantId = invoiceId
+      const grant = await entitlementCall<{ granted: boolean }>(env, uid, '/grant', { id: invoiceId, credits: verified.credits, subscriptionId: subscription.id })
+      if (grant.granted) await adjustFreeSolPromo(env, invoiceId, planEconomics(plan).fundedFreeSolJobs)
     }
   }
   await entitlementCall(env, uid, '/subscription', { id: subscription.id, active: paid && subscription.status === 'active' && Number.isSafeInteger(end), until: Number.isSafeInteger(end) ? end : 0, revision, plan, grantId, terminal: ['canceled', 'incomplete_expired'].includes(String(subscription.status)) })
@@ -351,105 +334,12 @@ async function webhook(request: Request, env: BillingEnv, fetcher: typeof fetch)
   else if (['charge.dispute.created', 'charge.dispute.updated'].includes(String(event.type)) && resourceId(value.charge, 'ch')) await reverseCharge(env, await stripe(env, `/charges/${value.charge}`, fetcher), fetcher)
   return json({ received: true })
 }
-
-function recoveryUrl(value: unknown, host: 'billing.stripe.com' | 'invoice.stripe.com') {
-  if (typeof value !== 'string') throw new EntitlementError('Secure payment address was not confirmed.')
-  const url = new URL(value)
-  if (url.protocol !== 'https:' || url.hostname !== host || url.username || url.password || url.port || url.hash)
-    throw new EntitlementError('Secure payment address was not confirmed.')
-  return url.href
-}
-
-/** No customer-supplied IDs and no automatic charge, subscription creation or cancellation. */
-async function recoverBilling(request: Request, env: BillingEnv, user: AccountUser, fetcher: typeof fetch) {
-  if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
-  const input = object(JSON.parse(await boundedText(request, 1024)))
-  const action = input.action ?? 'status'
-  if (Object.keys(input).some(key => key !== 'action') || !['status', 'retry', 'card', 'manage'].includes(String(action)))
-    return json({ error: 'Choose a supported payment recovery action.' }, 400)
-  const config = billingConfig(env)
-  const stored = await entitlementCall<{ customer: string | null }>(env, user.id, '/billing')
-  if (!stored.customer) return json({ state: 'none', canManage: false, canRetry: false })
-  if (!resourceId(stored.customer, 'cus')) throw new EntitlementError('Billing account requires review.', 409)
-
-  if (action === 'card' || action === 'manage') {
-    const configuration = env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID
-    if (!resourceId(configuration, 'bpc')) throw new EntitlementError('Billing management is temporarily unavailable.')
-    const returnUrl = `${config.origin}/account/credits?billing=returned`
-    const params = new URLSearchParams({ customer: stored.customer, configuration: configuration!, return_url: returnUrl })
-    if (action === 'card') {
-      params.set('flow_data[type]', 'payment_method_update')
-      params.set('flow_data[after_completion][type]', 'redirect')
-      params.set('flow_data[after_completion][redirect][return_url]', returnUrl)
-    }
-    const portal = await stripe(env, '/billing_portal/sessions', fetcher, params)
-    if (idOf(portal.customer) !== stored.customer || idOf(portal.configuration) !== configuration)
-      throw new EntitlementError('Billing management could not be verified.')
-    return json({ url: recoveryUrl(portal.url, 'billing.stripe.com'), destination: 'portal', requiresConfirmation: true })
-  }
-
-  const subscriptions = await stripe(env, `/subscriptions?customer=${stored.customer}&status=all&limit=100`, fetcher)
-  const open = array(subscriptions.data).filter(item => !['canceled', 'incomplete_expired'].includes(String(item.status)))
-  const review = () => json({ state: 'review', canManage: true, canRetry: false })
-  if (subscriptions.has_more === true || open.length > 1) return review()
-  if (!open.length) {
-    // Reconcile terminal state too, so a delayed deletion/expiry webhook cannot leave
-    // a phantom active membership blocking a legitimate new checkout.
-    for (const terminal of array(subscriptions.data)) {
-      if (terminal.livemode !== (env.STRIPE_MODE === 'live') || !resourceId(terminal.id, 'sub')
-        || uidFor(terminal) !== user.id || idOf(terminal.customer) !== stored.customer) return review()
-      await syncSubscription(env, terminal, Math.floor(Date.now() / 1000) * 1000, fetcher)
-    }
-    return json({ state: 'none', canManage: true, canRetry: false })
-  }
-  const subscription = open[0], items = array(object(subscription.items).data)
-  const currentPlan = planForPrice(env, idOf(items[0]?.price))
-  if (subscription.livemode !== (env.STRIPE_MODE === 'live') || !resourceId(subscription.id, 'sub')
-    || uidFor(subscription) !== user.id || idOf(subscription.customer) !== stored.customer
-    || !currentPlan || items.length !== 1 || items[0].quantity !== 1 || object(subscription.items).has_more === true) return review()
-
-  const invoiceId = idOf(subscription.latest_invoice)
-  if (!resourceId(invoiceId, 'in')) return review()
-  const invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher)
-  if (idOf(invoice) !== invoiceId || idOf(invoice.customer) !== stored.customer || subscriptionOf(invoice) !== subscription.id) return review()
-  // Status refresh repairs the local ledger from Stripe payment evidence, not from URL flags.
-  await syncSubscription(env, subscription, Math.floor(Date.now() / 1000) * 1000, fetcher)
-  const allowance = await entitlementStatus(env, user.id)
-  if (allowance.billingReview) return review()
-  const lines = array(object(invoice.lines).data), line = lines[0]
-  const invoicePrice = idOf(line?.price) || idOf(object(object(line?.pricing).price_details).price)
-  const invoicePlan = planForPrice(env, invoicePrice)
-  const pendingItems = array(object(subscription.pending_update).subscription_items)
-  const pendingPrice = pendingItems.length === 1 && pendingItems[0].quantity === 1 ? idOf(pendingItems[0].price) : ''
-  const intendedPrice = invoicePrice === idOf(items[0].price) || invoicePrice === pendingPrice
-  if (invoice.status === 'open' && Number(invoice.amount_remaining) > 0) {
-    if (!invoicePlan || !intendedPrice || lines.length !== 1 || object(invoice.lines).has_more === true
-      || line.quantity !== 1 || line.currency !== 'usd' || invoice.currency !== 'usd'
-      || !['subscription_create', 'subscription_cycle', 'subscription_update'].includes(String(invoice.billing_reason))) return review()
-    const amount = subscriptionOffer(env, invoicePlan).amountCents
-    if (line.amount !== amount || invoice.total !== amount || invoice.amount_due !== amount
-      || !Number.isSafeInteger(invoice.amount_remaining) || Number(invoice.amount_remaining) > amount
-      || !Number.isSafeInteger(invoice.amount_paid) || Number(invoice.amount_paid) < 0 || Number(invoice.amount_paid) >= amount) return review()
-    // Validate before displaying a retry action; re-read all state on the eventual button click.
-    const address = recoveryUrl(invoice.hosted_invoice_url, 'invoice.stripe.com')
-    const response = { state: 'payment_required', canManage: true, canRetry: true, amountCents: invoice.amount_remaining,
-      currency: 'USD', plan: invoicePlan, pendingChange: !!subscription.pending_update, activePlan: allowance.subscription.active ? allowance.subscription.plan : null }
-    if (action === 'retry') return json({ ...response, url: address, destination: 'invoice', requiresConfirmation: true })
-    return json(response)
-  }
-  // Paid, void, expired and processing invoices never open another charge or a stale link.
-  return json({ state: allowance.subscription.active ? 'active' : 'processing', canManage: true, canRetry: false,
-    activePlan: allowance.subscription.active ? allowance.subscription.plan : null })
-}
-
 export async function billingApi(request: Request, env: BillingEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
   const url = new URL(request.url)
   if (!url.pathname.startsWith('/api/billing/')) return null
   const config = billingConfig(env)
   if (url.pathname === '/api/billing/status' && request.method === 'GET') return json({
     status: config.subscription || config.topup ? 'CONFIGURED' : 'BLOCKED',
-    portalReady: config.ready && resourceId(env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID, 'bpc'),
-    planChangeReady: config.astraSpendGuard && resourceId(env.STRIPE_PLAN_CHANGE_CONFIGURATION_ID, 'bpc'),
     checkoutReady: config.subscription, topupReady: config.topup, mode: config.mode, subscriptionInterval: config.interval,
     subscriptionCredits: MONTHLY_MEMBERSHIP.credits, generationCost: 50, modelsPerSubscriptionGrant: 30,
     generationCosts: { sol: 50, astra: 250, luna: 15 }, topupCredits: CREDIT_PACK.credits, price: CREDIT_PACK, subscriptionPrice: MONTHLY_MEMBERSHIP,
@@ -471,103 +361,14 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     if (!user) return json({ error: 'Sign in before opening billing.' }, 401)
     const limiter = env.ACCOUNT_LIMITER ?? env.GENERATION_LIMITER
     if (!limiter || !(await limiter.limit({ key: `billing:${user.id}` })).success) return json({ error: 'Billing request limit reached.' }, limiter ? 429 : 503)
-    // One authenticated plan-card action, independent of stale frontend membership state.
-    // Recover an existing payment first; never create a second subscription to bypass it.
-    let planRecovery: Json | null = null
-    if (url.pathname === '/api/billing/plan-payment') {
-      if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
-      const input = object(JSON.parse(await boundedText(request, 1024)))
-      if (Object.keys(input).length !== 1 || !['creator', 'pro', 'studio'].includes(String(input.plan))) return json({ error: 'Choose a valid plan.' }, 400)
-      const plan = input.plan as PlanId
-      const recoveryRequest = new Request(request.url, { method: 'POST', headers: request.headers, body: JSON.stringify({ action: 'retry' }) })
-      const recovered = await recoverBilling(recoveryRequest, env, user, fetcher)
-      if (!recovered.ok) return recovered
-      planRecovery = object(await recovered.json())
-      if (planRecovery.state === 'review' || planRecovery.state === 'processing') return json({ state: planRecovery.state })
-      if (planRecovery.state === 'payment_required' && planRecovery.plan === plan && planRecovery.canRetry === true) return json(planRecovery)
-      if (planRecovery.activePlan === plan) {
-        url.pathname = '/api/billing/portal'
-        request = new Request(url, { method: 'POST', headers: request.headers, body: '{}' })
-      } else if (planRecovery.state === 'none') {
-        url.pathname = '/api/billing/checkout'
-        request = new Request(url, { method: 'POST', headers: request.headers, body: JSON.stringify({ kind: 'subscription', plan }) })
-      } else if (planRecovery.state === 'active' || planRecovery.state === 'payment_required' && planRecovery.pendingChange === true && planRecovery.activePlan) {
-        url.pathname = '/api/billing/change-plan'
-        request = new Request(url, { method: 'POST', headers: request.headers, body: JSON.stringify({ plan }) })
-      } else {
-        // An unpaid first purchase/renewal is not an optional upgrade that may be replaced.
-        return json({ state: 'payment_required_other', outstandingPlan: planRecovery.plan, requestedPlan: plan })
-      }
-    }
-    if (url.pathname === '/api/billing/recovery') return await recoverBilling(request, env, user, fetcher)
     if (url.pathname === '/api/billing/portal') {
       const stored = await entitlementCall<{ customer: string | null }>(env, user.id, '/billing')
       if (!stored.customer) return json({ error: 'There is no billing account to manage yet.' }, 409)
       const portalConfiguration = env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID
       if (!resourceId(portalConfiguration, 'bpc')) throw new EntitlementError('Subscription management is not configured.')
       const session = await stripe(env, '/billing_portal/sessions', fetcher, new URLSearchParams({ customer: stored.customer, configuration: portalConfiguration!, return_url: `${config.origin}/account/credits` }))
-      if (idOf(session.customer) !== stored.customer || idOf(session.configuration) !== portalConfiguration || typeof session.url !== 'string' || !session.url.startsWith('https://billing.stripe.com/')) throw new EntitlementError('Billing portal was not confirmed.')
-      return json({ url: recoveryUrl(session.url, 'billing.stripe.com'), destination: 'portal' })
-    }
-    if (url.pathname === '/api/billing/change-plan') {
-      if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
-      const input = object(JSON.parse(await boundedText(request, 1024)))
-      if (Object.keys(input).length !== 1 || !['creator','pro','studio'].includes(String(input.plan))) return json({error:'Choose a valid plan.'},400)
-      const plan=input.plan as PlanId
-      // Never create an upgrade confirmation for a product whose generation path is paused.
-      if (!config.plans[plan] || !config.astraSpendGuard) return json({error:'This plan change is temporarily paused while generation is verified. Your current subscription is unchanged.',code:'PLAN_PAUSED'},409)
-      const configuration=env.STRIPE_PLAN_CHANGE_CONFIGURATION_ID
-      if (!resourceId(configuration,'bpc')) return json({error:'Plan changes are not configured. Manage or cancel your existing subscription separately.'},503)
-      const allowance=await entitlementStatus(env,user.id)
-      if (!allowance.subscription.active || allowance.billingReview) return json({error:'An active subscription without a billing hold is required.'},409)
-      const stored=await entitlementCall<{customer:string|null}>(env,user.id,'/billing')
-      if (!stored.customer) return json({error:'Billing account is not linked.'},409)
-      const subscriptions=await stripe(env,`/subscriptions?customer=${stored.customer}&status=all&limit=100`,fetcher)
-      const open=array(subscriptions.data).filter(s=>!['canceled','incomplete_expired'].includes(String(s.status)))
-      if (subscriptions.has_more===true || open.length!==1) return json({error:'Subscription state needs review. No duplicate membership was created.'},409)
-      const subscription=open[0],items=array(object(subscription.items).data)
-      if (subscription.status!=='active'||subscription.livemode!==(env.STRIPE_MODE==='live')||!resourceId(subscription.id,'sub')||uidFor(subscription)!==user.id||idOf(subscription.customer)!==stored.customer||items.length!==1||object(subscription.items).has_more===true||items[0].quantity!==1||!resourceId(items[0].id,'si')||(subscription.pending_update && !(planRecovery?.state==='payment_required' && planRecovery.pendingChange===true && planRecovery.activePlan===allowance.subscription.plan && planRecovery.plan!==plan))||subscription.schedule||subscription.cancel_at_period_end===true) return json({error:'Finish the pending billing change first. No new charge was created.'},409)
-      const source=planForPrice(env,idOf(items[0].price))
-      if (!source || source===plan) return json({error:'That plan is already active or requires review.'},409)
-      const price=await verifiedPrice(env,'subscription',fetcher,false,undefined,plan)
-      const invoiceId=idOf(subscription.latest_invoice)
-      if (!resourceId(invoiceId,'in')) return json({error:'Latest paid invoice could not be verified.'},409)
-      const invoice=await stripe(env,`/invoices/${invoiceId}`,fetcher)
-      if (subscriptionOf(invoice)!==subscription.id || idOf(invoice.customer)!==stored.customer) return json({error:'The billing account could not be confirmed.'},409)
-      const paidInvoice = exactInvoice(env, invoice)
-      // A different pending target can be REVIEWED in Stripe. Session creation does not
-      // modify it: Stripe applies/replaces the pending update only on customer confirmation.
-      // Revalidate the latest invoice after the first recovery read to catch changed state.
-      const pendingItems = array(object(subscription.pending_update).subscription_items)
-      const pendingPrice = pendingItems.length === 1 && pendingItems[0].quantity === 1 ? idOf(pendingItems[0].price) : ''
-      const pendingPlan = planForPrice(env, pendingPrice)
-      const pendingLines = array(object(invoice.lines).data), pendingLine = pendingLines[0]
-      const pendingAmount = pendingPlan ? subscriptionOffer(env, pendingPlan).amountCents : 0
-      const replaceablePending = !!pendingPlan && pendingPlan !== plan && pendingPlan === planRecovery?.plan
-        && planRecovery?.state === 'payment_required' && planRecovery.pendingChange === true
-        && idOf(pendingItems[0]) === idOf(items[0]) && invoice.id === invoiceId
-        && invoice.status === 'open' && invoice.paid === false && invoice.billing_reason === 'subscription_update'
-        && invoice.currency === 'usd' && invoice.amount_paid === 0
-        && invoice.total === pendingAmount && invoice.amount_due === pendingAmount && invoice.amount_remaining === pendingAmount
-        && pendingLines.length === 1 && object(invoice.lines).has_more !== true
-        && (idOf(pendingLine?.price) || idOf(object(object(pendingLine?.pricing).price_details).price)) === pendingPrice
-        && pendingLine?.quantity === 1 && pendingLine.currency === 'usd' && pendingLine.amount === pendingAmount && pendingLine.proration !== true
-      if (!paidInvoice || paidInvoice.plan !== source) {
-        // Stripe voids an expired pending-upgrade invoice. It cannot be paid, and
-        // must not permanently prevent a fresh, explicitly confirmed plan change.
-        if (!replaceablePending && (invoice.status !== 'void' || invoice.billing_reason !== 'subscription_update')) return json({error:'Settle the outstanding invoice before changing plan.'},409)
-        await syncSubscription(env, subscription, Math.floor(Date.now() / 1000) * 1000, fetcher)
-        const recovered = await entitlementStatus(env, user.id)
-        if (!recovered.subscription.active || recovered.subscription.plan !== source || recovered.billingReview) return json({error:'The current paid subscription period could not be verified.'},409)
-      }
-      const params=new URLSearchParams({customer:stored.customer,configuration:configuration!,return_url:`${config.origin}/account/credits`,
-        'flow_data[type]':'subscription_update_confirm','flow_data[subscription_update_confirm][subscription]':String(subscription.id),
-        'flow_data[subscription_update_confirm][items][0][id]':String(items[0].id),'flow_data[subscription_update_confirm][items][0][price]':String(price.id),
-        'flow_data[subscription_update_confirm][items][0][quantity]':'1','flow_data[after_completion][type]':'redirect',
-        'flow_data[after_completion][redirect][return_url]':`${config.origin}/account/credits?billing=processing`})
-      const session=await stripe(env,'/billing_portal/sessions',fetcher,params)
-      if(idOf(session.customer)!==stored.customer||idOf(session.configuration)!==configuration||typeof session.url!=='string'||!session.url.startsWith('https://billing.stripe.com/'))throw new EntitlementError('Plan confirmation was not verified.')
-      return json({url:recoveryUrl(session.url, 'billing.stripe.com'),destination:'portal',requiresConfirmation:true})
+      if (session.customer !== stored.customer || session.configuration !== portalConfiguration || typeof session.url !== 'string' || !session.url.startsWith('https://billing.stripe.com/')) throw new EntitlementError('Billing portal was not confirmed.')
+      return json({ url: session.url })
     }
     if (url.pathname !== '/api/billing/checkout') return json({ error: 'Not found.' }, 404)
     if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({ error: 'Use application/json.' }, 415)
@@ -587,7 +388,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
         return json({ error: 'A subscription or payment is already present. Open Manage billing instead of starting another.' }, 409)
     }
     const attempt = await entitlementCall<{ id: string; created: number; url?: string }>(env, user.id, '/checkout-reserve', { kind, ...(kind === 'subscription' ? { plan } : {}) })
-    if (attempt.url) return json({ url: attempt.url, destination: 'checkout', mode: config.mode })
+    if (attempt.url) return json({ url: attempt.url, mode: config.mode })
     const checkoutAmount = kind === 'subscription' ? subscriptionOffer(env, plan).amountCents : CREDIT_PACK.amount
     const params = new URLSearchParams({ mode: kind === 'subscription' ? 'subscription' : 'payment', customer,
       'line_items[0][price]': price.id as string, 'line_items[0][quantity]': '1', client_reference_id: user.id,
@@ -619,7 +420,7 @@ export async function billingApi(request: Request, env: BillingEnv, fetcher: typ
     const fields = checks.filter(([, valid]) => !valid).map(([name]) => name)
     if (fields.length) throw new BillingDiagnosticError('Checkout price or account was not confirmed.', 503, { stage: 'checkout_create', category: 'checkout_validation', fields })
     await entitlementCall(env, user.id, '/checkout-finish', { kind, ...(kind === 'subscription' ? { plan } : {}), id: attempt.id, url: session.url, sessionId: session.id, expiresAt: Number(session.expires_at) * 1000 })
-    return json({ url: session.url, destination: 'checkout', mode: config.mode })
+    return json({ url: session.url, mode: config.mode })
   } catch (error) { return json({ error: error instanceof EntitlementError ? error.message : 'Billing is temporarily unavailable. No account credit was inferred from this response.', ...(error instanceof BillingDiagnosticError ? { diagnostic: error.diagnostic } : {}) }, error instanceof EntitlementError ? error.status : 503) }
 }
 
