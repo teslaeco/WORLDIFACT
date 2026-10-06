@@ -10,6 +10,7 @@ import { astraSupportApproval, ASTRA_SUPPORT_ONCE_KEY, ASTRA_SUPPORT_NAMESPACE, 
 import { astraSupplementalGrant, matchesAstraSupplementalClaim, ASTRA_SUPPLEMENTAL_KEY, ASTRA_SUPPLEMENTAL_NAMESPACE, ASTRA_SUPPLEMENTAL_CENTS, type AstraSupplementalGrant, type AstraSupplementalClaim } from './astraSupplementalGrant.ts'
 import { astraRepairedMccGrant, matchesAstraRepairedMccClaim, ASTRA_REPAIRED_MCC_KEY, ASTRA_REPAIRED_MCC_NAMESPACE, ASTRA_REPAIRED_MCC_CENTS, type AstraRepairedMccGrant, type AstraRepairedMccClaim } from './astraRepairedMccGrant.ts'
 import { astraProjectBudget, matchesAstraProjectBudgetRecord, matchesAstraProjectScope, isAstraProjectBudgetRecord, persistedAstraProjectBudget, ASTRA_PROJECT_BUDGET_KEY, ASTRA_PROJECT_BUDGET_NAMESPACE, ASTRA_PROJECT_BUDGET_CENTS, type AstraProjectBudget, type AstraProjectBudgetRecord } from './astraProjectBudget.ts'
+import { overnightTestPoolRoute, overnightTestAuthority, overnightWorkflow, matchesOvernightTestClaim, isOvernightTestClaim, OVERNIGHT_TEST_NAMESPACE, OVERNIGHT_TEST_APPROVAL, OVERNIGHT_TEST_WORKFLOWS, type OvernightTestClaim } from './overnightTestBudget.ts'
 import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { boundBlueprintProviderModel } from './blueprintModelBinding.ts'
 import type { GenerationFundingSnapshot } from '../src/lib/generationFunding.ts'
@@ -24,6 +25,7 @@ export interface EntitlementEnv {
   WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT?: string
   WORLDIFACT_ASTRA_REPAIRED_MCC_GRANT?: string
   WORLDIFACT_ASTRA_PROJECT_BUDGET?: string
+  WORLDIFACT_OVERNIGHT_TEST_BUDGET?: string
 }
 export interface EntitlementStorage {
   get<T>(key: string): Promise<T | undefined>
@@ -38,8 +40,8 @@ type StudioProviderReservation = { version: 1; source: 'ordinary'; amountCents: 
 type FailedBlueprintProviderReconciliation = { revision: 'blueprint-failed-output-v1'; evidence: BlueprintTerminalUsage; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number }
 type BlueprintProviderReconciliation = { revision: 'blueprint-bounded-output-v1'; model: GenerationModel; resultSha256: string; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number } | FailedBlueprintProviderReconciliation
 type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalReservedCents: 175 | 200 | 400; retainedCents: number; releasedCents: number; at: number }
-type Job = { blueprintProviderModel?: string; pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; repairedMccGrantId?: string; repairedMccClaim?: AstraRepairedMccClaim; projectBudget?: AstraProjectBudgetRecord; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
-export type Reservation = { providerModel?: string; pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
+type Job = { overnightTest?: OvernightTestClaim; blueprintProviderModel?: string; pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; repairedMccGrantId?: string; repairedMccClaim?: AstraRepairedMccClaim; projectBudget?: AstraProjectBudgetRecord; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
+export type Reservation = { fundingSource?: typeof OVERNIGHT_TEST_APPROVAL; providerModel?: string; pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
 export type JobAccess = { fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
 export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean }
@@ -125,6 +127,7 @@ function samePricing(left: StudioPricing | undefined, right: StudioPricing | und
     left.revision === right.revision && left.tier === right.tier && left.points === right.points && left.maxProviderCents === right.maxProviderCents
 }
 function terminalOrdinaryAstraReservation(job: Job): boolean {
+  if (Object.hasOwn(job, 'overnightTest')) return false
   const terms = reservationTerms(job)
   if (!terms) return false
   if (!['failed', 'completed'].includes(job.state) || job.channel !== 'studio' || job.profile !== 'slow' ||
@@ -298,7 +301,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
   if (job.state !== 'reserved') return { settled: true, repeated: true }
   let providerReservation = job.studioProviderReservation
   const economics = reservationTerms(job)
-  if (next === 'failed' && job.channel === 'studio' && job.kind === 'credits' && job.billingMode === 'hold-v1' &&
+  if (next === 'failed' && !Object.hasOwn(job, 'overnightTest') && job.channel === 'studio' && job.kind === 'credits' && job.billingMode === 'hold-v1' &&
       job.studioDispatch === 'ready-v1' && job.studioDispatchUntil === undefined && job.supportApprovalId === undefined && job.supplementalGrantId === undefined && !Object.hasOwn(job, 'repairedMccGrantId') && !Object.hasOwn(job, 'repairedMccClaim') && !Object.hasOwn(job, 'projectBudget') &&
       typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint) && economics && job.cost === economics.points &&
       providerReservation && typeof providerReservation === 'object' && !Array.isArray(providerReservation) && Object.keys(providerReservation).length === 4 &&
@@ -313,7 +316,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
     providerReservation = { ...providerReservation, state: 'released' }
   }
   let blueprintReservation = job.blueprintProviderReservation
-  if (next === 'failed' && job.channel === 'blueprint' && job.kind === 'credits' && job.billingMode === undefined &&
+  if (next === 'failed' && !Object.hasOwn(job, 'overnightTest') && job.channel === 'blueprint' && job.kind === 'credits' && job.billingMode === undefined &&
       job.blueprintDispatch === 'ready-v1' && job.blueprintDispatchUntil === undefined && !Object.hasOwn(job, 'pricing') &&
       job.supportApprovalId === undefined && job.supplementalGrantId === undefined && !Object.hasOwn(job, 'repairedMccGrantId') && !Object.hasOwn(job, 'repairedMccClaim') && !Object.hasOwn(job, 'projectBudget') &&
       typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint) && economics && job.cost === economics.points &&
@@ -352,7 +355,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
 // by an immutable authenticated terminal Oracle receipt. Unknown spend is held.
 const PROVIDER_BUDGET = 'provider-budget-cents:v1'
 const FUNDING_SCAN_LIMIT = 256
-const FUNDING_JOB_FIELDS = ['pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile', 'failureCode', 'supportApprovalId',
+const FUNDING_JOB_FIELDS = ['overnightTest', 'pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile', 'failureCode', 'supportApprovalId',
   'supplementalGrantId', 'repairedMccGrantId', 'repairedMccClaim', 'projectBudget', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'billingMode', 'state', 'studioDispatch', 'studioDispatchUntil',
   'studioProviderReservation', 'studioProviderReconciliation', 'blueprintDispatch', 'blueprintDispatchUntil', 'blueprintProviderReservation', 'blueprintProviderReconciliation', 'blueprintProviderModel']
 function fundingJob(value: unknown): value is Job {
@@ -366,10 +369,12 @@ function fundingJob(value: unknown): value is Job {
     (!Object.hasOwn(job, 'blueprintProviderModel') || job.channel === 'blueprint' && !!boundBlueprintProviderModel(job)) &&
     (!Object.hasOwn(job, 'fingerprint') || typeof job.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(job.fingerprint)) &&
     (!Object.hasOwn(job, 'prompt') || typeof job.prompt === 'string' && job.prompt.length <= 4000) &&
+    (!Object.hasOwn(job, 'overnightTest') || isOvernightTestClaim(job.overnightTest)) &&
     (!Object.hasOwn(job, 'billingMode') || job.billingMode === 'hold-v1')
 }
 /** Recognize only the explicit ordinary reservation writer. Historical markerless rows stay unknown. */
 function recordedOrdinaryReservation(job: Job): StudioProviderReservation | null {
+  if (Object.hasOwn(job, 'overnightTest')) return null
   if (job.kind !== 'credits' || typeof job.fingerprint !== 'string' || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim') || Object.hasOwn(job, 'projectBudget') ||
       !Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at) return null
   const terms = reservationTerms(job), model = job.model ?? (job.profile === 'slow' ? 'astra' : 'sol')
@@ -434,7 +439,7 @@ async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get'
     const job = value, id = key.slice(4), evidence = jobs.evidence, amounts = jobs.fundingEvidence
     jobs.states[job.state]++
     jobs.routes[job.channel ?? 'legacyBlueprint']++
-    const supportRecord = Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim') || Object.hasOwn(job, 'projectBudget')
+    const supportRecord = Object.hasOwn(job, 'overnightTest') || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim') || Object.hasOwn(job, 'projectBudget')
     const marked = Object.hasOwn(job, 'studioProviderReconciliation') || Object.hasOwn(job, 'blueprintProviderReconciliation')
     const failedBlueprintMarked = job.blueprintProviderReconciliation?.revision === 'blueprint-failed-output-v1' ||
       job.channel === 'blueprint' && job.state === 'failed' && Object.hasOwn(job, 'blueprintProviderReconciliation')
@@ -451,7 +456,7 @@ async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get'
     }
     const studioPending = id === id.toLowerCase() && providerBudgetPending(job)
     const blueprintPending = !Object.hasOwn(job, 'blueprintProviderReconciliation') && completedOrdinaryBlueprint(job) !== null
-    if (supportRecord && !Object.hasOwn(job, 'projectBudget')) evidence.supportGrantRecords++
+    if (supportRecord && !Object.hasOwn(job, 'projectBudget') && !Object.hasOwn(job, 'overnightTest')) evidence.supportGrantRecords++
     if (marked && (!failedBlueprintMarked || failedBlueprintVerified)) evidence.markedReconciled++
     if (failedBlueprintMarked && !failedBlueprintVerified) evidence.unknown++
     if (studioPending) evidence.ordinaryTerminalStudioPending++
@@ -585,16 +590,43 @@ async function status(storage: EntitlementStorage, now: number, astraEnabled = f
   }
 }
 
+function overnightJobExpiry(job: Job, id: string, accountId: string | null, env: EntitlementEnv, now: number): number {
+  if (!Object.hasOwn(job, 'overnightTest')) return Infinity
+  const authority = overnightTestAuthority(env, accountId, now), model = job.model ?? (job.profile === 'fast' ? 'sol' : 'astra')
+  const workflow = overnightWorkflow(job.channel, model)
+  if (!authority || !workflow || !job.fingerprint || job.kind !== 'credits' || job.cost !== MODEL_ECONOMICS[model].creditsPerGeneration ||
+      Object.hasOwn(job, 'pricing') || Object.hasOwn(job, 'projectBudget') || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') ||
+      Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'studioProviderReservation') || Object.hasOwn(job, 'blueprintProviderReservation') ||
+      !matchesOvernightTestClaim(job.overnightTest, authority, id, job.fingerprint, workflow, now) ||
+      (job.channel === 'studio' ? job.billingMode !== 'hold-v1' : job.billingMode !== undefined || boundBlueprintProviderModel(job) !== OVERNIGHT_TEST_WORKFLOWS[workflow].model)) return 0
+  return Date.parse(authority.expiresAt)
+}
+async function overnightPoolCall(env: EntitlementEnv, userId: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
+  if (!ACCOUNT_ID.test(userId) || !env.ACCOUNT_ENTITLEMENTS || env.ACCOUNT_LEDGER_MODE !== undefined && env.ACCOUNT_LEDGER_MODE !== 'live') throw new EntitlementError('Live account test funding is unavailable.')
+  const object = env.ACCOUNT_ENTITLEMENTS.get(env.ACCOUNT_ENTITLEMENTS.idFromName(OVERNIGHT_TEST_NAMESPACE))
+  const response = await object.fetch(new Request('https://entitlements.internal' + path, { method: body === undefined ? 'GET' : 'POST',
+    headers: internalHeaders(userId), ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000) }))
+  if (!response.ok) throw new EntitlementError('The overnight test authority is unavailable.')
+  return response.json() as Promise<Record<string, unknown>>
+}
+
 /** One internal Durable Object per verified existing Chess account UUID. No passwords or identity database. */
 export class AccountEntitlements {
   private storage: EntitlementStorage
   private now: () => number
   private astraEnabled: boolean
   private supportEnv: EntitlementEnv
-  constructor(state: { storage: EntitlementStorage }, env: unknown = {}, now = Date.now) { this.storage = state.storage; this.now = now; this.astraEnabled = !!env && typeof env === 'object' && (env as { ENABLE_ASTRA_PLANS?: string }).ENABLE_ASTRA_PLANS === 'true'; this.supportEnv = env && typeof env === 'object' ? env as EntitlementEnv : {} }
+  private overnightPoolNamespace = false
+  constructor(state: { storage: EntitlementStorage; id?: { toString(): string } }, env: unknown = {}, now = Date.now) { this.storage = state.storage; this.now = now; this.astraEnabled = !!env && typeof env === 'object' && (env as { ENABLE_ASTRA_PLANS?: string }).ENABLE_ASTRA_PLANS === 'true'; this.supportEnv = env && typeof env === 'object' ? env as EntitlementEnv : {}
+    try { this.overnightPoolNamespace = !!state.id && !!this.supportEnv.ACCOUNT_ENTITLEMENTS && state.id.toString() === String(this.supportEnv.ACCOUNT_ENTITLEMENTS.idFromName(OVERNIGHT_TEST_NAMESPACE)) } catch { /* Unknown namespace never holds test funds. */ }
+  }
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname, now = this.now()
     try {
+      if (path === '/overnight-test-status' || path === '/overnight-test-claim') {
+        if (!this.overnightPoolNamespace) return json({ error: 'Wrong overnight budget namespace.' }, 403)
+        return (await overnightTestPoolRoute(request, this.storage, this.supportEnv, this.now))!
+      }
       if (path === '/studio-library' || path.startsWith('/studio-library/')) {
         if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
         const params = new URL(request.url).searchParams
@@ -825,8 +857,9 @@ export class AccountEntitlements {
           const job = await storage.get<Job>(`job:${input.id}`)
           if (!job || job.channel !== 'blueprint' || job.fingerprint !== input.fingerprint || job.state !== 'reserved' || job.blueprintDispatch !== 'ready-v1') return { dispatch: false }
           const claimedAt = this.now()
-          if (!Number.isSafeInteger(job.at) || claimedAt < job.at || claimedAt >= job.at + BLUEPRINT_JOB_WINDOW_MS) return { dispatch: false }
-          const deadline = Math.min(claimedAt + BLUEPRINT_DISPATCH_WINDOW_MS, job.at + BLUEPRINT_JOB_WINDOW_MS)
+          const testExpiry = overnightJobExpiry(job, String(input.id), request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv, claimedAt)
+          if (!Number.isSafeInteger(job.at) || claimedAt < job.at || claimedAt >= job.at + BLUEPRINT_JOB_WINDOW_MS || claimedAt >= testExpiry) return { dispatch: false }
+          const deadline = Math.min(claimedAt + BLUEPRINT_DISPATCH_WINDOW_MS, job.at + BLUEPRINT_JOB_WINDOW_MS, testExpiry)
           await storage.put(`job:${input.id}`, { ...job, blueprintDispatch: 'claimed-v1', blueprintDispatchUntil: deadline })
           return { dispatch: true, deadline }
         }))
@@ -839,7 +872,8 @@ export class AccountEntitlements {
           const job = await storage.get<Job>(`job:${input.id}`)
           if (!job || job.channel !== 'studio' || job.fingerprint !== input.fingerprint || job.state !== 'reserved' || job.studioDispatch !== 'ready-v1') return { dispatch: false }
           const repairedJob = Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim')
-          let repairedExpiry = Infinity
+          let repairedExpiry = overnightJobExpiry(job, String(input.id), request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv, this.now())
+          if (Object.hasOwn(job, 'overnightTest') && this.now() >= repairedExpiry) return { dispatch: false }
           if (repairedJob) {
             const claim = job.repairedMccClaim, marker = await storage.get(ASTRA_REPAIRED_MCC_KEY)
             const grant = claim ? astraRepairedMccGrant(JSON.stringify({ version: claim.version, accountId: claim.accountId, grantId: claim.grantId,
@@ -851,7 +885,7 @@ export class AccountEntitlements {
                 Object.hasOwn(job, 'studioProviderReservation') || (job.qualityProfile ?? 'standard') !== 'standard' ||
                 !matchesAstraRepairedMccClaim(claim, grant, this.now(), String(input.id), String(input.fingerprint)) ||
                 !matchesAstraRepairedMccClaim(marker, grant, this.now(), String(input.id), String(input.fingerprint)) || marker.at !== claim.at) return { dispatch: false }
-            repairedExpiry = Date.parse(claim.expiresAt)
+            repairedExpiry = Math.min(repairedExpiry, Date.parse(claim.expiresAt))
           }
           const projectJob = Object.hasOwn(job, 'projectBudget')
           if (projectJob) {
@@ -862,7 +896,7 @@ export class AccountEntitlements {
                 Object.hasOwn(job, 'studioProviderReservation') || (job.qualityProfile ?? 'standard') !== 'standard' ||
                 !matchesAstraProjectBudgetRecord(record, approved, this.now(), String(input.id), String(input.fingerprint)) ||
                 !matchesAstraProjectBudgetRecord(marker, approved, this.now(), String(input.id), String(input.fingerprint)) || marker.at !== record.at) return { dispatch: false }
-            repairedExpiry = Date.parse(record.expiresAt)
+            repairedExpiry = Math.min(repairedExpiry, Date.parse(record.expiresAt))
           }
           const claimedAt = this.now()
           if (!Number.isSafeInteger(job.at) || claimedAt < job.at || claimedAt >= job.at + STUDIO_SUBMISSION_GRACE_MS || claimedAt >= repairedExpiry) return { dispatch: false }
@@ -871,11 +905,13 @@ export class AccountEntitlements {
           // recovery-only; a delayed acknowledgement cannot launch after this
           // bounded deadline. Legacy rows cannot acquire dispatch permission.
           await storage.put(`job:${input.id}`, { ...job, studioDispatch: 'claimed-v1', studioDispatchUntil: deadline })
-          if ((repairedJob || projectJob) && this.now() >= repairedExpiry) throw new Error('Bounded MCC dispatch expired before commit')
+          if ((repairedJob || projectJob || job.overnightTest) && this.now() >= repairedExpiry) throw new Error('Bounded MCC dispatch expired before commit')
           return { dispatch: true, deadline }
         }))
       }
-      if (path === '/reserve') {
+      if (path === '/reserve' || path === '/reserve-overnight-test') {
+        const overnightRequest = path === '/reserve-overnight-test'
+        if (!overnightRequest && Object.hasOwn(input, 'overnightTestClaim')) return json({ error: 'Wrong funding route' }, 400)
         if (typeof input.id !== 'string' || !JOB_ID.test(input.id) || !['fast', 'slow'].includes(String(input.profile))) return json({ error: 'Invalid generation' }, 400)
         if (input.fingerprint !== undefined && (typeof input.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(input.fingerprint))) return json({ error: 'Invalid request fingerprint' }, 400)
         const fingerprint = input.fingerprint as string | undefined
@@ -898,8 +934,19 @@ export class AccountEntitlements {
         if (Object.hasOwn(input, 'pricing') && (!isStudioPricing(input.pricing) || channel !== 'studio' || selectedModel !== 'astra' || !fingerprint))
           return json({ error: 'Invalid Studio pricing terms' }, 400)
         const pricing = input.pricing as StudioPricing | undefined
+        const testAuthority = overnightRequest ? overnightTestAuthority(this.supportEnv, request.headers.get('X-WORLDIFACT-Verified-Account'), this.now()) : null
+        const testWorkflow = overnightWorkflow(channel, selectedModel)
+        const testClaim = input.overnightTestClaim
+        if (overnightRequest && (!testAuthority || !testWorkflow || MODEL_ECONOMICS[selectedModel].model !== OVERNIGHT_TEST_WORKFLOWS[testWorkflow].model || MODEL_ECONOMICS[selectedModel].maxProviderCents !== OVERNIGHT_TEST_WORKFLOWS[testWorkflow].capCents || pricing !== undefined || input.projectBudgetInputEligible === true || input.repairedMccInputEligible === true ||
+            !fingerprint || !matchesOvernightTestClaim(testClaim, testAuthority, id, fingerprint, testWorkflow, this.now())))
+          return json({ allowed: false, reason: 'ACCOUNT_REQUEST_CONFLICT' }, 429)
+        const overnightClaim = overnightRequest ? testClaim as OvernightTestClaim : undefined
         const result = await this.storage.transaction(async storage => {
           const existing = await storage.get<Job>(`job:${id}`)
+          const currentTestAuthority = overnightRequest ? overnightTestAuthority(this.supportEnv, request.headers.get('X-WORLDIFACT-Verified-Account'), this.now()) : null
+          if (overnightRequest && (!currentTestAuthority || !testWorkflow || !fingerprint || !matchesOvernightTestClaim(overnightClaim, currentTestAuthority, id, fingerprint, testWorkflow, this.now())))
+            return { allowed: false, reason: 'ACCOUNT_ADMISSION_UNAVAILABLE' }
+          if (existing && overnightRequest && (!existing.overnightTest || !matchesOvernightTestClaim(existing.overnightTest, currentTestAuthority!, id, fingerprint!, testWorkflow!, this.now()) || existing.overnightTest.claimedAt !== overnightClaim?.claimedAt)) return { allowed: false, repeated: true, reason: 'JOB_FUNDING_SOURCE_MISMATCH' }
           if (existing && existing.fingerprint !== fingerprint) return { allowed: false, repeated: true, reason: 'REQUEST_PAYLOAD_MISMATCH' }
           if (existing?.state === 'failed' && existing.failureCode === 'MISSING_SUBMISSION')
             return { allowed: false, repeated: true, state: existing.state, cost: 0, kind: existing.kind, reason: 'JOB_ALREADY_FAILED' }
@@ -909,7 +956,7 @@ export class AccountEntitlements {
           if (existing && (existing.channel ?? 'blueprint') !== channel) return { allowed: false, reason: 'JOB_CHANNEL_MISMATCH' }
           if (existing) return existing.profile !== profile
             ? { allowed: false, reason: 'JOB_PROFILE_MISMATCH' }
-            : { allowed: existing.state !== 'failed', repeated: true, state: existing.state, cost: existing.cost, kind: existing.kind, ...(existing.pricing ? { pricing: existing.pricing } : {}), ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
+            : { allowed: existing.state !== 'failed', repeated: true, state: existing.state, cost: existing.cost, kind: existing.kind, ...(existing.overnightTest ? { fundingSource: OVERNIGHT_TEST_APPROVAL } : {}), ...(existing.pricing ? { pricing: existing.pricing } : {}), ...(existing.state === 'failed' ? { reason: 'JOB_ALREADY_FAILED' } : {}) }
           const credits = await balance(storage), heldCredits = await reservedCredits(storage), subscription = await storage.get<Subscription>('subscription')
           if (credits < 0 || await storage.get<boolean>('billingHold') === true) return { allowed: false, reason: 'BILLING_REVIEW_REQUIRED' }
           const subscriptionActive = active(subscription, now)
@@ -919,6 +966,7 @@ export class AccountEntitlements {
           // guards below still protect the service and prevent unbounded API spend.
           if (model === 'astra' && !this.astraEnabled) return { allowed: false, reason: 'ASTRA_RUNTIME_DISABLED' }
           const paid = subscriptionActive || credits > 0
+          if (overnightRequest && !paid) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
           if (paid && credits - heldCredits < cost) return { allowed: false, reason: 'CREDITS_EXHAUSTED' }
           const free = await usage(storage, now)
           if (!paid && profile === 'slow') return { allowed: false, reason: 'FREE_SOL_ONLY' }
@@ -929,7 +977,7 @@ export class AccountEntitlements {
           let projectBudgetRecord: AstraProjectBudgetRecord | undefined
           let studioProviderReservation: StudioProviderReservation | undefined
           let blueprintProviderReservation: StudioProviderReservation | undefined
-          if (paid) {
+          if (paid && !overnightRequest) {
             // Separate support/project attempts only read the ordinary ledger.
             // Only an actual ordinary reservation may initialize or debit it.
             const repairedConfiguration = repaired()
@@ -1019,8 +1067,9 @@ export class AccountEntitlements {
                 blueprintProviderReservation = { version: 1, source: 'ordinary', amountCents: ceiling, state: 'reserved' }
             }
           }
+          if (overnightClaim && (!testAuthority || !testWorkflow || !fingerprint || !matchesOvernightTestClaim(overnightClaim, testAuthority, id, fingerprint, testWorkflow, this.now()))) throw new Error('Overnight account admission expired before writes')
           const cloudHold = paid && channel === 'studio'
-          const job: Job = { ...(typeof providerModel === 'string' ? { blueprintProviderModel: providerModel } : {}), ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(repairedMccClaim ? { repairedMccGrantId: repairedMccClaim.grantId, repairedMccClaim } : {}), ...(projectBudgetRecord ? { projectBudget: projectBudgetRecord } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), ...(blueprintProviderReservation ? { blueprintProviderReservation } : {}), ...(channel === 'blueprint' && fingerprint && fencedBlueprint ? { blueprintDispatch: 'ready-v1' as const } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
+          const job: Job = { ...(overnightClaim ? { overnightTest: overnightClaim } : {}), ...(typeof providerModel === 'string' ? { blueprintProviderModel: providerModel } : {}), ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(repairedMccClaim ? { repairedMccGrantId: repairedMccClaim.grantId, repairedMccClaim } : {}), ...(projectBudgetRecord ? { projectBudget: projectBudgetRecord } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), ...(blueprintProviderReservation ? { blueprintProviderReservation } : {}), ...(channel === 'blueprint' && fingerprint && fencedBlueprint ? { blueprintDispatch: 'ready-v1' as const } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
@@ -1036,7 +1085,8 @@ export class AccountEntitlements {
             if (!current || !matchesAstraProjectBudgetRecord(projectBudgetRecord, current, this.now(), id, fingerprint!))
               throw new Error('Project budget admission expired before account commit')
           }
-          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold, ...(job.blueprintProviderModel ? { providerModel: job.blueprintProviderModel } : {}), ...(job.pricing ? { pricing: job.pricing } : {}) }
+          if (overnightClaim && (!overnightTestAuthority(this.supportEnv, request.headers.get('X-WORLDIFACT-Verified-Account'), this.now()) || this.now() >= Date.parse(overnightClaim.expiresAt))) throw new Error('Overnight account admission expired before commit')
+          return { allowed: true, repeated: false, cost: job.cost, kind: job.kind, held: cloudHold, ...(job.overnightTest ? { fundingSource: OVERNIGHT_TEST_APPROVAL } : {}), ...(job.blueprintProviderModel ? { providerModel: job.blueprintProviderModel } : {}), ...(job.pricing ? { pricing: job.pricing } : {}) }
         })
         return json(result, result.allowed ? 200 : 429)
       }
@@ -1319,7 +1369,7 @@ export async function entitlementCall<T>(env: EntitlementEnv, userId: string, pa
   let response: Response
   try { response = await object.fetch(new Request(`https://entitlements.internal${path}`, { method: body === undefined ? 'GET' : 'POST', headers: internalHeaders(userId, support), ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000) })) }
   catch { throw new EntitlementError('Account allowances are temporarily unavailable.') }
-  if (!response.ok && !(path === '/reserve' && response.status === 429)) throw new EntitlementError('Account allowances are temporarily unavailable.')
+  if (!response.ok && !(['/reserve', '/reserve-overnight-test'].includes(path) && response.status === 429)) throw new EntitlementError('Account allowances are temporarily unavailable.')
   return response.json() as Promise<T>
 }
 async function supportCall(env: EntitlementEnv, userId: string, identity?: AstraSupportIdentity, body?: { id: string; fingerprint: string }): Promise<{ available?: boolean; consumed?: boolean; approved?: boolean; approvalId?: string }> {
@@ -1434,8 +1484,24 @@ export async function entitlementStatus(env: EntitlementEnv, userId: string, ide
     repaired: { available: repaired.available, consumed: repaired.consumed, statusKnown: typeof repaired.available === 'boolean' },
     project: { available: project.available, committed: project.committed, statusKnown: typeof project.available === 'boolean' } })
 }
-export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { providerModel?: string; channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing; blueprintDispatch?: 'fenced-v1'; repairedMccInputEligible?: boolean; projectBudgetInputEligible?: boolean }) {
+export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { overnightTest?: boolean; providerModel?: string; channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing; blueprintDispatch?: 'fenced-v1'; repairedMccInputEligible?: boolean; projectBudgetInputEligible?: boolean }) {
   const body = { id: jobId, profile, ...(metadata?.providerModel !== undefined ? { providerModel: metadata.providerModel } : {}), ...(metadata?.projectBudgetInputEligible === true ? { projectBudgetInputEligible: true } : {}), ...(metadata?.repairedMccInputEligible === true ? { repairedMccInputEligible: true } : {}), ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.blueprintDispatch ? { blueprintDispatch: metadata.blueprintDispatch } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
+  if (metadata?.overnightTest) {
+    const workflow = overnightWorkflow(metadata.channel, model ?? (profile === 'fast' ? 'sol' : 'astra'))
+    if (env.ENFORCE_ACCOUNT_ENTITLEMENTS !== 'true' || !workflow || !fingerprint || metadata.pricing !== undefined || metadata.projectBudgetInputEligible || metadata.repairedMccInputEligible)
+      throw new EntitlementError('This request is outside the approved overnight test scope.')
+    const economics = MODEL_ECONOMICS[model ?? (profile === 'fast' ? 'sol' : 'astra')]
+    if (economics.model !== OVERNIGHT_TEST_WORKFLOWS[workflow].model || economics.maxProviderCents !== OVERNIGHT_TEST_WORKFLOWS[workflow].capCents) throw new EntitlementError('The overnight model or price is not reviewed.')
+    const authority = overnightTestAuthority(env, userId, Date.now())
+    if (!authority) throw new EntitlementError('The overnight test authority is unavailable or expired.')
+    const record = await overnightPoolCall(env, userId, '/overnight-test-claim', { jobId, fingerprint, workflow })
+    if (record.approved !== true) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
+    if (!matchesOvernightTestClaim(record.claim, authority, jobId, fingerprint, workflow, Date.now())) throw new EntitlementError('The overnight test commitment could not be verified.')
+    const reservation = await entitlementCall<Reservation>(env, userId, '/reserve-overnight-test', { ...body, overnightTestClaim: record.claim })
+    if (reservation.allowed && (reservation.fundingSource !== OVERNIGHT_TEST_APPROVAL || reservation.kind !== 'credits' || reservation.cost !== MODEL_ECONOMICS[model ?? (profile === 'fast' ? 'sol' : 'astra')].creditsPerGeneration))
+      throw new EntitlementError('The overnight account reservation could not be verified.')
+    return reservation
+  }
   const identity = metadata?.supportIdentity
   const selected = metadata?.projectBudgetInputEligible === true && metadata.channel === 'studio' && profile === 'slow' &&
     (model === undefined || model === 'astra') && !!fingerprint && metadata.pricing === undefined
@@ -1532,7 +1598,7 @@ export async function markStudioDispatch(env: EntitlementEnv, userId: string, jo
   throw new EntitlementError('The Studio dispatch acknowledgement could not be verified.')
 }
 export async function entitlementApi(request: Request, env: AccountEnv & EntitlementEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
-  if (new URL(request.url).pathname === '/api/account/generation-funding') {
+  if (['/api/account/generation-funding', '/api/overnight-tests/status'].includes(new URL(request.url).pathname)) {
     const reply = (value: unknown, code = 200) => Response.json(value, { status: code,
       headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie', 'X-Content-Type-Options': 'nosniff', ...(code === 405 ? { Allow: 'GET' } : {}) } })
     if (request.method !== 'GET') return reply({ error: 'Use GET.' }, 405)
@@ -1546,6 +1612,7 @@ export async function entitlementApi(request: Request, env: AccountEnv & Entitle
       if (!limiter) return reply({ error: 'Account protection is unavailable.' }, 503)
       if (!(await limiter.limit({ key: `account:generation-funding:${user.id.toLowerCase()}` })).success)
         return reply({ error: 'Please wait before reading generation funding again.' }, 429)
+      if (new URL(request.url).pathname === '/api/overnight-tests/status') return reply(await overnightPoolCall(env, user.id, '/overnight-test-status'))
       return reply(await entitlementCall<GenerationFundingSnapshot>(env, user.id, '/generation-funding'))
     } catch { return reply({ error: 'Generation funding is temporarily unavailable.' }, 503) }
   }
