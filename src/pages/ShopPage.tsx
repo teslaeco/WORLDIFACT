@@ -1,3 +1,4 @@
+/* eslint-disable react/refs -- Owner epochs invalidate scoped test actions during account transitions before effects settle. */
 import { STUDIO_PRICING, type StudioBudgetTier } from '../lib/studioPricing'
 import { hasStudioBudgetConsent, studioBudgetFailureAdvice, studioBudgetSelection, studioTiersReady } from '../lib/studioTierSelection'
 import { detailedUnavailable, DETAILED_REFERENCE_LIMIT } from '../lib/detailedStudio'
@@ -28,6 +29,8 @@ import { formatStudioGenerationDuration, JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_M
 import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../lib/generationAdmission'
 import { BlueprintClient, type BlueprintRecovery } from '../lib/blueprintClient'
 import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, BLUEPRINT_REFERENCE_BYTES, blueprintDelivery, blueprintReferences, type BlueprintDelivery } from '../lib/blueprintRequest'
+import { OvernightTestClient, OVERNIGHT_PANEL_SLOTS, type OvernightPanelRow, type OvernightPanelSlot, type OvernightPanelStatus } from '../lib/overnightTestClient'
+import { assertOrdinaryRequestsSettled, shopCloudRecoveryFetch, readTestCurrent, readTestAccount, shopTestSelectionKey, testFundingQuote, testInputProblem, testRowsUncertain, testSlot } from '../lib/shopTestFunding'
 import './ShopPage.css'
 
 const EXAMPLE_ORIGIN = 'https://forge-studio-public.terraformingplanet.chatgpt.site'
@@ -64,8 +67,25 @@ export default function ShopPage() {
   const location = useLocation()
   const { user, loading: accountLoading } = useAccount()
   const accountOwner = user?.id ?? null
+  const testOwner = accountLoading ? null : accountOwner
+  const testIdentity = useRef({ owner: testOwner, epoch: 0 })
+  if (testIdentity.current.owner !== testOwner) { testIdentity.current.owner = testOwner; testIdentity.current.epoch++ }
+  const testOwnerEpoch = testIdentity.current.epoch
+  const testScope = useRef<{ owner: string; active: () => boolean; client: OvernightTestClient } | null>(null)
+  const [testChoice, setTestChoice] = useState<'ordinary' | OvernightPanelSlot>('ordinary')
+  const [testSavedSlot, setTestSavedSlot] = useState<OvernightPanelSlot | null>(null)
+  const [testBlueprintSlot, setTestBlueprintSlot] = useState<OvernightPanelSlot | null>(null)
+  const [testRows, setTestRows] = useState<OvernightPanelRow[]>([])
+  const [testStatus, setTestStatus] = useState<OvernightPanelStatus | null>(null)
+  const [testAccount, setTestAccount] = useState<unknown>(null)
+  const [testChecking, setTestChecking] = useState(false)
+  const [testError, setTestError] = useState('')
+  const [testNow, setTestNow] = useState(Date.now)
+  const testOptedIn = testChoice !== 'ordinary'
+  const testCurrent = testScope.current?.active() ? testScope.current : null
   const pendingCharacter = useRef(typeof location.state?.worldPrompt === 'string' && location.state.worldPrompt.length <= BLUEPRINT_PROMPT_LIMIT ? location.state.worldPrompt : '')
   const coordinator = useRef<StudioCoordinator | null>(null)
+  const cloudDiscovery = useRef<{ controller: AbortController; invalidate: () => void } | null>(null)
   const mounted = useRef(false), epoch = useRef(0), objectUrl = useRef('')
   const promptInput = useRef<HTMLTextAreaElement>(null)
   const deliveryInput = useRef<HTMLSelectElement>(null)
@@ -118,13 +138,17 @@ export default function ShopPage() {
   const detailed = blueprintDelivery({ prompt, deliverable }, photos.length) === 'detailed-mesh'
   const detailedProblem = detailed ? (fast ? 'Select Astra for a detailed model. The selected model will never be upgraded automatically.' : detailedUnavailable(status, photos.length)) : null
   const tiersReady = studioTiersReady(status)
-  const selectedTier = detailed && tiersReady ? budgetTier : undefined
+  const selectedTier = detailed && tiersReady && !testOptedIn ? budgetTier : undefined
   const draftBudgetRevision = useMemo(() => ({ prompt, purpose, textureLimit, photos, profile, deliverable, budgetTier, accountOwner, owner, tiersReady, pricingRevision: status?.pricingRevision }), [prompt, purpose, textureLimit, photos, profile, deliverable, budgetTier, accountOwner, owner, tiersReady, status?.pricingRevision])
   const budgetAccepted = hasStudioBudgetConsent(budgetTier, acceptedBudgetRevision, draftBudgetRevision)
   const selectedPoints = selectedTier ? STUDIO_PRICING[selectedTier].points : 250
-  const accountQuote = useGenerationQuote(fast ? cheapModel : 'astra', busy, detailed, selectedTier)
+  const ordinaryAccountQuote = useGenerationQuote(fast ? cheapModel : 'astra', busy, detailed, selectedTier)
+  const poolQuote = testOptedIn ? testFundingQuote(testChoice, testCurrent ? testStatus : null, testRows, testAccount, testNow) : null
+  const accountQuote = testOptedIn ? { quote: poolQuote!, checking: testChecking || busy, canRefresh: !!testCurrent && !testChecking && !busy, refresh: () => { void refreshTestFunding() } } : ordinaryAccountQuote
+  const testDraftProblem = testOptedIn ? testInputProblem(testChoice, fast ? cheapModel : 'astra', detailed, photos.length, budgetTier) : null
+  const otherTestPending = !!testCurrent && testRowsUncertain(testRows, testStatus)
   const accountReady = accountQuote.quote.state === 'credits' || accountQuote.quote.state === 'free'
-  const fundingBlocked = accountQuote.quote.state === 'blocked' && accountQuote.quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
+  const fundingBlocked = !testOptedIn && accountQuote.quote.state === 'blocked' && accountQuote.quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
   const recoveryAccountMismatch = !!accountOwner && !!saved && recoveryOwner?.id === saved.receipt.id && recoveryOwner.owner !== accountOwner
   const savedJob = saved && job?.id === saved.receipt.id ? job : null
   const savedStatusUnknown = savedJob?.state === 'failed' && !savedJob.failureCode && savedJob.detail !== JOB_DETAILS.failed
@@ -146,6 +170,7 @@ export default function ShopPage() {
   }
   const dismissFinishedJob = async () => {
     const client = coordinator.current
+    if (testSavedSlot) { setNotice('This test receipt is retained permanently. Choose an unused test slot or explicitly return to ordinary funding after recovery.'); return }
     if (!client || !saved || !terminal(job?.state) || operations.current.submit || operations.current.artifact) return
     try {
       await client.dismissCurrent(owner)
@@ -162,11 +187,11 @@ export default function ShopPage() {
     }
   }
 
-  const showBlob = async (blob: Blob, identity: StudioPreviewIdentity, token: number) => {
+  const showBlob = async (blob: Blob, identity: StudioPreviewIdentity, token: number, scopeActive?: () => boolean) => {
     let warning = ''
     try { inspectGLB(await blob.arrayBuffer()) }
     catch (e) { warning = e instanceof Error ? e.message : 'This GLB cannot be safely previewed on this device.' }
-    if (!mounted.current || token !== epoch.current) return
+    if (!mounted.current || token !== epoch.current || (scopeActive && !scopeActive())) return
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
     const url = warning ? '' : URL.createObjectURL(blob)
     objectUrl.current = url
@@ -199,7 +224,7 @@ export default function ShopPage() {
       const directClient = new BlueprintClient(window.localStorage, fetch)
       blueprintClient.current = directClient
       setRecovery(directClient.current())
-      const client = new StudioCoordinator(window.localStorage)
+      const client = new StudioCoordinator(window.localStorage, shopCloudRecoveryFetch(fetch, () => testIdentity.current.owner))
       const restored = client.restore()
       coordinator.current = client
       if (restored) {
@@ -228,9 +253,110 @@ export default function ShopPage() {
     return () => { closed = true; mounted.current = false; version.current++; if (urls.current) URL.revokeObjectURL(urls.current) }
   }, [])
 
+  async function refreshTestFunding() {
+    const scope = testCurrent
+    if (!scope?.active() || testChecking || operations.current.submit) return
+    setTestChecking(true); setTestStatus(null); setTestAccount(null); setTestError('')
+    try {
+      const [next, account] = await Promise.all([scope.client.status(), readTestAccount(fetch, scope.owner)])
+      if (!scope.active()) return
+      setTestRows(scope.client.rows()); setTestStatus(next); setTestAccount(account); setTestNow(Date.now())
+    } catch (e) { if (scope.active()) setTestError(e instanceof Error ? e.message : 'The same approved pool could not be verified.') }
+    finally { if (scope.active()) setTestChecking(false) }
+  }
+  useEffect(() => {
+    // Display state belongs to the original test account as strictly as its
+    // stored receipts. Clear it before restoring any next account's selection.
+    if (testSavedSlot || testBlueprintSlot) {
+      clearPreview(); setSaved(null); setJob(null); setFastResult(null); setFastPrompt(''); setDemoPrompt(''); setBusy(false)
+      setPrompt(''); setPhotos([]); setRecovery(blueprintClient.current?.current() ?? null)
+    }
+    setTestChoice('ordinary'); setTestSavedSlot(null); setTestBlueprintSlot(null)
+    setTestRows([]); setTestStatus(null); setTestAccount(null); setTestError(''); setTestChecking(false)
+    if (!testOwner) return
+    let closed = false
+    const active = () => !closed && testIdentity.current.owner === testOwner && testIdentity.current.epoch === testOwnerEpoch
+    try {
+      const client = new OvernightTestClient(window.localStorage, fetch, testOwner, active)
+      const scope = { owner: testOwner, active, client }; testScope.current = scope
+      setTestRows(client.rows()); setTestStatus(null); setTestAccount(null); setTestError(''); setTestChecking(false)
+      const selected = testSlot(window.localStorage.getItem(shopTestSelectionKey(testOwner)))
+      if (selected) {
+        setTestChoice(selected)
+        if (selected.startsWith('astra-')) {
+          const recovered = client.currentDetailed(selected)
+          if (recovered) { setSaved(recovered); setJob(client.rows().find(row => row.slot === selected)?.job ?? null); setTestSavedSlot(selected); setTestBlueprintSlot(null); setRecovery(null); setPrompt(recovered.prompt); setProfile('standard'); setDeliverable('detailed-mesh'); setDiscoveredOwner(testOwner); setCloudChecking(false) }
+        } else { setRecovery(client.currentBlueprint(selected)); setTestBlueprintSlot(selected); setTestSavedSlot(null); setSaved(null); setJob(null); setDiscoveredOwner(testOwner); setCloudChecking(false) }
+      }
+      const timer = window.setInterval(() => { if (active()) setTestNow(Date.now()) }, 1000)
+      return () => { closed = true; window.clearInterval(timer); if (testScope.current === scope) testScope.current = null }
+    } catch { setTestError('Approved test receipts could not be opened for this account. Ordinary receipts were preserved.') }
+    return () => { closed = true }
+    // Controller identity changes only with the account; selecting a slot must not replace it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testOwner, testOwnerEpoch])
+  async function recoverTestSlot(slot: OvernightPanelSlot) {
+    const scope = testCurrent
+    if (!scope?.active() || operations.current.submit || operations.current.artifact) return
+    operations.current.artifact = true; setArtifactBusy(true)
+    try {
+      const row = await scope.client.recover(slot)
+      if (!scope.active()) return
+      setTestRows(scope.client.rows())
+      if (row.job && row.id) {
+        const selected = scope.client.currentDetailed(slot)
+        const current = await readTestCurrent(fetch, scope.owner)
+        if (!scope.active()) return
+        const currentId = current?.receipt && typeof current.receipt === 'object' ? (current.receipt as { id?: unknown }).id : null
+        const sameCurrent = current === null || (currentId === row.id && current.fundingSource === 'api-tests-20261006-044444-usd4')
+        if (selected && selected.receipt.id === row.id && (!saved || previousFinished || saved.receipt.id === row.id)) {
+          cloudDiscovery.current?.invalidate(); cloudDiscovery.current?.controller.abort()
+          clearPreview(); setFastResult(null); setSaved(selected); setJob(row.job); setTestSavedSlot(slot); setTestBlueprintSlot(null); setRecovery(null)
+          setTestChoice(slot); setRetry(value => value + 1); window.localStorage.setItem(shopTestSelectionKey(scope.owner), slot)
+          if (sameCurrent) { setDiscoveredOwner(scope.owner); setCloudChecking(false); setRecoveryError('') }
+        }
+      } else if (row.result && row.id && (!saved || previousFinished)) {
+        cloudDiscovery.current?.invalidate(); cloudDiscovery.current?.controller.abort()
+        setTestChoice(slot); setTestBlueprintSlot(slot); setTestSavedSlot(null); setSaved(null); setJob(null)
+        setRecovery(scope.client.currentBlueprint(slot)); clearPreview(); setFastPrompt('Recovered approved test blueprint.'); setFastResult(row.result)
+        window.localStorage.setItem(shopTestSelectionKey(scope.owner), slot)
+        const current = await readTestCurrent(fetch, scope.owner)
+        if (scope.active() && (current === null || ['completed', 'failed'].includes(String(current.financialState)))) { setDiscoveredOwner(scope.owner); setCloudChecking(false); setRecoveryError('') }
+      } else if (slot === testBlueprintSlot) setRecovery(scope.client.currentBlueprint(slot))
+    } catch (e) { if (scope.active()) setTestError(e instanceof Error ? e.message : 'Recover the same test request before continuing.') }
+    finally { operations.current.artifact = false; if (mounted.current) setArtifactBusy(false) }
+  }
+  function chooseTestFunding(value: string) {
+    const scope = testCurrent, slot = testSlot(value)
+    if (!scope?.active() || operations.current.submit || operations.current.artifact || busy || photoBusy || artifactBusy || cloudRecoveryPending || (saved && !previousFinished) || recovery?.state === 'pending' || testRowsUncertain(scope.client.rows(), testStatus)) {
+      setTestError('Recover all pending or uncertain same-account requests before switching funding. No new request was started.'); return
+    }
+    if (value !== 'ordinary' && !slot) return
+    setTestChoice(slot ?? 'ordinary'); setTestError('')
+    // This records a selected source only. It never clears any receipt or submits work.
+    window.localStorage.setItem(shopTestSelectionKey(scope.owner), slot ?? 'ordinary')
+    if (!slot && (testSavedSlot || testBlueprintSlot)) {
+      clearPreview(); setFastResult(null); setTestSavedSlot(null); setTestBlueprintSlot(null)
+      const ordinary = coordinator.current?.current ?? null
+      setSaved(ordinary); setJob(ordinary ? { id: ordinary.receipt.id, state: 'pending', detail: JOB_DETAILS.pending } : null)
+      setRecovery(blueprintClient.current?.current() ?? null)
+    }
+  }
+  async function beforeTestAllocation(next: OvernightPanelStatus) {
+    const scope = testCurrent
+    if (!scope?.active()) throw new Error('The test account changed. No request was started.')
+    if (testRowsUncertain(scope.client.rows(), next)) throw new Error('Another test request is pending or unverified. Recover it before allocating another slot.')
+    if (!scope.active()) throw new Error('The test account changed. No request was started.')
+  }
+
   useEffect(() => {
     const client = coordinator.current
     if (accountLoading || !client) return
+    const scope = testScope.current
+    if (scope?.active()) {
+      const selected = testSlot(window.localStorage.getItem(shopTestSelectionKey(scope.owner)))
+      if (selected && (selected.startsWith('astra-') ? scope.client.currentDetailed(selected) : scope.client.currentBlueprint(selected))) return
+    }
     if (!accountOwner) {
       setCloudChecking(false)
       setDiscoveredOwner(null)
@@ -241,6 +367,8 @@ export default function ShopPage() {
     let closed = false, failures = 0
     let timer: ReturnType<typeof setTimeout> | undefined
     const controller = new AbortController()
+    const discovery = { controller, invalidate: () => { closed = true; if (timer) clearTimeout(timer) } }
+    cloudDiscovery.current = discovery
     setCloudChecking(true); setRecoveryError('')
     const recoverCloud = async () => {
       try {
@@ -270,12 +398,12 @@ export default function ShopPage() {
       }
     }
     void recoverCloud()
-    return () => { closed = true; controller.abort(); if (timer) clearTimeout(timer) }
-  }, [accountLoading, accountOwner])
+    return () => { discovery.invalidate(); controller.abort(); if (cloudDiscovery.current === discovery) cloudDiscovery.current = null }
+  }, [accountLoading, accountOwner, testSavedSlot, testBlueprintSlot])
 
   const loadResult = async (selected: SavedStudioJob, known?: StudioJob) => {
-    const flags = operations.current, client = coordinator.current
-    if (!client || flags.artifact || flags.submit) return
+    const flags = operations.current, client = coordinator.current, scope = testSavedSlot ? testCurrent : null
+    if (!client || flags.artifact || flags.submit || (testSavedSlot && !scope?.active())) return
     if (known?.downloadAllowed === false) {
       setNotice('Your SLOW model is complete and preserved. An active subscription is required to download the model and textures. A protected image preview is not available on the connected worker yet.')
       return
@@ -285,20 +413,21 @@ export default function ShopPage() {
     try {
       // A GLB preview contains the downloadable original. Check server rights
       // before loading it; a free SLOW result stays on the worker.
-      const confirmed = known || (status?.accountRequired ? await client.poll(selected) : undefined)
+      const confirmed = known || (testSavedSlot ? (await scope!.client.recover(testSavedSlot)).job : status?.accountRequired ? await client.poll(selected) : undefined)
       if (confirmed && mounted.current) setJob(confirmed)
       if (confirmed?.downloadAllowed === false) {
         setNotice('Your SLOW model is complete and preserved. Subscribe to download it. Protected image preview is currently unavailable.')
         return
       }
-      const blob = await client.artifact('model', selected)
+      const blob = testSavedSlot ? await scope!.client.artifact(testSavedSlot, 'model') : await client.artifact('model', selected)
       if (!mounted.current || token !== epoch.current) return
-      await showBlob(blob, { id: selected.receipt.id, origin: 'job', label: selected.prompt }, token)
+      await showBlob(blob, { id: selected.receipt.id, origin: 'job', label: selected.prompt }, token, scope?.active)
+      if (scope && !scope.active()) return
       try {
         await saveStudioModel(selected, blob)
-        if (mounted.current && token === epoch.current) setPersistedPreview({ jobId: selected.receipt.id, blob })
+        if (mounted.current && token === epoch.current && (!scope || scope.active())) setPersistedPreview({ jobId: selected.receipt.id, blob })
         const entries = await listStudioModels()
-        if (mounted.current && token === epoch.current) { setArchive(entries); setNotice('Your preview is ready.') }
+        if (mounted.current && token === epoch.current && (!scope || scope.active())) { setArchive(entries); setNotice('Your preview is ready.') }
       } catch (e) { if (mounted.current && token === epoch.current) setNotice(e instanceof Error ? e.message : 'The preview is ready, but local recovery storage is unavailable.') }
     } catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Could not load the model. Retry the same result.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
@@ -310,14 +439,15 @@ export default function ShopPage() {
       return
     }
     if (recoveryOwner?.id !== saved.receipt.id) setRecoveryOwner({ id: saved.receipt.id, owner: accountOwner })
-    const selected = saved, client = coordinator.current
+    const selected = saved, client = coordinator.current, scope = testSavedSlot ? testCurrent : null, selectionEpoch = epoch.current
     let stopped = false, timer: ReturnType<typeof setTimeout> | undefined, failures = 0
     const poll = async () => {
-      if (stopped) return
+      if (stopped || epoch.current !== selectionEpoch || (testSavedSlot && !scope?.active())) return
       if (operations.current.submit) { timer = setTimeout(poll, 1500); return }
       try {
-        const value = await client.poll(selected)
-        if (stopped) return
+        const value = testSavedSlot ? (await scope!.client.recover(testSavedSlot)).job! : await client.poll(selected)
+        if (testSavedSlot && scope?.active()) setTestRows(scope.client.rows())
+        if (stopped || epoch.current !== selectionEpoch || (testSavedSlot && !scope?.active())) return
         failures = 0; setJob(value); setError('')
         if (value.reconciliationRequired) {
           setNotice('')
@@ -352,7 +482,7 @@ export default function ShopPage() {
     return () => { stopped = true; if (timer) clearTimeout(timer) }
     // Draft edits must not restart the selected job's request loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saved?.receipt.id, retry, accountLoading, accountOwner, recoveryOwner])
+  }, [saved?.receipt.id, retry, accountLoading, accountOwner, recoveryOwner, testSavedSlot])
   useEffect(() => {
     if (!saved || terminal(job?.state) || job?.reconciliationRequired) return
     const tick = () => setSeconds(Math.max(0, Math.floor((Date.now() - Date.parse(saved.startedAt)) / 1000)))
@@ -360,26 +490,31 @@ export default function ShopPage() {
     return () => window.clearInterval(timer)
   }, [saved, job?.state, job?.reconciliationRequired])
 
-  const applyBlueprint = (result: GenerationResult, submittedPrompt: string) => {
+  const applyBlueprint = (result: GenerationResult, submittedPrompt: string, testSlot?: OvernightPanelSlot) => {
+    if (testSlot && !testCurrent?.active()) return
     clearPreview()
     if (!mounted.current) return
     setFastPrompt(submittedPrompt)
     setFastResult(result)
-    setRecovery(blueprintClient.current?.current() ?? null)
+    setRecovery(testSlot ? testCurrent!.client.currentBlueprint(testSlot) : blueprintClient.current?.current() ?? null)
     setNotice('AI specification ready. The GLB contains local procedural geometry, not a detailed character or faithful reference reconstruction. Your request can be recovered without paying again.')
   }
   const recoverBlueprint = async () => {
-    if (operations.current.submit || !blueprintClient.current) return
+    if (operations.current.submit || operations.current.artifact || !blueprintClient.current || (testBlueprintSlot && !testCurrent?.active())) return
     operations.current.submit = true; setBusy(true); setError('')
-    try { applyBlueprint(await blueprintClient.current.recover(), 'Recovered account result. The original private prompt is not stored on this device.') }
+    try {
+      if (testBlueprintSlot) { const row = await testCurrent!.client.recover(testBlueprintSlot); if (row.result) applyBlueprint(row.result, 'Recovered test result.', testBlueprintSlot); if (testCurrent?.active()) setTestRows(testCurrent.client.rows()) }
+      else applyBlueprint(await blueprintClient.current.recover(), 'Recovered account result. The original private prompt is not stored on this device.')
+    }
     catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'Recovery is temporarily unavailable.') }
     finally {
       operations.current.submit = false
-      if (mounted.current) { setBusy(false); setRecovery(blueprintClient.current.current()); updateCredits() }
+      if (mounted.current && (!testBlueprintSlot || testCurrent?.active())) { setBusy(false); setRecovery(testBlueprintSlot ? testCurrent!.client.currentBlueprint(testBlueprintSlot) : blueprintClient.current.current()); updateCredits() }
     }
   }
   const newBlueprintAttempt = () => {
-    if (operations.current.submit || recovery?.state === 'pending' || !blueprintClient.current) return
+    if (testBlueprintSlot) { setNotice('This test slot cannot be reset. Recover it or choose another unused approved slot explicitly.'); return }
+    if (operations.current.submit || operations.current.artifact || recovery?.state === 'pending' || !blueprintClient.current) return
     if (!window.confirm('Start a NEW paid attempt on your next Generate click? Recovering the existing result costs no additional points.')) return
     try { blueprintClient.current.reset(); setRecovery(null); setError('') }
     catch (e) { setError(e instanceof Error ? e.message : 'Recovery could not be cleared.') }
@@ -388,6 +523,7 @@ export default function ShopPage() {
     event.preventDefault()
     const flags = operations.current, directClient = blueprintClient.current
     if (cloudRecoveryPending || flags.status || flags.submit || flags.photos || flags.artifact || !previousFinished || !directClient) return
+    if (otherTestPending || testDraftProblem || testChecking) { setError(testDraftProblem || 'Recover the pending test request and verify its funding before generating.'); return }
     if (!accountReady) { setError(nextGenerationQuoteMessage(accountQuote.quote)); return }
     if (recovery?.state === 'pending') { setError('Recover the pending blueprint request before starting another model.'); return }
     if (detailed) {
@@ -398,15 +534,18 @@ export default function ShopPage() {
       flags.submit = true; setBusy(true); setError(''); setNotice('')
       try {
         const input: StudioInput = { worldId: 'enchanted-ai-shop', prompt: prompt.trim(), purpose, textureMaxSize: textureLimit, photos: photos.map(photo => ({ ...photo })), ...(selectedTier ? studioBudgetSelection(selectedTier, budgetAccepted) : {}) }
-        const created = await client.start(input, selected => {
-          if (!mounted.current) return
+        const onPrepared = (selected: SavedStudioJob) => {
+          if (!mounted.current || (testOptedIn && !testCurrent?.active())) return
           clearPreview(); setFastResult(null); setFastPrompt(''); setDemoPrompt(''); setAcceptedBudgetRevision(null)
           setSaved(selected); setJob({ id: selected.receipt.id, state: 'pending', detail: JOB_DETAILS.pending }); setSeconds(0)
+          setTestSavedSlot(testOptedIn ? testChoice : null); setTestBlueprintSlot(null); setRecovery(null)
           setNotice('Uploading your description and reference images once. Generation has not been confirmed yet. Keep this page open until the upload is accepted.')
-        }, owner, !!saved)
-        if (mounted.current) { setJob(created); setNotice(terminal(created.state) || created.reconciliationRequired ? '' : created.detail) }
-      } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'The detailed model request could not be confirmed. Recover this same job.') }
-      finally { flags.submit = false; if (mounted.current) { setBusy(false); updateCredits() } }
+        }
+        const created = testOptedIn ? (await testCurrent!.client.startDetailed(testChoice, input, onPrepared, beforeTestAllocation)).job! : await (testCurrent ? testCurrent.client.runOrdinaryAllocation(() => client.start(input, onPrepared, owner, !!saved), () => assertOrdinaryRequestsSettled(window.localStorage, fetch, testCurrent.owner)) : client.start(input, onPrepared, owner, !!saved))
+        if (testOptedIn && testCurrent?.active()) setTestRows(testCurrent.client.rows())
+        if (mounted.current && (!testOptedIn || testCurrent?.active())) { setJob(created); setNotice(terminal(created.state) || created.reconciliationRequired ? '' : created.detail) }
+      } catch (e) { if (mounted.current && (!testOptedIn || testCurrent?.active())) setError(e instanceof Error ? e.message : 'The detailed model request could not be confirmed. Recover this same job.') }
+      finally { flags.submit = false; if (mounted.current) { setBusy(false); updateCredits(); if (testOptedIn && testCurrent?.active()) void refreshTestFunding() } }
       return
     }
     const selectedModel: GenerationModel = fast ? cheapModel : 'astra'
@@ -419,19 +558,21 @@ export default function ShopPage() {
     const submittedPrompt = prompt.trim()
     try {
       const references = blueprintReferences({ references: photos.map(photo => ({ dataUrl: photo.dataUrl, view: photo.view })) })
-      const result = await directClient.submit({ worldId: 'enchanted-ai-shop', prompt: submittedPrompt, mode: 'live', model: selectedModel, deliverable: 'procedural-blueprint', references }, controller.signal)
-      applyBlueprint(result, submittedPrompt)
+      const payload = { worldId: 'enchanted-ai-shop', prompt: submittedPrompt, mode: 'live', model: selectedModel, deliverable: 'procedural-blueprint', references }
+      if (testOptedIn) setTestBlueprintSlot(testChoice)
+      const result = testOptedIn ? (await testCurrent!.client.startBlueprint(testChoice, payload, beforeTestAllocation)).result! : await (testCurrent ? testCurrent.client.runOrdinaryAllocation(() => directClient.submit(payload, controller.signal), () => assertOrdinaryRequestsSettled(window.localStorage, fetch, testCurrent.owner)) : directClient.submit(payload, controller.signal))
+      if (!testOptedIn || testCurrent?.active()) applyBlueprint(result, submittedPrompt, testOptedIn ? testChoice : undefined)
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error && e.name === 'AbortError' ? 'The connection timed out. Recover this same request below; do not start a second paid generation.' : e instanceof Error ? e.message : 'Generation failed. Recover this same request.')
+      if (mounted.current && (!testOptedIn || testCurrent?.active())) setError(e instanceof Error && e.name === 'AbortError' ? 'The connection timed out. Recover this same request below; do not start a second paid generation.' : e instanceof Error ? e.message : 'Generation failed. Recover this same request.')
     } finally {
       window.clearTimeout(timeout)
       flags.submit = false
-      if (mounted.current) { setBusy(false); setRecovery(directClient.current()); updateCredits() }
+      if (mounted.current && (!testOptedIn || testCurrent?.active())) { setBusy(false); setRecovery(testOptedIn ? testCurrent!.client.currentBlueprint(testChoice) : directClient.current()); if (testOptedIn && testCurrent?.active()) { setTestRows(testCurrent.client.rows()); void refreshTestFunding() }; updateCredits() }
     }
   }
   const previewDemo = () => {
     const value = prompt.trim()
-    if (busy || photoBusy || value.length < 3) return
+    if (busy || photoBusy || operations.current.artifact || value.length < 3) return
     setFastResult(null)
     setFastPrompt('')
     setDemoPrompt(value)
@@ -469,7 +610,8 @@ export default function ShopPage() {
     promptInput.current?.focus()
   }
   const exportFile = async (format: 'model' | 'pbr' | 'fbx' | 'blend') => {
-    const flags = operations.current
+    const flags = operations.current, scope = testSavedSlot ? testCurrent : null
+    if (testSavedSlot && !scope?.active()) return
     if (flags.artifact || !saved || !mayExportCurrentJob(saved.receipt.id, job?.state, preview) || !coordinator.current) return
     if (job?.downloadAllowed === false || (saved.generationProfile === FAST_DRAFT_PROFILE && !['model', 'blend'].includes(format))) return
     flags.artifact = true; setArtifactBusy(true); setError('')
@@ -477,7 +619,8 @@ export default function ShopPage() {
       // A loaded current-job GLB has already passed the rights and identity
       // checks. Download those exact bytes without spending another GET slot.
       const blob = format === 'model' && preview?.origin === 'job' && preview.id === saved.receipt.id && preview.blob.size
-        ? preview.blob : await coordinator.current.artifact(format, saved)
+        ? preview.blob : testSavedSlot ? await scope!.client.artifact(testSavedSlot, format) : await coordinator.current.artifact(format, saved)
+      if (scope && !scope.active()) return
       download(blob, `WORLDIFACT-${saved.receipt.id}.${format === 'pbr' ? 'textures.zip' : format === 'model' ? 'glb' : format}`)
     }
     catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'This export is not available on the connected worker.') }
@@ -492,7 +635,7 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = accountReady && !cloudRecoveryPending && !checking && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
+  const canGenerate = accountReady && !otherTestPending && !testDraftProblem && !testChecking && !cloudRecoveryPending && !checking && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
     (detailed ? !detailedProblem && (budgetTier === 'standard' || (tiersReady && budgetAccepted)) && prompt.length <= (status?.promptMaxLength ?? 0) : fast ? fastAvailable && !photos.length && purpose !== 'terrain' : astraReady && photos.length <= BLUEPRINT_REFERENCE_LIMIT)
   const progressArtifact = saved && preview?.origin === 'job' && preview.id === saved.receipt.id && !preview.warning && persistedPreview?.jobId === saved.receipt.id && persistedPreview.blob === preview.blob
     ? { jobId: saved.receipt.id, validated: true, saved: true } : undefined
@@ -599,12 +742,23 @@ export default function ShopPage() {
             <p>No automatic upgrade, paid retry or additional debit. Editing this draft requires a new 500-point acceptance.</p>
           </fieldset>}
           {detailed && (detailedProblem || accountReady) && <p className={detailedProblem ? "native-shop-error" : "shop-beta-note"} role="status">{detailedAvailabilityMessage || (!accountReady ? nextGenerationQuoteMessage(accountQuote.quote) : cloudRecoveryPending ? recoveryError || 'Checking your account models before a new request can start.' : currentRequestMessage || "Astra/Blender is ready for one explicit model request. All attached views will be used. Output quality must be reviewed; uploading or refreshing never starts a paid job.")}</p>}
-          {recovery && <div role="status"><p>Request {recovery.id} · {recovery.state}. Recovering it does not start another paid generation.</p>{recovery.failureCode && <p>{blueprintAdmissionDetail(recovery.failureCode)}</p>}<button type="button" disabled={busy} onClick={() => void recoverBlueprint()}>Recover same request · no extra charge</button>{recovery.state !== 'pending' && <button type="button" disabled={busy} onClick={newBlueprintAttempt}>Start a new paid attempt</button>}</div>}
-          {detailedProblem && <p><strong>Next generation unavailable.</strong> Existing requests keep their own status and price.</p>}<GenerationCostNotice model={fast ? cheapModel : 'astra'} busy={busy} detailed={detailed} budgetTier={selectedTier} accountQuote={accountQuote} />
+          {recovery && <div role="status"><p>Request {recovery.id} · {recovery.state}. Recovering it does not start another paid generation.</p>{recovery.failureCode && <p>{blueprintAdmissionDetail(recovery.failureCode)}</p>}<button type="button" disabled={busy || artifactBusy} onClick={() => void recoverBlueprint()}>Recover same request · no extra charge</button>{recovery.state !== 'pending' && !testBlueprintSlot && <button type="button" disabled={busy} onClick={newBlueprintAttempt}>Start a new paid attempt</button>}</div>}
+          <fieldset className="shop-test-funding"><legend>Funding for this explicit request</legend>
+            <label htmlFor="shop-funding-source">Funding source</label><select id="shop-funding-source" value={testChoice} disabled={!testCurrent || busy || photoBusy || artifactBusy || cloudRecoveryPending || (!!saved && !previousFinished) || recovery?.state === 'pending' || otherTestPending} onChange={event => chooseTestFunding(event.target.value)}>
+              <option value="ordinary">Ordinary account funding</option>{OVERNIGHT_PANEL_SLOTS.map(slot => <option key={slot.id} value={slot.id}>{slot.label} · approved USD 4 test pool</option>)}
+            </select>
+            <small>Optional, same previously approved pool. Four fixed slots, maximum USD 3.95 within USD 4.00. No new budget, automatic retry, recycled commitment or ordinary-funding fallback.</small>
+            <button type="button" disabled={!testCurrent || testChecking || busy} onClick={() => void refreshTestFunding()}>Check approved test pool · no charge</button>
+            {testCurrent && testStatus && <p>Same test pool: USD {(testStatus.committedCents / 100).toFixed(2)} committed; USD {(testStatus.remainingCents / 100).toFixed(2)} ceiling remaining. New starts end 6 October 2026 at 12:00 UTC.</p>}
+            {testDraftProblem && <p role="status">{testDraftProblem}</p>}{testError && <p role="alert">{testError}</p>}
+            {testRows.filter(row => row.state !== 'empty').map(row => <p key={row.slot}>{row.slot}: {row.state} · {row.id}<button type="button" disabled={busy || artifactBusy} onClick={() => recoverTestSlot(row.slot)}>Recover this test slot · no new charge</button></p>)}
+          </fieldset>
+          {detailedProblem && <p><strong>Next generation unavailable.</strong> Existing requests keep their own status and price.</p>}
+          {testOptedIn ? <section className="generation-cost-notice" aria-label="Selected approved test funding"><strong>{OVERNIGHT_PANEL_SLOTS.find(slot => slot.id === testChoice)!.label}</strong><p>{accountQuote.quote.message}</p><p>Account price: {OVERNIGHT_PANEL_SLOTS.find(slot => slot.id === testChoice)!.points} points. Provider ceiling: USD {(OVERNIGHT_PANEL_SLOTS.find(slot => slot.id === testChoice)!.capCents / 100).toFixed(2)} from the same approved USD 4 pool. Failed commitments are not recycled; account settlement remains server-authoritative.</p></section> : <GenerationCostNotice model={fast ? cheapModel : 'astra'} busy={busy} detailed={detailed} budgetTier={selectedTier} accountQuote={accountQuote} />}
           <button className="native-shop-generate" type={fundingBlocked ? 'button' : 'submit'} disabled={fundingBlocked ? !accountQuote.canRefresh || busy || photoBusy || artifactBusy || checking : !canGenerate} onClick={fundingBlocked ? () => { if (accountQuote.canRefresh && !busy && !photoBusy && !artifactBusy && !checking) void refresh() } : undefined}>{fundingBlocked ? accountQuote.checking ? 'Checking generation funding…' : 'Check generation funding · no charge' : busy ? 'Checking model request…' : detailed ? budgetTier === 'extended' && !tiersReady ? 'Review model budget availability' : `Generate Astra/Blender model · ${selectedPoints} points` : fast ? `Generate ${MODEL_CATALOG[cheapModel].label} draft · ${MODEL_CATALOG[cheapModel].creditsPerGeneration} points or funded free allowance` : 'Generate GPT-6 Astra blueprint · 250 points'}</button><details className="shop-generation-help"><summary>Plans, free drafts and limits</summary><small>Free: up to 2 shared Sol/Luna drafts per rolling 24 hours when funded capacity is available. Paid Luna uses 15 points, Sol 50 and Astra blueprints 250. Detailed Astra uses the selected model budget. Astra requires eligible membership and verified runtime activation. There is no free Astra fallback. Manufacturing and delivery are separate.</small></details>
         </form>
         {saved && <details className="shop-customer-status shop-saved-details" aria-label="Saved Shop request"><summary>Saved request details</summary>
-          <p><strong>Saved Shop request selected on this device.</strong> This may differ from your newest account model. <Link to="/account/models">Open account model library →</Link></p>
+          <p><strong>Saved Shop request selected on this device.</strong> {testSavedSlot && `Funding: existing approved test pool, slot ${testSavedSlot}.`} This may differ from your newest account model. <Link to="/account/models">Open account model library →</Link></p>
           <p className="native-shop-job-diagnostic" style={{ overflowWrap: 'anywhere' }}>Job ID: {saved.receipt.id} · Last known status: {savedStatusLabel}{savedJob?.failureCode && <> · Reason: {savedJob.failureCode}</>}</p>
           <p>Receipt created: {receiptDate ? <time dateTime={saved.receipt.createdAt}>{receiptDate.toLocaleString(undefined, { timeZoneName: 'short' })}</time> : 'Unknown'}. This is not the generation start time.</p>
           <p>Recorded worker generation time: {formatStudioGenerationDuration(savedJob?.generationTiming)} · Excludes upload and queue time.</p>
@@ -612,7 +766,7 @@ export default function ShopPage() {
           {savedJob && <p className={savedJob.state === 'failed' && !savedStatusUnknown ? 'native-shop-error' : undefined}>{savedJob.detail}</p>}
           {accountOwner && !accountLoading && !recoveryAccountMismatch && recoveryOwner?.id === saved.receipt.id && <details><summary>Saved request description</summary><p>{saved.prompt}</p></details>}
         </details>}
-        <details className="shop-customer-status shop-availability-details"><summary>Generation availability</summary><div role="status"><strong>{checking || accountQuote.checking ? 'Checking availability…' : !accountReady ? accountQuote.quote.state === 'signin' ? 'Sign in to generate' : 'Next generation is unavailable for this account' : cloudRecoveryPending ? 'Resolve cloud recovery before generating' : currentRequestMessage ? 'Next generation is waiting for the selected request' : detailed ? activeReady ? 'Astra/Blender model generation available' : 'Astra/Blender awaiting readiness' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} draft generation available` : 'ASTRA blueprint generation available' : 'Generation temporarily unavailable'}</strong><p>{!accountReady ? nextGenerationQuoteMessage(accountQuote.quote) : cloudRecoveryPending ? recoveryError || 'Checking for an existing model before another generation can start.' : currentRequestMessage ? currentRequestMessage : detailed ? detailedAvailabilityMessage || 'Your explicit request starts one signed model job. Recovery and downloads never start another generation.' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} creates a validated specification and a lightweight procedural 3D draft.` : 'ASTRA creates a validated premium specification and a procedural downloadable GAME GLB in one bounded call.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && !detailed && <button type="button" className="native-shop-demo-button" disabled={busy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking || accountQuote.checking} onClick={() => void refresh()}>Refresh availability</button></div></details>
+        <details className="shop-customer-status shop-availability-details"><summary>Generation availability</summary><div role="status"><strong>{checking || accountQuote.checking ? 'Checking availability…' : !accountReady ? accountQuote.quote.state === 'signin' ? 'Sign in to generate' : 'Next generation is unavailable for this account' : cloudRecoveryPending ? 'Resolve cloud recovery before generating' : currentRequestMessage ? 'Next generation is waiting for the selected request' : detailed ? activeReady ? 'Astra/Blender model generation available' : 'Astra/Blender awaiting readiness' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} draft generation available` : 'ASTRA blueprint generation available' : 'Generation temporarily unavailable'}</strong><p>{!accountReady ? nextGenerationQuoteMessage(accountQuote.quote) : cloudRecoveryPending ? recoveryError || 'Checking for an existing model before another generation can start.' : currentRequestMessage ? currentRequestMessage : detailed ? detailedAvailabilityMessage || 'Your explicit request starts one signed model job. Recovery and downloads never start another generation.' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} creates a validated specification and a lightweight procedural 3D draft.` : 'ASTRA creates a validated premium specification and a procedural downloadable GAME GLB in one bounded call.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && !detailed && <button type="button" className="native-shop-demo-button" disabled={busy || artifactBusy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking || accountQuote.checking} onClick={() => void refresh()}>Refresh availability</button></div></details>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}
         {recoveryError && <p className="native-shop-error" role="alert">{recoveryError}</p>}{serviceError && <p className="native-shop-error" role="alert">{serviceError}</p>}{error && <p className="native-shop-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}

@@ -59,26 +59,47 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, submittedAt, artifactFailure = false, artifactMalformed = false, archiveSaveFailure = false, withArchivedModel = true, solReady = ready, lunaReady = solReady, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, healthLookup, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, submittedAt, artifactFailure = false, artifactMalformed = false, archiveSaveFailure = false, withArchivedModel = true, solReady = ready, lunaReady = solReady, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, healthLookup, testPool, initialStore, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
   const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   if (receiptCreatedAt) selected.receipt.createdAt = receiptCreatedAt
   if (submittedAt) selected.startedAt = submittedAt
-  const storeData = new Map(withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : [])
+  const storeData = new Map(initialStore ?? (withExistingJob ? [[clientModule.STUDIO_RECEIPT_KEY, JSON.stringify(selected)]] : []))
   if (blueprintRecovery) storeData.set('worldifact:blueprint-recovery:v1', JSON.stringify(blueprintRecovery))
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = artifactMalformed ? new Blob(['not a GLB']) : modelBlob(), archive = new Map(withArchivedModel ? [[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]] : [])
   const status = { newJobPolicy, pricingRevision: STUDIO_PRICING_REVISION, tiersReady: pricingReady, detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
     reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000, detailedReferenceLimit: 4 }
+  const poolStatus = { commitments: [], accountContract: 'approved-test-account-v1', available: true, approvalId: 'api-tests-20261006-044444-usd4', expiresAt: '2026-10-06T12:00:00.000Z', totalCents: 400, committedCents: 0, remainingCents: 400, attempts: { 'detailed-astra': 0, 'blueprint-sol': 0, 'blueprint-luna': 0 }, noRecycling: true }
   const fetcher = async (url, init = {}) => {
     const path = String(url), method = init.method || 'GET'
     calls.push({ path, method, body: init.body, credentials: init.credentials, cache: init.cache, redirect: init.redirect })
+    if (testPool && path === '/api/overnight-tests/status') return Response.json(testPool.status ?? poolStatus)
+    if (testPool && path.startsWith('/api/overnight-tests/') && method === 'POST') {
+      const wrapped = JSON.parse(init.body)
+      assert.equal(wrapped.testContract, 'approved-test-account-v1'); assert.equal(wrapped.expectedAccountId, accountState.user.id)
+      if (testPool.onPost) await testPool.onPost(path, wrapped.input)
+      if (path.endsWith('/prepare')) return Response.json(makeReceipt(newId))
+      if (path.endsWith('/studio/jobs')) { poolStatus.committedCents += 175; poolStatus.remainingCents -= 175; poolStatus.attempts['detailed-astra']++; poolStatus.commitments.push({ jobId: newId, workflow: 'detailed-astra', capCents: 175 }); return Response.json({ job: { id: newId, state: 'building' } }) }
+      if (path.endsWith('/blueprint')) {
+        const body = wrapped.input
+        const model = body.model === 'sol' ? 'gpt-6.1-sol' : 'gpt-6-luna'
+        const cents = body.model === 'sol' ? 35 : 10, workflow = `blueprint-${body.model}`
+        poolStatus.committedCents += cents; poolStatus.remainingCents -= cents; poolStatus.attempts[workflow]++; poolStatus.commitments.push({ jobId: await blueprintRequestId(new Headers(init.headers).get('X-WORLDIFACT-Request')), workflow, capCents: cents })
+        return Response.json({ ...fastGeneration, model, requestId: await blueprintRequestId(new Headers(init.headers).get('X-WORLDIFACT-Request')), delivery: { kind: 'procedural-blueprint', referenceCount: 0, fallbackUsed: false }, evidence: { providerResponseId: 'resp_test_pool_fixture', receivedAt: new Date().toISOString(), blueprintSha256: 'f'.repeat(64), inputTokens: 100, outputTokens: 10, totalTokens: 110 } })
+      }
+      throw new Error('Unexpected dedicated test POST')
+    }
+    if (testPool && path === '/api/account/entitlements' && new Headers(init.headers).has('X-WORLDIFACT-Expected-Account')) return Response.json({ ...(testPool.account ?? blockedAccount), accountContract: 'approved-test-account-v1' })
+    if (testPool?.currentHandler && path === '/api/studio/current') return testPool.currentHandler(init)
+    if (testPool?.blueprintRecovery && path.startsWith('/api/blueprint/requests/')) return Response.json({ state: 'completed', result: testPool.blueprintRecovery })
+    if (testPool && path === '/api/studio/current' && new Headers(init.headers).has('X-WORLDIFACT-Expected-Account')) return Response.json({ accountContract: 'approved-test-account-v1', current: testPool.current ?? null })
     if (path === '/api/account/entitlements') return accountLookup ? accountLookup(accountState.user?.id, init) : Response.json(fundedAccount)
     assert.ok(!['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(path), 'Availability must never invoke financial recovery')
     if (path === '/api/billing/status' && billingLookup) return billingLookup(init)
     if (path === '/api/billing/status') return Response.json({ plans: { pro: { checkoutReady: true }, studio: { checkoutReady: true } } })
     if (path === '/api/studio/status') return Response.json(status)
-    if (path === '/api/studio/current' && cloudLookup) return cloudLookup()
-    if (path === '/api/studio/current') return Response.json(cloudCurrent ? { current: { receipt: makeReceipt(oldId), prompt: selected.prompt, startedAt: selected.startedAt, financialState: 'reserved', reservedPoints: 250 } } : { current: null })
+    if (path === '/api/studio/current' && cloudLookup) { const response = await cloudLookup(); if (!response.ok) return response; try { const value = await response.clone().json(); return Response.json({ ...value, accountContract: 'approved-test-account-v1', ...(value.current ? { current: { ...value.current, fundingSource: 'ordinary' } } : {}) }) } catch { return response } }
+    if (path === '/api/studio/current') return Response.json(cloudCurrent ? { accountContract: 'approved-test-account-v1', current: { fundingSource: 'ordinary', receipt: makeReceipt(oldId), prompt: selected.prompt, startedAt: selected.startedAt, financialState: 'reserved', reservedPoints: 250 } } : { accountContract: 'approved-test-account-v1', current: null })
     if (path === '/api/health' && healthLookup) return healthLookup()
     if (path === '/api/health') return Response.json({ generationReady: solReady || lunaReady || ready, model: solReady ? 'gpt-6.1-sol' : null, lunaBlueprintReady: lunaReady, draftModels: [...(solReady ? ['sol'] : []), ...(lunaReady ? ['luna'] : [])], qualityModel: ready ? 'gpt-6-astra' : null, astraBlueprintReady: ready })
     if (path === '/api/blueprint' && method === 'POST') return Response.json({ ...fastGeneration,
@@ -125,7 +146,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   const Component = await loadShopComponent({ react: hookReact, globals, adapters: {
     'react-router-dom': { useLocation: () => ({ pathname: '/shop', state: characterPrompt ? { worldPrompt: characterPrompt } : null }) },
     '../lib/account': { useAccount: () => accountState },
-    '../lib/studioClient': { ...clientModule, StudioCoordinator: class extends clientModule.StudioCoordinator { constructor(store) { super(store, fetcher) } }, checkStudio: () => clientModule.checkStudio(fetcher) },
+    '../lib/studioClient': { ...clientModule, StudioCoordinator: class extends clientModule.StudioCoordinator { constructor(store, provided) { super(store, provided ?? fetcher) } }, checkStudio: () => clientModule.checkStudio(fetcher) },
     '../lib/studioArchive': {
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
       saveStudioModel: async saved => { if (archiveSaveFailure) throw new Error('Local recovery storage unavailable'); if (!archive.has(saved.receipt.id)) archive.set(saved.receipt.id, { id: saved.receipt.id, prompt: saved.prompt, savedAt: saved.startedAt, byteLength: blob.size, sha256: 'new-fixture', review: 'UNREVIEWED' }); return archive.get(saved.receipt.id) },
@@ -1396,5 +1417,301 @@ test('retained archive metadata cannot certify a conflicting or failed current s
     assert.match(h.description(), /Original brown chess knight/, 'The new preview can still be shown')
     assert.equal(h.all().some(node => node.type?.name === 'GenerationProgressOrb' && node.props.compact), false)
     assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+
+test('Shop requires an explicit pool choice and sends the complete detailed input only to the same bounded pool', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const h = await harness({ ready: true, detailedReady: true, pricingReady: false, withExistingJob: false, withArchivedModel: false, downloadAllowed: true, testPool: {}, initialAccount: { user: { id: owner }, loading: false }, accountLookup: () => Response.json(blockedAccount) })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Detailed blue robot from my front reference' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } })
+    h.byId('studio-purpose').props.onChange({ target: { value: 'game' } }); await h.settle()
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'front.png' }], value: 'front.png' } }); await h.settle()
+    h.button('Check approved test pool').props.onClick(); await h.settle()
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.byId('shop-funding-source').props.value, 'ordinary')
+    h.byId('shop-funding-source').props.onChange({ target: { value: 'astra-1' } }); await h.settle()
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.all().find(node => node.props.className === 'native-shop-generate').props.disabled, false)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const posts = h.calls.filter(call => call.method === 'POST')
+    assert.deepEqual(posts.map(call => call.path), ['/api/overnight-tests/studio/prepare', '/api/overnight-tests/studio/jobs'])
+    const submitted = JSON.parse(posts[1].body).input
+    assert.equal(submitted.prompt, 'Detailed blue robot from my front reference'); assert.equal(submitted.purpose, 'game')
+    assert.equal(submitted.photos.length, 1); assert.equal(submitted.photos[0].name, 'front.png'); assert.equal(submitted.photos[0].view, 'front')
+    assert.equal(h.storeData.has(clientModule.STUDIO_RECEIPT_KEY), false)
+    assert.ok([...h.storeData.keys()].some(key => key.includes(`:${owner}:astra-1:`)))
+    assert.equal(h.byId('shop-funding-source').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 2)
+    await h.poll()
+    assert.match(h.description(), /Detailed blue robot/)
+    assert.equal(h.archive.has(newId), true)
+    assert.ok(h.all().some(node => node.type?.name === 'GenerationProgressOrb' && node.props.compact))
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 2)
+  } finally { h.close() }
+})
+
+test('ordinary pending work prevents opting into the test pool and cannot be replaced', async () => {
+  const h = await harness({ state: 'building', ready: true, detailedReady: true, pricingReady: false, testPool: {}, initialAccount: { user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, loading: false } })
+  try {
+    await h.poll()
+    const ordinary = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    h.byId('shop-funding-source').props.onChange({ target: { value: 'astra-1' } }); await h.settle()
+    assert.equal(h.byId('shop-funding-source').props.value, 'ordinary')
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), ordinary)
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+
+test('a reloaded Shop test receipt stays separately scoped and recovers the same model with GETs only', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const testReceipt = { receipt: makeReceipt(newId), prompt: 'Previously submitted test model', startedAt: new Date().toISOString() }
+  const original = JSON.stringify({ receipt: makeReceipt(oldId), prompt: 'Ordinary model preserved', startedAt: new Date().toISOString() })
+  const key = `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${owner}:astra-1:${clientModule.STUDIO_RECEIPT_KEY}`
+  const initialStore = [[clientModule.STUDIO_RECEIPT_KEY, original], [key, JSON.stringify(testReceipt)], [`worldifact:shop-test-selection:v1:api-tests-20261006-044444-usd4:${owner}`, 'astra-1']]
+  const h = await harness({ ready: true, detailedReady: true, pricingReady: false, downloadAllowed: true, initialStore, testPool: {}, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    assert.equal(h.byId('shop-funding-source').props.value, 'astra-1')
+    await h.poll()
+    assert.match(h.description(), /Previously submitted test model/)
+    assert.equal(h.archive.has(newId), true)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), original)
+    assert.equal(h.storeData.get(key), JSON.stringify(testReceipt))
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+    assert.ok(h.all().some(node => node.type?.name === 'GenerationProgressOrb' && node.props.compact))
+  } finally { h.close() }
+})
+
+test('a changed account during test preparation cannot submit or save into the former account namespace', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let release, entered
+  const waiting = new Promise(resolve => { entered = resolve })
+  const blocked = new Promise(resolve => { release = resolve })
+  const h = await harness({ ready: true, detailedReady: true, pricingReady: false, withExistingJob: false, testPool: { onPost: async path => { if (path.endsWith('/prepare')) { entered(); await blocked } } }, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Only the approved account may submit this model' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    h.button('Check approved test pool').props.onClick(); await h.settle()
+    h.byId('shop-funding-source').props.onChange({ target: { value: 'astra-1' } }); await h.settle()
+    const start = h.form().props.onSubmit({ preventDefault() {} }); await waiting
+    await h.account({ user: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }, loading: false })
+    release(); await start; await h.settle()
+    assert.equal(h.calls.filter(call => call.path === '/api/overnight-tests/studio/jobs').length, 0)
+    assert.equal([...h.storeData.keys()].some(key => key.includes(`:${owner}:astra-1:`)), false)
+    assert.equal(h.storeData.has(clientModule.STUDIO_RECEIPT_KEY), false)
+  } finally { release(); h.close() }
+})
+
+for (const model of ['sol', 'luna']) test(`explicit ${model} pool input remains a blueprint and cannot use ordinary provider funds`, async () => {
+  const h = await harness({ ready: true, withExistingJob: false, testPool: {}, initialAccount: { user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, loading: false }, accountLookup: () => Response.json(blockedAccount) })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A lightweight rover concept' } })
+    h.byId('studio-mode').props.onChange({ target: { value: model === 'sol' ? FAST_DRAFT_PROFILE : 'luna' } }); await h.settle()
+    h.button('Check approved test pool').props.onClick(); await h.settle()
+    h.byId('shop-funding-source').props.onChange({ target: { value: model } }); await h.settle()
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const posts = h.calls.filter(call => call.method === 'POST')
+    assert.deepEqual(posts.map(call => call.path), ['/api/overnight-tests/blueprint'])
+    const wrapped = JSON.parse(posts[0].body)
+    assert.equal(wrapped.input.model, model); assert.equal(wrapped.input.deliverable, 'procedural-blueprint')
+    assert.deepEqual(wrapped.input.references, [])
+    assert.equal(h.storeData.has('worldifact:blueprint-recovery:v1'), false)
+    assert.match(h.fastDescription(), /procedural FAST draft/)
+    assert.equal(h.byId('shop-funding-source').props.value, model)
+  } finally { h.close() }
+})
+
+
+test('a panel-origin test receipt can be explicitly adopted into Shop without an ordinary receipt write', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const saved = { receipt: makeReceipt(newId), prompt: 'A model begun in the fixed test panel', startedAt: new Date().toISOString() }
+  const key = `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${owner}:astra-1:${clientModule.STUDIO_RECEIPT_KEY}`
+  const current = { fundingSource: 'api-tests-20261006-044444-usd4', receipt: saved.receipt, prompt: saved.prompt, startedAt: saved.startedAt, financialState: 'reserved' }
+  const h = await harness({ ready: true, detailedReady: true, pricingReady: false, withExistingJob: false, initialStore: [[key, JSON.stringify(saved)]], downloadAllowed: true, testPool: { current }, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    assert.equal(h.byId('shop-funding-source').props.disabled, true)
+    await h.button('Recover this test slot').props.onClick(); await h.settle()
+    assert.equal(h.byId('shop-funding-source').props.value, 'astra-1')
+    assert.equal(h.byId('shop-funding-source').props.disabled, false)
+    await h.poll()
+    assert.match(h.description(), /begun in the fixed test panel/)
+    assert.equal(h.storeData.has(clientModule.STUDIO_RECEIPT_KEY), false)
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+test('ordinary Shop submit re-reads scoped pending work created by another tab after rendering', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const h = await harness({ ready: true, detailedReady: true, pricingReady: false, withExistingJob: false, testPool: {}, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'An ordinary new model' } }); h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    const key = `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${owner}:astra-1:${clientModule.STUDIO_RECEIPT_KEY}`
+    h.storeData.set(key, JSON.stringify({ receipt: makeReceipt(newId), prompt: 'Already pending in another tab', startedAt: new Date().toISOString() }))
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.storeData.has(clientModule.STUDIO_RECEIPT_KEY), false)
+  } finally { h.close() }
+})
+
+
+test('a complete row recovery is serialized through current-job verification and cannot overwrite a newer selection', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const first = { receipt: makeReceipt(newId), prompt: 'First panel model', startedAt: new Date().toISOString() }
+  const second = { receipt: makeReceipt(oldId), prompt: 'Second panel model', startedAt: new Date().toISOString() }
+  const key = slot => `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${owner}:${slot}:${clientModule.STUDIO_RECEIPT_KEY}`
+  let entered, release, currentReads = 0
+  const began = new Promise(resolve => { entered = resolve }), delayed = new Promise(resolve => { release = resolve })
+  const current = { fundingSource: 'api-tests-20261006-044444-usd4', ...first, financialState: 'reserved' }
+  const h = await harness({ ready: true, withExistingJob: false, initialStore: [[key('astra-1'), JSON.stringify(first)], [key('astra-2'), JSON.stringify(second)]], testPool: { currentHandler: async () => { if (++currentReads === 2) { entered(); await delayed }; return Response.json({ accountContract: 'approved-test-account-v1', current }) } }, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    const buttons = h.all().filter(node => node.type === 'button' && text(node).includes('Recover this test slot'))
+    buttons[0].props.onClick(); await began
+    buttons[1].props.onClick(); await h.settle()
+    assert.equal(currentReads, 2, 'The second recovery is refused while the first adoption is pending')
+    release(); await h.settle()
+    assert.equal(h.byId('shop-funding-source').props.value, 'astra-1')
+    assert.equal(h.calls.filter(call => call.path === `/api/studio/jobs/${oldId}`).length, 0)
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { release(); h.close() }
+})
+
+test('late ordinary discovery cannot persist or replace a test receipt explicitly adopted in the meantime', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const saved = { receipt: makeReceipt(newId), prompt: 'Explicitly adopted test model', startedAt: new Date().toISOString() }
+  const key = `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${owner}:astra-1:${clientModule.STUDIO_RECEIPT_KEY}`
+  let release, reads = 0
+  const pending = new Promise(resolve => { release = resolve })
+  const h = await harness({ ready: true, withExistingJob: false, initialStore: [[key, JSON.stringify(saved)]], testPool: { currentHandler: async () => {
+    if (++reads === 1) { await pending; return Response.json({ accountContract: 'approved-test-account-v1', current: { fundingSource: 'ordinary', receipt: makeReceipt(oldId), prompt: 'Late ordinary response', startedAt: saved.startedAt, financialState: 'completed' } }) }
+    return Response.json({ accountContract: 'approved-test-account-v1', current: { fundingSource: 'api-tests-20261006-044444-usd4', ...saved, financialState: 'completed' } })
+  } }, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    await h.button('Recover this test slot').props.onClick(); await h.settle()
+    assert.equal(h.byId('shop-funding-source').props.value, 'astra-1')
+    release(); await h.settle()
+    assert.equal(h.byId('shop-funding-source').props.value, 'astra-1')
+    assert.equal(h.storeData.has(clientModule.STUDIO_RECEIPT_KEY), false)
+    assert.match(text(h.all().find(node => node.props['aria-label'] === 'Saved Shop request')), /Explicitly adopted test model/)
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { release(); h.close() }
+})
+
+test('a panel-origin Sol result can be explicitly adopted and previewed without a new request', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const record = { id: newId, fingerprint: 'a'.repeat(64), model: 'sol', providerModel: 'gpt-6.1-sol', state: 'completed', createdAt: Date.now() }
+  const result = { ...fastGeneration, requestId: await blueprintRequestId(newId), delivery: { kind: 'procedural-blueprint', referenceCount: 0, fallbackUsed: false }, evidence: { providerResponseId: 'resp_recovered_pool_fixture', receivedAt: new Date().toISOString(), blueprintSha256: 'f'.repeat(64), inputTokens: 100, outputTokens: 10, totalTokens: 110 } }
+  const key = `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${owner}:sol:worldifact:blueprint-recovery:v1`
+  const h = await harness({ ready: true, withExistingJob: false, initialStore: [[key, JSON.stringify(record)]], testPool: { blueprintRecovery: result }, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    await h.button('Recover this test slot').props.onClick(); await h.settle()
+    assert.equal(h.byId('shop-funding-source').props.value, 'sol', JSON.stringify({ calls: h.calls.map(call => call.path), alerts: h.all().filter(node => node.props.role === 'alert').map(text) }))
+    assert.match(h.fastDescription(), /procedural FAST draft/)
+    assert.equal(h.storeData.has('worldifact:blueprint-recovery:v1'), false)
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+
+test('recovering the same pending selected test restarts its exact-job polling loop', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const saved = { receipt: makeReceipt(newId), prompt: 'Still building in this same test slot', startedAt: new Date().toISOString() }
+  const key = `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${owner}:astra-1:${clientModule.STUDIO_RECEIPT_KEY}`
+  const selected = `worldifact:shop-test-selection:v1:api-tests-20261006-044444-usd4:${owner}`
+  const current = { fundingSource: 'api-tests-20261006-044444-usd4', ...saved, financialState: 'reserved' }
+  const h = await harness({ ready: true, state: 'building', withExistingJob: false, initialStore: [[key, JSON.stringify(saved)], [selected, 'astra-1']], testPool: { current }, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    await h.poll()
+    await h.button('Recover this test slot').props.onClick(); await h.settle()
+    const before = h.calls.filter(call => call.path === `/api/studio/jobs/${newId}`).length
+    await h.poll()
+    assert.equal(h.calls.filter(call => call.path === `/api/studio/jobs/${newId}`).length, before + 1)
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+    assert.equal(h.byId('shop-funding-source').props.value, 'astra-1')
+  } finally { h.close() }
+})
+
+
+test('starting a detailed test after a test blueprint clears only the displayed blueprint recovery', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const record = { id: newId, fingerprint: 'a'.repeat(64), model: 'sol', providerModel: 'gpt-6.1-sol', state: 'completed', createdAt: Date.now() }
+  const ordinary = JSON.stringify({ ...record, id: oldId })
+  const result = { ...fastGeneration, requestId: await blueprintRequestId(newId), delivery: { kind: 'procedural-blueprint', referenceCount: 0, fallbackUsed: false }, evidence: { providerResponseId: 'resp_recovered_pool_fixture', receivedAt: new Date().toISOString(), blueprintSha256: 'f'.repeat(64), inputTokens: 100, outputTokens: 10, totalTokens: 110 } }
+  const key = `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${owner}:sol:worldifact:blueprint-recovery:v1`
+  const selection = `worldifact:shop-test-selection:v1:api-tests-20261006-044444-usd4:${owner}`
+  const h = await harness({ ready: true, detailedReady: true, pricingReady: false, withExistingJob: false, initialStore: [[key, JSON.stringify(record)], [selection, 'sol'], ['worldifact:blueprint-recovery:v1', ordinary]], testPool: { blueprintRecovery: result }, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    await h.button('Recover this test slot').props.onClick(); await h.settle()
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A detailed blue castle' } })
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
+    h.button('Check approved test pool').props.onClick(); await h.settle()
+    h.byId('shop-funding-source').props.onChange({ target: { value: 'astra-1' } }); await h.settle()
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.deepEqual(h.calls.filter(call => call.method === 'POST').map(call => call.path), ['/api/overnight-tests/studio/prepare', '/api/overnight-tests/studio/jobs'])
+    assert.equal(h.all().some(node => node.type === 'button' && text(node).includes('Start a new paid attempt')), false)
+    assert.equal(h.all().some(node => node.type === 'button' && text(node).includes('Recover same request')), false)
+    assert.equal(h.storeData.get('worldifact:blueprint-recovery:v1'), ordinary)
+    assert.equal(h.storeData.get(key), JSON.stringify(record))
+    await h.poll()
+    h.byId('shop-funding-source').props.onChange({ target: { value: 'ordinary' } }); await h.settle()
+    assert.equal(h.byId('shop-funding-source').props.value, 'ordinary')
+    assert.ok(h.all().some(node => node.props.role === 'status' && text(node).includes(`Request ${oldId}`)))
+    assert.equal(h.storeData.get('worldifact:blueprint-recovery:v1'), ordinary)
+    assert.equal(h.storeData.get(key), JSON.stringify(record))
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 2)
+  } finally { h.close() }
+})
+
+
+test('switching accounts cannot relabel a scoped pending blueprint as ordinary recovery', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const record = { id: newId, fingerprint: 'a'.repeat(64), model: 'sol', providerModel: 'gpt-6.1-sol', state: 'pending', createdAt: Date.now() }
+  const key = `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${owner}:sol:worldifact:blueprint-recovery:v1`
+  const selection = `worldifact:shop-test-selection:v1:api-tests-20261006-044444-usd4:${owner}`
+  const h = await harness({ ready: true, withExistingJob: false, initialStore: [[key, JSON.stringify(record)], [selection, 'sol']], testPool: {}, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    await h.account({ user: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }, loading: false })
+    assert.equal(h.byId('shop-funding-source').props.value, 'ordinary')
+    assert.equal(h.all().some(node => node.props.role === 'status' && text(node).includes(`Request ${newId}`)), false)
+    assert.equal(h.all().some(node => node.type === 'button' && text(node).includes('Recover same request')), false)
+    assert.equal(h.storeData.get(key), JSON.stringify(record))
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+    await h.account({ user: { id: owner }, loading: false })
+    assert.equal(h.byId('shop-funding-source').props.value, 'sol')
+    assert.ok(h.all().some(node => node.props.role === 'status' && text(node).includes(`Request ${newId}`)))
+    assert.equal(h.storeData.get(key), JSON.stringify(record))
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+
+for (const nextSelection of ['astra-2', 'sol']) test(`account switch clears the prior test prompt and preview before restoring ${nextSelection}`, async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', other = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  const first = { receipt: makeReceipt(newId), prompt: 'PRIVATE account A detailed castle', startedAt: new Date().toISOString() }
+  const second = { receipt: makeReceipt(oldId), prompt: 'Account B own selected robot', startedAt: new Date().toISOString() }
+  const blueprint = { id: oldId, fingerprint: 'a'.repeat(64), model: 'sol', providerModel: 'gpt-6.1-sol', state: 'completed', createdAt: Date.now() }
+  const key = (account, slot, receiptKey) => `worldifact:overnight-tests:v1:api-tests-20261006-044444-usd4:${account}:${slot}:${receiptKey}`
+  const selection = account => `worldifact:shop-test-selection:v1:api-tests-20261006-044444-usd4:${account}`
+  const firstKey = key(owner, 'astra-1', clientModule.STUDIO_RECEIPT_KEY)
+  const secondKey = key(other, nextSelection, nextSelection === 'sol' ? 'worldifact:blueprint-recovery:v1' : clientModule.STUDIO_RECEIPT_KEY)
+  const initialStore = [[firstKey, JSON.stringify(first)], [selection(owner), 'astra-1'], [secondKey, JSON.stringify(nextSelection === 'sol' ? blueprint : second)], [selection(other), nextSelection]]
+  const h = await harness({ ready: true, downloadAllowed: true, withExistingJob: false, initialStore, testPool: {}, initialAccount: { user: { id: owner }, loading: false } })
+  try {
+    await h.poll()
+    assert.match(h.description(), /PRIVATE account A/)
+    await h.account({ user: { id: other }, loading: false })
+    assert.equal(h.byId('shop-funding-source').props.value, nextSelection)
+    assert.equal(h.all().some(node => node.props['data-testid'] === 'result-description' || node.props['data-testid'] === 'fast-result-description'), false)
+    assert.equal(h.byId('studio-prompt').props.value, nextSelection === 'sol' ? '' : second.prompt)
+    assert.equal(h.storeData.get(firstKey), JSON.stringify(first))
+    assert.equal(h.storeData.get(secondKey), JSON.stringify(nextSelection === 'sol' ? blueprint : second))
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+    await h.account({ user: null, loading: false })
+    assert.equal(h.byId('studio-prompt').props.value, '')
+    assert.equal(h.all().some(node => node.type === 'button' && text(node).includes('Recover this test slot')), false)
+    assert.equal(h.storeData.get(firstKey), JSON.stringify(first))
   } finally { h.close() }
 })

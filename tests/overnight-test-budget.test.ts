@@ -255,7 +255,8 @@ test('status is private, read-only and cannot lazily create or refill the pool',
       assert.equal(result.data.totalCents, 400); assert.equal(result.data.committedCents, consumed ? 175 : 0)
       assert.equal(result.data.noRecycling, true)
       const serialized = JSON.stringify(result.data)
-      for (const privateValue of [OWNER, JOB, FINGERPRINT, 'accountId', 'jobId', 'fingerprint', 'WORLDIFACT_OVERNIGHT_TEST_BUDGET']) assert.equal(serialized.includes(privateValue), false)
+      assert.deepEqual(result.data.commitments, consumed ? [{ jobId: JOB, workflow: 'detailed-astra', capCents: 175 }] : [])
+      for (const privateValue of [OWNER, FINGERPRINT, 'accountId', 'fingerprint', 'WORLDIFACT_OVERNIGHT_TEST_BUDGET']) assert.equal(serialized.includes(privateValue), false)
     }
     assert.deepEqual(snapshot(f), before); assert.equal(f.writes.length, writeCount)
     if (!consumed) assert.equal((await f.reserve(input({ jobId: JOB })))!.data.approved, true)

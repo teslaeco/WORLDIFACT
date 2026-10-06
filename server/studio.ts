@@ -8,6 +8,7 @@ import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob,
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { astraRepairedMccGrant } from './astraRepairedMccGrant.ts'
 import { overnightTestAuthority, OVERNIGHT_TEST_APPROVAL } from './overnightTestBudget.ts'
+import { TEST_ACCOUNT_CONTRACT, hasTestAccountHeaders, testAccountMatches, readTestInputEnvelope } from '../src/lib/testAccountContract.ts'
 import { astraProjectBudget } from './astraProjectBudget.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioNewJobPolicy.ts'
@@ -110,9 +111,13 @@ async function libraryReadLimit(env: StudioEnv, userId: string) {
 }
 const accountPolicy = (env: StudioEnv) => env.ENFORCE_ACCOUNT_ENTITLEMENTS === 'true'
 async function accountIdentity(request: Request, env: StudioEnv, fetcher: typeof fetch) {
-  if (!accountPolicy(env)) return null
+  if (!accountPolicy(env)) {
+    if (hasTestAccountHeaders(request.headers)) throw new StudioError('Verified test account access is unavailable.', 403, 'ACCOUNT_ADMISSION_UNAVAILABLE')
+    return null
+  }
   const user = await getVerifiedAccount(request, env, fetcher)
   if (!user) throw new StudioError('Sign in with your shared WORLDIFACT / Cube Chess account to continue.', 401)
+  if (hasTestAccountHeaders(request.headers) && !testAccountMatches(request.headers, user.id)) throw new StudioError('The signed-in account changed. Reopen the original account before continuing.', 403, 'ACCOUNT_ADMISSION_UNAVAILABLE')
   return user
 }
 async function boundDigest(digest: string, userId?: string) {
@@ -255,8 +260,10 @@ async function limitedJson(response: Request | Response, limit: number) {
     return result as Record<string, unknown>
   } catch (error) { await reader.cancel().catch(() => {}); if (error instanceof StudioError) throw error; throw new StudioError('Invalid JSON data.') }
 }
-async function inputFrom(request: Request) {
-  const value = await limitedJson(request, STUDIO_BODY_LIMIT)
+async function inputFrom(request: Request, overnightTest = false) {
+  const raw = await limitedJson(request, STUDIO_BODY_LIMIT)
+  const value = overnightTest ? readTestInputEnvelope(raw, request.headers) : raw
+  if (!value) throw new StudioError('Refresh the test page to verify its account contract. Nothing was submitted.', 409, 'ACCOUNT_ADMISSION_UNAVAILABLE')
   try { return validateStudioInput(value) } catch (e) { throw new StudioError(e instanceof Error ? e.message : 'Invalid model input.', 400) }
 }
 async function limit(request: Request, env: StudioEnv, bucket: string) {
@@ -525,12 +532,15 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       await limit(request, env, 'current')
       const user = await accountIdentity(request, env, fetcher)
       if (!user) throw new StudioError('Sign in to recover your cloud model.', 401)
+      const expectedAccount = hasTestAccountHeaders(request.headers)
       const current = await currentUserStudioJob(env, user.id)
-      if (!current.job) return json({ current: null })
+      if (!current.job) return json({ current: null, ...(expectedAccount ? { accountContract: TEST_ACCOUNT_CONTRACT } : {}) })
+      if (!expectedAccount && current.job.fundingSource !== 'ordinary') throw new StudioError('This current request uses separate or unverified funding. Recover its original signed receipt or refresh the approved test controls.', 409, 'ACCOUNT_ADMISSION_UNAVAILABLE')
       const generationTiming = ['completed', 'failed'].includes(current.job.state) ? await oracleGenerationTiming(env, current.job.id, fetcher) : undefined
       const freshReceipt = await receipt(env, current.job.id, current.job.fingerprint, user.id, current.job.pricing)
-      return json({ current: {
+      return json({ ...(expectedAccount ? { accountContract: TEST_ACCOUNT_CONTRACT } : {}), current: {
         receipt: freshReceipt,
+        fundingSource: current.job.fundingSource ?? 'unknown',
         prompt: current.job.prompt,
         startedAt: new Date(current.job.at).toISOString(),
         financialState: current.job.state,
@@ -550,7 +560,9 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
     if (url.pathname === '/api/studio/prepare' && request.method === 'POST') {
       await limit(request, env, 'prepare')
       const user = await accountIdentity(request, env, fetcher)
-      const value = await limitedJson(request, STUDIO_BODY_LIMIT)
+      const raw = await limitedJson(request, STUDIO_BODY_LIMIT)
+      const value = overnightTest ? readTestInputEnvelope(raw, request.headers) : raw
+      if (!value) throw new StudioError('Refresh the test page to verify its account contract. No job was prepared.', 409, 'ACCOUNT_ADMISSION_UNAVAILABLE')
       let metadata: StudioPrepareMetadata, digest: string
       try {
         if (Object.hasOwn(value, 'version')) {
@@ -580,7 +592,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const auth = await verifyReceipt(env, request.headers.get('X-WORLDIFACT-Job') || '', undefined, !!user, user?.id)
       const idempotencyKey = request.headers.get('X-WORLDIFACT-Idempotency-Key')
       if (idempotencyKey && idempotencyKey !== auth.id) throw new StudioError('The generation idempotency key does not match this signed job. No new charge was made.', 409)
-      const input = await inputFrom(request)
+      const input = await inputFrom(request, overnightTest)
       if (await boundInputDigest(input, user?.id, overnightTest) !== auth.hash) throw new StudioError('Inputs changed after this receipt was prepared. Nothing was submitted.', 409)
       logStudioDiagnostic({ requestId: auth.id, stage: 'RECEIVED', admission: 'PREPARED', reason: 'INPUT_VALIDATED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
       if (overnightTest) checkOvernightPreparation(env, user?.id, prepareMetadata(input))

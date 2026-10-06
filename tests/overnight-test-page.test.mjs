@@ -19,7 +19,7 @@ const startTime = Date.parse('2026-10-06T05:00:00Z')
 const ownerA = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa', ownerB = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb'
 const requestID = 'cccccccc-cccc-4ccc-cccc-cccccccccccc'
 const emptyRows = () => OVERNIGHT_PANEL_SLOTS.map(slot => ({ slot: slot.id, state: 'empty', detail: 'Not yet started.' }))
-const budget = (overrides = {}) => ({ available: true, approvalId: 'api-tests-20261006-044444-usd4', expiresAt: OVERNIGHT_PANEL_EXPIRES, totalCents: 400, committedCents: 0, remainingCents: 400, attempts: { 'detailed-astra': 0, 'blueprint-sol': 0, 'blueprint-luna': 0 }, noRecycling: true, ...overrides })
+const budget = (overrides = {}) => ({ accountContract: 'approved-test-account-v1', commitments: [], available: true, approvalId: 'api-tests-20261006-044444-usd4', expiresAt: OVERNIGHT_PANEL_EXPIRES, totalCents: 400, committedCents: 0, remainingCents: 400, attempts: { 'detailed-astra': 0, 'blueprint-sol': 0, 'blueprint-luna': 0 }, noRecycling: true, ...overrides })
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
 const text = node => node == null || typeof node === 'boolean' ? '' : Array.isArray(node) ? node.map(text).join('') : React.isValidElement(node) ? text(node.props.children) : String(node)
 const elements = tree => { const list = []; const walk = node => { if (Array.isArray(node)) node.forEach(walk); else if (React.isValidElement(node)) { list.push(node); walk(node.props.children) } }; walk(tree); return list }

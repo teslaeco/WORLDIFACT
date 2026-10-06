@@ -150,3 +150,13 @@ never create a claim or repair configuration. A JSON-typed or stale private
 binding remains rejected rather than being normalized or substituted silently.
 This repair retains the same approval, pool, cutoff and committed amount. It is
 released under its own exact-parent scope preserving billing and remote settings.
+
+## Ordinary Shop integration (6 October 2026)
+
+The Shop funding selector reuses the exact existing approval and receipt namespaces. Ordinary account funding remains the default; choosing a fixed test slot and clicking Generate explicitly uses that slot. The same two USD 1.75 detailed Astra attempts, USD 0.35 Sol attempt and USD 0.10 Luna attempt remain bounded to USD 3.95 within the original USD 4 ceiling and original cutoff. This adds no ordinary provider funding, new pool, replenishment, automatic retry or paid fallback.
+
+The client/server handshake binds test status, current-job recovery, account reads, preparation and submission to the same authenticated account. Versioned request envelopes fail closed against older servers; old clients cannot allocate new test work without the contract. Historical receipt tickets and funding fingerprints are unchanged, so already admitted attempts retain same-job GET recovery and download. Status includes only fixed committed job IDs/workflows/caps, preventing a browser with missing receipts from treating an existing commitment as fresh authority.
+
+The Shop and test panel share a browser allocation lock and receipt isolation. Existing ordinary pending work must settle before a test starts; a pending or unverified test blocks replacement and ordinary fallback. Changing a funding choice preserves all receipts and never adjusts the user's prompt, references, selected model or delivery. A selected slot survives reload. Account changes invalidate late recovery/export results. Detailed test models use the normal validated GLB preview and export path, without another paid request.
+
+Release uses a new exact-parent/exact-file scope with the existing financial setup/check steps skipped and dashboard variables preserved. No paid provider call is used as engineering validation. Exact-head CI and protected production evidence belong to the release record.

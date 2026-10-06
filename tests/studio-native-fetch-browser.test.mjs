@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import ts from 'typescript'
+import { buildSync } from 'esbuild'
 import { createHash } from 'node:crypto'
 import { validateStudioInput } from '../src/lib/studioProtocol.ts'
 
@@ -112,17 +113,15 @@ test('native Chromium reproduces the old invocation error and accepts the repair
 })
 
 // Separate inert bundle: exercise the actual temporary-panel controller without
-// constructing Studio/Blueprint clients or starting/recovering any paid job.
+// starting/recovering any paid job. The real bundle may read scoped receipt keys.
 test('native Chromium reads the temporary test allowance with the repaired OvernightTestClient receiver', { timeout: 45_000 }, () => {
   const candidates = [process.env.CHROME_BIN, 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'].filter(Boolean)
   const browser = candidates.find(command => spawnSync(command, ['--version'], { encoding: 'utf8', timeout: 3000 }).status === 0)
   assert.ok(browser, 'Chromium/Chrome is required for this browser-specific regression; do not report Node mocks as browser proof.')
-  const compile = name => ts.transpileModule(readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8'), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-  }).outputText.replace(/^export /gm, '')
-  const diagnostics = compile('overnightTestDiagnostics')
-  const client = compile('overnightTestClient').replace(/^import .+ from ['"]\.\/(?:blueprintClient|studioClient|glb|overnightTestDiagnostics)\.ts['"];?\s*$/gm, '')
-  assert.doesNotMatch(diagnostics + client, /^import /m, 'Unexpected new dependency: update the explicit temporary-panel fixture bundle.')
+  const client = buildSync({
+    stdin: { contents: "import { OvernightTestClient } from './src/lib/overnightTestClient.ts'; globalThis.__OvernightTestClient = OvernightTestClient;", resolveDir: new URL('../', import.meta.url).pathname, sourcefile: 'native-test-client.ts', loader: 'ts' },
+    bundle: true, write: false, format: 'iife', platform: 'browser', target: 'es2022', minify: true,
+  }).outputFiles[0].text
   const exercise = `
 (async () => {
   const result = document.getElementById('result');
@@ -134,7 +133,7 @@ test('native Chromium reads the temporary test allowance with the repaired Overn
     catch (error) { oldError = error; }
     check(oldError instanceof TypeError && /Illegal invocation/.test(oldError.message), 'Native fetch did not reproduce the original wrong-receiver defect');
     const fixture = {
-      available: true,
+      commitments: [], accountContract: 'approved-test-account-v1', available: true,
       approvalId: 'api-tests-20261006-044444-usd4',
       expiresAt: '2026-10-06T12:00:00.000Z',
       totalCents: 400,
@@ -164,7 +163,7 @@ test('native Chromium reads the temporary test allowance with the repaired Overn
       throw new Error('Status attempted to modify browser storage');
     };
     try {
-      const current = new OvernightTestClient(store, fixtureFetch, '12345678-1234-4234-8234-123456789abc', () => true, () => Date.parse('2026-10-06T05:00:00.000Z'));
+      const current = new globalThis.__OvernightTestClient(store, fixtureFetch, '12345678-1234-4234-8234-123456789abc', () => true, () => Date.parse('2026-10-06T05:00:00.000Z'));
       const status = await current.status();
       check(JSON.stringify(status) === JSON.stringify(fixture), 'Actual controller did not return the validated allowance fixture');
       check(status.approvalId === 'api-tests-20261006-044444-usd4' && status.expiresAt === '2026-10-06T12:00:00.000Z', 'Status accepted the wrong approval or cutoff');
@@ -172,14 +171,14 @@ test('native Chromium reads the temporary test allowance with the repaired Overn
       check(calls.length === 1 && calls[0].path === '/api/overnight-tests/status' && calls[0].method === 'GET', 'Status performed more than one GET');
       check(calls.every(call => call.method !== 'POST'), 'Status attempted a paid submission');
       check(calls[0].receiverIsWindow, 'Actual controller did not bind its fetch receiver to Window');
-      check(storageCalls.length === 0 && browserStorageWrites.length === 0, 'Status touched receipt or browser storage');
+      check(storageCalls.every(call => call.method === 'getItem') && browserStorageWrites.length === 0, 'Status wrote receipt or browser storage');
       result.textContent = 'PASS: native old error reproduced; actual OvernightTestClient.status validated the new 400-cent approval and cutoff with exactly one GET, no POST and no browser-storage writes; inert fixtures only.';
     } finally {
       for (const [method, original] of originalStorageMethods) Storage.prototype[method] = original;
     }
   } catch (error) { result.textContent = 'FAIL: ' + error.message; }
 })();`
-  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + diagnostics + '\n' + client + '\n' + exercise + '</script>'
+  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + client + '\n' + exercise + '</script>'
   const profile = mkdtempSync(join(tmpdir(), 'worldifact-native-overnight-fetch-'))
   try {
     const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking', '--no-first-run', '--no-default-browser-check',

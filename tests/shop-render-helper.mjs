@@ -25,6 +25,8 @@ import * as modelCatalog from '../src/lib/modelCatalog.ts'
 import * as blueprintRequest from '../src/lib/blueprintRequest.ts'
 import * as blueprintClient from '../src/lib/blueprintClient.ts'
 import * as generationAccount from '../src/lib/generationAccount.ts'
+import * as overnightClient from '../src/lib/overnightTestClient.ts'
+import * as shopTestFunding from '../src/lib/shopTestFunding.ts'
 import * as progressView from '../src/lib/generationProgressView.ts'
 
 // Render the real progress markup; only decorative WebGL is replaced in Node.
@@ -105,7 +107,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
   runInNewContext(code, {
     crypto: globalThis.crypto, ...globals, module, exports: module.exports,
     require(id) {
-      const modules = { '../lib/studioPricing': studioPricing, '../lib/studioTierSelection': studioTierSelection, '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
+      const modules = { '../lib/overnightTestClient': overnightClient, '../lib/shopTestFunding': shopTestFunding, '../lib/studioPricing': studioPricing, '../lib/studioTierSelection': studioTierSelection, '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/generationAdmission': generationAdmission, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
         '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }

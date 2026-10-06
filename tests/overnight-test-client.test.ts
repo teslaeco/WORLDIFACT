@@ -30,7 +30,7 @@ function deferred<T = void>() {
   return { promise, resolve }
 }
 function status(overrides: Record<string, unknown> = {}) {
-  return { available: true, approvalId: APPROVAL, expiresAt: '2026-10-06T12:00:00.000Z', totalCents: 400,
+  return { commitments: [], accountContract: 'approved-test-account-v1', available: true, approvalId: APPROVAL, expiresAt: '2026-10-06T12:00:00.000Z', totalCents: 400,
     committedCents: 0, remainingCents: 400,
     attempts: { 'detailed-astra': 0, 'blueprint-sol': 0, 'blueprint-luna': 0 }, noRecycling: true, ...overrides }
 }
@@ -58,11 +58,12 @@ function fixture(storage = store(), account = OWNER) {
     assert.equal(call.path.includes('?'), false)
     const overridden = await custom?.(call)
     if (overridden) return overridden
+    if (call.path === '/api/studio/current') return Response.json({ accountContract: 'approved-test-account-v1', current: null })
     if (call.path === '/api/overnight-tests/status' && call.method === 'GET') return Response.json(status())
     if (call.path === '/api/overnight-tests/blueprint' && call.method === 'POST') {
       const seed = headers.get('X-WORLDIFACT-Request')!
       assert.match(seed, /^[a-f0-9-]{36}$/)
-      const payload = JSON.parse(String(init.body))
+      const envelope = JSON.parse(String(init.body)); assert.equal(envelope.expectedAccountId, account); assert.equal(envelope.testContract, 'approved-test-account-v1'); const payload = envelope.input
       assert.equal(payload.prompt, PROMPT)
       assert.equal(payload.providerModel, payload.model === 'sol' ? 'gpt-6.1-sol' : 'gpt-6-luna')
       const generated = await result(seed, payload.providerModel); blueprints.set(seed, generated)
@@ -167,7 +168,7 @@ test('unavailable status and exhausted selected workflow reject before any prepa
 for (const slot of ['sol', 'luna'] as const) test(`${slot} uses only the dedicated explicit route once and preserves its original recovery ID`, async () => {
   const f = fixture(); await f.client.start(slot, PROMPT)
   assert.deepEqual(f.calls.map(({ path, method }) => [path, method]), [
-    ['/api/overnight-tests/status', 'GET'], ['/api/overnight-tests/blueprint', 'POST'],
+    ['/api/overnight-tests/status', 'GET'], ['/api/studio/current', 'GET'], ['/api/overnight-tests/blueprint', 'POST'],
   ])
   const original = row(f.client, slot)
   assert.equal(original.state, 'completed'); assert.ok(original.id); assert.ok(original.result)
@@ -184,12 +185,12 @@ for (const slot of ['sol', 'luna'] as const) test(`${slot} uses only the dedicat
 test('detailed attempts use dedicated prepare and submit routes while recovery uses the original GET', async () => {
   const f = fixture(); await f.client.start('astra-1', PROMPT)
   assert.deepEqual(f.calls.map(({ path, method }) => [path, method]), [
-    ['/api/overnight-tests/status', 'GET'], ['/api/overnight-tests/studio/prepare', 'POST'], ['/api/overnight-tests/studio/jobs', 'POST'],
+    ['/api/overnight-tests/status', 'GET'], ['/api/studio/current', 'GET'], ['/api/overnight-tests/studio/prepare', 'POST'], ['/api/overnight-tests/studio/jobs', 'POST'],
   ])
   const original = row(f.client, 'astra-1'); assert.equal(original.state, 'pending'); assert.ok(original.id)
   const submitted = posts(f)[1]
   assert.equal(new Headers(submitted.init.headers).get('X-WORLDIFACT-Idempotency-Key'), original.id)
-  assert.equal(JSON.parse(String(submitted.init.body)).prompt, PROMPT)
+  assert.equal(JSON.parse(String(submitted.init.body)).input.prompt, PROMPT)
   const restored = f.make(); f.job('succeeded')
   await restored.recover('astra-1')
   assert.equal(row(restored, 'astra-1').state, 'completed'); assert.equal(row(restored, 'astra-1').id, original.id)
@@ -267,11 +268,11 @@ test('logout while status JSON is arriving is checked after decoding and cannot 
   assert.equal(f.storage.writes.length, 0)
 })
 
-test('after expiry, reload recovery polls only the original detailed job without a new status or POST', async () => {
+test('after expiry, recovery verifies the account contract and reads only the same detailed job', async () => {
   const f = fixture(); await f.client.start('astra-1', PROMPT)
   const id = row(f.client, 'astra-1').id; f.time(END + 1); f.job('succeeded')
   const previous = f.calls.length, restored = f.make(); await restored.recover('astra-1')
-  assert.deepEqual(f.calls.slice(previous).map(({ path, method }) => [path, method]), [[`/api/studio/jobs/${id}`, 'GET']])
+  assert.deepEqual(f.calls.slice(previous).map(({ path, method }) => [path, method]), [['/api/overnight-tests/status', 'GET'], [`/api/studio/jobs/${id}`, 'GET']])
   assert.equal(row(restored, 'astra-1').id, id); assert.equal(row(restored, 'astra-1').state, 'completed')
   assert.equal(posts(f).length, 2)
 })
@@ -304,8 +305,8 @@ test('detailed admission rejection and terminal worker failure never permit a fr
 
 test('ordinary receipts remain untouched and test receipts are isolated by account, run and slot', async () => {
   const storage = store(), ordinary = new Map([
-    [BLUEPRINT_RECOVERY_KEY, 'ordinary-blueprint-must-not-be-read-or-replaced'],
-    [STUDIO_RECEIPT_KEY, 'ordinary-studio-must-not-be-read-or-replaced'],
+    [BLUEPRINT_RECOVERY_KEY, JSON.stringify({ id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', fingerprint: 'e'.repeat(64), model: 'sol', state: 'completed', createdAt: NOW })],
+    [STUDIO_RECEIPT_KEY, JSON.stringify({ receipt: { id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', createdAt: new Date(NOW).toISOString(), ticket: `ffffffff-ffff-4fff-8fff-ffffffffffff.${NOW}.${'f'.repeat(64)}.${'a'.repeat(64)}` }, prompt: 'Old ordinary request', startedAt: new Date(NOW).toISOString(), rejection: 'Definite admission refusal', rejectionCode: 'PROVIDER_BUDGET_EXHAUSTED' })],
     [STUDIO_RECEIPT_HISTORY_PREFIX + 'existing', 'ordinary-history'], ['unrelated-model', 'keep'],
   ])
   for (const [key, value] of ordinary) storage.values.set(key, value)
@@ -404,7 +405,7 @@ test('unexpected underlying routes or methods cannot escape the dedicated transp
   for (const [Constructor, method, slot, routes] of [
     [StudioCoordinator, 'start', 'astra-1', [
       ['/api/studio/current', 'DELETE'], ['/api/studio/current', 'GET'], ['/api/studio/prepare?ordinary=1', 'POST'],
-      ['/api/blueprint', 'POST'], ['https://example.invalid/api/studio/jobs', 'POST'], [`/api/studio/jobs/${id}/exports/blend`, 'GET'],
+      ['/api/blueprint', 'POST'], ['https://example.invalid/api/studio/jobs', 'POST'], [`/api/studio/jobs/${id}/exports/obj`, 'GET'],
     ]],
     [BlueprintClient, 'submit', 'sol', [
       ['/api/blueprint?ordinary=1', 'POST'], ['/api/studio/prepare', 'POST'], ['/api/blueprint', 'PUT'],
@@ -417,7 +418,7 @@ test('unexpected underlying routes or methods cannot escape the dedicated transp
       })
       try {
         const f = fixture(); await assert.rejects(f.client.start(slot, PROMPT))
-        assert.deepEqual(f.calls.map(({ path: target, method: verb }) => [target, verb]), [['/api/overnight-tests/status', 'GET']])
+        assert.deepEqual(f.calls.map(({ path: target, method: verb }) => [target, verb]), [['/api/overnight-tests/status', 'GET'], ['/api/studio/current', 'GET']])
         assert.equal(f.storage.writes.length, 0)
       } finally { mocked.mock.restore() }
     }
@@ -456,5 +457,70 @@ test('missing cross-tab locking support fails closed before status, receipt allo
   } finally {
     if (descriptor) Object.defineProperty(navigator, 'locks', descriptor)
     else Reflect.deleteProperty(navigator, 'locks')
+  }
+})
+
+
+test('every caller rejects a remote commitment even when a local no-charge receipt could mask its count', async () => {
+  for (const withLocalRejection of [false, true]) {
+    const f = fixture()
+    if (withLocalRejection) {
+      const id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      const receipt = { id, createdAt: new Date(NOW).toISOString(), ticket: `${id}.${NOW}.${'a'.repeat(64)}.${'b'.repeat(64)}` }
+      f.storage.values.set(`worldifact:overnight-tests:v1:${APPROVAL}:${OWNER}:astra-1:${STUDIO_RECEIPT_KEY}`, JSON.stringify({ receipt, prompt: PROMPT, startedAt: receipt.createdAt, rejection: 'The submission was refused before generation.' }))
+    }
+    f.intercept(call => call.path.endsWith('/status') ? Response.json(status({ committedCents: 175, remainingCents: 225, attempts: { 'detailed-astra': 1, 'blueprint-sol': 0, 'blueprint-luna': 0 }, commitments: [{ jobId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', workflow: 'detailed-astra', capCents: 175 }] })) : undefined)
+    await assert.rejects(f.client.start(withLocalRejection ? 'astra-2' : 'astra-1', PROMPT), /missing a committed test receipt/)
+    assert.equal(posts(f).length, 0)
+  }
+})
+
+test('invalid recovery credentials stay uncertain and cannot unlock another test slot', async () => {
+  const f = fixture(); await f.client.start('astra-1', PROMPT)
+  f.intercept(call => /^\/api\/studio\/jobs\//.test(call.path) ? Response.json({ error: 'The job receipt is not valid.' }, { status: 401 }) : undefined)
+  await f.client.recover('astra-1')
+  assert.equal(row(f.client, 'astra-1').state, 'pending')
+  assert.equal(row(f.client, 'astra-1').uncertain, true)
+  await assert.rejects(f.client.start('astra-2', PROMPT))
+  await assert.rejects(f.client.runOrdinaryAllocation(async () => { throw Error('Must not run') }))
+  assert.equal(posts(f).length, 2)
+})
+
+test('ordinary starts re-read another tab’s pending test under the shared no-queue lock', async () => {
+  const f = fixture(), another = f.make()
+  await another.start('astra-1', PROMPT)
+  let ordinaryStarts = 0
+  await assert.rejects(f.client.runOrdinaryAllocation(async () => { ordinaryStarts++ }))
+  assert.equal(ordinaryStarts, 0)
+  assert.equal(posts(f).length, 2)
+})
+
+test('ordinary use without test history retains compatibility when Web Locks are unavailable', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, 'locks')
+  Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined })
+  try {
+    const f = fixture()
+    assert.equal(await f.client.runOrdinaryAllocation(async () => 'ordinary'), 'ordinary')
+    assert.equal(f.calls.length, 0)
+    await assert.rejects(f.client.start('astra-1', PROMPT))
+  } finally { if (descriptor) Object.defineProperty(navigator, 'locks', descriptor); else Reflect.deleteProperty(navigator, 'locks') }
+})
+
+
+test('standalone panel allocation checks ordinary pending and uncertain work before every test POST', async () => {
+  for (const scenario of ['blueprint', 'studio', 'remote-current', 'unknown-source'] as const) {
+    const f = fixture()
+    const id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+    if (scenario === 'blueprint') f.storage.values.set(BLUEPRINT_RECOVERY_KEY, JSON.stringify({ id, fingerprint: 'e'.repeat(64), model: 'sol', state: 'pending', createdAt: NOW }))
+    if (scenario === 'studio') {
+      const receipt = { id, createdAt: new Date(NOW).toISOString(), ticket: `${id}.${NOW}.${'a'.repeat(64)}.${'b'.repeat(64)}` }
+      f.receipts.set(id, receipt)
+      f.storage.values.set(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: PROMPT, startedAt: receipt.createdAt }))
+    }
+    if (scenario === 'remote-current' || scenario === 'unknown-source') f.intercept(call => call.path === '/api/studio/current' ? Response.json({ accountContract: 'approved-test-account-v1', current: { fundingSource: scenario === 'unknown-source' ? 'unknown' : 'ordinary', financialState: scenario === 'unknown-source' ? 'failed' : 'reserved' } }) : undefined)
+    const snapshot = new Map(f.storage.values)
+    await assert.rejects(f.client.start('astra-1', PROMPT))
+    assert.equal(posts(f).length, 0)
+    assert.deepEqual(f.storage.values, snapshot)
   }
 })

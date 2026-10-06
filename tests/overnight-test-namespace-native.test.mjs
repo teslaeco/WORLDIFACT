@@ -86,7 +86,7 @@ test('Worker status uses the project selector through the real native ledger con
     calls.push([path, init.method])
     assert.equal(path, '/api/overnight-tests/status'); assert.equal(init.method, 'GET')
     const response = await mf.dispatchFetch('https://fixture.invalid' + path, {
-      method: init.method, headers: { Cookie: '__Host-worldifact-access=inert-fixture-account' },
+      method: init.method, headers: { ...Object.fromEntries(new Headers(init.headers)), Cookie: '__Host-worldifact-access=inert-fixture-account' },
     })
     assert.equal(response.status, 200)
     assert.equal(response.headers.get('X-Fixture-Auth-Reads'), '1')
@@ -96,7 +96,7 @@ test('Worker status uses the project selector through the real native ledger con
     return response
   }, owner, () => true)
   const before = Date.now(), status = await client.status(), after = Date.now()
-  assert.deepEqual(status, { available: status.available, approvalId: OVERNIGHT_TEST_APPROVAL,
+  assert.deepEqual(status, { accountContract: 'approved-test-account-v1', commitments: [], available: status.available, approvalId: OVERNIGHT_TEST_APPROVAL,
     expiresAt: OVERNIGHT_TEST_EXPIRES, totalCents: 400, committedCents: 0, remainingCents: 400,
     attempts: { 'detailed-astra': 0, 'blueprint-sol': 0, 'blueprint-luna': 0 }, noRecycling: true })
   // Status remains readable after expiry; using the real clock must not make

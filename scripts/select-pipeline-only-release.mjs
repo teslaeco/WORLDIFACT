@@ -287,7 +287,48 @@ export const TEST_STATUS_REPAIR_REVIEWED_PATHS = Object.freeze([
   'tests/studio-native-fetch-browser.test.mjs',
   'tests/test-status-release.test.mjs',
 ].sort())
+export const SHOP_TEST_FUNDING_BASE_COMMIT = 'e36ca479d051deb9ff31297ccf12814b16c17220'
+export const SHOP_TEST_FUNDING_MARKER_PATH = 'ops/SHOP_TEST_FUNDING_RELEASE_20261006.json'
+export const SHOP_TEST_FUNDING_MARKER_CONTENT = JSON.stringify({
+  release: 'shop-existing-test-funding-20261006',
+  baseCommit: SHOP_TEST_FUNDING_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+}, null, 2) + '\n'
+export const SHOP_TEST_FUNDING_REVIEWED_PATHS = Object.freeze([
+  'docs/CONTEST_STATUS.md',
+  'docs/ONE_TIME_API_TESTS_20261006.md',
+  'ops/SHOP_TEST_FUNDING_RELEASE_20261006.json',
+  'scripts/select-pipeline-only-release.mjs',
+  'server/entitlements.ts',
+  'server/overnightTestBudget.ts',
+  'server/studio.ts',
+  'server/worker.ts',
+  'src/lib/overnightTestClient.ts',
+  'src/lib/shopTestFunding.ts',
+  'src/lib/testAccountContract.ts',
+  'src/pages/ShopPage.css',
+  'src/pages/ShopPage.tsx',
+  'tests/one-time-test-renewal.test.ts',
+  'tests/overnight-status-diagnostics.test.ts',
+  'tests/overnight-test-admission.test.ts',
+  'tests/overnight-test-client.test.ts',
+  'tests/overnight-test-budget.test.ts',
+  'tests/overnight-test-namespace-native.test.mjs',
+  'tests/overnight-test-page.test.mjs',
+  'tests/shop-draft-lifecycle.test.mjs',
+  'tests/shop-render-helper.mjs',
+  'tests/shop-test-funding.test.ts',
+  'tests/studio-native-fetch-browser.test.mjs',
+  'tests/test-account-contract.test.ts',
+  'tests/shop-test-funding-release.test.mjs',
+].sort())
 const releaseIntroductions = new Set([
+  'src/lib/shopTestFunding.ts',
+  'src/lib/testAccountContract.ts',
+  'tests/shop-test-funding.test.ts',
+  'tests/test-account-contract.test.ts',
+  'tests/shop-test-funding-release.test.mjs',
   'src/lib/overnightTestDiagnostics.ts',
   'tests/overnight-status-diagnostics.test.ts',
   'tests/test-status-release.test.mjs',
@@ -344,6 +385,7 @@ const releaseIntroductions = new Set([
   'tests/studio-project-budget.test.ts',
 ])
 const scopes = [
+  { base: SHOP_TEST_FUNDING_BASE_COMMIT, marker: SHOP_TEST_FUNDING_MARKER_PATH, content: SHOP_TEST_FUNDING_MARKER_CONTENT, paths: SHOP_TEST_FUNDING_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: BASE_COMMIT, marker: MARKER_PATH, content: MARKER_CONTENT, paths: REVIEWED_PATHS },
   { base: FUNDING_BASE_COMMIT, marker: FUNDING_MARKER_PATH, content: FUNDING_MARKER_CONTENT, paths: FUNDING_REVIEWED_PATHS },
   { base: READONLY_QUOTE_BASE_COMMIT, marker: READONLY_QUOTE_MARKER_PATH, content: READONLY_QUOTE_MARKER_CONTENT, paths: READONLY_QUOTE_REVIEWED_PATHS, preserveRemoteVars: true },
@@ -404,7 +446,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH) {
+  if (scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {
