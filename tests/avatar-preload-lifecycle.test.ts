@@ -28,7 +28,7 @@ test('initial session discovery preserves the mounted world request and preloads
     await flush()
     assert.equal(clears, 0)
     assert.equal(requests.length, 1)
-    assert.equal(requests[0].url, '/api/avatar/terraforming-heroine')
+    assert.equal(requests[0].url, '/api/avatar/neptune-queen')
     assert.equal(requests[0].signal.aborted, false)
     assert.equal(loadAvatarBytes(DEFAULT_WORLD_AVATAR), world)
     requests[0].resolve(new Response(fixture()))

@@ -1,5 +1,6 @@
 import { STUDIO_PRICING, type StudioBudgetTier } from '../lib/studioPricing'
 import { Link } from 'react-router-dom'
+import { MODEL_CATALOG } from '../lib/modelCatalog'
 import { type QuotedModel } from '../lib/generationQuote'
 import type { AdmissionFailureCode } from '../lib/generationAdmission'
 import { useGenerationQuote, type GenerationQuoteState } from '../lib/useGenerationQuote'
@@ -37,7 +38,7 @@ function CostNotice({ model, busy = false, detailed = false, budgetTier, account
   const rate = detailed && model === 'astra' && budgetTier ? STUDIO_PRICING[budgetTier].points : model === 'luna' ? 15 : model === 'sol' ? 50 : 250
   const fundingBlocked = quote.state === 'blocked' && quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
   return <section className="generation-cost-notice" aria-label="Selected model and cost for the next generation" aria-live="polite">
-    <div><strong>{model === 'luna' ? 'GPT-6 LUNA' : model === 'sol' ? 'GPT-6 SOL' : 'GPT-6 ASTRA'}</strong><span>{rate} points / paid generation</span></div>
+    <div><strong>{MODEL_CATALOG[model].label}</strong><span>{rate} points / paid generation</span></div>
     <p><b>{(checking || busy) && !fundingBlocked ? 'Checking next generation cost…' : quote.points === 0 ? 'Next generation: 0 points, subject to funded free capacity' : quote.points !== null ? `Next generation: ${quote.points} points` : 'Next generation cost: not yet verified'}</b>{quote.after !== null && !busy && <> · Balance after reservation: <strong>{quote.after} points</strong></>}</p>
     <p>This quote is for the next generation only. It does not report the status or charges of a saved request.</p>
     {['blocked', 'signin', 'pending'].includes(quote.state) && <p>{nextGenerationQuoteMessage(quote)}{quote.state === 'signin' && <> <Link to="/account">Sign in →</Link></>}</p>}

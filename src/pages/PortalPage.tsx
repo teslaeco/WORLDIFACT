@@ -19,7 +19,13 @@ export default function PortalPage() {
   const app = foundationForPath(pathname)
   if (!app) return <Navigate to="/world" replace />
 
-  if (app.route === '/shop') return <ShopPage />
+  if (app.route === '/shop') return <>
+    <ShopPage />
+    <details open className="portal-generator-drawer portal-page">
+      <summary>Create a world blueprint with GPT-6 Astra</summary>
+      <PortalAstraGenerator worldId="enchanted-ai-shop" title="Enchanted AI Shop" />
+    </details>
+  </>
 
   const planets = app.route === '/planets'
   const worldId = app.id as 'chess-cube-512-ai' | 'terra-fix-iss' | '8-planets-in-8-days'
@@ -91,7 +97,7 @@ export default function PortalPage() {
     </p>}
 
     {app.route !== '/terra' && <details open className="portal-generator-drawer">
-      <summary>Create a blueprint inside this world</summary>
+      <summary>Create inside this world with GPT-6 Astra</summary>
       <PortalAstraGenerator worldId={worldId} title={app.title} />
     </details>}
   </main>

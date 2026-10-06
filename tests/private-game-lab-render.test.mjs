@@ -47,7 +47,7 @@ test('real editor onboarding has named world, real 18-face jewel and no shared p
     '../lib/scopedBlueprintClient': scopedBlueprint,
     '../lib/blueprintRequest': blueprintRequest,
   }, { fetch: forbidden })
-  const html = renderToStaticMarkup(React.createElement(MemoryRouter, { initialEntries: ['/lab'] }, React.createElement(PrivateLab)))
+  const html = renderToStaticMarkup(React.createElement(MemoryRouter, { initialEntries: ['/account/worlds'] }, React.createElement(PrivateLab)))
   assert.match(html, /Create your world\./)
   assert.match(html, /Name your world\./)
   assert.match(html, /aria-modal="true"/)
@@ -61,17 +61,17 @@ test('real editor onboarding has named world, real 18-face jewel and no shared p
   assert.doesNotMatch(html, /Drive Mars landship|Terrace tower|Fan Queen|Create a world blueprint with GPT-6 Astra/)
   assert.equal(externalCalls, 0)
 })
-test('route integration removes only the shop drawer and no longer mounts the shared world in private editor routes', async () => {
+test('saved private worlds retain their separate editor without shared-world asset preloading', async () => {
   const [app, portal, page] = await Promise.all(['../src/App.tsx','../src/pages/PortalPage.tsx','../src/pages/PrivateGameLab.tsx'].map(path => readFile(new URL(path, import.meta.url), 'utf8')))
-  assert.match(app, /path="\/lab" element=\{<PrivateGameLab \/>\}/)
-  assert.match(app, /path="\/builder" element=\{<PrivateGameLab \/>\}/)
+  assert.match(app, /path="\/account\/worlds" element=\{<PrivateGameLab \/>\}/)
+  assert.match(app, /to="\/account\/worlds">My saved worlds<\/Link>/)
   assert.match(app, /createAvatarPreloadLifecycle/)
   const { createAvatarPreloadLifecycle } = await import('../src/lib/avatarPreloadLifecycle.ts')
   const reads = []; const preload = createAvatarPreloadLifecycle({ clear() {}, load: async choice => { reads.push(choice); return new ArrayBuffer(0) } })
-  preload.observe({ loading: false, userId: 'test-account', pathname: '/lab' })
-  preload.observe({ loading: false, userId: 'test-account', pathname: '/builder' })
+  preload.observe({ loading: false, userId: 'test-account', pathname: '/account/worlds' })
+  preload.observe({ loading: false, userId: 'test-account', pathname: '/account/models' })
   assert.deepEqual(reads, [], 'private editor routes must not preload shared-world characters')
-  assert.match(portal, /if \(app.route === '\/shop'\) return <ShopPage \/>/)
+  assert.match(portal, /<PortalAstraGenerator worldId="enchanted-ai-shop"/)
   assert.match(portal, /<PortalAstraGenerator worldId=\{worldId\}/, 'other portal tools remain intact')
   assert.doesNotMatch(page, /import StartingWorld|loadAvatarBytes|fetch\(.+\/api\/avatar/)
 })

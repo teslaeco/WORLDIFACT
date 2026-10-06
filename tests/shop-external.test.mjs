@@ -9,13 +9,18 @@ test('native Shop presents a customer creation flow with cart and no visible eng
   const html = await renderShopMarkup()
   assert.match(html, /href="\/world"[^>]*>← Back to WORLDIFAKT/)
   for (const portal of PORTALS) assert.ok(html.includes(`href="${portal.route}"`))
+  assert.match(html, /Describe it\.<br\/>See it in 3D\./)
+  assert.match(html, /SLOW · QUALITY/)
+  assert.match(html, /FAST · DRAFT/)
+  assert.ok(html.indexOf('id="studio-mode"') < html.indexOf('id="studio-prompt"'))
+  assert.doesNotMatch(html, /shop-funding-source|Check approved test pool|Turn your idea|WORLDIFACT STUDIO/)
   assert.match(html, /id="studio-prompt"/)
   assert.match(html, /id="studio-photos"/)
   assert.equal((html.match(/id="studio-mode"/g) ?? []).length, 1)
   assert.match(html, /GPT-6 ASTRA — 250 points per job/)
   assert.match(html, /GPT-6\.1 SOL — 50 points/)
   assert.match(html, /GPT-6 LUNA — 15 points/)
-  assert.match(html, /Generate GPT-6 Astra blueprint · 250 points/)
+  assert.match(html, /Generate Astra\/Blender model · 250 points/)
   assert.match(html, /CUSTOMIZE &amp; ORDER/)
   assert.match(html, /Cart/)
   assert.match(html, /Specify model dimensions \(optional\)/)
@@ -74,7 +79,7 @@ test('mobile layout keeps creation controls first and internal archive out of si
   assert.match(html, /SLOW model downloads require an active subscription/)
 })
 
-test('historical Oracle jobs recover while new Astra and FAST generation use blueprint paths', async () => {
+test('historical Oracle jobs recover while explicit Astra blueprint and FAST generation keep modern transports', async () => {
   const source = await readFile(new URL('../src/pages/ShopPage.tsx', import.meta.url), 'utf8')
   const preview = await readFile(new URL('../src/components/DemoShopPreview.tsx', import.meta.url), 'utf8')
   assert.match(source, /Saved request did not finish/)

@@ -343,7 +343,55 @@ export const MODEL_PREVIEW_REVIEWED_PATHS = Object.freeze([
   "tests/software-model-preview.test.ts",
   "tests/studio-library-gallery.test.mjs"
 ].sort())
+export const COMPATIBLE_MCC_BASE_COMMIT = '9b2a5a9e48424e11d2d8ddc9b360ec110544a508'
+export const COMPATIBLE_MCC_MARKER_PATH = 'ops/COMPATIBLE_MCC_ROLLBACK_RELEASE_20261006.json'
+export const COMPATIBLE_MCC_MARKER_CONTENT = JSON.stringify({
+  release: 'compatible-mcc-ui-rollback-20261006',
+  baseCommit: COMPATIBLE_MCC_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+  preserveSecrets: true,
+  compatibleMccRollback: true,
+}, null, 2) + '\n'
+export const COMPATIBLE_MCC_REVIEWED_PATHS = Object.freeze([
+  ".github/workflows/cloudflare.yml",
+  "docs/COMPATIBLE_MCC_RESTORATION.md",
+  "docs/CONTEST_STATUS.md",
+  "ops/COMPATIBLE_MCC_ROLLBACK_RELEASE_20261006.json",
+  "scripts/build-compatible-mcc-config.mjs",
+  "scripts/check-compatible-mcc-release.mjs",
+  "scripts/select-pipeline-only-release.mjs",
+  "src/App.tsx",
+  "src/components/GenerationCostNotice.tsx",
+  "src/components/P0GameLab.tsx",
+  "src/components/PortalAstraGenerator.tsx",
+  "src/components/WorldStudio.tsx",
+  "src/lib/avatarPreloadLifecycle.ts",
+  "src/pages/PortalPage.tsx",
+  "src/pages/ShopPage.css",
+  "src/pages/ShopPage.tsx",
+  "tests/account-entry-routing.test.mjs",
+  "tests/avatar-preload-lifecycle.test.ts",
+  "tests/compatible-mcc-release.test.mjs",
+  "tests/contest-finish.test.mjs",
+  "tests/contest-hotfix.test.ts",
+  "tests/generation-profile-client.test.mjs",
+  "tests/historical-blueprint-bindings.test.mjs",
+  "tests/mcc-compatible-storage.test.ts",
+  "tests/pipeline-only-release.test.mjs",
+  "tests/portal-entry.test.mjs",
+  "tests/private-game-lab-render.test.mjs",
+  "tests/prompt-model-ui.test.mjs",
+  "tests/shop-draft-lifecycle.test.mjs",
+  "tests/shop-external.test.mjs"
+].sort())
 const releaseIntroductions = new Set([
+  'docs/COMPATIBLE_MCC_RESTORATION.md',
+  'tests/historical-blueprint-bindings.test.mjs',
+  'tests/mcc-compatible-storage.test.ts',
+  'scripts/build-compatible-mcc-config.mjs',
+  'scripts/check-compatible-mcc-release.mjs',
+  'tests/compatible-mcc-release.test.mjs',
   'src/lib/softwareModelPreview.ts',
   'tests/model-preview-release.test.mjs',
   'tests/oracle-model-preview-lifecycle.test.mjs',
@@ -410,6 +458,7 @@ const releaseIntroductions = new Set([
   'tests/studio-project-budget.test.ts',
 ])
 const scopes = [
+  { base: COMPATIBLE_MCC_BASE_COMMIT, marker: COMPATIBLE_MCC_MARKER_PATH, content: COMPATIBLE_MCC_MARKER_CONTENT, paths: COMPATIBLE_MCC_REVIEWED_PATHS, preserveRemoteVars: true, compatibleMccRollback: true, singleParent: true },
   { base: MODEL_PREVIEW_BASE_COMMIT, marker: MODEL_PREVIEW_MARKER_PATH, content: MODEL_PREVIEW_MARKER_CONTENT, paths: MODEL_PREVIEW_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: SHOP_TEST_FUNDING_BASE_COMMIT, marker: SHOP_TEST_FUNDING_MARKER_PATH, content: SHOP_TEST_FUNDING_MARKER_CONTENT, paths: SHOP_TEST_FUNDING_REVIEWED_PATHS, preserveRemoteVars: true, singleParent: true },
   { base: BASE_COMMIT, marker: MARKER_PATH, content: MARKER_CONTENT, paths: REVIEWED_PATHS },
@@ -467,12 +516,15 @@ function selectReleaseScope(cwd, readGit) {
   }
   if (markedScopes.length !== 1) refuse()
   const scope = markedScopes[0]
+  if (scope.compatibleMccRollback && changes.some(change =>
+    change.path === 'wrangler.jsonc' || change.path.startsWith('server/') ||
+    (change.path.startsWith('src/lib/') && change.path !== 'src/lib/avatarPreloadLifecycle.ts'))) refuse()
   const marker = changes.find(change => change.path === scope.marker)
   if (marker.status !== 'A' || parent !== scope.base) refuse()
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {
@@ -486,12 +538,20 @@ function selectReleaseScope(cwd, readGit) {
   const match = /^100644 blob ([0-9a-f]{40})\t([^\0]+)\0$/.exec(entry)
   if (!match || match[2] !== scope.marker) refuse()
   if (readGit(cwd, ['cat-file', 'blob', match[1]]) !== scope.content) refuse()
+  if (scope.compatibleMccRollback) {
+    const path = 'src/lib/avatarPreloadLifecycle.ts'
+    const prior = readGit(cwd, ['cat-file', 'blob', `${parent}:${path}`])
+    const current = readGit(cwd, ['cat-file', 'blob', `${head}:${path}`])
+    const before = "export const DEFAULT_WORLD_AVATAR = 'terraformer' satisfies AvatarAsset"
+    const after = "export const DEFAULT_WORLD_AVATAR = 'queen' satisfies AvatarAsset"
+    if (prior.split(before).length !== 2 || current !== prior.replace(before, after)) refuse()
+  }
   return scope
 }
 
 export function selectPipelineReleaseOptions(cwd = process.cwd(), readGit = git) {
   const scope = selectReleaseScope(cwd, readGit)
-  return { preserveBilling: Boolean(scope), preserveRemoteVars: scope?.preserveRemoteVars === true }
+  return { preserveBilling: Boolean(scope), preserveRemoteVars: scope?.preserveRemoteVars === true, ...(scope?.compatibleMccRollback ? { compatibleMccRollback: true } : {}) }
 }
 
 export function selectPipelineOnlyRelease(cwd = process.cwd(), readGit = git) {
@@ -503,6 +563,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (process.argv.length !== 2) refuse()
     const options = selectPipelineReleaseOptions()
     console.log(`preserve_billing=${options.preserveBilling}\npreserve_remote_vars=${options.preserveRemoteVars}`)
+    if (options.compatibleMccRollback) console.log('compatible_mcc_rollback=true')
   } catch {
     console.error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED: publication stopped before credential setup; verify the reviewed parent, paths and one-time marker. No secret values were read.')
     process.exitCode = 1

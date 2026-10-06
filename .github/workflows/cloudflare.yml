@@ -44,7 +44,12 @@ jobs:
         id: mode
         shell: bash
         run: |
-          if test -f ops/LIVE_GENERATION_ONGOING_20260919; then
+          if test "${{ steps.billing_scope.outputs.compatible_mcc_rollback }}" = 'true'; then
+            node scripts/build-compatible-mcc-config.mjs
+            echo 'config=.compatible-mcc.wrangler.json' >> "$GITHUB_OUTPUT"
+            echo 'mode=PRESERVE' >> "$GITHUB_OUTPUT"
+            echo 'Compatible UI rollback: no declared vars; preserve deployed variables and secrets.'
+          elif test -f ops/LIVE_GENERATION_ONGOING_20260919; then
             node scripts/build-live-generation-config.ts
             echo 'config=.live-generation.wrangler.json' >> "$GITHUB_OUTPUT"
             echo 'mode=LIVE' >> "$GITHUB_OUTPUT"
@@ -64,6 +69,7 @@ jobs:
         run: npx wrangler deploy --dry-run --config "${{ steps.mode.outputs.config }}" --outdir .wrangler/preview
       - name: Verify and sync OpenAI secrets
         id: openai
+        if: steps.mode.outputs.mode != 'PRESERVE'
         run: node scripts/connect-openai.ts
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -71,6 +77,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GENERATION_ACCESS_TOKEN: ${{ secrets.GENERATION_ACCESS_TOKEN }}
       - name: Sync owner and Oracle connection secrets
+        if: steps.mode.outputs.mode != 'PRESERVE'
         run: node scripts/connect-platform.ts
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -150,7 +157,12 @@ jobs:
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson
       - name: Verify published HTML, assets and no-cost DEMO API path
         id: release
-        run: node scripts/release-check.ts smoke
+        run: |
+          if test "${{ steps.mode.outputs.mode }}" = 'PRESERVE'; then
+            node scripts/check-compatible-mcc-release.mjs
+          else
+            node scripts/release-check.ts smoke
+          fi
         env:
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson
       - name: Verify published detailed route without creating a model
@@ -181,6 +193,7 @@ jobs:
           console.log('PASS: detailed route READY, four views, current cost/output guards, unauthenticated preparation rejected; no paid generation.');
           JS
       - name: Report deployed generation capability without spending
+        if: steps.mode.outputs.mode != 'PRESERVE'
         run: |
           node --input-type=module - <<'JS'
           import { inspectWorldifactServices } from './scripts/check-froge-external.mjs'
