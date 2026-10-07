@@ -407,7 +407,7 @@ test('a worker refusal is scoped to the next generation while the saved accepted
     await h.poll()
     assert.match(text(h.all()), /Last known status: building/)
     assert.match(text(h.all()), /Next generation: Astra\/Blender model generation is awaiting server activation/)
-    assert.match(text(h.all()), /Next generation unavailable\. Existing requests keep their own status and price/)
+    assert.match(text(h.all()), /Next generation: Astra\/Blender model generation is awaiting server activation\.[\s\S]*Existing requests keep their own status and price/)
     assert.doesNotMatch(text(h.all()) + h.quoteMarkup(), /No points reserved — model generation has not started|No Oracle generation was submitted/)
     assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
   } finally { h.close() }
@@ -554,25 +554,14 @@ test('reconciled succeeded Studio job loads the same GLB and never starts anothe
 })
 
 
-test('confirmed empty cloud recovery shows labelled front preview and all example view controls work without generation', async () => {
+test('confirmed empty cloud recovery shows original vector empty state, never a fabricated generated model', async () => {
   const h = await harness({ withExistingJob: false })
-  const origin = 'https://forge-studio-public.terraformingplanet.chatgpt.site'
-  const sample = () => h.all().find(node => node.type === 'img' && node.props.alt === 'Example 3D product preview')
   try {
     assert.ok(h.calls.some(call => call.path === '/api/studio/current' && call.method === 'GET'))
-    assert.equal(sample()?.props.src, `${origin}/assets/model-front.webp`)
-    assert.ok(h.all().some(node => node.type === 'small' && text(node).includes('Example only.')))
-    for (const [label, view] of [['Left side', 'left'], ['Back', 'back'], ['Face', 'face'], ['Front', 'front']]) {
-      h.button(label).props.onClick(); await h.settle()
-      assert.equal(sample()?.props.src, `${origin}/assets/model-${view}.webp`)
-      assert.equal(h.button(label).props['aria-pressed'], true)
-    }
-    sample().props.onError(); await h.settle()
-    assert.equal(sample(), undefined)
-    assert.ok(h.all().some(node => node.type === 'p' && text(node).includes('example preview is temporarily unavailable')))
-    h.button('Front').props.onClick(); await h.settle()
-    assert.equal(sample()?.props.src, `${origin}/assets/model-front.webp`)
-    assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
+    assert.ok(h.all().some(node => node.props.className === 'shop-creation-art' && node.props['aria-hidden'] === 'true'))
+    assert.match(text(h.all()), /WAITING FOR YOUR FIRST CREATION/)
+    assert.equal(h.all().some(node => node.type === 'img'), false)
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
   } finally { h.close() }
 })
 
@@ -810,6 +799,26 @@ test('failed paid-points model shows manual financial review, stops automatic re
     await assert.rejects(h.poll(), /Recovery should have scheduled a GET/)
     assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
+  } finally { h.close() }
+})
+
+test('budget-stopped Shop result explains absent completed preview/gallery while preserving held points and original request', async () => {
+  const current = { ...fundedAccount, paidGenerationPolicy: PAID_POINTS_POLICY, credits: 1190, availableCredits: 940, reservedCredits: 250 }
+  const h = await harness({ ready: true, detailedReady: true,
+    accountLookup: () => Response.json(current),
+    jobLookup: () => Response.json({ job: { id: oldId, state: 'failed', failureCode: 'MODEL_BUDGET_EXCEEDED', pointSettlement: { version: 1, state: 'pending-cost', heldPoints: 250, chargedPoints: 0 } } }) })
+  try {
+    await h.poll()
+    const visible = text(h.all())
+    assert.match(visible, /next API request did not fit the remaining model budget/)
+    assert.match(visible, /no completed, verified model for the preview or completed-model gallery/)
+    assert.match(visible, /250 points remain held for cost review/)
+    assert.match(visible, /manual review is needed/)
+    assert.doesNotMatch(visible, /Simplify this draft|Reserved customer points were released|Your model is complete/)
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+    assert.equal(h.calls.some(call => call.path.endsWith('/model')), false)
+    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
+    await assert.rejects(h.poll(), /Recovery should have scheduled a GET/)
   } finally { h.close() }
 })
 
@@ -1704,5 +1713,46 @@ test('read-only other-request recovery cannot unlock a still-pending request or 
     assert.equal(h.calls.length, after, 'A retained handler from the original account cannot read its receipt')
     assert.equal(h.storeData.get(key), JSON.stringify(receipt))
     assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+
+test('Image choice preserves the model draft and receipt and cannot fall through to a paid 3D endpoint', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A quiet blue forest' } }); await h.settle()
+    const before = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    const priorSubmit = h.form().props.onSubmit
+    h.button('Image').props.onClick()
+    await priorSubmit({ preventDefault() {} })
+    await h.settle()
+    assert.equal(h.button('Image').props['aria-pressed'], true)
+    assert.equal(h.byId('studio-prompt').props.value, 'A quiet blue forest')
+    assert.equal(h.button('Image generation not connected').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), before)
+    h.button('Model 3D').props.onClick(); await h.settle()
+    assert.equal(h.byId('studio-prompt').props.value, 'A quiet blue forest')
+    assert.equal(h.byId('studio-mode').props.value, 'standard')
+  } finally { h.close() }
+})
+
+test('500-point consent stays upfront outside Settings after choosing the extended budget', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A carefully detailed glass observatory' } })
+    h.byId('studio-budget-tier').props.onChange({ target: { value: 'extended' } }); await h.settle()
+    const settings = h.all().find(node => node.props.className === 'shop-settings')
+    const consent = h.byId('studio-budget-consent')
+    assert.equal(elements(settings).includes(consent), false)
+    assert.equal(consent.props.checked, false)
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, true)
+    consent.props.onChange({ target: { checked: true } }); await h.settle()
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, false)
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A different observatory' } }); await h.settle()
+    assert.equal(h.byId('studio-budget-consent').props.checked, false)
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, true)
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
   } finally { h.close() }
 })

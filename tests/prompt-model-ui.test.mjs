@@ -7,7 +7,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 
-test('historical mode cards and one visible model picker precede cost, prompt and delivery', async () => {
+test('composer puts the idea first, with model controls in Settings and cost before Generate', async () => {
   const html = await renderShopMarkup()
   const modes = html.indexOf('class="shop-generation-modes"')
   const picker = html.indexOf('class="shop-model-picker"')
@@ -16,7 +16,9 @@ test('historical mode cards and one visible model picker precede cost, prompt an
   const prompt = html.indexOf('id="studio-prompt"')
   const delivery = html.indexOf('id="studio-deliverable"')
   const generate = html.indexOf('class="native-shop-generate"')
-  assert.ok(modes >= 0 && picker > modes && select > picker && cost > select && prompt > cost && delivery > prompt && generate > delivery)
+  const settings = html.indexOf('class="shop-settings"')
+  assert.ok(prompt >= 0 && settings > prompt && modes > settings && picker > modes && select > picker && delivery > select && cost > delivery && generate > cost)
+  assert.doesNotMatch(html.slice(settings, html.indexOf('>', settings)), /open=/, 'Settings starts collapsed')
   assert.equal((html.match(/id="studio-mode"/g) || []).length, 1)
   assert.equal((html.match(/class="shop-generation-mode"/g) || []).length, 2)
   assert.match(html, /SLOW · QUALITY/)
@@ -107,4 +109,15 @@ test('historical SLOW is the detailed default and native mode changes never subm
   fast.props.onClick(); nodes = render()
   assert.equal(byId('studio-mode').props.value, 'standard', 'Even a retained unavailable FAST handler cannot change the draft route')
   assert.deepEqual(calls, [])
+})
+
+test('compact Shop quote keeps point holds, uncertain-cost review and provider limit above billing disclosure', async () => {
+  const { PAID_POINTS_FUNDING } = await import('../src/lib/paidPointsFunding.ts')
+  const CostNotice = (await loadCostNotice()).default
+  const accountQuote = { quote: { state: 'credits', points: 250, after: 500, fundingSource: PAID_POINTS_FUNDING, message: 'Verified current account quote' }, checking: false, canRefresh: true, refresh() { throw new Error('Rendering must not refresh') } }
+  const html = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(CostNotice, { compact: true, model: 'astra', detailed: true, accountQuote })))
+  const [upfront] = html.split('<details>')
+  for (const text of ['Next generation: 250 points', '250 points held before dispatch', 'Success costs 250', 'no-dispatch or zero-cost failure releases the hold', 'Failed requests with possible API costs keep points unavailable', 'manual review', 'USD 1.75', 'No automatic retry or card charge']) assert.ok(upfront.includes(text), text)
+  assert.match(upfront, /Balance after reservation/)
+  assert.doesNotMatch(upfront, /Model details and billing/)
 })

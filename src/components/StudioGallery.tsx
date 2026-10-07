@@ -257,13 +257,13 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
   return <section className={`studio-gallery ${compact ? 'studio-gallery-compact' : ''}`} aria-labelledby="studio-gallery-title">
     <div className="studio-gallery-heading">
       <div>
-        <span className="studio-gallery-eyebrow">MY 3D MODELS</span>
-        <h2 id="studio-gallery-title">Your model gallery</h2>
-        <p>Completed Studio models on your account appear across devices. Device copies, including procedural blueprint models, stay in this browser. The device archive is not a cloud backup; keep your own file copies.</p>
+        {!compact && <span className="studio-gallery-eyebrow">MY 3D MODELS</span>}
+        <h2 id="studio-gallery-title">{compact ? 'Your creations' : 'Your model gallery'}</h2>
+        {compact ? <details className="shop-gallery-details"><summary>About your library</summary><p>Completed Studio models on your account appear across devices. Device copies, including procedural blueprint models, stay in this browser. The device archive is not a cloud backup; keep your own file copies.</p></details> : <p>Completed Studio models on your account appear across devices. Device copies, including procedural blueprint models, stay in this browser. The device archive is not a cloud backup; keep your own file copies.</p>}
       </div>
       <div className="studio-gallery-heading-actions">
         <button type="button" disabled={loading || (cloudVisible && cloud.loading)} onClick={() => { void refreshLocal(); void loadAccountPage(true) }}>{loading || (cloudVisible && cloud.loading) ? 'Refreshing…' : 'Refresh'}</button>
-        {compact && <Link to="/account/models">Open full gallery →</Link>}
+        {compact && <Link to="/account/models">View all →</Link>}
       </div>
     </div>
 
@@ -280,9 +280,9 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
       <OracleModelPreview url={currentSelection.url} label={currentSelection.row.model.prompt} customerMode />
     </div>}
 
-    <label className="studio-gallery-search">Find a saved model
+    <details className="shop-gallery-details" open={!compact}><summary>Find a creation</summary><label className="studio-gallery-search">Find a saved model
       <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search descriptions" />
-    </label>
+    </label></details>
 
     {error && <p className="studio-gallery-error" role="alert">{error}</p>}
     {!owner && <p>Sign in to see completed Studio models on your account. Device copies below have no verified account ownership.</p>}
@@ -292,8 +292,10 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
 
     <div className="studio-gallery-grid">
       {filtered.map(item => <article key={item.key} aria-label={item.origin === 'account' && item.model.id === requestedModelId ? 'Requested account model' : undefined}>
+        {compact && <div className="shop-gallery-model-mark" aria-label="3D model file, preview available on request"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1"><path d="m24 4 18 10v20L24 44 6 34V14Z" /><path d="m6 14 18 10 18-10M24 24v20m-9-35 18 10v20m-9-10L6 19m18 10 18-10" /></svg></div>}
         <strong>{item.model.prompt}</strong>
         <small>{item.origin === 'account' ? 'Account model · Studio · UNREVIEWED' : item.model.source === 'blueprint' ? `Device copy · Procedural blueprint · ${item.model.generation.model} · UNREVIEWED` : 'Device copy · Studio · UNREVIEWED'}</small>
+        <details className="shop-gallery-details" open={!compact}><summary>File details</summary>
         {item.origin === 'account' ? <>
           {item.model.id === requestedModelId && <small>Requested model</small>}
           <small>Completed: {new Date(item.model.completedAt).toLocaleString()} · GLB fetched when opened</small>
@@ -303,7 +305,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
           <small>{new Date(item.model.savedAt).toLocaleString()} · {(item.model.byteLength / 1048576).toFixed(1)} MB</small>
           <small>Recorded worker generation time: {formatStudioGenerationDuration()}.</small>
           <small>Stored only in this browser; account ownership is unverified.</small>
-        </>}
+        </>}</details>
         <div className="studio-gallery-actions">
           <button type="button" disabled={!!busyId} onClick={event => void open(item, false, event.currentTarget)}>{busyId === item.key ? 'Opening…' : 'Preview 3D'}</button>
           <button type="button" disabled={!!busyId} onClick={() => void open(item, true)}>Download GLB</button>

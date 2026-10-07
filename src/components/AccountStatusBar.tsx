@@ -61,8 +61,12 @@ function AccountStatusContent({ signedIn, loading }: { signedIn: boolean; loadin
     const search = new URLSearchParams(location.search); search.delete('billing')
     navigate({ pathname: location.pathname, search: search.toString() ? `?${search}` : '', hash: location.hash }, { replace: true })
   }
-  return <aside className="account-status-bar" aria-label="Account and credit balance">
-    <div className="account-status-row">
+  const shop = location.pathname === '/shop'
+  // Shop owns its compact account navigation. Keep consequential balance,
+  // checkout and held-point information visible rather than duplicating it.
+  if (shop && !returning && !error && !(signedIn && !loading && balance && balance.reservedCredits > 0)) return null
+  return <aside className={`account-status-bar${shop ? ' account-status-shop' : ''}`} aria-label="Account and credit balance">
+    {!shop && <div className="account-status-row">
       <Link to="/" className="account-status-brand">WORLDIFACT</Link>
       <div className="account-status-tools">
         <Link to={signedIn ? '/account/credits' : signIn} className="account-status-credits" aria-live="polite">
@@ -72,8 +76,9 @@ function AccountStatusContent({ signedIn, loading }: { signedIn: boolean; loadin
         {signedIn && balance && <span className="account-status-free">Free drafts: <b>{balance.fastRemaining} FAST</b></span>}
         {signedIn && <button type="button" className="account-status-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Refresh credit balance">Refresh</button>}
       </div>
-    </div>
-    {signedIn && error && <p className="account-status-error" role="status">{error}</p>}
+    </div>}
+    {shop && signedIn && !loading && balance && balance.reservedCredits > 0 && <p className="account-status-shop-hold"><span><b>{balance.reservedCredits} points held</b> · {balance.availableCredits} available</span><Link to="/account/generation-funding">Review holds</Link></p>}
+    {signedIn && error && <p className="account-status-error" role="status">{error}{shop && <button type="button" className="account-status-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Refresh credit balance">Refresh</button>}</p>}
     {returning && <section className={`account-status-return ${notice.tone === 'success' && signedIn ? 'is-confirmed' : ''}`} aria-label="Welcome back from checkout">
       <p role="status">{signedIn ? notice.text : 'Welcome back to WORLDIFACT! Sign in to the account used at checkout to check your membership and credits. Please do not pay again while confirmation is pending.'}</p>
       <div><Link to={signedIn ? '/shop' : signIn}>{signedIn ? 'Create a model' : 'Sign in'}</Link><Link to="/account/credits">View account</Link><button type="button" onClick={dismissReturn} aria-label="Dismiss checkout welcome">Close</button></div>
