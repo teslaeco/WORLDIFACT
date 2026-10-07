@@ -1,0 +1,8 @@
+{
+  "release": "owner-reserve-adjustment-20261007",
+  "baseCommit": "267cefe2c40b8800e36a161cfa9166ec280142e5",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "ownerReserveAdjustment": true
+}
