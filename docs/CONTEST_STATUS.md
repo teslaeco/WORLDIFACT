@@ -2,6 +2,49 @@
 
 Updated 7 October 2026.
 
+## LOCAL REVIEW — self-account stored purchase evidence (7 October 2026)
+
+This diagnostic extends the existing authenticated funding read with an explicit
+`evidence=stored-v1` option. The original no-query response is unchanged. The
+same signed-in account, same-origin protections, rate limiter and account-bound
+Durable Object remain authoritative; callers cannot supply another account ID.
+
+The read scans at most 64 stored invoice-grant rows, exposing counts and recorded
+point totals without listing discovered references. A user may provide at most
+two canonical invoice references to distinguish a present record, a missing
+record, a reversal/tombstone, and an unreadable or invalid record. Customer and
+subscription identifiers are not returned; only linkage booleans are shown.
+These records establish stored bookkeeping, not independent Stripe payment
+proof, current unused points, API spending or permission to issue a grant.
+
+The existing bounded job scan also groups unknown-amount records by recognized
+stored route, model, state, date range and recorded point cost. Missing models
+remain unknown. No prompt, job ID, receipt, credential or inferred refundable
+amount is exposed. The read does not initialize funding, reconcile a job,
+replay an invoice, call Stripe/Oracle or change any customer balance.
+
+The existing standalone funding page opts into this read and offers an optional
+invoice-reference form. Both controls issue GET requests only. Responses with
+unexpected invoice references are rejected, and leaving/refocusing the page
+clears displayed evidence and the invoice input without automatic recovery.
+No actual customer or invoice identifiers are embedded in source or tests.
+
+Local validation passes 1,727 runnable tests, including 31 focused endpoint/UI
+tests, lint (existing warnings), TypeScript, HTTP/origin smoke, production build
+and Worker dry-run packaging. Independent ownership/read-only/privacy review
+passed, including malformed-value and maximum-total probes. A narrowly bounded
+GET-only fallback preserves the baseline funding view against an older worker;
+unavailable evidence never becomes a missing-invoice claim. Native browser tests
+remain enabled for hosted CI; the known local browser block was respected.
+The fresh exact-parent, 13-file release envelope preserves runtime settings and
+skips financial/provider operations. All 101 focused endpoint/UI/release tests
+pass; the corrected verifier checks both reviewed Terra hidden metadata files
+and retains mandatory deployment receipts. A separate eligibility regression
+confirms that funded Creator, Pro and Studio accounts all admit Astra without
+a retired monthly quota or new-sale requirement. No plan or price changed.
+Publication and exact-head hosted results remain separate gates. This diagnostic
+does not remove generation limits or establish that an account has been restored.
+
 ## LOCAL REVIEW — verified subscription settlement across plan changes (7 October 2026)
 
 The focused billing repair is based on production `29b6b9af`. Two defects were

@@ -43,10 +43,17 @@ jobs:
       - name: Select reviewed deployment configuration
         id: mode
         env:
+          ACCOUNT_PURCHASE_EVIDENCE: ${{ steps.billing_scope.outputs.account_purchase_evidence }}
           SUBSCRIPTION_UPGRADE_REPAIR: ${{ steps.billing_scope.outputs.subscription_upgrade_repair }}
         shell: bash
         run: |
-          if test "${SUBSCRIPTION_UPGRADE_REPAIR:-false}" = 'true'; then
+          if test "${ACCOUNT_PURCHASE_EVIDENCE:-false}" = 'true'; then
+            node scripts/build-compatible-mcc-config.mjs --account-purchase-evidence
+            echo 'config=.account-purchase-evidence.wrangler.json' >> "$GITHUB_OUTPUT"
+            echo 'account_purchase_evidence=true' >> "$GITHUB_OUTPUT"
+            echo 'mode=PRESERVE' >> "$GITHUB_OUTPUT"
+            echo 'Account purchase evidence: preserve runtime gates, prices, variables and secrets.'
+          elif test "${SUBSCRIPTION_UPGRADE_REPAIR:-false}" = 'true'; then
             node scripts/build-compatible-mcc-config.mjs --subscription-upgrade-repair
             echo 'config=.subscription-upgrade.wrangler.json' >> "$GITHUB_OUTPUT"
             echo 'subscription_upgrade_repair=true' >> "$GITHUB_OUTPUT"
@@ -166,7 +173,9 @@ jobs:
       - name: Verify published HTML, assets and no-cost DEMO API path
         id: release
         run: |
-          if test "${SUBSCRIPTION_UPGRADE_REPAIR:-false}" = 'true'; then
+          if test "${ACCOUNT_PURCHASE_EVIDENCE:-false}" = 'true'; then
+            node scripts/check-compatible-mcc-release.mjs --account-purchase-evidence
+          elif test "${SUBSCRIPTION_UPGRADE_REPAIR:-false}" = 'true'; then
             node scripts/check-compatible-mcc-release.mjs --subscription-upgrade-repair
           elif test "${{ steps.mode.outputs.mode }}" = 'PRESERVE'; then
             node scripts/check-compatible-mcc-release.mjs
@@ -174,6 +183,7 @@ jobs:
             node scripts/release-check.ts smoke
           fi
         env:
+          ACCOUNT_PURCHASE_EVIDENCE: ${{ steps.mode.outputs.account_purchase_evidence }}
           SUBSCRIPTION_UPGRADE_REPAIR: ${{ steps.mode.outputs.subscription_upgrade_repair }}
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson
       - name: Verify published detailed route without creating a model

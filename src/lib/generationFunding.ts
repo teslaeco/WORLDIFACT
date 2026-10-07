@@ -1,3 +1,57 @@
+/** Only explicitly supplied canonical references may be echoed by the stored-evidence read. */
+export const isStoredInvoiceReference = (value: unknown): value is string => typeof value === 'string' && /^in_[A-Za-z0-9]{1,180}$/.test(value)
+
+/** null is the unchanged default read; malformed or expanded queries are rejected. */
+export function readGenerationFundingEvidenceQuery(params: URLSearchParams): { invoices: string[] } | null {
+  if (params.size === 0) return null
+  const invoices = params.getAll('invoice')
+  if (params.size > 3 || [...params.keys()].some(key => key !== 'evidence' && key !== 'invoice') ||
+      params.getAll('evidence').length !== 1 || params.get('evidence') !== 'stored-v1' ||
+      invoices.length > 2 || new Set(invoices).size !== invoices.length || !invoices.every(isStoredInvoiceReference))
+    throw new Error('Invalid stored evidence query.')
+  return { invoices }
+}
+
+export interface StoredGenerationFundingEvidence {
+  version: 1
+  source: 'stored-credit-records'
+  stripeCustomerLinked: boolean
+  stripeCustomerStatus: 'known' | 'invalid' | 'unavailable'
+  invoiceGrants: {
+    scanLimit: 64
+    scanned: number
+    partial: boolean
+    scanStatus: 'complete' | 'partial' | 'unavailable' | 'invalid'
+    states: { present: number; revoked: number; unverifiable: number }
+    /** Stored point quantities, including tombstones; not proof of a payment or current balance. */
+    creditedPoints: number
+    revokedPoints: number
+  }
+  requestedInvoices: {
+    invoiceReference: string
+    state: 'present' | 'missing' | 'revoked' | 'unverifiable'
+    reason: null | 'invalid-record' | 'unavailable'
+    creditedPoints: number | null
+    revokedPoints: number | null
+    subscriptionLinked: boolean
+  }[]
+  unknownAmountProvenance: {
+    records: number
+    classifiedRecords: number
+    unclassifiedRecords: number
+    /** Only recognized stored metadata; no inferred model, provider spend or refundability. */
+    groups: {
+      route: 'studio' | 'blueprint' | 'legacyBlueprint'
+      model: 'luna' | 'sol' | 'astra' | 'unknown'
+      state: 'reserved' | 'completed' | 'failed'
+      records: number
+      recordedPointCosts: number
+      earliestAt: number
+      latestAt: number
+    }[]
+  }
+}
+
 /** An owned-account read snapshot. It is neither admission approval nor an API invoice. */
 export interface GenerationFundingSnapshot {
   version: 1
@@ -41,6 +95,8 @@ export interface GenerationFundingSnapshot {
   }
   /** Presence only. Availability, validity and global support authority are not evaluated. */
   supportGrantClaims: { originalRecordPresent: boolean; supplementalRecordPresent: boolean }
+  /** Present only when explicitly requested with evidence=stored-v1. */
+  storedEvidence?: StoredGenerationFundingEvidence
 }
 
 /** Reject expanded/unrecognized responses before rendering any account data. */
@@ -53,7 +109,9 @@ export function readGenerationFundingSnapshot(value: unknown): GenerationFunding
   const integer = (input: unknown, minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER) =>
     typeof input === 'number' && Number.isSafeInteger(input) && input >= minimum && input <= maximum
   const nullableInteger = (input: unknown, minimum?: number) => input === null || integer(input, minimum)
-  const root = object(value, ['version', 'readOnly', 'currency', 'customerPoints', 'providerBudget', 'ordinaryAstraMinimumCents', 'jobs', 'supportGrantClaims'])
+  const rootKeys = ['version', 'readOnly', 'currency', 'customerPoints', 'providerBudget', 'ordinaryAstraMinimumCents', 'jobs', 'supportGrantClaims']
+  if (value && typeof value === 'object' && Object.hasOwn(value, 'storedEvidence')) rootKeys.push('storedEvidence')
+  const root = object(value, rootKeys)
   if (root.version !== 1 || root.readOnly !== true || root.currency !== 'USD') return invalid()
   const points = object(root.customerPoints, ['status', 'balance', 'held', 'available'])
   if (typeof points.status !== 'string' || !['known', 'invalid'].includes(points.status) || !nullableInteger(points.balance) || !nullableInteger(points.held, 0) || !nullableInteger(points.available) ||
@@ -94,5 +152,54 @@ export function readGenerationFundingSnapshot(value: unknown): GenerationFunding
   }
   const support = object(root.supportGrantClaims, ['originalRecordPresent', 'supplementalRecordPresent'])
   if (typeof support.originalRecordPresent !== 'boolean' || typeof support.supplementalRecordPresent !== 'boolean') return invalid()
+  if (Object.hasOwn(root, 'storedEvidence')) {
+    const stored = object(root.storedEvidence, ['version', 'source', 'stripeCustomerLinked', 'stripeCustomerStatus', 'invoiceGrants', 'requestedInvoices', 'unknownAmountProvenance'])
+    if (stored.version !== 1 || stored.source !== 'stored-credit-records' || typeof stored.stripeCustomerLinked !== 'boolean' ||
+        typeof stored.stripeCustomerStatus !== 'string' || !['known', 'invalid', 'unavailable'].includes(stored.stripeCustomerStatus) ||
+        stored.stripeCustomerStatus !== 'known' && stored.stripeCustomerLinked) return invalid()
+    const grants = object(stored.invoiceGrants, ['scanLimit', 'scanned', 'partial', 'scanStatus', 'states', 'creditedPoints', 'revokedPoints'])
+    if (grants.scanLimit !== 64 || !integer(grants.scanned, 0, 64) || typeof grants.partial !== 'boolean' || typeof grants.scanStatus !== 'string' ||
+        !['complete', 'partial', 'unavailable', 'invalid'].includes(grants.scanStatus) ||
+        (grants.scanStatus === 'complete') !== !grants.partial || grants.scanStatus === 'complete' && grants.scanned === 64 ||
+        grants.scanStatus === 'partial' && grants.scanned !== 64 || ['unavailable', 'invalid'].includes(grants.scanStatus) && grants.scanned !== 0) return invalid()
+    const states = object(grants.states, ['present', 'revoked', 'unverifiable'])
+    if (Object.values(states).some(count => !integer(count, 0, Number(grants.scanned))) ||
+        Object.values(states).reduce<number>((total, count) => total + Number(count), 0) !== grants.scanned ||
+        !integer(grants.creditedPoints, Number(states.present), (Number(states.present) + Number(states.revoked)) * 1_000_000) ||
+        !integer(grants.revokedPoints, Number(states.revoked), Number(states.revoked) * 1_000_000)) return invalid()
+    if (!Array.isArray(stored.requestedInvoices) || stored.requestedInvoices.length > 2) return invalid()
+    const references = new Set<string>()
+    for (const raw of stored.requestedInvoices) {
+      const invoice = object(raw, ['invoiceReference', 'state', 'reason', 'creditedPoints', 'revokedPoints', 'subscriptionLinked'])
+      if (!isStoredInvoiceReference(invoice.invoiceReference) || references.has(invoice.invoiceReference) || typeof invoice.state !== 'string' ||
+          !['present', 'missing', 'revoked', 'unverifiable'].includes(invoice.state) || typeof invoice.subscriptionLinked !== 'boolean') return invalid()
+      references.add(invoice.invoiceReference)
+      if (invoice.state === 'unverifiable') {
+        if (typeof invoice.reason !== 'string' || !['invalid-record', 'unavailable'].includes(invoice.reason) || invoice.creditedPoints !== null || invoice.revokedPoints !== null || invoice.subscriptionLinked) return invalid()
+      } else if (invoice.state === 'missing') {
+        if (invoice.reason !== null || invoice.creditedPoints !== null || invoice.revokedPoints !== null || invoice.subscriptionLinked) return invalid()
+      } else if (invoice.reason !== null || !integer(invoice.creditedPoints, invoice.state === 'present' ? 1 : 0, 1_000_000) ||
+          !integer(invoice.revokedPoints, invoice.state === 'present' ? 0 : 1, invoice.state === 'present' ? 0 : 1_000_000) ||
+          Number(invoice.creditedPoints) > 0 && Number(invoice.revokedPoints) > Number(invoice.creditedPoints)) return invalid()
+    }
+    const provenance = object(stored.unknownAmountProvenance, ['records', 'classifiedRecords', 'unclassifiedRecords', 'groups'])
+    if (provenance.records !== funding.unknownAmountRecords || !integer(provenance.classifiedRecords, 0, Number(provenance.records)) ||
+        !integer(provenance.unclassifiedRecords, 0, Number(provenance.records)) || Number(provenance.classifiedRecords) + Number(provenance.unclassifiedRecords) !== provenance.records ||
+        !Array.isArray(provenance.groups) || provenance.groups.length > 36) return invalid()
+    const groups = new Set<string>()
+    let groupedRecords = 0
+    for (const raw of provenance.groups) {
+      const group = object(raw, ['route', 'model', 'state', 'records', 'recordedPointCosts', 'earliestAt', 'latestAt'])
+      if (typeof group.route !== 'string' || !['studio', 'blueprint', 'legacyBlueprint'].includes(group.route) ||
+          typeof group.model !== 'string' || !['luna', 'sol', 'astra', 'unknown'].includes(group.model) ||
+          typeof group.state !== 'string' || !['reserved', 'completed', 'failed'].includes(group.state) ||
+          !integer(group.records, 1, Number(provenance.classifiedRecords)) || !integer(group.recordedPointCosts, 0, Number(group.records) * 1_000_000) ||
+          !integer(group.earliestAt, 1, 8_640_000_000_000_000) || !integer(group.latestAt, Number(group.earliestAt), 8_640_000_000_000_000)) return invalid()
+      const key = `${group.route}:${group.model}:${group.state}`
+      if (groups.has(key)) return invalid()
+      groups.add(key); groupedRecords += Number(group.records)
+    }
+    if (groupedRecords !== provenance.classifiedRecords) return invalid()
+  }
   return value as GenerationFundingSnapshot
 }
