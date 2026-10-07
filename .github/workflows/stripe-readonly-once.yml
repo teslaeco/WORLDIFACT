@@ -1,0 +1,41 @@
+name: Read approved Stripe billing evidence once
+on:
+  push:
+    branches: ['diagnostics/stripe-readonly-once-20261007']
+    paths: ['.github/workflows/stripe-readonly-once.yml']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-stripe-readonly-20261007
+  cancel-in-progress: false
+jobs:
+  diagnostic:
+    if: github.ref == 'refs/heads/diagnostics/stripe-readonly-once-20261007' && github.event.before == '29b6b9af08d62baafddceb029652db321ec83273' && github.run_attempt == 1
+    environment:
+      name: production
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify offline safety fixtures without production credentials
+        run: node --test tests/stripe-readonly-once.test.mjs
+      - name: Read allowlisted Stripe data and encrypt in memory
+        run: node scripts/stripe-readonly-once.mjs
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          DIAGNOSTIC_BEFORE: ${{ github.event.before }}
+      - name: Upload ciphertext only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: stripe-readonly-encrypted-${{ github.run_id }}
+          path: .stripe-readonly-encrypted/report.enc.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
