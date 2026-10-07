@@ -1,0 +1,32 @@
+name: Read STANDARD context activation once without generation
+on:
+  push:
+    branches: [fix/standard-context-v2-20261007]
+    paths:
+      - 'scripts/check-standard-context-runtime.mjs'
+      - '.github/workflows/standard-context-runtime-readonly.yml'
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-standard-context-readonly
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.event.head_commit.message == 'Read STANDARD context activation status once'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify fixed public reader bytes
+        run: echo "484098bf8c312b9b3fdbdb293cff1236190f47ecc441313d3cadfec3bb31acf1  scripts/check-standard-context-runtime.mjs" | sha256sum -c -
+      - name: Read existing source-attested context health
+        run: node scripts/check-standard-context-runtime.mjs
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}

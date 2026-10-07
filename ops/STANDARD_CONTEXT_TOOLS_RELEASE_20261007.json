@@ -1,0 +1,9 @@
+{
+  "release": "standard-context-tools-only-20261007",
+  "baseCommit": "0934d82b25003dc0d9601b49c4119facdaeaea54",
+  "sourceOnly": true,
+  "deployAllowed": false,
+  "existingOracleActivation": "worldifact-standard-context-v2",
+  "preserveCloudflareDeployment": true,
+  "paidGenerationRequested": false
+}
