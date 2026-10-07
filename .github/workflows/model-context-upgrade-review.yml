@@ -1,0 +1,47 @@
+name: Verify selective context upgrade without provider calls
+on:
+  pull_request:
+    paths:
+      - 'tools/model_context_upgrade/**'
+      - 'docs/STANDARD_CONTEXT_UPGRADE_20261007.md'
+      - '.github/workflows/model-context-upgrade-review.yml'
+permissions:
+  contents: read
+jobs:
+  context-upgrade:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/WORLDIFACT
+          ref: 2380a7e2dad05a40b3753faf06c2635ed444be51
+          path: .context-ancestor
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .model-completion-source
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Compile new package and test exact mixed-commit dependency assembly
+        env:
+          MODEL_CONTEXT_ANCESTOR_REPOSITORY: ${{ github.workspace }}/.context-ancestor
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+        run: |
+          python3 -m py_compile tools/model_context_upgrade/*.py
+          python3 -B -m unittest discover -s tools/model_context_upgrade -p 'test_*.py' -v
+      - name: Verify inherited completion, pricing and maintenance safety fixtures
+        working-directory: .context-ancestor
+        env:
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+        run: |
+          for suite in model_completion model_prebuild model_context model_budget_receipt model_budget_tiers; do
+            python3 -B -m unittest discover -s "tools/$suite" -p 'test_*.py' -v || exit 1
+          done
