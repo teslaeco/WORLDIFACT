@@ -14,10 +14,53 @@ import {
 const root = fileURLToPath(new URL('../', import.meta.url))
 const head = '1'.repeat(40), other = '2'.repeat(40), zero = '0'.repeat(40)
 const scriptBytes = readFileSync(join(root, SCRIPT_PATH))
-const original = spawnSync('git', ['cat-file', 'blob', BASE_WORKFLOW_BLOB], { cwd: root, encoding: 'utf8' })
-assert.equal(original.status, 0, 'The exact reviewed UI workflow must be locally available.')
-const baseWorkflow = original.stdout
+// A normal hosted checkout may not contain the ancestor object. Recover only
+// the reviewed inverse transform, then cryptographically require the exact UI
+// base workflow. Neither Git history nor a self-asserted derived fixture suffices.
+const originalIf = "github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'DEPLOY')"
+const guardedHeader = `jobs:\n  deploy:\n    needs: context_tools_preflight\n    if: needs.context_tools_preflight.result == 'success' && needs.context_tools_preflight.outputs.deploy_allowed == 'true' && (${originalIf})\n`
+const currentWorkflow = readFileSync(join(root, WORKFLOW_PATH), 'utf8')
+const workflowParts = currentWorkflow.split('\n  context_tools_preflight:\n')
+assert.equal(workflowParts.length, 2, 'Exactly one appended preflight is required.')
+assert.equal(workflowParts[0].split(guardedHeader).length, 2, 'Exactly one guarded deploy header is required.')
+const baseWorkflow = workflowParts[0].replace(guardedHeader, `jobs:\n  deploy:\n    if: ${originalIf}\n`)
+assert.equal(blob(baseWorkflow), BASE_WORKFLOW_BLOB, 'Inverse workflow fixture must equal the immutable UI base blob.')
 const expectedWorkflow = guardedWorkflow(baseWorkflow, sha256(scriptBytes))
+// Immutable workflow blobs from actual UI base 0934d82, excluding the one reviewed transform.
+const LEGACY_WORKFLOW_BLOBS = Object.freeze({
+  ".github/workflows/ai-shop-integration-check.yml": "e7a70d1093bde218989b0a7ffc1a2941b6dfc2a6",
+  ".github/workflows/approved-fast-cost-review.yml": "384d3c65e5090b77d4eb49059c70f17b6d66ac01",
+  ".github/workflows/approved-model-test-once.yml": "c06fc5996bd5209164e35daac3a88b86fe255306",
+  ".github/workflows/astra-activation-test-once.yml": "1cd82788e804f8ed234daa7341629c1cafcae14c",
+  ".github/workflows/astra-direct-activation-test-once.yml": "833a3a6f2def7286291c8293f223966df6a59a83",
+  ".github/workflows/astra-profit-guard-review.yml": "af34bebdf51d6e7898734409196a16336beb8645",
+  ".github/workflows/astra-runtime-readonly.yml": "bc5ca4921559d7fefaaab114e0332b4b12cf40dc",
+  ".github/workflows/billing-recovery-review.yml": "9adaf36be028aca4f89895f9dcb372588ef43812",
+  ".github/workflows/ci.yml": "47fa876758aef48ec15b915eb7c4fc72c4293c36",
+  ".github/workflows/contest-live-paid-smoke-once.yml": "666c72b0b3aaabb3ae5eac6646340e83f7f99b31",
+  ".github/workflows/expired-billing-recovery-review.yml": "fb49e18cc6676cb979f9e82afb8e8a382073c9a6",
+  ".github/workflows/fast-install-review.yml": "f2b2b182efd95707eaef6efdfe9f965894a80359",
+  ".github/workflows/fast-launch-review.yml": "b5b81b69d80551a79256303c14cbbfa1c027637e",
+  ".github/workflows/fast-preview-review.yml": "b87a775112062df06b518ddd1b80393fcb6c954c",
+  ".github/workflows/ingest-portal-building-exports-once.yml": "1bfb92eba4e99e3b393d7141bb1e9a7fd7e93fdf",
+  ".github/workflows/ingest-portal-building-once.yml": "30f35f6070b4e10601c1c46a5665d65c05047c05",
+  ".github/workflows/inspect-astra-activation-job.yml": "22cd4b548e3023c4cdf12eee3d55313d9dae8273",
+  ".github/workflows/model-completion-review.yml": "e3be68677c6e661ea94201232b2731f243fa11f4",
+  ".github/workflows/oracle-artifact-review-once.yml": "f996d87fd7a933f202dfb37eb32d726fe641ab65",
+  ".github/workflows/p0-pilot-once.yml": "3d531cc27f560174b22968dea56fe79f192f63c7",
+  ".github/workflows/p0-pilot-recovery-once.yml": "a2b30d36da0221fcade9b6e73d27cb32dd91c5ee",
+  ".github/workflows/pilot.yml": "6cb0a5c96fb6d4cc42b3834ba55dd833e3ca8022",
+  ".github/workflows/plan-card-payment-review.yml": "d98798239a4a6870d486e0c72acdbdd6439ac370",
+  ".github/workflows/prepare-model-quality-v3.yml": "2bd2556b7d8157e98b0be4cf72325df8bf1e3337",
+  ".github/workflows/prepare-prompt-model-ui.yml": "e53aed760badd5667e7cf552b3b4c9b361c738e2",
+  ".github/workflows/private-game-publication.yml": "7a278241b0b9cbdc3cfa032ba74741920509da96",
+  ".github/workflows/project-files-review.yml": "2b53ff0381ca1798a2dba40dafe4129184e49f8a",
+  ".github/workflows/resume-approved-studio-once.yml": "b1058002f21c41187a84557f2c53723601eb1c54",
+  ".github/workflows/shop-mcp2-pilot-once.yml": "30c6416d69d9f7bac4c8eb9cd3f6968887d36317",
+  ".github/workflows/shop-ui-preview.yml": "4b065f4b0c70126994b83f67e5a5a2e7b279bd62",
+  ".github/workflows/stripe-setup.yml": "272c524735a4645dafbd4c76e3ec1a33ad6eb248",
+  ".github/workflows/verify-mcc-publication.yml": "5985a19a0686759ee10aabbf0bf7cfc906fd219f"
+})
 const rawChanges = changes => changes.map(change => `:${change.oldMode} ${change.newMode} ${change.oldBlob} ${change.newBlob} ${change.status}\0${change.path}\0`).join('')
 const addition = (path, newBlob = '3'.repeat(40)) => ({ path, oldMode: '000000', newMode: '100644', oldBlob: zero, newBlob, status: 'A' })
 const modification = path => ({ path, oldMode: '100644', newMode: '100644', oldBlob: '3'.repeat(40), newBlob: '4'.repeat(40), status: 'M' })
@@ -171,12 +214,9 @@ test('the actual preflight checksum command succeeds only for the frozen guard b
 })
 test('legacy workflow_run paid markers and workflow source remain unchanged', () => {
   assert.deepEqual(REVIEWED_PATHS.filter(path => path.startsWith('ops/')), [MARKER_PATH])
-  const listed = spawnSync('git', ['ls-tree', '-r', '--name-only', BASE_COMMIT, '--', '.github/workflows'], { cwd: root, encoding: 'utf8' })
-  assert.equal(listed.status, 0)
-  for (const path of listed.stdout.trim().split('\n').filter(path => path !== WORKFLOW_PATH)) {
-    const prior = spawnSync('git', ['show', `${BASE_COMMIT}:${path}`], { cwd: root })
-    assert.equal(prior.status, 0)
-    assert.deepEqual(readFileSync(join(root, path)), prior.stdout, path)
+  assert.equal(Object.keys(LEGACY_WORKFLOW_BLOBS).length, 32)
+  for (const [path, expectedBlob] of Object.entries(LEGACY_WORKFLOW_BLOBS)) {
+    assert.equal(blob(readFileSync(join(root, path))), expectedBlob, path)
   }
 })
 test('CLI errors emit no positive or negative GitHub output, so missing output cannot admit production', () => {

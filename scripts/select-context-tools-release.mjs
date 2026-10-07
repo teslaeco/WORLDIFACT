@@ -10,7 +10,7 @@ export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
 export const SCRIPT_PATH = 'scripts/select-context-tools-release.mjs'
 export const TEST_PATH = 'tests/context-tools-release.test.mjs'
 export const MARKER_PATH = 'ops/STANDARD_CONTEXT_TOOLS_RELEASE_20261007.json'
-export const TEST_BLOB = '35d8fb14021e00814e9ab64544fccd8143099c9b'
+export const TEST_BLOB = '5a29e2e378fe40c9157b9a6bc1df50cdabfa8c19'
 export const PAYLOAD_BLOBS = Object.freeze({
   ".github/workflows/model-context-upgrade-review.yml": "0f6eb629bbda8742e4869aa2d82713b4b369bc08",
   ".github/workflows/standard-context-runtime-readonly.yml": "541147021115df021ced575d925474bba9620de1",
