@@ -33,7 +33,7 @@ async function fixture() {
     GENERATION_LIMITER: { async limit() { return { success: true } } },
     GENERATION_BUDGET: { idFromName: value => value, get: () => ({ async fetch() { return Response.json({ allowed: true }) } }) } }
   const ledger = new AccountEntitlements({ storage }, env)
-  env.ACCOUNT_ENTITLEMENTS = { idFromName: value => value, get: () => ({ async fetch(request) { if (new URL(request.url).pathname === '/reserve') calls.reserve++; return ledger.fetch(request) } }) }
+  env.ACCOUNT_ENTITLEMENTS = { idFromName: value => value, get: () => ({ async fetch(request) { if (new URL(request.url).pathname === '/generation-v3/reserve') calls.reserve++; return ledger.fetch(request) } }) }
   const call = async (path: string, body: unknown) => ledger.fetch(new Request('https://ledger.internal' + path, { method: 'POST', body: JSON.stringify(body) }))
   await call('/grant', { id: 'in_mixed_fixture', credits: 1500 })
   const provider = (async (input: unknown, init?: RequestInit) => {

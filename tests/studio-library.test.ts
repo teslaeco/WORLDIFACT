@@ -51,7 +51,7 @@ function fixture() {
       return { async fetch(request: Request) {
         ledgerRequests.push({ account, method: request.method, path: new URL(request.url).pathname })
         assert.equal(request.method, 'GET', 'No finance, settlement, reconciliation or current-job POSTs')
-        assert.match(new URL(request.url).pathname, /^\/studio-library(?:\/|$)/)
+        assert.match(new URL(request.url).pathname, /^\/generation-v3\/studio-library(?:\/|$)/)
         return object.fetch(request)
       } }
     } },
@@ -133,8 +133,9 @@ test('current completed model is discovered from all 58 account rows after the l
   assert.match(page.models[0].receipt.ticket, new RegExp(`^library\\.${latest}\\.${NOW}\\.[a-f0-9]{64}\\.[a-f0-9]{64}$`))
   assert.equal(page.hasMore, false)
   assert.equal(page.nextCursor, null)
-  assert.equal(f.lists.length, 1)
-  assert.equal(f.lists[0].limit, STUDIO_LIBRARY_SCAN_LIMIT)
+  assert.equal(f.lists.length, 2)
+  assert.deepEqual(f.lists.map(item => item.prefix), ['job:', 'paid-points-job:v2:'])
+  assert.ok(f.lists.every(item => item.limit === STUDIO_LIBRARY_SCAN_LIMIT))
   assert.ok(!f.reads.includes('current-studio-job:v1'))
   assert.deepEqual([...values], before)
   assert.equal(f.external.length, 0, 'Opening metadata must never read model bytes, health or provider status')

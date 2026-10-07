@@ -1,8 +1,9 @@
 import { STUDIO_PRICING, type StudioBudgetTier } from './studioPricing.ts'
 import { MODEL_CATALOG, type GenerationModel } from './modelCatalog.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from './generationAdmission.ts'
+import { PAID_POINTS_POLICY, PAID_POINTS_FUNDING } from './paidPointsFunding.ts'
 export type QuotedModel = GenerationModel
-export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits' | 'blocked'; points: number | null; after: number | null; message: string; reason?: AdmissionFailureCode }
+export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits' | 'blocked'; points: number | null; after: number | null; message: string; reason?: AdmissionFailureCode; fundingSource?: typeof PAID_POINTS_FUNDING }
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const integer = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 /** Non-binding display only. The server rechecks identity, model and funds atomically. */
@@ -12,6 +13,12 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
   const tier = detailed && model === 'astra' ? budgetTier : undefined
   const points = tier ? STUDIO_PRICING[tier].points : MODEL_CATALOG[model].creditsPerGeneration
   const pendingAdmission = (): GenerationQuote => ({ state: 'pending', points: null, after: null, message: 'Your current generation availability could not be verified. No payment is inferred.' })
+  // A new or malformed funding contract cannot be reinterpreted as legacy
+  // admission. Only genuinely absent historical markers retain that fallback.
+  if (Object.hasOwn(value, 'paidGenerationPolicy') && value.paidGenerationPolicy !== PAID_POINTS_POLICY &&
+      value.paidGenerationPolicy !== 'paid-membership-no-quota-v1') return pendingAdmission()
+  const pointsPolicy = value.paidGenerationPolicy === PAID_POINTS_POLICY
+  const pointsFunded = pointsPolicy && subscription.active === true && typeof subscription.plan === 'string' && ['creator', 'pro', 'studio'].includes(subscription.plan)
   let admissionVerified = false
   if (tier) {
     const admission = object(object(object(value.studioAdmission).tiers)[tier]), pricing = object(admission.pricing), expected = STUDIO_PRICING[tier]
@@ -34,11 +41,15 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
   if (!integer(value.credits) || typeof subscription.active !== 'boolean' || costs.sol !== 50 || costs.astra !== 250 || (model === 'luna' && costs.luna !== 15))
     return { state: 'pending', points: null, after: null, message: 'Your current balance and generation cost could not be verified. No payment is inferred.' }
   if (value.billingReview !== false) return { state: 'blocked', points: null, after: null, message: 'Your account needs billing review before another generation.' }
+  // The versioned policy must come with this model's authenticated admission
+  // and a complete spendable balance. Membership alone never changes funding.
+  if (pointsPolicy && (!admissionVerified || !integer(value.reservedCredits) || !integer(value.availableCredits) ||
+      value.availableCredits !== value.credits - value.reservedCredits)) return pendingAdmission()
   const spendable = integer(value.availableCredits) ? value.availableCredits : value.credits
   if (model === 'astra') {
-    if (!subscription.active || !['creator', 'pro', 'studio'].includes(String(subscription.plan)))
+    if (pointsPolicy ? !pointsFunded : !subscription.active || !['creator', 'pro', 'studio'].includes(String(subscription.plan)))
       return { state: 'blocked', points, after: null, message: 'ASTRA requires an active Creator, Pro or Studio plan. A top-up alone does not unlock ASTRA.' }
-    if (value.paidGenerationPolicy === 'paid-membership-no-quota-v1') {
+    if (pointsPolicy || value.paidGenerationPolicy === 'paid-membership-no-quota-v1') {
       // A current authenticated admission checks runtime and funded spend. Sales
       // availability and the retired Creator counter do not gate paid generation.
       if (!admissionVerified) return pendingAdmission()
@@ -60,7 +71,8 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
       : { state: 'blocked', points, after: null, message: 'Your personal free allowance is used. Wait for its reset or use prepaid credits.' }
   }
   if (spendable < points) return { state: 'blocked', points, after: null, message: 'Not enough available points for this model. No generation has started.', reason: 'CREDITS_EXHAUSTED' }
-  return { state: 'credits', points, after: spendable - points, message: integer(value.reservedCredits) && value.reservedCredits > 0
-    ? `One explicit attempt. ${value.reservedCredits} points are already reserved for an active cloud job; this quote uses only currently available points.`
+  return { state: 'credits', points, after: spendable - points, ...(pointsFunded ? { fundingSource: PAID_POINTS_FUNDING } : {}), message: integer(value.reservedCredits) && value.reservedCredits > 0
+    ? `One explicit attempt. ${value.reservedCredits} points are already reserved for ${pointsFunded ? 'earlier requests, including any pending cost review' : 'an active cloud job'}; this quote uses only currently available points.`
+    : pointsFunded ? 'One explicit attempt. Points are held before dispatch and remain unavailable until the result or verified failure cost is settled. Generation never starts a card or subscription charge.'
     : 'One explicit attempt. Detailed Studio jobs hold points until a valid model completes; generation never starts a card or subscription charge.' }
 }

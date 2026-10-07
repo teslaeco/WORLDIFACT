@@ -7,6 +7,8 @@ import { setImmediate as tick } from 'node:timers/promises'
 import React from 'react'
 import ts from 'typescript'
 import { fundingReadPath, loadGenerationFunding } from '../src/lib/loadGenerationFunding.ts'
+import { readGenerationFundingSnapshot } from '../src/lib/generationFunding.ts'
+import { recoverHeldPoints } from '../src/lib/recoverHeldPoints.ts'
 
 const pageUrl = new URL('../src/pages/GenerationFundingPage.tsx', import.meta.url), localRequire = createRequire(pageUrl)
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
@@ -32,13 +34,14 @@ async function harness(answer = () => Response.json(fixture())) {
   window.setTimeout = callback => { timers.set(++nextTimer, callback); return nextTimer }
   window.clearTimeout = id => timers.delete(id)
   const react = { ...React,
+    useRef(initial) { const i = cursor++; if (!slots[i]) slots[i] = { ref: { current: initial } }; return slots[i].ref },
     useState(initial) { const i = cursor++; if (!slots[i]) slots[i] = { value: initial }; return [slots[i].value, update => { const next = typeof update === 'function' ? update(slots[i].value) : update; if (!Object.is(next, slots[i].value)) { slots[i].value = next; dirty = true } }] },
     useEffect(callback, deps) { const i = cursor++, prior = slots[i]; if (!prior || deps.some((v,j) => !Object.is(v, prior.deps[j]))) { const slot = { deps, cleanup: prior?.cleanup }; slots[i] = slot; effects.push(() => { slot.cleanup?.(); slot.cleanup = callback() }) } },
   }
   const fetcher = async (path, init) => { calls.push({ path, init }); return answer(calls.length, init, path) }
   const module = { exports: {} }
-  runInNewContext(pageCode, { module, exports: module.exports, window, document, AbortController, console, Intl, Error,
-      require(id) { if (id === 'react') return react; if (id === 'react/jsx-runtime') return localRequire(id); if (id === '../lib/loadGenerationFunding') return { fundingReadPath, loadGenerationFunding: (signal, _fetcher, options) => loadGenerationFunding(signal, fetcher, options) }; if (id.endsWith('.css')) return {}; throw Error('Unexpected page dependency: ' + id) },
+  runInNewContext(pageCode, { module, exports: module.exports, window, document, AbortController, console, Intl, Error, fetch: fetcher,
+      require(id) { if (id === 'react') return react; if (id === 'react/jsx-runtime') return localRequire(id); if (id === '../lib/loadGenerationFunding') return { fundingReadPath, loadGenerationFunding: (signal, _fetcher, options) => loadGenerationFunding(signal, fetcher, options) }; if (id === '../lib/recoverHeldPoints') return { recoverHeldPoints }; if (id.endsWith('.css')) return {}; throw Error('Unexpected page dependency: ' + id) },
   }, { filename: pageUrl.pathname, timeout: 1000 })
   const settle = async () => { for (let i=0;i<10;i++) { if (dirty) { dirty=false;cursor=0;tree=module.exports.default() } while(effects.length)effects.shift()(); await tick() } }
   await settle()
@@ -48,6 +51,8 @@ async function harness(answer = () => Response.json(fixture())) {
     async checkInvoices() { elements(tree).find(node => node.type === 'form').props.onSubmit({ preventDefault() {} }); await settle() },
     async focus() { window.dispatchEvent(new Event('focus')); await settle() },
     async read() { const button = elements(tree).find(node => node.type === 'button'); assert.equal(button.props.disabled, false); button.props.onClick(); await settle() },
+    async nextReviews() { const button = elements(tree).find(node => node.type === 'button' && text(node).includes('Read next review page')); assert.ok(button); assert.equal(button.props.disabled, false); button.props.onClick(); await settle() },
+    async checkHeld(twice = false) { const button = elements(tree).find(node => node.type === 'button' && text(node).includes('Check this request')); assert.ok(button); button.props.onClick(); if (twice) button.props.onClick(); await settle() },
     async timeout() { for (const callback of [...timers.values()]) callback(); await settle() },
     close() { for (const slot of slots) slot?.cleanup?.() },
   }
@@ -58,8 +63,113 @@ test('standalone page entry reads only its GET endpoint and exposes no mutation 
     assert.equal(h.calls.length, 1); assert.equal(h.calls[0].path, '/api/account/generation-funding?evidence=stored-v1')
     assert.equal(h.calls[0].init.method, 'GET'); assert.equal(h.calls[0].init.credentials, 'same-origin'); assert.equal(h.calls[0].init.body, undefined)
     assert.match(h.text(), /500/); assert.match(h.text(), /\$0\.42/); assert.match(h.text(), /not an OpenAI invoice/)
+    assert.match(h.text(), /Legacy Astra.*reserve requirement/)
+    assert.match(h.text(), /paid-membership points policy use available points without this separate account reserve/)
+    assert.match(h.text(), /does not verify your current generation policy/)
     await h.focus(); assert.doesNotMatch(h.text(), /\$0\.42/); assert.equal(h.calls.length, 1)
     await h.read(); assert.equal(h.calls.length, 2); assert.ok(h.calls.every(call => call.init.method === 'GET'))
+  } finally { h.close() }
+})
+
+const pointsFixture = () => {
+  const snapshot = fixture()
+  snapshot.jobs.scanned = 2; snapshot.jobs.states.completed = 1; snapshot.jobs.states.reserved = 1; snapshot.jobs.routes.studio = 2
+  return { ...snapshot, paidMembershipLiability: { version: 1, jobs: 2, unresolvedJobs: 1, maximumLiabilityCents: 225 } }
+}
+
+test('points-funded diagnostics separate bounded liability from the unchanged legacy reserve without mutation', async () => {
+  const h = await harness(() => Response.json(pointsFixture()))
+  try {
+    assert.match(h.text(), /Paid-membership model liability/)
+    assert.match(h.text(), /2 points-funded jobs in this scan; 1 dispatched jobs/)
+    assert.match(h.text(), /Recorded maximum API liability across these jobs: \$2\.25/)
+    assert.match(h.text(), /not an API invoice, customer points charge, account reserve or refundable amount/)
+    assert.match(h.text(), /\$0\.42/)
+    assert.deepEqual(h.calls.map(call => call.init.method), ['GET'])
+  } finally { h.close() }
+})
+
+test('liability diagnostics accept only the exact bounded version and preserve legacy snapshots', () => {
+  assert.equal(readGenerationFundingSnapshot(fixture()).paidMembershipLiability, undefined)
+  assert.deepEqual(readGenerationFundingSnapshot(pointsFixture()).paidMembershipLiability, pointsFixture().paidMembershipLiability)
+  for (const paidMembershipLiability of [undefined, null, [], {},
+    { ...pointsFixture().paidMembershipLiability, version: 2 },
+    { ...pointsFixture().paidMembershipLiability, jobs: 3 },
+    { ...pointsFixture().paidMembershipLiability, jobs: 1.5 },
+    { ...pointsFixture().paidMembershipLiability, unresolvedJobs: 3 },
+    { ...pointsFixture().paidMembershipLiability, maximumLiabilityCents: -1 },
+    { ...pointsFixture().paidMembershipLiability, maximumLiabilityCents: 801 },
+    { ...pointsFixture().paidMembershipLiability, maximumLiabilityCents: 1.5 },
+    { ...pointsFixture().paidMembershipLiability, privateProviderData: 'DO_NOT_DISPLAY' },
+  ]) assert.throws(() => readGenerationFundingSnapshot({ ...pointsFixture(), paidMembershipLiability }), /unrecognized snapshot/)
+  assert.throws(() => readGenerationFundingSnapshot({ ...fixture(), paidMembershipLiability: { version: 1, jobs: 0, unresolvedJobs: 0, maximumLiabilityCents: 1 } }), /unrecognized snapshot/)
+})
+
+const reviewId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const reviewRecord = () => ({ id: reviewId, channel: 'studio', model: 'astra', at: Date.parse('2026-10-07T08:00:00Z'), heldPoints: 500, state: 'pending-cost' })
+const reviewPage = (patch = {}) => ({ version: 1, items: [reviewRecord()], nextCursor: null, hasMore: false, scanStatus: 'complete', ...patch })
+
+test('authoritative account cost reviews remain visible without local receipts and paginate empty pages by exact cursor using GET only', async () => {
+  const cursor = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA'
+  const h = await harness((_count, _init, path) => Response.json({ ...fixture(), pendingCostReviews: path.includes('pendingAfter=') ? reviewPage() : reviewPage({ items: [], nextCursor: cursor, hasMore: true, scanStatus: 'partial' }) }))
+  try {
+    assert.match(h.text(), /More account records remain/)
+    assert.equal(h.calls.length, 1)
+    await h.nextReviews()
+    assert.equal(h.calls[1].path, `/api/account/generation-funding?evidence=stored-v1&pendingAfter=${cursor}`)
+    assert.match(h.text(), new RegExp(reviewId)); assert.match(h.text(), /500 points held/)
+    assert.match(h.text(), /even if this browser no longer has their receipts/)
+    assert.match(h.text(), /does not retry generation or settle charges/)
+    assert.match(h.text(), /Keep the request ID for status or manual cost review/)
+    assert.equal(h.calls.length, 2); assert.ok(h.calls.every(call => call.init.method === 'GET' && call.init.body === undefined))
+  } finally { h.close() }
+})
+
+test('cost review parser and cursor continuation reject malformed, expanded, duplicate or non-advancing account evidence', async () => {
+  for (const pendingCostReviews of [null, {}, reviewPage({ version: 2 }), reviewPage({ scanStatus: ['complete'] }),
+    reviewPage({ items: [reviewRecord(), reviewRecord()] }), reviewPage({ items: Array.from({ length: 9 }, reviewRecord) }),
+    reviewPage({ items: [{ ...reviewRecord(), heldPoints: 501 }] }), reviewPage({ items: [{ ...reviewRecord(), channel: ['studio'] }] }),
+    reviewPage({ items: [{ ...reviewRecord(), model: ['astra'] }] }), reviewPage({ items: [{ ...reviewRecord(), privatePrompt: 'PRIVATE' }] }),
+    reviewPage({ hasMore: true }), reviewPage({ nextCursor: reviewId }), reviewPage({ scanStatus: 'unavailable' }),
+  ]) assert.throws(() => readGenerationFundingSnapshot({ ...fixture(), pendingCostReviews }), /unrecognized snapshot/)
+  for (const page of [reviewPage(), reviewPage({ items: [], hasMore: true, scanStatus: 'partial', nextCursor: reviewId })]) {
+    let calls = 0
+    await assert.rejects(loadGenerationFunding(new AbortController().signal, async (_path, init) => { calls++; assert.equal(init.method, 'GET'); return Response.json({ ...fixture(), pendingCostReviews: page }) }, { storedEvidence: true, invoiceReferences: [], pendingAfter: reviewId }), /could not be verified/)
+    assert.equal(calls, 1)
+  }
+  let calls = 0
+  await assert.rejects(loadGenerationFunding(new AbortController().signal, async () => { calls++; return Response.json({ error: 'Query parameters are not supported.' }, { status: 400 }) }, { storedEvidence: true, invoiceReferences: [], pendingAfter: reviewId }), /unavailable/)
+  assert.equal(calls, 1, 'cursor pagination must never fall back to the first page of an older endpoint')
+})
+
+test('an explicit account review checks the original stored Blueprint once without browser receipts or a new POST', async () => {
+  const item = { ...reviewRecord(), channel: 'blueprint', model: 'sol', heldPoints: 50 }
+  const h = await harness((_count, _init, path) => Response.json(path.startsWith('/api/account/')
+    ? { ...fixture(), pendingCostReviews: reviewPage({ items: [item] }) }
+    : { requestId: item.id, model: 'sol', state: 'failed', refunded: false, pointSettlement: { version: 1, state: 'pending-cost', heldPoints: 50, chargedPoints: 0 } }))
+  try {
+    assert.equal(h.calls.length, 1, 'opening the list never contacts a generation-status route')
+    await h.checkHeld(true)
+    assert.deepEqual(h.calls.map(call => call.path), ['/api/account/generation-funding?evidence=stored-v1', `/api/blueprint/requests/${item.id}?stored=held-points-v1`])
+    assert.ok(h.calls.every(call => call.init.method === 'GET'))
+    assert.match(h.text(), /50 points remain held pending provider-cost review/)
+    assert.match(h.text(), /Manual review is needed/)
+    assert.match(h.text(), /Read current funding again to refresh/)
+    await h.focus(); assert.doesNotMatch(h.text(), new RegExp(item.id)); assert.equal(h.calls.length, 2)
+  } finally { h.close() }
+})
+
+test('leaving the diagnostic invalidates a late same-job review without displaying the previous account result', async () => {
+  const response = deferred(), item = { ...reviewRecord(), channel: 'blueprint', model: 'sol', heldPoints: 50 }
+  const h = await harness((_count, _init, path) => path.startsWith('/api/account/')
+    ? Response.json({ ...fixture(), pendingCostReviews: reviewPage({ items: [item] }) }) : response.promise)
+  try {
+    await h.checkHeld(); assert.equal(h.calls.length, 2)
+    await h.focus()
+    response.resolve(Response.json({ requestId: item.id, model: 'sol', state: 'failed', pointSettlement: { version: 1, state: 'released', heldPoints: 0, chargedPoints: 0 } }))
+    await h.settle()
+    assert.doesNotMatch(h.text(), /held points were released|aaaaaaaa-aaaa/)
+    assert.equal(h.calls.length, 2)
   } finally { h.close() }
 })
 

@@ -15,6 +15,7 @@ import * as scoped from '../src/lib/scopedBlueprintClient.ts'
 import * as models from '../src/lib/modelCatalog.ts'
 import * as admission from '../src/lib/generationAdmission.ts'
 import * as quotes from '../src/lib/generationQuote.ts'
+import * as paidPointsFunding from '../src/lib/paidPointsFunding.ts'
 import * as accountReads from '../src/lib/generationAccount.ts'
 import * as routing from '../src/lib/portalRouting.ts'
 
@@ -90,6 +91,7 @@ async function harness({ store = new Map(), io = transport(), accountRead, healt
     },
   }
   const modules = { '../lib/studioPricing': studioPricing, '../lib/blueprint': blueprint, '../lib/blueprintRequest': request, '../lib/scopedBlueprintClient': scoped, '../lib/generationAdmission': admission, '../lib/modelCatalog': models, '../lib/portalRouting': routing,
+    '../lib/paidPointsFunding': paidPointsFunding,
     '../lib/account': { useAccount: () => ({ user: owner ? { id: owner } : null, loading: accountLoading }) },
     './account': { useAccount: () => ({ user: owner ? { id: owner } : null, loading: accountLoading }) }, './generationAccount': accountReads, './generationQuote': quotes,
   }
@@ -343,4 +345,89 @@ test('blocked portal refresh reads current admission and requires another explic
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 3)
     assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
   } finally { h.close() }
+})
+
+test('failed portal point holds survive reload and prepare-new with manual review and GET-only old-request checks', async () => {
+  const pointSettlement = { version: 1, state: 'pending-cost', heldPoints: 50, chargedPoints: 0 }, ids = []
+  const io = async (path, init) => {
+    const post = init.method === 'POST', id = post ? new Headers(init.headers).get('X-WORLDIFACT-Request') : path.split('/').at(-1)
+    if (post) ids.push(id)
+    assert.ok(ids.includes(id))
+    return Response.json({ state: 'failed', requestId: await request.blueprintRequestId(id), pointSettlement, error: 'Fixture says refunded; client must use checked settlement only' }, { status: post ? 502 : 200 })
+  }
+  const h = await harness({ io }); let reload
+  try {
+    h.button('Generate DEMO').props.onClick(); await h.settle()
+    const before = h.canvas().props.blueprint
+    h.primary().props.onClick(); await h.waitDone()
+    assert.equal(posts(h).length, 1); assert.equal(h.canvas().props.blueprint, before)
+    assert.match(h.text(), /Previous attempt failed · points held/)
+    assert.match(h.text(), /Manual review/); assert.match(h.text(), /No points have been charged or released/)
+    assert.doesNotMatch(h.text(), /Fixture says refunded|Previous attempt closed/)
+    const activeKey = [...h.store.keys()][0], saved = JSON.parse(h.store.get(activeKey)).recovery
+    assert.deepEqual(saved.pointSettlement, pointSettlement); assert.equal(saved.state, 'failed')
+    h.close(); reload = await harness({ io, store: h.store })
+    assert.equal(reload.calls.filter(call => call.path.startsWith('/api/blueprint')).length, 0)
+    assert.match(reload.text(), /Manual review/)
+    const recover = reload.button('Recover same request').props.onClick; recover(); recover(); await reload.waitDone()
+    assert.equal(posts(reload).length, 0)
+    assert.deepEqual(reload.calls.filter(call => call.path.startsWith('/api/blueprint')).map(call => [call.path, call.method]), [[`/api/blueprint/requests/${saved.id}`, 'GET']])
+    reload.button('Prepare new paid attempt').props.onClick(); await reload.settle()
+    assert.equal(h.store.has(activeKey), false)
+    assert.equal(JSON.parse(h.store.get(`${activeKey}:held-history`))[0].recovery.id, saved.id)
+    assert.match(reload.text(), /Manual review/); assert.equal(posts(reload).length, 0)
+    assert.equal(reload.primary().props.disabled, false, 'Another attempt can use remaining available points after an explicit reset')
+    reload.primary().props.onClick(); await reload.waitDone()
+    const next = JSON.parse(h.store.get(activeKey)).recovery
+    assert.notEqual(next.id, saved.id); assert.equal(posts(reload).length, 1)
+    const latestReceipt = h.store.get(activeKey)
+    reload.button('Check held-point request').props.onClick(); await reload.waitDone()
+    assert.equal(h.store.get(activeKey), latestReceipt)
+    assert.equal(posts(reload).length, 1)
+    assert.equal(reload.calls.filter(call => call.path === `/api/blueprint/requests/${saved.id}`).length, 2)
+    assert.doesNotMatch([...h.store.values()].join(''), /Fixture says refunded|Design a playable/)
+    await reload.setOwner('owner-b')
+    assert.doesNotMatch(reload.text(), new RegExp(saved.id))
+    assert.equal(h.store.get(activeKey), latestReceipt)
+  } finally { h.close(); reload?.close() }
+})
+
+test('malformed failed portal settlement cannot become a refundable terminal receipt', async () => {
+  const h = await harness({ io: async () => Response.json({ state: 'failed', refunded: true, noCharge: true, pointSettlement: { version: 2, state: 'released', heldPoints: 0, chargedPoints: 0 } }, { status: 502 }) })
+  try {
+    h.primary().props.onClick(); await h.waitDone()
+    assert.match(h.text(), /Point settlement needs review/)
+    assert.equal(JSON.parse([...h.store.values()][0]).recovery.state, 'pending')
+    assert.ok(!h.all().some(n => n.type === 'button' && text(n).includes('Prepare new paid attempt')))
+    assert.equal(posts(h).length, 1)
+  } finally { h.close() }
+})
+
+test('portal persists negotiated held-point funding before a lost acknowledgement and refuses legacy refund recovery', async () => {
+  const account = { ...funded, reservedCredits: 0, paidGenerationPolicy: paidPointsFunding.PAID_POINTS_POLICY }
+  let seed = ''
+  const io = async (path, init) => {
+    if (init.method === 'POST') { seed = new Headers(init.headers).get('X-WORLDIFACT-Request'); throw new TypeError('Lost hold acknowledgement') }
+    assert.equal(path, `/api/blueprint/requests/${seed}`)
+    return Response.json({ state: 'failed', refunded: true })
+  }
+  const h = await harness({ io, accountRead: () => Response.json(account) }); let reload
+  try {
+    h.primary().props.onClick(); await h.waitDone()
+    const record = JSON.parse([...h.store.values()][0]).recovery
+    assert.equal(record.fundingPolicy, paidPointsFunding.PAID_POINTS_FUNDING)
+    assert.equal(record.state, 'pending'); assert.equal(posts(h).length, 1)
+    h.close(); reload = await harness({ io, store: h.store, accountRead: () => Response.json(account) })
+    assert.equal(reload.calls.filter(call => call.path.startsWith('/api/blueprint')).length, 0)
+    reload.button('Recover same request').props.onClick(); await reload.waitDone()
+    assert.match(reload.text(), /Point settlement is unconfirmed/); assert.match(reload.text(), /Manual review/)
+    assert.doesNotMatch(reload.text(), /allowance have been returned|Previous attempt closed/)
+    assert.equal(JSON.parse([...h.store.values()][0]).recovery.id, record.id)
+    assert.equal(JSON.parse([...h.store.values()][0]).recovery.state, 'failed')
+    assert.equal(JSON.parse([...h.store.values()][0]).recovery.pointSettlementUnconfirmed, true)
+    assert.equal(posts(reload).length, 0)
+    reload.button('Prepare new paid attempt').props.onClick(); await reload.settle()
+    assert.equal(JSON.parse([...h.store.values()][0])[0].recovery.id, record.id)
+    assert.ok(reload.button('Check held-point request')); assert.equal(posts(reload).length, 0)
+  } finally { h.close(); reload?.close() }
 })

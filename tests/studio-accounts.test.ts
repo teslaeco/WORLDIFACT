@@ -26,7 +26,7 @@ function fixture() {
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => budget }
   const users = new Map<string, AccountEntitlements>()
   let reservationDenial: string | undefined
-  env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() }, env, () => Date.now())); const object = users.get(key)!; return { fetch: (request: Request) => reservationDenial && new URL(request.url).pathname === '/reserve' ? Promise.resolve(Response.json({ allowed: false, reason: reservationDenial }, { status: 429 })) : object.fetch(request) } } }
+  env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) { const key = String(id); if (!users.has(key)) users.set(key, new AccountEntitlements({ storage: storage() }, env, () => Date.now())); const object = users.get(key)!; return { fetch: (request: Request) => reservationDenial && new URL(request.url).pathname === '/generation-v3/reserve' ? Promise.resolve(Response.json({ allowed: false, reason: reservationDenial }, { status: 429 })) : object.fetch(['/generation-v3/reserve', '/generation-v3/status'].includes(new URL(request.url).pathname) ? new Request(request.url.replace('/generation-v3/', '/'), request) : request) } } }
   let modelStatus: 'draft' | 'reviewed' | undefined, qualityFailure = false
   let quality: Record<string, unknown> = { revision: 6, state: 'succeeded', hasModel: true, modelStatus: 'draft', automaticQualityAccepted: false, agent: {}, agentUsage: { completed: false, error_code: null }, visualReview: { assessment_completed: false, accepted: false, status: 'not_completed' } }
   let qualityReads = 0
@@ -765,7 +765,7 @@ test('unknown or conflicting account denial never leaks arbitrary internal text'
   }
 })
 
-test('actual exhausted provider allowance does not masquerade as exhausted customer points', async () => {
+test('legacy provider allowance refusal remains distinct from exhausted customer points', async () => {
   const f = fixture(); await f.subscribe()
   for (let index = 0; index < 18; index++) {
     const id = crypto.randomUUID()

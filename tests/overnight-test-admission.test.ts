@@ -57,7 +57,7 @@ function fixture() {
   }
   ensure(ACCOUNT); oldNames.forEach(ensure)
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get: opaque => ({ async fetch(request) {
-    const name = String(opaque), path = new URL(request.url).pathname
+    const name = String(opaque), path = new URL(request.url).pathname.replace(/^\/generation-v3(?=\/)/, '')
     if (path === '/reserve') calls.ordinaryReserve++
     if (path === '/reserve-overnight-test') { calls.testReserve++; if (legacyAccount) return Response.json({ error: 'Legacy endpoint missing' }, { status: 404 }) }
     if (path === '/overnight-test-claim') calls.poolClaim++

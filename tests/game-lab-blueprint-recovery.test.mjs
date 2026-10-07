@@ -214,3 +214,55 @@ test('scoped adapter rejects delayed results after owner or surface switches and
     assert.equal(t.posts().length,1);assert.equal(t.calls.filter(c=>c.method==='GET').length,1)
   }
 })
+
+test('scoped failed holds retain UUID and original world snapshot after explicit reset without crossing owner or world scope',async()=>{
+  const data=new Map(),calls=[],pointSettlement={version:1,state:'pending-cost',heldPoints:15,chargedPoints:0},snapshot={privateWorld:'Original held world'}
+  const fetcher=async(path,init={})=>{
+    const method=init.method||'GET';calls.push({path,method})
+    const id=method==='POST'?new Headers(init.headers).get('X-WORLDIFACT-Request'):path.split('/').at(-1)
+    return Response.json({state:'failed',requestId:await blueprintRequestId(id),pointSettlement},{status:method==='POST'?502:200})
+  }
+  const initial=new ScopedBlueprintClient(storage(data),fetcher,owner,'world-a')
+  await assert.rejects(initial.submit({prompt:'Private held rover',model:'luna'},snapshot),/Manual review/)
+  const saved=initial.current()
+  assert.equal(saved.state,'failed');assert.deepEqual(saved.pointSettlement,pointSettlement)
+  const reload=new ScopedBlueprintClient(storage(data),fetcher,owner,'world-a')
+  assert.deepEqual(reload.current(),saved);await assert.rejects(reload.recover(),/Manual review/)
+  assert.equal(calls.filter(call=>call.method==='POST').length,1)
+  assert.throws(()=>reload.reset(false),/Confirm/)
+  reload.reset(true);assert.equal(reload.current(),null);assert.deepEqual(reload.archived(),[saved])
+  assert.equal(calls.length,2,'Reset does not recover or generate')
+  assert.deepEqual(new ScopedBlueprintClient(storage(data),fetcher,other,'world-a').archived(),[])
+  assert.deepEqual(new ScopedBlueprintClient(storage(data),fetcher,owner,'world-b').archived(),[])
+  await assert.rejects(new ScopedBlueprintClient(storage(data),fetcher,other,'world-a').recoverArchived(saved.id),/no saved held-point/)
+  assert.equal(calls.length,2,'A foreign scope cannot send a recovery request for an archived UUID')
+  const prepared=new ScopedBlueprintClient(storage(data),fetcher,owner,'world-a')
+  await assert.rejects(prepared.submit({prompt:'Another held rover',model:'luna'},{privateWorld:'Changed world'}),/Manual review/)
+  const latest=prepared.current()
+  assert.notEqual(latest.id,saved.id)
+  assert.notEqual(latest.snapshotFingerprint,saved.snapshotFingerprint)
+  await assert.rejects(prepared.recoverArchived(saved.id),/Manual review/)
+  assert.deepEqual(prepared.current(),latest)
+  assert.deepEqual(prepared.archived(),[saved]);assert.equal(saved.snapshotFingerprint,await blueprintFingerprint(snapshot))
+  assert.deepEqual(calls.at(-1),{path:`/api/blueprint/requests/${saved.id}`,method:'GET'})
+  assert.doesNotMatch([...data.values()].join(''),/Private held rover|Original held world|Changed world/)
+})
+
+test('scope changes fence archived settlement writes and malformed held history never starts a replacement',async()=>{
+  const data=new Map(),pointSettlement={version:1,state:'pending-cost',heldPoints:15,chargedPoints:0},pending=deferred()
+  let active=true,postCount=0,readCount=0
+  const fetcher=async(_path,init={})=>{
+    if(init.method==='POST'){postCount++;return Response.json({state:'failed',pointSettlement},{status:502})}
+    readCount++;await pending.promise;return Response.json({state:'failed',pointSettlement:{version:1,state:'released',heldPoints:0,chargedPoints:0}})
+  }
+  const client=new ScopedBlueprintClient(storage(data),fetcher,owner,'world-a',()=>active)
+  await assert.rejects(client.submit({prompt:'Held rover',model:'luna'},{}),/Manual review/)
+  const id=client.current().id;client.reset(true)
+  const original=[...data.values()][0],checking=client.recoverArchived(id),rejected=assert.rejects(checking,/account or world changed/)
+  active=false;pending.resolve();await rejected
+  assert.equal([...data.values()][0],original);assert.equal(postCount,1);assert.equal(readCount,1)
+  active=true;const archiveKey=[...data.keys()][0]
+  data.set(archiveKey,JSON.stringify([{snapshotFingerprint:'invalid',recovery:client.archived()[0]}]))
+  await assert.rejects(client.submit({prompt:'Another rover',model:'luna'},{}),/held-point requests need review/)
+  assert.equal(postCount,1)
+})

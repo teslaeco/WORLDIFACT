@@ -14,8 +14,9 @@ import { readArchive, saveArchive } from "../lib/archive";
 import type { ArchivedWorld } from "../lib/archive";
 import { createWorldObject, disposeObject } from "../lib/worldGeometry";
 import { Group } from "three";
-import { ScopedBlueprintClient, type ScopedBlueprintRecovery } from "../lib/scopedBlueprintClient";
+import { ScopedBlueprintClient, blueprintRecoveryDetail, type ScopedBlueprintRecovery } from "../lib/scopedBlueprintClient";
 import { useAccount } from "../lib/account";
+import { useGenerationQuote } from "../lib/useGenerationQuote";
 import GenerationCostNotice from "./GenerationCostNotice";
 
 function download(data: Blob, name: string) {
@@ -47,6 +48,7 @@ export default function WorldStudio() {
   const [accessCode, setAccessCode] = useState("");
   const [accessRequired, setAccessRequired] = useState(false);
   const [recovery, setRecovery] = useState<ScopedBlueprintRecovery | null>(null);
+  const [heldRequests, setHeldRequests] = useState<ScopedBlueprintRecovery[]>([]);
   const client = useRef<ScopedBlueprintClient | null>(null);
   const [busy, setBusy] = useState(false),
     [seconds, setSeconds] = useState(0),
@@ -66,10 +68,12 @@ export default function WorldStudio() {
   const generationInFlight = useRef(false);
   const importRevision = useRef(0);
   const mounted = useRef(true);
+  const accountQuote = useGenerationQuote("astra", busy);
+  const funded = !accountQuote.checking && ['free', 'credits'].includes(accountQuote.quote.state);
   useEffect(() => {
     // Reset transient UI when the external account scope changes.
     // eslint-disable-next-line react/set-state-in-effect
-    mounted.current = true; generationInFlight.current = false; setBusy(false); setImageBusy(false); setRecovery(null); client.current = null;
+    mounted.current = true; generationInFlight.current = false; setBusy(false); setImageBusy(false); setRecovery(null); setHeldRequests([]); client.current = null;
     sceneRevision.current++;
     setBlueprint(meadowBlueprint()); setLastResult(null); setSelected(""); setSearch(""); setMode("demo");
     setPrompt("An open green meadow with a flowing river and a photovoltaic explorer.");
@@ -79,7 +83,7 @@ export default function WorldStudio() {
     try {
       if (owner) {
         client.current = new ScopedBlueprintClient(window.localStorage, fetch, owner, "historical-world-studio", () => mounted.current && activeOwner.current === owner);
-        setRecovery(client.current.current());
+        setRecovery(client.current.current()); setHeldRequests(client.current.archived());
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Recovery storage is unavailable. No paid request can start.");
@@ -138,7 +142,7 @@ export default function WorldStudio() {
     setLastResult(result);
     setNotice(`DEMO · ${result.limitation}`);
   }
-  async function generate(recoverOnly = false) {
+  async function generate(recoverOnly = false, archivedId?: string) {
     if (generationInFlight.current || readingImage.current) return;
     generationInFlight.current = true;
     const generationId = ++generationRevision.current;
@@ -170,13 +174,15 @@ export default function WorldStudio() {
         }), owner, "historical-world-studio", () => mounted.current && activeOwner.current === owner);
         client.current = transport;
         if (!recoverOnly) {
+          if (!funded) throw new Error(accountQuote.quote.message);
           if (transport.current()) throw new Error("Recover the saved request or explicitly prepare a new paid attempt first.");
           if (!live) throw new Error("Astra blueprint generation is not enabled. The no-cost demo is still available.");
           if (accessRequired && accessCode.trim().length < 32) throw new Error("Enter the preview access code.");
         }
+        if (archivedId) { await transport.recoverArchived(archivedId, controller.signal); return }
         const proposal = recoverOnly
           ? await transport.recover(controller.signal)
-          : await transport.submit({ worldId: "ai-game-lab", prompt, image, mode: "live", model: "astra", deliverable: "procedural-blueprint" }, blueprint, controller.signal);
+          : await transport.submit({ worldId: "ai-game-lab", prompt, image, mode: "live", model: "astra", deliverable: "procedural-blueprint" }, blueprint, controller.signal, accountQuote.quote.fundingSource);
         if (!mounted.current || activeOwner.current !== owner || controller.signal.aborted || generationId !== generationRevision.current) return;
         const value = proposal.result;
         if (sceneRevision.current !== startingRevision)
@@ -200,14 +206,14 @@ export default function WorldStudio() {
         generationInFlight.current = false;
         if (abort.current === controller) abort.current = null;
         setBusy(false);
-        try { setRecovery(client.current?.current() ?? null); }
+        try { setRecovery(client.current?.current() ?? null); setHeldRequests(client.current?.archived() ?? []); accountQuote.refresh(); }
         catch (e) { setError(e instanceof Error ? e.message : "Recovery storage needs review."); }
       }
     }
   }
   function newAttempt() {
-    if (generationInFlight.current || !client.current || !window.confirm("Prepare a NEW paid attempt for your next Create click? Recovering the saved result costs no additional points.")) return;
-    try { client.current.reset(true); setRecovery(null); setError(""); }
+    if (generationInFlight.current || !client.current || !window.confirm("Prepare a NEW paid attempt for your next Create click? Any unresolved held-point request stays available for review. Generating again requires a separate click.")) return;
+    try { client.current.reset(true); setRecovery(null); setHeldRequests(client.current.archived()); accountQuote.refresh(); setError(""); }
     catch (e) { setError(e instanceof Error ? e.message : "Recovery could not be cleared."); }
   }
   async function importBlueprint(file?: File) {
@@ -416,7 +422,7 @@ export default function WorldStudio() {
               </option>
             </select>
           </label>
-          {mode === "live" && <GenerationCostNotice model="astra" busy={busy} />}
+          {mode === "live" && <GenerationCostNotice model="astra" busy={busy} accountQuote={accountQuote} />}
           {mode === "live" && accessRequired ? (
             <label>
               Preview access code
@@ -470,7 +476,7 @@ export default function WorldStudio() {
           {mode === "live" ? <small>Use only references you have permission to share. <Link to="/privacy">How your data is used</Link></small> : null}
           <button
             className="primary"
-            disabled={busy || imageBusy || (mode === "live" && (!owner || accountLoading || !!recovery || (accessRequired && accessCode.trim().length < 32)))}
+            disabled={busy || imageBusy || (mode === "live" && (!owner || accountLoading || !funded || !!recovery || (accessRequired && accessCode.trim().length < 32)))}
             onClick={() => void generate()}
           >
             {imageBusy
@@ -488,7 +494,8 @@ export default function WorldStudio() {
               <button onClick={() => abort.current?.abort()}>Cancel</button>
             </div>
           ) : null}
-          {recovery && <div role="status"><p>Saved request · {recovery.state}. Recovery does not start another paid generation.</p><button disabled={busy || imageBusy} onClick={() => void generate(true)}>Recover same request · no extra charge</button>{recovery.state !== "pending" && <button disabled={busy} onClick={newAttempt}>Prepare new paid attempt…</button>}</div>}
+          {recovery && <div role="status"><p>Saved request · {recovery.state}. {blueprintRecoveryDetail(recovery)}</p>{(recovery.pointSettlement?.state === 'pending-cost' || recovery.pointSettlementUnconfirmed) && <a href="/account/generation-funding">Review all held points</a>}<button disabled={busy || imageBusy} onClick={() => void generate(true)}>Recover same request · no extra charge</button>{recovery.state !== "pending" && <button disabled={busy} onClick={newAttempt}>Prepare new paid attempt…</button>}</div>}
+        {heldRequests.map(saved => <div role="status" key={saved.id}><p>Saved point review · Request {saved.id}. {blueprintRecoveryDetail(saved)}</p><a href="/account/generation-funding">Review all held points</a>{(saved.pointSettlement?.state === 'pending-cost' || saved.pointSettlementUnconfirmed) && <button disabled={busy || imageBusy} onClick={() => void generate(true, saved.id)}>Check held-point request · no new charge</button>}</div>)}
           {error ? (
             <p role="alert" className="error">
               {error}

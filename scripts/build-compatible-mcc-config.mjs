@@ -37,6 +37,12 @@ export function buildBoundedSoftwarePreviewConfig(base, options) {
   return omitDeclaredVars(base)
 }
 
+export function buildPaidPointsAdmissionConfig(base, options) {
+  if (options?.paidPointsAdmission !== true || options?.preserveBilling !== true || options?.preserveRemoteVars !== true || options?.preserveSecrets !== true)
+    throw new Error('PAID_POINTS_ADMISSION_SCOPE_REQUIRED')
+  return omitDeclaredVars(base)
+}
+
 function omitDeclaredVars(base) {
   if (base?.name !== 'worldifact' || base.main !== 'server/worker.ts' || !base.vars ||
       !Array.isArray(base.durable_objects?.bindings) || !Array.isArray(base.migrations))
@@ -52,14 +58,15 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const subscriptionUpgrade = process.argv.length === 3 && process.argv[2] === '--subscription-upgrade-repair'
     const accountPurchaseEvidence = process.argv.length === 3 && process.argv[2] === '--account-purchase-evidence'
     const ownerReserveAdjustment = process.argv.length === 3 && process.argv[2] === '--owner-reserve-adjustment'
+    const paidPointsAdmission = process.argv.length === 3 && process.argv[2] === '--paid-points-admission'
     const boundedSoftwarePreview = process.argv.length === 3 && process.argv[2] === '--bounded-software-preview'
-    if (process.argv.length !== 2 && !subscriptionUpgrade && !accountPurchaseEvidence && !ownerReserveAdjustment && !boundedSoftwarePreview) throw new Error('PRESERVING_RELEASE_ARGUMENTS_NOT_ALLOWED')
+    if (process.argv.length !== 2 && !subscriptionUpgrade && !accountPurchaseEvidence && !ownerReserveAdjustment && !boundedSoftwarePreview && !paidPointsAdmission) throw new Error('PRESERVING_RELEASE_ARGUMENTS_NOT_ALLOWED')
     const options = selectPipelineReleaseOptions()
-    const buildConfig = boundedSoftwarePreview ? buildBoundedSoftwarePreviewConfig : ownerReserveAdjustment ? buildOwnerReserveAdjustmentConfig : accountPurchaseEvidence ? buildAccountPurchaseEvidenceConfig : subscriptionUpgrade ? buildSubscriptionUpgradeConfig : buildCompatibleMccConfig
+    const buildConfig = paidPointsAdmission ? buildPaidPointsAdmissionConfig : boundedSoftwarePreview ? buildBoundedSoftwarePreviewConfig : ownerReserveAdjustment ? buildOwnerReserveAdjustmentConfig : accountPurchaseEvidence ? buildAccountPurchaseEvidenceConfig : subscriptionUpgrade ? buildSubscriptionUpgradeConfig : buildCompatibleMccConfig
     const config = buildConfig(JSON.parse(await readFile('wrangler.jsonc', 'utf8')), options)
-    const path = boundedSoftwarePreview ? '.bounded-software-preview.wrangler.json' : ownerReserveAdjustment ? '.owner-reserve-adjustment.wrangler.json' : accountPurchaseEvidence ? '.account-purchase-evidence.wrangler.json' : subscriptionUpgrade ? '.subscription-upgrade.wrangler.json' : '.compatible-mcc.wrangler.json'
+    const path = paidPointsAdmission ? '.paid-points-admission.wrangler.json' : boundedSoftwarePreview ? '.bounded-software-preview.wrangler.json' : ownerReserveAdjustment ? '.owner-reserve-adjustment.wrangler.json' : accountPurchaseEvidence ? '.account-purchase-evidence.wrangler.json' : subscriptionUpgrade ? '.subscription-upgrade.wrangler.json' : '.compatible-mcc.wrangler.json'
     await writeFile(path, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 })
-    console.log(`Prepared ${boundedSoftwarePreview ? 'bounded software preview' : ownerReserveAdjustment ? 'owner reserve adjustment' : accountPurchaseEvidence ? 'account purchase evidence' : subscriptionUpgrade ? 'subscription upgrade repair' : 'compatible UI rollback'} config without declared vars; deploy only with --keep-vars. Existing bindings and migrations are unchanged.`)
+    console.log(`Prepared ${paidPointsAdmission ? 'paid points admission' : boundedSoftwarePreview ? 'bounded software preview' : ownerReserveAdjustment ? 'owner reserve adjustment' : accountPurchaseEvidence ? 'account purchase evidence' : subscriptionUpgrade ? 'subscription upgrade repair' : 'compatible UI rollback'} config without declared vars; deploy only with --keep-vars. Existing bindings and migrations are unchanged.`)
   } catch {
     console.error('PRESERVING_RELEASE_CONFIG_NOT_VERIFIED: publication stopped; no remote settings or secrets were read or changed.')
     process.exitCode = 1

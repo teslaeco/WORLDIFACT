@@ -33,7 +33,8 @@ async function fixture() {
   }
   let ledger = new AccountEntitlements({ storage: storageFor(values) }, env)
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get: () => ({ async fetch(request: Request) {
-    const path = new URL(request.url).pathname, response = await ledger.fetch(request)
+    // This retained suite deliberately creates legacy reserve-backed jobs; paid liability has dedicated tests.
+    const path = new URL(request.url).pathname.replace(/^\/generation-v3(?=\/)/, ''), response = await ledger.fetch(path === '/reserve' ? new Request(new URL(path, request.url), request) : request)
     return afterAccount ? afterAccount(path, response) : response
   } }) }
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -239,7 +240,7 @@ test('optional provider read failure preserves the existing points refund and un
 test('lost settlement acknowledgement cannot double refund or redispatch', async () => {
   const f = await fixture(), before = f.funding(), seed = crypto.randomUUID(); f.provider(failedResponse('sol'))
   f.afterAccount(async (path, result) => { if (path === '/settle') throw new Error('Inert lost acknowledgement'); return result })
-  assert.equal((await f.call('sol', seed)).status, 502)
+  assert.equal((await f.call('sol', seed)).status, 503)
   assert.equal((await f.call('sol', seed)).status, 409)
   assert.equal(f.values.get('balance'), 4500); assert.equal(f.funding(), before - 2); assert.equal(f.generationCalls(), 1)
 })

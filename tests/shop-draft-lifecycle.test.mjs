@@ -10,6 +10,7 @@ import * as clientModule from '../src/lib/studioClient.ts'
 import { blueprintRequestId } from '../src/lib/blueprintRequest.ts'
 import { FAST_DRAFT_PROFILE } from '../src/lib/studioProtocol.ts'
 import { ADMISSION_FAILURE_CODES } from '../src/lib/generationAdmission.ts'
+import { PAID_POINTS_POLICY, PAID_POINTS_FUNDING } from '../src/lib/paidPointsFunding.ts'
 
 const oldId = '12345678-1234-4234-8234-123456789abc'
 const newId = '87654321-1234-4234-8234-123456789abc'
@@ -764,6 +765,51 @@ test('one account snapshot blocks both ready Shop routes and forced form submiss
     assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
     assert.equal(h.byId('studio-prompt').props.disabled, false)
     assert.equal(h.byId('studio-photos').props.disabled, false)
+  } finally { h.close() }
+})
+
+test('explicit paid-points admission enables both ready Shop routes from one quote without recovery or automatic generation', async () => {
+  for (const plan of ['creator', 'pro', 'studio']) {
+    const current = { ...fundedAccount, paidGenerationPolicy: PAID_POINTS_POLICY, credits: 1190, availableCredits: 1190, reservedCredits: 0,
+      subscription: { active: true, plan }, creatorAstra: { active: false, remaining: 0 } }
+    const h = await harness({ ready: true, detailedReady: true, withExistingJob: false,
+      accountLookup: () => Response.json(current), billingLookup: () => Response.json({ plans: { [plan]: { checkoutReady: false } } }) })
+    try {
+      h.byId('studio-prompt').props.onChange({ target: { value: 'A detailed blue rook' } }); await h.settle()
+      for (const delivery of ['procedural-blueprint', 'detailed-mesh']) {
+        h.byId('studio-deliverable').props.onChange({ target: { value: delivery } }); await h.settle()
+        assert.equal(h.quote().quote.state, 'credits'); assert.equal(h.quote().quote.after, 940)
+        assert.equal(h.quote().quote.fundingSource, PAID_POINTS_FUNDING)
+        const primary = h.all().find(node => node.props.className === 'native-shop-generate')
+        assert.equal(primary.props.type, 'submit'); assert.equal(primary.props.disabled, false)
+        assert.doesNotMatch(text(primary), /Check generation funding/)
+        assert.match(h.quoteMarkup(), /without a separate account API reserve/)
+      }
+      assert.equal(h.calls.filter(call => call.path === '/api/account/entitlements').length, 1)
+      assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+      assert.equal(h.storeData.has(clientModule.STUDIO_RECEIPT_KEY), false)
+    } finally { h.close() }
+  }
+})
+
+test('failed paid-points model shows manual financial review, stops automatic reads and keeps enough remaining points usable', async () => {
+  const current = { ...fundedAccount, paidGenerationPolicy: PAID_POINTS_POLICY, credits: 1190, availableCredits: 940, reservedCredits: 250 }
+  const h = await harness({ ready: true, detailedReady: true,
+    accountLookup: () => Response.json(current),
+    jobLookup: () => Response.json({ job: { id: oldId, state: 'failed', failureCode: 'ASTRA_COST_LIMIT', pointSettlement: { version: 1, state: 'pending-cost', heldPoints: 250, chargedPoints: 0 } } }) })
+  try {
+    await h.poll()
+    const visible = text(h.all())
+    assert.match(visible, /Generation failed · points held for cost review/)
+    assert.match(visible, /250 points remain held for cost review/)
+    assert.match(visible, /manual review is needed/)
+    assert.doesNotMatch(visible, /Reserved customer points were released/)
+    assert.equal(h.quote().quote.after, 690)
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A separately requested new blue rook' } }); await h.settle()
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, false)
+    await assert.rejects(h.poll(), /Recovery should have scheduled a GET/)
+    assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
+    assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
   } finally { h.close() }
 })
 

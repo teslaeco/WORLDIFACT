@@ -9,6 +9,8 @@ import { getVerifiedAccount, type AccountEnv } from '../server/accounts.ts'
 import type { AstraSupportIdentity } from '../server/astraSupportOnce.ts'
 import { STUDIO_PRICING } from '../src/lib/studioPricing.ts'
 
+const operationPath = (request: Request) => new URL(request.url).pathname.replace(/^\/generation-v3(?=\/)/, '')
+
 // Entirely synthetic, in-memory tests: no provider, billing service or production account.
 const OWNER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -107,8 +109,13 @@ function fixture(options: { config?: string | null; mode?: string; seed?: Record
     get(id) {
       const name = String(id)
       return { async fetch(request) {
-        requests.push({ name, header: request.headers.get(VERIFIED), path: new URL(request.url).pathname })
-        return ensure(name).object.fetch(request)
+        requests.push({ name, header: request.headers.get(VERIFIED), path: operationPath(request) })
+        // Historical support fixtures keep the legacy policy/readiness and writer.
+        // Current v3 dispatch, settlement and recovery still read these legacy rows.
+        const path = new URL(request.url).pathname
+        const legacyAdmission = path === '/generation-v3/status' || path === '/generation-v3/reserve'
+          ? new Request(new URL(operationPath(request), request.url), request) : request
+        return ensure(name).object.fetch(legacyAdmission)
       } }
     },
   }
@@ -177,6 +184,8 @@ test('default and explicit live ledgers admit exactly 175 support cents and pres
     const store = f.store(), job = crypto.randomUUID(), paidGrant = structuredClone(store.values.get('grant:in_Synthetic'))
     assert.deepEqual((await f.status()).astraSupportOnce, { available: true, consumed: false, maximumProviderCents: 175 })
     assert.deepEqual(await f.reserve(job), { allowed: true, repeated: false, cost: 250, kind: 'credits', held: true })
+    assert.equal((store.values.get(`job:${job}`) as Record<string, unknown>).fundingMode, undefined, 'The fixture must retain historical support-funded accounting')
+    assert.equal(store.values.has(`paid-points-job:v2:${job}`), false)
     assert.equal(store.values.get('balance'), 1500)
     assert.equal(store.values.get(HELD), 250)
     assert.equal(store.values.get(PROVIDER), 0, 'Supplemental funding and this reservation leave paid funding unchanged')

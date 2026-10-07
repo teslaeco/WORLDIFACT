@@ -1,5 +1,6 @@
 import { TEST_ACCOUNT_CONTRACT, OVERNIGHT_PANEL_EXPIRES, OVERNIGHT_PANEL_SLOTS, type OvernightPanelRow, type OvernightPanelSlot, type OvernightPanelStatus } from './overnightTestClient.ts'
 import type { GenerationQuote } from './generationQuote.ts'
+import { PAID_POINTS_FUNDING } from './paidPointsFunding.ts'
 
 export const SHOP_TEST_APPROVAL = 'api-tests-20261006-044444-usd4'
 export const shopTestSelectionKey = (owner: string) => `worldifact:shop-test-selection:v1:${SHOP_TEST_APPROVAL}:${owner}`
@@ -72,7 +73,7 @@ export function shopCloudRecoveryFetch(fetcher: typeof fetch, owner: () => strin
     if (value.accountContract !== TEST_ACCOUNT_CONTRACT) throw new Error('Refresh this page after the account-safe recovery update. No receipt was replaced.')
     if (value.current !== null && object(value.current).fundingSource === SHOP_TEST_APPROVAL && ['completed', 'failed'].includes(String(object(value.current).financialState)))
       return Response.json({ accountContract: TEST_ACCOUNT_CONTRACT, current: null })
-    if (value.current !== null && object(value.current).fundingSource !== 'ordinary')
+    if (value.current !== null && object(value.current).fundingSource !== 'ordinary' && object(value.current).fundingSource !== PAID_POINTS_FUNDING)
       throw new Error('The current cloud request belongs to separate test funding or its source is unverified. Recover its original approved test slot; ordinary receipts were preserved.')
     return response
   }

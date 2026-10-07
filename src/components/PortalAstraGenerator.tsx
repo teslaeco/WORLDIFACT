@@ -5,8 +5,7 @@ import GenerationCostNotice from './GenerationCostNotice'
 import { demoBlueprint, localSceneResult, meadowBlueprint } from '../lib/blueprint'
 import type { GenerationResult, WorldBlueprint } from '../lib/blueprint'
 import { blueprintReferences, BLUEPRINT_REFERENCE_LIMIT, type BlueprintReference } from '../lib/blueprintRequest'
-import { ScopedBlueprintClient, type ScopedBlueprintRecovery } from '../lib/scopedBlueprintClient'
-import { blueprintAdmissionDetail } from '../lib/generationAdmission'
+import { ScopedBlueprintClient, blueprintRecoveryDetail, type ScopedBlueprintRecovery } from '../lib/scopedBlueprintClient'
 import { MODEL_CATALOG, type GenerationModel } from '../lib/modelCatalog'
 import { useAccount } from '../lib/account'
 import { useGenerationQuote } from '../lib/useGenerationQuote'
@@ -16,7 +15,7 @@ import './PortalAstraGenerator.css'
 type WorldId = 'chess-cube-512-ai' | 'terra-fix-iss' | '8-planets-in-8-days' | 'enchanted-ai-shop' | 'ai-game-lab'
 type Health = { generationReady?: boolean; accessRequired?: boolean; model?: string | null; qualityModel?: string | null; astraBlueprintReady?: boolean; draftModels?: string[] }
 type Scope = { owner: string | null; worldId: WorldId }
-type Session = { scope: Scope; client: ScopedBlueprintClient | null; recovery: ScopedBlueprintRecovery | null; problem: string }
+type Session = { scope: Scope; client: ScopedBlueprintClient | null; recovery: ScopedBlueprintRecovery | null; archived: ScopedBlueprintRecovery[]; problem: string }
 const MAX_REFERENCE_BYTES = 6 * 1024 * 1024
 const DEFAULT_PROMPTS: Record<WorldId, string> = {
   'chess-cube-512-ai': 'Design a playable 8×8×8 chess arena asset with a clear board silhouette, safe readable geometry and a GAME plan.',
@@ -71,9 +70,9 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
       if (currentScope.current !== scope || !mounted.current) return
       try {
         const saved = client?.current() ?? null
-        setSession({ scope, client, recovery: saved, problem: '' })
+        setSession({ scope, client, recovery: saved, archived: client?.archived() ?? [], problem: '' })
         if (saved) setSelectedModel(saved.model as GenerationModel)
-      } catch (reason) { setSession({ scope, client: null, recovery: null, problem: message(reason) }) }
+      } catch (reason) { setSession({ scope, client: null, recovery: null, archived: [], problem: message(reason) }) }
     }
     try {
       if (scope.owner) client = new ScopedBlueprintClient(window.localStorage, (input, init) => {
@@ -82,7 +81,7 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
         return fetch(input, { ...init, headers })
       }, scope.owner, `portal:${worldId}`, active)
       sync()
-    } catch (reason) { setSession({ scope, client: null, recovery: null, problem: message(reason) }) }
+    } catch (reason) { setSession({ scope, client: null, recovery: null, archived: [], problem: message(reason) }) }
     window.addEventListener('storage', sync)
     return () => {
       mounted.current = false
@@ -144,17 +143,18 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
     setBlueprint(demo.blueprint); setResult(demo); setResultRequest(null); setError('')
   }
 
-  async function runRequest(recoverOnly: boolean) {
+  async function runRequest(recoverOnly: boolean, archivedId?: string) {
     const client = current?.client
-    if (!active() || !client || current.problem || operation.current || fileOperation.current || (recoverOnly ? !recovery : !canGenerate)) return
+    if (!active() || !client || current.problem || operation.current || fileOperation.current || (recoverOnly ? !recovery && !archivedId : !canGenerate)) return
     const task = { scope, controller: new AbortController() }
     operation.current = task; setBusy(true); setError('')
     // A local deadline ends waiting only. The durable identity always survives.
     const timeout = window.setTimeout(() => task.controller.abort(), recoverOnly ? 15000 : selectedModel === 'astra' ? 95000 : 65000)
     try {
+      if (archivedId) { await client.recoverArchived(archivedId, task.controller.signal); return }
       const proposal = recoverOnly ? await client.recover(task.controller.signal) : await client.submit({
         worldId, prompt: prompt.trim(), mode: 'live', model: selectedModel, deliverable: 'procedural-blueprint', references: blueprintReferences({ references }),
-      }, { worldId, blueprint }, task.controller.signal)
+      }, { worldId, blueprint }, task.controller.signal, accountQuote.quote.fundingSource)
       if (!active() || operation.current !== task) return
       setBlueprint(proposal.result.blueprint); setResult(proposal.result); setResultRequest(client.current()!.id)
     } catch (reason) {
@@ -166,8 +166,8 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
         operation.current = null
         if (active()) {
           setBusy(false)
-          try { setSession({ scope, client, recovery: client.current(), problem: '' }) }
-          catch (reason) { setSession({ scope, client: null, recovery: null, problem: message(reason) }) }
+          try { setSession({ scope, client, recovery: client.current(), archived: client.archived(), problem: '' }) }
+          catch (reason) { setSession({ scope, client: null, recovery: null, archived: [], problem: message(reason) }) }
           window.dispatchEvent(new Event('worldifact:balance-changed'))
         }
       }
@@ -179,9 +179,9 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
     try {
       const saved = current.client.current()
       if (!saved || saved.state === 'pending') return
-      if (!window.confirm('Prepare a new paid attempt? The finished request will leave this portal’s recovery controls. Your previous preview stays visible. Generating again will require a separate click at the displayed cost.')) return
+      if (!window.confirm('Prepare a new paid attempt? Any unresolved held-point request will stay available for review. Your previous preview stays visible. Generating again will require a separate click at the displayed cost.')) return
       current.client.reset(true)
-      setSession({ ...current, recovery: null }); setError(''); accountQuote.refresh()
+      setSession({ ...current, recovery: null, archived: current.client.archived() }); setError(''); accountQuote.refresh()
     } catch (reason) { setError(message(reason)) }
   }
 
@@ -215,12 +215,17 @@ export default function PortalAstraGenerator({ worldId, title }: { worldId: Worl
         {fileBusy && <small>Reading every selected reference…</small>}
         {health.accessRequired && <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={controlsLocked || !!recovery} onChange={event => setAccessCode(event.target.value)} /></label>}
         {recovery && <div className="portal-astra-result" aria-live="polite">
-          <strong>{recovery.state === 'pending' ? 'Saved request · recover before another attempt' : recovery.state === 'failed' ? 'Previous attempt closed' : 'Previous attempt completed'}</strong>
+          <strong>{recovery.state === 'pending' ? 'Saved request · recover before another attempt' : recovery.state === 'failed' ? recovery.pointSettlement?.state === 'pending-cost' ? 'Previous attempt failed · points held' : recovery.pointSettlementUnconfirmed ? 'Previous attempt failed · point review needed' : 'Previous attempt closed' : 'Previous attempt completed'}</strong>
           <span>{MODEL_CATALOG[recovery.model as GenerationModel].label} · Request {recovery.id}</span>
-          {recovery.failureCode && <small>{blueprintAdmissionDetail(recovery.failureCode)}</small>}
+          <small>{blueprintRecoveryDetail(recovery)}</small>
+          {(recovery.pointSettlement?.state === 'pending-cost' || recovery.pointSettlementUnconfirmed) && <a href="/account/generation-funding">Review all held points</a>}
           <button type="button" disabled={controlsLocked || loading || !current?.client} onClick={() => { void runRequest(true) }}>Recover same request · no new charge</button>
           {recovery.state !== 'pending' && <button type="button" disabled={controlsLocked} onClick={prepareNewAttempt}>Prepare new paid attempt…</button>}
         </div>}
+        {current?.archived.map(saved => <div className="portal-astra-result" key={saved.id} role="status">
+          <strong>Saved point review · Request {saved.id}</strong><small>{blueprintRecoveryDetail(saved)}</small><a href="/account/generation-funding">Review all held points</a>
+          {(saved.pointSettlement?.state === 'pending-cost' || saved.pointSettlementUnconfirmed) && <button type="button" disabled={controlsLocked || loading || !current.client} onClick={() => { void runRequest(true, saved.id) }}>Check held-point request · no new charge</button>}
+        </div>)}
         <div className="portal-astra-buttons">
           <button className="primary" type="button" disabled={fundingBlocked ? controlsLocked || loading || !accountQuote.canRefresh : !canGenerate} onClick={() => { if (fundingBlocked) { if (active() && !controlsLocked && accountQuote.canRefresh) { setHealthRevision(value => value + 1); accountQuote.refresh() } return } void runRequest(false) }}>{fundingBlocked ? accountQuote.checking ? 'Checking generation funding…' : 'Check generation funding · no charge' : busy ? 'Checking saved generation…' : `Generate ${MODEL_CATALOG[selectedModel].label} blueprint`}</button>
           <button type="button" disabled={controlsLocked || recovery?.state === 'pending' || prompt.trim().length < 3} onClick={generateDemo}>Generate DEMO · no API cost</button>

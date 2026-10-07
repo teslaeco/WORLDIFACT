@@ -21,6 +21,7 @@ import * as glb from '../src/lib/glb.ts'
 import * as shopManufacturing from '../src/lib/shopManufacturing.ts'
 import * as blueprint from '../src/lib/blueprint.ts'
 import * as generationQuote from '../src/lib/generationQuote.ts'
+import * as paidPointsFunding from '../src/lib/paidPointsFunding.ts'
 import * as modelCatalog from '../src/lib/modelCatalog.ts'
 import * as blueprintRequest from '../src/lib/blueprintRequest.ts'
 import * as blueprintClient from '../src/lib/blueprintClient.ts'
@@ -63,6 +64,7 @@ export async function loadCostNotice(quoteHook) {
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, { module, exports: module.exports, require(id) {
     if (id === '../lib/generationQuote') return generationQuote
+    if (id === '../lib/paidPointsFunding') return paidPointsFunding
     if (id === '../lib/studioPricing') return studioPricing
     if (id === '../lib/modelCatalog') return modelCatalog
     if (id === '../lib/useGenerationQuote') return quoteHook

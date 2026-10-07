@@ -65,7 +65,13 @@ function fixture() {
     await call('/grant', { id: 'in_fixture', credits: 7500, subscriptionId: 'sub_fixture' }, user)
     await call('/subscription', { id: 'sub_fixture', until: now + 86400000, active: true, revision: 1, plan: 'studio', grantId: 'in_fixture' }, user)
   }
-  const reserve = (id: string, channel = 'studio', user = ALICE) => call('/reserve', { id, channel, profile: channel === 'studio' ? 'slow' : 'fast', fingerprint, ...(channel === 'blueprint' ? { blueprintDispatch: 'fenced-v1' } : {}) }, user)
+  // These historical-recovery fixtures must be written with the legacy protocol.
+  const legacyCall = async (path: string, value: unknown, user = ALICE) => {
+    const object = env.ACCOUNT_ENTITLEMENTS!.get(env.ACCOUNT_ENTITLEMENTS!.idFromName(`account:v1:${user}`))
+    const response = await object.fetch(new Request('https://entitlements.internal' + path, { method: 'POST', headers: { 'X-WORLDIFACT-Verified-Account': user }, body: JSON.stringify(value) }))
+    assert.equal(response.status, 200); return await response.json() as Record<string, unknown>
+  }
+  const reserve = (id: string, channel = 'studio', user = ALICE) => legacyCall('/reserve', { id, channel, profile: channel === 'studio' ? 'slow' : 'fast', fingerprint, ...(channel === 'blueprint' ? { blueprintDispatch: 'fenced-v1' } : {}) }, user)
   const terminal = async (id: string, user = ALICE) => {
     await reserve(id, 'studio', user)
     await call('/studio-dispatch', { id, fingerprint }, user)
@@ -106,7 +112,7 @@ test('pending account pages bound scan and receipt fanout, resume after scanned 
   const second = await (await f.sweep(first.nextCursor)).json() as { checked: number; reconciled: number; nextCursor: string | null; hasMore: boolean }
   assert.equal(second.checked, 4); assert.equal(second.reconciled, 4); assert.equal(second.hasMore, false); assert.equal(second.nextCursor, null)
   assert.equal(f.store().get(PROVIDER), before + 10 * 154)
-  assert.ok(f.lists.every(options => options.prefix === 'job:' && options.limit === 64))
+  assert.ok(f.lists.every(options => ['job:', 'paid-points-job:v2:'].includes(options.prefix) && options.limit === 64))
   const proof = f.store().get(`job:${idAt(2)}`) as Record<string, unknown>
   assert.equal(proof.studioProviderReconciliation, undefined)
   assert.equal((await f.sweep(undefined, 'alice', { id: idAt(3), accountId: BOB })).status, 400)
@@ -195,7 +201,7 @@ test('historically valid uppercase job keys retain exact pagination order withou
   assert.equal(first.checked, 0); assert.equal(first.nextCursor, upper(64)); assert.equal(first.hasMore, true)
   const second = await (await f.sweep(first.nextCursor)).json() as { checked: number; reconciled: number; hasMore: boolean }
   assert.equal(second.checked, 1); assert.equal(second.reconciled, 1); assert.equal(second.hasMore, false)
-  assert.equal(f.lists.at(-1)?.startAfter, `job:${upper(64)}`)
+  assert.equal(f.lists.filter(options => options.prefix === 'job:').at(-1)?.startAfter, `job:${upper(64)}`)
   assert.deepEqual(f.calls.map(x => x.path), [`/v1/jobs/${eligible}/budget`])
 })
 

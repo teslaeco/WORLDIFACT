@@ -65,6 +65,10 @@ export interface GenerationFundingSnapshot {
     legacyDerivedFallbackCents: number | null
   }
   ordinaryAstraMinimumCents: { blueprint: 175; unpricedDetailed: 175 }
+  /** Conservative stored liability for points-funded jobs in this bounded scan.
+   * Not actual spend, a customer reserve, or an amount available to refund. */
+  paidMembershipLiability?: { version: 1; jobs: number; unresolvedJobs: number; maximumLiabilityCents: number }
+  pendingCostReviews?: { version: 1; items: { id: string; channel: 'studio' | 'blueprint'; model: 'luna' | 'sol' | 'astra'; at: number; heldPoints: number; state: 'held' | 'pending-cost' }[]; nextCursor: string | null; hasMore: boolean; scanStatus: 'complete' | 'partial' | 'unavailable' }
   jobs: {
     scanLimit: 256
     scanned: number
@@ -111,8 +115,27 @@ export function readGenerationFundingSnapshot(value: unknown): GenerationFunding
   const nullableInteger = (input: unknown, minimum?: number) => input === null || integer(input, minimum)
   const rootKeys = ['version', 'readOnly', 'currency', 'customerPoints', 'providerBudget', 'ordinaryAstraMinimumCents', 'jobs', 'supportGrantClaims']
   if (value && typeof value === 'object' && Object.hasOwn(value, 'storedEvidence')) rootKeys.push('storedEvidence')
+  if (value && typeof value === 'object' && Object.hasOwn(value, 'paidMembershipLiability')) rootKeys.push('paidMembershipLiability')
+  if (value && typeof value === 'object' && Object.hasOwn(value, 'pendingCostReviews')) rootKeys.push('pendingCostReviews')
   const root = object(value, rootKeys)
   if (root.version !== 1 || root.readOnly !== true || root.currency !== 'USD') return invalid()
+  if (Object.hasOwn(root, 'pendingCostReviews')) {
+    const pending = object(root.pendingCostReviews, ['version', 'items', 'nextCursor', 'hasMore', 'scanStatus'])
+    const uuid = (input: unknown): input is string => typeof input === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(input)
+    if (pending.version !== 1 || !Array.isArray(pending.items) || pending.items.length > 8 || typeof pending.hasMore !== 'boolean' ||
+        typeof pending.scanStatus !== 'string' || !['complete', 'partial', 'unavailable'].includes(pending.scanStatus) ||
+        (pending.hasMore ? !uuid(pending.nextCursor) || pending.scanStatus !== 'partial' : pending.nextCursor !== null || pending.scanStatus === 'partial') ||
+        pending.scanStatus === 'unavailable' && pending.items.length !== 0) return invalid()
+    let prior = ''
+    for (const raw of pending.items) {
+      const entry = object(raw, ['id', 'channel', 'model', 'at', 'heldPoints', 'state'])
+      if (!uuid(entry.id) || entry.id <= prior || typeof entry.channel !== 'string' || !['studio', 'blueprint'].includes(entry.channel) || typeof entry.model !== 'string' || !['luna', 'sol', 'astra'].includes(entry.model) ||
+          !['held', 'pending-cost'].some(state => entry.state === state) || !integer(entry.at, 1, 8_640_000_000_000_000) || !integer(entry.heldPoints, 1, 500) ||
+          (entry.model === 'astra' ? ![250, ...(entry.channel === 'studio' ? [500] : [])].includes(Number(entry.heldPoints)) : entry.heldPoints !== (entry.model === 'sol' ? 50 : 15))) return invalid()
+      prior = entry.id
+    }
+    if (pending.hasMore && typeof pending.nextCursor === 'string' && pending.nextCursor < prior) return invalid()
+  }
   const points = object(root.customerPoints, ['status', 'balance', 'held', 'available'])
   if (typeof points.status !== 'string' || !['known', 'invalid'].includes(points.status) || !nullableInteger(points.balance) || !nullableInteger(points.held, 0) || !nullableInteger(points.available) ||
       (points.status === 'known') !== (points.available !== null) || points.available !== null &&
@@ -127,6 +150,12 @@ export function readGenerationFundingSnapshot(value: unknown): GenerationFunding
   const jobs = object(root.jobs, jobsKeys)
   if (jobs.scanLimit !== 256 || !integer(jobs.scanned, 0, 256) || typeof jobs.partial !== 'boolean' || typeof jobs.scanStatus !== 'string' || !['complete', 'partial', 'unavailable', 'invalid'].includes(jobs.scanStatus) ||
       (jobs.scanStatus === 'complete') !== !jobs.partial || jobs.scanStatus === 'complete' && jobs.scanned === 256) return invalid()
+  if (Object.hasOwn(root, 'paidMembershipLiability')) {
+    const liability = object(root.paidMembershipLiability, ['version', 'jobs', 'unresolvedJobs', 'maximumLiabilityCents'])
+    if (liability.version !== 1 || !integer(liability.jobs, 0, Number(jobs.scanned)) ||
+        !integer(liability.unresolvedJobs, 0, Number(liability.jobs)) ||
+        !integer(liability.maximumLiabilityCents, 0, Number(liability.jobs) * 400)) return invalid()
+  }
   const counts = (input: unknown, keys: string[], sum = false) => {
     const result = object(input, keys)
     if (Object.values(result).some(count => !integer(count, 0, Number(jobs.scanned))) || sum && Object.values(result).reduce<number>((total, count) => total + Number(count), 0) !== jobs.scanned) return invalid()

@@ -2,6 +2,7 @@ import { STUDIO_PRICING, type StudioBudgetTier } from '../lib/studioPricing'
 import { Link } from 'react-router-dom'
 import { MODEL_CATALOG } from '../lib/modelCatalog'
 import { type QuotedModel } from '../lib/generationQuote'
+import { PAID_POINTS_FUNDING } from '../lib/paidPointsFunding'
 import type { AdmissionFailureCode } from '../lib/generationAdmission'
 import { useGenerationQuote, type GenerationQuoteState } from '../lib/useGenerationQuote'
 import './GenerationCostNotice.css'
@@ -36,11 +37,14 @@ function ConnectedCostNotice(props: Props) {
 function CostNotice({ model, busy = false, detailed = false, budgetTier, accountQuote }: Props & { accountQuote: GenerationQuoteState }) {
   const { quote, checking, canRefresh, refresh } = accountQuote
   const rate = detailed && model === 'astra' && budgetTier ? STUDIO_PRICING[budgetTier].points : model === 'luna' ? 15 : model === 'sol' ? 50 : 250
+  const providerCap = detailed && model === 'astra' && budgetTier ? STUDIO_PRICING[budgetTier].maxProviderCents : MODEL_CATALOG[model].maxProviderCents
   const fundingBlocked = quote.state === 'blocked' && quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
+  const pointsFunded = quote.state === 'credits' && quote.fundingSource === PAID_POINTS_FUNDING
   return <section className="generation-cost-notice" aria-label="Selected model and cost for the next generation" aria-live="polite">
     <div><strong>{MODEL_CATALOG[model].label}</strong><span>{rate} points / paid generation</span></div>
     <p><b>{(checking || busy) && !fundingBlocked ? 'Checking next generation cost…' : quote.points === 0 ? 'Next generation: 0 points, subject to funded free capacity' : quote.points !== null ? `Next generation: ${quote.points} points` : 'Next generation cost: not yet verified'}</b>{quote.after !== null && !busy && <> · Balance after reservation: <strong>{quote.after} points</strong></>}</p>
     <p>This quote is for the next generation only. It does not report the status or charges of a saved request.</p>
+    {pointsFunded && <p><strong>Before you generate:</strong> We hold {rate} points before dispatch. Success costs {rate} points. A proved pre-dispatch or zero-cost failure releases the hold. If a failed request may have incurred API costs, its points remain held until the cost is verified; manual review may be required. Held points are unavailable for other requests. The API limit for this request is USD {(providerCap / 100).toFixed(2)}. No automatic retry or card charge.</p>}
     {['blocked', 'signin', 'pending'].includes(quote.state) && <p>{nextGenerationQuoteMessage(quote)}{quote.state === 'signin' && <> <Link to="/account">Sign in →</Link></>}</p>}
     {fundingBlocked && <button type="button" disabled={!canRefresh} onClick={refresh}>{checking ? 'Checking availability…' : 'Refresh availability'}</button>}
     <details><summary>Model details and billing</summary>
@@ -48,7 +52,9 @@ function CostNotice({ model, busy = false, detailed = false, budgetTier, account
       {fundingBlocked && <p><a href="/account/generation-funding" target="_blank" rel="noopener noreferrer">Read-only funding details · opens in a new tab</a></p>}
       {['free', 'credits'].includes(quote.state) && <p>{quote.message}</p>}
       <p>{detailed ? 'Astra works with the existing Blender worker to build an editable model. One job uses one points reservation even when it has several bounded AI/tool steps. All accepted reference views are included. Results require visual review; no procedural substitute or manufacturing approval.' : model !== 'astra' ? 'The selected model creates a validated specification with a lightweight procedural preview. It is not the detailed Oracle mesh workflow.' : 'ASTRA uses one bounded server-side call to create a validated blueprint/specification and a locally derived procedural GAME GLB. The separate multi-call Oracle/Blender mesh workflow remains beta. MAKE still requires validation.'}</p>
-      <p>Use once from your points. No automatic batch, model upgrade or card charge. Failed attempts may return points. Only confirmed unused API funding can be restored; incurred or uncertain costs remain reserved.</p>
+      <p>Use once from your points. No automatic batch, model upgrade or card charge. Failed attempts may return points. {pointsFunded
+        ? 'This paid-membership request uses your available points without a separate account API reserve. The selected model’s API cost limit and service readiness checks still apply. Earlier jobs keep their original funding terms.'
+        : 'For reserve-funded requests, only confirmed unused API funding can be restored; incurred or uncertain costs remain reserved.'}</p>
       {!fundingBlocked && <div><Link to="/account/credits">Plans & one-time prepaid credits →</Link><button type="button" disabled={!canRefresh} onClick={refresh}>Refresh points</button></div>}
     </details>
   </section>

@@ -480,7 +480,102 @@ export const BOUNDED_SOFTWARE_PREVIEW_REVIEWED_PATHS = Object.freeze([
   'tests/oracle-model-preview-lifecycle.test.mjs',
   'tests/software-model-preview.test.ts',
 ].sort())
+export const PAID_POINTS_ADMISSION_BASE_COMMIT = '3319f7e7685905d0f40a9acde6b2a0602fbf5452'
+export const PAID_POINTS_ADMISSION_MARKER_PATH = 'ops/PAID_POINTS_ADMISSION_RELEASE_20261007.json'
+export const PAID_POINTS_ADMISSION_MARKER_CONTENT = JSON.stringify({
+  release: 'paid-points-admission-20261007',
+  baseCommit: PAID_POINTS_ADMISSION_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+  preserveSecrets: true,
+  paidPointsAdmission: true,
+  paidFailurePolicy: 'held-points-v1',
+}, null, 2) + '\n'
+export const PAID_POINTS_ADMISSION_REVIEWED_PATHS = Object.freeze([
+  '.github/workflows/cloudflare.yml',
+  'docs/CONTEST_STATUS.md',
+  PAID_POINTS_ADMISSION_MARKER_PATH,
+  'scripts/build-compatible-mcc-config.mjs',
+  'scripts/select-pipeline-only-release.mjs',
+  'server/entitlements.ts',
+  'server/generationEconomics.ts',
+  'server/paidPointsStorage.ts',
+  'server/studio.ts',
+  'server/worker.ts',
+  'src/components/GenerationCostNotice.tsx',
+  'src/components/P0GameLab.tsx',
+  'src/components/PortalAstraGenerator.tsx',
+  'src/components/WorldCharacterStudio.tsx',
+  'src/components/WorldStudio.tsx',
+  'src/lib/blueprintClient.ts',
+  'src/lib/generationFunding.ts',
+  'src/lib/generationProgressView.ts',
+  'src/lib/generationQuote.ts',
+  'src/lib/loadGenerationFunding.ts',
+  'src/lib/overnightTestClient.ts',
+  'src/lib/paidPointsFunding.ts',
+  'src/lib/recoverHeldPoints.ts',
+  'src/lib/scopedBlueprintClient.ts',
+  'src/lib/shopTestFunding.ts',
+  'src/lib/studioClient.ts',
+  'src/lib/studioProtocol.ts',
+  'src/pages/CreditsPage.tsx',
+  'src/pages/GenerationFundingPage.tsx',
+  'src/pages/InfoPage.tsx',
+  'src/pages/ShopPage.tsx',
+  'tests/account-provider-recovery.test.ts',
+  'tests/astra-project-budget.test.ts',
+  'tests/astra-repaired-mcc-grant.test.ts',
+  'tests/astra-supplemental-grant.test.ts',
+  'tests/astra-support-once.test.ts',
+  'tests/blueprint-accounts.test.ts',
+  'tests/blueprint-failed-provider-reconciliation.test.ts',
+  'tests/blueprint-provider-reservation.test.ts',
+  'tests/blueprint-repair.test.ts',
+  'tests/character-studio-lifecycle.test.mjs',
+  'tests/credits-offer.test.mjs',
+  'tests/entitlements.test.ts',
+  'tests/fixtures/paid-points-legacy-entitlements.source.txt',
+  'tests/game-lab-blueprint-recovery.test.mjs',
+  'tests/generation-cost-notice.test.mjs',
+  'tests/generation-funding-page.test.mjs',
+  'tests/generation-funding.test.ts',
+  'tests/generation-progress-view.test.ts',
+  'tests/generation-quote.test.ts',
+  'tests/historical-blueprint-bindings.test.mjs',
+  'tests/overnight-test-admission.test.ts',
+  'tests/paid-points-admission-native.test.mjs',
+  'tests/paid-points-admission-release.test.mjs',
+  'tests/paid-points-admission.test.ts',
+  'tests/paid-points-legacy-readers.test.mjs',
+  'tests/paid-points-settlement-api.test.ts',
+  'tests/portal-generation-lifecycle.test.mjs',
+  'tests/recover-held-points.test.ts',
+  'tests/shop-draft-lifecycle.test.mjs',
+  'tests/shop-render-helper.mjs',
+  'tests/shop-test-funding.test.ts',
+  'tests/sol61-mixed-deployment.test.ts',
+  'tests/studio-accounts.test.ts',
+  'tests/studio-client.test.ts',
+  'tests/studio-dispatch-fence.test.ts',
+  'tests/studio-library.test.ts',
+  'tests/studio-native-fetch-browser.test.mjs',
+  'tests/studio-priced-submission.test.ts',
+  'tests/studio-pricing-ledger.test.ts',
+  'tests/studio-project-budget.test.ts',
+  'tests/studio-provider-reconciliation.test.ts',
+].sort())
 const releaseIntroductions = new Set([
+  'src/lib/recoverHeldPoints.ts',
+  'tests/paid-points-settlement-api.test.ts',
+  'tests/recover-held-points.test.ts',
+  'server/paidPointsStorage.ts',
+  'src/lib/paidPointsFunding.ts',
+  'tests/paid-points-admission.test.ts',
+  'tests/paid-points-admission-native.test.mjs',
+  'tests/paid-points-legacy-readers.test.mjs',
+  'tests/fixtures/paid-points-legacy-entitlements.source.txt',
+  'tests/paid-points-admission-release.test.mjs',
   'tests/bounded-software-preview-release.test.mjs',
   'server/ownerReserveAdjustment.ts',
   'src/lib/ownerReserveAdjustment.ts',
@@ -564,6 +659,7 @@ const releaseIntroductions = new Set([
   'tests/studio-project-budget.test.ts',
 ])
 const scopes = [
+  { base: PAID_POINTS_ADMISSION_BASE_COMMIT, marker: PAID_POINTS_ADMISSION_MARKER_PATH, content: PAID_POINTS_ADMISSION_MARKER_CONTENT, paths: PAID_POINTS_ADMISSION_REVIEWED_PATHS, preserveRemoteVars: true, paidPointsAdmission: true, singleParent: true },
   { base: BOUNDED_SOFTWARE_PREVIEW_BASE_COMMIT, marker: BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH, content: BOUNDED_SOFTWARE_PREVIEW_MARKER_CONTENT, paths: BOUNDED_SOFTWARE_PREVIEW_REVIEWED_PATHS, preserveRemoteVars: true, boundedSoftwarePreview: true, singleParent: true },
   { base: OWNER_RESERVE_ADJUSTMENT_BASE_COMMIT, marker: OWNER_RESERVE_ADJUSTMENT_MARKER_PATH, content: OWNER_RESERVE_ADJUSTMENT_MARKER_CONTENT, paths: OWNER_RESERVE_ADJUSTMENT_REVIEWED_PATHS, preserveRemoteVars: true, ownerReserveAdjustment: true, singleParent: true },
   { base: ACCOUNT_PURCHASE_EVIDENCE_BASE_COMMIT, marker: ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH, content: ACCOUNT_PURCHASE_EVIDENCE_MARKER_CONTENT, paths: ACCOUNT_PURCHASE_EVIDENCE_REVIEWED_PATHS, preserveRemoteVars: true, accountPurchaseEvidence: true, singleParent: true },
@@ -634,7 +730,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {
@@ -661,7 +757,7 @@ function selectReleaseScope(cwd, readGit) {
 
 export function selectPipelineReleaseOptions(cwd = process.cwd(), readGit = git) {
   const scope = selectReleaseScope(cwd, readGit)
-  return { preserveBilling: Boolean(scope), preserveRemoteVars: scope?.preserveRemoteVars === true, ...(scope?.compatibleMccRollback ? { compatibleMccRollback: true } : {}), ...(scope?.boundedSoftwarePreview ? { boundedSoftwarePreview: true, preserveSecrets: true } : {}), ...(scope?.ownerReserveAdjustment ? { ownerReserveAdjustment: true, preserveSecrets: true } : {}), ...(scope?.accountPurchaseEvidence ? { accountPurchaseEvidence: true, preserveSecrets: true } : {}), ...(scope?.subscriptionUpgradeRepair ? { subscriptionUpgradeRepair: true, preserveSecrets: true } : {}) }
+  return { ...(scope?.paidPointsAdmission ? { paidPointsAdmission: true, preserveSecrets: true } : {}), preserveBilling: Boolean(scope), preserveRemoteVars: scope?.preserveRemoteVars === true, ...(scope?.compatibleMccRollback ? { compatibleMccRollback: true } : {}), ...(scope?.boundedSoftwarePreview ? { boundedSoftwarePreview: true, preserveSecrets: true } : {}), ...(scope?.ownerReserveAdjustment ? { ownerReserveAdjustment: true, preserveSecrets: true } : {}), ...(scope?.accountPurchaseEvidence ? { accountPurchaseEvidence: true, preserveSecrets: true } : {}), ...(scope?.subscriptionUpgradeRepair ? { subscriptionUpgradeRepair: true, preserveSecrets: true } : {}) }
 }
 
 export function selectPipelineOnlyRelease(cwd = process.cwd(), readGit = git) {
@@ -678,6 +774,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (options.accountPurchaseEvidence) console.log('account_purchase_evidence=true')
     if (options.ownerReserveAdjustment) console.log('owner_reserve_adjustment=true')
     if (options.boundedSoftwarePreview) console.log('bounded_software_preview=true')
+    if (options.paidPointsAdmission) console.log('paid_points_admission=true')
   } catch {
     console.error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED: publication stopped before credential setup; verify the reviewed parent, paths and one-time marker. No secret values were read.')
     process.exitCode = 1

@@ -7,6 +7,7 @@ import { StudioCoordinator, STUDIO_RECEIPT_KEY, type ReceiptStore, type SavedStu
 import { validateStudioInput, type StudioInput, type StudioJob } from './studioProtocol.ts'
 import { inspectGLB } from './glb.ts'
 import { isOvernightTestDiagnostic, OvernightTestStatusError, type OvernightTestDiagnostic } from './overnightTestDiagnostics.ts'
+import { PAID_POINTS_FUNDING } from './paidPointsFunding.ts'
 
 export const OVERNIGHT_PANEL_EXPIRES = '2026-10-06T12:00:00.000Z'
 import { TEST_ACCOUNT_CONTRACT, TEST_ACCOUNT_HEADER, TEST_CONTRACT_HEADER } from './testAccountContract.ts'
@@ -70,7 +71,9 @@ export async function assertOrdinaryRequestsSettled(storage: ReceiptStore, fetch
   const parsed: unknown = JSON.parse(text)
   const value = object(parsed) ? parsed : {}
   if (value.accountContract !== TEST_ACCOUNT_CONTRACT) throw new Error('The expected account was not confirmed for current work.')
-  if (value.current !== null && (!object(value.current) || !['ordinary', approval].includes(String(value.current.fundingSource)) || !['completed', 'failed'].includes(String(value.current.financialState)))) throw new Error('A same-account model is pending or unconfirmed. Recover it before starting a test.')
+  if (value.current !== null && (!object(value.current) || typeof value.current.fundingSource !== 'string' ||
+      !['ordinary', PAID_POINTS_FUNDING, approval].includes(value.current.fundingSource) || typeof value.current.financialState !== 'string' ||
+      !['completed', 'failed'].includes(value.current.financialState))) throw new Error('A same-account model is pending or unconfirmed. Recover it before starting a test.')
 }
 
 /** Visible operator controls reuse the app's HttpOnly same-origin cookies.

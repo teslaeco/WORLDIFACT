@@ -2,6 +2,65 @@
 
 Updated 7 October 2026.
 
+## LOCAL REVIEW — paid membership points admission (7 October 2026)
+
+The requested policy makes available customer points the account-level funding
+condition for active paid Creator, Pro and Studio plans, including Creator at
+$29.99. A second per-account legacy API reserve no longer determines eligibility
+for new paid-membership jobs. Provider availability, billing review, verified
+membership, account/rate protection, points/holds, per-job provider ceilings and
+explicit pricing contracts remain mandatory. Free, support and test pools retain
+their existing bounded rules. Global operator controls are not increased.
+
+New jobs negotiate a versioned Worker-to-ledger route and persist in a separate
+paid-points namespace. A terminal zero-cost legacy collision fence prevents an
+older caller from reusing the same request ID. Strict pair validation refuses
+orphaned, malformed or unknown modes. Existing jobs, receipts, held-point rules,
+upfront Blueprint debit/refund behavior and original recovery paths retain their
+historical semantics. Paid-membership jobs record conservative provider liability
+without debiting or releasing the old reserve. They do not create credit grants,
+negative legacy reserves or retrospective refunds. Old and new library/current
+readers are tested for safe recovery and account ownership.
+
+Client quotes require explicitly negotiated policy and matching server admission;
+unknown or incomplete responses fail closed. Paid-membership diagnostics separate
+legacy reserve from bounded provider liability, which is not a provider invoice.
+No page entry or quote launches a model, recovers funds or retries a paid call.
+
+The owner approved prospective point holds to avoid refund-driven repeated
+failed-call exposure. Every new paid attempt holds its full configured point
+price before dispatch. Successful delivery charges that price exactly once;
+proven no-dispatch or authenticated zero-liability failure releases the hold.
+A dispatched failure with positive or unknown cost retains a bounded point hold
+pending verified cost/manual review. Generation failure is not itself a refund
+or a final point charge. Existing conservative Oracle ceilings are never treated
+as actual billed cost. No positive failure charge is finalized without stronger
+proof, and no new privileged proof endpoint or provider credentials are added.
+The UI must explain this before the request and expose the pending status and
+original-request recovery. An immutable upper-bound receipt cannot promise
+automatic final resolution; operator review may be required. Available points
+exclude outstanding holds, while other sufficiently funded requests remain
+possible. This bounds new attempt exposure, not overall company profitability
+after fees, taxes, historical costs, chargebacks or infrastructure. No new paid
+test is authorized. Earlier unused-reserve recovery is not part of this release
+and has not been applied. The retained historical reserve is bookkeeping, not
+cash backing; future legacy/ineligible-account routes keep their original rules.
+No cross-lifecycle aggregate profitability or cash-solvency guarantee is implied.
+
+Final local validation passes 1,892 runnable tests, lint, TypeScript, real HTTP
+smoke, production build and Worker dry-run. Independent financial review passes
+45 final accounting/API/native checks and 22 actual old/new-reader compatibility
+cases; the release envelope passes 100 current/prior regressions. The known two
+local native-browser cases remain enabled for hosted CI and were excluded from
+the local aggregate. New submissions explicitly acknowledge the held-points
+policy; stale/missing revisions refuse before new holds. New Studio receipts use
+a separate HMAC domain, so removing or changing their prefix cannot turn them
+into a legacy receipt. Existing legacy/artifact signatures remain compatible. The exact-parent,
+72-file release envelope preserves remote variables, secrets and global
+operator settings, skips payment/provider probes, and verifies only public
+health/static bytes. Exact-head hosted CI and deployment are still separate
+gates; no new paid generation is included in verification.
+
 ## LOCAL REVIEW — bounded preview for dense generated models (7 October 2026)
 
 The separately approved single Astra test completed through the ordinary Shop

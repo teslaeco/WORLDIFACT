@@ -1,15 +1,17 @@
 import { isStoredInvoiceReference, readGenerationFundingSnapshot, type GenerationFundingSnapshot } from './generationFunding.ts'
 
-export type FundingReadOptions = { storedEvidence: true; invoiceReferences: string[] }
+export type FundingReadOptions = { storedEvidence: true; invoiceReferences: string[]; pendingAfter?: string }
 export function fundingReadPath(options?: FundingReadOptions): string {
   const path = '/api/account/generation-funding'
   if (options === undefined) return path
-  if (!options || Object.keys(options).some(key => !['storedEvidence', 'invoiceReferences'].includes(key)) || options.storedEvidence !== true ||
+  if (!options || Object.keys(options).some(key => !['storedEvidence', 'invoiceReferences', 'pendingAfter'].includes(key)) || options.storedEvidence !== true ||
       !Array.isArray(options.invoiceReferences) || options.invoiceReferences.length > 2 || new Set(options.invoiceReferences).size !== options.invoiceReferences.length ||
-      !options.invoiceReferences.every(isStoredInvoiceReference))
+      !options.invoiceReferences.every(isStoredInvoiceReference) || Object.hasOwn(options, 'pendingAfter') &&
+      (typeof options.pendingAfter !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(options.pendingAfter)))
     throw new Error('Enter at most two distinct Stripe invoice IDs beginning with in_.')
   const query = new URLSearchParams({ evidence: 'stored-v1' })
   for (const reference of options.invoiceReferences) query.append('invoice', reference)
+  if (options.pendingAfter) query.set('pendingAfter', options.pendingAfter)
   return `${path}?${query}`
 }
 
@@ -45,7 +47,7 @@ export async function loadGenerationFunding(signal: AbortSignal, fetcher: typeof
     // A mixed deployment may still serve the original query-free endpoint.
     // Retry only its exact old schema rejection, once, using the same session
     // and abort signal. This never treats unavailable invoice evidence as missing.
-    if (options && await unsupportedEvidenceQuery(response, signal)) {
+    if (options && !options.pendingAfter && await unsupportedEvidenceQuery(response, signal)) {
       signal.throwIfAborted()
       return loadGenerationFunding(signal, fetcher)
     }
@@ -71,6 +73,9 @@ export async function loadGenerationFunding(signal: AbortSignal, fetcher: typeof
     if (snapshot.storedEvidence && (!options ||
         JSON.stringify(snapshot.storedEvidence.requestedInvoices.map(record => record.invoiceReference)) !== JSON.stringify(options.invoiceReferences)))
       throw new Error('The returned invoice records do not match this read request.')
+    if (options?.pendingAfter && (!snapshot.pendingCostReviews || snapshot.pendingCostReviews.items.some(item => item.id <= options.pendingAfter!) ||
+        snapshot.pendingCostReviews.nextCursor !== null && snapshot.pendingCostReviews.nextCursor <= options.pendingAfter))
+      throw new Error('The pending cost review page did not advance safely.')
     return snapshot
   } catch {
     await reader.cancel().catch(() => {})

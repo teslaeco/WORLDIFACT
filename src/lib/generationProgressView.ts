@@ -1,4 +1,4 @@
-import type { StudioJob } from './studioProtocol.ts'
+import { studioPointsPending, type StudioJob } from './studioProtocol.ts'
 import { isAdmissionFailureCode } from './generationAdmission.ts'
 
 /** UI evidence only. No elapsed-time-to-percentage conversion is supported. */
@@ -35,6 +35,7 @@ export function generationProgressView({ job, artifact, trackedSeconds }: Genera
   const elapsed = formatTrackedElapsed(trackedSeconds)
   const base = { percent: null, elapsed } as const
   if (!job) return { ...base, kind: 'idle', title: 'Your next creation', stage: 'Ready for an idea', detail: 'Describe your model to prepare a new request.' }
+  if (studioPointsPending(job)) return { ...base, kind: 'review', title: job.pointSettlementUnconfirmed ? 'Generation failed · settlement unconfirmed' : 'Generation failed · points held', stage: 'Cost review required', detail: job.detail }
   if (job.reconciliationRequired) return { ...base, kind: 'review', title: 'Status review needed', stage: 'Needs attention', detail: job.detail }
   if (job.state === 'failed' && isAdmissionFailureCode(job.failureCode)) return { ...base, kind: 'failed', title: 'Generation was not started', stage: 'Not submitted', detail: job.detail }
   if (job.state === 'failed' && job.failureCode === 'MISSING_SUBMISSION') return { ...base, kind: 'review', title: 'The upload was not confirmed', stage: 'Acceptance unconfirmed', detail: job.detail }
