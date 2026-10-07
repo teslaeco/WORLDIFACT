@@ -17,11 +17,19 @@ test('tier controls need exact readiness and consent belongs to one current draf
   assert.deepEqual(studioBudgetSelection('extended', true), { pricingRevision: STUDIO_PRICING_REVISION, budgetTier: 'extended', acceptedPoints: 500 })
 })
 
-test('complexity advice belongs only to structured per-model budget failure', () => {
+test('budget-stop explanation distinguishes missing completed output from financial settlement and prompt complexity', () => {
   const job = { id: 'fixture', state: 'failed', detail: 'ignored' } as StudioJob
   for (const failureCode of ['ASTRA_COST_LIMIT', 'PROVIDER_BUDGET_EXHAUSTED', 'ORACLE_JOB_FAILED'] as const)
     assert.equal(studioBudgetFailureAdvice({ ...job, failureCode }), null)
-  assert.match(studioBudgetFailureAdvice({ ...job, failureCode: 'MODEL_BUDGET_EXCEEDED', pricing: STUDIO_PRICING.standard })!, /explicitly accept the 500-point budget/)
-  assert.doesNotMatch(studioBudgetFailureAdvice({ ...job, failureCode: 'MODEL_BUDGET_EXCEEDED', pricing: STUDIO_PRICING.extended })!, /500/)
-  assert.doesNotMatch(studioBudgetFailureAdvice({ ...job, failureCode: 'MODEL_BUDGET_EXCEEDED', pricing: STUDIO_PRICING.standard }, false)!, /500|upgrade/)
+  for (const pricing of [undefined, STUDIO_PRICING.standard, STUDIO_PRICING.extended]) {
+    for (const tiersAvailable of [true, false]) {
+      const detail = studioBudgetFailureAdvice({ ...job, failureCode: 'MODEL_BUDGET_EXCEEDED', pricing }, tiersAvailable)
+      assert.match(detail!, /next API request did not fit the remaining model budget/)
+      assert.match(detail!, /no completed, verified model for the preview or completed-model gallery/)
+      assert.match(detail!, /same request without starting another generation/)
+      assert.doesNotMatch(detail!, /[Ss]implify|[Cc]omplex|500|upgrade|points were released|charged|artifact.*(deleted|missing)/)
+    }
+  }
+  for (const state of ['pending', 'queued', 'building', 'succeeded', 'cancelled'] as const)
+    assert.equal(studioBudgetFailureAdvice({ ...job, state, failureCode: 'MODEL_BUDGET_EXCEEDED' }), null)
 })
