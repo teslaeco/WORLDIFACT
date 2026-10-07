@@ -43,11 +43,18 @@ jobs:
       - name: Select reviewed deployment configuration
         id: mode
         env:
+          OWNER_RESERVE_ADJUSTMENT: ${{ steps.billing_scope.outputs.owner_reserve_adjustment }}
           ACCOUNT_PURCHASE_EVIDENCE: ${{ steps.billing_scope.outputs.account_purchase_evidence }}
           SUBSCRIPTION_UPGRADE_REPAIR: ${{ steps.billing_scope.outputs.subscription_upgrade_repair }}
         shell: bash
         run: |
-          if test "${ACCOUNT_PURCHASE_EVIDENCE:-false}" = 'true'; then
+          if test "${OWNER_RESERVE_ADJUSTMENT:-false}" = 'true'; then
+            node scripts/build-compatible-mcc-config.mjs --owner-reserve-adjustment
+            echo 'config=.owner-reserve-adjustment.wrangler.json' >> "$GITHUB_OUTPUT"
+            echo 'owner_reserve_adjustment=true' >> "$GITHUB_OUTPUT"
+            echo 'mode=PRESERVE' >> "$GITHUB_OUTPUT"
+            echo 'Owner reserve adjustment: preserve deployed variables and secrets; no allocation or model test during deployment.'
+          elif test "${ACCOUNT_PURCHASE_EVIDENCE:-false}" = 'true'; then
             node scripts/build-compatible-mcc-config.mjs --account-purchase-evidence
             echo 'config=.account-purchase-evidence.wrangler.json' >> "$GITHUB_OUTPUT"
             echo 'account_purchase_evidence=true' >> "$GITHUB_OUTPUT"
@@ -173,7 +180,33 @@ jobs:
       - name: Verify published HTML, assets and no-cost DEMO API path
         id: release
         run: |
-          if test "${ACCOUNT_PURCHASE_EVIDENCE:-false}" = 'true'; then
+          if test "${OWNER_RESERVE_ADJUSTMENT:-false}" = 'true'; then
+            node --input-type=module <<'JS'
+          import { appendFile, readFile } from 'node:fs/promises';
+          import { selectPipelineReleaseOptions } from './scripts/select-pipeline-only-release.mjs';
+          import { readDeployment } from './scripts/release-check.ts';
+          import { checkCompatibleMccRelease } from './scripts/check-compatible-mcc-release.mjs';
+          let stage = 'release_scope';
+          try {
+            const options = selectPipelineReleaseOptions();
+            if (options.ownerReserveAdjustment !== true || options.preserveBilling !== true || options.preserveRemoteVars !== true || options.preserveSecrets !== true) throw new Error('Unreviewed owner reserve release.');
+            stage = 'deployment_receipt';
+            const deployment = readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8'));
+            console.log(`Cloudflare version: ${deployment.versionId}`);
+            const result = await checkCompatibleMccRelease(deployment, { onStage: value => {
+              if (['health', 'local_assets', 'foundation_manifest', 'html_routes', 'static_assets'].includes(value)) stage = value;
+            } });
+            stage = 'report';
+            console.log(`PASS: owner reserve adjustment; ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} exact built files. GET-only health/static verification; no reserve allocation, financial probes, secret synchronization or generation requests.`);
+            if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `url=${result.origin}\n`);
+            if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY,
+              `## WORLDIFACT owner reserve adjustment\n\n[Open WORLDIFACT](${result.origin})\n\nCloudflare version: \`${result.versionId}\`\n\nGET-only verification matched ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} built files. Deployed variables, secrets, bindings and migrations were preserved. No reserve allocation, financial probes or generation requests. Browser/device appearance remains unverified.\n`);
+          } catch {
+            console.error(`PRESERVING_RELEASE_NOT_VERIFIED: ${stage}; read-only publication checks failed. No reserve allocation, generation, payment or secret synchronization was attempted.`);
+            process.exitCode = 1;
+          }
+          JS
+          elif test "${ACCOUNT_PURCHASE_EVIDENCE:-false}" = 'true'; then
             node scripts/check-compatible-mcc-release.mjs --account-purchase-evidence
           elif test "${SUBSCRIPTION_UPGRADE_REPAIR:-false}" = 'true'; then
             node scripts/check-compatible-mcc-release.mjs --subscription-upgrade-repair
@@ -183,6 +216,7 @@ jobs:
             node scripts/release-check.ts smoke
           fi
         env:
+          OWNER_RESERVE_ADJUSTMENT: ${{ steps.mode.outputs.owner_reserve_adjustment }}
           ACCOUNT_PURCHASE_EVIDENCE: ${{ steps.mode.outputs.account_purchase_evidence }}
           SUBSCRIPTION_UPGRADE_REPAIR: ${{ steps.mode.outputs.subscription_upgrade_repair }}
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson

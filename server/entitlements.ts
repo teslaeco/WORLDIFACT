@@ -17,6 +17,7 @@ import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from './stu
 import { boundBlueprintProviderModel } from './blueprintModelBinding.ts'
 import { isStoredInvoiceReference, readGenerationFundingEvidenceQuery, type GenerationFundingSnapshot, type StoredGenerationFundingEvidence } from '../src/lib/generationFunding.ts'
 import { BLUEPRINT_RECONCILIATION_TERMS, blueprintRetainedCents, validateBlueprintTerminalUsage, type BlueprintTerminalUsage } from './blueprintTerminalUsage.ts'
+import { ownerReserveAdjustmentApi, ownerReserveAdjustmentLedgerRoute } from './ownerReserveAdjustment.ts'
 
 export interface EntitlementEnv {
   ACCOUNT_ENTITLEMENTS?: BudgetNamespace
@@ -716,12 +717,20 @@ export class AccountEntitlements {
   private astraEnabled: boolean
   private supportEnv: EntitlementEnv
   private overnightPoolNamespace = false
+  private durableObjectId: string | null = null
   constructor(state: { storage: EntitlementStorage; id?: { toString(): string } }, env: unknown = {}, now = Date.now) { this.storage = state.storage; this.now = now; this.astraEnabled = !!env && typeof env === 'object' && (env as { ENABLE_ASTRA_PLANS?: string }).ENABLE_ASTRA_PLANS === 'true'; this.supportEnv = env && typeof env === 'object' ? env as EntitlementEnv : {}
+    try { this.durableObjectId = state.id?.toString() ?? null } catch { /* Unknown namespace cannot apply owner adjustments. */ }
     try { this.overnightPoolNamespace = !!state.id && !!this.supportEnv.ACCOUNT_ENTITLEMENTS && state.id.toString() === String(this.supportEnv.ACCOUNT_ENTITLEMENTS.idFromName(OVERNIGHT_TEST_NAMESPACE)) } catch { /* Unknown namespace never holds test funds. */ }
   }
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname, now = this.now()
     try {
+      if (path === '/owner-reserve-adjustment') {
+        const account = request.headers.get('X-WORLDIFACT-Verified-Account')
+        const matches = !!account && ACCOUNT_ID.test(account) && !!this.supportEnv.ACCOUNT_ENTITLEMENTS && this.durableObjectId !== null &&
+          this.durableObjectId === String(this.supportEnv.ACCOUNT_ENTITLEMENTS.idFromName(`account:v1:${account.toLowerCase()}`))
+        return await ownerReserveAdjustmentLedgerRoute(request, this.storage, this.supportEnv, matches, now)
+      }
       if (path === '/overnight-test-status' || path === '/overnight-test-claim') {
         if (!this.overnightPoolNamespace) return json({ error: 'Wrong overnight budget namespace.', ...(path === '/overnight-test-status' ? { diagnostic: 'TEST_POOL_NAMESPACE_MISMATCH' } : {}) }, 403)
         return (await overnightTestPoolRoute(request, this.storage, this.supportEnv, this.now))!
@@ -1702,6 +1711,7 @@ export async function markStudioDispatch(env: EntitlementEnv, userId: string, jo
   throw new EntitlementError('The Studio dispatch acknowledgement could not be verified.')
 }
 export async function entitlementApi(request: Request, env: AccountEnv & EntitlementEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
+  if (new URL(request.url).pathname === '/api/account/owner-reserve-adjustment') return ownerReserveAdjustmentApi(request, env, fetcher)
   if (['/api/account/generation-funding', '/api/overnight-tests/status'].includes(new URL(request.url).pathname)) {
     const statusRead = new URL(request.url).pathname === '/api/overnight-tests/status'
     const reply = (value: unknown, code = 200) => Response.json(value, { status: code,

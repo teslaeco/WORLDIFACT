@@ -2,6 +2,47 @@
 
 Updated 7 October 2026.
 
+## LOCAL REVIEW — explicitly approved one-time reserve adjustment (7 October 2026)
+
+Both historical purchase grants were found in the authenticated account ledger.
+No invoice replay or refund of unknown historical costs is justified. The owner
+separately approved a single $1.12 USD internal API reserve allocation and one
+later, manually initiated Astra test, capped at $1.75 USD total API cost and
+250 points on success. This change implements only the allocation control;
+it does not submit the paid test or claim successful generation.
+
+The dedicated self-account route verifies the existing authenticated cookie,
+account-bound live Durable Object, and fixed SHA-256 commitments for the owner,
+Stripe customer, two exact unreversed invoice grants and their subscription.
+No account selector, administrator reader, credential or environment override is
+introduced. Public source and UI contain no actual customer or invoice IDs.
+The transaction requires exactly 1,440 points, zero effective held points and
+63 cents of existing reserve. It changes only that reserve to 175 cents and
+writes one immutable audit with the authorization commitment, timestamp and
+original before/after values. A changed baseline, payment binding or corrupt
+marker refuses; duplicate application returns the original receipt even after
+later spending. Earlier claims, jobs, models and generation limits are preserved.
+
+Page entry and the status button perform GET only. The explicit application
+button sends one fixed POST, locks synchronously against double clicks and never
+retries an uncertain result. A later explicit status read identifies a committed
+application without replenishing it. Account changes and page lifecycle events
+clear the old view. The receipt labels its values as historical rather than a
+fresh balance. No model, checkout, card charge or subscription is started.
+
+Focused unit and actual SQLite Durable Object tests cover concurrent applications,
+atomic rollback after either write, lost acknowledgements, revoked/wrong invoice
+bindings, changed baselines, malformed markers and cross-account refusal. UI tests
+cover entry, double clicks, uncertainty, stale results and identity changes. The
+fresh 15-file exact-parent release envelope preserves deployed variables and
+secrets and skips Stripe setup, checkouts, financial probes and Oracle operations.
+Local validation passes all 1,759 runnable tests, lint, TypeScript, real HTTP
+smoke, production build and Worker dry-run. Independent review passed 32 new
+tests plus 60 prior release regressions without a blocking finding. The known
+local browser restriction was respected; its two tests remain required in
+hosted CI. Publication, full hosted CI, deployment and the manual account action
+remain separate evidence gates; no successful paid model is inferred from these tests.
+
 ## LOCAL REVIEW — self-account stored purchase evidence (7 October 2026)
 
 This diagnostic extends the existing authenticated funding read with an explicit
