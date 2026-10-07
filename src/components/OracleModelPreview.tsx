@@ -190,9 +190,12 @@ function ModelPreviewSession({ url, label, targetDimensionsMm, customerMode }: {
         if (disposed) return
         inspectEmbeddedGlb(bytes)
         let loaded: { scene: Group; scenes: Group[] }
+        let softwareBounds: Box3 | null = null, reducedDetail = ''
         if (software) {
           const result = buildSoftwareModel(bytes)
           isPerson = result.person
+          softwareBounds = result.bounds
+          if (result.sourceTriangles > result.triangles) reducedDetail = ` Geometry is reduced from ${result.sourceTriangles} to ${result.triangles} triangles; small parts and fine details may be missing.`
           loaded = { scene: result.model, scenes: [result.model] }
         } else {
           // Source validation guarantees embedded images; allow only internal Blob or bounded embedded image data URLs.
@@ -206,13 +209,13 @@ function ModelPreviewSession({ url, label, targetDimensionsMm, customerMode }: {
         if (!slot.replace(loaded)) return
         model = loaded.scene
         model.traverse(object => { if (object.userData.froge_kind === 'person') isPerson = true })
-        let box = new Box3().setFromObject(model)
+        let box = softwareBounds?.clone() ?? new Box3().setFromObject(model)
         if (targetDimensionsMm && targetDimensionsMm.every(n => Number.isFinite(n) && n > 0)) {
           const source = box.getSize(new Vector3())
           if (source.x > 0 && source.y > 0 && source.z > 0) {
             model.scale.set(targetDimensionsMm[0] / source.x, targetDimensionsMm[1] / source.y, targetDimensionsMm[2] / source.z)
             model.updateMatrixWorld(true)
-            box = new Box3().setFromObject(model)
+            box = softwareBounds ? softwareBounds.clone().applyMatrix4(model.matrix) : new Box3().setFromObject(model)
           }
         }
         bounds = { min: box.min.toArray(), max: box.max.toArray() }
@@ -223,7 +226,7 @@ function ModelPreviewSession({ url, label, targetDimensionsMm, customerMode }: {
         resize()
         setReady(true)
         setStatus(software
-          ? 'Simplified untextured preview of your model. Base colors only; textures, lighting effects and fine appearance may differ. The original file is unchanged.'
+          ? `Simplified untextured preview of your model.${reducedDetail} Base colors only; textures, lighting effects and fine appearance may differ. The original file is unchanged.`
           : customerMode ? 'Preview ready.' : 'GENERATED-UNREVIEWED GLB loaded in the browser; visual review is still required.')
       } catch (cause) {
         if (disposed) return

@@ -1,0 +1,8 @@
+{
+  "release": "bounded-software-model-preview-20261007",
+  "baseCommit": "64986c33139e515d6a0a81fccb61f8db972bd62e",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "boundedSoftwarePreview": true
+}

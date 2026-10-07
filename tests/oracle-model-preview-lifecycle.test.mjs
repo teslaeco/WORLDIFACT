@@ -12,12 +12,18 @@ import { createModelSlot } from '../src/lib/modelSlot.ts'
 import { frameModel } from '../src/lib/modelFraming.ts'
 import { disposeObject } from '../src/lib/worldGeometry.ts'
 
-function bytes() {
-  const json = { asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0 }], meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }], accessors: [{ bufferView: 0, count: 3, componentType: 5126, type: 'VEC3' }], bufferViews: [{ buffer: 0, byteLength: 36 }], buffers: [{ byteLength: 36 }] }
+function bytes(triangles = 1) {
+  const size = triangles * 36
+  const json = { asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0 }], meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }], accessors: [{ bufferView: 0, count: triangles * 3, componentType: 5126, type: 'VEC3' }], bufferViews: [{ buffer: 0, byteLength: size }], buffers: [{ byteLength: size }] }
   const encoded = new TextEncoder().encode(JSON.stringify(json)), n = Math.ceil(encoded.length / 4) * 4
-  const result = new Uint8Array(n + 64), v = new DataView(result.buffer)
-  for (const [offset, value] of [[0, 0x46546c67], [4, 2], [8, result.length], [12, n], [16, 0x4e4f534a], [20 + n, 36], [24 + n, 0x004e4942]]) v.setUint32(offset, value, true)
-  result.fill(32, 20, 20 + n); result.set(encoded, 20); new Float32Array(result.buffer, n + 28, 9).set([-1, -1, 0, 1, -1, 0, 0, 1, 0])
+  const result = new Uint8Array(n + 28 + size), v = new DataView(result.buffer)
+  for (const [offset, value] of [[0, 0x46546c67], [4, 2], [8, result.length], [12, n], [16, 0x4e4f534a], [20 + n, size], [24 + n, 0x004e4942]]) v.setUint32(offset, value, true)
+  result.fill(32, 20, 20 + n); result.set(encoded, 20)
+  const positions = new Float32Array(result.buffer, n + 28, triangles * 9)
+  for (let i = 0; i < triangles; i++) positions.set([-1, -1, 0, 1, -1, 0, 0, 1, 0], i * 9)
+  // In the 40k-triangle fixture triangle 1 is omitted; framing must still include
+  // this source-only extreme and all three source dimensions when scaling.
+  if (triangles > 1) positions.set([100, -1, 1], 9)
   return result.buffer
 }
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
@@ -34,8 +40,8 @@ class Element {
 
 // Runs the real component's hooks/effects, Three models, source guards and model
 // ownership. DOM/GPU facilities are controlled to exercise failure and races.
-async function harness({ mode = 'webgl', source = async () => bytes(), parse, url = 'blob:approved-model' } = {}) {
-  const state = [], effects = [], webgl = [], svgs = [], controls = [], envs = [], reads = [], parses = [], built = [], observers = [], frames = new Map()
+async function harness({ mode = 'webgl', source = async () => bytes(), parse, url = 'blob:approved-model', targetDimensionsMm } = {}) {
+  const state = [], effects = [], webgl = [], svgs = [], controls = [], envs = [], reads = [], parses = [], built = [], observers = [], framed = [], frames = new Map()
   const host = { clientWidth: 640, clientHeight: 480, children: [], appendChild(child) { child.parent = this; this.children.push(child) } }
   let cursor = 0, dirty = true, closed = false, lateUpdates = 0, tree, frameId = 0
   const react = { ...React,
@@ -88,7 +94,7 @@ async function harness({ mode = 'webgl', source = async () => bytes(), parse, ur
       if (id.includes('/SVGRenderer')) return { SVGRenderer: Svg }
       if (id === '../lib/worldGeometry') return { disposeObject }
       if (id === '../lib/modelSlot') return { createModelSlot }
-      if (id === '../lib/modelFraming') return { frameModel }
+      if (id === '../lib/modelFraming') return { frameModel(...args) { framed.push(args); return frameModel(...args) } }
       if (id === '../lib/softwareModelPreview') return { ...softwareHelpers,
         readModelPreviewBytes(...args) { reads.push(args); return source(...args) },
         buildSoftwareModel(value) { const result = softwareHelpers.buildSoftwareModel(value); built.push(result); return result },
@@ -96,10 +102,10 @@ async function harness({ mode = 'webgl', source = async () => bytes(), parse, ur
       throw new Error(`Unexpected dependency ${id}`)
     },
   }, { timeout: 2000 })
-  const wrapper = module.exports.default({ url, label: 'Account model', customerMode: true }), Component = wrapper.type
+  const wrapper = module.exports.default({ url, label: 'Account model', customerMode: true, targetDimensionsMm }), Component = wrapper.type
   async function settle() { for (let i = 0; i < 16; i++) { if (dirty && !closed) { dirty = false; cursor = 0; tree = Component(wrapper.props); for (const node of nodes(tree)) if (node.props.ref) node.props.ref.current = host } while (effects.length) effects.shift()(); await nextTick() } }
   await settle()
-  return { webgl, svgs, controls, envs, reads, parses, built, observers, frames, host, settle,
+  return { webgl, svgs, controls, envs, reads, parses, built, observers, framed, frames, host, settle,
     text: () => content(tree), tree: () => tree, lateUpdates: () => lateUpdates,
     button: name => nodes(tree).find(node => node.type === 'button' && node.props.children === name),
     renderFrames() { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(fn => fn()) },
@@ -145,6 +151,28 @@ test('context loss tears down WebGL and switches to actual bounded source geomet
     assert.equal(h.built[0].triangles, 1); assert.equal(h.host.children.length, 1)
     assert.match(h.text(), /Simplified untextured preview/)
   } finally { h.close() }
+})
+
+test('dense fallback discloses omitted detail and frames full source bounds, including target-dimension scaling', async () => {
+  for (const targetDimensionsMm of [undefined, [10, 20, 30]]) {
+    const h = await harness({ mode: 'constructor-failure', source: async () => bytes(40000), targetDimensionsMm })
+    let geometryDisposed = 0, materialDisposed = 0
+    try {
+      assert.equal(h.built.length, 1); assert.equal(h.built[0].sampled, true)
+      const mesh = h.built[0].model.children[0]
+      mesh.geometry.addEventListener('dispose', () => geometryDisposed++)
+      mesh.material.addEventListener('dispose', () => materialDisposed++)
+      assert.match(h.text(), /Geometry is reduced from 40000 to 20000 triangles; small parts and fine details may be missing/)
+      assert.match(h.text(), /Base colors only.*original file is unchanged/); assert.equal(h.button('Front').props.disabled, false)
+      const box = h.framed[0][0], dimensions = box.max.map((value, i) => value - box.min[i])
+      assert.deepEqual(dimensions, targetDimensionsMm ?? [101, 2, 1])
+      const sampled = new Three.Box3().setFromObject(h.built[0].model)
+      assert.ok(sampled.max.x < box.max[0]); assert.equal(sampled.max.z, 0)
+      h.renderFrames(); assert.equal(h.svgs[0].renders, 1); assert.equal(h.frames.size, 0)
+    } finally { h.close() }
+    assert.equal(h.host.children.length, 0); assert.equal(h.built[0].model.parent, null)
+    assert.equal(geometryDisposed, 1); assert.equal(materialDisposed, 1)
+  }
 })
 
 test('unmount cancels source reads and prevents delayed results from building or updating state', async () => {

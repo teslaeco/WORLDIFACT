@@ -9,6 +9,8 @@ export const SOFTWARE_PREVIEW_LIMITS = Object.freeze({
   nodes: 512, meshes: 256, primitives: 256, accessors: 2048, bufferViews: 2048,
   vertices: 60_000, triangles: 20_000, depth: 64, coordinate: 1e8,
 })
+/** Source scans are separately bounded; these are never renderer/allocation budgets. */
+export const SOFTWARE_PREVIEW_SOURCE_LIMITS = Object.freeze({ vertices: 600_000, triangles: 200_000 })
 export const MODEL_PREVIEW_MAX_BYTES = 96 * 1024 * 1024
 export class ModelPreviewError extends Error {}
 export const isEmbeddedPreviewImage = (value: unknown): value is string => typeof value === 'string'
@@ -102,10 +104,13 @@ export function inspectEmbeddedGlb(bytes: ArrayBuffer): { json: Json; bin: DataV
 
 type Accessor = { count: number; read: (index: number, component?: number) => number }
 type Primitive = { positions: Accessor; indices?: Accessor; count: number; materialIndex?: number }
-type Instance = { primitives: Primitive[]; matrix: Matrix4 }
+type Instance = { primitive: Primitive; matrix: Matrix4 }
 
 /** Decode the bounded static subset directly: no loader, image decoding, scripts or I/O. */
-export function buildSoftwareModel(bytes: ArrayBuffer): { model: Group; triangles: number; vertices: number; person: boolean } {
+export function buildSoftwareModel(bytes: ArrayBuffer): {
+  model: Group; triangles: number; vertices: number; person: boolean; sampled: boolean;
+  sourceTriangles: number; sourceVertices: number; bounds: Box3;
+} {
   if (bytes.byteLength > SOFTWARE_PREVIEW_LIMITS.bytes) fail('This model exceeds the simplified preview file limit.')
   const { json, bin } = inspectEmbeddedGlb(bytes)
   const nodes = list(json.nodes, SOFTWARE_PREVIEW_LIMITS.nodes).map(object)
@@ -123,7 +128,7 @@ export function buildSoftwareModel(bytes: ArrayBuffer): { model: Group; triangle
     const type = integer(a.componentType, 5121, 5126)
     if (positions ? type !== 5126 : ![5121, 5123, 5125].includes(type)) fail('Unsupported model geometry encoding.')
     const width = type === 5121 ? 1 : type === 5123 ? 2 : 4, itemSize = width * (positions ? 3 : 1)
-    const count = integer(a.count, 1, positions ? SOFTWARE_PREVIEW_LIMITS.vertices : SOFTWARE_PREVIEW_LIMITS.triangles * 3)
+    const count = integer(a.count, 1, positions ? SOFTWARE_PREVIEW_SOURCE_LIMITS.vertices : SOFTWARE_PREVIEW_SOURCE_LIMITS.triangles * 3)
     const v = views[integer(a.bufferView, 0, views.length - 1)]
     noExtensions(v)
     if (v.buffer !== 0) fail('The model buffer must be embedded.')
@@ -152,7 +157,7 @@ export function buildSoftwareModel(bytes: ArrayBuffer): { model: Group; triangle
       const count = indices?.count ?? positions.count
       if (count % 3) fail('Invalid model triangle count.')
       sourceVertices += positions.count; sourceTriangles += count / 3
-      if (sourceVertices > SOFTWARE_PREVIEW_LIMITS.vertices || sourceTriangles > SOFTWARE_PREVIEW_LIMITS.triangles) fail('This model is too complex for the simplified preview.')
+      if (sourceVertices > SOFTWARE_PREVIEW_SOURCE_LIMITS.vertices || sourceTriangles > SOFTWARE_PREVIEW_SOURCE_LIMITS.triangles) fail('This model is too complex for the simplified preview.')
       for (let i = 0; i < positions.count; i++) for (let component = 0; component < 3; component++) {
         const value = positions.read(i, component)
         if (!Number.isFinite(value) || Math.abs(value) > SOFTWARE_PREVIEW_LIMITS.coordinate) fail('Invalid or extreme model coordinates.')
@@ -191,39 +196,78 @@ export function buildSoftwareModel(bytes: ArrayBuffer): { model: Group; triangle
       const primitives = geometry[integer(node.mesh, 0, geometry.length - 1)]
       for (const p of primitives) {
         triangles += p.count / 3; vertices += p.positions.count; draws++
-        if (triangles > SOFTWARE_PREVIEW_LIMITS.triangles || vertices > SOFTWARE_PREVIEW_LIMITS.vertices || draws > SOFTWARE_PREVIEW_LIMITS.primitives) fail('This model is too complex for the simplified preview.')
+        if (triangles > SOFTWARE_PREVIEW_SOURCE_LIMITS.triangles || vertices > SOFTWARE_PREVIEW_SOURCE_LIMITS.vertices || draws > SOFTWARE_PREVIEW_LIMITS.primitives) fail('This model is too complex for the simplified preview.')
         for (let i = 0; i < p.positions.count; i++) {
           point.set(p.positions.read(i, 0), p.positions.read(i, 1), p.positions.read(i, 2)).applyMatrix4(matrix)
           if (!point.toArray().every(n => Number.isFinite(n) && Math.abs(n) <= SOFTWARE_PREVIEW_LIMITS.coordinate)) fail('Invalid transformed model coordinates.')
           bounds.expandByPoint(point)
         }
+        instances.push({ primitive: p, matrix })
       }
-      instances.push({ primitives, matrix })
     }
     for (const child of list(node.children, SOFTWARE_PREVIEW_LIMITS.nodes)) pending.push({ index: child, parent: matrix, depth: item.depth + 1 })
   }
   if (!triangles || bounds.isEmpty() || bounds.getSize(point).length() <= 1e-10) fail('The model has no usable geometry for simplified preview.')
-  // Allocate only after validating all rendered instances and transformed bounds.
+  // Validate materials before allocating any renderer geometry/materials, including
+  // materials on parts whose triangles will later be sampled.
+  const appearances = instances.map(({ primitive: p }) => {
+    const source = p.materialIndex === undefined ? {} : materials[p.materialIndex]
+    const pbr = source.pbrMetallicRoughness === undefined ? {} : object(source.pbrMetallicRoughness)
+    const color = vector(pbr.baseColorFactor, [1, 1, 1, 1])
+    if (color.some(c => c < 0 || c > 1) || (source.alphaMode !== undefined && !['OPAQUE', 'BLEND'].includes(String(source.alphaMode)))) fail('Unsupported model base material.')
+    return { color, side: source.doubleSided === true ? DoubleSide : FrontSide, opacity: source.alphaMode === 'BLEND' ? color[3] : 1, transparent: source.alphaMode === 'BLEND' }
+  })
+  const sampled = triangles > SOFTWARE_PREVIEW_LIMITS.triangles || vertices > SOFTWARE_PREVIEW_LIMITS.vertices
+  const budget = Math.min(triangles, SOFTWARE_PREVIEW_LIMITS.triangles, Math.floor(SOFTWARE_PREVIEW_LIMITS.vertices / 3))
+  // Reserve one complete triangle per part/instance. Distribute the rest by
+  // capacity, with stable largest-remainder ties. No part loses representation.
+  const quotas = instances.map(({ primitive: p }, index) => {
+    const share = triangles === draws ? 0 : (budget - draws) * (p.count / 3 - 1) / (triangles - draws)
+    return { index, count: sampled ? 1 + Math.floor(share) : p.count / 3, remainder: share - Math.floor(share) }
+  })
+  if (sampled) {
+    let remaining = budget - quotas.reduce((sum, q) => sum + q.count, 0)
+    for (const quota of [...quotas].sort((a, b) => b.remainder - a.remainder || a.index - b.index)) {
+      if (!remaining) break
+      quota.count++; remaining--
+    }
+  }
+  const allocatedVertices = instances.reduce((sum, instance, i) => sum + (sampled ? quotas[i].count * 3 : instance.primitive.positions.count), 0)
+  if (allocatedVertices > SOFTWARE_PREVIEW_LIMITS.vertices || quotas.reduce((sum, q) => sum + q.count, 0) > SOFTWARE_PREVIEW_LIMITS.triangles
+    || quotas.some((q, i) => !Number.isSafeInteger(q.count) || q.count < 1 || q.count > instances[i].primitive.count / 3)) fail('This model is too complex for the simplified preview.')
+  let renderedVertices = 0, renderedTriangles = 0
+  // All source indices/coordinates and full-instance bounds were validated above.
+  // Sampling affects only the preview copies; the original bytes stay untouched.
   const model = new Group()
   try {
-    for (const instance of instances) for (const p of instance.primitives) {
-      const values = new Float32Array(p.positions.count * 3)
-      for (let i = 0; i < p.positions.count; i++) for (let c = 0; c < 3; c++) values[i * 3 + c] = p.positions.read(i, c)
-      const source = p.materialIndex === undefined ? {} : materials[p.materialIndex]
-      const pbr = source.pbrMetallicRoughness === undefined ? {} : object(source.pbrMetallicRoughness)
-      const color = vector(pbr.baseColorFactor, [1, 1, 1, 1])
-      if (color.some(c => c < 0 || c > 1) || (source.alphaMode !== undefined && !['OPAQUE', 'BLEND'].includes(String(source.alphaMode)))) fail('Unsupported model base material.')
-      const material = new MeshLambertMaterial({ color: new Color().setRGB(color[0], color[1], color[2]), side: source.doubleSided === true ? DoubleSide : FrontSide, opacity: source.alphaMode === 'BLEND' ? color[3] : 1, transparent: source.alphaMode === 'BLEND' })
+    for (const [part, instance] of instances.entries()) {
+      const p = instance.primitive, count = quotas[part].count, vertexCount = sampled ? count * 3 : p.positions.count
+      const values = new Float32Array(vertexCount * 3)
+      if (sampled) {
+        for (let triangle = 0; triangle < count; triangle++) {
+          // Spread selections over the entire source stream, including endpoints.
+          const sourceTriangle = count === 1 ? Math.floor((p.count / 3 - 1) / 2) : Math.floor(triangle * (p.count / 3 - 1) / (count - 1))
+          for (let corner = 0; corner < 3; corner++) {
+            const sourceIndex = p.indices ? p.indices.read(sourceTriangle * 3 + corner) : sourceTriangle * 3 + corner
+            for (let c = 0; c < 3; c++) values[(triangle * 3 + corner) * 3 + c] = p.positions.read(sourceIndex, c)
+          }
+        }
+      } else {
+        for (let i = 0; i < p.positions.count; i++) for (let c = 0; c < 3; c++) values[i * 3 + c] = p.positions.read(i, c)
+      }
+      renderedTriangles += count; renderedVertices += vertexCount
+      const { color, ...appearance } = appearances[part]
+      const material = new MeshLambertMaterial({ ...appearance, color: new Color().setRGB(color[0], color[1], color[2]) })
       const buffer = new BufferGeometry()
       const mesh = new Mesh(buffer, material)
       model.add(mesh) // Own resources immediately, including on a later validation failure.
       buffer.setAttribute('position', new BufferAttribute(values, 3))
-      if (p.indices) { const indices = new Uint32Array(p.indices.count); for (let i = 0; i < indices.length; i++) indices[i] = p.indices.read(i); buffer.setIndex(new BufferAttribute(indices, 1)) }
+      if (!sampled && p.indices) { const indices = new Uint32Array(p.indices.count); for (let i = 0; i < indices.length; i++) indices[i] = p.indices.read(i); buffer.setIndex(new BufferAttribute(indices, 1)) }
       buffer.computeVertexNormals()
       mesh.matrixAutoUpdate = false; mesh.matrix.copy(instance.matrix)
     }
     model.updateMatrixWorld(true)
-    return { model, triangles, vertices, person }
+    return { model, triangles: renderedTriangles, vertices: renderedVertices, person, sampled, sourceTriangles: triangles, sourceVertices: vertices, bounds }
   } catch (error) { disposeSoftwareModel(model); throw error }
 }
 
