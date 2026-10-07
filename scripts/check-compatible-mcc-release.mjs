@@ -28,7 +28,7 @@ async function localFiles(dist, relative = '') {
   return result.sort()
 }
 
-/** Read-only smoke for the compatible rollback. The only API request is health.
+/** Shared read-only smoke for reviewed preserve-runtime releases. The only API request is health.
  * All other requests are GETs for built static files/routes, with exact hashes.
  * No platform, Studio, funding, billing, payment or generation endpoint is used.
  */
@@ -96,17 +96,27 @@ export async function checkCompatibleMccRelease(deployment, { dist = 'dist', fet
   return { origin, versionId, htmlRoutes: routes.length, verifiedAssets: files.length }
 }
 
+export async function checkSubscriptionUpgradeRelease(deployment, options, checks = {}) {
+  requireCheck(options?.subscriptionUpgradeRepair === true && options?.preserveBilling === true && options?.preserveRemoteVars === true && options?.preserveSecrets === true, 'Subscription upgrade release scope is required.')
+  return checkCompatibleMccRelease(deployment, checks)
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    requireCheck(process.argv.length === 2 && process.env.WRANGLER_OUTPUT_FILE_PATH && selectPipelineReleaseOptions().compatibleMccRollback === true, 'Compatible release scope is required.')
-    const result = await checkCompatibleMccRelease(readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8')))
+    const subscriptionUpgrade = process.argv.length === 3 && process.argv[2] === '--subscription-upgrade-repair'
+    requireCheck((process.argv.length === 2 || subscriptionUpgrade) && process.env.WRANGLER_OUTPUT_FILE_PATH, 'Preserving release arguments are required.')
+    const options = selectPipelineReleaseOptions()
+    requireCheck(subscriptionUpgrade ? options.subscriptionUpgradeRepair === true : options.compatibleMccRollback === true, 'Reviewed release scope is required.')
+    const deployment = readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8'))
+    const result = subscriptionUpgrade ? await checkSubscriptionUpgradeRelease(deployment, options) : await checkCompatibleMccRelease(deployment)
+    const label = subscriptionUpgrade ? 'subscription upgrade repair' : 'compatible UI rollback'
     console.log(`Cloudflare version: ${result.versionId}`)
-    console.log(`PASS: compatible UI rollback; ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} exact built files. GET-only health/static verification; no financial probes, secret synchronization or generation requests.`)
+    console.log(`PASS: ${label}; ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} exact built files. GET-only health/static verification; no financial probes, secret synchronization or generation requests.`)
     if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `url=${result.origin}\n`)
     if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY,
-      `## WORLDIFACT compatible UI rollback\n\n[Open WORLDIFACT](${result.origin})\n\nCloudflare version: \`${result.versionId}\`\n\nGET-only verification matched ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} built files. Existing runtime variables, secrets, bindings and migrations were preserved. No financial probes or generation requests. Browser/device appearance remains unverified.\n`)
+      `## WORLDIFACT ${label}\n\n[Open WORLDIFACT](${result.origin})\n\nCloudflare version: \`${result.versionId}\`\n\nGET-only verification matched ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} built files. Existing runtime variables, secrets, bindings and migrations were preserved. No financial probes or generation requests. Browser/device appearance remains unverified.\n`)
   } catch {
-    console.error('COMPATIBLE_MCC_RELEASE_NOT_VERIFIED: read-only publication checks failed. No generation, payment or secret synchronization was attempted.')
+    console.error('PRESERVING_RELEASE_NOT_VERIFIED: read-only publication checks failed. No generation, payment or secret synchronization was attempted.')
     process.exitCode = 1
   }
 }

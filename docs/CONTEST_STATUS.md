@@ -1,6 +1,45 @@
 # WORLDIFACT — TerraformingPlanet Astra heroine released
 
-Updated 6 October 2026.
+Updated 7 October 2026.
+
+## LOCAL REVIEW — verified subscription settlement across plan changes (7 October 2026)
+
+The focused billing repair is based on production `29b6b9af`. Two defects were
+independently reproduced: disabled new Astra sales or a missing management
+portal discarded already-paid invoices, and delayed paid invoices were ignored
+when their historical prices differed from the current plan after an upgrade
+or downgrade.
+
+Existing payments now settle independently of checkout availability. Every
+invoice still requires a configured known product, exact approved amount and
+currency, one non-prorated unit, paid status, matching subscription/customer and
+verified account ownership. Invoice grant keys remain idempotent, reversal
+tombstones remain authoritative, and current membership is synchronized
+separately. Disabled runtime stays disabled. Prices, point costs, provider
+funding limits, Oracle behavior and production account data are not modified
+by this code publication.
+
+Ten new deterministic regressions cover disabled sales, missing portals,
+pending/unpaid upgrades, delayed upgrade/downgrade invoices, cancellations,
+stale events, revoked grants, malformed/foreign payments, duplicate delivery,
+missing settlement configuration and returned subscription-ID mismatch. The
+original production billing source fails seven cases; the repaired source
+passes all 38 recovery tests. Tests use synthetic payments and no provider calls.
+
+The reconstructed billing change passes local lint (existing warnings),
+TypeScript, 1,701 runnable aggregate tests, real local HTTP/origin smoke,
+production build/postbuild and Worker dry-run packaging. The two native
+Chromium tests remain required in hosted CI and were not retried through the
+previously blocked local browser route. All 98 focused billing/release tests pass, including the preservation envelope.
+Exact-head hosted CI remains required; publication is not inferred from local tests.
+
+The fresh release envelope is pinned to the reviewed parent and exact changed
+paths. It preserves remote variables and secrets, skips payment configuration
+and checkout probes, and uses GET-only health/static verification. It does not
+roll back Oracle or reset any account's funding. Existing paid-invoice recovery
+is a separate, explicitly authorized account action; publication alone does
+not establish or repair a particular customer's missing grant. No customer
+identifiers or private billing records are included in the repository.
 
 ## REVIEW — compatible MCC-era presentation restoration (6 October 2026)
 
