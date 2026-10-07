@@ -17,9 +17,10 @@ export function hasStudioBudgetConsent(tier: StudioBudgetTier, acceptedRevision:
   return tier === 'standard' || acceptedRevision === currentRevision
 }
 
-export function studioBudgetFailureAdvice(job: StudioJob | null, tiersAvailable = true): string | null {
-  if (job?.failureCode !== 'MODEL_BUDGET_EXCEEDED') return null
-  return !tiersAvailable || job.pricing?.tier === 'extended'
-    ? 'Simplify this draft before starting another explicit attempt. No automatic paid retry was started.'
-    : 'Simplify this draft, or select and explicitly accept the 500-point budget when available. No automatic upgrade or paid retry was started.'
+export function studioBudgetFailureAdvice(job: StudioJob | null, _tiersAvailable = true): string | null {
+  if (job?.state !== 'failed' || job.failureCode !== 'MODEL_BUDGET_EXCEEDED') return null
+  // A guarded reservation failure does not prove an over-complex prompt, a
+  // missing private candidate, or that spending more would complete the model.
+  // Keep this execution explanation independent of the financial settlement.
+  return 'The worker stopped because its next API request did not fit the remaining model budget. This request has no completed, verified model for the preview or completed-model gallery. Keep this job ID for review. Recovery checks the same request without starting another generation.'
 }
