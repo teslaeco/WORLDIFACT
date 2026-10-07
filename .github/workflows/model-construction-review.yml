@@ -68,7 +68,23 @@ jobs:
         with:
           python-version: '3.12'
       - name: Assemble exact existing runtime fixture
-        run: python tools/model_construction/assemble_test_runtime.py --ancestor .context-ancestor --source .model-completion-source/oracle_connector --destination .construction-existing
+        run: |
+          python - <<'PY'
+          import json, pathlib, subprocess
+          root = pathlib.Path('.model-completion-source')
+          pin = 'd3f61b842dcfeda2ed794210caafc391919a75be'
+          def git(*args):
+              return subprocess.check_output(['git', '--no-replace-objects', '-C', str(root), *args])
+          assert git('rev-parse', 'HEAD').decode().strip() == pin, 'Unexpected public source checkout'
+          entries = []
+          for entry in git('ls-tree', '-r', '-z', pin).split(b'\0'):
+              if entry:
+                  metadata, path = entry.split(b'\t', 1)
+                  mode, kind, sha = metadata.decode().split()
+                  entries.append({'path': path.decode(), 'mode': mode, 'type': kind, 'sha': sha})
+          (root / 'pinned-tree.json').write_text(json.dumps({'sha': pin, 'truncated': False, 'tree': entries}))
+          PY
+          python tools/model_construction/assemble_test_runtime.py --ancestor .context-ancestor --source .model-completion-source/oracle_connector --destination .construction-existing
       - name: Install official checksum-verified native Blender for inert fixtures
         run: |
           curl --fail --location --retry 2 https://download.blender.org/release/Blender4.3/blender-4.3.0-linux-x64.tar.xz --output /tmp/blender-4.3.0-linux-x64.tar.xz

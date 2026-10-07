@@ -18,7 +18,7 @@ export const EVIDENCE_PATH = 'docs/CONTEST_STATUS.md'
 export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = '0957c6d31d2790ed4501ffd90b117a6ab7e35f53'
+export const CONFIG_BLOB = '2b7468de50c9d7209a08ede663b9031edc43ee51'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
 
 const HEX = /^[a-f0-9]{40}$/
