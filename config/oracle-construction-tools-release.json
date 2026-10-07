@@ -1,0 +1,264 @@
+{
+  "revision": "oracle-construction-tools-release-v1",
+  "release": "standard-bounded-construction-tools-only-20261007",
+  "baseCommit": "ea1987eee520880b1eb93e71b572f7f1f4879efd",
+  "sourceOnly": true,
+  "deployAllowed": false,
+  "preserveCloudflareDeployment": true,
+  "paidGenerationRequested": false,
+  "status": "FROZEN",
+  "payload": {
+    ".github/workflows/model-construction-review.yml": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "25d483a00199022160f26f945aef34296e1ac31e",
+      "status": "A"
+    },
+    "docs/CONTEST_STATUS.md": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "1172557e887b986d9d722279bc2539a55c6a97f4",
+      "newBlob": "b07103c88f8bee8faa796cc30734038605af3fce",
+      "status": "M"
+    },
+    "docs/STANDARD_CONSTRUCTION_REPAIR_20261007.md": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "a51e1b0900580b2f14bd6eca7ed9fd32379162ee",
+      "status": "A"
+    },
+    "tests/construction-tools-release.test.mjs": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "6aaa2f702035d56a141d8e22082f5b78dbc85ccc",
+      "status": "A"
+    },
+    "tests/context-tools-release.test.mjs": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "5a29e2e378fe40c9157b9a6bc1df50cdabfa8c19",
+      "newBlob": "0635b96ed9861b7130200ee39a46d0f0bf43979c",
+      "status": "M"
+    },
+    "tools/model_construction/README.md": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "69f7900f92bee97dfa8d3b66001276c69ec1f9a5",
+      "status": "A"
+    },
+    "tools/model_construction/assemble_test_runtime.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "0f1549ea64d4df3aeb7d189b8386a7ffbb6bca93",
+      "status": "A"
+    },
+    "tools/model_construction/construction_fence.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "6f00159558709482cee93eca323c94c7663dbb4b",
+      "status": "A"
+    },
+    "tools/model_construction/construction_health.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "39e3c75e0be7288d87f18a2e48ef7dd9f41df36b",
+      "status": "A"
+    },
+    "tools/model_construction/construction_manifest.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "924ae02125e915d784cc4a6b892c8e0dc910a92d",
+      "status": "A"
+    },
+    "tools/model_construction/construction_payload.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "396736815efe8322a3846f76352546e81332f0f5",
+      "status": "A"
+    },
+    "tools/model_construction/construction_policy.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "52438f2ad153770f40666def51950bac3082db4b",
+      "status": "A"
+    },
+    "tools/model_construction/construction_spend_patch.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "5c83a272b5b2207fbdf8ad510773b909e26c3499",
+      "status": "A"
+    },
+    "tools/model_construction/gateway_patch.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "39095208cd1e90c03fc35f81f93a63535a0930b0",
+      "status": "A"
+    },
+    "tools/model_construction/install_construction.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "fb6c4527b08a8b4fbb938d9bfa55117310de7119",
+      "status": "A"
+    },
+    "tools/model_construction/offline_construction.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "40ceaf27b5d1721b5d392478d2c4cb11880b48c5",
+      "status": "A"
+    },
+    "tools/model_construction/offline_legacy_standard.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "cc91dc779cfbefc61df5279a5d9bd66daebf8b98",
+      "status": "A"
+    },
+    "tools/model_construction/oracle_construction_launch.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "08157169dc2c1dacf212c294e72179b4f7647ed0",
+      "status": "A"
+    },
+    "tools/model_construction/phased_controller.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "8d7079c908411d67dc3f11bf65ca69b1d5a419bb",
+      "status": "A"
+    },
+    "tools/model_construction/runtime_controller.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "c4124241ff5c5937f9f69728c1db6a012c6877d1",
+      "status": "A"
+    },
+    "tools/model_construction/runtime_patch.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "e32d5a2bfadb625a8c89f37f8c00015e64ae93df",
+      "status": "A"
+    },
+    "tools/model_construction/test_construction_fence.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "097b2816dc819f90d3cdcd85bdd11bbf12f01ee6",
+      "status": "A"
+    },
+    "tools/model_construction/test_construction_gate_contract.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "5af55078648576bda2057eefad7e8dbc7f801be0",
+      "status": "A"
+    },
+    "tools/model_construction/test_construction_health.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "2ef01c6d8f071708bc890a05d43a34bdff88a7f4",
+      "status": "A"
+    },
+    "tools/model_construction/test_construction_launcher.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "4c3f342d54994a456c0f4e3aa11b5c25c2f0eede",
+      "status": "A"
+    },
+    "tools/model_construction/test_construction_manifest.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "3403687f4afd54e8fb82a5a2daa8cce683c53cb9",
+      "status": "A"
+    },
+    "tools/model_construction/test_construction_payload.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "7f8a57898b14e0545fa002c4da8b75815d303e84",
+      "status": "A"
+    },
+    "tools/model_construction/test_construction_policy.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "e281ece6274fa8e3f2a187e93ab0b046634ff5e3",
+      "status": "A"
+    },
+    "tools/model_construction/test_construction_spend_patch.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "f92d0116d0d16a86553fd6e9d6695c98753ff451",
+      "status": "A"
+    },
+    "tools/model_construction/test_construction_transaction.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "77d084689a9673650b30b773ccd119b02c26833e",
+      "status": "A"
+    },
+    "tools/model_construction/test_gateway_patch.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "35b73cf8f4a030bca34af21e064d0ddbf51b74ea",
+      "status": "A"
+    },
+    "tools/model_construction/test_native_pipeline.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "a5359423b86582f5e32c0d0e7ed37c2d160d7a2b",
+      "status": "A"
+    },
+    "tools/model_construction/test_offline_construction.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "3d7a01658353b0d147d7a4217e5961f735c8cd18",
+      "status": "A"
+    },
+    "tools/model_construction/test_offline_legacy_standard.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "87f8fa6cefed78a901d7dac94ec6627162cfb727",
+      "status": "A"
+    },
+    "tools/model_construction/test_phased_controller.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "e9966721c4fd15f5cd9e9c7410c56846212b3ae9",
+      "status": "A"
+    },
+    "tools/model_construction/test_runtime_controller.py": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "144fa37e8e30e3a1901c48e57b128d4408549a7d",
+      "status": "A"
+    }
+  }
+}

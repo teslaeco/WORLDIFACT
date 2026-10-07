@@ -10,6 +10,11 @@ import {
   MARKER_PATH, MARKER_CONTENT, PAYLOAD_BLOBS, REVIEWED_PATHS,
   blob, sha256, guardedWorkflow, parseRawChanges, selectContextToolsRelease,
 } from '../scripts/select-context-tools-release.mjs'
+import {
+  BASE_COMMIT as CONSTRUCTION_BASE, CONFIG_PATH as CONSTRUCTION_CONFIG,
+  CONFIG_BLOB as CONSTRUCTION_CONFIG_BLOB, SCRIPT_PATH as CONSTRUCTION_SCRIPT,
+  guardedWorkflow as constructionWorkflow,
+} from '../scripts/select-construction-tools-release.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const head = '1'.repeat(40), other = '2'.repeat(40), zero = '0'.repeat(40)
@@ -26,6 +31,12 @@ assert.equal(workflowParts[0].split(guardedHeader).length, 2, 'Exactly one guard
 const baseWorkflow = workflowParts[0].replace(guardedHeader, `jobs:\n  deploy:\n    if: ${originalIf}\n`)
 assert.equal(blob(baseWorkflow), BASE_WORKFLOW_BLOB, 'Inverse workflow fixture must equal the immutable UI base blob.')
 const expectedWorkflow = guardedWorkflow(baseWorkflow, sha256(scriptBytes))
+const constructionEnabled = currentWorkflow.includes('node scripts/select-construction-tools-release.mjs')
+const constructionConfigBytes = readFileSync(join(root, CONSTRUCTION_CONFIG))
+const constructionConfig = JSON.parse(constructionConfigBytes)
+const currentExpectedWorkflow = constructionEnabled
+  ? constructionWorkflow(expectedWorkflow, sha256(readFileSync(join(root, CONSTRUCTION_SCRIPT))), sha256(constructionConfigBytes))
+  : expectedWorkflow
 // Immutable workflow blobs from actual UI base 0934d82, excluding the one reviewed transform.
 const LEGACY_WORKFLOW_BLOBS = Object.freeze({
   ".github/workflows/ai-shop-integration-check.yml": "e7a70d1093bde218989b0a7ffc1a2941b6dfc2a6",
@@ -113,8 +124,18 @@ test('the complete reviewed tools squash skips deploy and has exactly 26 bound f
   assert.equal(Object.keys(PAYLOAD_BLOBS).length, 22)
   assert.equal(blob(baseWorkflow), BASE_WORKFLOW_BLOB)
   assert.equal(readFileSync(join(root, MARKER_PATH), 'utf8'), MARKER_CONTENT)
-  assert.equal(readFileSync(join(root, WORKFLOW_PATH), 'utf8'), expectedWorkflow)
-  assert.equal(blob(readFileSync(join(root, TEST_PATH))), TEST_BLOB)
+  assert.equal(readFileSync(join(root, WORKFLOW_PATH), 'utf8'), currentExpectedWorkflow)
+  // The historical guard and its TEST_BLOB remain immutable. This reviewed
+  // harness adaptation is instead pinned by the new exact construction batch.
+  assert.equal(constructionConfig.baseCommit, CONSTRUCTION_BASE)
+  if (constructionEnabled) {
+    assert.equal(constructionConfig.status, 'FROZEN')
+    assert.equal(blob(constructionConfigBytes), CONSTRUCTION_CONFIG_BLOB)
+    assert.equal(constructionConfig.payload[TEST_PATH].oldBlob, TEST_BLOB)
+    assert.equal(constructionConfig.payload[TEST_PATH].newBlob, blob(readFileSync(join(root, TEST_PATH))))
+  } else {
+    assert.equal(constructionConfig.status, 'UNFROZEN_REFUSE')
+  }
   for (const [path, expected] of Object.entries(PAYLOAD_BLOBS)) assert.equal(blob(readFileSync(join(root, path))), expected, path)
 })
 test('exact-head workflow reruns and explicit manual dispatch cannot republish the tools merge', () => {

@@ -988,3 +988,26 @@ At this checkpoint the runtime package is under final offline review and has not
 The ordinary Shop now has an explicit funding selector for the same owner-approved USD 4 aggregate test pool. Ordinary funding remains the default. This is temporary test access, not permanent replenishment of the ordinary provider budget. Existing test receipts, immutable commitments, the original expiry, historical grants, account balances, invoices and Stripe settings are preserved.
 
 Account-bound versioned reads and submissions prevent cookie/account changes or mixed deployments from admitting work to a different account. Existing legacy test receipts remain recoverable by the same GETs. Regression tests cover account swaps, legacy receipts, immutable pool state, separate ordinary/test receipt storage, draft preservation, reload/recovery/export and repeated starts. The prepared integration initially passed 141 focused tests plus lint and TypeScript; final aggregate offline, exact-head CI and protected deployment results belong to its release record. Native browser checks remain enabled in hosted CI, not rerun through the recorded blocked local browser route. No paid generation is performed by the engineering validation.
+
+## IN VERIFICATION — bounded STANDARD construction (7 October 2026)
+
+A reproduced completion-policy defect allowed candidate-recovery continuation
+when the preceding CLI had built no candidate. The prospective repair replaces
+that STANDARD planning control with typed complete-scene output, host-run
+existing MPC2/Blender tools, actual current-image assessment, one optionally
+funded sandboxed correction and verified export. Rejected or incomplete work
+cannot return a successful new-model outcome.
+
+The original Gateway, USD 1.75 ceiling, immutable pricing terms and historical
+ledger are preserved. Exact request bytes, mandatory future capacity and request
+slots are bound to the original atomic reservation; completed usage remains
+separate from invoice accounting. No paid provider request or customer-point
+change has been made for engineering validation.
+
+Native Blender integration has passed acceptance, rejection and real correction
+with new revision images using scripted provider responses. This does not prove
+live Astra quality or an installed Oracle change. The reviewed maintenance
+transaction, genuine isolated Podman gates, hosted checks and final activation
+receipt remain release requirements. See
+[the construction repair record](STANDARD_CONSTRUCTION_REPAIR_20261007.md) and
+[the package](../tools/model_construction/README.md).
