@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { createPreviewFetch, installPreviewGuards, PREVIEW_CSP, PREVIEW_LABEL, PREVIEW_WORKER_NAME, PREVIEW_BRANCH } from '../scripts/build-shop-ui-preview.mjs'
+import { createPreviewFetch, installPreviewGuards, PREVIEW_CSP, PREVIEW_LABEL, PREVIEW_WORKER_NAME, PREVIEW_BRANCH, PREVIEW_ASSET_PATHS } from '../scripts/build-shop-ui-preview.mjs'
 
 const fixture = createPreviewFetch()
 test('static preview has a different Worker identity and no runtime, secrets or storage bindings', async () => {
@@ -49,10 +49,10 @@ test('preview guards prevent forms, account navigation and reference-file select
   assert.equal(prevented, 2); assert.equal(stopped, 2)
   assert.match(notice.textContent, /No request was sent/)
 })
-test('public preview disclosure and CSP prohibit connections, forms, frames and service workers', () => {
+test('public preview disclosure and CSP permit only same-origin public assets and Blobs, with forms, frames and workers blocked', () => {
   assert.match(PREVIEW_LABEL, /sample account and balance/)
   assert.match(PREVIEW_LABEL, /no generation or payments/)
-  for (const restriction of ["connect-src 'none'", "form-action 'none'", "frame-src 'none'", "worker-src 'none'", "base-uri 'none'"]) assert.ok(PREVIEW_CSP.includes(restriction))
+  for (const restriction of ["form-action 'none'", "frame-src 'none'", "worker-src 'none'", "base-uri 'none'"]) assert.ok(PREVIEW_CSP.includes(restriction))
 })
 test('dedicated branch workflow reuses protected deployment access without app credentials or production config', async () => {
   const workflow = await readFile(new URL('../.github/workflows/shop-ui-preview.yml', import.meta.url), 'utf8')
@@ -64,7 +64,7 @@ test('dedicated branch workflow reuses protected deployment access without app c
   assert.doesNotMatch(workflow, /wrangler deploy --config wrangler\.jsonc|versions upload|secret (put|bulk)|permissions:[\s\S]*contents: write/)
   assert.match(workflow, /Refusing non-static or production configuration/)
   assert.match(workflow, /response.status!==200/)
-  assert.match(workflow, /expectedVersion="a9a6f643-e13b-44b3-9f89-37cf77387a12"/)
+  assert.match(workflow, /expectedVersion="411bf275-7ee5-46af-aeea-5c62121cc3b0"/)
   assert.match(workflow, /refusing overwrite/)
   assert.match(workflow, /current\[0\].version_id!==expectedVersion/)
   assert.match(workflow, /response.body\?\.cancel\(\)/, 'Failed preflights discard bytes without disclosing private response details')
@@ -92,4 +92,17 @@ test('synthetic preview GETs satisfy the actual account, quote and library contr
   assert.equal(detailedUnavailable(await checkStudio(fixture), 0), null)
   const library = await listStudioLibrary('ui-preview-only', null, new AbortController().signal, fixture)
   assert.deepEqual(library.models, [])
+})
+
+test('native preview reads are limited to two exact public assets and local origin Blobs', async () => {
+  const calls = [], origin = 'https://worldifact-shop-ui-preview-20261007.xodobrox.workers.dev'
+  const fetcher = createPreviewFetch(async (url, init) => { calls.push({ url, init }); return new Response('public bytes') }, origin, PREVIEW_ASSET_PATHS)
+  for (const path of PREVIEW_ASSET_PATHS) assert.equal((await fetcher(path, { headers: { Authorization: 'must-not-forward' }, credentials: 'include' })).status, 200)
+  await fetcher(`blob:${origin}/local-object`)
+  assert.equal(calls.length, 3)
+  for (const call of calls) { assert.equal(call.init.credentials, 'omit'); assert.equal(call.init.redirect, 'error'); assert.deepEqual(call.init.headers, {}); assert.equal(call.init.method, 'GET') }
+  for (const path of ['/gallery-assets/private.glb', '/api/studio/current', '/api/health', '/api/studio/jobs/private/model', '/gallery-assets/mars-solar-landship.glb?token=private', 'https://elsewhere.example/gallery-assets/mars-solar-landship.glb', 'blob:https://elsewhere.example/private']) await fetcher(path)
+  for (const method of ['POST', 'HEAD', 'PUT', 'DELETE']) assert.equal((await fetcher(PREVIEW_ASSET_PATHS[0], { method })).status, 405)
+  assert.equal(calls.length, 3)
+  assert.match(PREVIEW_CSP, /connect-src blob: https:\/\/worldifact-shop-ui-preview-20261007\.xodobrox\.workers\.dev\/gallery-assets\/;/)
 })

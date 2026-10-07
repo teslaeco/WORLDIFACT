@@ -54,3 +54,29 @@ The copied Fix ISS simulator credits the NASA / Visualization Technology Applica
 - Public GAME derivative: SHA-256 `7f27b281103325aa6f2aa58fcc396be7cf319bc683a91c4798ca374d592d70c3`, 1,291,820 bytes after decompression. Source mesh shapes/instances are retained while embedded image textures are replaced by lightweight representative PBR colors for bounded mobile delivery.
 - Runtime transport files: `public/world-assets/owner-landship/part-00.b64` through `part-05.b64`; see the directory README for limits and provenance.
 - The landship is owner-provided GAME geometry beside the existing photovoltaic explorer. WORLDIFACT may move/steer the whole scene instance as a GAME vehicle and place the avatar at a runtime seat/exit point; this does **not** claim that the source contains a verified vehicle rig, wheel animation, physics model or original driving animation. No engineering approval, manufacturing readiness or supplier approval is claimed.
+
+## Public AI Shop example gallery
+
+The gallery displays two already-public WORLDIFACT project assets from main revision
+`962309ab650fc7cfd93106544bb7d6dd52d0baf5`. It does not publish account-library models.
+Existing owner-provided project-use permissions and asset exclusions above remain
+unchanged; neither model is newly licensed under the source-code MIT license.
+
+- `gallery-assets/mars-solar-landship.glb` is the exact reviewed public GAME
+  material-optimized derivative reconstructed from
+  `public/world-assets/owner-landship/part-00.b64` through `part-05.b64`.
+  SHA-256: `7f27b281103325aa6f2aa58fcc396be7cf319bc683a91c4798ca374d592d70c3`;
+  1,291,820 bytes. No geometry or material changes are made for the gallery.
+- `gallery-assets/led-polyhedron.glb` repacks the existing
+  `public/world-assets/polyhedron-led.gltf` into a binary GLB container.
+  Source SHA-256: `b9fcc0315079e268efbb44465afb285b49e8d858aeaecb2cf96c1bcb0db2ade3`.
+  Output SHA-256: `8f1c2e923d654a03159baf36b711abdb8f94d04ae6843634bd8fe343750e2681`;
+  185,860 bytes. Binary geometry, meshes, transforms, scenes and LED-ready material
+  definitions are unchanged. The original textured FORGE source remains separate.
+
+`scripts/prepare-public-gallery.mjs` verifies the pinned public input fingerprints
+before rebuilding these two generated assets. The isolated preview copies only
+these allowlisted models. Both remain unreviewed GAME examples, without
+manufacturing, rigging or engineering approval. The software fallback truthfully
+labels sampled, untextured geometry. Hearts are local browser preferences and
+are not public popularity statistics or synchronized account likes.
