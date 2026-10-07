@@ -54,9 +54,13 @@ review of the target environment, not blind clearing or changing its settings.
 
 The October 5 cancelled-cleanup consent is historical and does not authorize
 this upgrade. The new invocation defaults to refusal. A separately approved
-`--allow-cancelled-cleanup` may bind at most one exact cancelled job for the
-current maintenance event, without modifying its rows or artifacts; identity
-changes and all other active-resource checks still refuse.
+`--allow-cancelled-cleanup --expected-cancelled-job <approved-uuid>` requires
+the caller-approved canonical lowercase UUID before the first database gate.
+Both arguments require `--approve-service-maintenance`; the cleanup flag alone
+is refused before connection. The exact singleton must be present at each gate.
+Missing, different or multiple cancellations and all other active-resource checks
+still refuse. This does not modify any job rows or artifacts. Never substitute
+another UUID or reuse historical cleanup consent.
 
 After the worker is proved stopped, both a genuine generic CLI/MCP/Blender
 round trip and the new selective STANDARD round trip must pass in a fresh

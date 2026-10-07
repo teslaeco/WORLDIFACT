@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import signal
 import sqlite3
@@ -402,14 +403,20 @@ class Operations(install_completion.Operations):
         self.context_health(revision=context_patch.OLD_REVISION)
 
 
-def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False):
+def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None):
     if approved is not True:
         raise Refused('maintenance_approval_required')
     if type(allow_cancelled_cleanup) is not bool:
         raise Refused('cancelled_consent_invalid')
+    if (allow_cancelled_cleanup and (not isinstance(expected_cancelled_job, str)
+            or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', expected_cancelled_job))
+            or not allow_cancelled_cleanup and expected_cancelled_job is not None):
+        raise Refused('cancelled_identity_required')
     check_container_environment()
     operations.allow_cancelled_cleanup = allow_cancelled_cleanup
-    operations.cancelled_job_ids = None  # Bound privately by the first DB gate.
+    # Bind owner-approved identity before the first gate, not whichever row is
+    # present on arrival. Every later/frozen/rollback gate keeps this tuple.
+    operations.cancelled_job_ids = (expected_cancelled_job,) if allow_cancelled_cleanup else ()
     source, workspace = base.safe_path(source).absolute(), base.safe_path(workspace).absolute()
     if workspace.exists() or workspace == source or source in workspace.parents:
         raise Refused('unsafe_backup')
@@ -552,9 +559,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--approve-service-maintenance', action='store_true')
     parser.add_argument('--allow-cancelled-cleanup', action='store_true')
+    parser.add_argument('--expected-cancelled-job')
     args = parser.parse_args(argv)
     if args.allow_cancelled_cleanup and not args.approve_service_maintenance:
         parser.error('--allow-cancelled-cleanup also requires --approve-service-maintenance')
+    if (args.allow_cancelled_cleanup and (not isinstance(args.expected_cancelled_job, str)
+            or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', args.expected_cancelled_job))
+            or not args.allow_cancelled_cleanup and args.expected_cancelled_job is not None):
+        parser.error('cleanup requires the exact approved --expected-cancelled-job')
     if not args.approve_service_maintenance:
         print('PLAN ONLY. No source reads, service signals, installation, exports or generation.')
         return
@@ -574,7 +586,8 @@ def main(argv=None):
         parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         workspace = parent / ('standard-context-upgrade-' + time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '-' + uuid.uuid4().hex[:8])
         value = install(source, workspace, Operations(source, home), approved=True,
-                        allow_cancelled_cleanup=args.allow_cancelled_cleanup)
+                        allow_cancelled_cleanup=args.allow_cancelled_cleanup,
+                        expected_cancelled_job=args.expected_cancelled_job)
         print(json.dumps(value, sort_keys=True))
         return value
 

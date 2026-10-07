@@ -144,8 +144,10 @@ candidate inspector and its nonblocking FIFO refusal, mixed immutable-source
 assembly, source/receipt pins, transactional rollback, activation uncertainty,
 unchanged financial-history fixtures and fail-closed Podman environment scope.
 Independent read-only review confirmed the transaction and inspection fixes.
-The final launcher SHA-256 is
+The initial reviewed launcher SHA-256 was
 `b9b97c31efdf378f2feae4c1dc5ee969eb05e3f8016fc7e2a18529767cfd80ed`.
+The exact-identity follow-up below supersedes that launcher for cancelled-job
+maintenance.
 
 The current-main integration separately passes 1,892 runnable application tests,
 lint (existing warnings), TypeScript, local DEMO HTTP, the production build hooks
@@ -154,3 +156,30 @@ with metrics disabled. The two known-blocked local native-browser cases remain
 for hosted CI. No application source or configuration is changed by this package.
 Hosted review and genuine target CLI/MCP/Blender verification still remain required;
 no source-only result proves successful paid generation, preview or account save.
+
+
+## Exact cancelled-job consent follow-up
+
+The initial default-refusal attempt did not confirm installation. Its read-only
+follow-up identified a single already-cancelled row; this did not itself authorize
+interrupting residual work. The earlier cleanup flag bound whichever single row
+was found at first arrival, which was insufficient for approval naming one job.
+
+The supported launcher and installer now require
+`--allow-cancelled-cleanup --expected-cancelled-job <approved-uuid>` together with
+`--approve-service-maintenance`. The canonical lowercase UUID is validated before
+connection or target reads and reaches the existing fence as an exact singleton
+before its first DB gate. Missing, replaced, additional, unknown or active jobs
+refuse. Frozen, guardian, final-admission and rollback checks retain the same
+identity. Inspection mode refuses either cleanup argument. There is no monkeypatch,
+job mutation, accounting change or new paid test. The private actual identifier is
+supplied only in the owner's command, never embedded in public source or tests.
+
+The 83 local package tests pass, including invalid/missing flags, exact-ID forwarding,
+missing/different/multiple rows and identity replacement after the initial gate.
+The unchanged fixture-only app and inherited package CI must pass on the new exact
+head before issuing a new pinned maintenance command. A successful source test is
+not installation evidence, finished output, preview or account-gallery acceptance.
+
+The exact-identity launcher SHA-256 is
+`8f6dfbf8dcf6ea1cd34a0280693c3a3fe6b579bcbe6ff765c82ffc2c64a493c5`.

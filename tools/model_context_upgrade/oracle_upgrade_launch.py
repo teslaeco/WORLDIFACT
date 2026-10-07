@@ -162,7 +162,7 @@ def connection(home=None):
 FILES.update({
     'context_policy.py': ('tools/model_context_upgrade/context_policy.py', '4b8189fe9ae22eb074e48db593bdbead55545bf3'),
     'upgrade_patch.py': ('tools/model_context_upgrade/upgrade_patch.py', '71c4cac9891e50257e92b05f9336ce853ba8cdfc'),
-    'install_upgrade.py': ('tools/model_context_upgrade/install_upgrade.py', 'a52be0c3f2136bfb612159d902e3cdc00609b631'),
+    'install_upgrade.py': ('tools/model_context_upgrade/install_upgrade.py', '843103b4a9fd6d239be076ebe5d89843c8d5140e'),
     'upgrade_fence.py': ('tools/model_context_upgrade/upgrade_fence.py', 'd5c810448d8d07999aa7c2baf703a4bc4994e3a2'),
     'verification_scope.py': ('tools/model_context/verification_scope.py', '677c577db69ece8d9757fa81bb62633bc134c17d'),
     'offline_standard.py': ('tools/model_context_upgrade/offline_standard.py', '726327ad50a994232786333a7b428ff1e3b1e7f1'),
@@ -200,6 +200,8 @@ failed={'phase':'WORLDIFACT_STANDARD_CONTEXT_UPGRADE_NOT_CONFIRMED','revision':R
 try:
     if APPROVED is not True:raise ValueError('approval absent')
     if type(ALLOW_CANCELLED_CLEANUP) is not bool:raise ValueError('invalid cleanup consent')
+    if (ALLOW_CANCELLED_CLEANUP and (not isinstance(EXPECTED_CANCELLED_JOB,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',EXPECTED_CANCELLED_JOB))
+            or not ALLOW_CANCELLED_CLEANUP and EXPECTED_CANCELLED_JOB is not None):raise ValueError('invalid cleanup identity')
     payload=json.loads(base64.b64decode(PAYLOAD,validate=True))
     if not isinstance(payload,dict) or set(payload)!=set(EXPECTED):raise ValueError('invalid package')
     files={}
@@ -216,7 +218,7 @@ try:
         with os.fdopen(fd,'wb') as stream:stream.write(raw);stream.flush();os.fsync(stream.fileno())
     with tempfile.TemporaryFile() as output:
         process=subprocess.Popen([sys.executable,'-B',str(folder/'install_upgrade.py'),'--approve-service-maintenance'] +
-            (['--allow-cancelled-cleanup'] if ALLOW_CANCELLED_CLEANUP else []),
+            (['--allow-cancelled-cleanup','--expected-cancelled-job',EXPECTED_CANCELLED_JOB] if ALLOW_CANCELLED_CLEANUP else []),
             cwd=folder,stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT)
         def relay(number,_frame):
             if process.poll() is None:process.send_signal(number)
@@ -245,11 +247,14 @@ except (Exception,KeyboardInterrupt):
     print(json.dumps(failed,sort_keys=True),flush=True);raise SystemExit(1)
 '''
 
-def script(payload, approved=False, allow_cancelled_cleanup=False):
+def script(payload, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None):
     if approved is not True:raise LaunchError('Explicit maintenance approval is required.')
     if type(allow_cancelled_cleanup) is not bool:raise LaunchError('Explicit cleanup consent must be boolean.')
+    if (allow_cancelled_cleanup and (not isinstance(expected_cancelled_job,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',expected_cancelled_job))
+            or not allow_cancelled_cleanup and expected_cancelled_job is not None):
+        raise LaunchError('Cleanup requires the exact approved cancelled job identity; no connection made.')
     return ('EXPECTED='+repr({name:item[1] for name,item in FILES.items()})+'\nPAYLOAD='+repr(payload)
-            +'\nAPPROVED=True\nALLOW_CANCELLED_CLEANUP='+repr(allow_cancelled_cleanup)+'\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
+            +'\nAPPROVED=True\nALLOW_CANCELLED_CLEANUP='+repr(allow_cancelled_cleanup)+'\nEXPECTED_CANCELLED_JOB='+repr(expected_cancelled_job)+'\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
             +'\nOUTPUT_LIMIT='+repr(OUTPUT_LIMIT)+'\n'+REMOTE)
 
 def invoke(ssh, program):
@@ -350,9 +355,13 @@ def main(argv=None):
     modes.add_argument('--approve-service-maintenance',action='store_true')
     modes.add_argument('--inspect-approved-candidate',action='store_true')
     parser.add_argument('--allow-cancelled-cleanup',action='store_true')
+    parser.add_argument('--expected-cancelled-job')
     args=parser.parse_args(argv)
     if args.allow_cancelled_cleanup and not args.approve_service_maintenance:
         parser.error('--allow-cancelled-cleanup requires maintenance approval')
+    if (args.allow_cancelled_cleanup and (not isinstance(args.expected_cancelled_job,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',args.expected_cancelled_job))
+            or not args.allow_cancelled_cleanup and args.expected_cancelled_job is not None):
+        parser.error('cleanup requires the exact approved cancelled job identity')
     if not args.approve_service_maintenance and not args.inspect_approved_candidate:
         print('PLAN ONLY. No download, OCI lookup, SSH, installation, service signal or model request.');return
     commit=source_commit(args.source_commit)
@@ -363,7 +372,7 @@ def main(argv=None):
         return value
     print('Verifying the exact reviewed maintenance package.',flush=True)
     payload=package(commit)
-    program=script(payload,approved=True,allow_cancelled_cleanup=args.allow_cancelled_cleanup)
+    program=script(payload,approved=True,allow_cancelled_cleanup=args.allow_cancelled_cleanup,expected_cancelled_job=args.expected_cancelled_job)
     print('Running bounded STANDARD helper upgrade. The existing tunnel remains unchanged; no paid model request.',flush=True)
     if args.allow_cancelled_cleanup:
         print('Explicit consent: residual work of the single bound cancelled job may be interrupted. Its history and files are not rewritten.',flush=True)

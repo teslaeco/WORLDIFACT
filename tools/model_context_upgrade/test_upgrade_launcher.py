@@ -17,6 +17,7 @@ import oracle_upgrade_launch as launcher
 
 ROOT = Path(__file__).resolve().parents[2]
 COMMIT = 'a' * 40
+CANCELLED = '00000000-0000-4000-8000-000000000001'
 
 
 def success():
@@ -47,17 +48,37 @@ class LauncherTests(unittest.TestCase):
         for invalid in (1,'true',None):
             with self.assertRaises(launcher.LaunchError): launcher.script('inert',approved=True,allow_cancelled_cleanup=invalid)
         for enabled in (False,True):
-            program=launcher.script('inert',approved=True,allow_cancelled_cleanup=enabled)
+            program=launcher.script('inert',approved=True,allow_cancelled_cleanup=enabled,expected_cancelled_job=CANCELLED if enabled else None)
             self.assertIn('ALLOW_CANCELLED_CLEANUP='+repr(enabled),program)
-            self.assertIn("(['--allow-cancelled-cleanup'] if ALLOW_CANCELLED_CLEANUP else [])",program)
+            self.assertIn("(['--allow-cancelled-cleanup','--expected-cancelled-job',EXPECTED_CANCELLED_JOB] if ALLOW_CANCELLED_CLEANUP else [])",program)
+            self.assertIn('EXPECTED_CANCELLED_JOB='+repr(CANCELLED if enabled else None),program)
 
     def test_cli_threads_explicit_consent_into_remote_invocation(self):
         for enabled in (False,True):
             with patch.object(launcher,'package',return_value='inert'),patch.object(launcher,'connection',return_value=['INERT']),patch.object(launcher,'invoke',return_value=success()) as invoke:
                 args=['--source-commit',COMMIT,'--approve-service-maintenance']
-                if enabled: args.append('--allow-cancelled-cleanup')
+                if enabled: args += ['--allow-cancelled-cleanup','--expected-cancelled-job',CANCELLED]
                 launcher.main(args)
             self.assertIn('ALLOW_CANCELLED_CLEANUP='+repr(enabled),invoke.call_args.args[1])
+            self.assertIn('EXPECTED_CANCELLED_JOB='+repr(CANCELLED if enabled else None),invoke.call_args.args[1])
+    def test_cleanup_identity_pair_refuses_before_download_connection_or_target_reads(self):
+        pairs = [(True, None), (True, ''), (True, 'not-a-job'), (True, CANCELLED.upper().replace('0', 'A', 1)),
+                 (True, CANCELLED + '\n'), (True, 42), (False, CANCELLED)]
+        for enabled, identity in pairs:
+            with self.subTest(enabled=enabled, identity=identity):
+                with self.assertRaises(launcher.LaunchError):
+                    launcher.script('inert', approved=True, allow_cancelled_cleanup=enabled, expected_cancelled_job=identity)
+        cases = [ ['--approve-service-maintenance','--allow-cancelled-cleanup'],
+                  ['--approve-service-maintenance','--expected-cancelled-job',CANCELLED],
+                  ['--inspect-approved-candidate','--expected-cancelled-job',CANCELLED],
+                  ['--expected-cancelled-job',CANCELLED],
+                  ['--approve-service-maintenance','--allow-cancelled-cleanup','--expected-cancelled-job','not-a-job'] ]
+        with patch.object(launcher, 'package', side_effect=AssertionError('download')), \
+             patch.object(launcher, 'connection', side_effect=AssertionError('connection')), \
+             patch.object(launcher, 'candidate_package', side_effect=AssertionError('candidate download')):
+            for args in cases:
+                with self.subTest(args=args), self.assertRaises(SystemExit): launcher.main(args)
+
     def test_package_preserves_full_exact_file_set_and_refuses_byte_drift(self):
         values, manifest = self.fixtures()
         with patch.object(launcher, 'FILES', manifest):

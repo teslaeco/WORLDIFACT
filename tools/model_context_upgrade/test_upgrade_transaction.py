@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+CANCELLED = '00000000-0000-4000-8000-000000000001'
 from upgrade_test_support import ANCESTOR, bootstrap
 bootstrap()
 import install_upgrade as installer
@@ -112,6 +113,9 @@ class Operations:
         assert installer.policy.maintenance_active(self.source) is maintenance
         if self.failure == 'health' or self.failure == 'final-health' and not maintenance:
             raise installer.Refused('context_health_unverified')
+        if self.failure == 'replace-cancelled':
+            with sqlite3.connect(self.source / 'state/jobs.sqlite') as db:
+                db.execute("UPDATE jobs SET id='00000000-0000-4000-8000-000000000002' WHERE state='cancelled'")
         if self.failure == 'new-cancelled':
             with sqlite3.connect(self.source / 'state/jobs.sqlite') as db:
                 db.execute("INSERT INTO jobs VALUES ('00000000-0000-4000-8000-000000000002', 'cancelled')")
@@ -237,8 +241,53 @@ class UpgradeTransactions(unittest.TestCase):
         with self.assertRaises(upgrade_fence.FenceRefused): self.install()
         self.assertEqual(tree(self.source), before)
         self.backup = self.root / 'explicit-backup'
-        self.assertTrue(self.install(allow_cancelled_cleanup=True)['activation_committed'])
+        self.assertTrue(self.install(allow_cancelled_cleanup=True, expected_cancelled_job=CANCELLED)['activation_committed'])
         self.assertEqual(self.operations.cancelled_job_ids, ('00000000-0000-4000-8000-000000000001',))
+    def test_cleanup_requires_exact_approved_identity_before_target_reads(self):
+        for enabled, identity in ((True, None), (True, ''), (True, 'not-a-job'),
+                                  (True, CANCELLED+'\n'), (True, 42), (False, CANCELLED)):
+            with self.subTest(enabled=enabled, identity=identity):
+                with patch.object(installer, 'check_container_environment', side_effect=AssertionError('target read')):
+                    with self.assertRaisesRegex(installer.Refused, 'cancelled_identity_required'):
+                        self.install(allow_cancelled_cleanup=enabled, expected_cancelled_job=identity)
+                self.assertFalse(self.backup.exists())
+                self.assertEqual(tree(self.source), self.before)
+
+    def test_missing_different_or_multiple_cancelled_jobs_refuse_before_maintenance(self):
+        other = '00000000-0000-4000-8000-000000000002'
+        for index, identities in enumerate(((), (other,), (CANCELLED, other))):
+            with self.subTest(identities=identities):
+                with sqlite3.connect(self.source / 'state/jobs.sqlite') as db:
+                    db.execute("DELETE FROM jobs WHERE state='cancelled'")
+                    db.executemany("INSERT INTO jobs VALUES (?, 'cancelled')", [(value,) for value in identities])
+                before = tree(self.source)
+                self.backup = self.root / ('wrong-identity-' + str(index))
+                with self.assertRaisesRegex(upgrade_fence.FenceRefused, 'Only one|identity changed'):
+                    self.install(allow_cancelled_cleanup=True, expected_cancelled_job=CANCELLED)
+                self.assertEqual(tree(self.source), before)
+                self.assertNotIn('synthetic-gates', self.operations.events)
+                self.assertNotIn('start', self.operations.events)
+                self.assertFalse((self.source / installer.policy.MAINTENANCE).exists())
+
+    def test_installer_cli_identity_pair_refuses_before_home_or_lock(self):
+        cases = [['--approve-service-maintenance','--allow-cancelled-cleanup'],
+                 ['--approve-service-maintenance','--expected-cancelled-job',CANCELLED],
+                 ['--expected-cancelled-job',CANCELLED],
+                 ['--approve-service-maintenance','--allow-cancelled-cleanup','--expected-cancelled-job','not-a-job']]
+        with patch.object(installer.Path, 'home', side_effect=AssertionError('target home')):
+            for args in cases:
+                with self.subTest(args=args), self.assertRaises(SystemExit): installer.main(args)
+
+    def test_identity_changed_after_initial_gate_cannot_activate_or_rebind_during_rollback(self):
+        with sqlite3.connect(self.source / 'state/jobs.sqlite') as db:
+            db.execute("INSERT INTO jobs VALUES (?, 'cancelled')", (CANCELLED,))
+        with self.assertRaisesRegex(installer.Refused, 'recovery_required'):
+            self.install('replace-cancelled', allow_cancelled_cleanup=True, expected_cancelled_job=CANCELLED)
+        self.assertEqual(self.operations.cancelled_job_ids, (CANCELLED,))
+        self.assertNotIn('activation-latched', self.operations.events)
+        self.assertTrue((self.source / installer.policy.MAINTENANCE).exists())
+        self.assertEqual(self.operations.events.count('start'), 1)
+
     def test_unknown_nonterminal_and_null_history_refused(self):
         for state in ('queued','generating','unknown',None):
             with self.subTest(state=state):
@@ -246,7 +295,7 @@ class UpgradeTransactions(unittest.TestCase):
                     db.execute('UPDATE jobs SET state=?', (state,))
                 self.backup = self.root / ('blocked-' + str(state))
                 before = tree(self.source)
-                with self.assertRaises(upgrade_fence.FenceRefused): self.install(allow_cancelled_cleanup=True)
+                with self.assertRaises(upgrade_fence.FenceRefused): self.install(allow_cancelled_cleanup=True, expected_cancelled_job=CANCELLED)
                 self.assertEqual(tree(self.source), before)
     def test_source_and_receipt_drift_never_overwritten_as_known_original(self):
         for failure in ('drift', 'receipt-drift', 'mode-drift'):
