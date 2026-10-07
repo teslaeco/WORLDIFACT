@@ -137,7 +137,7 @@ test('actual mode-selection shell uses the explicit repair config while retainin
     if (live) await writeFile(marker, '')
     else await rm(marker, { force: true })
     const output = join(directory, 'output'); await writeFile(output, '')
-    const result = spawnSync('bash', ['-euo', 'pipefail', '-c', run.replaceAll('${{ steps.billing_scope.outputs.compatible_mcc_rollback }}', compatible)], {
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-euo', 'pipefail', '-c', run.replaceAll('${{ steps.billing_scope.outputs.compatible_mcc_rollback }}', compatible)], {
       cwd: directory, encoding: 'utf8', env: { PATH: process.env.PATH, GITHUB_OUTPUT: output, OWNER_RESERVE_ADJUSTMENT: repair }, timeout: 15000,
     })
     assert.equal(result.status, 0, result.stderr)
@@ -164,7 +164,7 @@ test('selector and config CLIs reject invalid evidence, mismatched modes and cre
   for (const value of cases) {
     const data = { parent: BASE, changes, marker: CONTENT, tree, parents: `${head} ${BASE}\n`, ...value }
     await writeFile(join(directory, 'git'), `#!${process.execPath}\nconst data = ${JSON.stringify(data)}; const args = process.argv.slice(3);\nif (process.env.CLOUDFLARE_API_TOKEN || process.env.STRIPE_SECRET_KEY) process.exit(19);\nlet result;\nif (args[0] === 'rev-parse') result = (args.at(-1) === 'HEAD^{commit}' ? '${head}' : data.parent) + '\\n';\nelse if (args[0] === 'diff') result = data.changes.map(({status, path}) => status + '\\0' + path + '\\0').join('');\nelse if (args[0] === 'rev-list') result = data.parents;\nelse if (args[0] === 'ls-tree') result = args.length > 5 ? data.tree : '100644 blob ${blob}\\t${MARKER}\\0';\nelse if (args[0] === 'cat-file') result = data.marker;\nelse process.exit(20);\nprocess.stdout.write(result);\n`, { mode: 0o755 })
-    const result = spawnSync('bash', ['-euo', 'pipefail', '-c', '"$NODE" "$SELECTOR" >> output; touch credentials-reached'], {
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-euo', 'pipefail', '-c', '"$NODE" "$SELECTOR" >> output; touch credentials-reached'], {
       cwd: directory, encoding: 'utf8', env: { PATH: `${directory}:${process.env.PATH}`, NODE: process.execPath, SELECTOR: selector, CLOUDFLARE_API_TOKEN: 'private-fixture', STRIPE_SECRET_KEY: 'private-fixture' }, timeout: 15000,
     })
     const built = spawnSync(process.execPath, [builder, '--owner-reserve-adjustment'], {
@@ -288,7 +288,7 @@ globalThis.fetch = async (url, init) => {
   const validReceipt = JSON.stringify({ type: 'deploy', version: 1, worker_name: 'worldifact', version_id: versionId, targets: [origin] }) + '\n'
   await symlink(fileURLToPath(new URL('../scripts', import.meta.url)), join(directory, 'scripts'))
   const smoke = steps.find(step => step.includes('id: release')).match(/        run: \|\n([\s\S]*?)(?=^        env:)/m)[1].replace(/^ {10}/gm, '')
-  const run = stage => spawnSync('bash', ['-euo', 'pipefail', '-c', smoke.replaceAll('${{ steps.mode.outputs.mode }}', 'PRESERVE')], {
+  const run = stage => spawnSync('bash', ['--noprofile', '--norc', '-euo', 'pipefail', '-c', smoke.replaceAll('${{ steps.mode.outputs.mode }}', 'PRESERVE')], {
     cwd: directory, encoding: 'utf8', timeout: 15000,
     env: { PATH: `${directory}:${process.env.PATH}`, NODE_OPTIONS: `--import=${preload}`, OWNER_RESERVE_ADJUSTMENT: 'true', WRANGLER_OUTPUT_FILE_PATH: receipt, FAIL_STAGE: stage, CLOUDFLARE_API_TOKEN: 'private-fixture', STRIPE_SECRET_KEY: 'private-fixture' },
   })
