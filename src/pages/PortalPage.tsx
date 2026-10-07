@@ -21,7 +21,7 @@ export default function PortalPage() {
 
   if (app.route === '/shop') return <>
     <ShopPage />
-    <details open className="portal-generator-drawer portal-page">
+    <details className="portal-generator-drawer portal-page shop-world-disclosure">
       <summary>Create a world blueprint with GPT-6 Astra</summary>
       <PortalAstraGenerator worldId="enchanted-ai-shop" title="Enchanted AI Shop" />
     </details>
