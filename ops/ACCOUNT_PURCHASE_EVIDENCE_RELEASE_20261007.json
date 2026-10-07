@@ -1,0 +1,8 @@
+{
+  "release": "account-purchase-evidence-readonly-20261007",
+  "baseCommit": "e301b3989caf0bd2fcfe3a0e1ab65bd2b95ceb6d",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "accountPurchaseEvidence": true
+}

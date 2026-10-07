@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { setImmediate as tick } from 'node:timers/promises'
 import React from 'react'
 import ts from 'typescript'
-import { loadGenerationFunding } from '../src/lib/loadGenerationFunding.ts'
+import { fundingReadPath, loadGenerationFunding } from '../src/lib/loadGenerationFunding.ts'
 
 const pageUrl = new URL('../src/pages/GenerationFundingPage.tsx', import.meta.url), localRequire = createRequire(pageUrl)
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
@@ -35,14 +35,17 @@ async function harness(answer = () => Response.json(fixture())) {
     useState(initial) { const i = cursor++; if (!slots[i]) slots[i] = { value: initial }; return [slots[i].value, update => { const next = typeof update === 'function' ? update(slots[i].value) : update; if (!Object.is(next, slots[i].value)) { slots[i].value = next; dirty = true } }] },
     useEffect(callback, deps) { const i = cursor++, prior = slots[i]; if (!prior || deps.some((v,j) => !Object.is(v, prior.deps[j]))) { const slot = { deps, cleanup: prior?.cleanup }; slots[i] = slot; effects.push(() => { slot.cleanup?.(); slot.cleanup = callback() }) } },
   }
-  const fetcher = async (path, init) => { calls.push({ path, init }); return answer(calls.length, init) }
+  const fetcher = async (path, init) => { calls.push({ path, init }); return answer(calls.length, init, path) }
   const module = { exports: {} }
   runInNewContext(pageCode, { module, exports: module.exports, window, document, AbortController, console, Intl, Error,
-    require(id) { if (id === 'react') return react; if (id === 'react/jsx-runtime') return localRequire(id); if (id === '../lib/loadGenerationFunding') return { loadGenerationFunding: signal => loadGenerationFunding(signal, fetcher) }; if (id.endsWith('.css')) return {}; throw Error('Unexpected page dependency: ' + id) },
+      require(id) { if (id === 'react') return react; if (id === 'react/jsx-runtime') return localRequire(id); if (id === '../lib/loadGenerationFunding') return { fundingReadPath, loadGenerationFunding: (signal, _fetcher, options) => loadGenerationFunding(signal, fetcher, options) }; if (id.endsWith('.css')) return {}; throw Error('Unexpected page dependency: ' + id) },
   }, { filename: pageUrl.pathname, timeout: 1000 })
   const settle = async () => { for (let i=0;i<10;i++) { if (dirty) { dirty=false;cursor=0;tree=module.exports.default() } while(effects.length)effects.shift()(); await tick() } }
   await settle()
   return { calls, text: () => text(tree), settle,
+    invoiceInput: () => elements(tree).find(node => node.props.id === 'funding-invoice-references')?.props.value,
+    async enterInvoices(value) { elements(tree).find(node => node.props.id === 'funding-invoice-references').props.onChange({ target: { value } }); await settle() },
+    async checkInvoices() { elements(tree).find(node => node.type === 'form').props.onSubmit({ preventDefault() {} }); await settle() },
     async focus() { window.dispatchEvent(new Event('focus')); await settle() },
     async read() { const button = elements(tree).find(node => node.type === 'button'); assert.equal(button.props.disabled, false); button.props.onClick(); await settle() },
     async timeout() { for (const callback of [...timers.values()]) callback(); await settle() },
@@ -52,7 +55,7 @@ async function harness(answer = () => Response.json(fixture())) {
 
 test('standalone page entry reads only its GET endpoint and exposes no mutation control', async () => {
   const h = await harness(); try {
-    assert.equal(h.calls.length, 1); assert.equal(h.calls[0].path, '/api/account/generation-funding')
+    assert.equal(h.calls.length, 1); assert.equal(h.calls[0].path, '/api/account/generation-funding?evidence=stored-v1')
     assert.equal(h.calls[0].init.method, 'GET'); assert.equal(h.calls[0].init.credentials, 'same-origin'); assert.equal(h.calls[0].init.body, undefined)
     assert.match(h.text(), /500/); assert.match(h.text(), /\$0\.42/); assert.match(h.text(), /not an OpenAI invoice/)
     await h.focus(); assert.doesNotMatch(h.text(), /\$0\.42/); assert.equal(h.calls.length, 1)
@@ -140,4 +143,126 @@ test('stored-output assessment refuses private fields and inconsistent positive 
       assert.equal(h.calls.length, 1)
     } finally { h.close() }
   }
+})
+
+function storedFixture(requestedInvoices = []) {
+  return { ...fixture(), storedEvidence: {
+    version: 1, source: 'stored-credit-records', stripeCustomerLinked: true, stripeCustomerStatus: 'known',
+    invoiceGrants: { scanLimit: 64, scanned: 1, partial: false, scanStatus: 'complete', states: { present: 1, revoked: 0, unverifiable: 0 }, creditedPoints: 4500, revokedPoints: 0 },
+    requestedInvoices,
+    unknownAmountProvenance: { records: 0, classifiedRecords: 0, unclassifiedRecords: 0, groups: [] },
+  } }
+}
+
+test('invoice lookup is explicit, same-account GET-only and distinguishes missing from present', async () => {
+  const h = await harness((_count, _init, path) => {
+    const requested = new URL(path, 'https://fixture.test').searchParams.getAll('invoice')
+    return Response.json(storedFixture(requested.map(invoiceReference => ({ invoiceReference,
+      state: invoiceReference === 'in_Creator' ? 'missing' : 'present', reason: null,
+      creditedPoints: invoiceReference === 'in_Creator' ? null : 4500,
+      revokedPoints: invoiceReference === 'in_Creator' ? null : 0,
+      subscriptionLinked: invoiceReference !== 'in_Creator',
+    }))))
+  })
+  try {
+    assert.match(h.text(), /Stored purchase evidence/)
+    assert.match(h.text(), /Recorded awards: 4500 points/)
+    assert.doesNotMatch(h.text(), /in_Creator|in_Pro/)
+    await h.enterInvoices('in_Creator, in_Pro')
+    assert.equal(h.calls.length, 1)
+    await h.checkInvoices()
+    assert.equal(h.calls.length, 2)
+    assert.equal(h.calls[1].path, '/api/account/generation-funding?evidence=stored-v1&invoice=in_Creator&invoice=in_Pro')
+    assert.match(h.text(), /No stored credit record for this invoice in the current account/)
+    assert.match(h.text(), /Stored credit record present/)
+    assert.match(h.text(), /not your remaining balance or independent proof of payment/)
+    assert.ok(h.calls.every(call => call.init.method === 'GET' && call.init.body === undefined && call.init.credentials === 'same-origin'))
+    await h.focus()
+    assert.equal(h.invoiceInput(), '')
+    assert.doesNotMatch(h.text(), /in_Creator|in_Pro|Recorded awards/)
+    assert.equal(h.calls.length, 2)
+    await h.read()
+    assert.equal(h.calls[2].path, '/api/account/generation-funding?evidence=stored-v1')
+  } finally { h.close() }
+})
+
+test('revoked and unreadable invoice records never appear as missing or recovered', async () => {
+  const h = await harness((_count, _init, path) => Response.json(storedFixture(
+    new URL(path, 'https://fixture.test').searchParams.getAll('invoice').map(invoiceReference => invoiceReference === 'in_Reversed'
+      ? { invoiceReference, state: 'revoked', reason: null, creditedPoints: 0, revokedPoints: 1500, subscriptionLinked: false }
+      : { invoiceReference, state: 'unverifiable', reason: 'unavailable', creditedPoints: null, revokedPoints: null, subscriptionLinked: false }),
+  )))
+  try {
+    await h.enterInvoices('in_Reversed in_Unreadable'); await h.checkInvoices()
+    assert.match(h.text(), /A reversed credit record exists. It is not a missing grant/)
+    assert.match(h.text(), /Its absence is not established/)
+    assert.doesNotMatch(h.text(), /No stored credit record for this invoice/)
+    assert.ok(h.calls.every(call => call.init.method === 'GET'))
+  } finally { h.close() }
+})
+
+test('invalid invoice inputs cause no request and response references must match the requested IDs', async () => {
+  for (const input of ['in_One in_Two in_Three', 'in_One in_One', '../grant:in_Private', 'in_One&account=other']) {
+    const h = await harness(() => Response.json(storedFixture()))
+    try {
+      await h.enterInvoices(input); await h.checkInvoices()
+      assert.equal(h.calls.length, 1)
+      assert.match(h.text(), /at most two distinct Stripe invoice IDs/)
+    } finally { h.close() }
+  }
+  const h = await harness((count) => Response.json(storedFixture(count === 1 ? [] : [
+    { invoiceReference: 'in_Unrequested', state: 'present', reason: null, creditedPoints: 4500, revokedPoints: 0, subscriptionLinked: true },
+  ])))
+  try {
+    await h.enterInvoices('in_Requested'); await h.checkInvoices()
+    assert.match(h.text(), /could not be verified/)
+    assert.doesNotMatch(h.text(), /in_Unrequested|Stored credit record present/)
+  } finally { h.close() }
+})
+
+test('default client remains query-free and stored-evidence requests refuse extra options before network access', async () => {
+  assert.equal(fundingReadPath(), '/api/account/generation-funding')
+  for (const options of [null, {}, { storedEvidence: false, invoiceReferences: [] }, { storedEvidence: true, invoiceReferences: [], account: 'other' },
+    { storedEvidence: true, invoiceReferences: ['in_One', 'in_One'] }]) {
+    let calls = 0
+    await assert.rejects(loadGenerationFunding(new AbortController().signal, async () => { calls++; return Response.json(fixture()) }, options), /at most two/)
+    assert.equal(calls, 0)
+  }
+  await assert.rejects(loadGenerationFunding(new AbortController().signal, async () => Response.json(storedFixture())), /could not be verified/)
+})
+
+test('mixed deployment falls back once to baseline GET without claiming missing invoice evidence', async () => {
+  const h = await harness((_count, _init, path) => path.includes('?')
+    ? Response.json({ error: 'Query parameters are not supported.' }, { status: 400 })
+    : Response.json(fixture()))
+  try {
+    assert.deepEqual(h.calls.map(call => call.path), ['/api/account/generation-funding?evidence=stored-v1', '/api/account/generation-funding'])
+    assert.match(h.text(), /\$0\.42/)
+    assert.match(h.text(), /Stored invoice evidence is unavailable/)
+    await h.enterInvoices('in_Known'); await h.checkInvoices()
+    assert.deepEqual(h.calls.slice(2).map(call => call.path), ['/api/account/generation-funding?evidence=stored-v1&invoice=in_Known', '/api/account/generation-funding'])
+    assert.doesNotMatch(h.text(), /No stored credit record for this invoice/)
+    assert.ok(h.calls.every(call => call.init.method === 'GET' && call.init.body === undefined))
+    await h.focus(); assert.equal(h.calls.length, 4)
+    await h.enterInvoices('in_TypedWhileStale'); await h.focus()
+    assert.equal(h.invoiceInput(), '')
+    assert.equal(h.calls.length, 4)
+  } finally { h.close() }
+})
+
+test('evidence fallback never retries authentication, current validation errors, expanded errors or aborted reads', async () => {
+  for (const [status, body] of [[401, { error: 'Query parameters are not supported.' }], [403, { error: 'Query parameters are not supported.' }],
+    [500, { error: 'Query parameters are not supported.' }], [400, { error: 'Invalid stored evidence query.' }],
+    [400, { error: 'Query parameters are not supported.', private: 'MUST_NOT_RENDER' }], [400, { error: 'x'.repeat(1100) }]]) {
+    let calls = 0
+    await assert.rejects(loadGenerationFunding(new AbortController().signal, async () => {
+      calls++; return Response.json(body, { status })
+    }, { storedEvidence: true, invoiceReferences: [] }))
+    assert.equal(calls, 1)
+  }
+  const controller = new AbortController(); let calls = 0
+  await assert.rejects(loadGenerationFunding(controller.signal, async () => {
+    calls++; controller.abort(); return Response.json({ error: 'Query parameters are not supported.' }, { status: 400 })
+  }, { storedEvidence: true, invoiceReferences: ['in_Known'] }))
+  assert.equal(calls, 1)
 })

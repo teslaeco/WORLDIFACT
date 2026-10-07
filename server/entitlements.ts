@@ -15,7 +15,7 @@ import { isOvernightTestDiagnostic, type OvernightTestDiagnostic } from '../src/
 import { TEST_ACCOUNT_CONTRACT, hasTestAccountHeaders, testAccountMatches } from '../src/lib/testAccountContract.ts'
 import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { boundBlueprintProviderModel } from './blueprintModelBinding.ts'
-import type { GenerationFundingSnapshot } from '../src/lib/generationFunding.ts'
+import { isStoredInvoiceReference, readGenerationFundingEvidenceQuery, type GenerationFundingSnapshot, type StoredGenerationFundingEvidence } from '../src/lib/generationFunding.ts'
 import { BLUEPRINT_RECONCILIATION_TERMS, blueprintRetainedCents, validateBlueprintTerminalUsage, type BlueprintTerminalUsage } from './blueprintTerminalUsage.ts'
 
 export interface EntitlementEnv {
@@ -400,8 +400,86 @@ function recordedOrdinaryReservation(job: Job): StudioProviderReservation | null
   if (marker.state === 'released' && (job.state !== 'failed' || dispatch !== 'ready-v1')) return null
   return marker
 }
+/** A stored grant is evidence of ledger bookkeeping, never independent proof of a Stripe payment. */
+function storedInvoiceGrant(value: unknown): Grant | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const grant = value as Grant
+  const keys = ['credits', 'revoked', ...(Object.hasOwn(value, 'subscriptionId') ? ['subscriptionId'] : [])]
+  if (Object.keys(grant).length !== keys.length || Object.keys(grant).some(key => !keys.includes(key)) ||
+      !validInteger(grant.credits) || grant.credits < 0 || grant.credits > 1_000_000 || !validInteger(grant.revoked) || grant.revoked < 0 || grant.revoked > 1_000_000 ||
+      grant.credits === 0 && grant.revoked === 0 || grant.credits > 0 && grant.revoked > grant.credits ||
+      Object.hasOwn(grant, 'subscriptionId') && (typeof grant.subscriptionId !== 'string' || !/^sub_[A-Za-z0-9]{1,180}$/.test(grant.subscriptionId))) return null
+  return grant
+}
+
+async function storedGenerationFundingEvidence(storage: Pick<EntitlementStorage, 'get' | 'list'>, invoices: string[]): Promise<StoredGenerationFundingEvidence> {
+  const result: StoredGenerationFundingEvidence = {
+    version: 1, source: 'stored-credit-records', stripeCustomerLinked: false, stripeCustomerStatus: 'unavailable',
+    invoiceGrants: { scanLimit: 64, scanned: 0, partial: true, scanStatus: 'unavailable',
+      states: { present: 0, revoked: 0, unverifiable: 0 }, creditedPoints: 0, revokedPoints: 0 },
+    requestedInvoices: [], unknownAmountProvenance: { records: 0, classifiedRecords: 0, unclassifiedRecords: 0, groups: [] },
+  }
+  try {
+    const customer = await storage.get('customer')
+    result.stripeCustomerLinked = typeof customer === 'string' && /^cus_[A-Za-z0-9]{1,180}$/.test(customer)
+    result.stripeCustomerStatus = customer === undefined || result.stripeCustomerLinked ? 'known' : 'invalid'
+  } catch { /* Unavailable linkage is never reported as a known absent customer. */ }
+  for (const invoiceReference of invoices) {
+    const check: StoredGenerationFundingEvidence['requestedInvoices'][number] = {
+      invoiceReference, state: 'unverifiable', reason: 'unavailable', creditedPoints: null, revokedPoints: null, subscriptionLinked: false,
+    }
+    try {
+      const raw = await storage.get(`grant:${invoiceReference}`)
+      const grant = storedInvoiceGrant(raw)
+      if (raw === undefined) { check.state = 'missing'; check.reason = null }
+      else if (!grant) check.reason = 'invalid-record'
+      else {
+        check.state = grant.revoked > 0 ? 'revoked' : 'present'; check.reason = null
+        check.creditedPoints = grant.credits; check.revokedPoints = grant.revoked; check.subscriptionLinked = Object.hasOwn(grant, 'subscriptionId')
+      }
+    } catch { /* A failed lookup cannot establish that a grant is missing. */ }
+    result.requestedInvoices.push(check)
+  }
+  if (!storage.list) return result
+  let entries: Map<string, unknown>
+  try { entries = await storage.list<unknown>({ prefix: 'grant:in_', limit: 64 }) }
+  catch { return result }
+  const grants = result.invoiceGrants
+  if (!(entries instanceof Map)) { grants.scanStatus = 'invalid'; return result }
+  grants.partial = entries.size >= grants.scanLimit
+  grants.scanStatus = grants.partial ? 'partial' : 'complete'
+  for (const [key, raw] of entries) {
+    if (grants.scanned === grants.scanLimit) break
+    grants.scanned++
+    const grant = typeof key === 'string' && key.startsWith('grant:') && isStoredInvoiceReference(key.slice(6)) ? storedInvoiceGrant(raw) : null
+    if (!grant) { grants.states.unverifiable++; continue }
+    grants.states[grant.revoked > 0 ? 'revoked' : 'present']++
+    grants.creditedPoints += grant.credits; grants.revokedPoints += grant.revoked
+  }
+  return result
+}
+
+/** Group only existing validated metadata. Missing model is unknown, not inferred from profile. */
+function addUnknownAmountProvenance(evidence: StoredGenerationFundingEvidence | undefined, job: Job | null, now: number) {
+  if (!evidence) return
+  const provenance = evidence.unknownAmountProvenance
+  provenance.records++
+  if (!job || job.at > now || job.at > 8_640_000_000_000_000 || job.cost > 1_000_000 || Object.hasOwn(job, 'updatedAt') && Number(job.updatedAt) > now) {
+    provenance.unclassifiedRecords++; return
+  }
+  const route = job.channel ?? 'legacyBlueprint', model = job.model ?? 'unknown', state = job.state
+  let group = provenance.groups.find(value => value.route === route && value.model === model && value.state === state)
+  if (!group) {
+    group = { route, model, state, records: 0, recordedPointCosts: 0, earliestAt: job.at, latestAt: job.at }
+    provenance.groups.push(group)
+  }
+  group.records++; group.recordedPointCosts += job.cost
+  group.earliestAt = Math.min(group.earliestAt, job.at); group.latestAt = Math.max(group.latestAt, job.at)
+  provenance.classifiedRecords++
+}
+
 /** This projection can only read; it deliberately cannot call lazy initialization, settlement or provider services. */
-async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get' | 'list'>, accountId: string | null, now: number): Promise<GenerationFundingSnapshot> {
+async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get' | 'list'>, accountId: string | null, now: number, invoices?: string[]): Promise<GenerationFundingSnapshot> {
   const [rawBalance, rawHeld, rawBudget, originalClaim, supplementalClaim] = await Promise.all([
     storage.get('balance'), storage.get(CUSTOMER_RESERVED_CREDITS), storage.get(PROVIDER_BUDGET),
     storage.get(ASTRA_SUPPORT_ONCE_KEY), storage.get(ASTRA_SUPPLEMENTAL_KEY),
@@ -425,8 +503,11 @@ async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get'
   }
   const outputAdjustment = { scanLimit: 32 as const, checked: 0, candidates: 0, potentialCents: 0, unavailable: 0, partial: true }
   Object.assign(snapshot.jobs, { blueprintOutputAdjustment: outputAdjustment })
+  if (invoices !== undefined) snapshot.storedEvidence = await storedGenerationFundingEvidence(storage, invoices)
   if (!storage.list) return snapshot
-  const entries = await storage.list<unknown>({ prefix: 'job:', limit: FUNDING_SCAN_LIMIT })
+  let entries: Map<string, unknown>
+  try { entries = await storage.list<unknown>({ prefix: 'job:', limit: FUNDING_SCAN_LIMIT }) }
+  catch (error) { if (invoices !== undefined) return snapshot; throw error }
   const jobs = snapshot.jobs
   if (!(entries instanceof Map)) { jobs.scanStatus = 'invalid'; return snapshot }
   jobs.partial = entries.size >= FUNDING_SCAN_LIMIT
@@ -437,6 +518,7 @@ async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get'
     jobs.scanned++
     if (typeof key !== 'string' || !/^job:[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(key) || !fundingJob(value)) {
       jobs.states.unknown++; jobs.routes.unknown++; jobs.evidence.unknown++; jobs.fundingEvidence.unknownAmountRecords++
+      addUnknownAmountProvenance(snapshot.storedEvidence, null, now)
       continue
     }
     const job = value, id = key.slice(4), evidence = jobs.evidence, amounts = jobs.fundingEvidence
@@ -486,7 +568,10 @@ async function generationFundingSnapshot(storage: Pick<EntitlementStorage, 'get'
         bucket.records++; bucket.cents += marker.amountCents; knownAmount = true
       }
     }
-    if (!knownAmount && !supportRecord && job.kind === 'credits') amounts.unknownAmountRecords++
+    if (!knownAmount && !supportRecord && job.kind === 'credits') {
+      amounts.unknownAmountRecords++
+      addUnknownAmountProvenance(snapshot.storedEvidence, job, now)
+    }
     if (!supportRecord && !marked && !studioPending && !blueprintPending && !knownAmount) evidence.unknown++
   }
   return snapshot
@@ -672,8 +757,10 @@ export class AccountEntitlements {
       }
       if (path === '/generation-funding') {
         if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
-        if (new URL(request.url).search) return json({ error: 'Query parameters are not supported.' }, 400)
-        return json(await this.storage.transaction(storage => generationFundingSnapshot(storage, request.headers.get('X-WORLDIFACT-Verified-Account'), this.now())))
+        let evidence: { invoices: string[] } | null
+        try { evidence = readGenerationFundingEvidenceQuery(new URL(request.url).searchParams) }
+        catch { return json({ error: 'Invalid stored evidence query.' }, 400) }
+        return json(await this.storage.transaction(storage => generationFundingSnapshot(storage, request.headers.get('X-WORLDIFACT-Verified-Account'), this.now(), evidence?.invoices)))
       }
       const support = () => astraSupportApproval(this.supportEnv.WORLDIFACT_ASTRA_SUPPORT_ONCE, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
       const supplemental = () => astraSupplementalGrant(this.supportEnv.WORLDIFACT_ASTRA_SUPPLEMENTAL_GRANT, request.headers.get('X-WORLDIFACT-Verified-Account'), this.supportEnv.ACCOUNT_LEDGER_MODE, this.now(), request.headers.get('X-WORLDIFACT-Verified-Email'))
@@ -1620,7 +1707,10 @@ export async function entitlementApi(request: Request, env: AccountEnv & Entitle
     const reply = (value: unknown, code = 200) => Response.json(value, { status: code,
       headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie', 'X-Content-Type-Options': 'nosniff', ...(code === 405 ? { Allow: 'GET' } : {}) } })
     if (request.method !== 'GET') return reply({ error: 'Use GET.' }, 405)
-    if (new URL(request.url).search) return reply({ error: 'Query parameters are not supported.' }, 400)
+    let evidence: { invoices: string[] } | null = null
+    if (statusRead && new URL(request.url).search) return reply({ error: 'Query parameters are not supported.' }, 400)
+    try { if (!statusRead) evidence = readGenerationFundingEvidenceQuery(new URL(request.url).searchParams) }
+    catch { return reply({ error: 'Invalid stored evidence query.' }, 400) }
     if (request.headers.get('Sec-Fetch-Site') === 'cross-site' || request.headers.has('Origin') && request.headers.get('Origin') !== new URL(request.url).origin)
       return reply({ error: 'Same-origin account access required.' }, 403)
     let diagnostic: OvernightTestDiagnostic = 'TEST_AUTH_UNAVAILABLE'
@@ -1636,7 +1726,8 @@ export async function entitlementApi(request: Request, env: AccountEnv & Entitle
         return reply({ error: 'Please wait before reading generation funding again.', ...(statusRead ? { diagnostic: 'TEST_STATUS_RATE_LIMITED' } : {}) }, 429)
       diagnostic = 'TEST_POOL_REQUEST_FAILED'
       if (statusRead) return reply({ ...await overnightPoolCall(env, user.id, '/overnight-test-status'), accountContract: TEST_ACCOUNT_CONTRACT })
-      return reply(await entitlementCall<GenerationFundingSnapshot>(env, user.id, '/generation-funding'))
+      const query = evidence ? new URLSearchParams([['evidence', 'stored-v1'], ...evidence.invoices.map((invoice): [string, string] => ['invoice', invoice])]).toString() : ''
+      return reply(await entitlementCall<GenerationFundingSnapshot>(env, user.id, `/generation-funding${query ? `?${query}` : ''}`))
     } catch (error) { return reply({ error: 'Generation funding is temporarily unavailable.', ...(statusRead ? {
       diagnostic: error instanceof EntitlementError && isOvernightTestDiagnostic(error.testDiagnostic) ? error.testDiagnostic : diagnostic,
     } : {}) }, 503) }
