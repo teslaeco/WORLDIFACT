@@ -1,0 +1,38 @@
+name: Reverify subscription upgrade assets without deployment
+on:
+  push:
+    branches: ['verify/subscription-upgrade-readonly-20261007']
+    paths:
+      - '.github/workflows/reverify-compatible-mcc.yml'
+      - 'scripts/check-compatible-mcc-release.mjs'
+      - 'scripts/reverify-compatible-mcc-release.mjs'
+      - 'tests/compatible-mcc-release.test.mjs'
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-subscription-upgrade-readonly
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/verify/subscription-upgrade-readonly-20261007'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require the deployed source and exact verifier-only changes
+        run: node scripts/reverify-compatible-mcc-release.mjs --scope
+      - run: npm ci
+      - name: Test verifier without external requests
+        run: node --test tests/compatible-mcc-release.test.mjs tests/pipeline-only-release.test.mjs tests/subscription-upgrade-release.test.mjs
+      - name: Rebuild unchanged deployed application
+        run: npm run build
+      - uses: ./.github/actions/foundations
+      - name: Compare current public assets with the pinned source build
+        run: node scripts/reverify-compatible-mcc-release.mjs --verify

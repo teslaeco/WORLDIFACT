@@ -1,18 +1,20 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { buildCompatibleMccConfig } from '../scripts/build-compatible-mcc-config.mjs'
-import { checkCompatibleMccRelease } from '../scripts/check-compatible-mcc-release.mjs'
+import { checkCompatibleMccAssets, checkCompatibleMccRelease } from '../scripts/check-compatible-mcc-release.mjs'
 import {
   COMPATIBLE_MCC_BASE_COMMIT as BASE, COMPATIBLE_MCC_MARKER_PATH as MARKER,
   COMPATIBLE_MCC_MARKER_CONTENT as CONTENT, COMPATIBLE_MCC_REVIEWED_PATHS as PATHS,
   selectPipelineReleaseOptions,
 } from '../scripts/select-pipeline-only-release.mjs'
+
+import { VERIFIED_SOURCE_COMMIT, VERIFICATION_PATHS, verifyCompatibleMccSourceScope, reverifyCompatibleMccSource } from '../scripts/reverify-compatible-mcc-release.mjs'
 
 const head = '1'.repeat(40), blob = '2'.repeat(40)
 const options = { preserveBilling: true, preserveRemoteVars: true, compatibleMccRollback: true }
@@ -225,4 +227,110 @@ test('unreviewed local API paths and broken foundation integrity fail without en
   await mkdir(join(data.dist, 'api/billing'), { recursive: true }); await writeFile(join(data.dist, 'api/billing/status'), 'unreviewed')
   await assert.rejects(checkCompatibleMccRelease({ origin, versionId }, { ...data, retryDelaysMs: [] }), /Unreviewed release asset path/)
   assert.equal(data.requests.some(request => request.path === '/api/billing/status'), false)
+})
+
+
+test('pinned Terra public marker files are hash-verified while arbitrary dotfiles remain forbidden', async t => {
+  const data = await fixture(t)
+  for (const path of ['/apps/terra/eclipse-live/.dual-countdown-release', '/apps/terra/eclipse-live/.placeholder']) {
+    data.files.set(path, 'public foundation marker fixture')
+    await mkdir(dirname(join(data.dist, path)), { recursive: true })
+    await writeFile(join(data.dist, path), data.files.get(path))
+  }
+  const result = await checkCompatibleMccAssets(origin, { ...data, retryDelaysMs: [], fetcher: (url, init) => url.pathname.includes('/eclipse-live/.')
+    ? new Response(Buffer.from(data.files.get(url.pathname))) : data.fetcher(url, init) })
+  assert.equal(result.verifiedAssets, data.files.size)
+  assert.equal(Object.hasOwn(result, 'versionId'), false)
+  // Recheck through the recorded fetcher too, so each public marker must be requested.
+  await checkCompatibleMccAssets(origin, { ...data, retryDelaysMs: [] })
+  for (const path of ['/apps/terra/eclipse-live/.dual-countdown-release', '/apps/terra/eclipse-live/.placeholder'])
+    assert.ok(data.requests.some(request => request.path === path))
+  await assert.rejects(checkCompatibleMccAssets(origin, { ...data, retryDelaysMs: [], fetcher: (url, init) => url.pathname.endsWith('/.placeholder') ? new Response('mismatched marker') : data.fetcher(url, init) }), /Release bytes or MIME/)
+  await writeFile(join(data.dist, 'apps/terra/eclipse-live/.env'), 'do not expose')
+  await assert.rejects(checkCompatibleMccAssets(origin, { ...data, retryDelaysMs: [] }), /Unreviewed release asset path/)
+  assert.equal(data.requests.some(request => request.path.endsWith('/.env')), false)
+})
+test('reviewed marker exceptions never permit directories or symlinks', async t => {
+  for (const path of ['apps/terra/eclipse-live/.dual-countdown-release', 'apps/terra/eclipse-live/.placeholder']) {
+    const data = await fixture(t)
+    const marker = join(data.dist, path)
+    await mkdir(dirname(marker), { recursive: true })
+    await mkdir(marker)
+    await assert.rejects(checkCompatibleMccAssets(origin, { ...data, retryDelaysMs: [] }), /Unreviewed release asset path/)
+    await rm(marker, { recursive: true })
+    await symlink(join(data.dist, 'index.html'), marker)
+    await assert.rejects(checkCompatibleMccAssets(origin, { ...data, retryDelaysMs: [] }), /Unreviewed release asset path/)
+    assert.equal(data.requests.some(request => request.path === '/' + path), false)
+  }
+})
+test('normal deployment verification still rejects an absent or malformed version receipt before requests', async t => {
+  const data = await fixture(t)
+  for (const deployment of [{ origin }, { origin, versionId: '' }, { origin, versionId: 'invalid version' }, undefined])
+    await assert.rejects(checkCompatibleMccRelease(deployment, data), /Invalid deployment receipt/)
+  assert.equal(data.requests.length, 0)
+})
+const verificationHead = '6'.repeat(40)
+const verificationChanges = VERIFICATION_PATHS.map(path => ({ path, status: path === '.github/workflows/reverify-compatible-mcc.yml' || path === 'scripts/reverify-compatible-mcc-release.mjs' ? 'A' : 'M' }))
+function sourceEvidence(overrides = {}) {
+  const data = { parent: VERIFIED_SOURCE_COMMIT, head: verificationHead, changes: verificationChanges, mode: '100644', dirty: '', ...overrides }
+  return (_cwd, args) => {
+    if (args[0] === 'rev-parse') return data.head + '\n'
+    if (args[0] === 'rev-list') return data.parents ?? `${data.head} ${data.parent}\n`
+    if (args[0] === 'diff' && args.includes('--name-only')) return data.dirty
+    if (args[0] === 'diff') return data.changes.map(({ path, status }) => `${status}\0${path}\0`).join('')
+    if (args[0] === 'ls-tree') return data.tree ?? VERIFICATION_PATHS.map(path => `${data.mode} blob ${blob}\t${path}\0`).join('')
+    throw new Error('Unexpected source-scope evidence request')
+  }
+}
+test('read-only recovery accepts exactly four verifier files on the actual published main commit', () => {
+  assert.equal(VERIFIED_SOURCE_COMMIT, 'e301b3989caf0bd2fcfe3a0e1ab65bd2b95ceb6d')
+  assert.deepEqual(VERIFICATION_PATHS, ['.github/workflows/reverify-compatible-mcc.yml', 'scripts/check-compatible-mcc-release.mjs', 'scripts/reverify-compatible-mcc-release.mjs', 'tests/compatible-mcc-release.test.mjs'].sort())
+  assert.deepEqual(verifyCompatibleMccSourceScope('fixture', sourceEvidence()), { sourceCommit: VERIFIED_SOURCE_COMMIT, verificationCommit: verificationHead })
+  for (const invalid of [
+    { parent: BASE }, { head: 'invalid' }, { parents: `${verificationHead} ${VERIFIED_SOURCE_COMMIT} ${BASE}\n` },
+    { mode: '120000' }, { mode: '100755' }, { tree: '' }, { dirty: 'server/worker.ts\n' },
+    ...VERIFICATION_PATHS.map(path => ({ changes: verificationChanges.filter(change => change.path !== path) })),
+    ...['server/worker.ts', 'wrangler.jsonc', 'src/pages/ShopPage.tsx', '.github/workflows/cloudflare.yml'].map(path => ({ changes: [...verificationChanges, { path, status: 'M' }] })),
+    ...['D', 'T', 'R100'].map(status => ({ changes: verificationChanges.map((change, i) => i === 0 ? { ...change, status } : change) })),
+  ]) assert.throws(() => verifyCompatibleMccSourceScope('fixture', sourceEvidence(invalid)))
+})
+test('source comparison rechecks main before and after GET assets and never invents a deployment version', async t => {
+  const data = await fixture(t)
+  let refs = 0
+  const fetcher = (url, init) => {
+    if (String(url).startsWith('https://api.github.com/')) {
+      refs++
+      assert.equal(init.method, 'GET'); assert.equal(init.credentials, 'omit'); assert.equal(init.redirect, 'error')
+      assert.equal(init.headers.Authorization, undefined)
+      return Response.json({ ref: 'refs/heads/main', object: { type: 'commit', sha: VERIFIED_SOURCE_COMMIT } })
+    }
+    // The real origin remains hard-coded in the read-only runner.
+    assert.equal(url.origin, 'https://worldifact.xodobrox.workers.dev')
+    return data.fetcher(new URL(url.pathname, origin), init)
+  }
+  const result = await reverifyCompatibleMccSource({ ...data, readGit: sourceEvidence(), fetcher, retryDelaysMs: [] })
+  assert.equal(refs, 2)
+  assert.equal(result.evidenceMode, 'source-commit-comparison')
+  assert.equal(result.deploymentReceipt, 'unavailable')
+  assert.equal(Object.hasOwn(result, 'versionId'), false)
+  for (const failAt of [1, 2]) {
+    let calls = 0
+    await assert.rejects(reverifyCompatibleMccSource({ ...data, readGit: sourceEvidence(), retryDelaysMs: [], fetcher: (url, init) => {
+      if (String(url).startsWith('https://api.github.com/') && ++calls === failAt)
+        return Response.json({ ref: 'refs/heads/main', object: { type: 'commit', sha: BASE } })
+      return fetcher(url, init)
+    } }), /Main changed/)
+  }
+})
+test('isolated recovery workflow cannot deploy, synchronize credentials or trigger financial/generation probes', () => {
+  const recovery = readFileSync(new URL('../.github/workflows/reverify-compatible-mcc.yml', import.meta.url), 'utf8')
+  assert.match(recovery, /branches: \['verify\/subscription-upgrade-readonly-20261007'\]/)
+  assert.match(recovery, /contents: read/)
+  assert.match(recovery, /persist-credentials: false/)
+  assert.match(recovery, /reverify-compatible-mcc-release\.mjs --scope/)
+  assert.match(recovery, /npm run build/)
+  assert.match(recovery, /uses: \.\/\.github\/actions\/foundations/)
+  assert.match(recovery, /reverify-compatible-mcc-release\.mjs --verify/)
+  assert.ok(recovery.indexOf('--scope') < recovery.indexOf('npm ci'))
+  assert.doesNotMatch(recovery, /secrets\.|environment:|wrangler|deploy:check|npm run deploy|npm run verify|connect-|check-froge|billing|stripe|paypal|workflow_run|branches: \[main\]/i)
 })
