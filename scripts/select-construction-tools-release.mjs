@@ -7,24 +7,44 @@ import {
   SCRIPT_PATH as LEGACY_SCRIPT_PATH,
 } from './select-context-tools-release.mjs'
 
-export const BASE_COMMIT = 'ea1987eee520880b1eb93e71b572f7f1f4879efd'
-export const BASE_WORKFLOW_BLOB = '06db92301113f826e9dc470d6794cfe4fa4325d7'
+export const BASE_COMMIT = 'b9d6a28d6cf433861ad740a830b0726e5565401c'
+export const BASE_WORKFLOW_BLOB = '34ca55a6bbeae0392646ab588369bec36fdb34a1'
 export const LEGACY_SCRIPT_BLOB = '465898752099691d8cee1ca989575c2b83febab3'
 export const SCRIPT_PATH = 'scripts/select-construction-tools-release.mjs'
 export const CONFIG_PATH = 'config/oracle-construction-tools-release.json'
 export const TEST_PATH = 'tests/construction-tools-release.test.mjs'
-export const LEGACY_TEST_PATH = 'tests/context-tools-release.test.mjs'
-export const EVIDENCE_PATH = 'docs/CONTEST_STATUS.md'
 export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = '2b7468de50c9d7209a08ede663b9031edc43ee51'
+export const CONFIG_BLOB = '3ddd2acacfebc59106d6c256cd2b94882f8e7b8f'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
+export const BASE_SCRIPT_BLOB = '6fc18735c4c1e153d4d61962c4de33ec63ed28f3'
+export const BASE_CONFIG_BLOB = '2b7468de50c9d7209a08ede663b9031edc43ee51'
+export const BASE_SCRIPT_SHA256 = '0c3ab5d1a76b7c26f7b16021c311c5ae146c4b4e29245a068f97e57a8e11c576'
+export const BASE_CONFIG_SHA256 = 'e35213e647094d9b95cc3d8a4352d05593841471850f99019bee2db3678ad415'
+// Only these four existing source files may join the three guard files.
+// Old blobs are authority in this reviewed wrapper, never in mutable config.
+export const BASE_PAYLOAD_BLOBS = Object.freeze({
+  [TEST_PATH]: '6aaa2f702035d56a141d8e22082f5b78dbc85ccc',
+  'tools/model_construction/install_construction.py': 'fb6c4527b08a8b4fbb938d9bfa55117310de7119',
+  'tools/model_construction/oracle_construction_launch.py': '08157169dc2c1dacf212c294e72179b4f7647ed0',
+  'tools/model_construction/test_construction_transaction.py': '77d084689a9673650b30b773ccd119b02c26833e',
+})
+// Preserve the historical context test's manifest contract without permitting
+// this unchanged path in the repair diff. Both historical hashes are immutable.
+export const LEGACY_TEST_PATH = 'tests/context-tools-release.test.mjs'
+export const LEGACY_TEST_RECORD = Object.freeze({
+  oldMode: '100644', newMode: '100644',
+  oldBlob: '5a29e2e378fe40c9157b9a6bc1df50cdabfa8c19',
+  newBlob: '0635b96ed9861b7130200ee39a46d0f0bf43979c', status: 'M',
+})
+export const REVIEWED_PATHS = Object.freeze([
+  ...Object.keys(BASE_PAYLOAD_BLOBS), SCRIPT_PATH, CONFIG_PATH, WORKFLOW_PATH,
+].sort())
 
 const HEX = /^[a-f0-9]{40}$/
 const SHA256 = /^[a-f0-9]{64}$/
 const ZERO = '0'.repeat(40)
-const OLD_COMMAND = `          node ${LEGACY_SCRIPT_PATH} >> "$GITHUB_OUTPUT"\n`
 const CONFIG_KEYS = ['revision', 'release', 'baseCommit', 'sourceOnly', 'deployAllowed',
   'preserveCloudflareDeployment', 'paidGenerationRequested', 'status', 'payload']
 const ENTRY_KEYS = ['oldMode', 'newMode', 'oldBlob', 'newBlob', 'status']
@@ -39,12 +59,6 @@ function constructionPath(path) {
   return typeof path === 'string' && (/construction/i.test(path)
     || path.startsWith('tools/model_construction/'))
 }
-function payloadPath(path) {
-  return path === TEST_PATH || path === LEGACY_TEST_PATH || path === EVIDENCE_PATH
-    || /^tools\/model_construction\/[A-Za-z0-9_.-]+\.(?:py|md)$/.test(path)
-    || /^docs\/[A-Z0-9_-]*CONSTRUCTION[A-Z0-9_-]*\.md$/.test(path)
-    || /^\.github\/workflows\/[a-z0-9_-]*construction[a-z0-9_-]*\.yml$/.test(path)
-}
 
 export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
   if (!sha(expectedBlob) || !Buffer.isBuffer(raw) || raw.length < 2 || raw.length > 128 * 1024
@@ -55,34 +69,48 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
   // ambiguous serialization, in addition to the compiled immutable blob pin.
   if (Buffer.compare(raw, Buffer.from(JSON.stringify(value, null, 2) + '\n')) !== 0
       || !sameKeys(value, CONFIG_KEYS)
-      || value.revision !== 'oracle-construction-tools-release-v1'
-      || value.release !== 'standard-bounded-construction-tools-only-20261007'
+      || value.revision !== 'oracle-construction-tools-release-v2'
+      || value.release !== 'standard-construction-inventory-repair-tools-only-20261007'
       || value.baseCommit !== BASE_COMMIT || value.sourceOnly !== true
       || value.deployAllowed !== false || value.preserveCloudflareDeployment !== true
       || value.paidGenerationRequested !== false || value.status !== 'FROZEN'
       || !value.payload || typeof value.payload !== 'object' || Array.isArray(value.payload)) refused()
-  const entries = Object.entries(value.payload)
-  if (entries.length < 3 || entries.length > 128 || !Object.hasOwn(value.payload, TEST_PATH)
-      || !Object.hasOwn(value.payload, LEGACY_TEST_PATH)
-      || !entries.some(([path]) => path.startsWith('tools/model_construction/'))) refused()
-  for (const [path, entry] of entries) {
-    if (!payloadPath(path) || !sameKeys(entry, ENTRY_KEYS) || entry.newMode !== '100644'
-        || !sha(entry.newBlob) || !['A', 'M'].includes(entry.status)) refused()
-    if (entry.status === 'A') {
-      if (entry.oldMode !== '000000' || entry.oldBlob !== ZERO) refused()
-    } else if (entry.oldMode !== '100644' || !sha(entry.oldBlob) || entry.oldBlob === entry.newBlob) refused()
+  if (!sameKeys(value.payload, [...Object.keys(BASE_PAYLOAD_BLOBS), LEGACY_TEST_PATH])) refused()
+  if (!sameKeys(value.payload[LEGACY_TEST_PATH], ENTRY_KEYS)
+      || ENTRY_KEYS.some(key => value.payload[LEGACY_TEST_PATH][key] !== LEGACY_TEST_RECORD[key])) refused()
+  for (const path of Object.keys(BASE_PAYLOAD_BLOBS)) {
+    const entry = value.payload[path]
+    if (!sameKeys(entry, ENTRY_KEYS) || entry.newMode !== '100644'
+        || entry.oldMode !== '100644' || entry.status !== 'M'
+        || entry.oldBlob !== BASE_PAYLOAD_BLOBS[path]
+        || !sha(entry.newBlob) || entry.oldBlob === entry.newBlob) refused()
   }
   return value
 }
 
 export function guardedWorkflow(base, scriptSha, configSha) {
-  if (typeof base !== 'string' || blob(base) !== BASE_WORKFLOW_BLOB
-      || base.split(OLD_COMMAND).length !== 2 || !SHA256.test(scriptSha) || !SHA256.test(configSha)) refused()
-  const command = `          printf '%s  ${SCRIPT_PATH}\\n' '${scriptSha}' | sha256sum -c - >&2
-          printf '%s  ${CONFIG_PATH}\\n' '${configSha}' | sha256sum -c - >&2
-          node ${SCRIPT_PATH} >> "$GITHUB_OUTPUT"
-`
-  return base.replace(OLD_COMMAND, command)
+  if (typeof base !== 'string' || !SHA256.test(scriptSha) || !SHA256.test(configSha)) refused()
+  let result = base
+  // Keep the unchanged context test's historical transform API. Reconstruct
+  // the exact b9 workflow before editing it; this is not a second release base.
+  if (blob(result) === '06db92301113f826e9dc470d6794cfe4fa4325d7') {
+    const oldCommand = `          node ${LEGACY_SCRIPT_PATH} >> "$GITHUB_OUTPUT"\n`
+    if (result.split(oldCommand).length !== 2) refused()
+    result = result.replace(oldCommand,
+      `          printf '%s  ${SCRIPT_PATH}\\n' '${BASE_SCRIPT_SHA256}' | sha256sum -c - >&2\n`
+      + `          printf '%s  ${CONFIG_PATH}\\n' '${BASE_CONFIG_SHA256}' | sha256sum -c - >&2\n`
+      + `          node ${SCRIPT_PATH} >> "$GITHUB_OUTPUT"\n`)
+  }
+  if (blob(result) !== BASE_WORKFLOW_BLOB) refused()
+  for (const [path, previous, next] of [
+    [SCRIPT_PATH, BASE_SCRIPT_SHA256, scriptSha],
+    [CONFIG_PATH, BASE_CONFIG_SHA256, configSha],
+  ]) {
+    const command = `          printf '%s  ${path}\\n' '${previous}' | sha256sum -c - >&2\n`
+    if (result.split(command).length !== 2) refused()
+    result = result.replace(command, command.replace(previous, next))
+  }
+  return result
 }
 
 function readGit(cwd, args) {
@@ -155,14 +183,16 @@ export function selectConstructionToolsRelease({ cwd = process.cwd(), env = proc
   const rawConfig = configBytes ?? regularBytes(resolve(cwd, CONFIG_PATH), 128 * 1024)
   const manifest = readManifest(rawConfig, configBlob)
   if (git(cwd, ['ls-tree', '-z', head, '--', CONFIG_PATH]) !== `100644 blob ${configBlob}\t${CONFIG_PATH}\0`) refused()
-  const additions = {
-    [SCRIPT_PATH]: blob(scriptBytes), [CONFIG_PATH]: configBlob,
+  if (git(cwd, ['ls-tree', '-z', head, '--', LEGACY_TEST_PATH])
+      !== `100644 blob ${LEGACY_TEST_RECORD.newBlob}\t${LEGACY_TEST_PATH}\0`) refused()
+  const expected = { ...Object.fromEntries(Object.keys(BASE_PAYLOAD_BLOBS).map(path => [path, manifest.payload[path]])),
+    [SCRIPT_PATH]: { oldMode: '100644', newMode: '100644',
+      oldBlob: BASE_SCRIPT_BLOB, newBlob: blob(scriptBytes), status: 'M' },
+    [CONFIG_PATH]: { oldMode: '100644', newMode: '100644',
+      oldBlob: BASE_CONFIG_BLOB, newBlob: configBlob, status: 'M' },
   }
-  const expected = { ...manifest.payload,
-    ...Object.fromEntries(Object.entries(additions).map(([path, newBlob]) => [path,
-      { oldMode: '000000', newMode: '100644', oldBlob: ZERO, newBlob, status: 'A' }])) }
-  const paths = [...Object.keys(expected), WORKFLOW_PATH].sort()
-  if (changes.length !== paths.length || changes.map(change => change.path).sort().join('\0') !== paths.join('\0')) refused()
+  if (changes.length !== REVIEWED_PATHS.length
+      || changes.map(change => change.path).sort().join('\0') !== REVIEWED_PATHS.join('\0')) refused()
   for (const change of changes) {
     if (change.path === WORKFLOW_PATH) {
       if (change.status !== 'M' || change.oldMode !== '100644' || change.newMode !== '100644'

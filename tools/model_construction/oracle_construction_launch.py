@@ -187,7 +187,7 @@ FILES.update({'construction_fence.py': ('tools/model_construction/construction_f
                                  '5c83a272b5b2207fbdf8ad510773b909e26c3499'),
  'gateway_patch.py': ('tools/model_construction/gateway_patch.py', '39095208cd1e90c03fc35f81f93a63535a0930b0'),
  'install_construction.py': ('tools/model_construction/install_construction.py',
-                             'fb6c4527b08a8b4fbb938d9bfa55117310de7119'),
+                             '0507f4809612b1d0ee7a141708526f9acb32371e'),
  'offline_construction.py': ('tools/model_construction/offline_construction.py',
                              '40ceaf27b5d1721b5d392478d2c4cb11880b48c5'),
  'offline_legacy_standard.py': ('tools/model_construction/offline_legacy_standard.py',

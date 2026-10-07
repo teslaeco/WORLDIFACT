@@ -105,6 +105,150 @@ class Operations:
         installer.validate_receipts(self.source, installer.original_sources(self.source))
 
 
+class AuxiliaryInventory(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.source = Path(temporary.name) / 'source'
+        for name in installer.EXECUTABLE_FILES:
+            write(self.source / name, b'INERT, NEVER EXECUTED')
+        self.native = self.source / 'ollama/lib/ollama/cuda_v12'
+        self.target = self.native / 'libcudart.so.12.4.127'
+        self.alias = self.native / 'libcudart.so.12'
+        write(self.target, b'inert native library fixture')
+        self.alias.symlink_to(self.target.name)
+        write(self.source / 'ollama/bin/ollama', b'inert native service fixture')
+        write(self.source / 'runtime/fixture.py', b'# normal checked Python dependency\n')
+
+    def test_cuda_alias_and_unversioned_native_chain_need_no_blob_reads(self):
+        # A sparse 2 GiB dependency proves native-library size is not a read or
+        # stage-copy requirement; no binary fixture or provider is executed.
+        with self.target.open('r+b') as output:
+            output.truncate(2 * 1024**3)
+        (self.native / 'libcudart.so').symlink_to(self.alias.name)
+        read_regular = installer.base.read_regular
+        def read(path, *args, **kwargs):
+            self.assertNotIn(self.source / 'ollama', Path(path).parents)
+            return read_regular(path, *args, **kwargs)
+        with patch.object(installer.base, 'read_regular', side_effect=read):
+            inventory = installer.code_inventory(self.source)
+            installer.assert_inventory(self.source, inventory)
+        self.assertIn('ollama/lib/ollama/cuda_v12/libcudart.so.12', inventory)
+        self.assertIn('ollama/bin/ollama', inventory)
+        self.assertEqual(os.readlink(self.alias), self.target.name)
+
+    def test_relative_alias_can_reach_another_native_subdirectory(self):
+        write(self.native.parent / 'cuda_v13/libother.so.1', b'another native fixture')
+        (self.native / 'libother.so').symlink_to('../cuda_v13/libother.so.1')
+        inventory = installer.code_inventory(self.source)
+        installer.assert_inventory(self.source, inventory)
+
+    def test_escape_dangling_cycle_directory_and_non_native_targets_refuse(self):
+        cases = ('../../../../runtime/fixture.py', str(self.target),
+                 'libmissing.so.1', self.alias.name, '.', 'native-data',
+                 self.target.name + '/../' + self.target.name)
+        write(self.native / 'native-data', b'not a native library path')
+        for target in cases:
+            with self.subTest(target=target):
+                self.alias.unlink(); self.alias.symlink_to(target)
+                with self.assertRaisesRegex(installer.Refused, 'unsafe_code_inventory'):
+                    installer.code_inventory(self.source)
+        self.alias.unlink(); self.alias.symlink_to('libcycle.so.1')
+        (self.native / 'libcycle.so.1').symlink_to(self.alias.name)
+        with self.assertRaisesRegex(installer.Refused, 'unsafe_code_inventory'):
+            installer.code_inventory(self.source)
+
+    def test_module_source_and_directory_symlinks_still_refuse(self):
+        cases = ('json.py', 'libnative.so', 'ollama/json.py',
+                 'ollama/lib/module.so', 'ollama/lib/ollama/cuda_v12/module.so',
+                 'ollama/lib/ollama/cuda_v12/nested')
+        for name in cases:
+            with self.subTest(name=name):
+                path = self.source / name
+                path.symlink_to(self.target if name.endswith('.so') else self.native)
+                try:
+                    with self.assertRaisesRegex(installer.Refused, 'unsafe_code_inventory'):
+                        installer.code_inventory(self.source)
+                finally:
+                    path.unlink()
+
+    def test_python_source_bytecode_and_unexpected_extensions_cannot_hide(self):
+        cases = ('ollama/json/__init__.py', 'ollama/lib/ollama/sitecustomize.py',
+                 'ollama/__pycache__/shadow.cpython-312.pyc', 'ollama/module.pyo',
+                 'ollama/lib/ollama/cuda_v12/module.so', 'ollama/module.pyd',
+                 'ollama/libnative.so', 'ollama/site-packages/extra.pth')
+        for name in cases:
+            with self.subTest(name=name):
+                path = self.source / name
+                write(path, b'unknown Python/import content')
+                try:
+                    with self.assertRaisesRegex(installer.Refused, 'unsafe_code_inventory'):
+                        installer.code_inventory(self.source)
+                finally:
+                    path.unlink()
+
+    def test_new_unknown_package_elsewhere_remains_in_import_inventory(self):
+        expected = installer.code_inventory(self.source)
+        write(self.source / 'json/__init__.py', b'# unknown package\n')
+        with self.assertRaisesRegex(installer.Refused, 'concurrent_code_inventory_edit'):
+            installer.assert_inventory(self.source, expected)
+
+    def test_link_replacement_and_same_size_native_edit_are_detected(self):
+        for change in ('link', 'bytes', 'mode'):
+            with self.subTest(change=change):
+                expected = installer.code_inventory(self.source)
+                if change == 'link':
+                    self.alias.unlink(); self.alias.symlink_to(self.target.name)
+                elif change == 'bytes':
+                    before = self.target.stat()
+                    self.target.write_bytes(b'X' * before.st_size)
+                    os.utime(self.target, ns=(before.st_atime_ns, before.st_mtime_ns))
+                else:
+                    self.target.chmod(0o700)
+                with self.assertRaisesRegex(installer.Refused, 'concurrent_code_inventory_edit'):
+                    installer.assert_inventory(self.source, expected)
+
+    def test_auxiliary_root_replacement_is_detected(self):
+        expected = installer.code_inventory(self.source)
+        auxiliary = self.source / 'ollama'
+        old = self.source.parent / 'old-ollama'
+        auxiliary.rename(old)
+        auxiliary.mkdir()
+        for name in ('bin', 'lib'):
+            (old / name).rename(auxiliary / name)
+        with self.assertRaisesRegex(installer.Refused, 'concurrent_code_inventory_edit'):
+            installer.assert_inventory(self.source, expected)
+
+    def test_link_replaced_during_snapshot_is_refused(self):
+        readlink = os.readlink
+        changed = []
+        def replace(path, *args, **kwargs):
+            target = readlink(path, *args, **kwargs)
+            if path == self.alias.name and not changed:
+                changed.append(True)
+                self.alias.unlink(); self.alias.symlink_to(self.target.name)
+            return target
+        with patch.object(installer.os, 'readlink', side_effect=replace):
+            with self.assertRaisesRegex(installer.Refused, 'concurrent_code_inventory_edit'):
+                installer.code_inventory(self.source)
+        self.assertTrue(changed)
+
+    def test_directory_replaced_with_symlink_during_snapshot_is_not_followed(self):
+        open_fd = os.open
+        changed = []
+        def replace(path, *args, **kwargs):
+            if path == 'cuda_v12' and not changed:
+                changed.append(True)
+                moved = self.source.parent / 'moved-native'
+                self.native.rename(moved)
+                self.native.symlink_to(moved, target_is_directory=True)
+            return open_fd(path, *args, **kwargs)
+        with patch.object(installer.os, 'open', side_effect=replace):
+            with self.assertRaisesRegex(installer.Refused, 'unsafe_code_inventory'):
+                installer.code_inventory(self.source)
+        self.assertTrue(changed)
+
+
 class ConstructionTransactions(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -194,6 +338,36 @@ class ConstructionTransactions(unittest.TestCase):
         for name, entry in backup['originals'].items():
             self.assertEqual(tree(self.backup / 'originals')[name], self.before[name])
             self.assertEqual(entry['sha256'], digest(self.before[name][0]))
+
+    def test_transaction_preserves_native_service_and_never_stages_it(self):
+        native = self.source / 'ollama/lib/ollama/cuda_v12'
+        write(native / 'libcudart.so.12.4.127', b'inert native library fixture')
+        alias = native / 'libcudart.so.12'
+        alias.symlink_to('libcudart.so.12.4.127')
+        before = installer.code_inventory(self.source)
+        auxiliary = {name: value for name, value in before.items() if name.startswith('ollama')}
+        self.assertTrue(self.install()['activation_committed'])
+        after = installer.code_inventory(self.source)
+        self.assertEqual({name: after[name] for name in auxiliary}, auxiliary)
+        self.assertEqual(os.readlink(alias), 'libcudart.so.12.4.127')
+        self.assertFalse((self.backup / 'verification-stage/ollama').exists())
+
+    def test_concurrent_auxiliary_replacement_preserved_without_activation(self):
+        native = self.source / 'ollama/lib/ollama/cuda_v12'
+        write(native / 'libcudart.so.12.4.127', b'inert native library fixture')
+        alias = native / 'libcudart.so.12'
+        alias.symlink_to('libcudart.so.12.4.127')
+        verify = Operations.verify_stage
+        def replace(operations, *args):
+            result = verify(operations, *args)
+            alias.unlink(); alias.symlink_to('libcudart.so.12.4.127')
+            return result
+        with patch.object(Operations, 'verify_stage', replace):
+            with self.assertRaisesRegex(installer.Refused, 'recovery_required'):
+                self.install()
+        self.assertEqual(os.readlink(alias), 'libcudart.so.12.4.127')
+        self.assertNotIn('activation-latched', self.operations.events)
+        self.assertNotIn('start', self.operations.events)
 
     def test_failures_before_activation_restore_every_byte_and_mode(self):
         for failure in ('verify','stage','missing-gate','health','stage-dependency','stage-addition','stage-mode','stage-symlink'):
