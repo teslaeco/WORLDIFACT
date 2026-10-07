@@ -49,6 +49,6 @@ test('actual Shop initial render restores detailed Astra by default and keeps FA
   assert.match(html, /<option value="fast-draft-v1" disabled="">GPT-6\.1 SOL/)
   assert.match(html, /Sol\/Luna generation is awaiting verified worker readiness/)
   assert.match(html, /Generate Astra\/Blender model · 250 points/)
-  assert.match(html, /Back to WORLDIFAKT/)
+  assert.match(html, /Back to WORLDIFACT/)
   assert.doesNotMatch(html, /<iframe|target="_top"|FAST guaranteed/)
 })
