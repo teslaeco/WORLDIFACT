@@ -1,0 +1,8 @@
+{
+  "release": "settled-subscription-upgrade-repair-20261007",
+  "baseCommit": "29b6b9af08d62baafddceb029652db321ec83273",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "subscriptionUpgradeRepair": true
+}

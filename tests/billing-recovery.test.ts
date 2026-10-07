@@ -37,6 +37,195 @@ function fixture() {
   return { map, env, calls, subscription, base, invoice, state, call, fetcher }
 }
 
+function paidUpgrade(f: ReturnType<typeof fixture>) {
+  f.subscription.pending_update = null
+  f.subscription.items.data[0].price = 'price_Pro'
+  f.subscription.current_period_end = f.invoice.lines.data[0].period.end
+  Object.assign(f.invoice, { paid: true, status: 'paid', amount_paid: 9999, amount_remaining: 0 })
+}
+
+async function billingEvent(f: ReturnType<typeof fixture>, type: string, id: string, created = Math.floor(Date.now() / 1000)) {
+  const payload = JSON.stringify({ id: 'evt_SettlementFixture', type, created, livemode: false, data: { object: { id } } })
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(f.env.STRIPE_WEBHOOK_SECRET!), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const signature = Buffer.from(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${created}.${payload}`))).toString('hex')
+  return billingApi(new Request('https://worldifact.test/api/billing/webhook', {
+    method: 'POST', headers: { 'Stripe-Signature': `t=${created},v1=${signature}`, 'Content-Type': 'application/json' }, body: payload,
+  }), f.env, f.fetcher)
+}
+
+test('paused new sales and absent portals cannot erase a verified paid Pro subscription or grant', async () => {
+  for (const mode of ['sales-paused', 'portal-missing', 'both'] as const) {
+    for (const path of ['recovery', 'invoice', 'subscription'] as const) {
+      const f = fixture(); paidUpgrade(f)
+      f.map.set('provider-budget-cents:v1', 63)
+      if (mode !== 'portal-missing') f.env.ENABLE_ASTRA_PLANS = 'false'
+      if (mode !== 'sales-paused') delete f.env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID
+      delete f.env.STRIPE_PLAN_CHANGE_CONFIGURATION_ID
+      for (let i = 0; i < 2; i++) {
+        const response = path === 'recovery' ? await f.call()
+          : await billingEvent(f, path === 'invoice' ? 'invoice.paid' : 'customer.subscription.updated', path === 'invoice' ? 'in_Upgrade' : subId)
+        assert.equal(response?.status, 200, `${mode}/${path}`)
+        const allowance = await entitlementStatus(f.env, uid)
+        assert.equal(allowance.credits, 5105)
+        assert.equal(allowance.subscription.active, true)
+        assert.equal(allowance.subscription.plan, 'pro')
+        assert.equal(f.map.get('provider-budget-cents:v1'), 3213)
+      }
+      const sales = await (await billingApi(new Request('https://worldifact.test/api/billing/status'), f.env, f.fetcher))!.json() as Json
+      assert.equal(sales.plans.pro.checkoutReady, false)
+      assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+    }
+  }
+})
+
+test('paid settlement cannot enable Astra generation while its runtime remains disabled', async () => {
+  for (const path of ['recovery', 'invoice', 'subscription'] as const) {
+    const f = fixture(); paidUpgrade(f); f.env.ENABLE_ASTRA_PLANS = 'false'
+    f.map.set('provider-budget-cents:v1', 63)
+    for (let i = 0; i < 2; i++) {
+      const response = path === 'recovery' ? await f.call()
+        : await billingEvent(f, path === 'invoice' ? 'invoice.paid' : 'customer.subscription.updated', path === 'invoice' ? 'in_Upgrade' : subId)
+      assert.equal(response?.status, 200)
+      const allowance = await entitlementStatus(f.env, uid)
+      assert.equal(allowance.credits, 5105)
+      assert.equal(allowance.subscription.active, true)
+      assert.equal(allowance.generationAdmission?.astra.allowed, false)
+      assert.equal(allowance.generationAdmission?.astra.reason, 'ASTRA_RUNTIME_DISABLED')
+      assert.equal(allowance.studioAdmission?.allowed, false)
+      assert.equal(allowance.studioAdmission?.reason, 'ASTRA_RUNTIME_DISABLED')
+      assert.equal(f.map.get('provider-budget-cents:v1'), 3213)
+      assert.equal(f.env.ENABLE_ASTRA_PLANS, 'false')
+    }
+    assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+  }
+})
+
+test('paused sales preserve paid Creator access during an unpaid Pro upgrade without granting Pro', async () => {
+  const f = fixture(); f.env.ENABLE_ASTRA_PLANS = 'false'; delete f.env.STRIPE_BILLING_PORTAL_CONFIGURATION_ID
+  f.map.set('provider-budget-cents:v1', 63)
+  for (let i = 0; i < 2; i++) {
+    assert.equal((await f.call())?.status, 200)
+    const allowance = await entitlementStatus(f.env, uid)
+    assert.equal(allowance.subscription.active, true)
+    assert.equal(allowance.subscription.plan, 'creator')
+    assert.equal(allowance.credits, 605)
+    assert.equal(f.map.get('provider-budget-cents:v1'), 63)
+    assert.equal(f.map.has('grant:in_Upgrade'), false)
+  }
+})
+
+test('delayed paid Creator invoice after Pro upgrade grants both purchases exactly once', async () => {
+  const f = fixture(); paidUpgrade(f)
+  f.map.delete('grant:in_Base')
+  f.map.set('provider-budget-cents:v1', 63)
+  f.env.ENABLE_ASTRA_PLANS = 'false'
+  for (let i = 0; i < 2; i++) {
+    assert.equal((await billingEvent(f, 'invoice.paid', 'in_Base'))?.status, 200)
+    const allowance = await entitlementStatus(f.env, uid)
+    assert.equal(allowance.credits, 6605)
+    assert.equal(allowance.subscription.plan, 'pro')
+    assert.equal(allowance.subscription.active, true)
+    assert.equal(f.map.get('provider-budget-cents:v1'), 4263)
+  }
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+})
+
+test('delayed paid Pro invoice after downgrade preserves the current Creator membership', async () => {
+  const f = fixture()
+  Object.assign(f.invoice, { paid: true, status: 'paid', amount_paid: 9999, amount_remaining: 0 })
+  f.subscription.pending_update = null; f.subscription.latest_invoice = 'in_Base'
+  f.map.set('provider-budget-cents:v1', 63)
+  for (let i = 0; i < 2; i++) {
+    assert.equal((await billingEvent(f, 'invoice.paid', 'in_Upgrade'))?.status, 200)
+    const allowance = await entitlementStatus(f.env, uid)
+    assert.equal(allowance.credits, 5105)
+    assert.equal(allowance.subscription.plan, 'creator')
+    assert.equal(allowance.subscription.active, true)
+    assert.equal(f.map.get('provider-budget-cents:v1'), 3213)
+  }
+})
+
+test('historical paid invoices do not reactivate canceled or expired membership', async () => {
+  for (const status of ['canceled', 'incomplete_expired']) {
+    const f = fixture(); paidUpgrade(f); f.subscription.status = status
+    f.map.set('provider-budget-cents:v1', 63)
+    for (let i = 0; i < 2; i++) {
+      assert.equal((await billingEvent(f, 'invoice.paid', 'in_Upgrade'))?.status, 200)
+      const allowance = await entitlementStatus(f.env, uid)
+      assert.equal(allowance.credits, 5105)
+      assert.equal(allowance.subscription.active, false)
+      assert.equal(f.map.get('provider-budget-cents:v1'), 3213)
+    }
+  }
+})
+
+test('stale invoice events cannot revive a newer terminal subscription or a revoked grant', async () => {
+  for (const revoked of [false, true]) {
+    const f = fixture(); paidUpgrade(f)
+    const now = Math.floor(Date.now() / 1000)
+    f.map.set('provider-budget-cents:v1', 63)
+    f.map.set('subscription', { id: subId, plan: 'pro', until: f.subscription.current_period_end * 1000, active: false, terminal: true, revision: now * 1000 })
+    if (revoked) f.map.set('grant:in_Upgrade', { credits: 0, revoked: 4500 })
+    for (let i = 0; i < 2; i++) {
+      assert.equal((await billingEvent(f, 'invoice.paid', 'in_Upgrade', now - 60))?.status, 200)
+      const allowance = await entitlementStatus(f.env, uid)
+      assert.equal(allowance.subscription.active, false)
+      assert.equal(allowance.credits, revoked ? 605 : 5105)
+      assert.equal(f.map.get('provider-budget-cents:v1'), revoked ? 63 : 3213)
+    }
+  }
+})
+
+test('settlement without sales still rejects unpaid, partial, prorated, unknown and foreign invoices', async () => {
+  for (const change of ['unpaid', 'partial', 'proration', 'unknown-price', 'wrong-amount', 'wrong-currency', 'quantity', 'multiple-lines', 'foreign-customer', 'foreign-subscription']) {
+    const f = fixture(); paidUpgrade(f); f.env.ENABLE_ASTRA_PLANS = 'false'
+    f.map.set('provider-budget-cents:v1', 63)
+    if (change === 'unpaid') { f.invoice.paid = false; f.invoice.status = 'open' }
+    if (change === 'partial') f.invoice.amount_paid = 4999
+    if (change === 'proration') f.invoice.lines.data[0].proration = true
+    if (change === 'unknown-price') f.invoice.lines.data[0].price = 'price_Unknown'
+    if (change === 'wrong-amount') f.invoice.total = 10000
+    if (change === 'wrong-currency') f.invoice.currency = 'eur'
+    if (change === 'quantity') f.invoice.lines.data[0].quantity = 2
+    if (change === 'multiple-lines') f.invoice.lines.data.push(structuredClone(f.invoice.lines.data[0]))
+    if (change === 'foreign-customer') f.invoice.customer = 'cus_Other'
+    if (change === 'foreign-subscription') f.invoice.subscription = 'sub_Other'
+    const response = await billingEvent(f, 'invoice.paid', 'in_Upgrade')
+    assert.ok(response && [200, 400, 503].includes(response.status), change)
+    assert.equal(f.map.get('balance'), 605, change)
+    assert.equal(f.map.get('provider-budget-cents:v1'), 63, change)
+    assert.equal(f.map.has('grant:in_Upgrade'), false, change)
+    assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+  }
+})
+
+test('a returned subscription with the wrong ID cannot settle an otherwise matching invoice', async () => {
+  const f = fixture(); paidUpgrade(f)
+  // The lookup route still returns a well-formed matching owner and customer,
+  // but the provider object identifies a different subscription.
+  f.subscription.id = 'sub_Other'
+  f.map.set('provider-budget-cents:v1', 63)
+  const before = structuredClone([...f.map])
+  for (let i = 0; i < 2; i++) {
+    assert.equal((await billingEvent(f, 'invoice.paid', 'in_Upgrade'))?.status, 200)
+    assert.deepEqual([...f.map], before)
+  }
+  assert.equal(f.calls.filter(c => c.url.endsWith(`/subscriptions/${subId}`)).length, 2)
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0)
+})
+
+test('missing settlement price or interval fails closed without deleting paid membership', async () => {
+  for (const change of ['price', 'interval'] as const) {
+    const f = fixture(); paidUpgrade(f)
+    f.map.set('subscription', { id: subId, plan: 'pro', until: f.subscription.current_period_end * 1000, active: true, revision: 1, grantId: 'in_Upgrade' })
+    const before = structuredClone([...f.map])
+    if (change === 'price') delete f.env.STRIPE_PRO_PRICE_ID
+    else delete f.env.STRIPE_SUBSCRIPTION_INTERVAL
+    assert.equal((await billingEvent(f, 'customer.subscription.updated', subId))?.status, change === 'price' ? 200 : 503)
+    assert.deepEqual([...f.map], before)
+  }
+})
+
 test('failed Pro upgrade restores only paid Creator period without duplicating credits or charging', async () => {
   const f = fixture()
   for (let i = 0; i < 2; i++) {

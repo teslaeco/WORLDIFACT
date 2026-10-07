@@ -239,7 +239,10 @@ async function syncSubscription(env: BillingEnv, subscription: Json, revision: n
   const end = Number(items[0].current_period_end ?? subscription.current_period_end) * 1000
   const invoiceId = idOf(subscription.latest_invoice)
   let paid = false, grantId: string | undefined
-  if (billingConfig(env).plans[plan] && resourceId(invoiceId, 'in') && subscription.status === 'active') {
+  // Existing paid entitlements are independent of NEW-sale availability. A
+  // paused Astra checkout or missing portal must not discard a paid invoice.
+  // The known plan, exact invoice and authoritative price still fail closed.
+  if (resourceId(invoiceId, 'in') && subscription.status === 'active') {
     await verifiedPrice(env, 'subscription', fetcher, true, priceIdValue, plan)
     let invoice = await stripe(env, `/invoices/${invoiceId}`, fetcher)
     // A failed pending upgrade replaces latest_invoice, not the already-paid base period.
@@ -271,13 +274,17 @@ async function syncSubscription(env: BillingEnv, subscription: Json, revision: n
 }
 async function invoicePaid(env: BillingEnv, invoice: Json, revision: number, fetcher: typeof fetch) {
   const verified = exactInvoice(env, invoice)
-  if (!verified || !billingConfig(env).plans[verified.plan]) return
+  if (!verified) return
   await verifiedPrice(env, 'subscription', fetcher, true, verified.priceId, verified.plan)
   const subId = subscriptionOf(invoice)
   if (!resourceId(subId, 'sub') || !resourceId(invoice.id, 'in')) return
   const subscription = await stripe(env, `/subscriptions/${subId}`, fetcher), uid = uidFor(subscription)
   const items = array(object(subscription.items).data)
-  if (!uid || items.length !== 1 || items[0].quantity !== 1 || idOf(items[0].price) !== verified.priceId || object(subscription.items).has_more === true) return
+  // A delayed paid invoice still funds its purchased credits after an upgrade
+  // or downgrade. The CURRENT item cannot redefine this invoice's product.
+  // Membership below is separately verified from the current subscription.
+  if (!uid || subscription.id !== subId || items.length !== 1 || items[0].quantity !== 1
+    || !planForPrice(env, idOf(items[0].price)) || object(subscription.items).has_more === true) return
   await checkCustomer(env, uid, invoice.customer)
   await checkCustomer(env, uid, subscription.customer)
   const grant = await entitlementCall<{ granted: boolean }>(env, uid, '/grant', { id: invoice.id, credits: verified.credits, subscriptionId: subId })

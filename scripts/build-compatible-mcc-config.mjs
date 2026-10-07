@@ -10,6 +10,16 @@ import { selectPipelineReleaseOptions } from './select-pipeline-only-release.mjs
 export function buildCompatibleMccConfig(base, options) {
   if (options?.compatibleMccRollback !== true || options?.preserveBilling !== true || options?.preserveRemoteVars !== true)
     throw new Error('COMPATIBLE_MCC_SCOPE_REQUIRED')
+  return omitDeclaredVars(base)
+}
+
+export function buildSubscriptionUpgradeConfig(base, options) {
+  if (options?.subscriptionUpgradeRepair !== true || options?.preserveBilling !== true || options?.preserveRemoteVars !== true || options?.preserveSecrets !== true)
+    throw new Error('SUBSCRIPTION_UPGRADE_SCOPE_REQUIRED')
+  return omitDeclaredVars(base)
+}
+
+function omitDeclaredVars(base) {
   if (base?.name !== 'worldifact' || base.main !== 'server/worker.ts' || !base.vars ||
       !Array.isArray(base.durable_objects?.bindings) || !Array.isArray(base.migrations))
     throw new Error('COMPATIBLE_MCC_CONFIG_NOT_REVIEWED')
@@ -21,13 +31,16 @@ export function buildCompatibleMccConfig(base, options) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    if (process.argv.length !== 2) throw new Error('COMPATIBLE_MCC_ARGUMENTS_NOT_ALLOWED')
+    const subscriptionUpgrade = process.argv.length === 3 && process.argv[2] === '--subscription-upgrade-repair'
+    if (process.argv.length !== 2 && !subscriptionUpgrade) throw new Error('PRESERVING_RELEASE_ARGUMENTS_NOT_ALLOWED')
     const options = selectPipelineReleaseOptions()
-    const config = buildCompatibleMccConfig(JSON.parse(await readFile('wrangler.jsonc', 'utf8')), options)
-    await writeFile('.compatible-mcc.wrangler.json', JSON.stringify(config, null, 2) + '\n', { mode: 0o600 })
-    console.log('Prepared compatible UI rollback config without declared vars; deploy only with --keep-vars. Existing bindings and migrations are unchanged.')
+    const buildConfig = subscriptionUpgrade ? buildSubscriptionUpgradeConfig : buildCompatibleMccConfig
+    const config = buildConfig(JSON.parse(await readFile('wrangler.jsonc', 'utf8')), options)
+    const path = subscriptionUpgrade ? '.subscription-upgrade.wrangler.json' : '.compatible-mcc.wrangler.json'
+    await writeFile(path, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 })
+    console.log(`Prepared ${subscriptionUpgrade ? 'subscription upgrade repair' : 'compatible UI rollback'} config without declared vars; deploy only with --keep-vars. Existing bindings and migrations are unchanged.`)
   } catch {
-    console.error('COMPATIBLE_MCC_CONFIG_NOT_VERIFIED: publication stopped; no remote settings or secrets were read or changed.')
+    console.error('PRESERVING_RELEASE_CONFIG_NOT_VERIFIED: publication stopped; no remote settings or secrets were read or changed.')
     process.exitCode = 1
   }
 }

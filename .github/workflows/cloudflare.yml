@@ -42,9 +42,17 @@ jobs:
       - uses: ./.github/actions/foundations
       - name: Select reviewed deployment configuration
         id: mode
+        env:
+          SUBSCRIPTION_UPGRADE_REPAIR: ${{ steps.billing_scope.outputs.subscription_upgrade_repair }}
         shell: bash
         run: |
-          if test "${{ steps.billing_scope.outputs.compatible_mcc_rollback }}" = 'true'; then
+          if test "${SUBSCRIPTION_UPGRADE_REPAIR:-false}" = 'true'; then
+            node scripts/build-compatible-mcc-config.mjs --subscription-upgrade-repair
+            echo 'config=.subscription-upgrade.wrangler.json' >> "$GITHUB_OUTPUT"
+            echo 'subscription_upgrade_repair=true' >> "$GITHUB_OUTPUT"
+            echo 'mode=PRESERVE' >> "$GITHUB_OUTPUT"
+            echo 'Subscription upgrade repair: preserve runtime gates, prices, variables and secrets.'
+          elif test "${{ steps.billing_scope.outputs.compatible_mcc_rollback }}" = 'true'; then
             node scripts/build-compatible-mcc-config.mjs
             echo 'config=.compatible-mcc.wrangler.json' >> "$GITHUB_OUTPUT"
             echo 'mode=PRESERVE' >> "$GITHUB_OUTPUT"
@@ -158,12 +166,15 @@ jobs:
       - name: Verify published HTML, assets and no-cost DEMO API path
         id: release
         run: |
-          if test "${{ steps.mode.outputs.mode }}" = 'PRESERVE'; then
+          if test "${SUBSCRIPTION_UPGRADE_REPAIR:-false}" = 'true'; then
+            node scripts/check-compatible-mcc-release.mjs --subscription-upgrade-repair
+          elif test "${{ steps.mode.outputs.mode }}" = 'PRESERVE'; then
             node scripts/check-compatible-mcc-release.mjs
           else
             node scripts/release-check.ts smoke
           fi
         env:
+          SUBSCRIPTION_UPGRADE_REPAIR: ${{ steps.mode.outputs.subscription_upgrade_repair }}
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-deploy.ndjson
       - name: Verify published detailed route without creating a model
         if: steps.mode.outputs.mode == 'LIVE'
