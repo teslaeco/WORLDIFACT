@@ -458,7 +458,30 @@ export const OWNER_RESERVE_ADJUSTMENT_REVIEWED_PATHS = Object.freeze([
   'tests/owner-reserve-adjustment-release.test.mjs',
   'tests/owner-reserve-adjustment.test.ts',
 ].sort())
+export const BOUNDED_SOFTWARE_PREVIEW_BASE_COMMIT = '64986c33139e515d6a0a81fccb61f8db972bd62e'
+export const BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH = 'ops/BOUNDED_SOFTWARE_PREVIEW_RELEASE_20261007.json'
+export const BOUNDED_SOFTWARE_PREVIEW_MARKER_CONTENT = JSON.stringify({
+  release: 'bounded-software-model-preview-20261007',
+  baseCommit: BOUNDED_SOFTWARE_PREVIEW_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+  preserveSecrets: true,
+  boundedSoftwarePreview: true,
+}, null, 2) + '\n'
+export const BOUNDED_SOFTWARE_PREVIEW_REVIEWED_PATHS = Object.freeze([
+  '.github/workflows/cloudflare.yml',
+  'docs/CONTEST_STATUS.md',
+  BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH,
+  'scripts/build-compatible-mcc-config.mjs',
+  'scripts/select-pipeline-only-release.mjs',
+  'src/components/OracleModelPreview.tsx',
+  'src/lib/softwareModelPreview.ts',
+  'tests/bounded-software-preview-release.test.mjs',
+  'tests/oracle-model-preview-lifecycle.test.mjs',
+  'tests/software-model-preview.test.ts',
+].sort())
 const releaseIntroductions = new Set([
+  'tests/bounded-software-preview-release.test.mjs',
   'server/ownerReserveAdjustment.ts',
   'src/lib/ownerReserveAdjustment.ts',
   'src/lib/ownerReserveAdjustmentClient.ts',
@@ -541,6 +564,7 @@ const releaseIntroductions = new Set([
   'tests/studio-project-budget.test.ts',
 ])
 const scopes = [
+  { base: BOUNDED_SOFTWARE_PREVIEW_BASE_COMMIT, marker: BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH, content: BOUNDED_SOFTWARE_PREVIEW_MARKER_CONTENT, paths: BOUNDED_SOFTWARE_PREVIEW_REVIEWED_PATHS, preserveRemoteVars: true, boundedSoftwarePreview: true, singleParent: true },
   { base: OWNER_RESERVE_ADJUSTMENT_BASE_COMMIT, marker: OWNER_RESERVE_ADJUSTMENT_MARKER_PATH, content: OWNER_RESERVE_ADJUSTMENT_MARKER_CONTENT, paths: OWNER_RESERVE_ADJUSTMENT_REVIEWED_PATHS, preserveRemoteVars: true, ownerReserveAdjustment: true, singleParent: true },
   { base: ACCOUNT_PURCHASE_EVIDENCE_BASE_COMMIT, marker: ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH, content: ACCOUNT_PURCHASE_EVIDENCE_MARKER_CONTENT, paths: ACCOUNT_PURCHASE_EVIDENCE_REVIEWED_PATHS, preserveRemoteVars: true, accountPurchaseEvidence: true, singleParent: true },
   { base: SUBSCRIPTION_UPGRADE_BASE_COMMIT, marker: SUBSCRIPTION_UPGRADE_MARKER_PATH, content: SUBSCRIPTION_UPGRADE_MARKER_CONTENT, paths: SUBSCRIPTION_UPGRADE_REVIEWED_PATHS, preserveRemoteVars: true, subscriptionUpgradeRepair: true, singleParent: true },
@@ -610,7 +634,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {
@@ -637,7 +661,7 @@ function selectReleaseScope(cwd, readGit) {
 
 export function selectPipelineReleaseOptions(cwd = process.cwd(), readGit = git) {
   const scope = selectReleaseScope(cwd, readGit)
-  return { preserveBilling: Boolean(scope), preserveRemoteVars: scope?.preserveRemoteVars === true, ...(scope?.compatibleMccRollback ? { compatibleMccRollback: true } : {}), ...(scope?.ownerReserveAdjustment ? { ownerReserveAdjustment: true, preserveSecrets: true } : {}), ...(scope?.accountPurchaseEvidence ? { accountPurchaseEvidence: true, preserveSecrets: true } : {}), ...(scope?.subscriptionUpgradeRepair ? { subscriptionUpgradeRepair: true, preserveSecrets: true } : {}) }
+  return { preserveBilling: Boolean(scope), preserveRemoteVars: scope?.preserveRemoteVars === true, ...(scope?.compatibleMccRollback ? { compatibleMccRollback: true } : {}), ...(scope?.boundedSoftwarePreview ? { boundedSoftwarePreview: true, preserveSecrets: true } : {}), ...(scope?.ownerReserveAdjustment ? { ownerReserveAdjustment: true, preserveSecrets: true } : {}), ...(scope?.accountPurchaseEvidence ? { accountPurchaseEvidence: true, preserveSecrets: true } : {}), ...(scope?.subscriptionUpgradeRepair ? { subscriptionUpgradeRepair: true, preserveSecrets: true } : {}) }
 }
 
 export function selectPipelineOnlyRelease(cwd = process.cwd(), readGit = git) {
@@ -653,6 +677,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (options.subscriptionUpgradeRepair) console.log('subscription_upgrade_repair=true')
     if (options.accountPurchaseEvidence) console.log('account_purchase_evidence=true')
     if (options.ownerReserveAdjustment) console.log('owner_reserve_adjustment=true')
+    if (options.boundedSoftwarePreview) console.log('bounded_software_preview=true')
   } catch {
     console.error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED: publication stopped before credential setup; verify the reviewed parent, paths and one-time marker. No secret values were read.')
     process.exitCode = 1

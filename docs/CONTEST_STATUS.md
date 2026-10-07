@@ -2,6 +2,38 @@
 
 Updated 7 October 2026.
 
+## LOCAL REVIEW — bounded preview for dense generated models (7 October 2026)
+
+The separately approved single Astra test completed through the ordinary Shop
+path. Its downloaded original is a valid embedded GLB with two meshes, 53,100
+triangles, 151,686 vertices and embedded textures. The software-only preview
+rejected its leaf accessor at the 60,000-vertex rendered-geometry limit. The
+container, finite positions and indices are valid; this is a preview complexity
+mismatch, not evidence of a failed generation or a corrupted model.
+
+This correction is limited to the texture-free software fallback. Separate
+bounded source-work limits allow validation of every source position, index and
+active transformed instance before any renderer geometry allocation. Existing
+16 MiB input, metadata, URI, depth and per-draw safeguards remain. Larger valid
+models are represented by a deterministic subset of their actual source
+triangles, distributed across visible parts. Rendered geometry remains capped
+at 20,000 triangles and 60,000 vertices; small models retain exact geometry.
+Full source bounds drive framing and dimension scaling. The UI explicitly labels
+sampled software views simplified and untextured. The original GLB, textures,
+download, saved model and normal WebGL path are unchanged.
+
+This release contains no financial endpoint, reserve adjustment, generation or
+provider request. The prior one-time allocation and its audit are preserved.
+Historical unused-reserve recovery, if separately authorized, is a different
+action and is not included. Local validation passes all 1,775 runnable tests, lint, TypeScript, real HTTP
+smoke, production build and Worker dry-run. Independent review passes all
+39 focused geometry/lifecycle/release tests and additional adversarial boundary
+probes. The known two local browser restrictions remain respected and those
+tests remain enabled in hosted CI. The exact original oak passes offline in
+under 60 ms here, without source-byte changes; this is not browser/device timing
+or visual-quality evidence. Exact-head hosted checks and verified deployment
+remain separate gates.
+
 ## LOCAL REVIEW — explicitly approved one-time reserve adjustment (7 October 2026)
 
 Both historical purchase grants were found in the authenticated account ledger.
