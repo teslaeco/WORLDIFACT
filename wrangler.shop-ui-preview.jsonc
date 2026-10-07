@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "worldifact-shop-ui-preview-20261007",
+  "compatibility_date": "2026-09-14",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./.review/shop-ui-preview",
+    "not_found_handling": "single-page-application"
+  }
+}
