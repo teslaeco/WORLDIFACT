@@ -2,6 +2,7 @@ import * as studioPricing from '../src/lib/studioPricing.ts'
 import * as studioTierSelection from '../src/lib/studioTierSelection.ts'
 import * as detailedStudio from '../src/lib/detailedStudio.ts'
 import * as studioClient from '../src/lib/studioClient.ts'
+import { studioPointsPending } from '../src/lib/studioProtocol.ts'
 import { quoteGeneration } from '../src/lib/generationQuote.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -76,7 +77,7 @@ async function harness(readStatus, { withExistingJob = true, ready = false, quot
         async start(input, onPrepared) { posts++; submitted.push(input); onPrepared({ ...record, ...(input.budgetTier ? { pricing: studioPricing.STUDIO_PRICING[input.budgetTier] } : {}) }); return { id: record.receipt.id, state: 'building' } }
         async artifact() { loads++; return new Blob(['Synthetic bytes; geometry is not under test']) }
       } }
-      if (id === '../lib/studioProtocol') return { validateStudioInput: value => value, STUDIO_POLL_MS: 25_000 }
+      if (id === '../lib/studioProtocol') return { validateStudioInput: value => value, STUDIO_POLL_MS: 25_000, studioPointsPending }
       if (id === '../lib/studioArchive') return { saveStudioModel: async () => {} }
       if (id === '../lib/privateWorldAssets') return { listWorldAssets: async () => [], storeWorldAsset: async () => ({ id: 'fixture-asset' }) }
       if (id === '../lib/editorTools') return { characterGenerationPrompt: world => world.character.description || 'Synthetic adult character' }
@@ -114,6 +115,18 @@ test('character status survives repeated GET errors and later imports the same s
     assert.deepEqual(h.delays, [800, 10_000, 20_000, 40_000, 80_000, 120_000, 120_000])
     assert.deepEqual(h.counts(), { polls: 7, posts: 0, loads: 1, adopted: 1 })
     assert.equal(h.timers.size, 0)
+  } finally { h.close() }
+})
+
+test('terminal character failure with held points shows manual review and stops automatic recovery without starting another model', async () => {
+  const h = await harness(() => ({ state: 'failed', failureCode: 'ASTRA_COST_LIMIT', pointSettlement: { version: 1, state: 'pending-cost', heldPoints: 250, chargedPoints: 0 } }), { realClient: true })
+  try {
+    await h.poll()
+    assert.match(JSON.stringify(h.tree()), /250 points remain held for cost review/)
+    assert.match(JSON.stringify(h.tree()), /manual review is needed/)
+    assert.doesNotMatch(JSON.stringify(h.tree()), /Reserved customer points were released/)
+    assert.equal(h.counts().posts, 0); assert.equal(h.counts().polls, 1); assert.equal(h.timers.size, 0)
+    assert.ok(h.storeData.has(h.savedKey))
   } finally { h.close() }
 })
 

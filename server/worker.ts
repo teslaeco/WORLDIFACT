@@ -6,7 +6,8 @@ import { studioApi } from "./studio.ts";
 import { avatarApi, type AvatarContext } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
 import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
-import { entitlementCall, entitlementApi, markBlueprintDispatch, reserveUserGeneration, settleFailedBlueprint, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
+import { POINT_COST_PENDING_DETAIL, PAID_POINTS_POLICY_HEADER, type PointSettlement } from '../src/lib/paidPointsFunding.ts';
+import { entitlementCall, entitlementApi, userJobAccess, markBlueprintDispatch, reserveUserGeneration, settleFailedBlueprint, settleUserGeneration, type EntitlementEnv } from './entitlements.ts';
 import { hasTestAccountHeaders, testAccountMatches, readTestInputEnvelope } from '../src/lib/testAccountContract.ts';
 import { captureBlueprintTerminalUsage, type BlueprintTerminalUsage } from './blueprintTerminalUsage.ts';
 import { billingApi, type BillingEnv } from './billing.ts';
@@ -114,15 +115,19 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (url.pathname.startsWith('/api/blueprint/requests/')) {
     if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405);
     if (request.headers.get('origin') && request.headers.get('origin') !== url.origin) return json({ error: 'Cross-origin request rejected' }, 403);
+    const storedRecovery = url.searchParams.get('stored') === 'held-points-v1';
+    if (url.searchParams.size && (!storedRecovery || url.searchParams.size !== 1 || url.searchParams.getAll('stored').length !== 1)) return json({ error: 'Invalid owned recovery selection.' }, 400);
     const seed = url.pathname.slice('/api/blueprint/requests/'.length);
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(seed)) return json({ error: 'Invalid request identifier' }, 400);
     try {
       const account = await getVerifiedAccount(request, env, fetcher);
       if (!account) return json({ error: 'Sign in to recover your own generation.' }, 401);
       if (hasTestAccountHeaders(request.headers) && !testAccountMatches(request.headers, account.id)) return json({ error: 'The signed-in account changed. Recover from the original account.', diagnostic: 'TEST_ACCOUNT_NOT_APPROVED' }, 403);
-      const requestId = await blueprintRequestId(seed);
-      const status = await entitlementCall(env, account.id, '/blueprint-status', { id: requestId });
-      return json(status);
+      const requestId = storedRecovery ? seed : await blueprintRequestId(seed);
+      const owned = storedRecovery ? await userJobAccess(env, account.id, requestId) : undefined;
+      if (storedRecovery && (!owned?.owned || owned.channel !== 'blueprint' || !owned.pointSettlement)) return json({ error: 'This held request is not available in your account.' }, 404);
+      const status = await entitlementCall<Record<string, unknown>>(env, account.id, '/blueprint-status', { id: requestId });
+      return json(storedRecovery ? { ...status, requestId, model: owned!.model } : status);
     } catch { return json({ error: 'Recovery status is temporarily unavailable. Do not start another paid attempt.' }, 503); }
   }
   const configured = !!env.OPENAI_API_KEY && env.ENABLE_PAID_GENERATION === "true";
@@ -233,36 +238,47 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (!["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"].includes(model)) return json({ error: "Selected model requires review.", requestId, noCharge: true }, 503);
   if (selectedModel === "astra" && env.ENABLE_ASTRA_PLANS !== "true") return json({ error: "ASTRA is not commercially enabled yet.", requestId, noCharge: true }, 503);
   if (selectedModel !== "astra" && references.length) return json({ error: "Sol and Luna are text-only. No image was discarded.", requestId, noCharge: true }, 400);
+  let pointSettlement: PointSettlement | undefined;
+  const financialJson = (value: object, status = 200) => json({ ...value, ...(pointSettlement ? { pointSettlement, ...('error' in value && !('state' in value) ? { state: pointSettlement.state === 'held' ? 'pending' : 'failed' } : {}) } : {}) }, status);
   let customerGenerationKind: 'free' | 'credits' | null = null;
   if (account) {
     try {
       const reservation = await reserveUserGeneration(env, account.id, requestId, selectedModel === 'astra' ? 'slow' : 'fast', selectedModel, fingerprint, undefined,
-        { channel: 'blueprint', blueprintDispatch: 'fenced-v1', providerModel: model, ...(overnightTest ? { overnightTest: true } : {}) });
-      if (reservation.reason === 'REQUEST_PAYLOAD_MISMATCH') return json({ error: 'This request ID belongs to different inputs. No new charge was made.', code: 'REQUEST_PAYLOAD_MISMATCH', requestId }, 409);
+        { paidPointsPolicy: request.headers.get(PAID_POINTS_POLICY_HEADER), channel: 'blueprint', blueprintDispatch: 'fenced-v1', providerModel: model, ...(overnightTest ? { overnightTest: true } : {}) });
+      pointSettlement = reservation.pointSettlement;
+      if (reservation.reason === 'REQUEST_PAYLOAD_MISMATCH') return financialJson({ error: 'This request ID belongs to different inputs. No new charge was made.', code: 'REQUEST_PAYLOAD_MISMATCH', requestId }, 409);
       if (reservation.repeated) {
-        const status = await entitlementCall<{ state: string; result?: GenerationResult; refunded?: boolean }>(env, account.id, '/blueprint-status', { id: requestId });
-        if (status.state === 'completed' && status.result) return json(status.result);
-        return json({ error: status.refunded ? 'This attempt failed and its customer allowance was returned. No replacement was started.' : 'This same request is already being processed. Recover its status; no second charge was made.', requestId, state: status.state, refunded: status.refunded === true }, 409);
+        const status = await entitlementCall<{ state: string; result?: GenerationResult; refunded?: boolean; pointSettlement?: PointSettlement }>(env, account.id, '/blueprint-status', { id: requestId });
+        pointSettlement = status.pointSettlement;
+        if (status.state === 'completed' && status.result) return financialJson(status.result);
+        return financialJson({ error: status.pointSettlement?.state === 'pending-cost' ? POINT_COST_PENDING_DETAIL : status.refunded ? 'This attempt failed and its customer allowance was returned. No replacement was started.' : 'This same request is already being processed. Recover its status; no second charge was made.', requestId, state: status.state, refunded: status.refunded === true }, 409);
       }
       if (!reservation.allowed) {
         const conflict = ['JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(reservation.reason ?? '');
         const failureCode = isAdmissionFailureCode(reservation.reason) ? reservation.reason : conflict ? 'ACCOUNT_REQUEST_CONFLICT' : 'ACCOUNT_ADMISSION_UNAVAILABLE';
-        return json({ error: blueprintAdmissionDetail(failureCode), failureCode, requestId, noCharge: true }, 429);
+        return financialJson({ error: blueprintAdmissionDetail(failureCode), failureCode, requestId, noCharge: true }, 429);
       }
       if (reservation.providerModel !== model) {
-        await settleUserGeneration(env, account.id, requestId, 'failed');
-        return json({ error: 'The account model binding is not ready. No provider request was sent.', requestId, noCharge: true }, 503);
+        const released = await settleUserGeneration(env, account.id, requestId, 'failed');
+        pointSettlement = released.pointSettlement;
+        return financialJson({ error: 'The account model binding is not ready. No provider request was sent.', requestId, noCharge: true }, 503);
       }
       customerGenerationKind = reservation.kind ?? null;
-    } catch { return json({ error: 'Your generation allowance could not be checked. No model was requested.', requestId }, 503); }
+    } catch { return financialJson({ error: 'Your generation allowance could not be checked. No model was requested.', requestId }, 503); }
   }
   let generationCompleted = false;
   let terminalUsage: BlueprintTerminalUsage | undefined;
   async function finishUser(success: boolean) {
     if (account) {
-      if (!success && terminalUsage) await settleFailedBlueprint(env, account.id, requestId, terminalUsage);
-      else await settleUserGeneration(env, account.id, requestId, success ? 'completed' : 'failed');
+      const settled = !success && terminalUsage ? await settleFailedBlueprint(env, account.id, requestId, terminalUsage)
+        : await settleUserGeneration(env, account.id, requestId, success ? 'completed' : 'failed');
+      if (settled.pointSettlement) pointSettlement = settled.pointSettlement;
     }
+  }
+  async function financialFailure(value: object, status: number) {
+    try { await finishUser(false); }
+    catch { return financialJson({ error: 'Generation settlement is uncertain. Recover this same request; no replacement was started.', requestId, state: 'pending' }, 503); }
+    return financialJson(pointSettlement?.state === 'pending-cost' ? { ...value, error: POINT_COST_PENDING_DETAIL, state: 'failed' } : value, status);
   }
   const content: Record<string, unknown>[] = [{ type: "input_text", text: input.prompt }];
   for (const [index, reference] of references.entries()) {
@@ -287,29 +303,29 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
       method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(12000), body: JSON.stringify(counterPayload),
     });
-    if (!count.ok) { await count.body?.cancel(); await finishUser(false); return json({ error: "Cost preflight is unavailable. No generation request was sent.", requestId }, 503); }
+    if (!count.ok) { await count.body?.cancel(); await finishUser(false); return financialJson({ error: "Cost preflight is unavailable. No generation request was sent.", requestId }, 503); }
     const tokenBody = await limitedBody(count as unknown as Request);
     const inputTokens = tokenBody.object === "response.input_tokens" && Number.isSafeInteger(tokenBody.input_tokens) && tokenBody.input_tokens >= 0 ? Number(tokenBody.input_tokens) : -1;
-    if (inputTokens < 0) { await finishUser(false); return json({ error: "Cost preflight returned invalid usage. No generation request was sent.", requestId }, 503); }
+    if (inputTokens < 0) { await finishUser(false); return financialJson({ error: "Cost preflight returned invalid usage. No generation request was sent.", requestId }, 503); }
     // Conservative Standard Sol reservation: $6/M input + $17/M output, above current
     // long-context rates and regional uplift. This intentionally reserves more than list price.
     const worstMicroUsd = blueprintReservationMicroUsd(selectedModel, inputTokens);
     const ceilingMicroUsd = customerGenerationKind === 'free' ? 150_000 : MODEL_CATALOG[selectedModel].maxProviderCents * 10_000;
     if (worstMicroUsd > ceilingMicroUsd) {
       await finishUser(false);
-      return json({ error: `This request exceeds the selected ${MODEL_CATALOG[selectedModel].label} cost guard. Reduce reference complexity or prompt size.`, requestId }, 413);
+      return financialJson({ error: `This request exceeds the selected ${MODEL_CATALOG[selectedModel].label} cost guard. Reduce reference complexity or prompt size.`, requestId }, 413);
     }
   } catch {
     await finishUser(false).catch(() => {});
-    return json({ error: "Cost preflight is unavailable. No generation request was sent.", requestId }, 503);
+    return financialJson({ error: "Cost preflight is unavailable. No generation request was sent.", requestId }, 503);
   }
 
   try {
     const budget = env.GENERATION_BUDGET!.get(env.GENERATION_BUDGET!.idFromName("worldifact-generation-budget-v1"));
     const reservation = await budget.fetch(new Request("https://budget.internal/reserve", { method: "POST", signal: AbortSignal.timeout(5000) }));
-    if (reservation.status === 429) { await finishUser(false); return json({ error: "Preview generation allowance has ended. DEMO is still available.", requestId }, 429); }
-    if (!reservation.ok || (await reservation.json() as { allowed?: boolean }).allowed !== true) { await finishUser(false); return json({ error: "Generation allowance is unavailable.", requestId }, 503); }
-  } catch { await finishUser(false).catch(() => {}); return json({ error: "Generation allowance is unavailable.", requestId }, 503); }
+    if (reservation.status === 429) { await finishUser(false); return financialJson({ error: "Preview generation allowance has ended. DEMO is still available.", requestId }, 429); }
+    if (!reservation.ok || (await reservation.json() as { allowed?: boolean }).allowed !== true) { await finishUser(false); return financialJson({ error: "Generation allowance is unavailable.", requestId }, 503); }
+  } catch { await finishUser(false).catch(() => {}); return financialJson({ error: "Generation allowance is unavailable.", requestId }, 503); }
   if (customerGenerationKind === 'free') {
     try {
       const promo = env.GENERATION_BUDGET!.get(env.GENERATION_BUDGET!.idFromName("worldifact-free-sol-promo-v1"));
@@ -318,15 +334,15 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
       }));
       if (response.status === 429) {
         await finishUser(false);
-        return json({ error: "The funded free Sol pool is used for now. DEMO is still available and no Astra request was started.", requestId }, 429);
+        return financialJson({ error: "The funded free Sol pool is used for now. DEMO is still available and no Astra request was started.", requestId }, 429);
       }
       if (!response.ok || (await response.json() as { allowed?: boolean }).allowed !== true) {
         await finishUser(false);
-        return json({ error: "The funded free Sol allowance is unavailable. No paid provider request was started.", requestId }, 503);
+        return financialJson({ error: "The funded free Sol allowance is unavailable. No paid provider request was started.", requestId }, 503);
       }
     } catch {
       await finishUser(false).catch(() => {});
-      return json({ error: "The funded free Sol allowance is unavailable. No paid provider request was started.", requestId }, 503);
+      return financialJson({ error: "The funded free Sol allowance is unavailable. No paid provider request was started.", requestId }, 503);
     }
   }
   try {
@@ -336,20 +352,20 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     if (account) {
       let claim;
       try { claim = await markBlueprintDispatch(env, account.id, requestId, fingerprint); }
-      catch { return json({ error: "Generation admission could not be confirmed. Recover this request; no replacement was started.", requestId }, 503); }
+      catch { return financialJson({ error: "Generation admission could not be confirmed. Recover this request; no replacement was started.", requestId }, 503); }
       // The account transaction races with failed/expired settlement. Only one
       // live claimant may dispatch, and a delayed acknowledgement is unusable.
       // Keep the expiry check adjacent to fetch: no asynchronous work between.
       dispatchedAt = Date.now();
       if (!claim.dispatch || dispatchedAt >= claim.deadline)
-        return json({ error: "This request can no longer start. Recover its status; no replacement was started.", requestId }, 409);
+        return financialJson({ error: "This request can no longer start. Recover its status; no replacement was started.", requestId }, 409);
       dispatchDeadline = claim.deadline;
     }
     const upstream = await fetcher("https://api.openai.com/v1/responses", {
       method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(selectedModel === 'astra' ? 60_000 : 30_000),
       body: payload,
     });
-    if (!upstream.ok) return json({ error: upstream.status === 429 ? "AI service is busy. Try again later." : "AI service could not complete the request.", requestId }, upstream.status === 429 ? 429 : 502);
+    if (!upstream.ok) return await financialFailure({ error: upstream.status === 429 ? "AI service is busy. Try again later." : "AI service could not complete the request.", requestId }, upstream.status === 429 ? 429 : 502);
     const body = await limitedBody(upstream as unknown as Request);
     // Keep authenticated terminal usage before content checks can fail. A
     // refusal, truncated output or invalid schema is still a paid response.
@@ -357,9 +373,9 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
       accountId: account.id.toLowerCase(), requestId, fingerprint, model, dispatchDeadline, dispatchedAt, receivedAt: Date.now(),
       reservedCents: MODEL_CATALOG[selectedModel].maxProviderCents,
     });
-    if (body.status !== "completed" || body.model !== model) return json({ error: "AI response was incomplete. Previous scene is unchanged.", requestId }, 502);
+    if (body.status !== "completed" || body.model !== model) return await financialFailure({ error: "AI response was incomplete. Previous scene is unchanged.", requestId }, 502);
     const parts = (body.output ?? []).flatMap((item: { content?: { type: string; text?: string }[] }) => item.content ?? []);
-    if (parts.some((p: { type: string }) => p.type === "refusal")) return json({ error: "This request could not be generated. Try a different scene.", requestId }, 422);
+    if (parts.some((p: { type: string }) => p.type === "refusal")) return await financialFailure({ error: "This request could not be generated. Try a different scene.", requestId }, 422);
     const result = parts.filter((p: { type: string }) => p.type === "output_text").map((p: { text: string }) => p.text).join("");
     const parsed = JSON.parse(result) as Record<string, unknown>;
     const blueprint = validateBlueprint(parsed.blueprint);
@@ -377,18 +393,18 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     const delivered = validateGenerationResult({ mode: "LIVE", provenance: "GENERATED", blueprint, assetSpec, requestId, model, evidence, delivery: { kind: "procedural-blueprint", referenceCount: references.length, fallbackUsed: false },
       limitation: `${MODEL_CATALOG[selectedModel].label} created a validated WorldBlueprint and AssetSpec in one bounded provider call. The scene change is real and the downloadable GAME GLB is derived locally from that specification; it is not a detailed Oracle/Blender mesh. MAKE remains validation-required; no quote, order or production approval was generated.` });
     if (account) {
-      const settled = await entitlementCall<{ state: string; result?: GenerationResult }>(env, account.id, "/blueprint-complete", { id: requestId, result: delivered });
+      const settled = await entitlementCall<{ state: string; result?: GenerationResult; pointSettlement?: PointSettlement }>(env, account.id, "/blueprint-complete", { id: requestId, result: delivered });
+      pointSettlement = settled.pointSettlement;
       if (settled.state !== "completed" || !settled.result) throw new Error("The deliverable could not be committed to your account");
     }
     generationCompleted = true;
-    return json(delivered);
+    return financialJson(delivered);
   } catch (e) {
-    return json({ error: e instanceof Error && ["TimeoutError", "AbortError"].includes(e.name) ? "Generation timed out. Previous scene is unchanged." : "Invalid AI result. Previous scene is unchanged.", requestId }, 502);
+    return await financialFailure({ error: e instanceof Error && ["TimeoutError", "AbortError"].includes(e.name) ? "Generation timed out. Previous scene is unchanged." : "Invalid AI result. Previous scene is unchanged.", requestId }, 502);
   } finally {
-    // A synchronous blueprint request with no deliverable never consumes a
-    // customer's credit. Unknown provider liability stays reserved. Verified
-    // terminal usage can release only the conservatively bounded unused part
-    // in the same account transaction as the one-time points refund.
+    // Legacy jobs retain their established refund semantics. New paid jobs
+    // retain a full point hold after dispatched failure; conservative positive
+    // usage is not an actual-cost bill and cannot finalize that charge.
     if (!generationCompleted) await finishUser(false).catch(() => {});
   }
 }

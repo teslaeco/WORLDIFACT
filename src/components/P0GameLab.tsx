@@ -14,8 +14,9 @@ import ProjectAttachmentPicker from './ProjectAttachmentPicker'
 import GenerationCostNotice from './GenerationCostNotice'
 import { MODEL_CATALOG, type DraftModel } from '../lib/modelCatalog'
 import { exportProceduralGlb } from '../lib/proceduralGlb'
-import { ScopedBlueprintClient, type ScopedBlueprintRecovery } from '../lib/scopedBlueprintClient'
+import { ScopedBlueprintClient, blueprintRecoveryDetail, type ScopedBlueprintRecovery } from '../lib/scopedBlueprintClient'
 import { useAccount } from '../lib/account'
+import { useGenerationQuote } from '../lib/useGenerationQuote'
 
 const MAX_REFERENCE_BYTES = 6 * 1024 * 1024
 function download(data: Blob, name: string) {
@@ -45,6 +46,7 @@ function WorldBlueprintLab() {
   const [busy, setBusy] = useState(false)
   const [imageBusy, setImageBusy] = useState(false)
   const [recovery, setRecovery] = useState<ScopedBlueprintRecovery | null>(null)
+  const [heldRequests, setHeldRequests] = useState<ScopedBlueprintRecovery[]>([])
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState('')
   const abort = useRef<AbortController | null>(null)
@@ -54,17 +56,19 @@ function WorldBlueprintLab() {
   const imageRevision = useRef(0)
   const readingImage = useRef(false)
   const mounted = useRef(true)
+  const accountQuote = useGenerationQuote(selectedModel, busy)
+  const funded = !accountQuote.checking && ['free', 'credits'].includes(accountQuote.quote.state)
   useEffect(() => {
     // Reset transient UI when the external account scope changes.
     // eslint-disable-next-line react/set-state-in-effect
-    mounted.current = true; inFlight.current = false; setBusy(false); setImageBusy(false); setRecovery(null); client.current = null
+    mounted.current = true; inFlight.current = false; setBusy(false); setImageBusy(false); setRecovery(null); setHeldRequests([]); client.current = null
     setBlueprint(meadowBlueprint()); setResult(null); setSelectedModel('sol')
     setPrompt('Design a solar exploration workshop with a rover beside a restored forest.')
     setImage(null); setAccessCode(''); setError(''); setSeconds(0); setHealth({})
     try {
       if (owner) {
         client.current = new ScopedBlueprintClient(window.localStorage, fetch, owner, 'historical-blueprint-lab', () => mounted.current && activeOwner.current === owner)
-        setRecovery(client.current.current())
+        setRecovery(client.current.current()); setHeldRequests(client.current.archived())
       }
     } catch (e) { setError(e instanceof Error ? e.message : 'Recovery storage is unavailable. No paid request can start.') }
     const controller = new AbortController()
@@ -99,7 +103,7 @@ function WorldBlueprintLab() {
     const demo = localSceneResult(demoBlueprint(input), 'DEMO / MOCK local scene. No GPT-6 Astra request was made; MAKE remains validation-required.')
     setPrompt(input); setBlueprint(demo.blueprint); setResult(demo)
   }
-  async function generateLive(recoverOnly = false) {
+  async function generateLive(recoverOnly = false, archivedId?: string) {
     if (inFlight.current || readingImage.current) return
     inFlight.current = true
     const generationId = ++generationRevision.current
@@ -115,13 +119,15 @@ function WorldBlueprintLab() {
       const transport = new ScopedBlueprintClient(window.localStorage, (input, init) => fetch(input, { ...init, headers: { ...Object.fromEntries(new Headers(init?.headers)), ...headers } }), owner, 'historical-blueprint-lab', () => mounted.current && activeOwner.current === owner)
       client.current = transport
       if (!recoverOnly) {
+        if (!funded) throw new Error(accountQuote.quote.message)
         if (image) throw new Error('Luna and Sol world blueprints use text only. Remove the reference, or open 3D models + textures for a detailed reference model.')
         if (transport.current()) throw new Error('Recover the saved request or explicitly prepare a new paid attempt first.')
         if (!health.generationReady) throw new Error('World blueprint generation is not enabled. The no-cost scene demo is still available.')
         if (prompt.trim().length < 3 || prompt.length > 2000) throw new Error('Use a prompt between 3 and 2000 characters.')
         if (health.accessRequired && accessCode.trim().length < 32) throw new Error('Enter the preview access code.')
       }
-      const proposal = recoverOnly ? await transport.recover(controller.signal) : await transport.submit({ worldId: 'ai-game-lab', prompt, image, mode: 'live', model: selectedModel, deliverable: 'procedural-blueprint' }, blueprint, controller.signal)
+      if (archivedId) { await transport.recoverArchived(archivedId, controller.signal); return }
+      const proposal = recoverOnly ? await transport.recover(controller.signal) : await transport.submit({ worldId: 'ai-game-lab', prompt, image, mode: 'live', model: selectedModel, deliverable: 'procedural-blueprint' }, blueprint, controller.signal, accountQuote.quote.fundingSource)
       if (!mounted.current || activeOwner.current !== owner || generationId !== generationRevision.current || controller.signal.aborted) return
       const validated = proposal.result
       setBlueprint(validated.blueprint); setResult(validated)
@@ -131,13 +137,13 @@ function WorldBlueprintLab() {
       window.clearTimeout(timeout)
       if (mounted.current && activeOwner.current === owner && generationId === generationRevision.current) {
         abort.current = null; inFlight.current = false; setBusy(false)
-        try { setRecovery(client.current?.current() ?? null) } catch (e) { setError(e instanceof Error ? e.message : 'Recovery storage needs review.') }
+        try { setRecovery(client.current?.current() ?? null); setHeldRequests(client.current?.archived() ?? []); accountQuote.refresh() } catch (e) { setError(e instanceof Error ? e.message : 'Recovery storage needs review.') }
       }
     }
   }
   function newAttempt() {
-    if (inFlight.current || !client.current || !window.confirm('Prepare a NEW paid attempt for your next Generate click? Recovering the saved result costs no additional points.')) return
-    try { client.current.reset(true); setRecovery(null); setError('') }
+    if (inFlight.current || !client.current || !window.confirm('Prepare a NEW paid attempt for your next Generate click? Any unresolved held-point request stays available for review. Generating again requires a separate click.')) return
+    try { client.current.reset(true); setRecovery(null); setHeldRequests(client.current.archived()); accountQuote.refresh(); setError('') }
     catch (e) { setError(e instanceof Error ? e.message : 'Recovery could not be cleared.') }
   }
   function generatePrimary() {
@@ -177,7 +183,7 @@ function WorldBlueprintLab() {
       <aside className="creator-panel">
         <span className="eyebrow">WORLD INPUT</span>
         <label>AI model<select value={selectedModel} disabled={busy} onChange={e => { if (e.target.value === "astra") navigate("/shop"); else setSelectedModel(e.target.value as DraftModel) }}><option value="luna">GPT-6 LUNA — 15 points</option><option value="sol">GPT-6.1 SOL — 50 points</option><option value="astra">GPT-6 ASTRA — 250 points · open detailed Studio</option></select></label>
-        <GenerationCostNotice model={selectedModel} busy={busy} />
+        <GenerationCostNotice model={selectedModel} busy={busy} accountQuote={accountQuote} />
         <label>Prompt<textarea rows={6} maxLength={2000} value={prompt} disabled={busy} onChange={e => setPrompt(e.target.value)} /></label>
         <div className="prompt-presets" aria-label="No-cost demo examples">{DEMO_EXAMPLES.map(example => <button key={example.id} type="button" disabled={busy} onClick={() => generateDemo(example.prompt)}>{example.label}</button>)}</div>
         <label>Reference image · optional · max 6 MB<input key={owner ?? "signed-out"} type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void pickImage(e.target.files?.[0])} /></label>
@@ -186,11 +192,12 @@ function WorldBlueprintLab() {
         {image && <small>Luna and Sol world blueprints use text only. Remove this reference or open <Link to="/shop">3D models + textures</Link> for a detailed reference model.</small>}
         <ProjectAttachmentPicker scope="game-lab" disabled={busy} />
         {health.accessRequired && <label>Preview access code<input type="password" autoComplete="off" value={accessCode} disabled={busy} onChange={e => setAccessCode(e.target.value)} /></label>}
-        <button className="primary" disabled={busy || imageBusy || prompt.trim().length < 3 || (health.generationReady && (!!recovery || !!image || !owner || accountLoading))} onClick={generatePrimary}>{busy ? `${MODEL_CATALOG[selectedModel].label} working · ${seconds}s` : health.generationReady ? `Generate world blueprint · ${MODEL_CATALOG[selectedModel].label}` : 'Generate DEMO world · no API cost'}</button>
+        <button className="primary" disabled={busy || imageBusy || prompt.trim().length < 3 || (health.generationReady && (!!recovery || !!image || !owner || accountLoading || !funded))} onClick={generatePrimary}>{busy ? `${MODEL_CATALOG[selectedModel].label} working · ${seconds}s` : health.generationReady ? `Generate world blueprint · ${MODEL_CATALOG[selectedModel].label}` : 'Generate DEMO world · no API cost'}</button>
         <button disabled={busy} onClick={() => generateDemo()}>Refresh DEMO locally</button>
         <Link to="/shop" className="button-link">Create a 3D model + textures →</Link>
         {busy && <button onClick={() => abort.current?.abort()}>Stop waiting in this browser</button>}
-        {recovery && <div role="status"><p>Saved request · {recovery.state}. Recovery does not start another paid generation.</p><button disabled={busy || imageBusy} onClick={() => void generateLive(true)}>Recover same request · no extra charge</button>{recovery.state !== 'pending' && <button disabled={busy} onClick={newAttempt}>Prepare new paid attempt…</button>}</div>}
+        {recovery && <div role="status"><p>Saved request · {recovery.state}. {blueprintRecoveryDetail(recovery)}</p>{(recovery.pointSettlement?.state === 'pending-cost' || recovery.pointSettlementUnconfirmed) && <a href="/account/generation-funding">Review all held points</a>}<button disabled={busy || imageBusy} onClick={() => void generateLive(true)}>Recover same request · no extra charge</button>{recovery.state !== 'pending' && <button disabled={busy} onClick={newAttempt}>Prepare new paid attempt…</button>}</div>}
+        {heldRequests.map(saved => <div role="status" key={saved.id}><p>Saved point review · Request {saved.id}. {blueprintRecoveryDetail(saved)}</p><a href="/account/generation-funding">Review all held points</a>{(saved.pointSettlement?.state === 'pending-cost' || saved.pointSettlementUnconfirmed) && <button disabled={busy || imageBusy} onClick={() => void generateLive(true, saved.id)}>Check held-point request · no new charge</button>}</div>)}
         {error && <p role="alert" className="error">{error}</p>}
         {!health.generationReady && <p className="result-note">World blueprint AI is currently gated. Detailed models use the separate Studio connection; the local scene demo remains MOCK.</p>}
       </aside>

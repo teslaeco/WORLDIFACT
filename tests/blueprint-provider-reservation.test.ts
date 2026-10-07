@@ -43,9 +43,10 @@ async function fixture() {
   }
   const account = new AccountEntitlements({ storage: ledger.storage }, env)
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get: () => ({ async fetch(request: Request) {
-    const path = new URL(request.url).pathname
+    // This retained suite deliberately creates legacy reserve-backed jobs; paid liability has dedicated tests.
+    const path = new URL(request.url).pathname.replace(/^\/generation-v3(?=\/)/, '')
     if (path === '/blueprint-dispatch') dispatchClaims++
-    const result = await account.fetch(request)
+    const result = await account.fetch(path === '/reserve' ? new Request(new URL(path, request.url), request) : request)
     return afterAccount ? afterAccount(path, result) : result
   } }) }
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -145,7 +146,7 @@ test('lost dispatch acknowledgement sends no provider request and conservatively
 test('a new Worker talking to a legacy account object never dispatches without a fence', async () => {
   const f = await fixture(), before = f.funding(), namespace = f.env.ACCOUNT_ENTITLEMENTS!
   f.env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get: name => ({ async fetch(request: Request) {
-    const path = new URL(request.url).pathname
+    const path = new URL(request.url).pathname.replace(/^\/generation-v3(?=\/)/, '')
     if (path === '/blueprint-dispatch') return Response.json({ error: 'Legacy endpoint unavailable' }, { status: 404 })
     if (path === '/reserve') {
       // The previous writer ignores the new opt-in and creates only its old

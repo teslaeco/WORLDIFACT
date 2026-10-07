@@ -56,7 +56,10 @@ function fixture() {
       const storage = transactionalStorage()
       accounts.set(name, { ledger: new AccountEntitlements({ storage }, env), storage })
     }
-    return accounts.get(name)!.ledger
+    // Preserve legacy reserve/receipt coverage while modern recovery reads old rows.
+    const ledger = accounts.get(name)!.ledger
+    return { fetch: (request: Request) => ledger.fetch(new URL(request.url).pathname === '/generation-v3/reserve'
+      ? new Request(new URL('/reserve', request.url), request) : request) }
   } }
   let state: StudioJob['state'] = 'building'
   let budgetReply: (jobId: string) => Response | Promise<Response> = id => Response.json(terminalReceipt(id))

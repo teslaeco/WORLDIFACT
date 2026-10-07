@@ -178,7 +178,7 @@ test('normal Worker route performs only the auth GET and owned read transaction 
   }) as typeof fetch
   const env = { ACCOUNT_LIMITER: { async limit() { return { success: true } } }, ACCOUNT_ENTITLEMENTS: {
     idFromName(name: string) { assert.equal(name, `account:v1:${OWNER}`); return name }, get() { return { async fetch(request: Request) {
-      assert.equal(request.method, 'GET'); assert.equal(request.url, 'https://entitlements.internal/generation-funding'); requests.push(request.url)
+      assert.equal(request.method, 'GET'); assert.equal(request.url, 'https://entitlements.internal/generation-v3/generation-funding'); requests.push(request.url)
       return f.object.fetch(request)
     } } },
   } }
@@ -194,7 +194,7 @@ test('public funding read uses verified ownership only, GET-only auth/internal c
   const names: string[] = [], upstream: string[] = [], methods: string[] = [], limits: string[] = []
   const env = { ACCOUNT_LEDGER_MODE: 'sandbox', ACCOUNT_LIMITER: { async limit({ key }: { key: string }) { limits.push(key); return { success: true } } },
     ACCOUNT_ENTITLEMENTS: { idFromName(name: string) { names.push(name); return name }, get(id: unknown) { assert.equal(id, `account:sandbox:v1:${OWNER}`); return { async fetch(request: Request) {
-      methods.push(request.method); assert.equal(new URL(request.url).pathname, '/generation-funding'); assert.equal(request.body, null)
+      methods.push(request.method); assert.equal(new URL(request.url).pathname, '/generation-v3/generation-funding'); assert.equal(request.body, null)
       assert.equal(request.headers.get('X-WORLDIFACT-Verified-Account'), OWNER); return own.object.fetch(request)
     } } } } }
   const fetcher = (async (input, init) => { upstream.push(String(input)); assert.equal(init?.method, 'GET'); assert.equal(init?.body, undefined); return Response.json({ id: OWNER }) }) as typeof fetch
@@ -433,7 +433,7 @@ test('public evidence requests use only the verified session account and never c
   assert.equal(result.storedEvidence?.invoiceGrants.scanned, 1)
   assert.deepEqual(names, [`account:sandbox:v1:${OWNER}`]); assert.deepEqual(limits, [`account:generation-funding:${OWNER}`])
   assert.equal(requests.length, 1); assert.equal(calls.length, 1)
-  assert.equal(requests[0].url, `https://entitlements.internal/generation-funding${storedQuery}&invoice=in_SyntheticOwned&invoice=in_SyntheticOther`)
+  assert.equal(requests[0].url, `https://entitlements.internal/generation-v3/generation-funding${storedQuery}&invoice=in_SyntheticOwned&invoice=in_SyntheticOther`)
   assert.equal(requests[0].method, 'GET'); assert.equal(requests[0].body, null)
   assert.equal(requests[0].headers.get('X-WORLDIFACT-Verified-Account'), OWNER)
   assert.deepEqual([...requests[0].headers.keys()], ['x-worldifact-verified-account'])

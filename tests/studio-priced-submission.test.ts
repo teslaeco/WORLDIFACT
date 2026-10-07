@@ -35,7 +35,10 @@ function fixture() {
     const name = String(key)
     if (!stores.has(name)) stores.set(name, storage())
     if (!objects.has(name)) objects.set(name, new AccountEntitlements({ storage: stores.get(name)! }, { ENABLE_ASTRA_PLANS: 'true' }, () => Date.now()))
-    return objects.get(name)!
+    // This existing pricing/rollback suite retains legacy reserve-backed rows.
+    const ledger = objects.get(name)!
+    return { fetch: (request: Request) => ledger.fetch(new URL(request.url).pathname === '/generation-v3/reserve'
+      ? new Request(new URL('/reserve', request.url), request) : request) }
   } }
   let runtime: Record<string, unknown> = tierHealth(), healthReads = 0, state: StudioJob['state'] = 'building', statusFields: Record<string, unknown> = {}
   let postError = false, modelAvailable = true, postStatus = 200

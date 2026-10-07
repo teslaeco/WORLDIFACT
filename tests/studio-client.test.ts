@@ -1,10 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { StudioCoordinator, STUDIO_RECEIPT_KEY, STUDIO_RECEIPT_HISTORY_PREFIX, parseStudioJob, readSavedStudioJob, type ReceiptStore } from '../src/lib/studioClient.ts'
+import { StudioCoordinator, STUDIO_RECEIPT_KEY, STUDIO_RECEIPT_HISTORY_PREFIX, parseStudioJob, readReceipt, readSavedStudioJob, type ReceiptStore } from '../src/lib/studioClient.ts'
 import type { StudioInput } from '../src/lib/studioProtocol.ts'
 import { ADMISSION_FAILURE_CODES, ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode } from '../src/lib/generationAdmission.ts'
+import { PAID_POINTS_FUNDING } from '../src/lib/paidPointsFunding.ts'
+import { STUDIO_PRICING } from '../src/lib/studioPricing.ts'
 const id = '12345678-1234-4234-8234-123456789abc'
 const receipt = { id, createdAt: new Date().toISOString(), ticket: `${id}.${Date.now()}.${'a'.repeat(64)}.${'b'.repeat(64)}` }
+const heldReceipt = { ...receipt, ticket: 'held.' + receipt.ticket }
 const input: StudioInput = { worldId: 'enchanted-ai-shop', prompt: 'Create a blue skull sculpture', purpose: 'figurine', textureMaxSize: 4096, photos: [] }
 function store(): ReceiptStore {
   const data = new Map<string, string>()
@@ -14,6 +17,122 @@ function resignedReceipt(offset = 1000) {
   const issued = Number(receipt.ticket.split('.')[1]) + offset
   return { id, createdAt: new Date(issued).toISOString(), ticket: `${id}.${issued}.${'a'.repeat(64)}.${'c'.repeat(64)}` }
 }
+
+test('held-domain receipts preserve their prefix and bind mode, identity and immutable revision history', async () => {
+  assert.deepEqual(readReceipt(receipt), receipt)
+  assert.deepEqual(readReceipt(heldReceipt), heldReceipt)
+  for (const ticket of ['held.held.' + receipt.ticket, 'library.' + receipt.ticket, 'held.' + receipt.ticket.replace(id, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')])
+    assert.throws(() => readReceipt({ ...receipt, ticket }), /Invalid job receipt/)
+  const storage = store(), original = { receipt: heldReceipt, prompt: input.prompt, startedAt: receipt.createdAt }
+  const canonical = STUDIO_RECEIPT_HISTORY_PREFIX + id, text = JSON.stringify(original)
+  storage.setItem(canonical, text)
+  const revised = { ...resignedReceipt(), ticket: 'held.' + resignedReceipt().ticket }
+  const calls: string[] = []
+  const client = new StudioCoordinator(storage, (async (_url, init = {}) => { calls.push(init.method ?? 'GET'); return init.method === 'DELETE' ? Response.json({ cleared: true }) : Response.json({ current: { fundingSource: PAID_POINTS_FUNDING, receipt: revised, prompt: input.prompt, startedAt: receipt.createdAt, financialState: 'failed', pointSettlement: pendingPoints() } }) }) as typeof fetch)
+  await client.recoverCurrent(); await client.dismissCurrent()
+  assert.equal(storage.getItem(canonical), text)
+  const issued = revised.ticket.split('.')[2]
+  assert.equal(JSON.parse(storage.getItem(`${canonical}:${issued}`)!).receipt.ticket, revised.ticket)
+  assert.deepEqual(calls, ['GET', 'DELETE'])
+})
+
+test('new held-policy submission rejects a legacy or mismatched receipt before the generation POST', async () => {
+  for (const [prepared, funding] of [[receipt, PAID_POINTS_FUNDING], [heldReceipt, undefined]] as const) {
+    const calls: string[] = []
+    const client = new StudioCoordinator(store(), (async url => { calls.push(String(url)); return Response.json(prepared) }) as typeof fetch)
+    await assert.rejects(client.start(input, () => {}, '', false, funding), /funding policy/)
+    assert.deepEqual(calls, ['/api/studio/prepare'])
+  }
+})
+
+const pendingPoints = (points = 250) => ({ version: 1 as const, state: 'pending-cost' as const, heldPoints: points, chargedPoints: 0 })
+test('new failed job settlement suppresses legacy refund claims and preserves original higher-tier holds', () => {
+  for (const failureCode of ['ASTRA_COST_LIMIT', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_CANCELLED']) {
+    const job = parseStudioJob({ job: { id, state: 'failed', failureCode, pointSettlement: pendingPoints() } }, id, 250)
+    assert.equal(job.state, 'failed'); assert.equal(job.pointSettlement?.heldPoints, 250)
+    assert.match(job.detail, /250 points remain held/); assert.match(job.detail, /manual review is needed/)
+    assert.doesNotMatch(job.detail, /points were released|points were returned|points were charged/)
+  }
+  const extended = parseStudioJob({ job: { id, state: 'failed', pricing: STUDIO_PRICING.extended, failureCode: 'ASTRA_COST_LIMIT', pointSettlement: pendingPoints(500) } }, id, 500)
+  assert.equal(extended.pricing?.maxProviderCents, 400); assert.equal(extended.pointSettlement?.heldPoints, 500)
+  assert.match(extended.detail, /500 points remain held/)
+  for (const pointSettlement of [null, {}, { ...pendingPoints(), version: 2 }, { ...pendingPoints(), heldPoints: 500 }, { ...pendingPoints(), privateBill: 'PRIVATE' }])
+    assert.throws(() => parseStudioJob({ job: { id, state: 'failed', pointSettlement } }, id, 250), /could not be verified/)
+  for (const [state, pointSettlement] of [
+    ['failed', { version: 1, state: 'charged', chargedPoints: 250, heldPoints: 0 }],
+    ['failed', { ...pendingPoints(), state: 'held' }],
+    ['cancelled', { version: 1, state: 'charged', chargedPoints: 250, heldPoints: 0 }],
+    ['succeeded', pendingPoints()], ['succeeded', { ...pendingPoints(), state: 'held' }],
+    ['building', pendingPoints()], ['queued', { version: 1, state: 'released', chargedPoints: 0, heldPoints: 0 }],
+  ]) assert.throws(() => parseStudioJob({ job: { id, state, pointSettlement } }, id, 250), /states disagree/)
+  assert.match(parseStudioJob({ job: { id, state: 'failed', failureCode: 'ASTRA_COST_LIMIT' } }, id).detail, /points were released/, 'historical jobs keep their existing semantics')
+})
+
+test('settlement-aware non-2xx rejection survives reload and recovers only the same job with GET', async () => {
+  const storage = store(), calls: { url: string; method: string }[] = []
+  const fetcher = (async (url, init = {}) => {
+    calls.push({ url: String(url), method: init.method ?? 'GET' })
+    if (String(url).endsWith('/prepare')) return Response.json(heldReceipt)
+    if (init.method === 'POST') return Response.json({ failureCode: 'ORACLE_SUBMISSION_REJECTED', pointSettlement: pendingPoints() }, { status: 409 })
+    assert.equal(String(url), `/api/studio/jobs/${id}`)
+    return Response.json({ job: { id, state: 'failed', failureCode: 'ORACLE_SUBMISSION_REJECTED', pointSettlement: pendingPoints() } })
+  }) as typeof fetch
+  const client = new StudioCoordinator(storage, fetcher)
+  const failed = await client.start(input, () => {}, '', false, PAID_POINTS_FUNDING)
+  assert.equal(failed.state, 'failed'); assert.match(failed.detail, /250 points remain held/)
+  assert.equal(readSavedStudioJob(storage)?.fundingSource, PAID_POINTS_FUNDING)
+  const restored = new StudioCoordinator(storage, fetcher); restored.restore()
+  assert.equal((await restored.poll()).pointSettlement?.state, 'pending-cost')
+  assert.equal((await restored.poll()).pointSettlement?.state, 'pending-cost')
+  assert.deepEqual(restored.pendingCostReviews().map(saved => saved.receipt.id), [id])
+  assert.equal(calls.filter(call => call.method === 'POST' && call.url === '/api/studio/jobs').length, 1)
+  assert.equal(calls.filter(call => call.method === 'GET').length, 2)
+})
+
+test('lost held-policy acknowledgement cannot downgrade to a legacy refund on reload', async () => {
+  const storage = store(), calls: { url: string; method: string }[] = []
+  const fetcher = (async (url, init = {}) => {
+    calls.push({ url: String(url), method: init.method ?? 'GET' })
+    if (String(url).endsWith('/prepare')) return Response.json(heldReceipt)
+    if (init.method === 'POST') { assert.equal(readSavedStudioJob(storage)?.fundingSource, PAID_POINTS_FUNDING); throw new TypeError('Lost acknowledgement') }
+    return Response.json({ job: { id, state: 'failed', failureCode: 'ASTRA_COST_LIMIT' } })
+  }) as typeof fetch
+  const first = new StudioCoordinator(storage, fetcher)
+  assert.equal((await first.start(input, () => {}, '', false, PAID_POINTS_FUNDING)).state, 'pending')
+  const restored = new StudioCoordinator(storage, fetcher); restored.restore()
+  const failure = await restored.poll()
+  assert.equal(failure.state, 'failed'); assert.equal(failure.pointSettlementUnconfirmed, true)
+  assert.match(failure.detail, /point settlement is unconfirmed/); assert.doesNotMatch(failure.detail, /points were released|points were returned/)
+  assert.equal(restored.current?.receipt.id, id)
+  assert.equal(calls.filter(call => call.method === 'POST' && call.url === '/api/studio/jobs').length, 1)
+  assert.equal(calls.filter(call => call.method === 'GET').length, 1)
+})
+
+test('pending-cost receipts remain same-account GET-recoverable after explicit dismissal without a replacement POST', async () => {
+  const storage = store(); storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: receipt.createdAt, fundingSource: PAID_POINTS_FUNDING }))
+  let owner = 'account-a'
+  const calls: { url: string; method: string }[] = []
+  const fetcher = (async (url, init = {}) => { calls.push({ url: String(url), method: init.method ?? 'GET' }); return init.method === 'DELETE' ? Response.json({ cleared: true }) : Response.json({ job: { id, state: 'failed', failureCode: 'ASTRA_COST_LIMIT', pointSettlement: pendingPoints() } }) }) as typeof fetch
+  const client = new StudioCoordinator(storage, fetcher, () => owner); client.restore(); await client.poll()
+  await client.dismissCurrent()
+  assert.equal(client.current, null); assert.equal(client.pendingCostReviews()[0].receipt.ticket, receipt.ticket)
+  assert.equal((await client.recoverCostReview(id)).pointSettlement?.state, 'pending-cost')
+  assert.equal(client.current, null); assert.equal(calls.filter(call => call.method === 'POST').length, 0)
+  owner = 'account-b'; assert.deepEqual(client.pendingCostReviews(), [])
+  await assert.rejects(client.recoverCostReview(id), /No held-point review receipt/)
+  owner = 'account-a'; assert.equal(client.pendingCostReviews()[0].receipt.id, id)
+})
+
+test('owned unpriced current recovery binds the original 250-point price before writing any receipt', async () => {
+  for (const heldPoints of [1, 50, 500, 999]) {
+    const storage = store()
+    const client = new StudioCoordinator(storage, (async () => Response.json({ current: { fundingSource: PAID_POINTS_FUNDING,
+      receipt, prompt: input.prompt, startedAt: receipt.createdAt, financialState: 'failed', reservedPoints: heldPoints,
+      pointSettlement: pendingPoints(heldPoints) } })) as typeof fetch)
+    await assert.rejects(client.recoverCurrent(), /could not be verified/)
+    assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), null)
+  }
+})
 
 test('the exact receipt is retained before the only paid POST and double clicks are rejected', async () => {
   const storage = store(), calls: string[] = []

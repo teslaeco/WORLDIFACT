@@ -105,7 +105,13 @@ export type StudioLibraryModel = { id: string; prompt: string; createdAt: string
 export type StudioLibraryPage = { accountId: string; models: StudioLibraryModel[]; nextCursor: string | null; hasMore: boolean }
 export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'MODEL_BUDGET_EXCEEDED', 'STUDIO_BUDGET_POLICY_CHANGED', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
 export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
-export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean; pricing?: StudioPricing; generationTiming?: StudioGenerationTiming }
+export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean; pricing?: StudioPricing; generationTiming?: StudioGenerationTiming; pointSettlement?: import('./paidPointsFunding.ts').PointSettlement; pointSettlementUnconfirmed?: true }
+export function studioPointsPending(job: Pick<StudioJob, 'state' | 'pointSettlement' | 'pointSettlementUnconfirmed'> | null | undefined): boolean {
+  return !!job && ['failed', 'cancelled'].includes(job.state) && (job.pointSettlementUnconfirmed === true || ['held', 'pending-cost'].includes(job.pointSettlement?.state ?? ''))
+}
+export function studioPendingPointsDetail(heldPoints?: number): string {
+  return `Generation ended without a completed model. ${heldPoints === undefined ? 'The point settlement is unconfirmed' : `${heldPoints} points remain held for cost review`}; no final point charge or release is confirmed. Authoritative final API cost is required. If it is unavailable, manual review is needed; reading the same cost-limit receipt again does not establish exact spending. Keep this job ID. Other requests can use your remaining available points; no automatic retry or replacement model was started.`
+}
 export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   ...ADMISSION_FAILURE_DETAILS,
   ASTRA_COST_LIMIT: 'Astra’s cost protection stopped this job. Reserved customer points were released. Keep this job ID for review before starting another attempt; no automatic retry.',

@@ -54,7 +54,7 @@ function fixture(beforeProviderResponse?: () => Promise<void>) {
     return Response.json({ id: 'resp_test_fixture', status: 'completed', model: requestBody.model, output: [{ content: [{ type: 'output_text', text: JSON.stringify({ blueprint: demoBlueprint('A silver research tower'), assetSpec: assetSpecForBlueprint(demoBlueprint('A silver research tower')) }) }] }] })
   }) as typeof fetch
   const call = (requestId: string = crypto.randomUUID(), user: 'alice' | 'bob' | null = 'alice', input = body) => handle(new Request(origin + '/api/blueprint', {
-    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Request': requestId, ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) }, body: JSON.stringify({ ...input, providerModel: input.model === 'luna' ? 'gpt-6-luna' : input.model === 'astra' ? 'gpt-6-astra' : 'gpt-6.1-sol' }),
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Paid-Points-Policy': 'paid-membership-held-points-v1', 'X-WORLDIFACT-Request': requestId, ...(user ? { Cookie: `__Host-worldifact-access=${user}-token` } : {}) }, body: JSON.stringify({ ...input, providerModel: input.model === 'luna' ? 'gpt-6-luna' : input.model === 'astra' ? 'gpt-6-astra' : 'gpt-6.1-sol' }),
   }), env, fetcher)
   return { env, call, providerCalls: () => providerCalls, authCalls: () => authCalls, used: () => global.values.get('reserved-attempts') ?? 0, fail: (value: boolean) => { fail = value }, advance: (ms: number) => { now += ms } }
 }

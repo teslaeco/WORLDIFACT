@@ -1,0 +1,9 @@
+{
+  "release": "paid-points-admission-20261007",
+  "baseCommit": "3319f7e7685905d0f40a9acde6b2a0602fbf5452",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "paidPointsAdmission": true,
+  "paidFailurePolicy": "held-points-v1"
+}

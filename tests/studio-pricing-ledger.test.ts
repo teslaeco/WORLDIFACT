@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { AccountEntitlements, reserveUserGeneration, type EntitlementEnv, type EntitlementStatus, type EntitlementStorage } from '../server/entitlements.ts'
+import { AccountEntitlements, type EntitlementEnv, type EntitlementStatus, type EntitlementStorage } from '../server/entitlements.ts'
 import { STUDIO_PRICING, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { validateTerminalBudgetReceipt, type TerminalBudgetReceipt } from '../server/studioBudgetReceipt.ts'
 import { providerReserveCents } from '../server/generationEconomics.ts'
@@ -57,10 +57,10 @@ function fixture(support = false) {
   }
 }
 
-test('new Studio terms reserve the exact points and cap, expose saved terms, and settle once', async () => {
+test('legacy Studio terms reserve the exact points and cap, expose saved terms, and settle once', async () => {
   for (const pricing of Object.values(STUDIO_PRICING)) for (const state of ['completed', 'failed']) {
     const f = fixture(), id = crypto.randomUUID(); await f.fund()
-    const reserve = await reserveUserGeneration(f.env, USER, id, 'slow', 'astra', fingerprint, 'standard', { channel: 'studio', pricing })
+    const reserve = (await f.reserve(id, pricing)).data
     assert.equal(reserve.allowed, true); assert.equal(reserve.cost, pricing.points); assert.deepEqual(reserve.pricing, pricing)
     assert.equal(f.values.get(PROVIDER), 1050 - pricing.maxProviderCents)
     assert.equal(f.values.get('balance'), 1500); assert.equal(f.values.get('customer-reserved-credits:v1'), pricing.points)

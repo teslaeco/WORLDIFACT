@@ -4,7 +4,8 @@ import { handle, type Env } from '../server/worker.ts'
 import { AccountEntitlements, entitlementCall, entitlementStatus, reserveUserGeneration, type EntitlementStorage } from '../server/entitlements.ts'
 import { assetSpecForBlueprint, demoBlueprint } from '../src/lib/blueprint.ts'
 import { blueprintFingerprint, blueprintRequestId, BLUEPRINT_REFERENCE_BYTES } from '../src/lib/blueprintRequest.ts'
-import { BlueprintClient, BLUEPRINT_RECOVERY_KEY } from '../src/lib/blueprintClient.ts'
+import { BlueprintClient, BLUEPRINT_RECOVERY_KEY, BLUEPRINT_RECOVERY_ARCHIVE_KEY, blueprintRecoveryDetail } from '../src/lib/blueprintClient.ts'
+import { PAID_POINTS_FUNDING, PAID_POINTS_POLICY, PAID_POINTS_POLICY_HEADER } from '../src/lib/paidPointsFunding.ts'
 import { ADMISSION_FAILURE_CODES, blueprintAdmissionDetail } from '../src/lib/generationAdmission.ts'
 
 const origin = 'https://worldifact.test', uid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', other = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -35,7 +36,7 @@ async function fixture() {
   }) as typeof fetch
   await entitlementCall(env,uid,'/grant',{id:'in_repair_fixture',credits:4500,subscriptionId:'sub_Repair'})
   await entitlementCall(env,uid,'/subscription',{id:'sub_Repair',active:true,until:now+86_400_000,revision:1,plan:'pro',grantId:'in_repair_fixture'})
-  const request=(input:unknown=payload(),id: string=crypto.randomUUID())=>handle(new Request(origin+'/api/blueprint',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-WORLDIFACT-Request':id,Cookie:'__Host-worldifact-access=alice-token'},body:JSON.stringify(input)}),env,provider)
+  const request=(input:unknown=payload(),id: string=crypto.randomUUID())=>handle(new Request(origin+'/api/blueprint',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-WORLDIFACT-Request':id,[PAID_POINTS_POLICY_HEADER]:PAID_POINTS_POLICY,Cookie:'__Host-worldifact-access=alice-token'},body:JSON.stringify(input)}),env,provider)
   const recover=(id:string,who='alice-token')=>handle(new Request(origin+'/api/blueprint/requests/'+id,{headers:{Cookie:'__Host-worldifact-access='+who}}),env,provider)
   return {env,request,recover,provider,change:(value:string)=>{mode=value},advance:(ms:number)=>{now+=ms},balance:async()=>(await entitlementStatus(env,uid)).credits,counts:()=>({providerCalls,preflights,budgetCalls}),sent:()=>sent,ledger:()=>ledgers.get('account:v1:'+uid)!.data}
 }
@@ -81,18 +82,21 @@ for(const [name,input] of [
 test('completed replay and account recovery return the same result without another charge',async()=>{
   const f=await fixture(),id=crypto.randomUUID(),r=await f.request(payload(4),id),first=await r.json()
   const repeat=await f.request(payload(4),id);assert.equal(repeat.status,200);assert.deepEqual(await repeat.json(),first)
-  const status=await (await f.recover(id)).json() as any;assert.equal(status.state,'completed');assert.deepEqual(status.result,first)
+  const status=await (await f.recover(id)).json() as any;assert.equal(status.state,'completed');assert.deepEqual({...status.result,pointSettlement:status.pointSettlement},first)
   assert.equal((await f.request({...payload(4),prompt:'A different cabinet'},id)).status,409)
   assert.equal((await f.request({...payload(4),references:payload(4).references.toReversed()},id)).status,409)
   assert.deepEqual(f.counts(),{providerCalls:1,preflights:1,budgetCalls:1});assert.equal(await f.balance(),4250)
   const otherStatus=await (await f.recover(id,'bob-token')).json() as any;assert.equal(otherStatus.owned,false);assert.equal(otherStatus.result,undefined)
 })
-for(const mode of ['timeout','http-failure','json-failure','no-evidence','wrong-model','missing-spec','refusal','character-result'])test(`${mode} returns customer credits once and never replenishes provider spend`,async()=>{
+for(const mode of ['timeout','http-failure','json-failure','no-evidence','wrong-model','missing-spec','refusal','character-result'])test(`${mode} retains full paid point holds while provider cost remains unresolved`,async()=>{
   const f=await fixture(),id=crypto.randomUUID(),before=f.ledger().get('provider-budget-cents:v1');f.change(mode)
   const r=await f.request(payload(),id);assert.ok([422,502].includes(r.status))
   assert.equal(await f.balance(),4500)
-  const status=await (await f.recover(id)).json() as any;assert.equal(status.state,'failed');assert.equal(status.refunded,true)
-  const spent=f.ledger().get('provider-budget-cents:v1') as number;assert.ok(spent < Number(before))
+  const status=await (await f.recover(id)).json() as any;assert.equal(status.state,'failed');assert.equal(status.refunded,false);assert.deepEqual(status.pointSettlement,{version:1,state:'pending-cost',heldPoints:250,chargedPoints:0})
+  const entitlements=await entitlementStatus(f.env,uid);assert.equal(entitlements.reservedCredits,250);assert.equal(entitlements.availableCredits,4250)
+  const spent=f.ledger().get('provider-budget-cents:v1') as number;assert.equal(spent, before)
+  const paid=f.ledger().get('paid-points-job:v2:'+await blueprintRequestId(id)) as any
+  assert.equal(paid.providerLiability.state,'unresolved');assert.equal(paid.providerLiability.maximumLiabilityCents,175)
   assert.equal((await f.request(payload(),id)).status,409);assert.equal(await f.balance(),4500)
   assert.equal(f.ledger().get('provider-budget-cents:v1'),spent);assert.equal(f.counts().providerCalls,1)
 })
@@ -154,8 +158,9 @@ test('Blueprint transport preserves the native fetch receiver for submission and
   assert.equal(f.counts().providerCalls, 1)
 })
 
-test('actual provider funding refusal retains its reason with available customer points and no request', async () => {
+test('top-up-only provider funding refusal retains its reason with available customer points and no request', async () => {
   const f = await fixture()
+  await entitlementCall(f.env, uid, '/subscription', { id: 'sub_Repair', active: false, until: 0, revision: 2, plan: 'pro' })
   f.ledger().set('provider-budget-cents:v1', 0)
   const before = structuredClone([...f.ledger()])
   const id = crypto.randomUUID(), reply = await f.request(payload(), id)
@@ -174,7 +179,7 @@ test('Blueprint exposes only fixed account denial reasons and preserves them thr
     const f = await fixture(), namespace = f.env.ACCOUNT_ENTITLEMENTS!
     f.env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get: name => ({
       async fetch(request: Request) {
-        if (new URL(request.url).pathname === '/reserve') return Response.json({ allowed: false, reason })
+        if (new URL(request.url).pathname === '/generation-v3/reserve') return Response.json({ allowed: false, reason })
         return namespace.get(name).fetch(request)
       },
     }) }
@@ -232,4 +237,186 @@ test('cancellation before Blueprint allocation creates no orphan receipt or requ
   duringHash.abort()
   await assert.rejects(submission, { name: 'AbortError' })
   assert.equal(client.current(), null); assert.equal(calls, 0)
+})
+
+function heldPointBrowser() {
+  const data = new Map<string, string>()
+  const store = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value) }, removeItem: (key: string) => { data.delete(key) } }
+  return { data, store }
+}
+const pendingCost = { version: 1, state: 'pending-cost', heldPoints: 250, chargedPoints: 0 } as const
+const releasedPoints = { version: 1, state: 'released', heldPoints: 0, chargedPoints: 0 } as const
+
+test('failed held-point Blueprint receipts survive reload, explicit prepare-new and read-only archive recovery', async () => {
+  const b = heldPointBrowser(), calls: { path: string; method: string }[] = []
+  let settlement: unknown = pendingCost
+  const fetcher = (async (url: unknown, init?: RequestInit) => {
+    const path = String(url), method = init?.method ?? 'GET'; calls.push({ path, method })
+    const seed = method === 'POST' ? new Headers(init?.headers).get('X-WORLDIFACT-Request')! : path.split('/').at(-1)!
+    return Response.json({ state: 'failed', requestId: await blueprintRequestId(seed), pointSettlement: settlement, error: 'Untrusted refund wording must not appear' }, { status: method === 'POST' ? 502 : 200 })
+  }) as typeof fetch
+  const first = new BlueprintClient(b.store, fetcher)
+  await assert.rejects(first.submit(payload()), /Manual review/)
+  const saved = first.current()!
+  assert.equal(saved.state, 'failed'); assert.deepEqual(saved.pointSettlement, pendingCost)
+  assert.equal(calls.length, 1, 'An explicit terminal settlement is saved directly without automatic recovery')
+  const reload = new BlueprintClient(b.store, fetcher)
+  assert.deepEqual(reload.current(), saved)
+  assert.match(blueprintRecoveryDetail(saved), /No points have been charged or released/)
+  await assert.rejects(reload.recover(), /Manual review/)
+  assert.deepEqual(calls.at(-1), { path: `/api/blueprint/requests/${saved.id}`, method: 'GET' })
+  reload.reset()
+  assert.equal(reload.current(), null); assert.deepEqual(reload.archived(), [saved]); assert.equal(calls.length, 2)
+  const prepared = new BlueprintClient(b.store, fetcher)
+  assert.deepEqual(prepared.archived(), [saved])
+  await assert.rejects(prepared.submit(payload()), /Manual review/)
+  const next = prepared.current()!
+  assert.notEqual(next.id, saved.id)
+  const activeRaw = b.data.get(BLUEPRINT_RECOVERY_KEY)
+  await assert.rejects(prepared.recoverArchived(saved.id), /Manual review/)
+  assert.equal(b.data.get(BLUEPRINT_RECOVERY_KEY), activeRaw, 'Archived recovery cannot overwrite the newer active receipt')
+  settlement = releasedPoints
+  await assert.rejects(prepared.recoverArchived(saved.id), /held points were released; no points were charged/)
+  assert.equal(prepared.archived()[0].id, saved.id); assert.deepEqual(prepared.archived()[0].pointSettlement, releasedPoints)
+  assert.equal(b.data.get(BLUEPRINT_RECOVERY_KEY), activeRaw)
+  assert.equal(calls.filter(call => call.method === 'POST').length, 2)
+  assert.doesNotMatch([...b.data.values()].join(''), /MCC cabinet|data:image|Untrusted refund/)
+})
+
+test('lost failed Blueprint response recovers the same UUID and preserves positive or unknown cost holds', async () => {
+  const b = heldPointBrowser(); let posts = 0, reads = 0, seed = ''
+  const fetcher = (async (url: unknown, init?: RequestInit) => {
+    if (init?.method === 'POST') { posts++; seed = new Headers(init.headers).get('X-WORLDIFACT-Request')!; throw new TypeError('Response lost') }
+    reads++; assert.equal(String(url), `/api/blueprint/requests/${seed}`)
+    return Response.json({ state: 'failed', refunded: false, pointSettlement: pendingCost })
+  }) as typeof fetch
+  await assert.rejects(new BlueprintClient(b.store, fetcher).submit(payload()), /Response lost/)
+  const reload = new BlueprintClient(b.store, fetcher)
+  await assert.rejects(reload.recover(), /Manual review/)
+  await assert.rejects(reload.recover(), /Manual review/)
+  assert.equal(reload.current()?.id, seed); assert.equal(reload.current()?.state, 'failed')
+  assert.deepEqual(reload.current()?.pointSettlement, pendingCost); assert.equal(posts, 1); assert.equal(reads, 2)
+})
+
+test('unknown, malformed or contradictory point markers fail closed before refund or charge claims', async () => {
+  for (const pointSettlement of [null, {}, { ...pendingCost, version: 2 }, { ...pendingCost, state: 'future' }, { ...pendingCost, heldPoints: 249 }, { ...pendingCost, chargedPoints: 250 }, { ...pendingCost, extra: true }, { ...pendingCost, state: 'charged', heldPoints: 0, chargedPoints: 250 }]) {
+    const b = heldPointBrowser(); let calls = 0
+    const client = new BlueprintClient(b.store, (async () => { calls++; return Response.json({ state: 'failed', pointSettlement, error: 'All points refunded' }, { status: 502 }) }) as typeof fetch)
+    await assert.rejects(client.submit(payload()), /settlement needs review/)
+    assert.equal(client.current()?.state, 'pending'); assert.equal(client.current()?.pointSettlement, undefined); assert.equal(calls, 1)
+    b.data.set(BLUEPRINT_RECOVERY_KEY, JSON.stringify({ ...client.current(), state: 'failed', pointSettlement }))
+    assert.throws(() => client.current(), /settlement needs review/)
+  }
+  for (const contradiction of [{ noCharge: true }, { refunded: true }]) {
+    const b = heldPointBrowser(), client = new BlueprintClient(b.store, (async () => Response.json({ state: 'failed', pointSettlement: pendingCost, ...contradiction }, { status: 502 })) as typeof fetch)
+    await assert.rejects(client.submit(payload()), /settlement needs review/)
+    assert.equal(client.current()?.state, 'pending')
+  }
+})
+
+test('a saved held-point receipt cannot be downgraded to a legacy refund and a failed archive write never clears it', async () => {
+  const b = heldPointBrowser(); let body: Record<string, unknown> = { state: 'failed', pointSettlement: pendingCost }
+  const fetcher = (async (_url: unknown, init?: RequestInit) => Response.json(body, { status: init?.method === 'POST' ? 502 : 200 })) as typeof fetch
+  const client = new BlueprintClient(b.store, fetcher)
+  await assert.rejects(client.submit(payload()), /Manual review/)
+  const original = b.data.get(BLUEPRINT_RECOVERY_KEY)
+  body = { state: 'failed', refunded: true }
+  await assert.rejects(client.recover(), /settlement needs review/)
+  assert.equal(b.data.get(BLUEPRINT_RECOVERY_KEY), original)
+  const blocked = new BlueprintClient({ ...b.store, setItem(key, value) { if (key === BLUEPRINT_RECOVERY_ARCHIVE_KEY) throw new Error('Archive unavailable'); b.store.setItem(key, value) } }, fetcher)
+  assert.throws(() => blocked.reset(), /Archive unavailable/)
+  assert.equal(b.data.get(BLUEPRINT_RECOVERY_KEY), original)
+  b.data.set(BLUEPRINT_RECOVERY_ARCHIVE_KEY, '{"invalid":true}')
+  assert.throws(() => client.reset(), /need review/)
+  assert.equal(b.data.get(BLUEPRINT_RECOVERY_KEY), original)
+})
+
+test('charged Blueprint settlement stays in its durable receipt without altering the validated generated asset', async () => {
+  const b = heldPointBrowser(), pointSettlement = { version: 1, state: 'charged', heldPoints: 0, chargedPoints: 250 }
+  let result: Record<string, unknown> | undefined, calls = 0
+  const client = new BlueprintClient(b.store, (async (_url: unknown, init?: RequestInit) => {
+    calls++
+    if (init?.method === 'POST') {
+      const blueprint = demoBlueprint('Fixture')
+      result = { mode: 'LIVE', provenance: 'GENERATED', blueprint, assetSpec: assetSpecForBlueprint(blueprint), requestId: await blueprintRequestId(new Headers(init.headers).get('X-WORLDIFACT-Request')!), model: 'gpt-6-astra', limitation: 'Inert fixture.', evidence: { providerResponseId: 'resp_held_fixture', receivedAt: '2026-10-07T00:00:00.000Z', blueprintSha256: await blueprintFingerprint(blueprint), inputTokens: null, outputTokens: null, totalTokens: null }, delivery: { kind: 'procedural-blueprint', referenceCount: 0, fallbackUsed: false } }
+      return Response.json({ ...result, pointSettlement })
+    }
+    return Response.json({ state: 'completed', result, pointSettlement })
+  }) as typeof fetch)
+  const asset = await client.submit(payload())
+  assert.deepEqual(asset, result); assert.equal(Object.hasOwn(asset, 'pointSettlement'), false)
+  assert.deepEqual(client.current()?.pointSettlement, pointSettlement); assert.match(blueprintRecoveryDetail(client.current()!), /250 points were charged/)
+  assert.deepEqual(await client.recover(), asset); assert.equal(calls, 2)
+})
+
+test('negotiated held-point policy is durable before a lost POST and cannot degrade into a legacy refund on reload', async () => {
+  const b = heldPointBrowser(); let posts = 0, reads = 0, oldId = '', response: unknown = { state: 'failed', refunded: true }
+  const fetcher = (async (url: unknown, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      posts++; oldId = new Headers(init.headers).get('X-WORLDIFACT-Request')!
+      const durable = JSON.parse(b.data.get(BLUEPRINT_RECOVERY_KEY)!)
+      assert.equal(durable.id, oldId); assert.equal(durable.fundingPolicy, PAID_POINTS_FUNDING)
+      assert.equal(new Headers(init.headers).get(PAID_POINTS_POLICY_HEADER), PAID_POINTS_POLICY)
+      assert.equal(JSON.parse(String(init.body)).fundingPolicy, undefined, 'Local receipt metadata is not a provider input')
+      throw new TypeError('Lost acknowledgement')
+    }
+    reads++; assert.equal(String(url), `/api/blueprint/requests/${oldId}`)
+    return Response.json(response)
+  }) as typeof fetch
+  await assert.rejects(new BlueprintClient(b.store, fetcher).submit(payload(), undefined, PAID_POINTS_FUNDING), /Lost acknowledgement/)
+  const reload = new BlueprintClient(b.store, fetcher), original = b.data.get(BLUEPRINT_RECOVERY_KEY)
+  assert.equal(reload.current()?.fundingPolicy, PAID_POINTS_FUNDING)
+  response = { state: 'pending' }
+  await assert.rejects(reload.recover(), /Point settlement needs review/)
+  assert.equal(b.data.get(BLUEPRINT_RECOVERY_KEY), original)
+  assert.throws(() => reload.reset(), /Recover the pending/)
+  for (const oldReply of [{ state: 'failed', refunded: true }, { state: 'failed', noCharge: true, failureCode: 'CREDITS_EXHAUSTED' }]) {
+    response = oldReply
+    await assert.rejects(reload.recover(), /Point settlement is unconfirmed/)
+    assert.equal(reload.current()?.state, 'failed'); assert.equal(reload.current()?.pointSettlementUnconfirmed, true)
+    assert.equal(reload.current()?.id, oldId); assert.equal(reload.current()?.failureCode, undefined)
+  }
+  response = { state: 'failed', pointSettlement: pendingCost }
+  await assert.rejects(reload.recover(), /Manual review/)
+  reload.reset()
+  assert.equal(reload.archived()[0].fundingPolicy, PAID_POINTS_FUNDING)
+  assert.equal(reload.archived()[0].id, oldId); assert.equal(posts, 1); assert.equal(reads, 4)
+})
+
+test('missing settlement on known funding and unknown local policy versions fail closed without a replacement', async () => {
+  for (const body of [{ noCharge: true, failureCode: 'CREDITS_EXHAUSTED' }, { state: 'failed', refunded: true }]) {
+    const b = heldPointBrowser(); let calls = 0
+    const fetcher = (async () => { calls++; return Response.json(body, { status: 502 }) }) as typeof fetch
+    const client = new BlueprintClient(b.store, fetcher)
+    await assert.rejects(client.submit(payload(), undefined, PAID_POINTS_FUNDING), /Point settlement (needs review|is unconfirmed)/)
+    assert.equal(client.current()?.state, body.state === 'failed' ? 'failed' : 'pending'); assert.equal(client.current()?.fundingPolicy, PAID_POINTS_FUNDING); assert.equal(calls, 1)
+    b.data.set(BLUEPRINT_RECOVERY_KEY, JSON.stringify({ ...client.current(), fundingPolicy: 'paid-membership-future-v99' }))
+    assert.throws(() => client.current(), /settlement needs review/)
+  }
+  const b = heldPointBrowser(); let calls = 0
+  const client = new BlueprintClient(b.store, (async () => { calls++; throw new Error('Unexpected') }) as typeof fetch)
+  await assert.rejects(client.submit(payload(), undefined, 'paid-membership-future-v99'), /settlement needs review/)
+  assert.equal(client.current(), null); assert.equal(calls, 0)
+})
+
+test('terminal unconfirmed settlement remains reviewable after prepare-new and resolves without replacing the next receipt', async () => {
+  const b = heldPointBrowser(), calls: { path: string; method: string; policy: string | null }[] = []
+  let response: Record<string, unknown> = { state: 'failed', refunded: true }
+  const client = new BlueprintClient(b.store, (async (url: unknown, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'; calls.push({ path: String(url), method, policy: new Headers(init?.headers).get(PAID_POINTS_POLICY_HEADER) })
+    return Response.json(response, { status: method === 'POST' ? 502 : 200 })
+  }) as typeof fetch)
+  await assert.rejects(client.submit(payload(), undefined, PAID_POINTS_FUNDING), /Point settlement is unconfirmed/)
+  const old = client.current()!
+  assert.equal(old.pointSettlementUnconfirmed, true); assert.equal(old.pointSettlement, undefined)
+  client.reset(); assert.deepEqual(client.archived(), [old]); assert.equal(calls.length, 1)
+  await assert.rejects(client.submit(payload(), undefined, PAID_POINTS_FUNDING), /Point settlement is unconfirmed/)
+  const current = b.data.get(BLUEPRINT_RECOVERY_KEY)
+  response = { state: 'failed', pointSettlement: releasedPoints }
+  await assert.rejects(client.recoverArchived(old.id), /held points were released/)
+  assert.equal(b.data.get(BLUEPRINT_RECOVERY_KEY), current)
+  assert.equal(client.archived()[0].pointSettlementUnconfirmed, undefined)
+  assert.deepEqual(client.archived()[0].pointSettlement, releasedPoints)
+  assert.equal(client.archived()[0].fundingPolicy, PAID_POINTS_FUNDING)
+  assert.deepEqual(calls.map(call => [call.method, call.policy]), [['POST', PAID_POINTS_POLICY], ['POST', PAID_POINTS_POLICY], ['GET', null]])
 })

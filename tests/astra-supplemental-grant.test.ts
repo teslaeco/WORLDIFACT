@@ -12,6 +12,8 @@ import { studioApi, type StudioEnv } from '../server/studio.ts'
 import { detailedHealthFixture } from './detailed-studio-fixture.ts'
 import { GenerationBudget, type BudgetStorage } from '../server/budget.ts'
 
+const operationPath = (request: Request) => new URL(request.url).pathname.replace(/^\/generation-v3(?=\/)/, '')
+
 // Entirely synthetic, in-memory tests: no provider, billing service or production account.
 const OWNER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -119,8 +121,13 @@ function fixture(options: { config?: string | null; mode?: string; seed?: Record
     get(id) {
       const name = String(id)
       return { async fetch(request) {
-        requests.push({ name, header: request.headers.get(VERIFIED), path: new URL(request.url).pathname })
-        return ensure(name).object.fetch(request)
+        requests.push({ name, header: request.headers.get(VERIFIED), path: operationPath(request) })
+        // Historical support fixtures keep the legacy policy/readiness and writer.
+        // Current v3 dispatch, settlement and recovery still read these legacy rows.
+        const path = new URL(request.url).pathname
+        const legacyAdmission = path === '/generation-v3/status' || path === '/generation-v3/reserve'
+          ? new Request(new URL(operationPath(request), request.url), request) : request
+        return ensure(name).object.fetch(legacyAdmission)
       } }
     },
   }
@@ -189,6 +196,8 @@ test('default and explicit live ledgers admit exactly 175 support cents and pres
     const store = f.store(), job = crypto.randomUUID(), paidGrant = structuredClone(store.values.get('grant:in_Synthetic'))
     assert.deepEqual((await f.status()).astraSupplementalGrant, { available: true, consumed: false, maximumProviderCents: 175 })
     assert.deepEqual(await f.reserve(job), { allowed: true, repeated: false, cost: 250, kind: 'credits', held: true })
+    assert.equal((store.values.get(`job:${job}`) as Record<string, unknown>).fundingMode, undefined, 'The fixture must retain historical support-funded accounting')
+    assert.equal(store.values.has(`paid-points-job:v2:${job}`), false)
     assert.equal(store.values.get('balance'), 1500)
     assert.equal(store.values.get(HELD), 250)
     assert.equal(store.values.get(PROVIDER), 0, 'Supplemental funding and this reservation leave paid funding unchanged')
@@ -826,7 +835,7 @@ test('lost account admission acknowledgement recovers only the same job without 
     const object = ns.get(id)
     return { async fetch(request) {
       const response = await object.fetch(request)
-      if (String(id) === `account:v1:${OWNER}` && new URL(request.url).pathname === '/reserve' && response.ok && !dropped) {
+      if (String(id) === `account:v1:${OWNER}` && operationPath(request) === '/reserve' && response.ok && !dropped) {
         dropped = true; throw new Error('Synthetic acknowledgement loss after account commit')
       }
       return response
@@ -936,7 +945,7 @@ test('malformed successful supplemental account acknowledgements cannot proceed 
       const object = ns.get(id)
       return { async fetch(request) {
         const response = await object.fetch(request)
-        return String(id) === `account:v1:${OWNER}` && new URL(request.url).pathname === '/reserve' && response.ok
+        return String(id) === `account:v1:${OWNER}` && operationPath(request) === '/reserve' && response.ok
           ? Response.json(bad) : response
       } }
     } }

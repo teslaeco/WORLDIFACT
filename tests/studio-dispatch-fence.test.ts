@@ -6,6 +6,8 @@ import { studioApi, type StudioEnv } from '../server/studio.ts'
 import { STUDIO_SUBMISSION_GRACE_MS, type StudioJob, type StudioReceipt } from '../src/lib/studioProtocol.ts'
 import { detailedHealthFixture } from './detailed-studio-fixture.ts'
 
+const operationPath = (request: Request) => new URL(request.url).pathname.replace(/^\/generation-v3(?=\/)/, '')
+
 const alice = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', bob = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const fingerprint = 'a'.repeat(64), origin = 'https://worldifact.test'
 const input = { worldId: 'enchanted-ai-shop', prompt: 'A detailed blue rook', purpose: 'figurine', textureMaxSize: 4096, photos: [] }
@@ -41,8 +43,12 @@ function fixture() {
     if (!stores.has(name)) stores.set(name, storage())
     if (!objects.has(name)) objects.set(name, new AccountEntitlements({ storage: stores.get(name)! }, { ENABLE_ASTRA_PLANS: 'true' }, () => Date.now()))
     return { async fetch(request) {
-      const response = await objects.get(name)!.fetch(request)
-      if (new URL(request.url).pathname === '/studio-dispatch') {
+      // These fences retain historical reserve-backed funding. Only creation uses
+      // the legacy writer; dispatch, settlement and recovery use current v3 routes.
+      const legacyReservation = new URL(request.url).pathname === '/generation-v3/reserve'
+        ? new Request(new URL('/reserve', request.url), request) : request
+      const response = await objects.get(name)!.fetch(legacyReservation)
+      if (operationPath(request) === '/studio-dispatch') {
         claimReached.resolve(); await pauseClaim
         if (loseClaim) throw new Error('Uncertain dispatch acknowledgement')
         if (claimReply !== undefined) return Response.json(claimReply)
@@ -86,6 +92,8 @@ function fixture() {
 test('dispatch claim is account/fingerprint bound, one-use under concurrency, and durable across recreation', async () => {
   const f = fixture(); await f.fund(); const id = crypto.randomUUID()
   await f.reserve(id)
+  assert.equal((await f.account().get<Record<string, unknown>>(`job:${id}`))!.fundingMode, undefined, 'The fixture must retain historical reserve-backed accounting')
+  assert.equal(await f.account().get(`paid-points-job:v2:${id}`), undefined)
   const before = await f.counters()
   assert.deepEqual(await markStudioDispatch(f.env, bob, id, fingerprint), { dispatch: false })
   assert.deepEqual(await markStudioDispatch(f.env, alice, id, 'b'.repeat(64)), { dispatch: false })
@@ -292,7 +300,7 @@ test('a stale pre-claim 404 snapshot cannot settle through a dispatch tail which
     const object = namespace.get(key)
     return { async fetch(request) {
       const response = await object.fetch(request)
-      if (new URL(request.url).pathname === '/job' && ++jobReads === 2) { snapshotRead.resolve(); await snapshotGate.promise }
+      if (operationPath(request) === '/job' && ++jobReads === 2) { snapshotRead.resolve(); await snapshotGate.promise }
       return response
     } }
   } }

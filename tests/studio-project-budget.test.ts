@@ -10,6 +10,8 @@ import { studioApi, type StudioEnv } from '../server/studio.ts'
 import { prepareStudioInput, type StudioInput, type StudioJob, type StudioReceipt } from '../src/lib/studioProtocol.ts'
 import { detailedGLBFixture, detailedHealthFixture } from './detailed-studio-fixture.ts'
 
+const operationPath = (request: Request) => new URL(request.url).pathname.replace(/^\/generation-v3(?=\/)/, '')
+
 const origin = 'https://worldifact.test'
 const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const grantId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -64,6 +66,8 @@ async function fixture(options: { provider?: number; approvedInput?: StudioInput
   env.WORLDIFACT_ASTRA_REPAIRED_MCC_GRANT = JSON.stringify({ ...oldApproval, fingerprint: approval.fingerprint })
   const stores = new Map<string, ReturnType<typeof memory>>(), objects = new Map<string, AccountEntitlements>()
   const accountName = `account:v1:${owner}`
+  // No verified invoice grant: this remains a bounded support/project fixture
+  // using the current protocol, rather than a new paid-membership reservation.
   const account = memory({ balance: 1000, [HELD]: 0, [PROVIDER]: options.provider ?? 98, ...historical,
     subscription: { id: 'sub_Synthetic', active: true, until: now + 86_400_000, revision: 1, plan: 'pro' } }, options.provider === undefined)
   stores.set(accountName, account)
@@ -238,9 +242,9 @@ test('lost project, account and dispatch acknowledgements never automatically re
     f.env.ACCOUNT_ENTITLEMENTS = { idFromName: namespace.idFromName, get(id) {
       const object = namespace.get(id)
       return { async fetch(request) {
-        const response = await object.fetch(request), path = new URL(request.url).pathname
+        const response = await object.fetch(request), path = operationPath(request)
         const result = await response.clone().json() as Record<string, unknown>
-        const matches = boundary === 'project' ? path === '/astra-project-budget-claim' : boundary === 'account' ? path === '/reserve' && result.allowed === true : path === '/studio-dispatch'
+        const matches = boundary === 'project' ? new URL(request.url).pathname === '/astra-project-budget-claim' : boundary === 'account' ? path === '/reserve' && result.allowed === true : path === '/studio-dispatch'
         if (matches) matchingCalls++
         if (matches && !dropped) { dropped = true; throw new Error('Synthetic lost acknowledgement') }
         return response
@@ -270,9 +274,9 @@ test('expiry after every submission await boundary prevents the Oracle POST', as
     f.env.ACCOUNT_ENTITLEMENTS = { idFromName: namespace.idFromName, get(id) {
       const object = namespace.get(id)
       return { async fetch(request) {
-        const response = await object.fetch(request), path = new URL(request.url).pathname
+        const response = await object.fetch(request), path = operationPath(request)
         const value = await response.clone().json() as Record<string, unknown>
-        if (boundary === 'project claim' && path === '/astra-project-budget-claim' ||
+        if (boundary === 'project claim' && new URL(request.url).pathname === '/astra-project-budget-claim' ||
             boundary === 'account admission' && path === '/reserve' && value.allowed === true ||
             boundary === 'dispatch claim' && path === '/studio-dispatch') now = expired
         return response

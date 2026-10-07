@@ -24,9 +24,9 @@ import { useGenerationQuote } from '../lib/useGenerationQuote'
 import { inspectGLB } from '../lib/glb'
 import { DEFAULT_DIMENSIONS_MM, type ClientDimensions } from '../lib/shopManufacturing'
 import { type GenerationResult } from '../lib/blueprint'
-import { formatStudioGenerationDuration, JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
+import { formatStudioGenerationDuration, JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, studioPointsPending, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
 import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../lib/generationAdmission'
-import { BlueprintClient, type BlueprintRecovery } from '../lib/blueprintClient'
+import { BlueprintClient, blueprintRecoveryDetail, type BlueprintRecovery } from '../lib/blueprintClient'
 import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, BLUEPRINT_REFERENCE_BYTES, blueprintDelivery, blueprintReferences, type BlueprintDelivery } from '../lib/blueprintRequest'
 import { OvernightTestClient, type OvernightPanelRow, type OvernightPanelSlot } from '../lib/overnightTestClient'
 import { assertOrdinaryRequestsSettled, shopCloudRecoveryFetch, shopTestSelectionKey, testSlot } from '../lib/shopTestFunding'
@@ -140,8 +140,8 @@ export default function ShopPage() {
   const fundingBlocked = accountQuote.quote.state === 'blocked' && accountQuote.quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
   const recoveryAccountMismatch = !!accountOwner && !!saved && recoveryOwner?.id === saved.receipt.id && recoveryOwner.owner !== accountOwner
   const savedJob = saved && job?.id === saved.receipt.id ? job : null
-  const savedStatusUnknown = savedJob?.state === 'failed' && !savedJob.failureCode && savedJob.detail !== JOB_DETAILS.failed
-  const savedStatusLabel = savedStatusUnknown || !savedJob ? 'unknown' : savedJob.reconciliationRequired ? 'needs a status review' : savedJob.state === 'pending' ? 'awaiting acceptance confirmation' : savedJob.state
+  const savedStatusUnknown = savedJob?.state === 'failed' && !savedJob.failureCode && savedJob.detail !== JOB_DETAILS.failed && !studioPointsPending(savedJob)
+  const savedStatusLabel = studioPointsPending(savedJob) ? savedJob?.pointSettlementUnconfirmed ? 'generation failed · settlement unconfirmed' : 'generation failed · points held for cost review' : savedStatusUnknown || !savedJob ? 'unknown' : savedJob.reconciliationRequired ? 'needs a status review' : savedJob.state === 'pending' ? 'awaiting acceptance confirmation' : savedJob.state
   const receiptDate = saved && Number.isFinite(Date.parse(saved.receipt.createdAt)) ? new Date(saved.receipt.createdAt) : null
   const detailedAvailabilityMessage = detailedProblem ? `Next generation: ${detailedProblem}` : null
   const cloudRecoveryPending = cloudChecking || accountLoading || recoveryAccountMismatch || (!!accountOwner && !saved && discoveredOwner !== accountOwner)
@@ -212,7 +212,7 @@ export default function ShopPage() {
       const directClient = new BlueprintClient(window.localStorage, fetch)
       blueprintClient.current = directClient
       setRecovery(directClient.current())
-      const client = new StudioCoordinator(window.localStorage, shopCloudRecoveryFetch(fetch, () => testIdentity.current.owner))
+      const client = new StudioCoordinator(window.localStorage, shopCloudRecoveryFetch(fetch, () => testIdentity.current.owner), () => testIdentity.current.owner)
       const restored = client.restore()
       coordinator.current = client
       if (restored) {
@@ -405,6 +405,7 @@ export default function ShopPage() {
         if (scope?.active()) setOtherSavedRequests(scope.client.rows().filter(row => row.state !== 'empty'))
         if (stopped || epoch.current !== selectionEpoch || (testSavedSlot && !scope?.active())) return
         failures = 0; setJob(value); setError('')
+        if (studioPointsPending(value)) { updateCredits(); setNotice(''); setSeconds(0); return }
         if (value.reconciliationRequired) {
           setNotice('')
           setSeconds(0)
@@ -498,7 +499,7 @@ export default function ShopPage() {
           setTestSavedSlot(null); setTestBlueprintSlot(null); setRecovery(null)
           setNotice('Uploading your description and reference images once. Generation has not been confirmed yet. Keep this page open until the upload is accepted.')
         }
-        const created = await (testCurrent ? testCurrent.client.runOrdinaryAllocation(() => client.start(input, onPrepared, owner, !!saved), () => assertOrdinaryRequestsSettled(window.localStorage, fetch, testCurrent.owner)) : client.start(input, onPrepared, owner, !!saved))
+        const created = await (testCurrent ? testCurrent.client.runOrdinaryAllocation(() => client.start(input, onPrepared, owner, !!saved, accountQuote.quote.fundingSource), () => assertOrdinaryRequestsSettled(window.localStorage, fetch, testCurrent.owner)) : client.start(input, onPrepared, owner, !!saved, accountQuote.quote.fundingSource))
         if (mounted.current) { setJob(created); setNotice(terminal(created.state) || created.reconciliationRequired ? '' : created.detail) }
       } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'The detailed model request could not be confirmed. Recover this same job.') }
       finally { flags.submit = false; if (mounted.current) { setBusy(false); if (testCurrent?.active()) setOtherSavedRequests(testCurrent.client.rows().filter(row => row.state !== 'empty')); updateCredits() } }
@@ -515,7 +516,7 @@ export default function ShopPage() {
     try {
       const references = blueprintReferences({ references: photos.map(photo => ({ dataUrl: photo.dataUrl, view: photo.view })) })
       const payload = { worldId: 'enchanted-ai-shop', prompt: submittedPrompt, mode: 'live', model: selectedModel, deliverable: 'procedural-blueprint', references }
-      const result = await (testCurrent ? testCurrent.client.runOrdinaryAllocation(() => directClient.submit(payload, controller.signal), () => assertOrdinaryRequestsSettled(window.localStorage, fetch, testCurrent.owner)) : directClient.submit(payload, controller.signal))
+      const result = await (testCurrent ? testCurrent.client.runOrdinaryAllocation(() => directClient.submit(payload, controller.signal, accountQuote.quote.fundingSource), () => assertOrdinaryRequestsSettled(window.localStorage, fetch, testCurrent.owner)) : directClient.submit(payload, controller.signal, accountQuote.quote.fundingSource))
       applyBlueprint(result, submittedPrompt)
     } catch (e) {
       if (mounted.current) setError(e instanceof Error && e.name === 'AbortError' ? 'The connection timed out. Recover this same request below; do not start a second paid generation.' : e instanceof Error ? e.message : 'Generation failed. Recover this same request.')
@@ -618,7 +619,7 @@ export default function ShopPage() {
           {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
         </> : saved ? <div className="native-shop-progress">
           <p style={{ overflowWrap: 'anywhere' }}>Selected saved job: {saved.receipt.id} · Status: {savedStatusLabel}</p>
-          <h2>{job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your SLOW model is ready' : savedStatusUnknown ? 'Saved request needs a recovery check' : isAdmissionFailureCode(job?.failureCode) ? 'Generation was not started' : job?.failureCode === 'MISSING_SUBMISSION' ? 'The upload was not confirmed' : job?.state === 'failed' ? 'Saved request did not finish' : job?.state === 'cancelled' ? 'Saved request was cancelled' : busy ? 'Uploading your model request…' : job?.state === 'pending' ? 'Checking whether your request was accepted…' : 'Preparing your model…'}</h2>
+          <h2>{studioPointsPending(job) ? job?.pointSettlementUnconfirmed ? 'Generation failed · settlement unconfirmed' : 'Generation failed · points held for cost review' : job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your SLOW model is ready' : savedStatusUnknown ? 'Saved request needs a recovery check' : isAdmissionFailureCode(job?.failureCode) ? 'Generation was not started' : job?.failureCode === 'MISSING_SUBMISSION' ? 'The upload was not confirmed' : job?.state === 'failed' ? 'Saved request did not finish' : job?.state === 'cancelled' ? 'Saved request was cancelled' : busy ? 'Uploading your model request…' : job?.state === 'pending' ? 'Checking whether your request was accepted…' : 'Preparing your model…'}</h2>
           <p>{job?.reconciliationRequired ? job.detail : job?.state === 'succeeded' && job.downloadAllowed === false
             ? 'Model and texture downloads require an active subscription. Your result is preserved; a protected image preview is not available on this worker yet.'
             : terminal(job?.state)
@@ -628,8 +629,9 @@ export default function ShopPage() {
           {job?.state === 'succeeded' && job.downloadAllowed === false && <Link to="/account/credits">View subscription & credits</Link>}
           {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={() => void dismissFinishedJob()}>Start a new model</button>}
         </div> : busy && !recovery ? <div className="native-shop-progress" role="status"><h2>Submitting your blueprint request…</h2><p>No result for this request is displayed yet. Keep this page open while its status is confirmed.</p></div> : recovery ? <div className="native-shop-progress" role="status">
-          <h2>{recovery.failureCode ? 'Generation was not started' : recovery.state === 'failed' ? 'Previous blueprint attempt did not finish' : recovery.state === 'completed' ? 'Your blueprint result can be recovered' : 'Checking whether your blueprint request was accepted…'}</h2>
-          <p>{recovery.failureCode ? blueprintAdmissionDetail(recovery.failureCode) : 'No result for this request is displayed. Recover the same request below; this does not start another paid generation.'}</p>
+          <h2>{recovery.pointSettlementUnconfirmed ? 'Blueprint failed · settlement unconfirmed' : recovery.pointSettlement?.state === 'pending-cost' ? 'Blueprint failed · points held for cost review' : recovery.failureCode ? 'Generation was not started' : recovery.state === 'failed' ? 'Previous blueprint attempt did not finish' : recovery.state === 'completed' ? 'Your blueprint result can be recovered' : 'Checking whether your blueprint request was accepted…'}</h2>
+          <p>{blueprintRecoveryDetail(recovery) || (recovery.failureCode ? blueprintAdmissionDetail(recovery.failureCode) : 'No result for this request is displayed. Recover the same request below; this does not start another paid generation.')}</p>
+          {(recovery.pointSettlement?.state === 'pending-cost' || recovery.pointSettlementUnconfirmed) && <p><a href="/account/generation-funding" target="_blank" rel="noopener noreferrer">Review all held-point requests · account record</a></p>}
           <p>Request ID: {recovery.id}{recovery.failureCode && <> · Reason: {recovery.failureCode}</>}</p>
         </div> : <>
           {!sampleMissing ? <img className="native-shop-sample" src={`${EXAMPLE_ORIGIN}/assets/model-${sampleView}.webp`} alt="Example 3D product preview" referrerPolicy="no-referrer" onError={() => setSampleMissing(true)} /> : <p>The example preview is temporarily unavailable. You can still create your own model.</p>}
@@ -723,6 +725,7 @@ export default function ShopPage() {
           <p>Receipt created: {receiptDate ? <time dateTime={saved.receipt.createdAt}>{receiptDate.toLocaleString(undefined, { timeZoneName: 'short' })}</time> : 'Unknown'}. This is not the generation start time.</p>
           <p>Recorded worker generation time: {formatStudioGenerationDuration(savedJob?.generationTiming)} · Excludes upload and queue time.</p>
           {!terminal(savedJob?.state) && !savedJob?.reconciliationRequired && <p>Elapsed since this request was tracked: {Math.floor(seconds / 60)}m {seconds % 60}s · Includes waiting; not worker generation time.</p>}
+          {studioPointsPending(savedJob) && <p><a href="/account/generation-funding" target="_blank" rel="noopener noreferrer">Review all held-point requests · account record</a></p>}
           {savedJob && <p className={savedJob.state === 'failed' && !savedStatusUnknown ? 'native-shop-error' : undefined}>{savedJob.detail}</p>}
           {accountOwner && !accountLoading && !recoveryAccountMismatch && recoveryOwner?.id === saved.receipt.id && <details><summary>Saved request description</summary><p>{saved.prompt}</p></details>}
         </details>}
@@ -732,6 +735,7 @@ export default function ShopPage() {
           <button type="button" disabled={busy || artifactBusy || photoBusy} onClick={() => recoverOtherSavedRequests()}>Recover saved requests · no new charge</button>
           {otherRecoveryError && <p role="alert">{otherRecoveryError}</p>}
         </details>}
+        <p><a href="/account/generation-funding" target="_blank" rel="noopener noreferrer">Review held points and saved account request IDs</a></p>
         <div className="shop-customer-status shop-availability-details"><div role="status"><strong>{checking || accountQuote.checking ? 'Checking availability…' : !accountReady ? accountQuote.quote.state === 'signin' ? 'Sign in to generate' : 'Next generation is unavailable for this account' : cloudRecoveryPending ? 'Resolve cloud recovery before generating' : currentRequestMessage ? 'Next generation is waiting for the selected request' : detailed ? activeReady ? 'Astra/Blender model generation available' : 'Astra/Blender awaiting readiness' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} draft generation available` : 'ASTRA blueprint generation available' : 'Generation temporarily unavailable'}</strong><p>{!accountReady ? nextGenerationQuoteMessage(accountQuote.quote) : cloudRecoveryPending ? recoveryError || 'Checking for an existing model before another generation can start.' : currentRequestMessage ? currentRequestMessage : detailed ? detailedAvailabilityMessage || 'Your explicit request starts one signed model job. Recovery and downloads never start another generation.' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} creates a validated specification and a lightweight procedural 3D draft.` : 'ASTRA creates a validated premium specification and a procedural downloadable GAME GLB in one bounded call.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{!activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || artifactBusy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking || accountQuote.checking} onClick={() => void refresh()}>Refresh availability</button></div></div>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}

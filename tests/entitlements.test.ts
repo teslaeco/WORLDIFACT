@@ -26,7 +26,9 @@ function fixture() {
         stores.set(name, storage)
         objects.set(name, new AccountEntitlements({ storage }, env, () => now))
       }
-      return objects.get(name)!
+      const ledger = objects.get(name)!
+      return { fetch: (request: Request) => ledger.fetch(['/generation-v3/reserve', '/generation-v3/status'].includes(new URL(request.url).pathname)
+        ? new Request(request.url.replace('/generation-v3/', '/'), request) : request) }
     } },
   }
   return { env, stores, setNow: (value: number) => { now = value }, now: () => now, recreate: () => { for (const [name, storage] of stores) objects.set(name, new AccountEntitlements({ storage }, env, () => now)) } }
@@ -100,6 +102,7 @@ test('Studio Astra uses a non-destructive credit hold until the cloud job settle
   await reserveUserGeneration(env, USER, success, 'slow', undefined, 'b'.repeat(64), 'standard', { channel: 'studio', prompt: 'Second detailed model' })
   state = await entitlementStatus(env, USER)
   assert.equal(state.credits, 4500); assert.equal(state.reservedCredits, 250)
+  await entitlementCall(env, USER, '/studio-dispatch', { id: success, fingerprint: 'b'.repeat(64) })
   await settleUserGeneration(env, USER, success, 'completed')
   state = await entitlementStatus(env, USER)
   assert.equal(state.credits, 4250); assert.equal(state.reservedCredits, 0); assert.equal(state.availableCredits, 4250)
@@ -878,6 +881,7 @@ test('close-missing never overwrites a reservation or a settled job that already
   assert.deepEqual(result, { closed: false, state: 'reserved', fingerprintMatches: true })
   assert.deepEqual(await storage.get(`job:${job}`), before)
   assert.equal((await entitlementStatus(env, USER)).reservedCredits, 250)
+  await entitlementCall(env, USER, '/studio-dispatch', { id: job, fingerprint })
   await settleUserGeneration(env, USER, job, 'completed')
   const finished = await storage.get(`job:${job}`)
   assert.deepEqual(await closeMissingStudioJob(env, USER, job, fingerprint, now() - STUDIO_SUBMISSION_GRACE_MS - 1), { closed: false, state: 'completed', fingerprintMatches: true })

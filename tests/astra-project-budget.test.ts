@@ -10,6 +10,8 @@ import type { AstraSupportIdentity } from '../server/astraSupportOnce.ts'
 import type { TerminalBudgetReceipt } from '../server/studioBudgetReceipt.ts'
 import { STUDIO_PRICING } from '../src/lib/studioPricing.ts'
 
+const operationPath = (request: Request) => new URL(request.url).pathname.replace(/^\/generation-v3(?=\/)/, '')
+
 // Synthetic, serialized Durable Object fixtures only. No live services or account data.
 const OWNER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -108,8 +110,13 @@ function fixture(options: {
   env.ACCOUNT_ENTITLEMENTS = { idFromName: name => name, get(id) {
     const name = String(id)
     return { async fetch(request) {
-      requests.push({ name, path: new URL(request.url).pathname, method: request.method, header: request.headers.get(VERIFIED) })
-      return ensure(name).object.fetch(request)
+      requests.push({ name, path: operationPath(request), method: request.method, header: request.headers.get(VERIFIED) })
+      // Historical support fixtures keep the legacy policy/readiness and writer.
+      // Current v3 dispatch, settlement and recovery still read these legacy rows.
+      const path = new URL(request.url).pathname
+      const legacyAdmission = path === '/generation-v3/status' || path === '/generation-v3/reserve'
+        ? new Request(new URL(operationPath(request), request.url), request) : request
+      return ensure(name).object.fetch(legacyAdmission)
     } }
   } }
   const direct = async (path: string, body?: unknown, header?: string, account = OWNER) => {
@@ -173,6 +180,8 @@ test('one project-funded MCC attempt holds 250 points and binds full evidence wi
     assert.deepEqual(store.values.get(MARKER), claim)
     assert.deepEqual(f.globalStore().values.get(MARKER), claim)
     const saved = store.values.get(`job:${job}`) as Record<string, unknown>
+    assert.equal(saved.fundingMode, undefined, 'The fixture must retain historical project-funded accounting')
+    assert.equal(store.values.has(`paid-points-job:v2:${job}`), false)
     assert.equal(saved.projectBudget && (saved.projectBudget as Record<string, unknown>).source, 'project'); assert.deepEqual(saved.projectBudget, claim)
     assert.equal(saved.studioProviderReservation, undefined)
     assert.equal(store.values.get('balance'), 1500); assert.equal(store.values.get(HELD), 250)
@@ -432,7 +441,7 @@ test('lost account acknowledgement recovers committed accounting without another
     const object = namespace.get(id)
     return { async fetch(request) {
       const response = await object.fetch(request)
-      if (String(id) === `account:v1:${OWNER}` && new URL(request.url).pathname === '/reserve' && !dropped) {
+      if (String(id) === `account:v1:${OWNER}` && operationPath(request) === '/reserve' && !dropped) {
         const result = await response.clone().json() as { allowed?: boolean }
         if (result.allowed) { dropped = true; throw new Error('Synthetic lost acknowledgement after account commit') }
       }
@@ -481,7 +490,7 @@ test('malformed successful account acknowledgements fail closed and preserve the
       const object = namespace.get(id)
       return { async fetch(request) {
         const response = await object.fetch(request)
-        if (String(id) === `account:v1:${OWNER}` && new URL(request.url).pathname === '/reserve' && response.ok) {
+        if (String(id) === `account:v1:${OWNER}` && operationPath(request) === '/reserve' && response.ok) {
           const value = await response.clone().json() as { allowed?: boolean }
           if (value.allowed) return Response.json(bad)
         }

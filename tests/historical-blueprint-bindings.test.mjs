@@ -9,6 +9,7 @@ import ts from 'typescript'
 import * as blueprint from '../src/lib/blueprint.ts'
 import * as archive from '../src/lib/archive.ts'
 import * as models from '../src/lib/modelCatalog.ts'
+import { PAID_POINTS_FUNDING } from '../src/lib/paidPointsFunding.ts'
 import * as client from '../src/lib/scopedBlueprintClient.ts'
 import { blueprintFingerprint, blueprintRequestId } from '../src/lib/blueprintRequest.ts'
 
@@ -48,7 +49,7 @@ function transport({ lost = false, invalid = false, rejected = false, pause } = 
 
 // Real component handlers, archive validation and BlueprintClient. No DOM,
 // browser, provider, paid operation or external network is used by this fixture.
-async function harness(name, transport, { data = new Map(), confirm = () => true, storageBlocked = false, initialOwner = firstOwner, accessRequired = false } = {}) {
+async function harness(name, transport, { data = new Map(), confirm = () => true, storageBlocked = false, initialOwner = firstOwner, accessRequired = false, fundingSource, quoteState = 'credits' } = {}) {
   const slots = [], effects = [], timers = new Map(), readers = [], health = []
   let cursor = 0, dirty = true, tree, serial = 0, account = initialOwner
   const storage = { getItem: key => data.get(key) ?? null, setItem(key, value) { if (storageBlocked) throw new Error('Fixture storage unavailable'); data.set(key, value) }, removeItem: key => data.delete(key) }
@@ -74,6 +75,7 @@ async function harness(name, transport, { data = new Map(), confirm = () => true
       if (id === '../lib/archive') return { readArchive: () => archive.readArchive(storage), saveArchive: value => archive.saveArchive(value, storage) }
       if (id === '../lib/modelCatalog') return models
       if (id === '../lib/scopedBlueprintClient') return client
+      if (id === '../lib/useGenerationQuote') return { useGenerationQuote: () => ({ quote: { state: quoteState, fundingSource, message: 'Fixture funding unavailable.' }, checking: false, refresh: () => {} }) }
       if (id === '../lib/account') return { useAccount: () => ({ user: account ? { id: account } : null, loading: false }) }
       if (id === '../lib/portalRouting') return { routeForPortal: id => `/portal/${id}` }
       if (id === '../lib/demoExamples') return { DEMO_EXAMPLES: [] }
@@ -279,3 +281,38 @@ for (const name of forms) {
     } finally { h.close() }
   })
 }
+
+for (const name of forms) test(`${name}: negotiated point policy survives lost acknowledgment and cannot accept a markerless legacy refund`, async () => {
+  const calls = []
+  const t = { async fetch(path, init = {}) {
+    calls.push({ path, method: init.method || 'GET' })
+    if (init.method === 'POST') throw new Error('Lost acknowledgement')
+    return Response.json({ state: 'failed', refunded: true })
+  } }
+  const h = await harness(name, t, { fundingSource: PAID_POINTS_FUNDING }); let reload
+  try {
+    h.primary().props.onClick(); await h.finish()
+    const saved = JSON.parse(h.data.get(h.recoveryKey())).recovery
+    assert.equal(saved.fundingPolicy, PAID_POINTS_FUNDING); assert.equal(saved.state, 'pending')
+    h.close(); reload = await harness(name, t, { data: h.data, fundingSource: PAID_POINTS_FUNDING })
+    assert.equal(calls.length, 1)
+    reload.button(recoveryLabel).props.onClick(); await reload.finish()
+    assert.match(reload.text(), /Point settlement is unconfirmed/)
+    assert.equal(JSON.parse(h.data.get(h.recoveryKey())).recovery.id, saved.id)
+    assert.equal(JSON.parse(h.data.get(h.recoveryKey())).recovery.pointSettlementUnconfirmed, true)
+    assert.deepEqual(calls.map(call => call.method), ['POST', 'GET'])
+    reload.button(resetLabel).props.onClick(); await reload.settle()
+    assert.equal(JSON.parse(h.data.get(`${h.recoveryKey()}:held-history`))[0].recovery.id, saved.id)
+    assert.ok(reload.button('Check held-point request · no new charge'))
+    assert.deepEqual(calls.map(call => call.method), ['POST', 'GET'])
+  } finally { h.close(); reload?.close() }
+})
+
+for (const name of forms) test(`${name}: new requests require the shared verified quote while recovery remains available`, async () => {
+  const t = transport(), h = await harness(name, t, { quoteState: 'pending' })
+  try {
+    assert.equal(h.primary().props.disabled, true)
+    h.primary().props.onClick(); await h.finish()
+    assert.equal(t.calls.length, 0); assert.match(h.text(), /Fixture funding unavailable/)
+  } finally { h.close() }
+})

@@ -43,13 +43,20 @@ jobs:
       - name: Select reviewed deployment configuration
         id: mode
         env:
+          PAID_POINTS_ADMISSION: ${{ steps.billing_scope.outputs.paid_points_admission }}
           BOUNDED_SOFTWARE_PREVIEW: ${{ steps.billing_scope.outputs.bounded_software_preview }}
           OWNER_RESERVE_ADJUSTMENT: ${{ steps.billing_scope.outputs.owner_reserve_adjustment }}
           ACCOUNT_PURCHASE_EVIDENCE: ${{ steps.billing_scope.outputs.account_purchase_evidence }}
           SUBSCRIPTION_UPGRADE_REPAIR: ${{ steps.billing_scope.outputs.subscription_upgrade_repair }}
         shell: bash
         run: |
-          if test "${BOUNDED_SOFTWARE_PREVIEW:-false}" = 'true'; then
+          if test "${PAID_POINTS_ADMISSION:-false}" = 'true'; then
+            node scripts/build-compatible-mcc-config.mjs --paid-points-admission
+            echo 'config=.paid-points-admission.wrangler.json' >> "$GITHUB_OUTPUT"
+            echo 'paid_points_admission=true' >> "$GITHUB_OUTPUT"
+            echo 'mode=PRESERVE' >> "$GITHUB_OUTPUT"
+            echo 'Paid points admission: preserve deployed variables, secrets, prices, per-job caps and operator guards; no ledger mutation or model test during deployment.'
+          elif test "${BOUNDED_SOFTWARE_PREVIEW:-false}" = 'true'; then
             node scripts/build-compatible-mcc-config.mjs --bounded-software-preview
             echo 'config=.bounded-software-preview.wrangler.json' >> "$GITHUB_OUTPUT"
             echo 'bounded_software_preview=true' >> "$GITHUB_OUTPUT"
@@ -187,7 +194,33 @@ jobs:
       - name: Verify published HTML, assets and no-cost DEMO API path
         id: release
         run: |
-          if test "${BOUNDED_SOFTWARE_PREVIEW:-false}" = 'true'; then
+          if test "${PAID_POINTS_ADMISSION:-false}" = 'true'; then
+            node --input-type=module <<'JS'
+          import { appendFile, readFile } from 'node:fs/promises';
+          import { selectPipelineReleaseOptions } from './scripts/select-pipeline-only-release.mjs';
+          import { readDeployment } from './scripts/release-check.ts';
+          import { checkCompatibleMccRelease } from './scripts/check-compatible-mcc-release.mjs';
+          let stage = 'release_scope';
+          try {
+            const options = selectPipelineReleaseOptions();
+            if (options.paidPointsAdmission !== true || options.preserveBilling !== true || options.preserveRemoteVars !== true || options.preserveSecrets !== true) throw new Error('Unreviewed paid points admission release.');
+            stage = 'deployment_receipt';
+            const deployment = readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8'));
+            console.log(`Cloudflare version: ${deployment.versionId}`);
+            const result = await checkCompatibleMccRelease(deployment, { onStage: value => {
+              if (['health', 'local_assets', 'foundation_manifest', 'html_routes', 'static_assets'].includes(value)) stage = value;
+            } });
+            stage = 'report';
+            console.log(`PASS: paid points admission; ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} exact built files. GET-only health/static verification; no ledger mutation, financial probes, secret synchronization or generation requests.`);
+            if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `url=${result.origin}\n`);
+            if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY,
+              `## WORLDIFACT paid points admission\n\n[Open WORLDIFACT](${result.origin})\n\nCloudflare version: \`${result.versionId}\`\n\nGET-only verification matched ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} built files. Deployed variables, secrets, bindings and migrations were preserved. No ledger mutation, financial probes or generation requests. Browser/device appearance remains unverified.\n`);
+          } catch {
+            console.error(`PRESERVING_RELEASE_NOT_VERIFIED: ${stage}; read-only publication checks failed. No ledger mutation, generation, payment or secret synchronization was attempted.`);
+            process.exitCode = 1;
+          }
+          JS
+          elif test "${BOUNDED_SOFTWARE_PREVIEW:-false}" = 'true'; then
             node --input-type=module <<'JS'
           import { appendFile, readFile } from 'node:fs/promises';
           import { selectPipelineReleaseOptions } from './scripts/select-pipeline-only-release.mjs';
@@ -249,6 +282,7 @@ jobs:
             node scripts/release-check.ts smoke
           fi
         env:
+          PAID_POINTS_ADMISSION: ${{ steps.mode.outputs.paid_points_admission }}
           BOUNDED_SOFTWARE_PREVIEW: ${{ steps.mode.outputs.bounded_software_preview }}
           OWNER_RESERVE_ADJUSTMENT: ${{ steps.mode.outputs.owner_reserve_adjustment }}
           ACCOUNT_PURCHASE_EVIDENCE: ${{ steps.mode.outputs.account_purchase_evidence }}

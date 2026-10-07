@@ -40,6 +40,14 @@ test('failed, cancelled and reconciliation states cannot show successful progres
   assert.equal(review.kind, 'review')
 })
 
+test('generation failure and pending financial settlement remain distinct from processing and refunds', () => {
+  const failed: StudioJob = { ...job('failed'), failureCode: 'ASTRA_COST_LIMIT', pointSettlement: { version: 1, state: 'pending-cost', heldPoints: 500, chargedPoints: 0 }, detail: '500 points remain held; manual cost review required.' }
+  const view = generationProgressView({ job: failed, trackedSeconds: 600 })
+  assert.equal(view.title, 'Generation failed · points held'); assert.equal(view.stage, 'Cost review required')
+  assert.equal(view.kind, 'review'); assert.equal(view.percent, null); assert.equal(view.detail, failed.detail)
+  assert.equal(generationProgressView({ job: { ...failed, pointSettlement: undefined, pointSettlementUnconfirmed: true } }).title, 'Generation failed · settlement unconfirmed')
+})
+
 test('restricted downloads do not claim that browser validation or saving happened', () => {
   const view = generationProgressView({ job: { ...job('succeeded'), downloadAllowed: false } })
   assert.equal(view.percent, 75)

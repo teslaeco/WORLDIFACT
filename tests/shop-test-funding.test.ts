@@ -5,6 +5,7 @@ import { assertOrdinaryRequestsSettled, shopCloudRecoveryFetch, shopTestSelectio
 import { StudioCoordinator, STUDIO_RECEIPT_KEY } from '../src/lib/studioClient.ts'
 import { BLUEPRINT_RECOVERY_KEY } from '../src/lib/blueprintClient.ts'
 import type { StudioInput } from '../src/lib/studioProtocol.ts'
+import { PAID_POINTS_FUNDING } from '../src/lib/paidPointsFunding.ts'
 
 const OWNER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
@@ -96,5 +97,49 @@ test('ordinary cloud recovery refuses a test-funded or old unbound response befo
     const client = new StudioCoordinator(storage, shopCloudRecoveryFetch((async () => Response.json(body)) as typeof fetch, () => OWNER))
     await assert.rejects(client.recoverCurrent())
     assert.equal(storage.writes.length, 0); assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), null)
+  }
+})
+
+test('paid-points cloud jobs recover the same signed receipt without moving into a test slot', async () => {
+  for (const fundingSource of ['ordinary', PAID_POINTS_FUNDING]) {
+    const storage = store(), calls: { url: string; method: string }[] = []
+    const body = { accountContract: 'approved-test-account-v1', current: { fundingSource, receipt, prompt: input.prompt, startedAt: receipt.createdAt, financialState: 'reserved' } }
+    const fetcher = (async (url, init = {}) => {
+      calls.push({ url: String(url), method: init.method ?? 'GET' })
+      const headers = new Headers(init.headers)
+      assert.equal(headers.get('X-WORLDIFACT-Expected-Account'), OWNER)
+      assert.equal(headers.get('X-WORLDIFACT-Test-Contract'), 'approved-test-account-v1')
+      return Response.json(body)
+    }) as typeof fetch
+    const result = await new StudioCoordinator(storage, shopCloudRecoveryFetch(fetcher, () => OWNER)).recoverCurrent()
+    assert.deepEqual(result?.saved.receipt, receipt); assert.equal(result?.job.state, 'pending')
+    assert.deepEqual(calls, [{ url: '/api/studio/current', method: 'GET' }])
+    assert.deepEqual(storage.writes, [STUDIO_RECEIPT_KEY])
+  }
+  for (const fundingSource of [undefined, null, 'unknown', 'paid-membership-points-v2', 'paid-membership-no-quota-v1', [PAID_POINTS_FUNDING]]) {
+    const storage = store()
+    const fetcher = (async () => Response.json({ accountContract: 'approved-test-account-v1', current: { fundingSource, receipt, prompt: input.prompt, startedAt: receipt.createdAt, financialState: 'reserved' } })) as typeof fetch
+    await assert.rejects(new StudioCoordinator(storage, shopCloudRecoveryFetch(fetcher, () => OWNER)).recoverCurrent())
+    assert.equal(storage.writes.length, 0)
+  }
+})
+
+test('test gate recognizes settled paid-points work but rejects pending or unrecognized funding without mutation', async () => {
+  for (const financialState of ['reserved', 'completed', 'failed', 'unknown']) {
+    const storage = store(), calls: string[] = []
+    const fetcher = (async (url, init = {}) => {
+      calls.push(String(url)); assert.equal(init.method ?? 'GET', 'GET')
+      return Response.json({ accountContract: 'approved-test-account-v1', current: { fundingSource: PAID_POINTS_FUNDING, financialState } })
+    }) as typeof fetch
+    const check = assertOrdinaryRequestsSettled(storage, fetcher, OWNER)
+    if (financialState === 'completed' || financialState === 'failed') await check
+    else await assert.rejects(check, /pending or unconfirmed/)
+    assert.deepEqual(calls, ['/api/studio/current']); assert.equal(storage.writes.length, 0)
+  }
+  for (const patch of [{ fundingSource: 'paid-membership-points-v2' }, { fundingSource: [PAID_POINTS_FUNDING] }, { financialState: ['completed'] }]) {
+    const storage = store()
+    const fetcher = (async () => Response.json({ accountContract: 'approved-test-account-v1', current: { fundingSource: PAID_POINTS_FUNDING, financialState: 'completed', ...patch } })) as typeof fetch
+    await assert.rejects(assertOrdinaryRequestsSettled(storage, fetcher, OWNER), /pending or unconfirmed/)
+    assert.equal(storage.writes.length, 0)
   }
 })
