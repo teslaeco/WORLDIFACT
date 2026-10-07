@@ -565,7 +565,62 @@ export const PAID_POINTS_ADMISSION_REVIEWED_PATHS = Object.freeze([
   'tests/studio-project-budget.test.ts',
   'tests/studio-provider-reconciliation.test.ts',
 ].sort())
+// Provisional parent: repin and review the complete diff if production moves.
+export const AI_SHOP_UI_BASE_COMMIT = '962309ab650fc7cfd93106544bb7d6dd52d0baf5'
+export const AI_SHOP_UI_MARKER_PATH = 'ops/AI_SHOP_UI_RELEASE_20261007.json'
+export const AI_SHOP_UI_MARKER_CONTENT = JSON.stringify({
+  release: 'ai-shop-ui-and-public-gallery-20261007',
+  baseCommit: AI_SHOP_UI_BASE_COMMIT,
+  preserveBilling: true,
+  preserveRemoteVars: true,
+  preserveSecrets: true,
+  aiShopUi: true,
+}, null, 2) + '\n'
+export const AI_SHOP_UI_REVIEWED_PATHS = Object.freeze([
+  '.github/workflows/ai-shop-integration-check.yml',
+  '.github/workflows/cloudflare.yml',
+  '.github/workflows/shop-ui-preview.yml',
+  '.gitignore',
+  'ASSET_LICENSES.md',
+  AI_SHOP_UI_MARKER_PATH,
+  'package.json',
+  'scripts/build-compatible-mcc-config.mjs',
+  'scripts/build-shop-ui-preview.mjs',
+  'scripts/prepare-public-gallery.mjs',
+  'scripts/select-pipeline-only-release.mjs',
+  'src/components/AccountStatusBar.css',
+  'src/components/AccountStatusBar.tsx',
+  'src/components/GenerationCostNotice.tsx',
+  'src/components/PublicModelGallery.css',
+  'src/components/PublicModelGallery.tsx',
+  'src/components/StudioGallery.tsx',
+  'src/lib/publicGallery.ts',
+  'src/lib/studioTierSelection.ts',
+  'src/pages/PortalPage.tsx',
+  'src/pages/ShopPage.css',
+  'src/pages/ShopPage.tsx',
+  'tests/ai-shop-ui-release.test.mjs',
+  'tests/contest-finish.test.mjs',
+  'tests/generation-profile-client.test.mjs',
+  'tests/portal-entry.test.mjs',
+  'tests/prompt-model-ui.test.mjs',
+  'tests/public-model-gallery.test.mjs',
+  'tests/shop-account-chrome.test.mjs',
+  'tests/shop-draft-lifecycle.test.mjs',
+  'tests/shop-external.test.mjs',
+  'tests/shop-render-helper.mjs',
+  'tests/shop-ui-preview.test.mjs',
+  'tests/studio-tier-selection.test.ts',
+  'wrangler.shop-ui-preview.jsonc',
+].sort())
 const releaseIntroductions = new Set([
+  '.github/workflows/ai-shop-integration-check.yml',
+  'scripts/prepare-public-gallery.mjs',
+  'src/components/PublicModelGallery.css',
+  'src/components/PublicModelGallery.tsx',
+  'src/lib/publicGallery.ts',
+  'src/lib/studioTierSelection.ts',
+  'tests/ai-shop-ui-release.test.mjs',
   'src/lib/recoverHeldPoints.ts',
   'tests/paid-points-settlement-api.test.ts',
   'tests/recover-held-points.test.ts',
@@ -659,6 +714,7 @@ const releaseIntroductions = new Set([
   'tests/studio-project-budget.test.ts',
 ])
 const scopes = [
+  { base: AI_SHOP_UI_BASE_COMMIT, marker: AI_SHOP_UI_MARKER_PATH, content: AI_SHOP_UI_MARKER_CONTENT, paths: AI_SHOP_UI_REVIEWED_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: PAID_POINTS_ADMISSION_BASE_COMMIT, marker: PAID_POINTS_ADMISSION_MARKER_PATH, content: PAID_POINTS_ADMISSION_MARKER_CONTENT, paths: PAID_POINTS_ADMISSION_REVIEWED_PATHS, preserveRemoteVars: true, paidPointsAdmission: true, singleParent: true },
   { base: BOUNDED_SOFTWARE_PREVIEW_BASE_COMMIT, marker: BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH, content: BOUNDED_SOFTWARE_PREVIEW_MARKER_CONTENT, paths: BOUNDED_SOFTWARE_PREVIEW_REVIEWED_PATHS, preserveRemoteVars: true, boundedSoftwarePreview: true, singleParent: true },
   { base: OWNER_RESERVE_ADJUSTMENT_BASE_COMMIT, marker: OWNER_RESERVE_ADJUSTMENT_MARKER_PATH, content: OWNER_RESERVE_ADJUSTMENT_MARKER_CONTENT, paths: OWNER_RESERVE_ADJUSTMENT_REVIEWED_PATHS, preserveRemoteVars: true, ownerReserveAdjustment: true, singleParent: true },
@@ -711,6 +767,8 @@ function selectReleaseScope(cwd, readGit) {
     if (!/^[AMDT]$/.test(status) || !path) refuse()
     changes.push({ status, path })
   }
+  // A misspelled or unknown UI envelope cannot select the legacy LIVE fallback.
+  if (changes.some(change => change.path.startsWith('ops/AI_SHOP_UI_RELEASE_') && change.path !== AI_SHOP_UI_MARKER_PATH)) refuse()
   const markedScopes = scopes.filter(scope => changes.some(change => change.path === scope.marker))
   if (!markedScopes.length) {
     // A changed selector is release preparation, even if rebased without its marker.
@@ -730,7 +788,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {
@@ -757,7 +815,7 @@ function selectReleaseScope(cwd, readGit) {
 
 export function selectPipelineReleaseOptions(cwd = process.cwd(), readGit = git) {
   const scope = selectReleaseScope(cwd, readGit)
-  return { ...(scope?.paidPointsAdmission ? { paidPointsAdmission: true, preserveSecrets: true } : {}), preserveBilling: Boolean(scope), preserveRemoteVars: scope?.preserveRemoteVars === true, ...(scope?.compatibleMccRollback ? { compatibleMccRollback: true } : {}), ...(scope?.boundedSoftwarePreview ? { boundedSoftwarePreview: true, preserveSecrets: true } : {}), ...(scope?.ownerReserveAdjustment ? { ownerReserveAdjustment: true, preserveSecrets: true } : {}), ...(scope?.accountPurchaseEvidence ? { accountPurchaseEvidence: true, preserveSecrets: true } : {}), ...(scope?.subscriptionUpgradeRepair ? { subscriptionUpgradeRepair: true, preserveSecrets: true } : {}) }
+  return { ...(scope?.aiShopUi ? { aiShopUi: true, preserveSecrets: true } : {}), ...(scope?.paidPointsAdmission ? { paidPointsAdmission: true, preserveSecrets: true } : {}), preserveBilling: Boolean(scope), preserveRemoteVars: scope?.preserveRemoteVars === true, ...(scope?.compatibleMccRollback ? { compatibleMccRollback: true } : {}), ...(scope?.boundedSoftwarePreview ? { boundedSoftwarePreview: true, preserveSecrets: true } : {}), ...(scope?.ownerReserveAdjustment ? { ownerReserveAdjustment: true, preserveSecrets: true } : {}), ...(scope?.accountPurchaseEvidence ? { accountPurchaseEvidence: true, preserveSecrets: true } : {}), ...(scope?.subscriptionUpgradeRepair ? { subscriptionUpgradeRepair: true, preserveSecrets: true } : {}) }
 }
 
 export function selectPipelineOnlyRelease(cwd = process.cwd(), readGit = git) {
@@ -775,6 +833,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (options.ownerReserveAdjustment) console.log('owner_reserve_adjustment=true')
     if (options.boundedSoftwarePreview) console.log('bounded_software_preview=true')
     if (options.paidPointsAdmission) console.log('paid_points_admission=true')
+    if (options.aiShopUi) console.log('ai_shop_ui=true')
   } catch {
     console.error('PIPELINE_RELEASE_SCOPE_NOT_VERIFIED: publication stopped before credential setup; verify the reviewed parent, paths and one-time marker. No secret values were read.')
     process.exitCode = 1

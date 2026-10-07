@@ -1,0 +1,8 @@
+{
+  "release": "ai-shop-ui-and-public-gallery-20261007",
+  "baseCommit": "962309ab650fc7cfd93106544bb7d6dd52d0baf5",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "aiShopUi": true
+}

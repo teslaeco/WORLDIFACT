@@ -16,3 +16,9 @@
 .account-status-return a{color:#c1f3ef;font-weight:700}
 .account-status-return button{margin-left:auto}
 @media(max-width:600px){.account-status-brand{display:none}.account-status-tools{width:100%;justify-content:space-between;gap:8px}.account-status-credits{padding:7px 10px;gap:8px}.account-status-credits strong{font-size:18px}.account-status-refresh{padding:7px 9px;font-size:12px}.account-status-free{order:3;width:100%;white-space:normal}.account-status-return{padding:10px;font-size:13px}}
+
+.account-status-bar.account-status-shop { position: static; padding: 8px max(18px, env(safe-area-inset-right)); font-size: 12px; box-shadow: none; border-color: #23434a; background: #0d2027; }
+.account-status-shop-hold { max-width: 1136px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; color: #bbd2d8; }
+.account-status-shop-hold b { color: #f0d29e; font-weight: 550; }
+.account-status-shop-hold a { color: #b8e9de; min-height: 32px; display: inline-flex; align-items: center; }
+.account-status-shop .account-status-error { display: flex; align-items: center; gap: 12px; justify-content: center; }

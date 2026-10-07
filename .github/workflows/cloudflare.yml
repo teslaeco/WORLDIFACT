@@ -43,6 +43,7 @@ jobs:
       - name: Select reviewed deployment configuration
         id: mode
         env:
+          AI_SHOP_UI: ${{ steps.billing_scope.outputs.ai_shop_ui }}
           PAID_POINTS_ADMISSION: ${{ steps.billing_scope.outputs.paid_points_admission }}
           BOUNDED_SOFTWARE_PREVIEW: ${{ steps.billing_scope.outputs.bounded_software_preview }}
           OWNER_RESERVE_ADJUSTMENT: ${{ steps.billing_scope.outputs.owner_reserve_adjustment }}
@@ -50,7 +51,17 @@ jobs:
           SUBSCRIPTION_UPGRADE_REPAIR: ${{ steps.billing_scope.outputs.subscription_upgrade_repair }}
         shell: bash
         run: |
-          if test "${PAID_POINTS_ADMISSION:-false}" = 'true'; then
+          case "${AI_SHOP_UI:-false}" in
+            true|false) ;;
+            *) echo '::error::Unrecognized AI Shop UI release scope; publication stopped.'; exit 1 ;;
+          esac
+          if test "${AI_SHOP_UI:-false}" = 'true'; then
+            node scripts/build-compatible-mcc-config.mjs --ai-shop-ui
+            echo 'config=.ai-shop-ui.wrangler.json' >> "$GITHUB_OUTPUT"
+            echo 'ai_shop_ui=true' >> "$GITHUB_OUTPUT"
+            echo 'mode=PRESERVE' >> "$GITHUB_OUTPUT"
+            echo 'AI Shop UI and public gallery: preserve deployed variables, secrets, prices, payment settings and generation guards.'
+          elif test "${PAID_POINTS_ADMISSION:-false}" = 'true'; then
             node scripts/build-compatible-mcc-config.mjs --paid-points-admission
             echo 'config=.paid-points-admission.wrangler.json' >> "$GITHUB_OUTPUT"
             echo 'paid_points_admission=true' >> "$GITHUB_OUTPUT"
@@ -172,6 +183,9 @@ jobs:
         run: node --experimental-strip-types scripts/check-stripe-astra-checkouts.ts
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      - name: Verify both pinned public gallery models before UI deployment
+        if: steps.mode.outputs.ai_shop_ui == 'true'
+        run: node scripts/prepare-public-gallery.mjs --verify-dist
       - name: Deploy reviewed WORLDIFACT release
         run: |
           if test "${{ steps.billing_scope.outputs.preserve_remote_vars }}" = 'true'; then
@@ -194,7 +208,40 @@ jobs:
       - name: Verify published HTML, assets and no-cost DEMO API path
         id: release
         run: |
-          if test "${PAID_POINTS_ADMISSION:-false}" = 'true'; then
+          case "${AI_SHOP_UI:-false}" in
+            true|false) ;;
+            *) echo '::error::Unrecognized AI Shop UI release scope; verification stopped.'; exit 1 ;;
+          esac
+          if test "${AI_SHOP_UI:-false}" = 'true'; then
+            node --input-type=module <<'JS'
+          import { appendFile, readFile } from 'node:fs/promises';
+          import { selectPipelineReleaseOptions } from './scripts/select-pipeline-only-release.mjs';
+          import { readDeployment } from './scripts/release-check.ts';
+          import { checkCompatibleMccRelease } from './scripts/check-compatible-mcc-release.mjs';
+          import { verifyPublicGalleryAssets } from './scripts/prepare-public-gallery.mjs';
+          let stage = 'release_scope';
+          try {
+            const options = selectPipelineReleaseOptions();
+            if (options.aiShopUi !== true || options.preserveBilling !== true || options.preserveRemoteVars !== true || options.preserveSecrets !== true) throw new Error('Unreviewed AI Shop UI and public gallery release.');
+            stage = 'deployment_receipt';
+            const deployment = readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8'));
+            console.log(`Cloudflare version: ${deployment.versionId}`);
+            stage = 'public_gallery';
+            await verifyPublicGalleryAssets();
+            const result = await checkCompatibleMccRelease(deployment, { onStage: value => {
+              if (['health', 'local_assets', 'foundation_manifest', 'html_routes', 'static_assets'].includes(value)) stage = value;
+            } });
+            stage = 'report';
+            console.log(`PASS: AI Shop UI and public gallery; ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} exact built files. GET-only health/static verification; no financial probes, secret synchronization or generation requests.`);
+            if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `url=${result.origin}\n`);
+            if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY,
+              `## WORLDIFACT AI Shop UI and public gallery\n\n[Open WORLDIFACT](${result.origin})\n\nCloudflare version: \`${result.versionId}\`\n\nGET-only verification matched ${result.htmlRoutes} HTML routes and ${result.verifiedAssets} built files. Deployed variables, secrets, bindings and migrations were preserved. No financial probes or generation requests. Browser/device appearance remains unverified.\n`);
+          } catch {
+            console.error(`PRESERVING_RELEASE_NOT_VERIFIED: ${stage}; read-only publication checks failed. No generation, payment or secret synchronization was attempted.`);
+            process.exitCode = 1;
+          }
+          JS
+          elif test "${PAID_POINTS_ADMISSION:-false}" = 'true'; then
             node --input-type=module <<'JS'
           import { appendFile, readFile } from 'node:fs/promises';
           import { selectPipelineReleaseOptions } from './scripts/select-pipeline-only-release.mjs';
@@ -282,6 +329,7 @@ jobs:
             node scripts/release-check.ts smoke
           fi
         env:
+          AI_SHOP_UI: ${{ steps.mode.outputs.ai_shop_ui }}
           PAID_POINTS_ADMISSION: ${{ steps.mode.outputs.paid_points_admission }}
           BOUNDED_SOFTWARE_PREVIEW: ${{ steps.mode.outputs.bounded_software_preview }}
           OWNER_RESERVE_ADJUSTMENT: ${{ steps.mode.outputs.owner_reserve_adjustment }}
