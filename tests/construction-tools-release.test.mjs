@@ -7,7 +7,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   BASE_COMMIT, BASE_WORKFLOW_BLOB, LEGACY_SCRIPT_BLOB, SCRIPT_PATH, CONFIG_PATH,
-  TEST_PATH, LEGACY_TEST_PATH, WORKFLOW_PATH, CONFIG_BLOB, FAULT,
+  TEST_PATH, WORKFLOW_PATH, CONFIG_BLOB, FAULT, BASE_PAYLOAD_BLOBS, REVIEWED_PATHS,
+  LEGACY_TEST_PATH, LEGACY_TEST_RECORD,
+  BASE_SCRIPT_BLOB, BASE_CONFIG_BLOB, BASE_SCRIPT_SHA256, BASE_CONFIG_SHA256,
   readManifest, guardedWorkflow, selectConstructionToolsRelease,
 } from '../scripts/select-construction-tools-release.mjs'
 import {
@@ -26,22 +28,18 @@ const scriptBytes = readFileSync(join(root, SCRIPT_PATH))
 const oldScriptBytes = readFileSync(join(root, OLD_SCRIPT_PATH))
 const currentWorkflow = readFileSync(join(root, WORKFLOW_PATH), 'utf8')
 
-// Hosted review checkouts need not contain the base object. Remove only the
-// exact wrapper hook, then require the immutable original workflow blob.
+// Hosted review checkouts need not contain the base object. Restore only the
+// two checksum values, then require the immutable entire baseline workflow.
 function baseWorkflowOf(current) {
   if (blob(current) === BASE_WORKFLOW_BLOB) return current
-  let removed = 0
-  const lines = current.split('\n').filter(line => {
-    if ([SCRIPT_PATH, CONFIG_PATH].some(path => line.startsWith(`          printf '%s  ${path}\\n' `))) {
-      removed += 1
-      return false
-    }
-    return true
-  })
-  assert.equal(removed, 2)
-  const restored = lines.join('\n').replace(
-    `          node ${SCRIPT_PATH} >> "$GITHUB_OUTPUT"\n`,
-    `          node ${OLD_SCRIPT_PATH} >> "$GITHUB_OUTPUT"\n`)
+  let restored = current
+  for (const [path, checksum] of [[SCRIPT_PATH, BASE_SCRIPT_SHA256], [CONFIG_PATH, BASE_CONFIG_SHA256]]) {
+    const prefix = `          printf '%s  ${path}\\n' '`
+    const lines = restored.split('\n').filter(line => line.startsWith(prefix))
+    assert.equal(lines.length, 1)
+    assert.match(lines[0].slice(prefix.length), /^[a-f0-9]{64}' \| sha256sum -c - >&2$/)
+    restored = restored.replace(lines[0], `${prefix}${checksum}' | sha256sum -c - >&2`)
+  }
   assert.equal(blob(restored), BASE_WORKFLOW_BLOB)
   return restored
 }
@@ -54,18 +52,14 @@ const modification = (path, oldBlob = '3'.repeat(40), newBlob = '4'.repeat(40)) 
 function entry({ path: _path, ...value }) { return value }
 function fixtureManifest() {
   return {
-    revision: 'oracle-construction-tools-release-v1',
-    release: 'standard-bounded-construction-tools-only-20261007',
+    revision: 'oracle-construction-tools-release-v2',
+    release: 'standard-construction-inventory-repair-tools-only-20261007',
     baseCommit: BASE_COMMIT, sourceOnly: true, deployAllowed: false,
     preserveCloudflareDeployment: true, paidGenerationRequested: false, status: 'FROZEN',
-    payload: {
-      [TEST_PATH]: entry(addition(TEST_PATH, blob(readFileSync(join(root, TEST_PATH))))),
-      [LEGACY_TEST_PATH]: entry(modification(LEGACY_TEST_PATH)),
-      'tools/model_construction/runtime_controller.py': entry(addition('tools/model_construction/runtime_controller.py')),
-      'docs/BOUNDED_CONSTRUCTION_20261007.md': entry(addition('docs/BOUNDED_CONSTRUCTION_20261007.md')),
-      '.github/workflows/model-construction-review.yml': entry(addition('.github/workflows/model-construction-review.yml')),
-      'docs/CONTEST_STATUS.md': entry(modification('docs/CONTEST_STATUS.md')),
-    },
+    payload: { ...Object.fromEntries(Object.entries(BASE_PAYLOAD_BLOBS).map(([path, oldBlob]) =>
+      [path, entry(modification(path, oldBlob,
+        path === TEST_PATH ? blob(readFileSync(join(root, TEST_PATH))) : '4'.repeat(40)))])),
+      [LEGACY_TEST_PATH]: { ...LEGACY_TEST_RECORD } },
   }
 }
 function evidence(options = {}) {
@@ -74,8 +68,10 @@ function evidence(options = {}) {
   const configBlob = options.configBlob ?? blob(configBytes)
   const workflow = guardedWorkflow(baseWorkflow, sha256(scriptBytes), sha256(configBytes))
   const complete = [
-    ...Object.entries(manifest.payload).map(([path, value]) => ({ path, ...value })),
-    addition(SCRIPT_PATH, blob(scriptBytes)), addition(CONFIG_PATH, configBlob),
+    ...Object.entries(manifest.payload).filter(([path]) => path !== LEGACY_TEST_PATH)
+      .map(([path, value]) => ({ path, ...value })),
+    modification(SCRIPT_PATH, BASE_SCRIPT_BLOB, blob(scriptBytes)),
+    modification(CONFIG_PATH, BASE_CONFIG_BLOB, configBlob),
     modification(WORKFLOW_PATH, BASE_WORKFLOW_BLOB, blob(workflow)),
   ]
   const data = { parents: [BASE_COMMIT], changes: complete, workflow, beforeWorkflow: baseWorkflow,
@@ -91,7 +87,8 @@ function evidence(options = {}) {
     if (args[0] === 'ls-tree') {
       const path = args.at(-1)
       if (Object.hasOwn(data.trees ?? {}, path)) return data.trees[path]
-      const ownBlob = { [SCRIPT_PATH]: blob(scriptBytes), [OLD_SCRIPT_PATH]: blob(oldScriptBytes), [CONFIG_PATH]: configBlob }[path]
+      const ownBlob = { [SCRIPT_PATH]: blob(scriptBytes), [OLD_SCRIPT_PATH]: blob(oldScriptBytes), [CONFIG_PATH]: configBlob,
+        [LEGACY_TEST_PATH]: LEGACY_TEST_RECORD.newBlob }[path]
       assert.ok(ownBlob, path)
       return `100644 blob ${ownBlob}\t${path}\0`
     }
@@ -120,7 +117,10 @@ function dispatch(options = {}) {
   return selectConstructionToolsRelease({ cwd: root, ...fixture })
 }
 
-test('exact frozen synthetic source-only squash skips deployment before credentials', () => {
+test('exact seven-modification source-only squash skips deployment before credentials', () => {
+  assert.equal(REVIEWED_PATHS.length, 7)
+  assert.deepEqual(evidence().data.changes.map(change => change.path).sort(), REVIEWED_PATHS)
+  assert.ok(evidence().data.changes.every(change => change.status === 'M'))
   assert.deepEqual(select(), { deployAllowed: false })
   assert.deepEqual(dispatch(), { deployAllowed: false })
   assert.deepEqual(dispatch({ event: { ref: 'refs/heads/main' } }), { deployAllowed: false })
@@ -133,6 +133,7 @@ test('exact frozen synthetic source-only squash skips deployment before credenti
 test('production config stays inert until final payload bytes and its compiled blob pin are frozen', () => {
   const raw = readFileSync(join(root, CONFIG_PATH))
   if (CONFIG_BLOB === 'UNFROZEN_REFUSE') {
+    assert.equal(JSON.parse(raw).status, 'UNFROZEN_REFUSE')
     assert.throws(() => readManifest(raw), new RegExp(FAULT))
     const fixture = evidence()
     assert.throws(() => selectConstructionToolsRelease({ ...fixture, configBlob: CONFIG_BLOB }), new RegExp(FAULT))
@@ -179,13 +180,14 @@ test('later construction changes cannot become a lasting paths-ignore exemption'
 test('every changed file requires exact mode, old/new blob and status', () => {
   const complete = evidence().data.changes
   for (const target of complete) {
-    for (const changed of [{ status: 'D' }, { status: 'R100' }, { status: 'T' },
+    for (const changed of [{ status: 'A', oldMode: '000000', oldBlob: zero },
+      { status: 'D' }, { status: 'R100' }, { status: 'T' },
       { newMode: '120000' }, { newMode: '100755' }, { newMode: '160000' },
       { newBlob: '9'.repeat(40) }, { oldBlob: '8'.repeat(40) }, { oldMode: '100755' }]) {
       reject({ changes: complete.map(change => change === target ? { ...change, ...changed } : change) })
     }
   }
-  for (const path of [SCRIPT_PATH, OLD_SCRIPT_PATH, CONFIG_PATH]) {
+  for (const path of [SCRIPT_PATH, OLD_SCRIPT_PATH, CONFIG_PATH, LEGACY_TEST_PATH]) {
     reject({ trees: { [path]: `120000 blob ${blob(scriptBytes)}\t${path}\0` } })
     reject({ trees: { [path]: `100644 blob ${'f'.repeat(40)}\t${path}\0` } })
   }
@@ -212,9 +214,47 @@ test('unreviewed mutable config cannot assert authority or expand the source-onl
   }
 })
 
-test('workflow transform preserves every production and AI_SHOP_UI byte and adds only checksum commands', () => {
+test('manifest cannot change immutable baseline blobs, statuses, modes or exact payload paths', () => {
+  const original = fixtureManifest()
+  for (const path of Object.keys(BASE_PAYLOAD_BLOBS)) {
+    for (const patch of [{ oldBlob: '8'.repeat(40) }, { oldMode: '000000' },
+      { oldMode: '100755' }, { newMode: '100755' }, { newMode: '120000' },
+      { status: 'A', oldMode: '000000', oldBlob: zero }, { status: 'D' },
+      { newBlob: zero }, { newBlob: original.payload[path].oldBlob },
+      { extra: true }]) {
+      const manifest = structuredClone(original)
+      Object.assign(manifest.payload[path], patch)
+      reject({ manifest })
+    }
+    const missing = structuredClone(original)
+    delete missing.payload[path]
+    reject({ manifest: missing })
+    for (const replacement of ['tools/model_construction/runtime_controller.py',
+      'tools/model_construction/unknown.py', 'tests/context-tools-release.test.mjs',
+      'docs/CONTEST_STATUS.md', '.github/workflows/model-construction-review.yml']) {
+      const manifest = structuredClone(missing)
+      manifest.payload[replacement] = original.payload[path]
+      reject({ manifest })
+    }
+  }
+})
+
+test('historical context-test attestation cannot grant a changed-path exemption', () => {
+  for (const patch of [{ oldBlob: '8'.repeat(40) }, { newBlob: '9'.repeat(40) },
+    { status: 'A' }, { newMode: '120000' }, { extra: true }]) {
+    const manifest = fixtureManifest()
+    Object.assign(manifest.payload[LEGACY_TEST_PATH], patch)
+    reject({ manifest })
+  }
+  reject({ changes: [...evidence().data.changes,
+    modification(LEGACY_TEST_PATH, LEGACY_TEST_RECORD.newBlob)] })
+})
+
+test('workflow transform preserves the entire baseline except its two checksum values', () => {
   const fixture = evidence()
   const expected = fixture.data.workflow
+  assert.equal(expected.replace(sha256(scriptBytes), BASE_SCRIPT_SHA256)
+    .replace(sha256(fixture.configBytes), BASE_CONFIG_SHA256), baseWorkflow)
   const oldBoundary = baseWorkflow.indexOf('\n  context_tools_preflight:\n')
   const newBoundary = expected.indexOf('\n  context_tools_preflight:\n')
   assert.ok(oldBoundary > 0)
@@ -234,6 +274,24 @@ test('workflow transform preserves every production and AI_SHOP_UI byte and adds
     expected.replace('sha256sum -c -', 'true'), expected.replace("'PRESERVE'", "'LIVE'")]) reject({ workflow })
   reject({ beforeWorkflow: baseWorkflow + '\n' })
   assert.throws(() => guardedWorkflow(baseWorkflow, 'main', 'a'.repeat(64)), new RegExp(FAULT))
+})
+
+test('historical transform compatibility cannot authorize an earlier release base', () => {
+  let prior = baseWorkflow
+  for (const [path, checksum] of [[SCRIPT_PATH, BASE_SCRIPT_SHA256], [CONFIG_PATH, BASE_CONFIG_SHA256]]) {
+    prior = prior.replace(`          printf '%s  ${path}\\n' '${checksum}' | sha256sum -c - >&2\n`, '')
+  }
+  prior = prior.replace(`          node ${SCRIPT_PATH} >> "$GITHUB_OUTPUT"\n`,
+    `          node ${OLD_SCRIPT_PATH} >> "$GITHUB_OUTPUT"\n`)
+  assert.equal(blob(prior), '06db92301113f826e9dc470d6794cfe4fa4325d7')
+  const fixture = evidence()
+  assert.equal(guardedWorkflow(prior, sha256(scriptBytes), sha256(fixture.configBytes)), fixture.data.workflow)
+  assert.throws(() => guardedWorkflow(prior + '\n', sha256(scriptBytes), sha256(fixture.configBytes)), new RegExp(FAULT))
+  reject({ beforeWorkflow: prior })
+  reject({ changes: fixture.data.changes.map(change => change.path === WORKFLOW_PATH
+    ? { ...change, oldBlob: blob(prior) } : change) })
+  reject({ parents: ['ea1987eee520880b1eb93e71b572f7f1f4879efd'],
+    event: { before: 'ea1987eee520880b1eb93e71b572f7f1f4879efd' } })
 })
 
 test('new wrapper leaves the old guard and public release markers byte-for-byte intact', () => {

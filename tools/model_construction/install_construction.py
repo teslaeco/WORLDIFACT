@@ -51,6 +51,8 @@ NEW_FILES = policy.RUNTIME_HELPERS | {policy.RECEIPT}
 WRITES = manifest.MODIFIED | NEW_FILES | RECEIPTS
 EXECUTABLE_FILES = frozenset(('tools/codex/codex', 'tools/codex/codex-code-mode-host',
                               'tools/codex/codex-binary.json', 'tools/codex/code-mode-host.json'))
+NATIVE_LIBRARY = re.compile(r'lib[A-Za-z0-9_+\-]+\.so(?:\.[0-9]+)*\Z')
+OLLAMA_NATIVE = ('ollama', 'lib', 'ollama')
 
 
 def digest(raw):
@@ -77,6 +79,108 @@ def assert_absent(source, names):
             raise Refused('unexpected_construction_file')
 
 
+def auxiliary_identity(info):
+    # Ignore access time: reading a directory must not change its attestation.
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_uid,
+            info.st_gid, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def ollama_inventory(root, expected, maximum):
+    """Attest the separate native service without reading/copying large blobs.
+
+    The reviewed worker talks to Ollama over localhost HTTP; this distribution
+    is neither staged nor added to Python's import path. Refuse Python source,
+    bytecode and unexpected native modules instead of hiding them in this
+    metadata-only inventory. Only lib*.so[.VERSION] aliases in lib/ollama may
+    link to regular native libraries in that same subtree. Never follow a link
+    on disk, including a directory swapped while taking this snapshot.
+    """
+    entries = {}
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+
+    def native(name):
+        parts = Path(name).parts
+        return parts[:3] == OLLAMA_NATIVE and bool(NATIVE_LIBRARY.fullmatch(parts[-1]))
+
+    def visit(fd, name, before, depth):
+        if depth > 32 or auxiliary_identity(os.fstat(fd)) != auxiliary_identity(before):
+            raise Refused('unsafe_code_inventory')
+        entries[name] = ('auxiliary_directory', auxiliary_identity(before))
+        if len(entries) > maximum:
+            raise Refused('code_inventory_limit')
+        with os.scandir(fd) as listing:
+            for entry in listing:
+                child = name + '/' + entry.name
+                info = os.stat(entry.name, dir_fd=fd, follow_symlinks=False)
+                if Path(entry.name).suffix in ('.py', '.pyc', '.pyo', '.pyw', '.pth', '.pyd'):
+                    raise Refused('unsafe_code_inventory')
+                if stat.S_ISDIR(info.st_mode):
+                    child_fd = os.open(entry.name, flags, dir_fd=fd)
+                    try:
+                        visit(child_fd, child, info, depth + 1)
+                    finally:
+                        os.close(child_fd)
+                elif stat.S_ISLNK(info.st_mode):
+                    if not native(child):
+                        raise Refused('unsafe_code_inventory')
+                    target = os.readlink(entry.name, dir_fd=fd)
+                    entries[child] = ('auxiliary_symlink', auxiliary_identity(info), target)
+                elif stat.S_ISREG(info.st_mode):
+                    if Path(entry.name).suffix == '.so' and not native(child):
+                        raise Refused('unsafe_code_inventory')
+                    entries[child] = ('auxiliary_file', auxiliary_identity(info))
+                else:
+                    raise Refused('unsafe_code_inventory')
+                if len(entries) > maximum:
+                    raise Refused('code_inventory_limit')
+                if auxiliary_identity(os.stat(entry.name, dir_fd=fd, follow_symlinks=False)) != auxiliary_identity(info):
+                    raise Refused('concurrent_code_inventory_edit')
+        if auxiliary_identity(os.fstat(fd)) != auxiliary_identity(before):
+            raise Refused('concurrent_code_inventory_edit')
+
+    try:
+        fd = os.open(root / 'ollama', flags)
+        try:
+            visit(fd, 'ollama', expected, 0)
+        finally:
+            os.close(fd)
+        if auxiliary_identity((root / 'ollama').lstat()) != auxiliary_identity(expected):
+            raise Refused('concurrent_code_inventory_edit')
+    except OSError:
+        raise Refused('unsafe_code_inventory') from None
+
+    for name, record in entries.items():
+        if record[0] != 'auxiliary_symlink':
+            continue
+        seen = set()
+        while record[0] == 'auxiliary_symlink':
+            if name in seen or len(seen) >= 40:
+                raise Refused('unsafe_code_inventory')
+            seen.add(name)
+            target = record[2]
+            if not target or target.startswith('/'):
+                raise Refused('unsafe_code_inventory')
+            parts = name.split('/')[:-1]
+            components = target.split('/')
+            for index, part in enumerate(components):
+                if part == '..':
+                    if len(parts) <= len(OLLAMA_NATIVE):
+                        raise Refused('unsafe_code_inventory')
+                    parts.pop()
+                elif part not in ('', '.'):
+                    parts.append(part)
+                item = entries.get('/'.join(parts))
+                if item is None or index < len(components) - 1 and item[0] != 'auxiliary_directory':
+                    raise Refused('unsafe_code_inventory')
+            name = '/'.join(parts)
+            record = entries.get(name)
+            if not native(name) or record is None:
+                raise Refused('unsafe_code_inventory')
+        if record[0] != 'auxiliary_file':
+            raise Refused('unsafe_code_inventory')
+    return entries
+
+
 def code_inventory(root):
     """Snapshot import paths, package directories and verified runtime tools.
 
@@ -85,6 +189,8 @@ def code_inventory(root):
     modules and native extensions remain part of the checked import inventory.
     Every other directory is enumerated without following a symlink, so a new
     json package cannot hide outside the old root-*.py/runtime-only copier.
+    The auxiliary Ollama service has a separate bounded no-follow metadata
+    snapshot; it is preserved in place and never copied into the Python stage.
     """
     root = base.safe_path(root)
     inventory, pending, observed = {}, [root], 0
@@ -106,6 +212,13 @@ def code_inventory(root):
                     raise Refused('unsafe_code_inventory')
                 continue
             if path.name == '__pycache__' and stat.S_ISDIR(info.st_mode):
+                continue
+            if folder == root and path.name == 'ollama':
+                if not stat.S_ISDIR(info.st_mode):
+                    raise Refused('unsafe_code_inventory')
+                auxiliary = ollama_inventory(root, info, 16384 - observed + 1)
+                observed += len(auxiliary) - 1
+                inventory.update(auxiliary)
                 continue
             if stat.S_ISLNK(info.st_mode):
                 raise Refused('unsafe_code_inventory')
