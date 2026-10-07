@@ -72,9 +72,10 @@ test('Chess visitors get a mobile-safe full-screen guest launch instead of a nes
 test('historical Shop portal keeps the real model form and its separate world-blueprint drawer', async () => {
   const html = await renderPortal('/shop')
   assert.match(html, /data-world="enchanted-ai-shop"/)
+  assert.match(html, /<details class="portal-generator-drawer portal-page shop-world-disclosure">/, 'Secondary world tools start collapsed')
   assert.match(html, /<summary>Create a world blueprint with GPT-6 Astra<\/summary>/)
   assert.match(html, /AI model · Model AI/)
-  assert.match(html, /Back to WORLDIFAKT/)
+  assert.match(html, /Back to WORLDIFACT/)
   assert.match(html, /id="studio-prompt"/)
   assert.match(html, /Generate Astra\/Blender model/)
   assert.match(html, /target="_blank"/)
