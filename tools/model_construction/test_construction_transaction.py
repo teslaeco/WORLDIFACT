@@ -143,6 +143,40 @@ class AuxiliaryInventory(unittest.TestCase):
         inventory = installer.code_inventory(self.source)
         installer.assert_inventory(self.source, inventory)
 
+    def test_official_arm_backend_names_and_versioned_aliases_are_preserved(self):
+        # Official ggml src/CMakeLists.txt Linux ARM variants, checked 2026-10-08:
+        # https://github.com/ggml-org/ggml/blob/master/src/CMakeLists.txt
+        variants = ('armv8.0_1', 'armv8.2_1', 'armv8.2_2', 'armv8.2_3',
+                    'armv8.6_1', 'armv8.6_2', 'armv9.2_1', 'armv9.2_2')
+        for variant in variants:
+            name = 'libggml-cpu-' + variant + '.so'
+            write(self.native.parent / name, b'inert official-name fixture')
+            (self.native / (name + '.0')).symlink_to('../' + name)
+        inventory = installer.code_inventory(self.source)
+        installer.assert_inventory(self.source, inventory)
+        for variant in variants:
+            name = 'libggml-cpu-' + variant + '.so'
+            self.assertEqual(inventory['ollama/lib/ollama/' + name][0], 'auxiliary_file')
+            self.assertEqual(inventory['ollama/lib/ollama/cuda_v12/' + name + '.0'][0], 'auxiliary_symlink')
+
+    def test_dotted_arm_exception_cannot_admit_unknown_or_python_module_names(self):
+        names = ('libggml-cpu-armv8.2_4.so', 'libggml-cpu-armv9.3_1.so',
+                 'libggml-cpu-armv8.2_3.cpython-39-aarch64-linux-gnu.so',
+                 'libggml-cpu-armv8.2_3..so', 'libother.module.so', '__init__.so')
+        for name in names:
+            with self.subTest(name=name):
+                path = self.native.parent / name
+                write(path, b'unknown native/import fixture')
+                try:
+                    with self.assertRaisesRegex(installer.Refused, 'unsafe_code_inventory'):
+                        installer.code_inventory(self.source)
+                finally:
+                    path.unlink()
+        outside = self.source / 'runtime/libggml-cpu-armv8.2_3.so'
+        outside.symlink_to(self.target)
+        with self.assertRaisesRegex(installer.Refused, 'unsafe_code_inventory'):
+            installer.code_inventory(self.source)
+
     def test_escape_dangling_cycle_directory_and_non_native_targets_refuse(self):
         cases = ('../../../../runtime/fixture.py', str(self.target),
                  'libmissing.so.1', self.alias.name, '.', 'native-data',

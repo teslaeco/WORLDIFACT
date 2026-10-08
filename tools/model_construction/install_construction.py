@@ -51,7 +51,11 @@ NEW_FILES = policy.RUNTIME_HELPERS | {policy.RECEIPT}
 WRITES = manifest.MODIFIED | NEW_FILES | RECEIPTS
 EXECUTABLE_FILES = frozenset(('tools/codex/codex', 'tools/codex/codex-code-mode-host',
                               'tools/codex/codex-binary.json', 'tools/codex/code-mode-host.json'))
-NATIVE_LIBRARY = re.compile(r'lib[A-Za-z0-9_+\-]+\.so(?:\.[0-9]+)*\Z')
+# ggml's Linux ARM backend tags contain a decimal architecture separator.
+# Keep the eight official tags exact; arbitrary dotted/Python ABI names refuse.
+NATIVE_LIBRARY = re.compile(
+    r'(?:lib[A-Za-z0-9_+\-]+|libggml-cpu-armv(?:8\.0_1|8\.2_[123]|8\.6_[12]|9\.2_[12]))'
+    r'\.so(?:\.[0-9]+)*\Z')
 OLLAMA_NATIVE = ('ollama', 'lib', 'ollama')
 
 

@@ -1,7 +1,7 @@
 {
-  "revision": "oracle-construction-tools-release-v2",
-  "release": "standard-construction-inventory-repair-tools-only-20261007",
-  "baseCommit": "b9d6a28d6cf433861ad740a830b0726e5565401c",
+  "revision": "oracle-construction-tools-release-v3",
+  "release": "standard-construction-arm-names-tools-only-20261008",
+  "baseCommit": "0eb81ff43e85e8eb191dc6081abf93171a258b18",
   "sourceOnly": true,
   "deployAllowed": false,
   "preserveCloudflareDeployment": true,
@@ -11,29 +11,29 @@
     "tests/construction-tools-release.test.mjs": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "6aaa2f702035d56a141d8e22082f5b78dbc85ccc",
-      "newBlob": "89fb54d9a728c9073934aa4fdd18860dcd98ec95",
+      "oldBlob": "89fb54d9a728c9073934aa4fdd18860dcd98ec95",
+      "newBlob": "d6fdfb453fe5cd49bac4bafb93b9b26e565ec626",
       "status": "M"
     },
     "tools/model_construction/install_construction.py": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "fb6c4527b08a8b4fbb938d9bfa55117310de7119",
-      "newBlob": "0507f4809612b1d0ee7a141708526f9acb32371e",
+      "oldBlob": "0507f4809612b1d0ee7a141708526f9acb32371e",
+      "newBlob": "b43b235ae5675d38681dd332e0ec2f8e5eea32e8",
       "status": "M"
     },
     "tools/model_construction/oracle_construction_launch.py": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "08157169dc2c1dacf212c294e72179b4f7647ed0",
-      "newBlob": "296790b9b24aad78e2312e8823ded6e472c9f253",
+      "oldBlob": "296790b9b24aad78e2312e8823ded6e472c9f253",
+      "newBlob": "b1eeea9c9f6eb50d3dc0694fbf494b80ca4fe40f",
       "status": "M"
     },
     "tools/model_construction/test_construction_transaction.py": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "77d084689a9673650b30b773ccd119b02c26833e",
-      "newBlob": "e8b2476804a0e0ba913b80ee3bb5a840808ee67e",
+      "oldBlob": "e8b2476804a0e0ba913b80ee3bb5a840808ee67e",
+      "newBlob": "443522da8d1ee2c03ff9f3302948ae42ad059400",
       "status": "M"
     },
     "tests/context-tools-release.test.mjs": {

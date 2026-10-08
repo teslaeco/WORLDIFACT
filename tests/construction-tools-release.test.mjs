@@ -52,8 +52,8 @@ const modification = (path, oldBlob = '3'.repeat(40), newBlob = '4'.repeat(40)) 
 function entry({ path: _path, ...value }) { return value }
 function fixtureManifest() {
   return {
-    revision: 'oracle-construction-tools-release-v2',
-    release: 'standard-construction-inventory-repair-tools-only-20261007',
+    revision: 'oracle-construction-tools-release-v3',
+    release: 'standard-construction-arm-names-tools-only-20261008',
     baseCommit: BASE_COMMIT, sourceOnly: true, deployAllowed: false,
     preserveCloudflareDeployment: true, paidGenerationRequested: false, status: 'FROZEN',
     payload: { ...Object.fromEntries(Object.entries(BASE_PAYLOAD_BLOBS).map(([path, oldBlob]) =>
