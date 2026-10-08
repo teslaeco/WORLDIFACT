@@ -7,8 +7,8 @@ import {
   SCRIPT_PATH as LEGACY_SCRIPT_PATH,
 } from './select-context-tools-release.mjs'
 
-export const BASE_COMMIT = '0eb81ff43e85e8eb191dc6081abf93171a258b18'
-export const BASE_WORKFLOW_BLOB = '232f5838ec57473330aaf8bff44c8271096a7130'
+export const BASE_COMMIT = 'a30708fcfa4d6b2dc07cb07916f59d3dafb99b6f'
+export const BASE_WORKFLOW_BLOB = '09454d550f4862014de352a63158f2b602d64934'
 export const LEGACY_SCRIPT_BLOB = '465898752099691d8cee1ca989575c2b83febab3'
 export const SCRIPT_PATH = 'scripts/select-construction-tools-release.mjs'
 export const CONFIG_PATH = 'config/oracle-construction-tools-release.json'
@@ -16,19 +16,19 @@ export const TEST_PATH = 'tests/construction-tools-release.test.mjs'
 export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = '007b405d0d4d7ad7b416c337528f12dbf91bda17'
+export const CONFIG_BLOB = '503cfaf64a3c6bf0d0ffa897ff22c58508ed9134'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
-export const BASE_SCRIPT_BLOB = '5d2d541fa10739932d1f8fd23a991db656a00da4'
-export const BASE_CONFIG_BLOB = '3ddd2acacfebc59106d6c256cd2b94882f8e7b8f'
-export const BASE_SCRIPT_SHA256 = '7f2cf9aa5f2c9d3cf1556b82dc03ac3d6a154fc45394cd7547ec620ac560c331'
-export const BASE_CONFIG_SHA256 = '9f8363e5a5252ffe3390cb9690d21e38919d2913801b3a2c5c769be2e0322c0f'
+export const BASE_SCRIPT_BLOB = '0f07c0877812527b7ba1e2b7cfcabb3641b3edce'
+export const BASE_CONFIG_BLOB = '007b405d0d4d7ad7b416c337528f12dbf91bda17'
+export const BASE_SCRIPT_SHA256 = '57ca4ffb42cc125550e75c90f220ab5f35bf4bb657131e8c922b489324256327'
+export const BASE_CONFIG_SHA256 = '8947605b235d008dd0b6d4c86d8fde80f9b1752ca9192cf58cc51ac467b8f64f'
 // Only these four existing source files may join the three guard files.
 // Old blobs are authority in this reviewed wrapper, never in mutable config.
 export const BASE_PAYLOAD_BLOBS = Object.freeze({
-  [TEST_PATH]: '89fb54d9a728c9073934aa4fdd18860dcd98ec95',
-  'tools/model_construction/install_construction.py': '0507f4809612b1d0ee7a141708526f9acb32371e',
-  'tools/model_construction/oracle_construction_launch.py': '296790b9b24aad78e2312e8823ded6e472c9f253',
-  'tools/model_construction/test_construction_transaction.py': 'e8b2476804a0e0ba913b80ee3bb5a840808ee67e',
+  [TEST_PATH]: 'd6fdfb453fe5cd49bac4bafb93b9b26e565ec626',
+  'tools/model_construction/install_construction.py': 'b43b235ae5675d38681dd332e0ec2f8e5eea32e8',
+  'tools/model_construction/oracle_construction_launch.py': 'b1eeea9c9f6eb50d3dc0694fbf494b80ca4fe40f',
+  'tools/model_construction/test_construction_gate_contract.py': '5af55078648576bda2057eefad7e8dbc7f801be0',
 })
 // Preserve the historical context test's manifest contract without permitting
 // this unchanged path in the repair diff. Both historical hashes are immutable.
@@ -69,8 +69,8 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
   // ambiguous serialization, in addition to the compiled immutable blob pin.
   if (Buffer.compare(raw, Buffer.from(JSON.stringify(value, null, 2) + '\n')) !== 0
       || !sameKeys(value, CONFIG_KEYS)
-      || value.revision !== 'oracle-construction-tools-release-v3'
-      || value.release !== 'standard-construction-arm-names-tools-only-20261008'
+      || value.revision !== 'oracle-construction-tools-release-v4'
+      || value.release !== 'standard-construction-cabinet-state-tools-only-20261008'
       || value.baseCommit !== BASE_COMMIT || value.sourceOnly !== true
       || value.deployAllowed !== false || value.preserveCloudflareDeployment !== true
       || value.paidGenerationRequested !== false || value.status !== 'FROZEN'

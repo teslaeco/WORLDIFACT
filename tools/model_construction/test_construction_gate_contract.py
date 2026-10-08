@@ -1,8 +1,12 @@
 """Isolated gate caller and strict witness fixtures; no real pipeline claim."""
 from copy import deepcopy
+import ast
 import json
 import os
 from pathlib import Path
+import sqlite3
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -54,7 +58,7 @@ class GateCallerTests(unittest.TestCase):
         cls.sources = transactions.lineage.installed_sources()
         cls.sources['context_policy.py'] = (transactions.HERE.parents[1] / 'tools/model_context_upgrade/context_policy.py').read_bytes()
 
-    def exercise(self, *, failure=None):
+    def exercise(self, *, failure=None, verify_state=False):
         stage = self.root / 'stage'; workspace = self.root / 'verify'; workspace.mkdir()
         installer.legacy.stage_runtime(self.source, stage, self.after, {})
         gates = self.root / 'gates'; gates.mkdir()
@@ -68,6 +72,9 @@ class GateCallerTests(unittest.TestCase):
         if failure == 'native-proof': proof['native_fallback'] = True
         def generic_verify(_operations, _workspace):
             generic_envs.append(dict(os.environ))
+            if verify_state:
+                with sqlite3.connect(stage / 'state/jobs.sqlite') as db:
+                    db.execute("INSERT INTO jobs VALUES ('generic-fixture', 'synthetic', 'done', '', 0, 0)")
             if failure == 'generic': raise installer.Refused('generic_fixture_failure')
             write(stage / health.GENERIC_RECEIPT, {
                 'sources': {name:self.expected[name] for name in ('codex_runner.py','blender_mcp.py')},
@@ -77,6 +84,26 @@ class GateCallerTests(unittest.TestCase):
             def __init__(self, args, **kwargs):
                 self.name = Path(args[2]).name; self.calls = 0
                 processes.append((args, kwargs))
+                if verify_state:
+                    if self.name == 'offline_cabinet.py':
+                        # The immutable cabinet verifier makes a job folder,
+                        # but relies on its caller to initialize the schema.
+                        state = stage / 'state'
+                        (state / 'jobs/cabinet-fixture').mkdir(parents=True)
+                        tree = ast.parse((stage / 'server.py').read_text())
+                        functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                                     and node.name in ('database', 'status')]
+                        if len(functions) != 2: raise AssertionError('Actual server status contract changed')
+                        namespace = {'STATE': state, 'sqlite3': sqlite3, 'LOCK': threading.RLock(), 'time': time}
+                        exec(compile(ast.Module(body=functions, type_ignores=[]), 'staged-server.py', 'exec'), namespace)
+                        # No mocked SQL: without the real jobs schema this
+                        # raises the same OperationalError as run_blender.
+                        namespace['status']('cabinet-fixture', 'building', 'Synthetic Blender status')
+                        with sqlite3.connect(state / 'jobs.sqlite') as db:
+                            if db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0] != 0:
+                                raise AssertionError('Previous gate state leaked into cabinet verification')
+                    elif (stage / 'state').exists():
+                        raise AssertionError('Later gates must create their own clean state')
                 marker = pins[self.name][1]
                 if failure == 'old-marker' and self.name == 'offline_construction.py':
                     marker = 'STANDARD_FIRST_EXEC_REAL_PIPELINE_OK'
@@ -105,6 +132,12 @@ class GateCallerTests(unittest.TestCase):
                 try: answer = operations._verify_stage(stage, workspace, lease)
                 finally: self.assertEqual(dict(os.environ), before)
         return answer, generic_envs, processes, signals
+
+    def test_cabinet_has_fresh_real_server_schema_and_later_gates_have_clean_state(self):
+        original = (self.source / 'state/jobs.sqlite').read_bytes()
+        self.exercise(verify_state=True)
+        self.assertFalse((self.root / 'stage/state').exists())
+        self.assertEqual((self.source / 'state/jobs.sqlite').read_bytes(), original)
 
     def test_four_distinct_gate_classes_and_credential_free_environments(self):
         answer, generic, processes, signals = self.exercise()
