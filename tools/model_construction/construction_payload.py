@@ -283,14 +283,31 @@ def output_text(response):
         if not isinstance(item, dict):
             raise Refused('single_typed_output_required')
         if item.get('type') == 'reasoning':
-            if (item.get('status') not in (None, 'completed') or not isinstance(item.get('summary'), list)
+            # Responses reasoning records may carry nullable content in
+            # addition to summary/encrypted metadata. Validate its documented
+            # shape, then ignore it when selecting the single typed answer.
+            # Fixed diagnostic suffixes never echo generated text or keys.
+            if set(item) - {'type', 'id', 'summary', 'status', 'encrypted_content', 'content'}:
+                raise Refused('unexpected_provider_output:reasoning_fields')
+            if item.get('status') not in (None, 'completed'):
+                raise Refused('unexpected_provider_output:reasoning_status')
+            if (not isinstance(item.get('summary'), list)
                     or any(not isinstance(s, dict) or s.get('type') != 'summary_text'
-                           or not isinstance(s.get('text'), str) for s in item['summary'])
-                    or any(key not in ('type', 'id', 'summary', 'status', 'encrypted_content') for key in item)):
-                raise Refused('unexpected_provider_output')
+                           or not isinstance(s.get('text'), str) for s in item['summary'])):
+                raise Refused('unexpected_provider_output:reasoning_summary')
+            content = item.get('content')
+            if content is not None and (not isinstance(content, list)
+                    or any(not isinstance(block, dict) or set(block) != {'type', 'text'}
+                           or block.get('type') != 'reasoning_text' or not isinstance(block.get('text'), str)
+                           for block in content)):
+                raise Refused('unexpected_provider_output:reasoning_content')
             continue
-        if item.get('type') != 'message' or item.get('role') != 'assistant' or item.get('status') != 'completed':
-            raise Refused('unexpected_provider_output')
+        if item.get('type') != 'message':
+            raise Refused('unexpected_provider_output:item_type')
+        if item.get('role') != 'assistant':
+            raise Refused('unexpected_provider_output:message_role')
+        if item.get('status') != 'completed':
+            raise Refused('unexpected_provider_output:message_status')
         messages.append(item)
     if len(messages) != 1 or not isinstance(messages[0].get('content'), list):
         raise Refused('single_typed_output_required')

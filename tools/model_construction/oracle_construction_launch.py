@@ -178,16 +178,16 @@ FILES.update({'construction_fence.py': ('tools/model_construction/construction_f
  'construction_health.py': ('tools/model_construction/construction_health.py',
                             '39e3c75e0be7288d87f18a2e48ef7dd9f41df36b'),
  'construction_manifest.py': ('tools/model_construction/construction_manifest.py',
-                              '924ae02125e915d784cc4a6b892c8e0dc910a92d'),
+                              '026a272d4c3ee41def9cafe89b362290119ba3ca'),
  'construction_payload.py': ('tools/model_construction/construction_payload.py',
-                             '396736815efe8322a3846f76352546e81332f0f5'),
+                             '5f83524154090d8eaa4eb92f3829a48f6772b133'),
  'construction_policy.py': ('tools/model_construction/construction_policy.py',
                             '52438f2ad153770f40666def51950bac3082db4b'),
  'construction_spend_patch.py': ('tools/model_construction/construction_spend_patch.py',
                                  '5c83a272b5b2207fbdf8ad510773b909e26c3499'),
  'gateway_patch.py': ('tools/model_construction/gateway_patch.py', '39095208cd1e90c03fc35f81f93a63535a0930b0'),
  'install_construction.py': ('tools/model_construction/install_construction.py',
-                             'a96d0c009b410f9984aca3e536905eb3f0d64f01'),
+                             '3dcdb5d3119f54ed393699e11918380b47e2cee5'),
  'offline_construction.py': ('tools/model_construction/offline_construction.py',
                              '40ceaf27b5d1721b5d392478d2c4cb11880b48c5'),
  'offline_legacy_standard.py': ('tools/model_construction/offline_legacy_standard.py',
@@ -226,6 +226,7 @@ failed={'phase':'WORLDIFACT_STANDARD_CONSTRUCTION_NOT_CONFIRMED','revision':REVI
 try:
     if APPROVED is not True:raise ValueError('approval absent')
     if type(ALLOW_CANCELLED_CLEANUP) is not bool:raise ValueError('invalid cleanup consent')
+    if type(UPDATE_PAYLOAD) is not bool:raise ValueError('invalid update mode')
     if (ALLOW_CANCELLED_CLEANUP and (not isinstance(EXPECTED_CANCELLED_JOB,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',EXPECTED_CANCELLED_JOB))
             or not ALLOW_CANCELLED_CLEANUP and EXPECTED_CANCELLED_JOB is not None):raise ValueError('invalid cleanup identity')
     payload=json.loads(base64.b64decode(PAYLOAD,validate=True))
@@ -244,7 +245,8 @@ try:
         with os.fdopen(fd,'wb') as stream:stream.write(raw);stream.flush();os.fsync(stream.fileno())
     with tempfile.TemporaryFile() as output:
         process=subprocess.Popen([sys.executable,'-B',str(folder/'install_construction.py'),'--approve-service-maintenance'] +
-            (['--allow-cancelled-cleanup','--expected-cancelled-job',EXPECTED_CANCELLED_JOB] if ALLOW_CANCELLED_CLEANUP else []),
+            (['--allow-cancelled-cleanup','--expected-cancelled-job',EXPECTED_CANCELLED_JOB] if ALLOW_CANCELLED_CLEANUP else []) +
+            (['--update-payload'] if UPDATE_PAYLOAD else []),
             cwd=folder,stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT)
         def relay(number,_frame):
             if process.poll() is None:process.send_signal(number)
@@ -273,14 +275,15 @@ except (Exception,KeyboardInterrupt):
     print(json.dumps(failed,sort_keys=True),flush=True);raise SystemExit(1)
 '''
 
-def script(payload, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None):
+def script(payload, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False):
     if approved is not True:raise LaunchError('Explicit maintenance approval is required.')
+    if type(update_payload) is not bool:raise LaunchError('Explicit payload update mode must be boolean.')
     if type(allow_cancelled_cleanup) is not bool:raise LaunchError('Explicit cleanup consent must be boolean.')
     if (allow_cancelled_cleanup and (not isinstance(expected_cancelled_job,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',expected_cancelled_job))
             or not allow_cancelled_cleanup and expected_cancelled_job is not None):
         raise LaunchError('Cleanup requires the exact approved cancelled job identity; no connection made.')
     return ('EXPECTED='+repr({name:item[1] for name,item in FILES.items()})+'\nPAYLOAD='+repr(payload)
-            +'\nAPPROVED=True\nALLOW_CANCELLED_CLEANUP='+repr(allow_cancelled_cleanup)+'\nEXPECTED_CANCELLED_JOB='+repr(expected_cancelled_job)+'\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
+            +'\nUPDATE_PAYLOAD='+repr(update_payload)+'\nAPPROVED=True\nALLOW_CANCELLED_CLEANUP='+repr(allow_cancelled_cleanup)+'\nEXPECTED_CANCELLED_JOB='+repr(expected_cancelled_job)+'\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
             +'\nOUTPUT_LIMIT='+repr(OUTPUT_LIMIT)+'\n'+REMOTE)
 
 def invoke(ssh, program):
@@ -298,6 +301,7 @@ def main(argv=None):
     parser = PrivateArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--source-commit')
     parser.add_argument('--approve-service-maintenance', action='store_true')
+    parser.add_argument('--update-payload', action='store_true')
     parser.add_argument('--allow-cancelled-cleanup', action='store_true')
     parser.add_argument('--expected-cancelled-job')
     args = parser.parse_args(argv)
@@ -313,8 +317,9 @@ def main(argv=None):
     commit = source_commit(args.source_commit)
     payload = package(commit)
     program = script(payload, approved=True, allow_cancelled_cleanup=args.allow_cancelled_cleanup,
-                     expected_cancelled_job=args.expected_cancelled_job)
-    print('Running the exact reviewed construction transaction. No paid model request.', flush=True)
+                     expected_cancelled_job=args.expected_cancelled_job, update_payload=args.update_payload)
+    print('Running the exact reviewed payload update. No paid model request.' if args.update_payload
+          else 'Running the exact reviewed construction transaction. No paid model request.', flush=True)
     if args.allow_cancelled_cleanup:
         print('Explicit consent applies only to the single bound cancelled job. Its history and files are preserved.', flush=True)
     print('Four sequential offline gates and rollback protection must finish. Timing is unmeasured; keep this session open.', flush=True)

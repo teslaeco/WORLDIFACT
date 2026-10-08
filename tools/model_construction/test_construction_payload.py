@@ -260,6 +260,62 @@ class PayloadTests(unittest.TestCase):
                 with self.assertRaises(pc.Refused):
                     self.parse({'scene_json': pc.canonical(scene())}, change_response=mutate)
 
+    def test_documented_reasoning_content_and_optional_message_metadata_are_transport_only(self):
+        # Official openai-python ResponseReasoningItem: content is optional and
+        # nullable, with reasoning_text blocks. It is never the typed answer.
+        # https://github.com/openai/openai-python/blob/main/src/openai/types/responses/response_reasoning_item.py
+        values = [None, [], [{'type': 'reasoning_text', 'text': 'Synthetic reasoning fixture.'}]]
+        for value in values:
+            for phase in ('construction', 'inspection', 'reassessment'):
+                with self.subTest(content=value, phase=phase):
+                    envelope = ({'scene_json': pc.canonical(scene())} if phase == 'construction' else
+                        {'accepted': True, 'issues': [], 'summary': 'Synthetic verdict.', 'correction': None})
+                    def change(response):
+                        response['output'][0].update(content=value, encrypted_content=None, status=None)
+                        response['output'][-1].update(phase='final_answer')
+                        response['output'][-1]['content'][0].update(logprobs=[])
+                    result = self.parse(envelope, phase, change_response=change)
+                    if phase == 'construction': self.assertEqual(json.loads(result.scene_json), scene())
+                    else: self.assertIs(result.accepted, True)
+        def completed_metadata(response):
+            response['output'][0].update(content=[], status='completed',
+                encrypted_content='opaque-synthetic-fixture',
+                summary=[{'type': 'summary_text', 'text': 'Synthetic summary metadata.'}])
+            response['output'][-1].update(phase='commentary')
+        result = self.parse({'scene_json': pc.canonical(scene())}, change_response=completed_metadata)
+        self.assertEqual(json.loads(result.scene_json), scene())
+
+    def test_reasoning_shape_failures_are_bounded_and_never_echo_generated_content(self):
+        private = 'PRIVATE_FIXTURE_TEXT_MUST_NOT_APPEAR'
+        cases = [({'content': private}, 'reasoning_content'),
+                 ({'content': {}}, 'reasoning_content'),
+                 ({'content': [{'type': 'output_text', 'text': private}]}, 'reasoning_content'),
+                 ({'content': [{'type': 'reasoning_text', 'text': 1}]}, 'reasoning_content'),
+                 ({'content': [{'type': 'reasoning_text', 'text': private, 'tool': 'hidden'}]}, 'reasoning_content'),
+                 ({'status': 'in_progress'}, 'reasoning_status'),
+                 ({'status': 'incomplete'}, 'reasoning_status'),
+                 ({'summary': private}, 'reasoning_summary'),
+                 ({private: private}, 'reasoning_fields')]
+        for fields, reason in cases:
+            with self.subTest(reason=reason, fields=list(fields)):
+                with self.assertRaises(pc.Refused) as error:
+                    self.parse({'scene_json': pc.canonical(scene())},
+                        change_response=lambda response: response['output'][0].update(fields))
+                self.assertEqual(str(error.exception), 'unexpected_provider_output:' + reason)
+                self.assertNotIn(private, str(error.exception))
+
+    def test_other_output_shape_diagnostics_never_echo_provider_values(self):
+        private = 'PRIVATE_FIXTURE_TEXT_MUST_NOT_APPEAR'
+        for fields, reason in [({'type': private}, 'item_type'),
+                               ({'role': private}, 'message_role'),
+                               ({'status': private}, 'message_status')]:
+            with self.subTest(reason=reason):
+                with self.assertRaises(pc.Refused) as error:
+                    self.parse({'scene_json': pc.canonical(scene())},
+                        change_response=lambda response: response['output'][-1].update(fields))
+                self.assertEqual(str(error.exception), 'unexpected_provider_output:' + reason)
+                self.assertNotIn(private, str(error.exception))
+
     def test_outer_envelope_and_inner_scene_reject_duplicate_keys_nonfinite_and_incomplete_json(self):
         invalid = ['{"parts":[],"parts":[1]}', '{"parts":[NaN]}', '{"parts":[Infinity]}',
                    '{"parts":[1e999]}', '{"parts":', '[]', 'null', '"not a scene"']

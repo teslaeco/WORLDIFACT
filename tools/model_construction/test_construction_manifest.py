@@ -37,7 +37,7 @@ class ManifestTests(unittest.TestCase):
                           'from construction_manifest import EXPECTED, reviewed_manifest')
         self.assertEqual((here / 'construction_fence.py').read_text(), old)
 
-    def test_only_fixed_before_or_complete_after_manifest_is_accepted(self):
+    def test_only_fixed_predecessors_or_complete_after_manifest_is_accepted(self):
         sources = transactions.lineage.installed_sources()
         here = Path(__file__).resolve().parent
         sources['context_policy.py'] = (here.parents[1] / 'tools/model_context_upgrade/context_policy.py').read_bytes()
@@ -47,6 +47,7 @@ class ManifestTests(unittest.TestCase):
         with patch.object(manifest, 'EXPECTED_AFTER', after):
             self.assertTrue(manifest.reviewed_manifest(manifest.EXPECTED))
             self.assertTrue(manifest.reviewed_manifest(after))
+            self.assertTrue(manifest.reviewed_manifest(manifest.INSTALLED_V1))
             self.assertEqual(manifest.changes(sources, helpers), changed)
             for name in after:
                 with self.subTest(name=name):
@@ -54,6 +55,28 @@ class ManifestTests(unittest.TestCase):
                     self.assertFalse(manifest.reviewed_manifest({key:value for key,value in after.items() if key != name}))
             self.assertFalse(manifest.reviewed_manifest({**after, 'unreviewed.py': 'a' * 64}))
             with self.assertRaises(ValueError): manifest.changes(sources, {**helpers, 'runtime_controller.py': helpers['runtime_controller.py'] + b'\n'})
+
+    def test_update_target_can_only_change_the_complete_installed_parser_hash(self):
+        before, after = manifest.payload_predecessor(), manifest.final_manifest()
+        self.assertEqual(set(before), health.SOURCES)
+        self.assertEqual({name for name in before if before[name] != after[name]}, {'construction_payload.py'})
+        self.assertEqual(before['construction_payload.py'],
+                         'fb47f6038cf7e43eb98371fdaaa9ad9e34e8fa06075a94a6653338747878fca1')
+        invalid = [after, {name: value for name, value in before.items() if name != 'server.py'},
+                   {**before, 'unreviewed.py': 'a' * 64}, {**before, 'server.py': '0' * 64},
+                   {**before, 'construction_payload.py': 'UNFROZEN_REFUSE'}]
+        for value in invalid:
+            with self.subTest(value=value), patch.object(manifest, 'INSTALLED_V1', value):
+                with self.assertRaisesRegex(ValueError, 'not frozen'):
+                    manifest.payload_predecessor()
+
+    def test_update_source_authority_does_not_come_from_target_receipts(self):
+        operations = types.SimpleNamespace(source=Path('/synthetic/froge-connector'), home=Path('/synthetic'),
+                                           expected_source_sha256={**manifest.INSTALLED_V1, 'runtime_controller.py': '0' * 64})
+        with patch.object(fence, '_source', side_effect=AssertionError('Unreviewed source read')):
+            with self.assertRaisesRegex(fence.FenceRefused, 'exact reviewed'):
+                with fence.quiesce(operations):
+                    self.fail('Unreviewed update fence yielded')
 
 
 if __name__ == '__main__': unittest.main()
