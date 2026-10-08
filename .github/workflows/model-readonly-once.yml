@@ -1,0 +1,42 @@
+name: Read approved failed model evidence once
+on:
+  push:
+    branches: ['diagnostics/mcc-readonly-once-20261008']
+    paths: ['.github/workflows/model-readonly-once.yml']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-mcc-readonly-20261008
+  cancel-in-progress: false
+jobs:
+  diagnostic:
+    if: github.ref == 'refs/heads/diagnostics/mcc-readonly-once-20261008' && github.event.before == '944b486249b54cca02e6ed8ca426da6eba296391' && github.run_attempt == 1
+    environment:
+      name: production
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify offline safety fixtures without production credentials
+        run: node --test tests/model-readonly-once.test.mjs
+      - name: Read only the approved existing request and encrypt in memory
+        run: node scripts/model-readonly-once.mjs
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+          DIAGNOSTIC_BEFORE: ${{ github.event.before }}
+      - name: Upload ciphertext only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: model-readonly-encrypted-${{ github.run_id }}
+          path: .model-readonly-encrypted/report.enc.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
