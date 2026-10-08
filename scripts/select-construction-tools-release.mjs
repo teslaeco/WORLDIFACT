@@ -16,7 +16,7 @@ export const TEST_PATH = 'tests/construction-tools-release.test.mjs'
 export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = '59e429f9e433e73c343c6ed1db90131dd334562b'
+export const CONFIG_BLOB = '7414c8ed95921ae9f40e19951fefe5c411a1941e'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
 export const BASE_SCRIPT_BLOB = '22f8aadd27dc14727197d8c57676a0114dc36a9a'
 export const BASE_CONFIG_BLOB = 'ad7874ed47b148a39301742cc2185c922692e6bf'

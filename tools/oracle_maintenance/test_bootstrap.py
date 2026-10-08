@@ -21,6 +21,9 @@ class BootstrapTests(unittest.TestCase):
     def runner(self, argv, **kwargs):
         self.calls.append((argv, kwargs))
         if '-q' in argv:
+            # The runner only accepts OpenSSH private keys; older clients need
+            # an explicit format selection instead of their RSA PEM default.
+            self.assertIn('-o', argv)
             key = Path(argv[-1])
             key.write_text('INERT-PRIVATE-FIXTURE-NEVER-OUTPUT')
             key.chmod(0o600)

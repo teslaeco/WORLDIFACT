@@ -89,7 +89,7 @@ def key_pair(folder, run):
     key = folder / 'id_rsa'
     public = folder / 'id_rsa.pub'
     if not key.exists() and not public.exists():
-        result = run(['ssh-keygen', '-q', '-t', 'rsa', '-b', '4096', '-N', '',
+        result = run(['ssh-keygen', '-q', '-o', '-t', 'rsa', '-b', '4096', '-N', '',
                       '-C', KEY_COMMENT, '-f', str(key)], stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=90)
         if result.returncode:
