@@ -1,7 +1,7 @@
 {
-  "revision": "oracle-construction-tools-release-v6",
-  "release": "restricted-oracle-maintenance-source-only-20261008",
-  "baseCommit": "6698b79f244ea85ca50076fd54154ff982e96cf8",
+  "revision": "oracle-construction-tools-release-v7",
+  "release": "oracle-diagnostic-recipient-source-only-20261008",
+  "baseCommit": "766e651af475323152b6fd6fb7b1bce0ac4a8586",
   "sourceOnly": true,
   "deployAllowed": false,
   "preserveCloudflareDeployment": true,
@@ -11,100 +11,16 @@
     "tests/construction-tools-release.test.mjs": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "fde39abcd6edef8e70ad0aa7d87ee887b17bc7ad",
-      "newBlob": "020c53ffa9e9b061e1ef79fcde78c83ecabc758c",
+      "oldBlob": "020c53ffa9e9b061e1ef79fcde78c83ecabc758c",
+      "newBlob": "e4134d3d4c7e9a62421dc65ed34364909def55df",
       "status": "M"
     },
-    ".github/workflows/oracle-maintenance.yml": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "4f3c02c508a5ed650dae4fc772618cd3800a54b7",
-      "status": "A"
-    },
     ".github/oracle-maintenance-recipient.pem": {
-      "oldMode": "000000",
+      "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "4863ea338c11a81968197d396bc6f91fce163a4c",
-      "status": "A"
-    },
-    "scripts/oracle-maintenance.mjs": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "641557bee57e2d22edca071dac8d36d2a764df90",
-      "status": "A"
-    },
-    "tests/oracle-maintenance.test.mjs": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "ba701d390a734e5919253b4762fdd93d0768b606",
-      "status": "A"
-    },
-    "tools/oracle_maintenance/bootstrap.py": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "2603ca9ada0cab10f9d76accddd08ca3780eb323",
-      "status": "A"
-    },
-    "tools/oracle_maintenance/receiver.py": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "510c7d9b222be35f3d17241c2d72a2dc7040a257",
-      "status": "A"
-    },
-    "tools/oracle_maintenance/dispatcher.py": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "f4ab913f066aae80a80ae1257e7d6fcfac352ac7",
-      "status": "A"
-    },
-    "tools/oracle_maintenance/status.py": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "932f7f121bcb360f996f9a30f6fe45dd659e1758",
-      "status": "A"
-    },
-    "tools/oracle_maintenance/test_bootstrap.py": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "698ee5cf99d9a0fea0b8f97259343f3449ca78a1",
-      "status": "A"
-    },
-    "tools/oracle_maintenance/test_receiver.py": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "5445d1f9e5710826105417d89ee6f442dfb627c4",
-      "status": "A"
-    },
-    "tools/oracle_maintenance/test_dispatcher.py": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "af53eea32fe60164aea1b0fae626a71370e9dc60",
-      "status": "A"
-    },
-    "tools/oracle_maintenance/test_status.py": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "63b150daa3327078b8d41b645855bb817e958470",
-      "status": "A"
-    },
-    "tools/oracle_maintenance/README.md": {
-      "oldMode": "000000",
-      "newMode": "100644",
-      "oldBlob": "0000000000000000000000000000000000000000",
-      "newBlob": "167c50aa87f0a24081b0ffbcce5c8efeb8913865",
-      "status": "A"
+      "oldBlob": "4863ea338c11a81968197d396bc6f91fce163a4c",
+      "newBlob": "32d65af26659ee221c0885709155426285993d91",
+      "status": "M"
     },
     "tests/context-tools-release.test.mjs": {
       "oldMode": "100644",
