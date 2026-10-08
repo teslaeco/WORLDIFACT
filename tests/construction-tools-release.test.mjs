@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
   BASE_COMMIT, BASE_WORKFLOW_BLOB, LEGACY_SCRIPT_BLOB, SCRIPT_PATH, CONFIG_PATH,
   TEST_PATH, WORKFLOW_PATH, CONFIG_BLOB, FAULT, BASE_PAYLOAD_BLOBS, REVIEWED_PATHS,
-  LEGACY_TEST_PATH, LEGACY_TEST_RECORD, ADDED_PAYLOAD_PATHS,
+  LEGACY_TEST_PATH, LEGACY_TEST_RECORD, RECIPIENT_PATH,
   BASE_SCRIPT_BLOB, BASE_CONFIG_BLOB, BASE_SCRIPT_SHA256, BASE_CONFIG_SHA256,
   readManifest, guardedWorkflow, selectConstructionToolsRelease,
 } from '../scripts/select-construction-tools-release.mjs'
@@ -27,6 +27,8 @@ const head = '1'.repeat(40), other = '2'.repeat(40), zero = '0'.repeat(40)
 const scriptBytes = readFileSync(join(root, SCRIPT_PATH))
 const oldScriptBytes = readFileSync(join(root, OLD_SCRIPT_PATH))
 const currentWorkflow = readFileSync(join(root, WORKFLOW_PATH), 'utf8')
+// Inert bytes exercise content identity only; no encryption or key generation.
+const fixtureRecipientBytes = Buffer.from('INERT DIAGNOSTIC PUBLIC RECIPIENT FIXTURE\n')
 
 // Hosted review checkouts need not contain the base object. Restore only the
 // two checksum values, then require the immutable entire baseline workflow.
@@ -52,13 +54,13 @@ const modification = (path, oldBlob = '3'.repeat(40), newBlob = '4'.repeat(40)) 
 function entry({ path: _path, ...value }) { return value }
 function fixtureManifest() {
   return {
-    revision: 'oracle-construction-tools-release-v6',
-    release: 'restricted-oracle-maintenance-source-only-20261008',
+    revision: 'oracle-construction-tools-release-v7',
+    release: 'oracle-diagnostic-recipient-source-only-20261008',
     baseCommit: BASE_COMMIT, sourceOnly: true, deployAllowed: false,
     preserveCloudflareDeployment: true, paidGenerationRequested: false, status: 'FROZEN',
     payload: { ...Object.fromEntries(Object.entries(BASE_PAYLOAD_BLOBS).map(([path, oldBlob]) =>
-      [path, entry(ADDED_PAYLOAD_PATHS.includes(path) ? addition(path) : modification(path, oldBlob,
-        path === TEST_PATH ? blob(readFileSync(join(root, TEST_PATH))) : '4'.repeat(40)))])),
+      [path, entry(modification(path, oldBlob, path === TEST_PATH
+        ? blob(readFileSync(join(root, TEST_PATH))) : blob(fixtureRecipientBytes)))])),
       [LEGACY_TEST_PATH]: { ...LEGACY_TEST_RECORD } },
   }
 }
@@ -117,27 +119,20 @@ function dispatch(options = {}) {
   return selectConstructionToolsRelease({ cwd: root, ...fixture })
 }
 
-test('exact seventeen-path maintenance squash skips deployment before credentials', () => {
-  assert.equal(BASE_COMMIT, '6698b79f244ea85ca50076fd54154ff982e96cf8')
-  const additions = [
-    '.github/workflows/oracle-maintenance.yml', '.github/oracle-maintenance-recipient.pem',
-    'scripts/oracle-maintenance.mjs', 'tests/oracle-maintenance.test.mjs',
-    ...['bootstrap.py', 'receiver.py', 'dispatcher.py', 'status.py',
-      'test_bootstrap.py', 'test_receiver.py', 'test_dispatcher.py', 'test_status.py', 'README.md']
-      .map(name => `tools/oracle_maintenance/${name}`),
-  ].sort()
-  assert.deepEqual([...ADDED_PAYLOAD_PATHS].sort(), additions)
-  assert.equal(additions.length, 13)
+test('exact five-modification recipient squash skips deployment before credentials', () => {
+  assert.equal(BASE_COMMIT, '766e651af475323152b6fd6fb7b1bce0ac4a8586')
+  assert.equal(RECIPIENT_PATH, '.github/oracle-maintenance-recipient.pem')
   assert.deepEqual(REVIEWED_PATHS, [
     '.github/workflows/cloudflare.yml', 'config/oracle-construction-tools-release.json',
     'scripts/select-construction-tools-release.mjs', 'tests/construction-tools-release.test.mjs',
-    ...additions,
+    '.github/oracle-maintenance-recipient.pem',
   ].sort())
+  assert.deepEqual(Object.keys(BASE_PAYLOAD_BLOBS).sort(), [RECIPIENT_PATH, TEST_PATH].sort())
   const changes = evidence().data.changes
-  assert.equal(REVIEWED_PATHS.length, 17)
+  assert.equal(REVIEWED_PATHS.length, 5)
   assert.deepEqual(changes.map(change => change.path).sort(), REVIEWED_PATHS)
-  assert.deepEqual(changes.filter(change => change.status === 'A').map(change => change.path).sort(), additions)
-  assert.equal(changes.filter(change => change.status === 'M').length, 4)
+  assert.equal(changes.every(change => change.status === 'M'
+    && change.oldMode === '100644' && change.newMode === '100644'), true)
   assert.deepEqual(select(), { deployAllowed: false })
   assert.deepEqual(dispatch(), { deployAllowed: false })
   assert.deepEqual(dispatch({ event: { ref: 'refs/heads/main' } }), { deployAllowed: false })
@@ -149,6 +144,7 @@ test('exact seventeen-path maintenance squash skips deployment before credential
 
 test('production config stays inert until final payload bytes and its compiled blob pin are frozen', () => {
   const raw = readFileSync(join(root, CONFIG_PATH))
+  assert.equal(currentWorkflow, guardedWorkflow(baseWorkflow, sha256(scriptBytes), sha256(raw)))
   if (CONFIG_BLOB === 'UNFROZEN_REFUSE') {
     assert.equal(JSON.parse(raw).status, 'UNFROZEN_REFUSE')
     assert.throws(() => readManifest(raw), new RegExp(FAULT))
@@ -160,7 +156,6 @@ test('production config stays inert until final payload bytes and its compiled b
     for (const [path, record] of Object.entries(manifest.payload)) {
       assert.equal(blob(readFileSync(join(root, path))), record.newBlob, path)
     }
-    assert.equal(currentWorkflow, guardedWorkflow(baseWorkflow, sha256(scriptBytes), sha256(raw)))
   }
 })
 
@@ -191,7 +186,9 @@ test('review branch histories and multi-commit ranges cannot substitute for one 
 test('later construction or maintenance changes cannot become a lasting paths-ignore exemption', () => {
   for (const path of [SCRIPT_PATH, CONFIG_PATH, TEST_PATH, 'tools/model_construction/new.py',
     'docs/BOUNDED_CONSTRUCTION_20261007.md', '.github/workflows/model-construction-review.yml',
-    'config/oracle-construction-unknown.json', ...ADDED_PAYLOAD_PATHS,
+    'config/oracle-construction-unknown.json', RECIPIENT_PATH, WORKFLOW_PATH,
+    '.github/workflows/oracle-maintenance.yml', 'scripts/oracle-maintenance.mjs',
+    'tests/oracle-maintenance.test.mjs', 'tools/oracle_maintenance/bootstrap.py',
     '.github/workflows/oracle-maintenance-extra.yml', 'tools/oracle_maintenance/extra.py',
     'scripts/oracle-maintenance-extra.mjs', 'docs/ORACLE_MAINTENANCE.md']) {
     for (const status of ['A', 'M', 'D']) {
@@ -203,11 +200,8 @@ test('later construction or maintenance changes cannot become a lasting paths-ig
 test('every changed file requires exact mode, old/new blob and status', () => {
   const complete = evidence().data.changes
   for (const target of complete) {
-    for (const changed of [ADDED_PAYLOAD_PATHS.includes(target.path)
-      ? { status: 'M', oldMode: '100644', oldBlob: '8'.repeat(40) }
-      : { status: 'A', oldMode: '000000', oldBlob: zero },
-      { status: ADDED_PAYLOAD_PATHS.includes(target.path) ? 'M' : 'A' },
-      { oldMode: ADDED_PAYLOAD_PATHS.includes(target.path) ? '100644' : '000000' },
+    for (const changed of [{ status: 'A', oldMode: '000000', oldBlob: zero },
+      { status: 'A' }, { oldMode: '000000' },
       { status: 'D' }, { status: 'R100' }, { status: 'T' },
       { newMode: '120000' }, { newMode: '100755' }, { newMode: '160000' },
       { newBlob: '9'.repeat(40) }, { oldBlob: '8'.repeat(40) }, { oldMode: '100755' }]) {
@@ -245,12 +239,9 @@ test('manifest cannot change immutable baseline blobs, statuses, modes or exact 
   const original = fixtureManifest()
   for (const path of Object.keys(BASE_PAYLOAD_BLOBS)) {
     for (const patch of [{ oldBlob: '8'.repeat(40) },
-      { oldMode: ADDED_PAYLOAD_PATHS.includes(path) ? '100644' : '000000' },
+      { oldMode: '000000' },
       { oldMode: '100755' }, { newMode: '100755' }, { newMode: '120000' },
-      ADDED_PAYLOAD_PATHS.includes(path)
-        ? { status: 'M', oldMode: '100644', oldBlob: '8'.repeat(40) }
-        : { status: 'A', oldMode: '000000', oldBlob: zero },
-      { status: ADDED_PAYLOAD_PATHS.includes(path) ? 'M' : 'A' }, { status: 'D' },
+      { status: 'A', oldMode: '000000', oldBlob: zero }, { status: 'A' }, { status: 'D' },
       { newBlob: zero }, { newBlob: original.payload[path].oldBlob },
       { extra: true }]) {
       const manifest = structuredClone(original)
@@ -323,6 +314,8 @@ test('historical transform compatibility cannot authorize an earlier release bas
   reject({ beforeWorkflow: prior })
   reject({ changes: fixture.data.changes.map(change => change.path === WORKFLOW_PATH
     ? { ...change, oldBlob: blob(prior) } : change) })
+  reject({ parents: ['6698b79f244ea85ca50076fd54154ff982e96cf8'],
+    event: { before: '6698b79f244ea85ca50076fd54154ff982e96cf8' } })
   reject({ parents: ['ea1987eee520880b1eb93e71b572f7f1f4879efd'],
     event: { before: 'ea1987eee520880b1eb93e71b572f7f1f4879efd' } })
   reject({ parents: ['a30708fcfa4d6b2dc07cb07916f59d3dafb99b6f'],

@@ -5,43 +5,30 @@ import { fileURLToPath } from 'node:url'
 import {
   blob, sha256, parseRawChanges, selectContextToolsRelease,
   SCRIPT_PATH as LEGACY_SCRIPT_PATH,
+  BASE_COMMIT as LEGACY_BASE_COMMIT,
 } from './select-context-tools-release.mjs'
 
-export const BASE_COMMIT = '6698b79f244ea85ca50076fd54154ff982e96cf8'
-export const BASE_WORKFLOW_BLOB = 'd8978dc61f61a8a2a339b546c9ef243f7ca9ef4b'
+export const BASE_COMMIT = '766e651af475323152b6fd6fb7b1bce0ac4a8586'
+export const BASE_WORKFLOW_BLOB = '608cf064d6c895d3741e8d974f88d10dbcffa5b4'
 export const LEGACY_SCRIPT_BLOB = '465898752099691d8cee1ca989575c2b83febab3'
 export const SCRIPT_PATH = 'scripts/select-construction-tools-release.mjs'
 export const CONFIG_PATH = 'config/oracle-construction-tools-release.json'
 export const TEST_PATH = 'tests/construction-tools-release.test.mjs'
 export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
+export const RECIPIENT_PATH = '.github/oracle-maintenance-recipient.pem'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = '7414c8ed95921ae9f40e19951fefe5c411a1941e'
+export const CONFIG_BLOB = '7389e47e9580953c3646c3076ec679caf2b5faa6'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
-export const BASE_SCRIPT_BLOB = '22f8aadd27dc14727197d8c57676a0114dc36a9a'
-export const BASE_CONFIG_BLOB = 'ad7874ed47b148a39301742cc2185c922692e6bf'
-export const BASE_SCRIPT_SHA256 = '3e7e0584d1f4917cb3911aa5b595841b28a64b3951cccb6b7401fae277b5f39a'
-export const BASE_CONFIG_SHA256 = 'f1a525824293a07a6b8d5568201e784ccde638a330bc8c7f169376249a5a7296'
-// The maintenance package is source-only. These exact thirteen additions are
-// compiled authority; the manifest cannot admit arbitrary workflows or tools.
-export const ADDED_PAYLOAD_PATHS = Object.freeze([
-  '.github/workflows/oracle-maintenance.yml',
-  '.github/oracle-maintenance-recipient.pem',
-  'scripts/oracle-maintenance.mjs',
-  'tests/oracle-maintenance.test.mjs',
-  'tools/oracle_maintenance/bootstrap.py',
-  'tools/oracle_maintenance/receiver.py',
-  'tools/oracle_maintenance/dispatcher.py',
-  'tools/oracle_maintenance/status.py',
-  'tools/oracle_maintenance/test_bootstrap.py',
-  'tools/oracle_maintenance/test_receiver.py',
-  'tools/oracle_maintenance/test_dispatcher.py',
-  'tools/oracle_maintenance/test_status.py',
-  'tools/oracle_maintenance/README.md',
-])
+export const BASE_SCRIPT_BLOB = '445aa3428aa0670ac88b46024bc29ff11dad340a'
+export const BASE_CONFIG_BLOB = '7414c8ed95921ae9f40e19951fefe5c411a1941e'
+export const BASE_SCRIPT_SHA256 = '5caf8ac8409ca8e7f5988809631e00ee05ced7560dfa0cd7a9e249029e956e99'
+export const BASE_CONFIG_SHA256 = 'f5ff1f2f163930292fe87f3bae3c957b7369f5bacbf9ff1edf045ef1ede23d3e'
+// This finite source-only release replaces one diagnostic encryption recipient.
+// Existing SSH access, maintenance code and workflows are not release payloads.
 export const BASE_PAYLOAD_BLOBS = Object.freeze({
-  [TEST_PATH]: 'fde39abcd6edef8e70ad0aa7d87ee887b17bc7ad',
-  ...Object.fromEntries(ADDED_PAYLOAD_PATHS.map(path => [path, '0'.repeat(40)])),
+  [TEST_PATH]: '020c53ffa9e9b061e1ef79fcde78c83ecabc758c',
+  [RECIPIENT_PATH]: '4863ea338c11a81968197d396bc6f91fce163a4c',
 })
 // Preserve the historical context test's manifest contract without permitting
 // this unchanged path in the repair diff. Both historical hashes are immutable.
@@ -82,8 +69,8 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
   // ambiguous serialization, in addition to the compiled immutable blob pin.
   if (Buffer.compare(raw, Buffer.from(JSON.stringify(value, null, 2) + '\n')) !== 0
       || !sameKeys(value, CONFIG_KEYS)
-      || value.revision !== 'oracle-construction-tools-release-v6'
-      || value.release !== 'restricted-oracle-maintenance-source-only-20261008'
+      || value.revision !== 'oracle-construction-tools-release-v7'
+      || value.release !== 'oracle-diagnostic-recipient-source-only-20261008'
       || value.baseCommit !== BASE_COMMIT || value.sourceOnly !== true
       || value.deployAllowed !== false || value.preserveCloudflareDeployment !== true
       || value.paidGenerationRequested !== false || value.status !== 'FROZEN'
@@ -93,10 +80,8 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
       || ENTRY_KEYS.some(key => value.payload[LEGACY_TEST_PATH][key] !== LEGACY_TEST_RECORD[key])) refused()
   for (const path of Object.keys(BASE_PAYLOAD_BLOBS)) {
     const entry = value.payload[path]
-    const added = ADDED_PAYLOAD_PATHS.includes(path)
     if (!sameKeys(entry, ENTRY_KEYS) || entry.newMode !== '100644'
-        || entry.oldMode !== (added ? '000000' : '100644')
-        || entry.status !== (added ? 'A' : 'M')
+        || entry.oldMode !== '100644' || entry.status !== 'M'
         || entry.oldBlob !== BASE_PAYLOAD_BLOBS[path]
         || !sha(entry.newBlob) || entry.oldBlob === entry.newBlob) refused()
   }
@@ -188,8 +173,13 @@ export function selectConstructionToolsRelease({ cwd = process.cwd(), env = proc
     git(cwd, ['merge-base', '--is-ancestor', scope.before, head])
     if (scope.before !== parents[0]) changes = diff(scope.before)
   }
+  // Preserve only the historical context release's strict legacy verifier.
+  // Every other Cloudflare workflow change is refused by this finite envelope.
+  const legacyContextParent = parents.length === 1 && parents[0] === LEGACY_BASE_COMMIT
+    && (scope.kind === 'workflow_dispatch' || scope.before === LEGACY_BASE_COMMIT)
   const candidate = parents.includes(BASE_COMMIT) || scope.before === BASE_COMMIT
     || [...immediate, ...changes].some(change => protectedSourcePath(change.path))
+    || !legacyContextParent && [...immediate, ...changes].some(change => change.path === WORKFLOW_PATH)
   if (!candidate) return legacySelector({ cwd, env, event: selectedEvent, git })
   // A review branch may have arbitrary history, but only its single-parent
   // reviewed main squash can establish this one source-only release envelope.
