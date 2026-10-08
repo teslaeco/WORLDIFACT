@@ -1,0 +1,48 @@
+name: Read untrusted Oracle public host key once
+on:
+  push:
+    branches: [diagnostics/oracle-public-host-key-20261008]
+permissions:
+  contents: read
+concurrency:
+  group: oracle-public-host-key-20261008
+  cancel-in-progress: false
+jobs:
+  offline-scope:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/diagnostics/oracle-public-host-key-20261008' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Reject expired or out-of-scope commits before Production access
+        run: node scripts/oracle-host-key-once.mjs --gate
+      - name: Verify offline host-key safety fixtures
+        run: node --test tests/oracle-host-key-once.test.mjs
+  public-host-key:
+    needs: offline-scope
+    if: needs.offline-scope.result == 'success' && github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/diagnostics/oracle-public-host-key-20261008' && github.event_name == 'push' && github.run_attempt == 1
+    environment:
+      name: Production
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Read one untrusted RSA public host key without authentication
+        run: node scripts/oracle-host-key-once.mjs --scan
+        env:
+          ORACLE_MAINTENANCE_HOST: ${{ secrets.ORACLE_MAINTENANCE_HOST }}
