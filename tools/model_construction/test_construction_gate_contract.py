@@ -19,18 +19,26 @@ write = transactions.write
 
 def evidence(hashes):
     cases = []
-    for accepted in (True, False):
-        phases = ['construction','inspection','reassessment'] if accepted else ['construction','inspection']
+    for accepted, correction, initial_edit in ((True, True, False), (False, False, False), (True, False, True)):
+        phases = ['construction','inspection','reassessment'] if correction else ['construction','inspection']
+        tools = ['build_model'] + (['edit_model'] if initial_edit else []) + ['inspect_render'] * 3
+        if correction:
+            tools += ['edit_model'] + ['inspect_render'] * 3
+        tools += ['finish_model']
         cases.append({'accepted': accepted, 'revision': 2 if accepted else 1,
-            'correction': accepted, 'server_success_returned': accepted,
+            'correction': correction, 'initial_edit': initial_edit, 'server_success_returned': accepted,
+            'first_inspected_revision': 2 if initial_edit else 1,
+            'inspected_revisions': [1, 2] if correction else [2] if initial_edit else [1],
+            'before_initial_edit_model_sha256': 'a' * 64 if initial_edit else None,
+            'completed_pipeline_tools': tools,
             'model_sha256': 'b' * 64, 'render_sha256': {view:'c' * 64 for view in ('front','side','back')},
             'provider_requests': [{'phase':phase,'payload_sha256':'d' * 64} for phase in phases],
-            'before_correction_model_sha256': 'a' * 64 if accepted else None,
-            'before_correction_render_sha256': {view:'a' * 64 for view in ('front','side','back')} if accepted else None,
+            'before_correction_model_sha256': 'a' * 64 if correction else None,
+            'before_correction_render_sha256': {view:'a' * 64 for view in ('front','side','back')} if correction else None,
             'fixture_settled_micro_usd': 73844 * len(phases), 'invoice_amount': False})
-    commands = [{'phase': phase, 'job_id': '00000000-0000-4000-8000-00000000000' + ('1' if index < 3 else '2'),
+    commands = [{'phase': phase, 'job_id': '00000000-0000-4000-8000-00000000000' + ('1' if index < 3 else '2' if index < 5 else '3'),
                  'command_sha256': 'e' * 64}
-                for index, phase in enumerate(('build','build','finalize','build','finalize'))]
+                for index, phase in enumerate(('build','build','finalize','build','finalize','build','build','finalize'))]
     return {'revision': health.REVISION, 'source_sha256': hashes, 'cases': cases, 'container_calls': commands,
         'isolated_podman_execution_verified': True, 'native_fallback': False,
         'provider_fixture': True, 'activation_receipt_fixture': True,
@@ -189,9 +197,18 @@ class GateCallerTests(unittest.TestCase):
             lambda x:x['cases'][0].update({'before_correction_model_sha256':'b' * 64}),
             lambda x:x['cases'][0].update({'fixture_settled_micro_usd':0}),
             lambda x:x['cases'][0]['provider_requests'].pop(),
+            lambda x:x['cases'].pop(),
+            lambda x:x['cases'][2].update({'initial_edit':False}),
+            lambda x:x['cases'][2].update({'first_inspected_revision':1}),
+            lambda x:x['cases'][2].update({'inspected_revisions':[1,2]}),
+            lambda x:x['cases'][2].update({'inspected_revisions':[True]}),
+            lambda x:x['cases'][2].update({'before_initial_edit_model_sha256':x['cases'][2]['model_sha256']}),
+            lambda x:x['cases'][2]['completed_pipeline_tools'].remove('edit_model'),
+            lambda x:x['cases'][2]['provider_requests'].append({'phase':'reassessment','payload_sha256':'d'*64}),
             lambda x:x['container_calls'].pop(),
             lambda x:x['container_calls'][0].update({'phase':'finalize'}),
             lambda x:x['container_calls'][3].update({'job_id':x['container_calls'][0]['job_id']}),
+            lambda x:x['container_calls'][5].update({'job_id':x['container_calls'][0]['job_id']}),
         ]
         for index, mutation in enumerate(mutations):
             with self.subTest(index=index):

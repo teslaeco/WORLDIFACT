@@ -44,10 +44,12 @@ class ManifestTests(unittest.TestCase):
         helpers = {name: (here / name).read_bytes() for name in manifest.HELPERS}
         changed = transactions.runtime_patch.changes(sources, helpers)
         after = {name: transactions.digest(raw) for name, raw in changed.items()}
+        self.assertEqual(after, manifest.final_manifest(), 'Frozen target must match the real complete runtime.')
         with patch.object(manifest, 'EXPECTED_AFTER', after):
             self.assertTrue(manifest.reviewed_manifest(manifest.EXPECTED))
             self.assertTrue(manifest.reviewed_manifest(after))
             self.assertTrue(manifest.reviewed_manifest(manifest.INSTALLED_V1))
+            self.assertTrue(manifest.reviewed_manifest(manifest.INITIAL_EDIT_BEFORE))
             self.assertEqual(manifest.changes(sources, helpers), changed)
             for name in after:
                 with self.subTest(name=name):
@@ -57,7 +59,7 @@ class ManifestTests(unittest.TestCase):
             with self.assertRaises(ValueError): manifest.changes(sources, {**helpers, 'runtime_controller.py': helpers['runtime_controller.py'] + b'\n'})
 
     def test_update_target_can_only_change_the_complete_installed_parser_hash(self):
-        before, after = manifest.payload_predecessor(), manifest.final_manifest()
+        before, after = manifest.payload_predecessor(), manifest.PAYLOAD_AFTER
         self.assertEqual(set(before), health.SOURCES)
         self.assertEqual({name for name in before if before[name] != after[name]}, {'construction_payload.py'})
         self.assertEqual(before['construction_payload.py'],
@@ -69,6 +71,38 @@ class ManifestTests(unittest.TestCase):
             with self.subTest(value=value), patch.object(manifest, 'INSTALLED_V1', value):
                 with self.assertRaisesRegex(ValueError, 'not frozen'):
                     manifest.payload_predecessor()
+
+    def test_initial_edit_target_changes_exactly_three_helpers_from_parser_fixed_runtime(self):
+        before, after = manifest.initial_edit_predecessor(), manifest.final_manifest()
+        self.assertEqual(before, manifest.PAYLOAD_AFTER)
+        self.assertEqual({name for name in before if before[name] != after[name]},
+                         {'construction_payload.py', 'phased_controller.py', 'runtime_controller.py'})
+        self.assertEqual(before['construction_payload.py'],
+                         '3b7e5af5192724af4d7eb2943a09230c952fbd44905ec955f2ae2d7a6ec03a84')
+        invalid = [after, {name: value for name, value in before.items() if name != 'server.py'},
+                   {**before, 'unreviewed.py': 'a' * 64}, {**before, 'server.py': '0' * 64},
+                   {**before, 'construction_payload.py': 'UNFROZEN_REFUSE'}]
+        for value in invalid:
+            with self.subTest(value=value), patch.object(manifest, 'INITIAL_EDIT_BEFORE', value):
+                with self.assertRaisesRegex(ValueError, 'not frozen'):
+                    manifest.initial_edit_predecessor()
+
+    def test_initial_edit_rejects_incomplete_extra_or_changed_helper_bytes(self):
+        here = Path(__file__).resolve().parent
+        helpers = {name: (here / name).read_bytes() for name in manifest.INITIAL_EDIT_HELPERS}
+        original = {name: (b'# reviewed predecessor ' + name.encode() + b'\n')
+                    for name in manifest.initial_edit_predecessor()}
+        before = {name: transactions.digest(raw) for name, raw in original.items()}
+        changed = {**original, **helpers}
+        after = {name: transactions.digest(raw) for name, raw in changed.items()}
+        with patch.object(manifest, 'INITIAL_EDIT_BEFORE', before), \
+             patch.object(manifest, 'final_manifest', return_value=after):
+            self.assertEqual(manifest.initial_edit_changes(original, helpers), changed)
+            invalid = [{name: raw for name, raw in helpers.items() if name != 'phased_controller.py'},
+                       {**helpers, 'server.py': b'# unreviewed\n'},
+                       {**helpers, 'runtime_controller.py': helpers['runtime_controller.py'] + b'\n'}]
+            for value in invalid:
+                with self.assertRaises(ValueError): manifest.initial_edit_changes(original, value)
 
     def test_update_source_authority_does_not_come_from_target_receipts(self):
         operations = types.SimpleNamespace(source=Path('/synthetic/froge-connector'), home=Path('/synthetic'),

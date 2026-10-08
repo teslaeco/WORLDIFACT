@@ -43,13 +43,13 @@ INSTALL_TIMEOUT = 3000
 GATE_FILES = {
     'offline_cabinet.py': ('d30f21d49a4eb73f9ddb278901f7938f68c6f21c', 'CABINET_FIRST_EXEC_REAL_PIPELINE_OK'),
     'offline_legacy_standard.py': ('cc91dc779cfbefc61df5279a5d9bd66daebf8b98', 'WORLDIFACT_LEGACY_STANDARD_OFFLINE_VERIFIED'),
-    'offline_construction.py': ('40ceaf27b5d1721b5d392478d2c4cb11880b48c5', 'WORLDIFACT_PHASED_STANDARD_OFFLINE_VERIFIED'),
+    'offline_construction.py': ('3f978bdce0d9158c1dd8d361b757d7b020a2f1ad', 'WORLDIFACT_PHASED_STANDARD_OFFLINE_VERIFIED'),
 }
 REQUIRED_GATES = frozenset((*policy.GATES, 'offline_standard_pipeline'))
 RECEIPTS = policy.CHAIN_RECEIPTS
 NEW_FILES = policy.RUNTIME_HELPERS | {policy.RECEIPT}
 WRITES = manifest.MODIFIED | NEW_FILES | RECEIPTS
-PAYLOAD_WRITES = frozenset(('construction_payload.py', policy.RECEIPT))
+INITIAL_EDIT_WRITES = manifest.INITIAL_EDIT_HELPERS | {policy.RECEIPT}
 EXECUTABLE_FILES = frozenset(('tools/codex/codex', 'tools/codex/codex-code-mode-host',
                               'tools/codex/codex-binary.json', 'tools/codex/code-mode-host.json'))
 # ggml's Linux ARM backend tags contain a decimal architecture separator.
@@ -269,7 +269,7 @@ def installed_sources(source):
 def validate_installed_receipts(source, original):
     manifest.reviewed_installed_sources({name: original[name] for name in policy.SOURCES})
     proof = policy._json(base.read_regular(source / policy.RECEIPT, 16384))
-    if (proof.get('sha256') != manifest.payload_predecessor()
+    if (proof.get('sha256') != manifest.initial_edit_predecessor()
             or any(proof.get(gate) is not True for gate in REQUIRED_GATES)
             or policy.verified_health(source) != {'worldifactStandardConstructionPolicy': policy.REVISION}):
         raise Refused('installed_construction_receipt_refused')
@@ -315,15 +315,15 @@ def verified_gate_hashes(changed, evidence):
     return hashes
 
 
-def payload_update_receipt(original, changed, evidence, allow_cancelled_cleanup):
+def initial_edit_update_receipt(original, changed, evidence, allow_cancelled_cleanup):
     hashes = verified_gate_hashes(changed, evidence)
     proof = policy._json(original[policy.RECEIPT])
     proof.update(sha256=hashes,
                  receipt_sha256={name: digest(original[name]) for name in RECEIPTS},
                  cancelled_cleanup_interruption_approved=allow_cancelled_cleanup,
                  **{gate: True for gate in REQUIRED_GATES})
-    proof['payload_update'] = {
-        'revision': 'responses-reasoning-content-v1',
+    proof['initial_edit_update'] = {
+        'revision': 'typed-plan-initial-edit-v1',
         'previous_construction_receipt_sha256': digest(original[policy.RECEIPT]),
         'verified_generic_receipt_sha256': digest(evidence.generic_receipt),
     }
@@ -387,17 +387,29 @@ def validate_phased_evidence(raw):
             and all(value.get(key) is True for key in true_flags)
             and all(value.get(key) is False for key in false_flags))
     cases = value.get('cases')
-    require(isinstance(cases, list) and len(cases) == 2)
+    require(isinstance(cases, list) and len(cases) == 3)
     fields = {'accepted', 'revision', 'correction', 'server_success_returned', 'model_sha256',
               'render_sha256', 'provider_requests', 'before_correction_model_sha256',
-              'before_correction_render_sha256', 'fixture_settled_micro_usd', 'invoice_amount'}
+              'before_correction_render_sha256', 'fixture_settled_micro_usd', 'invoice_amount',
+              'initial_edit', 'first_inspected_revision', 'inspected_revisions',
+              'before_initial_edit_model_sha256', 'completed_pipeline_tools'}
     for index, case in enumerate(cases):
-        accepted = index == 0
-        phases = ['construction', 'inspection', 'reassessment'] if accepted else ['construction', 'inspection']
+        accepted, correction, initial_edit = index != 1, index == 0, index == 2
+        phases = ['construction', 'inspection', 'reassessment'] if correction else ['construction', 'inspection']
+        tools = ['build_model'] + (['edit_model'] if initial_edit else []) + ['inspect_render'] * 3
+        if correction:
+            tools += ['edit_model'] + ['inspect_render'] * 3
+        tools += ['finish_model']
         require(isinstance(case, dict) and set(case) == fields
-                and case.get('accepted') is accepted and case.get('correction') is accepted
+                and case.get('accepted') is accepted and case.get('correction') is correction
+                and case.get('initial_edit') is initial_edit
                 and case.get('server_success_returned') is accepted
                 and type(case.get('revision')) is int and case['revision'] == (2 if accepted else 1)
+                and type(case.get('first_inspected_revision')) is int
+                and case['first_inspected_revision'] == (2 if initial_edit else 1)
+                and case.get('inspected_revisions') == ([1, 2] if correction else [2] if initial_edit else [1])
+                and all(type(revision) is int for revision in case['inspected_revisions'])
+                and case.get('completed_pipeline_tools') == tools
                 and isinstance(case.get('model_sha256'), str) and policy.HASH.fullmatch(case['model_sha256'])
                 and policy._hashes(case.get('render_sha256'), {'front', 'side', 'back'})
                 and type(case.get('fixture_settled_micro_usd')) is int
@@ -409,7 +421,13 @@ def validate_phased_evidence(raw):
             require(isinstance(request, dict) and set(request) == {'phase', 'payload_sha256'}
                     and request.get('phase') == phase and isinstance(request.get('payload_sha256'), str)
                     and policy.HASH.fullmatch(request['payload_sha256']))
-        if accepted:
+        if initial_edit:
+            before = case.get('before_initial_edit_model_sha256')
+            require(isinstance(before, str) and policy.HASH.fullmatch(before)
+                    and before != case['model_sha256'])
+        else:
+            require(case.get('before_initial_edit_model_sha256') is None)
+        if correction:
             before = case.get('before_correction_model_sha256')
             require(isinstance(before, str) and policy.HASH.fullmatch(before)
                     and before != case['model_sha256']
@@ -419,15 +437,16 @@ def validate_phased_evidence(raw):
             require(case.get('before_correction_model_sha256') is None
                     and case.get('before_correction_render_sha256') is None)
     calls = value.get('container_calls')
-    require(isinstance(calls, list) and len(calls) == 5)
-    for call, phase in zip(calls, ('build', 'build', 'finalize', 'build', 'finalize')):
+    require(isinstance(calls, list) and len(calls) == 8)
+    for call, phase in zip(calls, ('build', 'build', 'finalize', 'build', 'finalize', 'build', 'build', 'finalize')):
         require(isinstance(call, dict) and set(call) == {'job_id', 'phase', 'command_sha256'}
                 and call.get('phase') == phase and isinstance(call.get('job_id'), str)
                 and re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', call['job_id'])
                 and isinstance(call.get('command_sha256'), str) and policy.HASH.fullmatch(call['command_sha256']))
     require(len({call['job_id'] for call in calls[:3]}) == 1
-            and len({call['job_id'] for call in calls[3:]}) == 1
-            and calls[0]['job_id'] != calls[3]['job_id'])
+            and len({call['job_id'] for call in calls[3:5]}) == 1
+            and len({call['job_id'] for call in calls[5:]}) == 1
+            and len({calls[index]['job_id'] for index in (0, 3, 5)}) == 3)
     return value
 
 
@@ -469,10 +488,10 @@ class Operations(legacy.Operations):
             raise Refused('unsupported_target')
         if self.source != self.home / 'froge-connector' or time.time() >= cache.legacy.VALID_UNTIL:
             raise Refused('source_or_pricing_review_refused')
-        update = getattr(self, 'update_payload', False)
+        update = getattr(self, 'update_initial_edit', False)
         original = installed_sources(self.source) if update else original_sources(self.source)
         self.source_variant = 'PRICING'
-        self.expected_source_sha256 = manifest.payload_predecessor() if update else dict(manifest.EXPECTED)
+        self.expected_source_sha256 = manifest.initial_edit_predecessor() if update else dict(manifest.EXPECTED)
         if (not legacy.studio_pricing.verified_health(self.source)
                 or not legacy.terminal_budget.verified_health(self.source)
                 or legacy.studio_pricing.maintenance_active(self.source)
@@ -599,13 +618,13 @@ class Operations(legacy.Operations):
             raise Refused('construction_health_unverified')
 
     def previous_health(self):
-        if getattr(self, 'update_payload', False):
+        if getattr(self, 'update_initial_edit', False):
             validate_installed_receipts(self.source, installed_sources(self.source))
             return self.context_health()
         return legacy.Operations.context_health(self, revision=legacy.policy.REVISION)
 
 
-def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False):
+def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False):
     if approved is not True:
         raise Refused('maintenance_approval_required')
     if type(allow_cancelled_cleanup) is not bool:
@@ -616,12 +635,18 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
         raise Refused('cancelled_identity_required')
     if type(update_payload) is not bool:
         raise Refused('payload_update_mode_invalid')
-    manifest.final_manifest()  # Before target reads, directories or service work.
+    if type(update_initial_edit) is not bool:
+        raise Refused('initial_edit_update_mode_invalid')
+    if update_payload and update_initial_edit:
+        raise Refused('conflicting_update_modes')
     if update_payload:
-        manifest.payload_predecessor()
-    absent = frozenset() if update_payload else NEW_FILES
-    writes = PAYLOAD_WRITES if update_payload else WRITES
-    operations.update_payload = update_payload
+        raise Refused('payload_update_requires_historical_package')
+    manifest.final_manifest()  # Before target reads, directories or service work.
+    if update_initial_edit:
+        manifest.initial_edit_predecessor()
+    absent = frozenset() if update_initial_edit else NEW_FILES
+    writes = INITIAL_EDIT_WRITES if update_initial_edit else WRITES
+    operations.update_initial_edit = update_initial_edit
     legacy.check_container_environment()
     operations.allow_cancelled_cleanup = allow_cancelled_cleanup
     operations.cancelled_job_ids = (expected_cancelled_job,) if allow_cancelled_cleanup else ()
@@ -632,17 +657,18 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
         raise Refused('maintenance_already_present')
     assert_absent(source, absent)
     operations.preflight()
-    original = installed_sources(source) if update_payload else original_sources(source)
+    original = installed_sources(source) if update_initial_edit else original_sources(source)
     operations.source_variant = 'PRICING'
-    operations.expected_source_sha256 = manifest.payload_predecessor() if update_payload else dict(manifest.EXPECTED)
-    if update_payload:
-        changed = manifest.payload_changes(original, base.read_regular(HERE / 'construction_payload.py'))
+    operations.expected_source_sha256 = manifest.initial_edit_predecessor() if update_initial_edit else dict(manifest.EXPECTED)
+    if update_initial_edit:
+        helpers = {name: base.read_regular(HERE / name) for name in manifest.INITIAL_EDIT_HELPERS}
+        changed = manifest.initial_edit_changes(original, helpers)
     else:
         helpers = {name: base.read_regular(HERE / name) for name in manifest.HELPERS}
         changed = manifest.changes(original, helpers)
     patched = {name: raw for name, raw in changed.items() if original.get(name) != raw}
-    original.update({name: base.read_regular(source / name, 16384) for name in RECEIPTS | ({policy.RECEIPT} if update_payload else set())})
-    (validate_installed_receipts if update_payload else validate_receipts)(source, original)
+    original.update({name: base.read_regular(source / name, 16384) for name in RECEIPTS | ({policy.RECEIPT} if update_initial_edit else set())})
+    (validate_installed_receipts if update_initial_edit else validate_receipts)(source, original)
     original_inventory = code_inventory(source)
     workspace.mkdir(mode=0o700, parents=True, exist_ok=False)
     modes = {name: stat.S_IMODE((source / name).stat().st_mode) for name in original}
@@ -679,9 +705,9 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
             assert_absent(source, absent)
             if any(base.read_regular(stage / name) != raw for name, raw in changed.items()):
                 raise Refused('verification_changed_source')
-            if update_payload:
-                receipts = payload_update_receipt(original, changed, evidence, allow_cancelled_cleanup)
-                base.atomic_write(workspace / 'PAYLOAD_UPDATE_GENERIC_EVIDENCE.json', evidence.generic_receipt)
+            if update_initial_edit:
+                receipts = initial_edit_update_receipt(original, changed, evidence, allow_cancelled_cleanup)
+                base.atomic_write(workspace / 'INITIAL_EDIT_UPDATE_GENERIC_EVIDENCE.json', evidence.generic_receipt)
                 staged_receipts = {**{name: original[name] for name in RECEIPTS}, **receipts}
             else:
                 receipts = rebound_receipts(original, changed, evidence, allow_cancelled_cleanup)
@@ -771,7 +797,9 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--approve-service-maintenance', action='store_true')
-    parser.add_argument('--update-payload', action='store_true')
+    updates = parser.add_mutually_exclusive_group()
+    updates.add_argument('--update-payload', action='store_true')
+    updates.add_argument('--update-initial-edit', action='store_true')
     parser.add_argument('--allow-cancelled-cleanup', action='store_true')
     parser.add_argument('--expected-cancelled-job')
     args = parser.parse_args(argv)
@@ -783,9 +811,11 @@ def main(argv=None):
     if not args.approve_service_maintenance:
         print('PLAN ONLY. No source reads, service signals, installation, exports or generation.')
         return
-    manifest.final_manifest()
     if args.update_payload:
-        manifest.payload_predecessor()
+        raise Refused('payload_update_requires_historical_package')
+    manifest.final_manifest()
+    if args.update_initial_edit:
+        manifest.initial_edit_predecessor()
     frozen_dependencies()
     def interrupted(*_):
         raise KeyboardInterrupt('Maintenance interrupted; preserve verified source.')
@@ -804,7 +834,7 @@ def main(argv=None):
         workspace = parent / ('standard-construction-' + time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '-' + uuid.uuid4().hex[:8])
         value = install(source, workspace, Operations(source, home), approved=True,
                         allow_cancelled_cleanup=args.allow_cancelled_cleanup,
-                        expected_cancelled_job=args.expected_cancelled_job, update_payload=args.update_payload)
+                        expected_cancelled_job=args.expected_cancelled_job, update_initial_edit=args.update_initial_edit)
         print(json.dumps(value, sort_keys=True))
         return value
 

@@ -191,7 +191,7 @@ class PayloadTests(unittest.TestCase):
         with self.assertRaises(pc.Refused):
             codec.prepare('construction', self.inputs, packet, '0' * 64)
         with self.assertRaisesRegex(pc.Refused, 'admitted_complete_payload'):
-            self.parse({'scene_json': pc.canonical(scene())},
+            self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None},
                        prepared_override=lambda value: replace(value, payload=value.payload + b' '))
 
     def test_no_input_or_output_is_silently_clipped(self):
@@ -199,39 +199,85 @@ class PayloadTests(unittest.TestCase):
             with self.assertRaises(pc.Refused):
                 self.prepare()
         with self.assertRaises(pc.Refused):
-            self.parse({'scene_json': pc.canonical({**scene(), 'name': 'x' * payload.MAX_SCENE_BYTES})})
+            self.parse({'scene_json': pc.canonical({**scene(), 'name': 'x' * payload.MAX_SCENE_BYTES}), 'initial_edit': None})
         with self.assertRaises(pc.Refused):
-            self.parse({'scene_json': pc.canonical(scene())}, raw=b' ' * (payload.MAX_RESPONSE_BYTES + 1))
+            self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None}, raw=b' ' * (payload.MAX_RESPONSE_BYTES + 1))
 
     def test_scene_is_typed_and_original_json_is_left_for_the_unchanged_validator(self):
         original = json.dumps(scene(), ensure_ascii=False, indent=2)
-        result = self.parse({'scene_json': original})
+        result = self.parse({'scene_json': original, 'initial_edit': None})
         self.assertEqual(result, pc.ScenePlan(original))
         # This module does not weaken, reimplement, or claim to have run the
         # unchanged scene validator. Even this inert empty-parts fixture is only
         # typed transport and will still require the existing host validation.
         self.assertEqual(json.loads(result.scene_json), scene())
 
+    def test_initial_edit_round_trip_matches_the_strict_nullable_plan_schema(self):
+        _, prepared, _ = self.prepare()
+        schema = json.loads(prepared.payload)['text']['format']['schema']
+        self.assertEqual(schema, {'type': 'object', 'properties': {
+            'scene_json': {'type': 'string'}, 'initial_edit': {'type': ['string', 'null']}},
+            'required': ['scene_json', 'initial_edit'], 'additionalProperties': False})
+        original = json.dumps(scene(), ensure_ascii=False, indent=2)
+        code = 'surface = bpy.data.objects.get("named_surface")\nsurface.data.uv_layers.new(name="SubjectUV")\n'
+        value = self.parse({'scene_json': original, 'initial_edit': code})
+        self.assertEqual(value, pc.ScenePlan(original, code))
+        # Initial edit code is preserved exactly for the unchanged host sandbox;
+        # decoding transport does not execute it or certify its scene effects.
+        self.assertEqual(value.scene_json, original)
+        self.assertEqual(value.initial_edit, code)
+
+    def test_initial_edit_is_optional_only_through_null_and_rejects_unbounded_or_wrong_types(self):
+        for code in ('', ' \t\n', 'x' * 20001, True, False, 1, 2.5, [], {},
+                     {'kind': 'edit', 'code': 'pass'}):
+            with self.subTest(code_type=type(code).__name__, length=len(code) if isinstance(code, str) else None):
+                with self.assertRaisesRegex(pc.Refused, 'bounded_initial_edit_required'):
+                    self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': code})
+        # The documented limit is characters, including multibyte text; no code
+        # is truncated at the edge. Runtime prepare_code still checks Python.
+        code = '#' + 'ą' * 19999
+        value = self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': code})
+        self.assertEqual(value.initial_edit, code)
+        self.assertEqual(len(value.initial_edit), 20000)
+
+    def test_initial_plan_rejects_missing_extra_and_correction_shaped_fields(self):
+        valid = {'scene_json': pc.canonical(scene()), 'initial_edit': None}
+        invalid = [{key: value for key, value in valid.items() if key != missing}
+                   for missing in valid]
+        invalid.extend({**valid, **extra} for extra in ({'accepted': True}, {'unsupported_reason': 'other'},
+            {'correction': {'kind': 'edit', 'code': 'pass'}}, {'code': 'pass'}))
+        for envelope in invalid:
+            with self.subTest(keys=list(envelope)):
+                with self.assertRaisesRegex(pc.Refused, 'typed_scene_envelope_required'):
+                    self.parse(envelope)
+
+    def test_initial_edit_is_bound_to_the_authenticated_provider_response(self):
+        valid = {'scene_json': pc.canonical(scene()), 'initial_edit': 'surface.scale.x = 1.1'}
+        trusted = pc.digest(pc.canonical(response(valid)).encode())
+        with self.assertRaisesRegex(pc.Refused, 'authenticated_provider_completion'):
+            self.parse({**valid, 'initial_edit': 'surface.scale.x = 1.2'},
+                       confirm=lambda a, r, raw: pc.digest(raw) == trusted)
+
     def test_authentication_precedes_any_response_json_parsing(self):
         def reject(*_):
             return False
         with self.assertRaisesRegex(pc.Refused, 'authenticated_provider_completion'):
-            self.parse({'scene_json': pc.canonical(scene())}, raw=b'not JSON', confirm=reject)
+            self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None}, raw=b'not JSON', confirm=reject)
         # A truthy non-boolean marker is not authenticated completion.
         with self.assertRaisesRegex(pc.Refused, 'authenticated_provider_completion'):
-            self.parse({'scene_json': pc.canonical(scene())}, confirm=lambda *_: 1)
+            self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None}, confirm=lambda *_: 1)
 
     def test_well_shaped_forged_completion_or_mutated_raw_bytes_do_not_parse(self):
-        trusted = pc.digest(pc.canonical(response({'scene_json': pc.canonical(scene())})).encode())
+        trusted = pc.digest(pc.canonical(response({'scene_json': pc.canonical(scene()), 'initial_edit': None})).encode())
         with self.assertRaisesRegex(pc.Refused, 'authenticated_provider_completion'):
-            self.parse({'scene_json': pc.canonical({**scene(), 'name': 'injected'})},
+            self.parse({'scene_json': pc.canonical({**scene(), 'name': 'injected'}), 'initial_edit': None},
                        confirm=lambda a, r, raw: pc.digest(raw) == trusted)
         for update in ({'model': 'other'}, {'status': 'incomplete'}, {'usage_known': False},
                        {'response_id': 'forged'}, {'execution_id': 'other'}, {'payload_sha256': 'b' * 64},
                        {'context_sha256': 'c' * 64}):
             with self.subTest(update=update):
                 with self.assertRaises(pc.Refused):
-                    self.parse({'scene_json': pc.canonical(scene())}, receipt_override=lambda r: replace(r, **update))
+                    self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None}, receipt_override=lambda r: replace(r, **update))
 
     def test_response_status_origin_and_usage_must_be_complete(self):
         updates = [{'status': 'incomplete'}, {'status': 'failed'}, {'id': 'resp_other'}, {'model': 'other'},
@@ -243,7 +289,7 @@ class PayloadTests(unittest.TestCase):
         for update in updates:
             with self.subTest(update=update):
                 with self.assertRaises(pc.Refused):
-                    self.parse({'scene_json': pc.canonical(scene())}, change_response=lambda r: r.update(update))
+                    self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None}, change_response=lambda r: r.update(update))
 
     def test_refusal_and_every_unexpected_output_are_rejected(self):
         mutations = [lambda r: r.update(output=[]),
@@ -258,7 +304,7 @@ class PayloadTests(unittest.TestCase):
         for mutate in mutations:
             with self.subTest(mutate=mutate):
                 with self.assertRaises(pc.Refused):
-                    self.parse({'scene_json': pc.canonical(scene())}, change_response=mutate)
+                    self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None}, change_response=mutate)
 
     def test_documented_reasoning_content_and_optional_message_metadata_are_transport_only(self):
         # Official openai-python ResponseReasoningItem: content is optional and
@@ -268,7 +314,7 @@ class PayloadTests(unittest.TestCase):
         for value in values:
             for phase in ('construction', 'inspection', 'reassessment'):
                 with self.subTest(content=value, phase=phase):
-                    envelope = ({'scene_json': pc.canonical(scene())} if phase == 'construction' else
+                    envelope = ({'scene_json': pc.canonical(scene()), 'initial_edit': None} if phase == 'construction' else
                         {'accepted': True, 'issues': [], 'summary': 'Synthetic verdict.', 'correction': None})
                     def change(response):
                         response['output'][0].update(content=value, encrypted_content=None, status=None)
@@ -282,7 +328,7 @@ class PayloadTests(unittest.TestCase):
                 encrypted_content='opaque-synthetic-fixture',
                 summary=[{'type': 'summary_text', 'text': 'Synthetic summary metadata.'}])
             response['output'][-1].update(phase='commentary')
-        result = self.parse({'scene_json': pc.canonical(scene())}, change_response=completed_metadata)
+        result = self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None}, change_response=completed_metadata)
         self.assertEqual(json.loads(result.scene_json), scene())
 
     def test_reasoning_shape_failures_are_bounded_and_never_echo_generated_content(self):
@@ -299,7 +345,7 @@ class PayloadTests(unittest.TestCase):
         for fields, reason in cases:
             with self.subTest(reason=reason, fields=list(fields)):
                 with self.assertRaises(pc.Refused) as error:
-                    self.parse({'scene_json': pc.canonical(scene())},
+                    self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None},
                         change_response=lambda response: response['output'][0].update(fields))
                 self.assertEqual(str(error.exception), 'unexpected_provider_output:' + reason)
                 self.assertNotIn(private, str(error.exception))
@@ -311,7 +357,7 @@ class PayloadTests(unittest.TestCase):
                                ({'status': private}, 'message_status')]:
             with self.subTest(reason=reason):
                 with self.assertRaises(pc.Refused) as error:
-                    self.parse({'scene_json': pc.canonical(scene())},
+                    self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None},
                         change_response=lambda response: response['output'][-1].update(fields))
                 self.assertEqual(str(error.exception), 'unexpected_provider_output:' + reason)
                 self.assertNotIn(private, str(error.exception))
@@ -322,21 +368,27 @@ class PayloadTests(unittest.TestCase):
         for raw_scene in invalid:
             with self.subTest(raw_scene=raw_scene):
                 with self.assertRaises(pc.Refused):
-                    self.parse({'scene_json': raw_scene})
-        for invalid_text in ('{"scene_json":"{}","scene_json":"{}"}', '{"scene_json":NaN}', '{'):
+                    self.parse({'scene_json': raw_scene, 'initial_edit': None})
+        for invalid_text in ('{"scene_json":"{}","scene_json":"{}","initial_edit":null}',
+                             '{"scene_json":"{}","initial_edit":null,"initial_edit":"pass"}',
+                             '{"scene_json":NaN,"initial_edit":null}', '{'):
             with self.subTest(invalid_text=invalid_text):
                 with self.assertRaises(pc.Refused):
                     self.parse({}, change_response=lambda r: r['output'][-1]['content'][0].update(text=invalid_text))
-        valid = pc.canonical(response({'scene_json': pc.canonical(scene())})).encode()
+        valid = pc.canonical(response({'scene_json': pc.canonical(scene()), 'initial_edit': None})).encode()
         for raw in (b'{"status":"completed",' + valid[1:], b'{"n":NaN}', b'\xff', valid[:-2]):
             with self.subTest(raw=raw[:80]):
                 with self.assertRaises(pc.Refused):
                     self.parse({}, raw=raw)
 
     def test_unsupported_scene_stops_honestly_without_creating_a_fallback_model(self):
-        with self.assertRaisesRegex(pc.Refused, 'complete_scene_not_supported'):
-            self.parse({'scene_json': ''})
-        for envelope in ({'scene_json': {}}, {'scene_json': '{}', 'accepted': True}, {'code': 'build_model(...)'}):
+        for code in (None, 'bpy.ops.mesh.primitive_cube_add()'):
+            with self.subTest(initial_edit=code):
+                with self.assertRaisesRegex(pc.Refused, 'complete_scene_not_supported'):
+                    self.parse({'scene_json': '', 'initial_edit': code})
+        for envelope in ({'scene_json': {}, 'initial_edit': None},
+                         {'scene_json': '{}', 'initial_edit': None, 'accepted': True},
+                         {'code': 'build_model(...)'}):
             with self.subTest(envelope=envelope):
                 with self.assertRaises(pc.Refused):
                     self.parse(envelope)
@@ -351,6 +403,11 @@ class PayloadTests(unittest.TestCase):
         for extra in ({'revision': 999}, {'model_sha256': 'b' * 64}, {'renders_sha256': 'c' * 64}):
             with self.assertRaises(pc.Refused):
                 self.parse({**envelope, **extra}, 'inspection')
+        for phase in ('inspection', 'reassessment'):
+            for code in (None, 'surface.scale.x = 1.1'):
+                with self.subTest(phase=phase, initial_edit=code):
+                    with self.assertRaisesRegex(pc.Refused, 'honest_typed_verdict_required'):
+                        self.parse({**envelope, 'initial_edit': code}, phase)
 
     def test_rejection_and_existing_sandbox_edit_capability_are_preserved(self):
         code = 'head = bpy.data.objects.get("actual_head")\nhead.scale.x *= 1.01'

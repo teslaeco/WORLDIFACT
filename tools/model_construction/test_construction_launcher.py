@@ -41,25 +41,41 @@ class LauncherTests(unittest.TestCase):
              patch.object(launcher.Path, 'home', side_effect=AssertionError('file lookup')):
             launcher.main([])
             launcher.main(['--update-payload'])
+            launcher.main(['--update-initial-edit'])
 
-    def test_explicit_payload_update_mode_is_boolean_and_reaches_installer(self):
+    def test_explicit_initial_edit_mode_is_boolean_and_reaches_installer(self):
         for invalid in (1, None, 'true'):
             with self.assertRaises(launcher.LaunchError):
-                launcher.script('inert', approved=True, update_payload=invalid)
+                launcher.script('inert', approved=True, update_initial_edit=invalid)
         for enabled in (False, True):
             with patch.object(launcher, 'package', return_value='inert'), \
                  patch.object(launcher, 'connection', return_value=['INERT']), \
                  patch.object(launcher, 'invoke', return_value=success()) as invoke:
                 args = ['--source-commit', COMMIT, '--approve-service-maintenance']
                 if enabled:
-                    args.append('--update-payload')
+                    args.append('--update-initial-edit')
                 launcher.main(args)
             program = invoke.call_args.args[1]
-            self.assertIn('UPDATE_PAYLOAD=' + repr(enabled), program)
-            self.assertIn("(['--update-payload'] if UPDATE_PAYLOAD else [])", program)
+            self.assertIn('UPDATE_INITIAL_EDIT=' + repr(enabled), program)
+            self.assertIn("(['--update-initial-edit'] if UPDATE_INITIAL_EDIT else [])", program)
             self.assertIn('ALLOW_CANCELLED_CLEANUP=False', program)
             self.assertIn('EXPECTED_CANCELLED_JOB=None', program)
             compile(program, 'pinned-update-wrapper', 'exec')
+    def test_retired_or_conflicting_modes_refuse_before_package_or_connection(self):
+        with patch.object(launcher, 'package', side_effect=AssertionError('download')), \
+             patch.object(launcher, 'connection', side_effect=AssertionError('remote')):
+            with self.assertRaisesRegex(launcher.LaunchError, 'historical pinned package'):
+                launcher.main(['--update-payload', '--approve-service-maintenance', '--source-commit', COMMIT])
+            with self.assertRaises(SystemExit):
+                launcher.main(['--update-payload', '--update-initial-edit', '--approve-service-maintenance'])
+            with self.assertRaisesRegex(launcher.LaunchError, 'historical pinned package'):
+                launcher.script('inert', approved=True, update_payload=True)
+            with self.assertRaisesRegex(launcher.LaunchError, 'Conflicting update modes'):
+                launcher.script('inert', approved=True, update_payload=True, update_initial_edit=True)
+            for value in (1, None, 'true'):
+                with self.assertRaises(launcher.LaunchError):
+                    launcher.script('inert', approved=True, update_payload=value)
+
     def test_unfrozen_package_refuses_before_read_download_or_connection(self):
         unfrozen = {name:(path, 'UNFROZEN_REFUSE' if name in launcher.NEW_FILES else digest)
                     for name,(path,digest) in launcher.FILES.items()}
@@ -178,10 +194,18 @@ class LauncherTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
             for name, raw in payload.items(): (folder / name).write_bytes(base64.b64decode(raw))
-            result = subprocess.run([sys.executable, '-B', str(folder / 'install_construction.py')],
-                                    cwd=folder, capture_output=True, text=True, timeout=20)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout, 'PLAN ONLY. No source reads, service signals, installation, exports or generation.\n')
+            for flags in ([], ['--update-initial-edit'], ['--update-payload']):
+                result = subprocess.run([sys.executable, '-B', str(folder / 'install_construction.py'), *flags],
+                                        cwd=folder, capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, 'PLAN ONLY. No source reads, service signals, installation, exports or generation.\n')
+                self.assertEqual(set(path.name for path in folder.iterdir()), set(payload))
+            retired = subprocess.run([sys.executable, '-B', str(folder / 'install_construction.py'),
+                                      '--update-payload', '--approve-service-maintenance'],
+                                     cwd=folder, capture_output=True, text=True, timeout=20)
+            self.assertEqual(retired.returncode, 1)
+            self.assertEqual(launcher.safe_result(json.loads(retired.stdout))['refusal_code'],
+                             'payload_update_requires_historical_package')
             self.assertEqual(set(path.name for path in folder.iterdir()), set(payload))
             checked = subprocess.run([sys.executable, '-B', '-c',
                 "import install_construction as i;i.manifest.final_manifest();i.frozen_dependencies();print('PINNED_FLAT_DEPENDENCIES_OK')"],

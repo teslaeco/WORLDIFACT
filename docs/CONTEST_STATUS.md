@@ -1011,3 +1011,22 @@ transaction, genuine isolated Podman gates, hosted checks and final activation
 receipt remain release requirements. See
 [the construction repair record](STANDARD_CONSTRUCTION_REPAIR_20261007.md) and
 [the package](../tools/model_construction/README.md).
+
+
+## Initial construction edit compatibility — 8 October 2026
+
+Prepared a bounded typed-plan correction for scene-schema features available only
+through the existing Blender edit sandbox. One construction response can carry a
+substantive scene and an optional validated initial edit; first inspection occurs
+after both complete. The original cap, request limits, cancellation, validation,
+render assessment and honest rejection remain unchanged.
+
+Five native Blender fixture cases passed, including a UV/textured globe with an
+alpha cloud shell and a different textured object followed by a correction. The
+responses are scripted and the globe geography is invented; this is not live AI,
+account-gallery or production-isolation evidence. The installed update's finite
+write set is three helpers plus the top receipt. A new pinned restricted operation
+requires separately approved grant refresh, status reconciliation and the genuine
+isolated installation gates. Publication, installation and a new paid acceptance
+test are not implied by these local results. See
+[the repair record](STANDARD_CONSTRUCTION_REPAIR_20261007.md).

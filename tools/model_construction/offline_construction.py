@@ -37,6 +37,7 @@ PROMPT = 'Synthetic native-MCP transport box; no user model or likeness request.
 INSTRUCTIONS = 'WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:\nBuild the exact public synthetic box fixture.'
 VIEWS = ('front', 'side', 'back')
 EDIT_CODE = 'body = bpy.data.objects.get("body")\nbody.scale.x *= 1.25'
+CASES = ((True, None), (False, None), (True, EDIT_CODE))
 SOURCES = frozenset(('server.py', 'codex_runner.py', 'blender_mcp.py', 'astra_spend_v2.py',
     'completion_policy.py', 'prebuild_policy.py', 'studio_pricing.py', 'terminal_budget.py',
     'context_policy.py', 'construction_policy.py', 'phased_controller.py', 'construction_payload.py',
@@ -93,11 +94,15 @@ class Reply(io.BytesIO):
 
 
 class Provider:
-    def __init__(self, runner, mcp, spend, folder, accepted):
+    def __init__(self, runner, mcp, spend, folder, accepted, initial_edit=None):
         self.runner, self.mcp, self.spend, self.folder = runner, mcp, spend, folder
-        self.accepted = accepted
-        self.phases = ('construction', 'inspection', 'reassessment') if accepted else ('construction', 'inspection')
+        self.accepted, self.initial_edit = accepted, initial_edit
+        self.correction = accepted and initial_edit is None
+        self.phases = ('construction', 'inspection', 'reassessment') if self.correction else ('construction', 'inspection')
+        self.first_revision = 2 if initial_edit is not None else 1
         self.before_model, self.before_renders = None, None
+        self.before_initial_model = None
+        self.inspected_revisions = []
         self.calls, self.counts, self.local_bytes, self.ports = [], [], [], set()
         self.render_hashes = {}
         self.gateway_instance = None
@@ -141,11 +146,15 @@ class Provider:
                 and wire.get('truncation') == 'disabled'
                 and wire.get('max_output_tokens') == {'construction': 8192, 'inspection': 3072, 'reassessment': 1536}[phase],
                 'BOUNDED_PROVIDER_POLICY_CHANGED')
-        required_schema = {'scene_json'} if phase == 'construction' else {'accepted', 'issues', 'summary', 'correction'}
+        required_schema = {'scene_json', 'initial_edit'} if phase == 'construction' else {'accepted', 'issues', 'summary', 'correction'}
         output = wire.get('text', {}).get('format', {})
         require(output.get('type') == 'json_schema' and output.get('strict') is True
                 and output.get('schema', {}).get('additionalProperties') is False
-                and set(output['schema'].get('properties', {})) == required_schema, 'STRICT_TYPED_OUTPUT_MISSING')
+                and set(output['schema'].get('properties', {})) == required_schema
+                and set(output['schema'].get('required', [])) == required_schema, 'STRICT_TYPED_OUTPUT_MISSING')
+        if phase == 'construction':
+            require(output['schema']['properties'] == {'scene_json': {'type': 'string'},
+                'initial_edit': {'type': ['string', 'null']}}, 'STRICT_TYPED_PLAN_MISSING')
         from scene_repair import photo_schema
         require(document.get('modeling_contract', {}).get('scene_schema') == photo_schema(0), 'FULL_SCENE_SCHEMA_CHANGED')
         with self.spend.ledger(self.folder) as (_, state):
@@ -154,10 +163,10 @@ class Provider:
                     and self.spend.used(state) <= 1750000, 'ORIGINAL_RESERVATION_MISSING')
         if phase == 'construction':
             require(not (self.folder / 'candidates').exists(), 'FIRST_PLAN_DID_NOT_PRECEDE_BUILD')
-            envelope = {'scene_json': canonical(scene())}
+            envelope = {'scene_json': canonical(scene()), 'initial_edit': self.initial_edit}
         else:
             current = self.mcp.current_candidate(self.folder)
-            revision = 2 if phase == 'reassessment' else 1
+            revision = self.first_revision + (1 if phase == 'reassessment' else 0)
             require(current is not None and current['info']['revision'] == revision, 'REAL_CURRENT_GLB_MISSING')
             labels = [strict_json(v['text'], MAX_PAYLOAD) for v in content[1:] if v.get('type') == 'input_text']
             images = [v for v in content if v.get('type') == 'input_image']
@@ -180,16 +189,22 @@ class Provider:
                     and state.get('report') == current['result']
                     and state.get('completion_contract', {}).get('structural_passed') is True,
                     'FULL_CURRENT_STATE_MISSING')
-            correcting = self.accepted and phase == 'inspection'
+            correcting = self.correction and phase == 'inspection'
             if correcting:
                 self.before_model, self.before_renders = current['identity'][1], dict(self.render_hashes)
             if phase == 'reassessment':
                 require(current['identity'][1] != self.before_model
                         and any(self.render_hashes[view] != self.before_renders[view] for view in VIEWS),
                         'ACTUAL_CORRECTED_MODEL_AND_IMAGES_REQUIRED')
+            if self.initial_edit is not None:
+                self.before_initial_model = digest(read(self.folder / 'candidates/1/model.glb', 50 * 1024**2))
+                require(current['identity'][1] != self.before_initial_model,
+                        'ACTUAL_INITIAL_EDIT_MODEL_REQUIRED')
+            if revision == 2:
                 meshes = [v for v in current['result'].get('mesh_objects', []) if v.get('name') == 'body']
                 require(len(meshes) == 1 and abs(meshes[0]['dimensions'][0] - 1.25) < 1e-6,
                         'ORIGINAL_SANDBOX_EDIT_NOT_APPLIED')
+            self.inspected_revisions.append(revision)
             envelope = {'accepted': self.accepted and not correcting,
                 'issues': (['The scripted fixture asks for a 25 percent wider current box.'] if correcting else
                            [] if self.accepted else ['Explicit scripted rejection of this synthetic transport fixture.']),
@@ -231,7 +246,7 @@ def preflight(source, workspace):
 def create_jobs(root):
     state = root / 'state'
     state.mkdir(mode=0o700)
-    folders = [state / 'jobs' / str(uuid.uuid4()) for _ in range(2)]
+    folders = [state / 'jobs' / str(uuid.uuid4()) for _ in CASES]
     for folder in folders:
         folder.mkdir(mode=0o700, parents=True)
     with sqlite3.connect(state / 'jobs.sqlite') as db:
@@ -244,8 +259,8 @@ def create_jobs(root):
 
 
 def verify_case(folder, provider, mcp, spend, accepted):
-    count = 3 if accepted else 2
-    revision = 2 if accepted else 1
+    count = len(provider.phases)
+    revision = provider.first_revision + (1 if provider.correction else 0)
     require(len(provider.calls) == len(provider.counts) == len(provider.local_bytes) == count, 'COMPLETE_PHASE_REQUESTS_REQUIRED')
     outcome = mcp.completed_outcome(folder)
     require(outcome is not None and outcome.get('finished') is True and outcome.get('accepted') is accepted
@@ -259,9 +274,15 @@ def verify_case(folder, provider, mcp, spend, accepted):
     report = record(folder / 'result.json')
     require(report.get('interchange_exports', {}).get('status') == 'ready', 'ORIGINAL_FINAL_EXPORT_FAILED')
     completed = [c.get('tool') for c in record(folder / 'agent-tools.json')['calls'] if c.get('status') == 'completed']
-    require(completed.count('build_model') == completed.count('finish_model') == 1
-            and completed.count('edit_model') == (1 if accepted else 0)
-            and completed.count('inspect_render') == 3 * revision, 'REAL_TOOL_SEQUENCE_INCOMPLETE')
+    pipeline_tools = [name for name in completed if name in ('build_model', 'edit_model', 'inspect_render', 'finish_model')]
+    expected_tools = ['build_model'] + (['edit_model'] if provider.initial_edit is not None else [])
+    expected_tools += ['inspect_render'] * 3
+    if provider.correction:
+        expected_tools += ['edit_model'] + ['inspect_render'] * 3
+    expected_tools += ['finish_model']
+    expected_revisions = [provider.first_revision] + ([revision] if provider.correction else [])
+    require(pipeline_tools == expected_tools and provider.inspected_revisions == expected_revisions,
+            'REAL_TOOL_SEQUENCE_INCOMPLETE')
     usage = record(folder / 'agent-usage.json')
     require(usage.get('requests') == count and usage.get('input_tokens') == 4096 * count and usage.get('output_tokens') == 300 * count
             and usage.get('unknown_usage') is False and usage.get('completed') is accepted,
@@ -274,7 +295,13 @@ def verify_case(folder, provider, mcp, spend, accepted):
                 and spend.used(state) == 73844 * count, 'ORIGINAL_SETTLEMENT_NOT_VERIFIED')
         require(not (path.parent / spend.studio_pricing.TERMS).exists()
                 and not spend.terminal_budget.sealed(path), 'ORIGINAL_LEGACY_TERMS_CHANGED')
-    return {'accepted': accepted, 'revision': revision, 'correction': accepted, 'server_success_returned': accepted, 'model_sha256': outcome['model_sha256'],
+    return {'accepted': accepted, 'revision': revision, 'correction': provider.correction,
+            'initial_edit': provider.initial_edit is not None,
+            'first_inspected_revision': provider.first_revision,
+            'inspected_revisions': provider.inspected_revisions,
+            'before_initial_edit_model_sha256': provider.before_initial_model,
+            'completed_pipeline_tools': pipeline_tools,
+            'server_success_returned': accepted, 'model_sha256': outcome['model_sha256'],
             'render_sha256': provider.render_hashes, 'provider_requests': provider.calls,
             'before_correction_model_sha256': provider.before_model,
             'before_correction_render_sha256': provider.before_renders,
@@ -350,8 +377,9 @@ def run(source, workspace):
         job = next((folder for folder in folders if 'froge-job-' + folder.name in command), None)
         require(job is not None, 'UNKNOWN_FIXTURE_CONTAINER')
         final = command[-1] == '/runner/finalize.py'
-        candidate = job / ('candidates/2' if job == folders[0] and any(
-            item['job_id'] == job.name for item in commands) else 'candidates/1')
+        previous_builds = sum(item['job_id'] == job.name and item['phase'] == 'build' for item in commands)
+        revision = previous_builds if final else previous_builds + 1
+        candidate = job / 'candidates' / str(revision)
         require(command == server.blender_command(job.name, candidate, finalize=final), 'ORIGINAL_BLENDER_COMMAND_CHANGED')
         commands.append({'job_id': job.name, 'phase': 'finalize' if final else 'build', 'command_sha256': digest(canonical(command).encode())})
         process = original_popen(command, *args, **kwargs)
@@ -361,8 +389,8 @@ def run(source, workspace):
         with patch.object(construction_health, 'verified_health',
                 return_value={'worldifactStandardConstructionPolicy': REVISION}), \
              patch.object(subprocess, 'Popen', tracked_popen):
-            for folder, accepted in zip(folders, (True, False)):
-                provider = Provider(runner, mcp, spend, folder, accepted)
+            for folder, (accepted, initial_edit) in zip(folders, CASES):
+                provider = Provider(runner, mcp, spend, folder, accepted, initial_edit)
                 original_open = urllib.request.OpenerDirector.open
                 def intercepted(opener, request, *args, **kwargs):
                     return provider.open(original_open, opener, request, *args, **kwargs)
@@ -374,7 +402,8 @@ def run(source, workspace):
                     except RejectedForServer:
                         require(not accepted, 'ACCEPTED_FIXTURE_WAS_REJECTED')
                 results.append(verify_case(folder, provider, mcp, spend, accepted))
-        require(len(commands) == 5 and [item['phase'] for item in commands] == ['build', 'build', 'finalize', 'build', 'finalize'],
+        require(len(commands) == 8 and [item['phase'] for item in commands] ==
+                ['build', 'build', 'finalize', 'build', 'finalize', 'build', 'build', 'finalize'],
                 'ACTUAL_CONTAINER_BUILDS_AND_EXPORTS_REQUIRED')
         require(hashes == {name: digest(read(root / name, 1048576)) for name in SOURCES}, 'STAGED_SOURCE_CHANGED')
     finally:

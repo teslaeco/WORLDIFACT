@@ -30,10 +30,12 @@ def phase_cost(phase):
     return (INPUTS[phase] + 2048) * 14 + OUTPUTS[phase] * 55
 
 
-def blender_callbacks(folder, cancelled, deadline, server, *, clock=time.monotonic):
+def blender_callbacks(folder, cancelled, deadline, server, *, clock=time.monotonic,
+                      pending_builds=lambda: 0):
     """Keep the original container lifecycle and original cancellation event."""
     def build(candidate):
-        remaining = deadline - clock() - ASSESS_SECONDS - EXPORT_SECONDS - RENDER_SECONDS
+        remaining = (deadline - clock() - ASSESS_SECONDS - EXPORT_SECONDS - RENDER_SECONDS
+                     - pending_builds() * BUILD_SECONDS)
         if cancelled.is_set() or remaining <= 0:
             raise Refused('construction_build_cancelled_or_expired')
         server.run_blender(folder.name, candidate, cancelled, timeout=min(BUILD_SECONDS, remaining))
@@ -75,6 +77,11 @@ class RuntimePolicy:
         self.confirmed = {}
         self.next_phase = 'construction'
         self.correction_fenced = False
+        self.initial_edit_fenced = False
+        self.initial_edit_until = 0
+
+    def pending_initial_builds(self):
+        return max(0, self.initial_edit_until - self.job.attempts)
 
     def check(self, action, inputs, candidate):
         if (inputs.fingerprint != self.inputs.fingerprint or self.gateway.cancelled.is_set()
@@ -85,7 +92,9 @@ class RuntimePolicy:
             return False
         remaining = self.deadline - self.clock()
         if action == 'before_build':
-            return remaining > BUILD_SECONDS + ASSESS_SECONDS + EXPORT_SECONDS + RENDER_SECONDS
+            builds = max(1, self.pending_initial_builds())
+            return (self.job.attempts + builds <= self.job.build_limit
+                    and remaining > builds * BUILD_SECONDS + ASSESS_SECONDS + EXPORT_SECONDS + RENDER_SECONDS)
         if action == 'before_finish':
             return remaining > EXPORT_SECONDS
         return True
@@ -99,7 +108,9 @@ class RuntimePolicy:
         payload = json.loads(prepared.payload)
         if payload.get('max_output_tokens') != OUTPUTS[phase]:
             raise Refused('reviewed_output_allowance_required')
-        future_time = (BUILD_SECONDS + ASSESS_SECONDS + EXPORT_SECONDS + RENDER_SECONDS
+        # Construction may include one sandboxed initial edit in the SAME
+        # response. Protect its second CPU build before sending that response.
+        future_time = (2 * BUILD_SECONDS + ASSESS_SECONDS + EXPORT_SECONDS + RENDER_SECONDS
                        if phase == 'construction' else EXPORT_SECONDS + RENDER_SECONDS)
         expires = min(self.clock() + ASSESS_SECONDS, self.deadline - future_time)
         if expires <= self.clock():
@@ -132,6 +143,31 @@ class RuntimePolicy:
             return False
         return (admission.payload_sha256 == receipt.payload_sha256
                 and admission.context_sha256 == receipt.context_sha256)
+
+    def admit_initial_edit(self, inputs, remaining_phases):
+        if (tuple(remaining_phases) != ('inspection',) or self.next_phase != 'inspection'
+                or self.initial_edit_fenced or self.job.attempts != 0 or self.job.revision != 0
+                or self.job.current is not None or self.job.build_limit < 2
+                or not self.check('before_initial_edit', inputs, None)
+                or self.gateway.active or self.gateway.unknown_usage
+                or self.deadline - self.clock() <=
+                    2 * BUILD_SECONDS + ASSESS_SECONDS + EXPORT_SECONDS + RENDER_SECONDS
+                or self.gateway.requests + 1 > self.gateway.fast_limits['requests']
+                or self.gateway.output + OUTPUTS['inspection'] > self.gateway.fast_limits['output']):
+            return False
+        # Recheck the construction permit's protected inspection against the
+        # ORIGINAL ledger. This is a read-only fence, never another reservation,
+        # settlement, request, or reinterpretation of held liability as cost.
+        with self.spend.ledger(self.job.folder) as (path, state):
+            cap, _ = self.spend.studio_pricing.cap_and_revision(
+                self.spend.studio_pricing.terms_at(path.parent, self.job.folder.name))
+            if (cap != 1750000 or self.spend.terminal_budget.sealed(path)
+                    or state['requests'] + 1 > 32
+                    or self.spend.used(state) + phase_cost('inspection') > cap):
+                return False
+        self.initial_edit_fenced = True
+        self.initial_edit_until = 2
+        return True
 
     def admit_correction(self, inputs, packet, remaining_phases):
         if (tuple(remaining_phases) != ('reassessment',) or self.next_phase != 'inspection_done'
@@ -297,7 +333,11 @@ def run(folder, prompt, instructions, key, cancelled, progress, *, gateway_facto
     with os.fdopen(fd, 'w', encoding='utf-8') as stream:
         stream.write(canonical(request)); stream.flush(); os.fsync(stream.fileno())
     original_deadline = request['completion_started'] + BUILD_DEADLINE
-    build, finalize = blender_callbacks(folder, cancelled, original_deadline, server)
+    # JobTools increments attempts before its build callback. During the first
+    # build this leaves one pending initial edit whose CPU time stays protected.
+    # The closure is called only after the policy below has been initialized.
+    build, finalize = blender_callbacks(folder, cancelled, original_deadline, server,
+        pending_builds=lambda: policy.pending_initial_builds())
 
     # The old CLI parent supervised subprocess cancellation. Direct JobTools
     # uses supported callbacks to pass the ORIGINAL cancellation event to the
@@ -314,7 +354,7 @@ def run(folder, prompt, instructions, key, cancelled, progress, *, gateway_facto
     adapter = JobToolsAdapter(job, parse_scene=mcp.parse_scene,
         required_views=completion_policy.required_views, current_candidate=mcp.current_candidate,
         completed_outcome=mcp.completed_outcome, check_arguments=mcp.check_tool_arguments,
-        tools=mcp.TOOLS, verify_inputs=verify_inputs)
+        tools=mcp.TOOLS, verify_inputs=verify_inputs, prepare_code=mcp.prepare_code)
     adapter.start(inputs)
     contract = adapter.call('get_modeling_contract', {})
     if photos:

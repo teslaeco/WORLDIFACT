@@ -28,7 +28,13 @@ INSTALLED_V1 = {'astra_spend_v2.py': '6ff61de4356388ecbec9d5eda1ae61f0ca2098deeb
  'studio_pricing.py': 'ad765f9193e973146a8fd9e0761d13006ba939db7926275f628ad21c83350584',
  'terminal_budget.py': '3e8a1654aede456eeeb673bb67f508a56996602239c56127123ba7e71a5a39f0'}
 # The installed predecessor is immutable; receipts cannot supply source authority.
-EXPECTED_AFTER = {**INSTALLED_V1, 'construction_payload.py': '3b7e5af5192724af4d7eb2943a09230c952fbd44905ec955f2ae2d7a6ec03a84'}
+PAYLOAD_AFTER = {**INSTALLED_V1, 'construction_payload.py': '3b7e5af5192724af4d7eb2943a09230c952fbd44905ec955f2ae2d7a6ec03a84'}
+INITIAL_EDIT_BEFORE = dict(PAYLOAD_AFTER)
+INITIAL_EDIT_HELPERS = frozenset(('construction_payload.py', 'phased_controller.py', 'runtime_controller.py'))
+EXPECTED_AFTER = {**INITIAL_EDIT_BEFORE,
+ 'construction_payload.py': '475e8251a2255775889d00d0611bb8954044cfd7f2dfba27c6735403408c35b8',
+ 'phased_controller.py': '1825f3cbff6e229799d22001481d8075a8e8b5c567e60b3736a9208126c99d6b',
+ 'runtime_controller.py': '9188b29c60ac26ab9f63781660db548b1757ee430fc4b33a43930f6868168b0d'}
 MODIFIED = runtime_patch.MODIFIED
 HELPERS = runtime_patch.HELPERS
 
@@ -53,7 +59,7 @@ def reviewed_sources(original):
 def reviewed_manifest(value):
     try:
         after = final_manifest()
-        return value == EXPECTED or value == after or value == payload_predecessor()
+        return value == EXPECTED or value == after or value == payload_predecessor() or value == initial_edit_predecessor()
     except ValueError:
         return False
 
@@ -69,9 +75,12 @@ def changes(original, helpers):
 
 def payload_predecessor():
     """Only the complete installed-v1 map may enter the helper-only update."""
-    after = final_manifest()
+    after = PAYLOAD_AFTER
     before = INSTALLED_V1
-    if (not isinstance(before, dict) or set(before) != health.SOURCES
+    if (not isinstance(after, dict) or set(after) != health.SOURCES
+            or any(not isinstance(value, str) or re.fullmatch('[a-f0-9]{64}', value) is None
+                   for value in after.values())
+            or not isinstance(before, dict) or set(before) != health.SOURCES
             or any(not isinstance(value, str) or re.fullmatch('[a-f0-9]{64}', value) is None
                    for value in before.values())
             or {name for name in after if after[name] != before[name]} != {'construction_payload.py'}):
@@ -79,18 +88,49 @@ def payload_predecessor():
     return dict(before)
 
 
-def reviewed_installed_sources(original):
+def reviewed_payload_sources(original):
     if {name: hashlib.sha256(raw).hexdigest() for name, raw in original.items()} != payload_predecessor():
         raise ValueError('Exact installed construction-v1 source is required.')
     return True
 
 
 def payload_changes(original, payload):
-    reviewed_installed_sources(original)
+    reviewed_payload_sources(original)
     if not isinstance(payload, bytes) or not 0 < len(payload) <= 1048576:
         raise ValueError('Invalid bounded runtime helper.')
     compile(payload, 'construction_payload.py', 'exec')
     changed = {**original, 'construction_payload.py': payload}
-    if {name: hashlib.sha256(raw).hexdigest() for name, raw in changed.items()} != final_manifest():
+    if {name: hashlib.sha256(raw).hexdigest() for name, raw in changed.items()} != PAYLOAD_AFTER:
         raise ValueError('Payload update differs from frozen runtime manifest.')
+    return changed
+
+
+def initial_edit_predecessor():
+    """Only the complete parser-fixed runtime may enter this three-helper update."""
+    after, before = final_manifest(), INITIAL_EDIT_BEFORE
+    if (not isinstance(before, dict) or set(before) != health.SOURCES
+            or any(not isinstance(value, str) or re.fullmatch('[a-f0-9]{64}', value) is None
+                   for value in before.values())
+            or {name for name in after if after[name] != before[name]} != INITIAL_EDIT_HELPERS):
+        raise ValueError('Exact initial-edit update manifest is not frozen.')
+    return dict(before)
+
+
+def reviewed_installed_sources(original):
+    if {name: hashlib.sha256(raw).hexdigest() for name, raw in original.items()} != initial_edit_predecessor():
+        raise ValueError('Exact installed parser-fixed construction-v1 source is required.')
+    return True
+
+
+def initial_edit_changes(original, helpers):
+    reviewed_installed_sources(original)
+    if not isinstance(helpers, dict) or set(helpers) != INITIAL_EDIT_HELPERS:
+        raise ValueError('Only the three reviewed initial-edit helpers may change.')
+    for name, raw in helpers.items():
+        if not isinstance(raw, bytes) or not 0 < len(raw) <= 1048576:
+            raise ValueError('Invalid bounded runtime helper.')
+        compile(raw, name, 'exec')
+    changed = {**original, **helpers}
+    if {name: hashlib.sha256(raw).hexdigest() for name, raw in changed.items()} != final_manifest():
+        raise ValueError('Initial-edit update differs from frozen runtime manifest.')
     return changed
