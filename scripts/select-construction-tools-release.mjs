@@ -7,8 +7,8 @@ import {
   SCRIPT_PATH as LEGACY_SCRIPT_PATH,
 } from './select-context-tools-release.mjs'
 
-export const BASE_COMMIT = 'b9d6a28d6cf433861ad740a830b0726e5565401c'
-export const BASE_WORKFLOW_BLOB = '34ca55a6bbeae0392646ab588369bec36fdb34a1'
+export const BASE_COMMIT = '0eb81ff43e85e8eb191dc6081abf93171a258b18'
+export const BASE_WORKFLOW_BLOB = '232f5838ec57473330aaf8bff44c8271096a7130'
 export const LEGACY_SCRIPT_BLOB = '465898752099691d8cee1ca989575c2b83febab3'
 export const SCRIPT_PATH = 'scripts/select-construction-tools-release.mjs'
 export const CONFIG_PATH = 'config/oracle-construction-tools-release.json'
@@ -16,19 +16,19 @@ export const TEST_PATH = 'tests/construction-tools-release.test.mjs'
 export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = '3ddd2acacfebc59106d6c256cd2b94882f8e7b8f'
+export const CONFIG_BLOB = '007b405d0d4d7ad7b416c337528f12dbf91bda17'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
-export const BASE_SCRIPT_BLOB = '6fc18735c4c1e153d4d61962c4de33ec63ed28f3'
-export const BASE_CONFIG_BLOB = '2b7468de50c9d7209a08ede663b9031edc43ee51'
-export const BASE_SCRIPT_SHA256 = '0c3ab5d1a76b7c26f7b16021c311c5ae146c4b4e29245a068f97e57a8e11c576'
-export const BASE_CONFIG_SHA256 = 'e35213e647094d9b95cc3d8a4352d05593841471850f99019bee2db3678ad415'
+export const BASE_SCRIPT_BLOB = '5d2d541fa10739932d1f8fd23a991db656a00da4'
+export const BASE_CONFIG_BLOB = '3ddd2acacfebc59106d6c256cd2b94882f8e7b8f'
+export const BASE_SCRIPT_SHA256 = '7f2cf9aa5f2c9d3cf1556b82dc03ac3d6a154fc45394cd7547ec620ac560c331'
+export const BASE_CONFIG_SHA256 = '9f8363e5a5252ffe3390cb9690d21e38919d2913801b3a2c5c769be2e0322c0f'
 // Only these four existing source files may join the three guard files.
 // Old blobs are authority in this reviewed wrapper, never in mutable config.
 export const BASE_PAYLOAD_BLOBS = Object.freeze({
-  [TEST_PATH]: '6aaa2f702035d56a141d8e22082f5b78dbc85ccc',
-  'tools/model_construction/install_construction.py': 'fb6c4527b08a8b4fbb938d9bfa55117310de7119',
-  'tools/model_construction/oracle_construction_launch.py': '08157169dc2c1dacf212c294e72179b4f7647ed0',
-  'tools/model_construction/test_construction_transaction.py': '77d084689a9673650b30b773ccd119b02c26833e',
+  [TEST_PATH]: '89fb54d9a728c9073934aa4fdd18860dcd98ec95',
+  'tools/model_construction/install_construction.py': '0507f4809612b1d0ee7a141708526f9acb32371e',
+  'tools/model_construction/oracle_construction_launch.py': '296790b9b24aad78e2312e8823ded6e472c9f253',
+  'tools/model_construction/test_construction_transaction.py': 'e8b2476804a0e0ba913b80ee3bb5a840808ee67e',
 })
 // Preserve the historical context test's manifest contract without permitting
 // this unchanged path in the repair diff. Both historical hashes are immutable.
@@ -69,8 +69,8 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
   // ambiguous serialization, in addition to the compiled immutable blob pin.
   if (Buffer.compare(raw, Buffer.from(JSON.stringify(value, null, 2) + '\n')) !== 0
       || !sameKeys(value, CONFIG_KEYS)
-      || value.revision !== 'oracle-construction-tools-release-v2'
-      || value.release !== 'standard-construction-inventory-repair-tools-only-20261007'
+      || value.revision !== 'oracle-construction-tools-release-v3'
+      || value.release !== 'standard-construction-arm-names-tools-only-20261008'
       || value.baseCommit !== BASE_COMMIT || value.sourceOnly !== true
       || value.deployAllowed !== false || value.preserveCloudflareDeployment !== true
       || value.paidGenerationRequested !== false || value.status !== 'FROZEN'
@@ -92,7 +92,7 @@ export function guardedWorkflow(base, scriptSha, configSha) {
   if (typeof base !== 'string' || !SHA256.test(scriptSha) || !SHA256.test(configSha)) refused()
   let result = base
   // Keep the unchanged context test's historical transform API. Reconstruct
-  // the exact b9 workflow before editing it; this is not a second release base.
+  // the exact reviewed workflow before editing it; this is not a second release base.
   if (blob(result) === '06db92301113f826e9dc470d6794cfe4fa4325d7') {
     const oldCommand = `          node ${LEGACY_SCRIPT_PATH} >> "$GITHUB_OUTPUT"\n`
     if (result.split(oldCommand).length !== 2) refused()
