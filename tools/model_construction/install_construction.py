@@ -472,9 +472,11 @@ class Operations(legacy.Operations):
 
     def _verify_stage(self, stage, workspace, lease):
         state = stage / 'state'
-        state.mkdir(mode=0o700)
-        with sqlite3.connect(state / 'jobs.sqlite') as db:
-            db.execute('CREATE TABLE jobs (id TEXT PRIMARY KEY, prompt TEXT NOT NULL, state TEXT NOT NULL, detail TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL)')
+        def fresh_server_state():
+            state.mkdir(mode=0o700)
+            with sqlite3.connect(state / 'jobs.sqlite') as db:
+                db.execute('CREATE TABLE jobs (id TEXT PRIMARY KEY, prompt TEXT NOT NULL, state TEXT NOT NULL, detail TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL)')
+        fresh_server_state()
         generic = legacy.install_completion.Operations(stage, self.home)
         inherited = dict(os.environ)
         env = {key: value for key, value in inherited.items() if key in
@@ -497,6 +499,11 @@ class Operations(legacy.Operations):
             verifier = HERE / name
             if base.blob_sha(base.read_regular(verifier)) != expected:
                 raise Refused('construction_gate_changed')
+            if name == 'offline_cabinet.py':
+                # This immutable verifier creates its job folder, while the
+                # original server's Blender status updates require this schema.
+                # Each gate receives disposable state, never live job history.
+                fresh_server_state()
             log = workspace / ('offline-construction-' + str(index) + '.log')
             args = [sys.executable, '-B', str(verifier), '--source', str(stage)]
             if name in ('offline_legacy_standard.py', 'offline_construction.py'):

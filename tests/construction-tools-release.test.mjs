@@ -52,8 +52,8 @@ const modification = (path, oldBlob = '3'.repeat(40), newBlob = '4'.repeat(40)) 
 function entry({ path: _path, ...value }) { return value }
 function fixtureManifest() {
   return {
-    revision: 'oracle-construction-tools-release-v3',
-    release: 'standard-construction-arm-names-tools-only-20261008',
+    revision: 'oracle-construction-tools-release-v4',
+    release: 'standard-construction-cabinet-state-tools-only-20261008',
     baseCommit: BASE_COMMIT, sourceOnly: true, deployAllowed: false,
     preserveCloudflareDeployment: true, paidGenerationRequested: false, status: 'FROZEN',
     payload: { ...Object.fromEntries(Object.entries(BASE_PAYLOAD_BLOBS).map(([path, oldBlob]) =>
@@ -119,6 +119,8 @@ function dispatch(options = {}) {
 
 test('exact seven-modification source-only squash skips deployment before credentials', () => {
   assert.equal(REVIEWED_PATHS.length, 7)
+  assert.ok(REVIEWED_PATHS.includes('tools/model_construction/test_construction_gate_contract.py'))
+  assert.equal(REVIEWED_PATHS.includes('tools/model_construction/test_construction_transaction.py'), false)
   assert.deepEqual(evidence().data.changes.map(change => change.path).sort(), REVIEWED_PATHS)
   assert.ok(evidence().data.changes.every(change => change.status === 'M'))
   assert.deepEqual(select(), { deployAllowed: false })
@@ -152,7 +154,8 @@ test('partial source envelopes, unknown additions and every missing reviewed pat
   for (const path of complete.map(change => change.path)) reject({ changes: complete.filter(change => change.path !== path) })
   for (const path of ['tools/model_construction/unknown.py', 'src/main.tsx', 'server/studio.ts',
     'server/billing.ts', 'wrangler.jsonc', 'package.json', 'ops/AI_SHOP_UI_RELEASE_20261007.json',
-    'ops/STANDARD_CONTEXT_TOOLS_RELEASE_20261007.json', OLD_SCRIPT_PATH]) {
+    'ops/STANDARD_CONTEXT_TOOLS_RELEASE_20261007.json', OLD_SCRIPT_PATH,
+    'tools/model_construction/test_construction_transaction.py']) {
     reject({ changes: [...complete, addition(path)] })
   }
 })
@@ -230,7 +233,8 @@ test('manifest cannot change immutable baseline blobs, statuses, modes or exact 
     delete missing.payload[path]
     reject({ manifest: missing })
     for (const replacement of ['tools/model_construction/runtime_controller.py',
-      'tools/model_construction/unknown.py', 'tests/context-tools-release.test.mjs',
+      'tools/model_construction/unknown.py', 'tools/model_construction/test_construction_transaction.py',
+      'tests/context-tools-release.test.mjs',
       'docs/CONTEST_STATUS.md', '.github/workflows/model-construction-review.yml']) {
       const manifest = structuredClone(missing)
       manifest.payload[replacement] = original.payload[path]
@@ -292,6 +296,8 @@ test('historical transform compatibility cannot authorize an earlier release bas
     ? { ...change, oldBlob: blob(prior) } : change) })
   reject({ parents: ['ea1987eee520880b1eb93e71b572f7f1f4879efd'],
     event: { before: 'ea1987eee520880b1eb93e71b572f7f1f4879efd' } })
+  reject({ parents: ['0eb81ff43e85e8eb191dc6081abf93171a258b18'],
+    event: { before: '0eb81ff43e85e8eb191dc6081abf93171a258b18' } })
 })
 
 test('new wrapper leaves the old guard and public release markers byte-for-byte intact', () => {

@@ -1,7 +1,7 @@
 {
-  "revision": "oracle-construction-tools-release-v3",
-  "release": "standard-construction-arm-names-tools-only-20261008",
-  "baseCommit": "0eb81ff43e85e8eb191dc6081abf93171a258b18",
+  "revision": "oracle-construction-tools-release-v4",
+  "release": "standard-construction-cabinet-state-tools-only-20261008",
+  "baseCommit": "a30708fcfa4d6b2dc07cb07916f59d3dafb99b6f",
   "sourceOnly": true,
   "deployAllowed": false,
   "preserveCloudflareDeployment": true,
@@ -11,29 +11,29 @@
     "tests/construction-tools-release.test.mjs": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "89fb54d9a728c9073934aa4fdd18860dcd98ec95",
-      "newBlob": "d6fdfb453fe5cd49bac4bafb93b9b26e565ec626",
+      "oldBlob": "d6fdfb453fe5cd49bac4bafb93b9b26e565ec626",
+      "newBlob": "96a730c841ca66cddc3ea3c1e254079b5cc4155a",
       "status": "M"
     },
     "tools/model_construction/install_construction.py": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "0507f4809612b1d0ee7a141708526f9acb32371e",
-      "newBlob": "b43b235ae5675d38681dd332e0ec2f8e5eea32e8",
+      "oldBlob": "b43b235ae5675d38681dd332e0ec2f8e5eea32e8",
+      "newBlob": "a96d0c009b410f9984aca3e536905eb3f0d64f01",
       "status": "M"
     },
     "tools/model_construction/oracle_construction_launch.py": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "296790b9b24aad78e2312e8823ded6e472c9f253",
-      "newBlob": "b1eeea9c9f6eb50d3dc0694fbf494b80ca4fe40f",
+      "oldBlob": "b1eeea9c9f6eb50d3dc0694fbf494b80ca4fe40f",
+      "newBlob": "c7d0f0f5799af001d1af3e754ec1d47e516026be",
       "status": "M"
     },
-    "tools/model_construction/test_construction_transaction.py": {
+    "tools/model_construction/test_construction_gate_contract.py": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "e8b2476804a0e0ba913b80ee3bb5a840808ee67e",
-      "newBlob": "443522da8d1ee2c03ff9f3302948ae42ad059400",
+      "oldBlob": "5af55078648576bda2057eefad7e8dbc7f801be0",
+      "newBlob": "458274b9562da76ab1a979bb0c694bc8c54db096",
       "status": "M"
     },
     "tests/context-tools-release.test.mjs": {
