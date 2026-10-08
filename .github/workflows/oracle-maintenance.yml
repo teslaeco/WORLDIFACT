@@ -1,0 +1,94 @@
+name: Restricted Oracle maintenance
+on:
+  pull_request:
+    paths:
+      - 'tools/oracle_maintenance/**'
+      - 'scripts/oracle-maintenance.mjs'
+      - 'tests/oracle-maintenance.test.mjs'
+      - '.github/oracle-maintenance-recipient.pem'
+      - '.github/workflows/oracle-maintenance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/oracle_maintenance/**'
+      - 'scripts/oracle-maintenance.mjs'
+      - 'tests/oracle-maintenance.test.mjs'
+      - '.github/oracle-maintenance-recipient.pem'
+      - '.github/workflows/oracle-maintenance.yml'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Read status first. Apply only after reviewing its encrypted evidence.'
+        required: true
+        default: status
+        type: choice
+        options:
+          - status
+          - reachability
+          - apply-b6dce84d
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-oracle-maintenance
+  cancel-in-progress: false
+jobs:
+  offline-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify credential-free dispatcher and runner fixtures
+        run: |
+          python -B -m unittest discover -s tools/oracle_maintenance -p 'test_*.py' -v
+          node --test tests/oracle-maintenance.test.mjs
+  maintenance:
+    needs: offline-safety
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    environment:
+      name: Production
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Check one SSH listener without authentication
+        if: inputs.action == 'reachability'
+        run: node scripts/oracle-maintenance.mjs
+        env:
+          ORACLE_MAINTENANCE_ACTION: reachability
+          ORACLE_MAINTENANCE_HOST: ${{ secrets.ORACLE_MAINTENANCE_HOST }}
+      - name: Run one fixed dispatcher command and encrypt evidence
+        if: inputs.action != 'reachability'
+        run: node scripts/oracle-maintenance.mjs
+        env:
+          ORACLE_MAINTENANCE_ACTION: ${{ inputs.action }}
+          ORACLE_MAINTENANCE_HOST: ${{ secrets.ORACLE_MAINTENANCE_HOST }}
+          ORACLE_MAINTENANCE_KNOWN_HOSTS: ${{ secrets.ORACLE_MAINTENANCE_KNOWN_HOSTS }}
+          ORACLE_MAINTENANCE_SSH_KEY: ${{ secrets.ORACLE_MAINTENANCE_SSH_KEY }}
+      - name: Upload ciphertext only, including safe failure evidence
+        if: ${{ always() && hashFiles('.oracle-maintenance-encrypted/report.enc.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: oracle-maintenance-encrypted-${{ github.run_id }}
+          path: .oracle-maintenance-encrypted/report.enc.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
