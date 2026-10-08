@@ -8,27 +8,29 @@ import {
   BASE_COMMIT as LEGACY_BASE_COMMIT,
 } from './select-context-tools-release.mjs'
 
-export const BASE_COMMIT = '766e651af475323152b6fd6fb7b1bce0ac4a8586'
-export const BASE_WORKFLOW_BLOB = '608cf064d6c895d3741e8d974f88d10dbcffa5b4'
+export const BASE_COMMIT = '3f6d7fcfd4cef8183b05fd1ff29176eec887cca4'
+export const BASE_WORKFLOW_BLOB = 'f96b89f0a70330f64f8c4af5243225966d4480ac'
 export const LEGACY_SCRIPT_BLOB = '465898752099691d8cee1ca989575c2b83febab3'
 export const SCRIPT_PATH = 'scripts/select-construction-tools-release.mjs'
 export const CONFIG_PATH = 'config/oracle-construction-tools-release.json'
 export const TEST_PATH = 'tests/construction-tools-release.test.mjs'
 export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
 export const RECIPIENT_PATH = '.github/oracle-maintenance-recipient.pem'
+export const RECIPIENT_BLOB = '32d65af26659ee221c0885709155426285993d91'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = '7389e47e9580953c3646c3076ec679caf2b5faa6'
+export const CONFIG_BLOB = '952240461e0d0b021a563d6d84608a77e7edbe67'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
-export const BASE_SCRIPT_BLOB = '445aa3428aa0670ac88b46024bc29ff11dad340a'
-export const BASE_CONFIG_BLOB = '7414c8ed95921ae9f40e19951fefe5c411a1941e'
-export const BASE_SCRIPT_SHA256 = '5caf8ac8409ca8e7f5988809631e00ee05ced7560dfa0cd7a9e249029e956e99'
-export const BASE_CONFIG_SHA256 = 'f5ff1f2f163930292fe87f3bae3c957b7369f5bacbf9ff1edf045ef1ede23d3e'
-// This finite source-only release replaces one diagnostic encryption recipient.
-// Existing SSH access, maintenance code and workflows are not release payloads.
+export const BASE_SCRIPT_BLOB = 'f821415a457befe0972cd7f35044e4823c5607e4'
+export const BASE_CONFIG_BLOB = '7389e47e9580953c3646c3076ec679caf2b5faa6'
+export const BASE_SCRIPT_SHA256 = 'bdf6d0adcf2d0a03faaa47864eb1776818ec80d350588b0005633eec30804b92'
+export const BASE_CONFIG_SHA256 = '0fee16eed10e739c967050d70c091f56ee64c8229f0fc09b5e3226d9543f40eb'
+// This finite source-only release normalizes SSH-key boundary whitespace.
+// The diagnostic recipient and all deployed runtime state remain unchanged.
 export const BASE_PAYLOAD_BLOBS = Object.freeze({
-  [TEST_PATH]: '020c53ffa9e9b061e1ef79fcde78c83ecabc758c',
-  [RECIPIENT_PATH]: '4863ea338c11a81968197d396bc6f91fce163a4c',
+  [TEST_PATH]: 'e4134d3d4c7e9a62421dc65ed34364909def55df',
+  'scripts/oracle-maintenance.mjs': '641557bee57e2d22edca071dac8d36d2a764df90',
+  'tests/oracle-maintenance.test.mjs': 'ba701d390a734e5919253b4762fdd93d0768b606',
 })
 // Preserve the historical context test's manifest contract without permitting
 // this unchanged path in the repair diff. Both historical hashes are immutable.
@@ -69,8 +71,8 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
   // ambiguous serialization, in addition to the compiled immutable blob pin.
   if (Buffer.compare(raw, Buffer.from(JSON.stringify(value, null, 2) + '\n')) !== 0
       || !sameKeys(value, CONFIG_KEYS)
-      || value.revision !== 'oracle-construction-tools-release-v7'
-      || value.release !== 'oracle-diagnostic-recipient-source-only-20261008'
+      || value.revision !== 'oracle-construction-tools-release-v8'
+      || value.release !== 'oracle-key-boundary-source-only-20261008'
       || value.baseCommit !== BASE_COMMIT || value.sourceOnly !== true
       || value.deployAllowed !== false || value.preserveCloudflareDeployment !== true
       || value.paidGenerationRequested !== false || value.status !== 'FROZEN'
@@ -190,6 +192,8 @@ export function selectConstructionToolsRelease({ cwd = process.cwd(), env = proc
   if (git(cwd, ['ls-tree', '-z', head, '--', CONFIG_PATH]) !== `100644 blob ${configBlob}\t${CONFIG_PATH}\0`) refused()
   if (git(cwd, ['ls-tree', '-z', head, '--', LEGACY_TEST_PATH])
       !== `100644 blob ${LEGACY_TEST_RECORD.newBlob}\t${LEGACY_TEST_PATH}\0`) refused()
+  if (git(cwd, ['ls-tree', '-z', head, '--', RECIPIENT_PATH])
+      !== `100644 blob ${RECIPIENT_BLOB}\t${RECIPIENT_PATH}\0`) refused()
   const expected = { ...Object.fromEntries(Object.keys(BASE_PAYLOAD_BLOBS).map(path => [path, manifest.payload[path]])),
     [SCRIPT_PATH]: { oldMode: '100644', newMode: '100644',
       oldBlob: BASE_SCRIPT_BLOB, newBlob: blob(scriptBytes), status: 'M' },

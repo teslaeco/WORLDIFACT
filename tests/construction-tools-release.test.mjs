@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
   BASE_COMMIT, BASE_WORKFLOW_BLOB, LEGACY_SCRIPT_BLOB, SCRIPT_PATH, CONFIG_PATH,
   TEST_PATH, WORKFLOW_PATH, CONFIG_BLOB, FAULT, BASE_PAYLOAD_BLOBS, REVIEWED_PATHS,
-  LEGACY_TEST_PATH, LEGACY_TEST_RECORD, RECIPIENT_PATH,
+  LEGACY_TEST_PATH, LEGACY_TEST_RECORD, RECIPIENT_PATH, RECIPIENT_BLOB,
   BASE_SCRIPT_BLOB, BASE_CONFIG_BLOB, BASE_SCRIPT_SHA256, BASE_CONFIG_SHA256,
   readManifest, guardedWorkflow, selectConstructionToolsRelease,
 } from '../scripts/select-construction-tools-release.mjs'
@@ -27,8 +27,6 @@ const head = '1'.repeat(40), other = '2'.repeat(40), zero = '0'.repeat(40)
 const scriptBytes = readFileSync(join(root, SCRIPT_PATH))
 const oldScriptBytes = readFileSync(join(root, OLD_SCRIPT_PATH))
 const currentWorkflow = readFileSync(join(root, WORKFLOW_PATH), 'utf8')
-// Inert bytes exercise content identity only; no encryption or key generation.
-const fixtureRecipientBytes = Buffer.from('INERT DIAGNOSTIC PUBLIC RECIPIENT FIXTURE\n')
 
 // Hosted review checkouts need not contain the base object. Restore only the
 // two checksum values, then require the immutable entire baseline workflow.
@@ -54,13 +52,12 @@ const modification = (path, oldBlob = '3'.repeat(40), newBlob = '4'.repeat(40)) 
 function entry({ path: _path, ...value }) { return value }
 function fixtureManifest() {
   return {
-    revision: 'oracle-construction-tools-release-v7',
-    release: 'oracle-diagnostic-recipient-source-only-20261008',
+    revision: 'oracle-construction-tools-release-v8',
+    release: 'oracle-key-boundary-source-only-20261008',
     baseCommit: BASE_COMMIT, sourceOnly: true, deployAllowed: false,
     preserveCloudflareDeployment: true, paidGenerationRequested: false, status: 'FROZEN',
     payload: { ...Object.fromEntries(Object.entries(BASE_PAYLOAD_BLOBS).map(([path, oldBlob]) =>
-      [path, entry(modification(path, oldBlob, path === TEST_PATH
-        ? blob(readFileSync(join(root, TEST_PATH))) : blob(fixtureRecipientBytes)))])),
+      [path, entry(modification(path, oldBlob, blob(readFileSync(join(root, path)))))])),
       [LEGACY_TEST_PATH]: { ...LEGACY_TEST_RECORD } },
   }
 }
@@ -90,7 +87,7 @@ function evidence(options = {}) {
       const path = args.at(-1)
       if (Object.hasOwn(data.trees ?? {}, path)) return data.trees[path]
       const ownBlob = { [SCRIPT_PATH]: blob(scriptBytes), [OLD_SCRIPT_PATH]: blob(oldScriptBytes), [CONFIG_PATH]: configBlob,
-        [LEGACY_TEST_PATH]: LEGACY_TEST_RECORD.newBlob }[path]
+        [LEGACY_TEST_PATH]: LEGACY_TEST_RECORD.newBlob, [RECIPIENT_PATH]: RECIPIENT_BLOB }[path]
       assert.ok(ownBlob, path)
       return `100644 blob ${ownBlob}\t${path}\0`
     }
@@ -119,17 +116,17 @@ function dispatch(options = {}) {
   return selectConstructionToolsRelease({ cwd: root, ...fixture })
 }
 
-test('exact five-modification recipient squash skips deployment before credentials', () => {
-  assert.equal(BASE_COMMIT, '766e651af475323152b6fd6fb7b1bce0ac4a8586')
+test('exact six-modification key-boundary squash skips deployment before credentials', () => {
+  assert.equal(BASE_COMMIT, '3f6d7fcfd4cef8183b05fd1ff29176eec887cca4')
   assert.equal(RECIPIENT_PATH, '.github/oracle-maintenance-recipient.pem')
   assert.deepEqual(REVIEWED_PATHS, [
     '.github/workflows/cloudflare.yml', 'config/oracle-construction-tools-release.json',
     'scripts/select-construction-tools-release.mjs', 'tests/construction-tools-release.test.mjs',
-    '.github/oracle-maintenance-recipient.pem',
+    'scripts/oracle-maintenance.mjs', 'tests/oracle-maintenance.test.mjs',
   ].sort())
-  assert.deepEqual(Object.keys(BASE_PAYLOAD_BLOBS).sort(), [RECIPIENT_PATH, TEST_PATH].sort())
+  assert.deepEqual(Object.keys(BASE_PAYLOAD_BLOBS).sort(), [TEST_PATH, 'scripts/oracle-maintenance.mjs', 'tests/oracle-maintenance.test.mjs'].sort())
   const changes = evidence().data.changes
-  assert.equal(REVIEWED_PATHS.length, 5)
+  assert.equal(REVIEWED_PATHS.length, 6)
   assert.deepEqual(changes.map(change => change.path).sort(), REVIEWED_PATHS)
   assert.equal(changes.every(change => change.status === 'M'
     && change.oldMode === '100644' && change.newMode === '100644'), true)
@@ -208,7 +205,7 @@ test('every changed file requires exact mode, old/new blob and status', () => {
       reject({ changes: complete.map(change => change === target ? { ...change, ...changed } : change) })
     }
   }
-  for (const path of [SCRIPT_PATH, OLD_SCRIPT_PATH, CONFIG_PATH, LEGACY_TEST_PATH]) {
+  for (const path of [SCRIPT_PATH, OLD_SCRIPT_PATH, CONFIG_PATH, LEGACY_TEST_PATH, RECIPIENT_PATH]) {
     reject({ trees: { [path]: `120000 blob ${blob(scriptBytes)}\t${path}\0` } })
     reject({ trees: { [path]: `100644 blob ${'f'.repeat(40)}\t${path}\0` } })
   }
@@ -272,6 +269,11 @@ test('historical context-test attestation cannot grant a changed-path exemption'
   }
   reject({ changes: [...evidence().data.changes,
     modification(LEGACY_TEST_PATH, LEGACY_TEST_RECORD.newBlob)] })
+  assert.equal(blob(readFileSync(join(root, RECIPIENT_PATH))), RECIPIENT_BLOB)
+  reject({ changes: [...evidence().data.changes, modification(RECIPIENT_PATH, RECIPIENT_BLOB)] })
+  const recipientPayload = fixtureManifest()
+  recipientPayload.payload[RECIPIENT_PATH] = entry(modification(RECIPIENT_PATH, RECIPIENT_BLOB))
+  reject({ manifest: recipientPayload })
 })
 
 test('workflow transform preserves the entire baseline except its two checksum values', () => {
@@ -322,6 +324,8 @@ test('historical transform compatibility cannot authorize an earlier release bas
     event: { before: 'a30708fcfa4d6b2dc07cb07916f59d3dafb99b6f' } })
   reject({ parents: ['944b486249b54cca02e6ed8ca426da6eba296391'],
     event: { before: '944b486249b54cca02e6ed8ca426da6eba296391' } })
+  reject({ parents: ['766e651af475323152b6fd6fb7b1bce0ac4a8586'],
+    event: { before: '766e651af475323152b6fd6fb7b1bce0ac4a8586' } })
   reject({ parents: ['0eb81ff43e85e8eb191dc6081abf93171a258b18'],
     event: { before: '0eb81ff43e85e8eb191dc6081abf93171a258b18' } })
 })

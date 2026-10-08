@@ -101,6 +101,35 @@ test('SSH uses private temporary files and removes them on success and unsafe er
   await assert.rejects(runSsh('status', env, (_file, _args, _options, callback) => callback(null, Buffer.alloc(16385))), /^Error: SSH_FAILED$/)
 })
 
+test('key copy/paste ASCII boundaries are normalized only in the private temporary copy', async () => {
+  for (const value of [privateKey, privateKey.trimEnd(), privateKey + '\n\n', privateKey + ' \t\r\n',
+    ' \t\r\n' + privateKey, '\n\t ' + privateKey + '\n \t\r\n']) {
+    const configured = { ...env, ORACLE_MAINTENANCE_SSH_KEY: value }
+    let keyPath
+    await runSsh('status', configured, (_file, args, _options, callback) => {
+      keyPath = args[args.indexOf('-i') + 1]
+      readFile(keyPath, 'utf8').then(key => {
+        assert.equal(key, privateKey)
+        callback(null, encoded(dispatch()))
+      }).catch(callback)
+    })
+    assert.equal(configured.ORACLE_MAINTENANCE_SSH_KEY, value)
+    await assert.rejects(access(dirname(keyPath)))
+  }
+})
+
+test('key boundary normalization cannot repair interior corruption, Unicode, extra text or oversized input', async () => {
+  const noSsh = () => assert.fail('Invalid key reached SSH')
+  for (const value of ['', ' \t\r\n', privateKey.replaceAll('\n', '\r\n'), privateKey.replaceAll('\n', '\\n'),
+    '\uFEFF' + privateKey, '\u00a0' + privateKey, privateKey + '\u200b', privateKey + '\u00a0',
+    privateKey.replace('U1lOVEhFVElD', 'U1lOV EhFVElD'), privateKey.replace('U1lOVEhFVElD', 'U1lOV\0EhFVElD'),
+    privateKey.replace('\nU1lOVEhFVElD', '\n\nU1lOVEhFVElD'), 'prompt ' + privateKey,
+    privateKey + ' extra text', privateKey + privateKey, privateKey.slice(0, -20),
+    ' '.repeat(32768) + privateKey, privateKey.repeat(500)]) {
+    await assert.rejects(runSsh('status', { ...env, ORACLE_MAINTENANCE_SSH_KEY: value }, noSsh), /^Error: INVALID_CONFIGURATION$/)
+  }
+})
+
 test('reachability opens only one socket to port 22, retains no banner and never authenticates', async () => {
   for (const banner of ['SSH-2.0-OpenSSH_fixture\r\n', 'private banner\n', 'x'.repeat(1025), 'SSH-2.0-\xff\n', null]) {
     let calls = 0, destroyed = false

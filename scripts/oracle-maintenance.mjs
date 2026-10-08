@@ -68,9 +68,13 @@ export function validateKnownHosts(value, host) {
 }
 
 function validatePrivateKey(value) {
-  if (typeof value !== 'string' || value.length > 32768 ||
-      !/^-----BEGIN OPENSSH PRIVATE KEY-----\n(?:[A-Za-z0-9+/=]+\n){1,128}-----END OPENSSH PRIVATE KEY-----\n?$/.test(value)) fail('INVALID_CONFIGURATION')
-  return value.endsWith('\n') ? value : value + '\n'
+  if (typeof value !== 'string' || value.length > 32768) fail('INVALID_CONFIGURATION')
+  // Copy/paste can add blank space around an otherwise valid key. Normalize
+  // only ASCII boundaries in memory; preserve every interior and Unicode byte.
+  const key = value.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, '') + '\n'
+  if (key.length > 32768 ||
+      !/^-----BEGIN OPENSSH PRIVATE KEY-----\n(?:[A-Za-z0-9+/=]+\n){1,128}-----END OPENSSH PRIVATE KEY-----\n$/.test(key)) fail('INVALID_CONFIGURATION')
+  return key
 }
 
 export function buildSshInvocation(action, host, keyPath, knownHostsPath, algorithms) {
