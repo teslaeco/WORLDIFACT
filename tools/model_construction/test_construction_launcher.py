@@ -40,6 +40,26 @@ class LauncherTests(unittest.TestCase):
              patch.object(launcher, 'connection', side_effect=AssertionError('remote')), \
              patch.object(launcher.Path, 'home', side_effect=AssertionError('file lookup')):
             launcher.main([])
+            launcher.main(['--update-payload'])
+
+    def test_explicit_payload_update_mode_is_boolean_and_reaches_installer(self):
+        for invalid in (1, None, 'true'):
+            with self.assertRaises(launcher.LaunchError):
+                launcher.script('inert', approved=True, update_payload=invalid)
+        for enabled in (False, True):
+            with patch.object(launcher, 'package', return_value='inert'), \
+                 patch.object(launcher, 'connection', return_value=['INERT']), \
+                 patch.object(launcher, 'invoke', return_value=success()) as invoke:
+                args = ['--source-commit', COMMIT, '--approve-service-maintenance']
+                if enabled:
+                    args.append('--update-payload')
+                launcher.main(args)
+            program = invoke.call_args.args[1]
+            self.assertIn('UPDATE_PAYLOAD=' + repr(enabled), program)
+            self.assertIn("(['--update-payload'] if UPDATE_PAYLOAD else [])", program)
+            self.assertIn('ALLOW_CANCELLED_CLEANUP=False', program)
+            self.assertIn('EXPECTED_CANCELLED_JOB=None', program)
+            compile(program, 'pinned-update-wrapper', 'exec')
     def test_unfrozen_package_refuses_before_read_download_or_connection(self):
         unfrozen = {name:(path, 'UNFROZEN_REFUSE' if name in launcher.NEW_FILES else digest)
                     for name,(path,digest) in launcher.FILES.items()}

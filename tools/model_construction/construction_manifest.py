@@ -13,7 +13,7 @@ import runtime_patch
 
 ANCESTOR_COMMIT = '2380a7e2dad05a40b3753faf06c2635ed444be51'
 EXPECTED = dict(runtime_patch.EXPECTED)
-EXPECTED_AFTER = {'astra_spend_v2.py': '6ff61de4356388ecbec9d5eda1ae61f0ca2098deeb8ed10f1c2928dec67b3028',
+INSTALLED_V1 = {'astra_spend_v2.py': '6ff61de4356388ecbec9d5eda1ae61f0ca2098deeb8ed10f1c2928dec67b3028',
  'blender_mcp.py': '85c4fe62f76aaa33e87a40ec0db03965e1ffac0a28b1459a73e3676bf66b020b',
  'codex_runner.py': 'ebcc149256ef3f54ad5b082b16f54719a30a66e6e2b94dfc2fe5f994f2f9f8fa',
  'completion_policy.py': '664e9f3b2326116fe9aeeb78e7a84aac254ca8a3054cdccdfb5224e112890110',
@@ -27,6 +27,8 @@ EXPECTED_AFTER = {'astra_spend_v2.py': '6ff61de4356388ecbec9d5eda1ae61f0ca2098de
  'server.py': 'd401a99fc2b271b886fa8c629e802d107ec8f6f05eb3da99c27dab040abc4c97',
  'studio_pricing.py': 'ad765f9193e973146a8fd9e0761d13006ba939db7926275f628ad21c83350584',
  'terminal_budget.py': '3e8a1654aede456eeeb673bb67f508a56996602239c56127123ba7e71a5a39f0'}
+# The installed predecessor is immutable; receipts cannot supply source authority.
+EXPECTED_AFTER = {**INSTALLED_V1, 'construction_payload.py': '3b7e5af5192724af4d7eb2943a09230c952fbd44905ec955f2ae2d7a6ec03a84'}
 MODIFIED = runtime_patch.MODIFIED
 HELPERS = runtime_patch.HELPERS
 
@@ -51,7 +53,7 @@ def reviewed_sources(original):
 def reviewed_manifest(value):
     try:
         after = final_manifest()
-        return value == EXPECTED or value == after
+        return value == EXPECTED or value == after or value == payload_predecessor()
     except ValueError:
         return False
 
@@ -62,4 +64,33 @@ def changes(original, helpers):
     changed = runtime_patch.changes(original, helpers)
     if {name: hashlib.sha256(raw).hexdigest() for name, raw in changed.items()} != expected:
         raise ValueError('Construction package differs from frozen runtime manifest.')
+    return changed
+
+
+def payload_predecessor():
+    """Only the complete installed-v1 map may enter the helper-only update."""
+    after = final_manifest()
+    before = INSTALLED_V1
+    if (not isinstance(before, dict) or set(before) != health.SOURCES
+            or any(not isinstance(value, str) or re.fullmatch('[a-f0-9]{64}', value) is None
+                   for value in before.values())
+            or {name for name in after if after[name] != before[name]} != {'construction_payload.py'}):
+        raise ValueError('Exact payload-only update manifest is not frozen.')
+    return dict(before)
+
+
+def reviewed_installed_sources(original):
+    if {name: hashlib.sha256(raw).hexdigest() for name, raw in original.items()} != payload_predecessor():
+        raise ValueError('Exact installed construction-v1 source is required.')
+    return True
+
+
+def payload_changes(original, payload):
+    reviewed_installed_sources(original)
+    if not isinstance(payload, bytes) or not 0 < len(payload) <= 1048576:
+        raise ValueError('Invalid bounded runtime helper.')
+    compile(payload, 'construction_payload.py', 'exec')
+    changed = {**original, 'construction_payload.py': payload}
+    if {name: hashlib.sha256(raw).hexdigest() for name, raw in changed.items()} != final_manifest():
+        raise ValueError('Payload update differs from frozen runtime manifest.')
     return changed

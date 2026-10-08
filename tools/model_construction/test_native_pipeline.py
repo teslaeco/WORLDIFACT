@@ -202,9 +202,15 @@ class ScriptedProvider:
         self.calls.append({'phase': phase, 'payload_sha256': digest(request.data)})
         response = {'id': 'resp_native_' + ('accepted_' if self.accepted else 'rejected_') + phase,
             'object': 'response', 'model': 'gpt-6-astra', 'status': 'completed', 'service_tier': 'default',
-            'output': [{'type': 'message', 'id': 'message_native_' + phase,
-                'role': 'assistant', 'status': 'completed',
-                'content': [{'type': 'output_text', 'text': canonical(envelope), 'annotations': []}]}],
+            # Exercise documented reasoning metadata through the actual parser
+            # before every real build/render/export case, not only a unit test.
+            'output': [{'type': 'reasoning', 'id': 'rs_native_' + phase, 'summary': [],
+                'status': None, 'encrypted_content': None,
+                'content': None if phase == 'construction' else [] if phase == 'inspection' else
+                    [{'type': 'reasoning_text', 'text': 'Synthetic transport metadata.'}]},
+                {'type': 'message', 'id': 'message_native_' + phase,
+                'role': 'assistant', 'status': 'completed', 'phase': 'final_answer',
+                'content': [{'type': 'output_text', 'text': canonical(envelope), 'annotations': [], 'logprobs': []}]}],
             'usage': {'input_tokens': 4096, 'output_tokens': 300, 'total_tokens': 4396,
                 'input_tokens_details': {'cached_tokens': 0, 'cache_write_tokens': 0},
                 'output_tokens_details': {'reasoning_tokens': 20}}}

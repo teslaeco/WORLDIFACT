@@ -7,8 +7,8 @@ import {
   SCRIPT_PATH as LEGACY_SCRIPT_PATH,
 } from './select-context-tools-release.mjs'
 
-export const BASE_COMMIT = 'a30708fcfa4d6b2dc07cb07916f59d3dafb99b6f'
-export const BASE_WORKFLOW_BLOB = '09454d550f4862014de352a63158f2b602d64934'
+export const BASE_COMMIT = '944b486249b54cca02e6ed8ca426da6eba296391'
+export const BASE_WORKFLOW_BLOB = 'a477707b194b5e88fcf8178e3f37c37aa93a41bd'
 export const LEGACY_SCRIPT_BLOB = '465898752099691d8cee1ca989575c2b83febab3'
 export const SCRIPT_PATH = 'scripts/select-construction-tools-release.mjs'
 export const CONFIG_PATH = 'config/oracle-construction-tools-release.json'
@@ -16,19 +16,28 @@ export const TEST_PATH = 'tests/construction-tools-release.test.mjs'
 export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = '503cfaf64a3c6bf0d0ffa897ff22c58508ed9134'
+export const CONFIG_BLOB = 'ad7874ed47b148a39301742cc2185c922692e6bf'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
-export const BASE_SCRIPT_BLOB = '0f07c0877812527b7ba1e2b7cfcabb3641b3edce'
-export const BASE_CONFIG_BLOB = '007b405d0d4d7ad7b416c337528f12dbf91bda17'
-export const BASE_SCRIPT_SHA256 = '57ca4ffb42cc125550e75c90f220ab5f35bf4bb657131e8c922b489324256327'
-export const BASE_CONFIG_SHA256 = '8947605b235d008dd0b6d4c86d8fde80f9b1752ca9192cf58cc51ac467b8f64f'
-// Only these four existing source files may join the three guard files.
+export const BASE_SCRIPT_BLOB = 'ae53c25cc03ee5011f5a99f9005daaab0a175466'
+export const BASE_CONFIG_BLOB = '503cfaf64a3c6bf0d0ffa897ff22c58508ed9134'
+export const BASE_SCRIPT_SHA256 = 'd3b1a325d5962681c06f27498e16dcb8b013300a8318857f8b8fb45e770fff07'
+export const BASE_CONFIG_SHA256 = '77e59318616bd8872716ff4e44dac1d48a2faf845e7ee9d341ff0d815f85945a'
+// Only these reviewed payload files may join the three guard files. The sole
+// addition is compiled here; mutable config cannot invent another new path.
 // Old blobs are authority in this reviewed wrapper, never in mutable config.
+export const ADDED_PAYLOAD_PATH = 'tools/model_construction/test_construction_payload_update.py'
 export const BASE_PAYLOAD_BLOBS = Object.freeze({
-  [TEST_PATH]: 'd6fdfb453fe5cd49bac4bafb93b9b26e565ec626',
-  'tools/model_construction/install_construction.py': 'b43b235ae5675d38681dd332e0ec2f8e5eea32e8',
-  'tools/model_construction/oracle_construction_launch.py': 'b1eeea9c9f6eb50d3dc0694fbf494b80ca4fe40f',
-  'tools/model_construction/test_construction_gate_contract.py': '5af55078648576bda2057eefad7e8dbc7f801be0',
+  [TEST_PATH]: '96a730c841ca66cddc3ea3c1e254079b5cc4155a',
+  'tools/model_construction/README.md': '69f7900f92bee97dfa8d3b66001276c69ec1f9a5',
+  'tools/model_construction/construction_manifest.py': '924ae02125e915d784cc4a6b892c8e0dc910a92d',
+  'tools/model_construction/construction_payload.py': '396736815efe8322a3846f76352546e81332f0f5',
+  'tools/model_construction/install_construction.py': 'a96d0c009b410f9984aca3e536905eb3f0d64f01',
+  'tools/model_construction/oracle_construction_launch.py': 'c7d0f0f5799af001d1af3e754ec1d47e516026be',
+  'tools/model_construction/test_construction_launcher.py': '4c3f342d54994a456c0f4e3aa11b5c25c2f0eede',
+  'tools/model_construction/test_construction_manifest.py': '3403687f4afd54e8fb82a5a2daa8cce683c53cb9',
+  'tools/model_construction/test_construction_payload.py': '7f8a57898b14e0545fa002c4da8b75815d303e84',
+  [ADDED_PAYLOAD_PATH]: '0'.repeat(40),
+  'tools/model_construction/test_native_pipeline.py': 'a5359423b86582f5e32c0d0e7ed37c2d160d7a2b',
 })
 // Preserve the historical context test's manifest contract without permitting
 // this unchanged path in the repair diff. Both historical hashes are immutable.
@@ -69,8 +78,8 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
   // ambiguous serialization, in addition to the compiled immutable blob pin.
   if (Buffer.compare(raw, Buffer.from(JSON.stringify(value, null, 2) + '\n')) !== 0
       || !sameKeys(value, CONFIG_KEYS)
-      || value.revision !== 'oracle-construction-tools-release-v4'
-      || value.release !== 'standard-construction-cabinet-state-tools-only-20261008'
+      || value.revision !== 'oracle-construction-tools-release-v5'
+      || value.release !== 'standard-construction-response-envelope-tools-only-20261008'
       || value.baseCommit !== BASE_COMMIT || value.sourceOnly !== true
       || value.deployAllowed !== false || value.preserveCloudflareDeployment !== true
       || value.paidGenerationRequested !== false || value.status !== 'FROZEN'
@@ -80,8 +89,10 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
       || ENTRY_KEYS.some(key => value.payload[LEGACY_TEST_PATH][key] !== LEGACY_TEST_RECORD[key])) refused()
   for (const path of Object.keys(BASE_PAYLOAD_BLOBS)) {
     const entry = value.payload[path]
+    const added = path === ADDED_PAYLOAD_PATH
     if (!sameKeys(entry, ENTRY_KEYS) || entry.newMode !== '100644'
-        || entry.oldMode !== '100644' || entry.status !== 'M'
+        || entry.oldMode !== (added ? '000000' : '100644')
+        || entry.status !== (added ? 'A' : 'M')
         || entry.oldBlob !== BASE_PAYLOAD_BLOBS[path]
         || !sha(entry.newBlob) || entry.oldBlob === entry.newBlob) refused()
   }
