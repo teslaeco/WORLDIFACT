@@ -1,0 +1,60 @@
+name: Classify Oracle key boundary whitespace once
+on:
+  push:
+    branches: [diagnostics/oracle-config-boundary-20261008]
+permissions:
+  contents: read
+concurrency:
+  group: oracle-config-boundary-20261008
+  cancel-in-progress: false
+jobs:
+  offline-scope:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/diagnostics/oracle-config-boundary-20261008' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Reject expired or out-of-scope commits before Production access
+        run: node scripts/oracle-config-boundary-once.mjs --gate
+      - name: Verify offline configuration privacy fixtures
+        run: node --test tests/oracle-config-boundary-once.test.mjs
+  configuration-shape:
+    needs: offline-scope
+    if: needs.offline-scope.result == 'success' && github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/diagnostics/oracle-config-boundary-20261008' && github.event_name == 'push' && github.run_attempt == 1
+    environment:
+      name: Production
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Classify existing configuration locally and encrypt finite evidence
+        run: node scripts/oracle-config-boundary-once.mjs --classify
+        env:
+          ORACLE_MAINTENANCE_HOST: ${{ secrets.ORACLE_MAINTENANCE_HOST }}
+          ORACLE_MAINTENANCE_KNOWN_HOSTS: ${{ secrets.ORACLE_MAINTENANCE_KNOWN_HOSTS }}
+          ORACLE_MAINTENANCE_SSH_KEY: ${{ secrets.ORACLE_MAINTENANCE_SSH_KEY }}
+      - name: Upload ciphertext only
+        if: ${{ success() && hashFiles('.oracle-config-boundary-encrypted/report.enc.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: oracle-config-boundary-encrypted-${{ github.run_id }}
+          path: .oracle-config-boundary-encrypted/report.enc.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
