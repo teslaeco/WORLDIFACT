@@ -7,8 +7,8 @@ import {
   SCRIPT_PATH as LEGACY_SCRIPT_PATH,
 } from './select-context-tools-release.mjs'
 
-export const BASE_COMMIT = '944b486249b54cca02e6ed8ca426da6eba296391'
-export const BASE_WORKFLOW_BLOB = 'a477707b194b5e88fcf8178e3f37c37aa93a41bd'
+export const BASE_COMMIT = '6698b79f244ea85ca50076fd54154ff982e96cf8'
+export const BASE_WORKFLOW_BLOB = 'd8978dc61f61a8a2a339b546c9ef243f7ca9ef4b'
 export const LEGACY_SCRIPT_BLOB = '465898752099691d8cee1ca989575c2b83febab3'
 export const SCRIPT_PATH = 'scripts/select-construction-tools-release.mjs'
 export const CONFIG_PATH = 'config/oracle-construction-tools-release.json'
@@ -16,28 +16,32 @@ export const TEST_PATH = 'tests/construction-tools-release.test.mjs'
 export const WORKFLOW_PATH = '.github/workflows/cloudflare.yml'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = 'ad7874ed47b148a39301742cc2185c922692e6bf'
+export const CONFIG_BLOB = '7414c8ed95921ae9f40e19951fefe5c411a1941e'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
-export const BASE_SCRIPT_BLOB = 'ae53c25cc03ee5011f5a99f9005daaab0a175466'
-export const BASE_CONFIG_BLOB = '503cfaf64a3c6bf0d0ffa897ff22c58508ed9134'
-export const BASE_SCRIPT_SHA256 = 'd3b1a325d5962681c06f27498e16dcb8b013300a8318857f8b8fb45e770fff07'
-export const BASE_CONFIG_SHA256 = '77e59318616bd8872716ff4e44dac1d48a2faf845e7ee9d341ff0d815f85945a'
-// Only these reviewed payload files may join the three guard files. The sole
-// addition is compiled here; mutable config cannot invent another new path.
-// Old blobs are authority in this reviewed wrapper, never in mutable config.
-export const ADDED_PAYLOAD_PATH = 'tools/model_construction/test_construction_payload_update.py'
+export const BASE_SCRIPT_BLOB = '22f8aadd27dc14727197d8c57676a0114dc36a9a'
+export const BASE_CONFIG_BLOB = 'ad7874ed47b148a39301742cc2185c922692e6bf'
+export const BASE_SCRIPT_SHA256 = '3e7e0584d1f4917cb3911aa5b595841b28a64b3951cccb6b7401fae277b5f39a'
+export const BASE_CONFIG_SHA256 = 'f1a525824293a07a6b8d5568201e784ccde638a330bc8c7f169376249a5a7296'
+// The maintenance package is source-only. These exact thirteen additions are
+// compiled authority; the manifest cannot admit arbitrary workflows or tools.
+export const ADDED_PAYLOAD_PATHS = Object.freeze([
+  '.github/workflows/oracle-maintenance.yml',
+  '.github/oracle-maintenance-recipient.pem',
+  'scripts/oracle-maintenance.mjs',
+  'tests/oracle-maintenance.test.mjs',
+  'tools/oracle_maintenance/bootstrap.py',
+  'tools/oracle_maintenance/receiver.py',
+  'tools/oracle_maintenance/dispatcher.py',
+  'tools/oracle_maintenance/status.py',
+  'tools/oracle_maintenance/test_bootstrap.py',
+  'tools/oracle_maintenance/test_receiver.py',
+  'tools/oracle_maintenance/test_dispatcher.py',
+  'tools/oracle_maintenance/test_status.py',
+  'tools/oracle_maintenance/README.md',
+])
 export const BASE_PAYLOAD_BLOBS = Object.freeze({
-  [TEST_PATH]: '96a730c841ca66cddc3ea3c1e254079b5cc4155a',
-  'tools/model_construction/README.md': '69f7900f92bee97dfa8d3b66001276c69ec1f9a5',
-  'tools/model_construction/construction_manifest.py': '924ae02125e915d784cc4a6b892c8e0dc910a92d',
-  'tools/model_construction/construction_payload.py': '396736815efe8322a3846f76352546e81332f0f5',
-  'tools/model_construction/install_construction.py': 'a96d0c009b410f9984aca3e536905eb3f0d64f01',
-  'tools/model_construction/oracle_construction_launch.py': 'c7d0f0f5799af001d1af3e754ec1d47e516026be',
-  'tools/model_construction/test_construction_launcher.py': '4c3f342d54994a456c0f4e3aa11b5c25c2f0eede',
-  'tools/model_construction/test_construction_manifest.py': '3403687f4afd54e8fb82a5a2daa8cce683c53cb9',
-  'tools/model_construction/test_construction_payload.py': '7f8a57898b14e0545fa002c4da8b75815d303e84',
-  [ADDED_PAYLOAD_PATH]: '0'.repeat(40),
-  'tools/model_construction/test_native_pipeline.py': 'a5359423b86582f5e32c0d0e7ed37c2d160d7a2b',
+  [TEST_PATH]: 'fde39abcd6edef8e70ad0aa7d87ee887b17bc7ad',
+  ...Object.fromEntries(ADDED_PAYLOAD_PATHS.map(path => [path, '0'.repeat(40)])),
 })
 // Preserve the historical context test's manifest contract without permitting
 // this unchanged path in the repair diff. Both historical hashes are immutable.
@@ -64,9 +68,9 @@ function sameKeys(value, keys) {
   return value && typeof value === 'object' && !Array.isArray(value)
     && Object.keys(value).sort().join('\0') === [...keys].sort().join('\0')
 }
-function constructionPath(path) {
+function protectedSourcePath(path) {
   return typeof path === 'string' && (/construction/i.test(path)
-    || path.startsWith('tools/model_construction/'))
+    || /oracle[-_]maintenance/i.test(path))
 }
 
 export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
@@ -78,8 +82,8 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
   // ambiguous serialization, in addition to the compiled immutable blob pin.
   if (Buffer.compare(raw, Buffer.from(JSON.stringify(value, null, 2) + '\n')) !== 0
       || !sameKeys(value, CONFIG_KEYS)
-      || value.revision !== 'oracle-construction-tools-release-v5'
-      || value.release !== 'standard-construction-response-envelope-tools-only-20261008'
+      || value.revision !== 'oracle-construction-tools-release-v6'
+      || value.release !== 'restricted-oracle-maintenance-source-only-20261008'
       || value.baseCommit !== BASE_COMMIT || value.sourceOnly !== true
       || value.deployAllowed !== false || value.preserveCloudflareDeployment !== true
       || value.paidGenerationRequested !== false || value.status !== 'FROZEN'
@@ -89,7 +93,7 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
       || ENTRY_KEYS.some(key => value.payload[LEGACY_TEST_PATH][key] !== LEGACY_TEST_RECORD[key])) refused()
   for (const path of Object.keys(BASE_PAYLOAD_BLOBS)) {
     const entry = value.payload[path]
-    const added = path === ADDED_PAYLOAD_PATH
+    const added = ADDED_PAYLOAD_PATHS.includes(path)
     if (!sameKeys(entry, ENTRY_KEYS) || entry.newMode !== '100644'
         || entry.oldMode !== (added ? '000000' : '100644')
         || entry.status !== (added ? 'A' : 'M')
@@ -185,7 +189,7 @@ export function selectConstructionToolsRelease({ cwd = process.cwd(), env = proc
     if (scope.before !== parents[0]) changes = diff(scope.before)
   }
   const candidate = parents.includes(BASE_COMMIT) || scope.before === BASE_COMMIT
-    || [...immediate, ...changes].some(change => constructionPath(change.path))
+    || [...immediate, ...changes].some(change => protectedSourcePath(change.path))
   if (!candidate) return legacySelector({ cwd, env, event: selectedEvent, git })
   // A review branch may have arbitrary history, but only its single-parent
   // reviewed main squash can establish this one source-only release envelope.

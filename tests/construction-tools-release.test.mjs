@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
   BASE_COMMIT, BASE_WORKFLOW_BLOB, LEGACY_SCRIPT_BLOB, SCRIPT_PATH, CONFIG_PATH,
   TEST_PATH, WORKFLOW_PATH, CONFIG_BLOB, FAULT, BASE_PAYLOAD_BLOBS, REVIEWED_PATHS,
-  LEGACY_TEST_PATH, LEGACY_TEST_RECORD, ADDED_PAYLOAD_PATH,
+  LEGACY_TEST_PATH, LEGACY_TEST_RECORD, ADDED_PAYLOAD_PATHS,
   BASE_SCRIPT_BLOB, BASE_CONFIG_BLOB, BASE_SCRIPT_SHA256, BASE_CONFIG_SHA256,
   readManifest, guardedWorkflow, selectConstructionToolsRelease,
 } from '../scripts/select-construction-tools-release.mjs'
@@ -52,12 +52,12 @@ const modification = (path, oldBlob = '3'.repeat(40), newBlob = '4'.repeat(40)) 
 function entry({ path: _path, ...value }) { return value }
 function fixtureManifest() {
   return {
-    revision: 'oracle-construction-tools-release-v5',
-    release: 'standard-construction-response-envelope-tools-only-20261008',
+    revision: 'oracle-construction-tools-release-v6',
+    release: 'restricted-oracle-maintenance-source-only-20261008',
     baseCommit: BASE_COMMIT, sourceOnly: true, deployAllowed: false,
     preserveCloudflareDeployment: true, paidGenerationRequested: false, status: 'FROZEN',
     payload: { ...Object.fromEntries(Object.entries(BASE_PAYLOAD_BLOBS).map(([path, oldBlob]) =>
-      [path, entry(path === ADDED_PAYLOAD_PATH ? addition(path) : modification(path, oldBlob,
+      [path, entry(ADDED_PAYLOAD_PATHS.includes(path) ? addition(path) : modification(path, oldBlob,
         path === TEST_PATH ? blob(readFileSync(join(root, TEST_PATH))) : '4'.repeat(40)))])),
       [LEGACY_TEST_PATH]: { ...LEGACY_TEST_RECORD } },
   }
@@ -117,21 +117,27 @@ function dispatch(options = {}) {
   return selectConstructionToolsRelease({ cwd: root, ...fixture })
 }
 
-test('exact fourteen-path source-only squash skips deployment before credentials', () => {
-  assert.equal(BASE_COMMIT, '944b486249b54cca02e6ed8ca426da6eba296391')
+test('exact seventeen-path maintenance squash skips deployment before credentials', () => {
+  assert.equal(BASE_COMMIT, '6698b79f244ea85ca50076fd54154ff982e96cf8')
+  const additions = [
+    '.github/workflows/oracle-maintenance.yml', '.github/oracle-maintenance-recipient.pem',
+    'scripts/oracle-maintenance.mjs', 'tests/oracle-maintenance.test.mjs',
+    ...['bootstrap.py', 'receiver.py', 'dispatcher.py', 'status.py',
+      'test_bootstrap.py', 'test_receiver.py', 'test_dispatcher.py', 'test_status.py', 'README.md']
+      .map(name => `tools/oracle_maintenance/${name}`),
+  ].sort()
+  assert.deepEqual([...ADDED_PAYLOAD_PATHS].sort(), additions)
+  assert.equal(additions.length, 13)
   assert.deepEqual(REVIEWED_PATHS, [
     '.github/workflows/cloudflare.yml', 'config/oracle-construction-tools-release.json',
     'scripts/select-construction-tools-release.mjs', 'tests/construction-tools-release.test.mjs',
-    ...['README.md', 'construction_manifest.py', 'construction_payload.py', 'install_construction.py',
-      'oracle_construction_launch.py', 'test_construction_launcher.py', 'test_construction_manifest.py',
-      'test_construction_payload.py', 'test_construction_payload_update.py', 'test_native_pipeline.py']
-      .map(name => `tools/model_construction/${name}`),
+    ...additions,
   ].sort())
   const changes = evidence().data.changes
-  assert.equal(REVIEWED_PATHS.length, 14)
+  assert.equal(REVIEWED_PATHS.length, 17)
   assert.deepEqual(changes.map(change => change.path).sort(), REVIEWED_PATHS)
-  assert.deepEqual(changes.filter(change => change.status === 'A'), [addition(ADDED_PAYLOAD_PATH)])
-  assert.equal(changes.filter(change => change.status === 'M').length, 13)
+  assert.deepEqual(changes.filter(change => change.status === 'A').map(change => change.path).sort(), additions)
+  assert.equal(changes.filter(change => change.status === 'M').length, 4)
   assert.deepEqual(select(), { deployAllowed: false })
   assert.deepEqual(dispatch(), { deployAllowed: false })
   assert.deepEqual(dispatch({ event: { ref: 'refs/heads/main' } }), { deployAllowed: false })
@@ -165,7 +171,9 @@ test('partial source envelopes, unknown additions and every missing reviewed pat
     'server/billing.ts', 'wrangler.jsonc', 'package.json', 'ops/AI_SHOP_UI_RELEASE_20261007.json',
     'ops/STANDARD_CONTEXT_TOOLS_RELEASE_20261007.json', OLD_SCRIPT_PATH,
     'tools/model_construction/test_construction_transaction.py',
-    'tools/model_construction/test_construction_gate_contract.py']) {
+    'tools/model_construction/test_construction_gate_contract.py',
+    '.github/workflows/unknown.yml', '.github/workflows/oracle-maintenance-extra.yml',
+    'tools/oracle_maintenance/unreviewed.py']) {
     reject({ changes: [...complete, addition(path)] })
   }
 })
@@ -180,10 +188,12 @@ test('review branch histories and multi-commit ranges cannot substitute for one 
   ]) reject(options)
 })
 
-test('later construction changes cannot become a lasting paths-ignore exemption', () => {
+test('later construction or maintenance changes cannot become a lasting paths-ignore exemption', () => {
   for (const path of [SCRIPT_PATH, CONFIG_PATH, TEST_PATH, 'tools/model_construction/new.py',
     'docs/BOUNDED_CONSTRUCTION_20261007.md', '.github/workflows/model-construction-review.yml',
-    'config/oracle-construction-unknown.json']) {
+    'config/oracle-construction-unknown.json', ...ADDED_PAYLOAD_PATHS,
+    '.github/workflows/oracle-maintenance-extra.yml', 'tools/oracle_maintenance/extra.py',
+    'scripts/oracle-maintenance-extra.mjs', 'docs/ORACLE_MAINTENANCE.md']) {
     for (const status of ['A', 'M', 'D']) {
       reject({ parents: [other], event: { before: other }, changes: [{ ...modification(path), status }] })
     }
@@ -193,11 +203,11 @@ test('later construction changes cannot become a lasting paths-ignore exemption'
 test('every changed file requires exact mode, old/new blob and status', () => {
   const complete = evidence().data.changes
   for (const target of complete) {
-    for (const changed of [target.path === ADDED_PAYLOAD_PATH
+    for (const changed of [ADDED_PAYLOAD_PATHS.includes(target.path)
       ? { status: 'M', oldMode: '100644', oldBlob: '8'.repeat(40) }
       : { status: 'A', oldMode: '000000', oldBlob: zero },
-      { status: target.path === ADDED_PAYLOAD_PATH ? 'M' : 'A' },
-      { oldMode: target.path === ADDED_PAYLOAD_PATH ? '100644' : '000000' },
+      { status: ADDED_PAYLOAD_PATHS.includes(target.path) ? 'M' : 'A' },
+      { oldMode: ADDED_PAYLOAD_PATHS.includes(target.path) ? '100644' : '000000' },
       { status: 'D' }, { status: 'R100' }, { status: 'T' },
       { newMode: '120000' }, { newMode: '100755' }, { newMode: '160000' },
       { newBlob: '9'.repeat(40) }, { oldBlob: '8'.repeat(40) }, { oldMode: '100755' }]) {
@@ -235,12 +245,12 @@ test('manifest cannot change immutable baseline blobs, statuses, modes or exact 
   const original = fixtureManifest()
   for (const path of Object.keys(BASE_PAYLOAD_BLOBS)) {
     for (const patch of [{ oldBlob: '8'.repeat(40) },
-      { oldMode: path === ADDED_PAYLOAD_PATH ? '100644' : '000000' },
+      { oldMode: ADDED_PAYLOAD_PATHS.includes(path) ? '100644' : '000000' },
       { oldMode: '100755' }, { newMode: '100755' }, { newMode: '120000' },
-      path === ADDED_PAYLOAD_PATH
+      ADDED_PAYLOAD_PATHS.includes(path)
         ? { status: 'M', oldMode: '100644', oldBlob: '8'.repeat(40) }
         : { status: 'A', oldMode: '000000', oldBlob: zero },
-      { status: path === ADDED_PAYLOAD_PATH ? 'M' : 'A' }, { status: 'D' },
+      { status: ADDED_PAYLOAD_PATHS.includes(path) ? 'M' : 'A' }, { status: 'D' },
       { newBlob: zero }, { newBlob: original.payload[path].oldBlob },
       { extra: true }]) {
       const manifest = structuredClone(original)
@@ -317,6 +327,8 @@ test('historical transform compatibility cannot authorize an earlier release bas
     event: { before: 'ea1987eee520880b1eb93e71b572f7f1f4879efd' } })
   reject({ parents: ['a30708fcfa4d6b2dc07cb07916f59d3dafb99b6f'],
     event: { before: 'a30708fcfa4d6b2dc07cb07916f59d3dafb99b6f' } })
+  reject({ parents: ['944b486249b54cca02e6ed8ca426da6eba296391'],
+    event: { before: '944b486249b54cca02e6ed8ca426da6eba296391' } })
   reject({ parents: ['0eb81ff43e85e8eb191dc6081abf93171a258b18'],
     event: { before: '0eb81ff43e85e8eb191dc6081abf93171a258b18' } })
 })
