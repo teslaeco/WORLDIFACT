@@ -1,7 +1,7 @@
 {
-  "revision": "oracle-construction-tools-release-v7",
-  "release": "oracle-diagnostic-recipient-source-only-20261008",
-  "baseCommit": "766e651af475323152b6fd6fb7b1bce0ac4a8586",
+  "revision": "oracle-construction-tools-release-v8",
+  "release": "oracle-key-boundary-source-only-20261008",
+  "baseCommit": "3f6d7fcfd4cef8183b05fd1ff29176eec887cca4",
   "sourceOnly": true,
   "deployAllowed": false,
   "preserveCloudflareDeployment": true,
@@ -11,15 +11,22 @@
     "tests/construction-tools-release.test.mjs": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "020c53ffa9e9b061e1ef79fcde78c83ecabc758c",
-      "newBlob": "e4134d3d4c7e9a62421dc65ed34364909def55df",
+      "oldBlob": "e4134d3d4c7e9a62421dc65ed34364909def55df",
+      "newBlob": "241fac7d75339f0e627638486ebc11eaae1cf703",
       "status": "M"
     },
-    ".github/oracle-maintenance-recipient.pem": {
+    "scripts/oracle-maintenance.mjs": {
       "oldMode": "100644",
       "newMode": "100644",
-      "oldBlob": "4863ea338c11a81968197d396bc6f91fce163a4c",
-      "newBlob": "32d65af26659ee221c0885709155426285993d91",
+      "oldBlob": "641557bee57e2d22edca071dac8d36d2a764df90",
+      "newBlob": "f6aeda9409223b62f78114cc15605457793b98b1",
+      "status": "M"
+    },
+    "tests/oracle-maintenance.test.mjs": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "ba701d390a734e5919253b4762fdd93d0768b606",
+      "newBlob": "5bc2d599689b37b8d47157d318b2b3c6917cec77",
       "status": "M"
     },
     "tests/context-tools-release.test.mjs": {
