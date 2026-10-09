@@ -1,4 +1,90 @@
-# WORLDIFACT — release deployed; live model acceptance still failing
+# WORLDIFACT — supervised STANDARD produced an accepted MCC; default-route release pending
+
+Current milestone: 10 October 2026 (source change after the 9 October UTC test).
+**GO for exact-head verification and a configuration-preserving release of the
+already tested existing route. No universal error-free or signed-in-account claim.**
+
+## A real completed model, not a scripted provider fixture
+
+The owner renewed authorization for one bounded paid engineering test. The
+comparison run [38004410388](https://github.com/teslaeco/WORLDIFACT/actions/runs/38004410388)
+used the original authenticated Oracle worker and the same MCC description,
+prices, completion guidance and USD 1.75 maximum. Only the fresh request's
+existing STANDARD selector differed: the original supervised CLI alias was
+chosen before dispatch. This was not a second submission of the failed job or a
+fallback after a provider error. The permanent one-use approval remains consumed.
+No additional paid model is authorized by this evidence document.
+
+That live job finished with `NEW_REVIEWED_GLB_VERIFIED`, not a candidate-only
+outcome. Host structural acceptance and rendered review passed. Two separate
+reads returned exactly the same original model. Downloaded GLB v2 bytes were
+independently checked locally:
+
+- Size: 886,288 bytes; 63 meshes, 223 nodes, 7 materials, 2 embedded images.
+- 2,996 unique triangles; 4,916 rendered triangles; 18 substantial meshes.
+- SHA-256: `fecefbf591d37f65f12aa8bcf44ad56efbfc58aa8bd0010356091adb7f9ba6d0`.
+- Artifact 11650961115 SHA-256: `a510c1f34c100cdf8cdb0b690034e85f94f42c0de8cee541d05eb4fad474996d`.
+
+This is an actual ordinary digital MCC game model, not proof of high-resolution
+photo reconstruction, manufacturing fitness or parity with every historical
+MCC/Meshy asset. Actual invoiced API cost is UNKNOWN; USD 1.75 is a ceiling, not
+a measured charge. Customer points, holds, subscriptions and owned-library rows
+were not changed by the engineering test. The signed-in Shop account flow and
+library auto-save are NOT established by this original-worker test.
+
+## Minimal compatible restoration
+
+`oracleStudioPayload` now chooses that exact successful request form for new
+ordinary unpriced STANDARD requests. The wire SHA-256 of the accepted MCC request
+is pinned in a regression; it is not derived from the new implementation.
+The entire completion recipe, actual-render inspection, finish_model acceptance,
+original prompt and references remain. Only the existing route header differs.
+The shared STANDARD completion/context policy and global USD 1.75 guard remain
+active on the original supervised executor. The newer typed controller's separate
+phase-admission scheduling is not asserted to be identical to the CLI policy.
+
+Explicit priced jobs, specialized photo-cabinet/character profiles and FAST keep
+their exact previous wire bytes. Canonical input digests and saved-job receipts
+are unchanged. Existing job recovery does not resubmit or re-route old jobs.
+No Oracle file, verification receipt, API model, rate/time limit, sandbox,
+financial policy, account balance, original building/MCC or saved model is changed.
+The update is in the Worker adapter; it requires no further Oracle installation.
+
+## Verification and count investigation
+
+The four new route regressions initially gave 1 pass / 3 failures against the
+original adapter. After restoration all four pass. Forty-four focused
+protocol/profile/manufacturing/one-use tests pass locally with no provider call.
+Four affected synthetic wire hashes changed by the single known header
+substitution; all seven original canonical input hashes remain unchanged.
+Five priced/specialized/FAST wire hashes remain byte-identical.
+
+An independent read of the exact reconstructed Oracle modules verified original
+STANDARD profile/context/completion guidance and USD 1.75 cap parity, with the
+routing decision different before Gateway creation and no job-state writes.
+The public pinned ancestor and MPC2 commit trees were reproduced from tracked
+source and verified commit objects, not installed customer data.
+
+The count-only native fixture probe in run
+[38002270919](https://github.com/teslaeco/WORLDIFACT/actions/runs/38002270919)
+returned HTTP 200 for all four exact public native requests: box construction
+10,280 tokens / inspection 13,582; globe construction 10,280 / inspection 14,494.
+Inspection used full text and three real 640x800 rendered images. All counts
+were within the existing phase bounds. No generation request was sent by that
+probe. These fixtures do NOT establish the precise cause of the earlier typed
+MCC count failure. No input limit was raised and no guessed tokenizer fallback
+or acceptance bypass was installed.
+
+The three completed probe/comparison workflow entrypoints are retired in this
+source commit. Original runs, artifacts, models and consumed approvals remain;
+no background paid continuation is configured. Full exact-head application and
+native CI plus a preserve-configuration Cloudflare release are pending at this
+source milestone. The current public version is still
+`7d88f9d7-0c32-413f-bcae-b6d0776b54f3` until its replacement is independently read.
+
+## Prior release and typed-path investigation (historical, not current default-route result)
+
+### Prior typed-path result
 
 Current operational evidence: 9 October 2026, 22:45 UTC.
 **NO-GO for claiming that production 3D generation is restored.**

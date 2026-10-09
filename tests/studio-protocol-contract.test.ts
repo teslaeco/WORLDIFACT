@@ -92,18 +92,19 @@ test('cabinet wording preserves selected price terms, legacy175 and the maximum 
   }
 })
 
-test('canonical input digests remain byte-compatible while Oracle wire fixtures bind corrected output scope', async () => {
+test('canonical input digests remain byte-compatible while wire fixtures bind the restored supervised route', async () => {
   const photos = [{ name: 'ceramic-reference.jpg', view: 'left' as const, dataUrl: jpeg, subject: 'Synthetic protocol reference', textureMaxSize: 4096 as const }]
   // Canonical input digests captured from e36797e7 stay unchanged. Oracle wire
-  // hashes intentionally include the corrected GAME/MAKE instruction scope.
+  // hashes include the corrected GAME/MAKE scope and, for ordinary unpriced
+  // STANDARD, the existing supervised selector verified by the real MCC test.
   // Synthetic fixtures only: no user prompt, job, account or provider data.
   const cases = [
-    ['A glazed teal teapot with a rounded handle.', 'figurine', [], 'fde3023881c1f982415e5671a4a46cff1ce65cdeca4c6d8559e86f438fd44253', '2826ec9d4c4fda3158d93f18ba9bdf16bdd9461c5670dc66187b6f37fab9cc15'],
+    ['A glazed teal teapot with a rounded handle.', 'figurine', [], 'fde3023881c1f982415e5671a4a46cff1ce65cdeca4c6d8559e86f438fd44253', 'f47af144645f08d4fafa223daa40fa2c9421272c20de35de205f421dfa6b7da7'],
     ['An adult character wearing a circuit breaker badge.', 'figurine', photos, '8ab9a40689311eda50deaf971683d0529d04a538894de27027adc60649af327a', 'f36331b65d48bc61362aa4062c456ae276849884a2e27f603f557b15d0bdcae1'],
     ['A 1:24 scale miniature electrical cabinet for a diorama.', 'figurine', photos, '7ca962cff4d8a507222099b0a435a55522b64ecbd75e2fbe100c7a3c9912014f', 'f88568265d6b91ed17cbacbd9ca78dfbd0fe4fb1cbcba6191cfb82a9fc041822'],
-    ['An electrical cabinet with a narrow service door.', 'object', [], 'ac32eae3ea33f0f043b7a75b8971f8066ef2800d79a018aefac3deff926adf10', 'fc652a907e409e7f68222bdfbfc4eee185ca5f000a55a9e6a42bca4afe0480f4'],
-    ['A rocky valley with a small wooden footbridge.', 'terrain', photos, '19ed565c69937a96fa1045281bf27fef032ec54bec88862c2dd2ffdf7fb1e255', '3ecd7aff9355665c17587d8942448527be4b8ca6c7e42ef78b4572ed552bd092'],
-    ['A brass exploration drone with folding wings.', 'game', [], '7841686491ee4788183d5c5296b578c7c2c4667bbf59ce3cf431f622d25d4283', '28014de408fef54f1b8bbd31dff0132e1bdf8e613bb032022386dd9440150093'],
+    ['An electrical cabinet with a narrow service door.', 'object', [], 'ac32eae3ea33f0f043b7a75b8971f8066ef2800d79a018aefac3deff926adf10', 'cd489559e8a4aa25462875faa55cd566487c9440742925b25e1564ed1d92b456'],
+    ['A rocky valley with a small wooden footbridge.', 'terrain', photos, '19ed565c69937a96fa1045281bf27fef032ec54bec88862c2dd2ffdf7fb1e255', 'c22562f0b072759c45b65d033db7167db64ef93df1b66279a62ef506ee254427'],
+    ['A brass exploration drone with folding wings.', 'game', [], '7841686491ee4788183d5c5296b578c7c2c4667bbf59ce3cf431f622d25d4283', 'e038b53eeadd3aec4ec1fabd2f35f826230d8c8b4e9d22c0bbde344f82f44757'],
   ] as const
   for (const [prompt, purpose, references, digest, payloadDigest] of cases) {
     const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt: ` ${prompt} `, purpose, textureMaxSize: 4096, photos: references })

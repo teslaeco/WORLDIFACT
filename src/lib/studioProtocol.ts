@@ -38,7 +38,12 @@ export const INDUSTRIAL_ELECTRICAL_PROFILE = 'industrial-electrical-cabinet-v1' 
 export const REFERENCE_CHARACTER_PROFILE = 'reference-character-v1' as const
 export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE | typeof REFERENCE_CHARACTER_PROFILE
 
-const standardCompletionInstructions = (pricing?: StudioPricing) => `WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:
+// Both headers are existing STANDARD profile aliases on the installed worker.
+// The legacy alias keeps the original supervised CLI, which completed the live
+// MCC comparison, instead of the newer typed controller's failed final preflight.
+// It does not claim that photos exist: their full instructions remain conditional
+// below. Select once before dispatch; never switch routes after a paid failure.
+const standardCompletionInstructions = (pricing?: StudioPricing, supervisedStandard = false) => `${supervisedStandard ? 'WORLDIFACT REFERENCE-FIDELITY MODE:' : 'WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:'}
 - Use Code Mode exec with the fully qualified tools.mcp__blender__ names below. Await every call and inspect its returned result; a tool error is not a completed step. Stay within the ${pricing ? 'selected' : 'existing'} per-job USD ${((pricing?.maxProviderCents ?? 175) / 100).toFixed(2)} guard and tool/build limits. Do not start another job, change limits or substitute another generator.
 1. Call tools.mcp__blender__get_modeling_contract({}) once. Parse and retain the returned scene schema, geometry guide, reference mapping and current revision. Compare the actual reference images, then construct a complete scene using only supported fields and operations.
 2. Call tools.mcp__blender__build_model({scene_json:JSON.stringify(scene),expected_revision:revision}), using the actual current revision (0 before the first successful build). This API takes scene JSON, not Python. Generate repeated parts compactly in Code Mode rather than hand-writing thousands of vertices. Read the returned revision and report; do not stop merely because a GLB candidate exists.
@@ -238,7 +243,7 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
     : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
   return { id, prompt: input.prompt + instruction, ...(studioPricing ? { studioPricing } : {}),
-    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(studioPricing) + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
+    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(studioPricing, !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
     ...(photos.length ? { photos } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {
