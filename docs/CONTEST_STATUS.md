@@ -1103,3 +1103,55 @@ grant update. No such grant or account change is made by this repair. The
 owner's existing SSH connection instead. The new installation mode must pass
 its exact-head hosted tests before delivery; their outcome is recorded in the
 PR. No Oracle installation or production-restored claim is made by this commit.
+
+## Observed pre-build refusal and output-scope correction — 9 October 2026
+
+This supersedes the earlier statement that the failed-job exception was unknown.
+The owner supplied a redacted original-host read: `complete_scene_not_supported`,
+`WORLDIFACT_CONSTRUCTION_INCOMPLETE`, one request, known usage, a 1,800-second
+limit, and zero recorded Blender seconds. The decoder update had already been
+activated at 18:37:26 UTC. Do not reinstall it or infer a 900-second deadline,
+missing Blender method, invalid key, or failed provider transport from this read.
+No private identifiers, reference images or customer balances are copied here.
+
+In the exact installed decoder, this exception is emitted when the authenticated
+completed construction response contains an empty/whitespace `scene_json`.
+The planner explicitly permits this sentinel for an unsupported complete subject.
+The observed refusal remains legitimate to reject: it is not a completed model.
+The diagnostic does not disclose why the model chose to return that sentinel.
+
+A separate input-contract error was reproduced with the real
+`oracleStudioPayload`: ordinary game/globe, terrain, object and default figurine
+requests unconditionally received physical manufacturing requirements, including
+resin walls and process-specific splits/joints. The typed planner is required to
+satisfy the entire original brief and instructions. The same scoping issue was
+independently identified in Codex review 5475643326 on PR #245.
+
+The adapter now keeps units, dimensions, original references, digital validation
+and the prohibition on manufacturing-approval claims for every output. Extra
+physical process rules apply only to explicit fabrication hints in the original
+brief, not a model-kind label or the English verb "make". Direct no-print intent
+is respected for classification; the original prompt itself is never rewritten.
+Unrecognized intent does not grant MAKE approval. Real fabrication still needs
+its separate process-specific review. Standard completion, actual rendered-image
+review and rejection of unsupported/unfinished models are unchanged.
+
+Five new regression methods ran before the change: two passed and three failed.
+After the change, 32 focused protocol, profile, output-scope and manufacturing
+cases passed with no skipped cases. Original canonical input digests, image
+bytes/order, prices, request IDs and pricing selections are preserved. Seven
+synthetic Oracle wire hashes intentionally change because their instruction
+scope changed; the original input-hash fixtures were not altered. Existing
+manufacturing tests now distinguish explicit printable requests from digital
+ones instead of requiring the diagnosed incorrect unconditional rule.
+
+This is a tested request-contract correction, not proof of the AI's motivation
+or successful production generation. Full exact-head hosted verification remains
+required. No Oracle source, installer, secret, ledger, account/hold/settlement,
+price, model or asset was changed; no paid request or production deployment was
+performed. This adapter is bundled in the Worker, so its deployment is separate
+from the already-completed Oracle installation. Do not use a generic main merge
+that would resynchronize billing or overwrite live variables. Any eventual
+release must retain the existing exact-parent and preserve-billing controls.
+Production restoration remains unverified until a new real model, preview,
+download and owned-library save are observed under an approved bounded test.

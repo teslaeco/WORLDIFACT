@@ -92,16 +92,18 @@ test('cabinet wording preserves selected price terms, legacy175 and the maximum 
   }
 })
 
-test('unrelated canonical digests and complete Oracle wire payloads remain byte-compatible with the prior adapter', async () => {
+test('canonical input digests remain byte-compatible while Oracle wire fixtures bind corrected output scope', async () => {
   const photos = [{ name: 'ceramic-reference.jpg', view: 'left' as const, dataUrl: jpeg, subject: 'Synthetic protocol reference', textureMaxSize: 4096 as const }]
-  // Synthetic fixtures captured from clean e36797e7; no user prompt, job or account data.
+  // Canonical input digests captured from e36797e7 stay unchanged. Oracle wire
+  // hashes intentionally include the corrected GAME/MAKE instruction scope.
+  // Synthetic fixtures only: no user prompt, job, account or provider data.
   const cases = [
-    ['A glazed teal teapot with a rounded handle.', 'figurine', [], 'fde3023881c1f982415e5671a4a46cff1ce65cdeca4c6d8559e86f438fd44253', '8e2190799f5afb455de7bcfcc857b58fdbe80e1707546834fadac36924c4e975'],
-    ['An adult character wearing a circuit breaker badge.', 'figurine', photos, '8ab9a40689311eda50deaf971683d0529d04a538894de27027adc60649af327a', 'fc200276e417f7df73ce30817ea3097090cfdc157ae1b0c65aa50c3b0a8f652b'],
-    ['A 1:24 scale miniature electrical cabinet for a diorama.', 'figurine', photos, '7ca962cff4d8a507222099b0a435a55522b64ecbd75e2fbe100c7a3c9912014f', '458e0ee194562d7235ca11610fd85f84817c6e476d717c1b4ec2f3601795503f'],
-    ['An electrical cabinet with a narrow service door.', 'object', [], 'ac32eae3ea33f0f043b7a75b8971f8066ef2800d79a018aefac3deff926adf10', '80b8017d4077c1e5469d5558180cc3958cebb46b9acd9af53641cff99f6a1aaa'],
-    ['A rocky valley with a small wooden footbridge.', 'terrain', photos, '19ed565c69937a96fa1045281bf27fef032ec54bec88862c2dd2ffdf7fb1e255', '4582aa9999d1642350b0c114b033a4bf08fe832642afc7aea00f1ee7c9dc6843'],
-    ['A brass exploration drone with folding wings.', 'game', [], '7841686491ee4788183d5c5296b578c7c2c4667bbf59ce3cf431f622d25d4283', '33e63ed9b99f57cb8add508b6872d357a4232b8c41c8f8beaee0cf37607c7a37'],
+    ['A glazed teal teapot with a rounded handle.', 'figurine', [], 'fde3023881c1f982415e5671a4a46cff1ce65cdeca4c6d8559e86f438fd44253', '2826ec9d4c4fda3158d93f18ba9bdf16bdd9461c5670dc66187b6f37fab9cc15'],
+    ['An adult character wearing a circuit breaker badge.', 'figurine', photos, '8ab9a40689311eda50deaf971683d0529d04a538894de27027adc60649af327a', 'f36331b65d48bc61362aa4062c456ae276849884a2e27f603f557b15d0bdcae1'],
+    ['A 1:24 scale miniature electrical cabinet for a diorama.', 'figurine', photos, '7ca962cff4d8a507222099b0a435a55522b64ecbd75e2fbe100c7a3c9912014f', 'f88568265d6b91ed17cbacbd9ca78dfbd0fe4fb1cbcba6191cfb82a9fc041822'],
+    ['An electrical cabinet with a narrow service door.', 'object', [], 'ac32eae3ea33f0f043b7a75b8971f8066ef2800d79a018aefac3deff926adf10', 'fc652a907e409e7f68222bdfbfc4eee185ca5f000a55a9e6a42bca4afe0480f4'],
+    ['A rocky valley with a small wooden footbridge.', 'terrain', photos, '19ed565c69937a96fa1045281bf27fef032ec54bec88862c2dd2ffdf7fb1e255', '3ecd7aff9355665c17587d8942448527be4b8ca6c7e42ef78b4572ed552bd092'],
+    ['A brass exploration drone with folding wings.', 'game', [], '7841686491ee4788183d5c5296b578c7c2c4667bbf59ce3cf431f622d25d4283', '28014de408fef54f1b8bbd31dff0132e1bdf8e613bb032022386dd9440150093'],
   ] as const
   for (const [prompt, purpose, references, digest, payloadDigest] of cases) {
     const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt: ` ${prompt} `, purpose, textureMaxSize: 4096, photos: references })
@@ -110,7 +112,7 @@ test('unrelated canonical digests and complete Oracle wire payloads remain byte-
   }
   const fast = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt: 'An industrial control cabinet with two doors.', purpose: 'figurine', photos: [], textureMaxSize: 2048, generationProfile: FAST_DRAFT_PROFILE })
   assert.equal(await inputDigest(fast), 'd7d424db5ca5ddc2f64fb3ee9c05cd65126de33e745413bd8b6dd569df0efffd')
-  assert.equal(createHash('sha256').update(JSON.stringify(oracleStudioPayload(id, fast))).digest('hex'), 'cddf963e5c4af3d150b2c06c20da2afd5f807de54542526504cf36409e705fca')
+  assert.equal(createHash('sha256').update(JSON.stringify(oracleStudioPayload(id, fast))).digest('hex'), '096221e58b854382118a9a6a8d1dead3ad0a2d38539414af2111c2cd939abceb')
 })
 
 test('cabinet Oracle payload requires a complete first build and real physical detail rather than a later box upgrade', () => {

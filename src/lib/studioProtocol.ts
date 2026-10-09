@@ -3,7 +3,26 @@
 import { ADMISSION_FAILURE_CODES, ADMISSION_FAILURE_DETAILS } from './generationAdmission.ts'
 import { studioPricingFor, validateStudioPricingSelection, type StudioPricing, type StudioPricingSelection } from './studioPricing.ts'
 
-const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for every generated asset:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
+const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for explicitly requested physical fabrication:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
+
+const DIGITAL_OUTPUT_RULES = `WORLDIFACT output scope and provenance:
+- Preserve the requested units, dimensions, silhouette, reference details and UV/material regions.
+- A game, terrain, object or figurine is a digital asset unless the original brief explicitly requests physical fabrication. A model-kind label alone does not request MAKE.
+- Validate the digital geometry and export, then inspect the actual current renders. Manufacturing certification and process-specific wall thicknesses, splits or joints are not prerequisites for digital-only output. Do not reject a supported digital model solely because its physical manufacturing suitability is unverified.
+- MAKE is unapproved; never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
+
+// These bounded hints only select additional process guidance. They do not
+// change the original prompt, profile, admission, price or approval status.
+// In particular, English "make", a figurine label, a material, or a model of a
+// manufacturing machine is not an instruction to fabricate the output.
+const EXPLICIT_FABRICATION_REQUEST = /\bfor\s+(?:3d[ -]?print(?:ing)?|resin[ -]?print(?:ing)?|cnc\s+(?:machining|milling)|laser\s+cutting)\b|\b(?:(?:3d|resin)[ -])?printable\b|\b(?:output|target)\s*:\s*MAKE\b|\bMAKE\s+(?:output|version)\b|\b(?:do|pod)\s+(?:druku\s+3d|frezowania\s+cnc|ci[eę]cia\s+laserowego)\b/iu
+const NEGATED_FABRICATION_REQUEST = /\b(?:not|no|never|without)\s+(?:(?:intended|suitable|ready)\s+)?(?:for\s+)?(?:(?:(?:3d|resin)[ -])?print(?:able|ing)?|cnc\s+(?:machining|milling)|laser\s+cutting)\b|\b(?:do\s+not|don['’]t|never)\s+(?:prepare|make|design|optimi[sz]e)\b[^.!?;\n]{0,80}?\bfor\s+(?:(?:3d|resin)[ -]?printing|cnc\s+(?:machining|milling)|laser\s+cutting)\b|\b(?:nie|bez)\s+(?:(?:do|pod)\s+)?(?:druku\s+3d|frezowania\s+cnc|ci[eę]cia\s+laserowego)\b/giu
+
+function modelOutputRules(prompt: string): string {
+  // Ignore direct negations for classification only; retain them on the wire.
+  const requested = prompt.normalize('NFKC').replace(NEGATED_FABRICATION_REQUEST, '')
+  return DIGITAL_OUTPUT_RULES + (EXPLICIT_FABRICATION_REQUEST.test(requested) ? '\n\n' + MANUFACTURING_HARD_RULES : '')
+}
 
 export const REFERENCE_FIDELITY_INSTRUCTIONS = `WORLDIFACT REFERENCE-FIDELITY MODE:
 - Treat every attached reference image as authoritative visual input, not decoration. Compare the actual images before the first build.
@@ -199,15 +218,16 @@ export function validateStudioInput(value: unknown): StudioInput {
     ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}), ...pricingSelection }
 }
 export function oracleStudioPayload(id: string, input: StudioInput) {
+  const outputRules = modelOutputRules(input.prompt)
   if (input.generationProfile === FAST_DRAFT_PROFILE) return {
     id, generationProfile: FAST_DRAFT_PROFILE,
-    prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + MANUFACTURING_HARD_RULES,
+    prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + outputRules,
   }
   const selection = validateStudioPricingSelection(input)
   const studioPricing = selection.budgetTier === undefined ? undefined : studioPricingFor(selection)
   const requestedModelKind = input.purpose === 'figurine' && EXPLICIT_INDUSTRIAL_CABINET_REQUEST.test(input.prompt) && !EXPLICIT_MINIATURE_OR_CHARACTER_REQUEST.test(input.prompt.replace(NEGATED_MINIATURE_LABELS, ''))
     ? 'object' : input.purpose
-  const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${requestedModelKind}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use the supported scene JSON contract for the complete first build, inspect actual renders and successfully call finish_model before claiming completion. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; report open/non-manifold geometry, intersections, thin walls and fragile joints; never claim manufacturing approval.`
+  const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${requestedModelKind}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use the supported scene JSON contract for the complete first build, inspect actual renders and successfully call finish_model before claiming completion. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; never claim manufacturing approval.`
   // The installed v33 photo contract accepts `side`, not `left`/`right`.
   // Keep image bytes, names and subject identity intact; preserve exact side
   // labels in ordered agent metadata rather than sending a rejected enum.
@@ -218,7 +238,7 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
     : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
   return { id, prompt: input.prompt + instruction, ...(studioPricing ? { studioPricing } : {}),
-    agentInstructions: MANUFACTURING_HARD_RULES + '\n\n' + standardCompletionInstructions(studioPricing) + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
+    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(studioPricing) + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
     ...(photos.length ? { photos } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {
