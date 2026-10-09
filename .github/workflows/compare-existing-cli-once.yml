@@ -1,0 +1,130 @@
+name: One approved existing-CLI comparison without changing the product
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+    paths: ['.github/workflows/compare-existing-cli-once.yml']
+permissions:
+  contents: write
+concurrency:
+  group: worldifact-owner-paid-model
+  cancel-in-progress: false
+jobs:
+  compare:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.run_number == 1 && github.run_attempt == 1
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 38
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Build and verify the exact comparative test, without provider credentials
+        run: |
+          test "$(git rev-parse HEAD^)" = 431b3213abe79f6d17d60a1548fa8e4641d7ce3d
+          test "$(git ls-remote --exit-code origin refs/heads/main | cut -f1)" = 38e7048c4176fac4c9808203af5bd58a1ae7d10e
+          python3 -B - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p=Path('scripts/approved-output-scope-smoke.mjs');s=p.read_text()
+          assert hashlib.sha256(s.encode()).hexdigest()=='4702a436b10de226f0636b39f1723edf23ff8f62b5681c39dc9b45b548e24144'
+          old_approval='worldifact-output-scope-smoke-20261010-once';new_approval='worldifact-existing-cli-comparison-20261010-once'
+          old_job='38c71530-2bc8-42ca-823c-e91be4f01b7a';new_job='d2a5c641-5738-44e5-8ca9-63b07740dcda'
+          s=s.replace(old_approval,new_approval).replace(old_job,new_job)
+          s=s.replace('const input=testInput(),payload=oracleStudioPayload(JOB,input)','const input=testInput(),payload=comparisonPayload(input)')
+          s=s.replace("accountLibrarySaveVerified:false,status:'NOT_STARTED'","accountLibrarySaveVerified:false,executionVariant:'existing-supervised-standard-cli',productDefaultChanged:false,status:'NOT_STARTED'")
+          s=s.replace("const folder='live-smoke-evidence'","const folder='cli-comparison-evidence'")
+          s=s.replace('/** One new owner-approved $1.75 test, never a retry of an earlier paid approval.\n * Uses the exact production Shop adapter and original authenticated Oracle.','/** One newly authorized comparative $1.75 test of the original supervised CLI.\n * The production Shop remains unchanged. Only this new job\'s route marker differs.')
+          pos=s.index('export async function bytes(')
+          s=s[:pos]+'''/** The existing reference-fidelity header is the pre-typed STANDARD profile
+           * selector, not an assertion that photos exist. No photo labels/bytes are added.
+           * This exact one-job opt-in keeps the complete original body, contract, $1.75
+           * guard, original job lifecycle and finish_model/GLB validation. It is not a
+           * post-dispatch fallback and does not change the public product's default.
+           */
+          export function comparisonPayload(input=testInput()) {
+            const original=oracleStudioPayload(JOB,input)
+            const marker='WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:'
+            const compatibility='WORLDIFACT REFERENCE-FIDELITY MODE:'
+            if(original.agentInstructions.split(marker).length!==2 || original.agentInstructions.includes(compatibility) || input.photos.length!==0)throw Error('COMPARISON_CONTRACT_INVALID')
+            const instructions=original.agentInstructions.replace(marker,compatibility)
+            if(instructions.includes(marker))throw Error('AMBIGUOUS_EXECUTION_ROUTE')
+            return {...original,agentInstructions:instructions}
+          }
+          '''+s[pos:]
+          pos=s.index('export async function run(')
+          s=s[:pos]+'''function finiteEvidence(job, quality) {
+            const known=new Set(['WORLDIFACT_ASTRA_COST_GUARD','TOKEN_COUNT_UNAVAILABLE','TOKEN_COUNT_INVALID','PAYLOAD_POLICY_REJECTED','INPUT_LIMIT','INSUFFICIENT_RESERVATION','OUTPUT_ALLOWANCE_BELOW_MINIMUM','PRICING_EXPIRED','REQUEST_LIMIT','LEDGER_INVALID','LEDGER_IO','WORLDIFACT_MODEL_INCOMPLETE','WORLDIFACT_CONSTRUCTION_INCOMPLETE','CODEX_TOOLS_MISSING','FORGE_REPEATED_TOOL_ERROR','FORGE_REPEATED_CODE_ERROR','FORGE_STREAM_INTERRUPTED','FORGE_UNCERTAIN_USAGE','insufficient_quota','rate_limit_exceeded','OPENAI_HTTP_400','OPENAI_HTTP_401','OPENAI_HTTP_403','OPENAI_HTTP_404','OPENAI_HTTP_429','complete_scene_not_supported','construction_response_unconfirmed','final_assessment_rejected'])
+            const code=v=>known.has(v)?v:'UNRECOGNIZED'
+            const numeric=(v,names)=>Object.fromEntries(names.filter(k=>typeof v?.[k]==='number'&&Number.isFinite(v[k])&&v[k]>=0&&v[k]<=1e9).map(k=>[k,v[k]]))
+            const flags=(v,names)=>Object.fromEntries(names.filter(k=>typeof v?.[k]==='boolean').map(k=>[k,v[k]]))
+            const u=quality?.agentUsage,t=quality?.agentTools,g=u?.cost_guard
+            return {detailCode:code(job.detail),usage:{code:code(u?.error_code),...numeric(u,['requests','input_tokens','output_tokens','upstream_status','seconds_limit']),...flags(u,['unknown_usage','completed'])},
+              guard:{reason:code(g?.reason),stage:['pricing','payload','count','ledger','admission','persistence','preflight'].includes(g?.stage)?g.stage:'UNKNOWN',...numeric(g,['counted_input','input_ceiling','minimum_output','remaining_micro_usd','affordable_output','requests'])},
+              tools:numeric(t,['total_calls','failures','build_attempts','revision']),timing:numeric(quality?.timing,['total_seconds','ai_seconds','blender_seconds']),
+              review:flags(quality?.visualReview,['assessment_completed','accepted']),rawPrivateFieldsExported:false}
+          }
+          '''+s[pos:]
+          old="if(current.state!=='succeeded'){report.status=['failed','cancelled'].includes(current.state)?'MODEL_FAILED':'RESULT_UNCONFIRMED';report.reason=FAILURES.has(current.detail)?current.detail:'MODEL_NOT_COMPLETED';await checkpoint();return report}"
+          new="""if(current.state!=='succeeded'){
+                report.status=['failed','cancelled'].includes(current.state)?'MODEL_FAILED':'RESULT_UNCONFIRMED';report.reason=FAILURES.has(current.detail)?current.detail:'MODEL_NOT_COMPLETED'
+                if(['failed','cancelled'].includes(current.state)){
+                  try {report.failureEvidence=finiteEvidence(current,await json(await call('/v1/jobs/'+JOB+'/quality'),262144))}
+                  catch {report.failureEvidence={read:'UNAVAILABLE'}}
+                }
+                await checkpoint();return report
+              }"""
+          assert s.count(old)==1;s=s.replace(old,new)
+          assert hashlib.sha256(s.encode()).hexdigest()=='5130c92478a4c8c0e03340d96695194943cd7485fc700c9103d1811f7fd157f2'
+          Path('scripts/approved-cli-comparison.mjs').write_text(s)
+          tests=Path('tests/output-scope-live-smoke.test.mjs').read_text().replace('approved-output-scope-smoke.mjs','approved-cli-comparison.mjs').replace(old_approval,new_approval).replace(old_job,new_job)
+          tests+='''
+
+          test('comparative route changes only one existing STANDARD selector before dispatch', async () => {
+            const {comparisonPayload,JOB,testInput}=await import('../scripts/approved-cli-comparison.mjs')
+            const {oracleStudioPayload}=await import('../src/lib/studioProtocol.ts')
+            const input=testInput(),before=oracleStudioPayload(JOB,input),after=comparisonPayload(input)
+            assert.equal(after.agentInstructions.replace('WORLDIFACT REFERENCE-FIDELITY MODE:', 'WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:'),before.agentInstructions)
+            assert.deepEqual({...before,agentInstructions:after.agentInstructions},after)
+            assert.ok(!('generationProfile' in after));assert.ok(!('studioPricing' in after))
+            assert.ok(after.agentInstructions.includes('finish_model'))
+            assert.ok(after.agentInstructions.includes('inspect_render'))
+            assert.equal(input.photos.length,0)
+          })
+          '''
+          assert hashlib.sha256(tests.encode()).hexdigest()=='5575f47a74063fe2df92558d999b7889548931db15c2b04f242c093e5ac9630d'
+          Path('tests/cli-comparison.test.mjs').write_text(tests)
+          PY
+          node --test tests/cli-comparison.test.mjs
+      - name: Require the existing deployed version, without publishing changes
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          import {verifyExclusiveDeployment} from './scripts/check-failed-hold-release.mjs';
+          try {await verifyExclusiveDeployment({versionId:'7d88f9d7-0c32-413f-bcae-b6d0776b54f3'});console.log('Reviewed production version unchanged.');}
+          catch {console.error('EXPECTED_RELEASE_NOT_ACTIVE; no model request.');process.exitCode=1;}
+          NODE
+      - name: Run one fresh original-CLI job, with its existing cost and completion guards
+        env:
+          WORLDIFACT_TEST_APPROVAL: worldifact-existing-cli-comparison-20261010-once
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/approved-cli-comparison.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: existing-cli-comparison-${{ github.run_id }}
+          path: cli-comparison-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
+          compression-level: 0
+# Comparison only. It selects the original supervised route before dispatch on a
+# NEW job; it never retries the preceding typed failure, changes a job's route
+# mid-flight, disables the USD1.75 guard, declares fake references, drops the
+# original completion checks, publishes a model or mutates customer accounts.
