@@ -51,12 +51,38 @@ permission to spend or repeat a failed generation.
    to narrow source paths and did not run for the initial rescue-task PR. Their
    triggers now include this executable task, so the existing pinned-source,
    offline construction/Blender and legacy suites run without paid API access.
-   Their results are pending until independently read; they are not inferred
-   from the JavaScript suite.
+   [Construction run 37949408968](https://github.com/teslaeco/WORLDIFACT/actions/runs/37949408968)
+   passed both Python 3.9/3.12 jobs and the separate native Blender job. The
+   Python 3.12 suite ran 259 cases: 258 passed, one native fixture was skipped
+   there and delegated to the separate native job. The legacy completion run
+   [37949408950](https://github.com/teslaeco/WORLDIFACT/actions/runs/37949408950)
+   also passed. These are offline/synthetic acceptance tests, not a paid model
+   request or an installation on the original Oracle host.
 5. **Unverified:** the failing signed-in user request, first failing runtime stage,
    installed Oracle helper/receipt revision, a new accepted GLB, account-gallery
    persistence and an exact safe production release. No Desktop Commander device
    was connected during this audit. Encrypted maintenance evidence is not bypassed.
+
+## Preserved platform and integration constraints
+
+Actual Android device/browser gameplay and a clean authenticated session remain
+unverified in this audit; GitHub Actions does not establish either. A valid GAME
+result needs original, verified model bytes. FBX export, full PBR fidelity and
+MAKE suitability must remain unverified unless matching capability and artifact
+proof are available. Oracle must run the reviewed helper and receipt revisions.
+SIGNED_MODEL_WORKER_URL and OPENAI_API_KEY are backend-only configuration/secrets;
+their presence is not proof of successful generation, and their values must never
+appear in a public report or frontend bundle.
+
+## Audit follow-up regression
+
+The first audit head passed all 2,042 application tests. The following audit-only
+head `1c4e7deaacf86d0ab058eab973109e1ce8e1bf56` failed one existing documentation
+contract: the shortened status summary omitted required platform limitations
+(the first missing label was `FBX`). This is an audit-documentation regression,
+not the user's original generator failure. This update restores the honest
+limitations above without removing or weakening that test. Full exact-head CI
+must be rerun; a fix is not declared tested merely because the text was edited.
 
 ## Scope and release boundary
 
