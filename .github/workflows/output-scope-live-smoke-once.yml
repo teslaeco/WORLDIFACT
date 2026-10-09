@@ -1,0 +1,68 @@
+name: One approved MCC model after output-scope release
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+    paths: ['.github/workflows/output-scope-live-smoke-once.yml']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-output-scope-one-model
+  cancel-in-progress: false
+jobs:
+  smoke:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/fix/generation-audit-recovery-20261009' && github.event.before == '2380e13f391b867f5303b6835e9914ccee3ef7fb' && github.run_attempt == 1
+    environment:
+      name: production
+      deployment: false
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Check exact new test scope and unchanged production adapter
+        run: |
+          set -euo pipefail
+          B=2380e13f391b867f5303b6835e9914ccee3ef7fb
+          C=49a02609a3730976ec0744ecf01877d1fbf16859
+          test "$(git rev-list --parents -n 1 HEAD)" = "$GITHUB_SHA $B"
+          test "$(git diff --name-status "$B" HEAD)" = $'A\t.github/workflows/output-scope-live-smoke-once.yml\nA\tscripts/approved-output-scope-smoke.mjs\nA\ttests/output-scope-live-smoke.test.mjs'
+          git diff --exit-code "$C" HEAD -- src server package.json package-lock.json wrangler.jsonc config tools
+          test "$(git ls-remote --exit-code origin refs/heads/main | cut -f1)" = 38e7048c4176fac4c9808203af5bd58a1ae7d10e
+          printf '%s  %s\n' '4702a436b10de226f0636b39f1723edf23ff8f62b5681c39dc9b45b548e24144' 'scripts/approved-output-scope-smoke.mjs' '03a01f7b9ad944ec0e91f9c02be8785668d223bd5f3149ebad3f6fd0cae1c831' 'tests/output-scope-live-smoke.test.mjs' | sha256sum -c -
+          node --test tests/output-scope-live-smoke.test.mjs
+      - name: Require the exact deployed version before any model request
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          import {verifyExclusiveDeployment} from './scripts/check-failed-hold-release.mjs';
+          try {await verifyExclusiveDeployment({versionId:'7d88f9d7-0c32-413f-bcae-b6d0776b54f3'});console.log('Exact released Worker still receives 100% of traffic.');}
+          catch {console.error('EXPECTED_RELEASE_NOT_ACTIVE; no model request.');process.exitCode=1;}
+          NODE
+      - name: Claim the new approval and run at most one existing-engine MCC job
+        env:
+          WORLDIFACT_TEST_APPROVAL: worldifact-output-scope-smoke-20261010-once
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/approved-output-scope-smoke.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: output-scope-one-model-${{ github.run_id }}
+          path: live-smoke-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
+          compression-level: 0
+# Owner approval: one model at the existing USD1.75 ceiling, including failure.
+# Permanent new approval ref + fixed job ID prevent another submission.
+# No customer point/price/hold operation and no job or approval deletion.
+# Scripted safety tests and actual provider result are reported separately.
