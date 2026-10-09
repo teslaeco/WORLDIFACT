@@ -1,0 +1,87 @@
+name: Stage reviewed output-scope correction (source only)
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+    paths: ['scripts/output-scope-correction.patch', '.github/workflows/stage-output-scope.yml']
+permissions:
+  contents: write
+concurrency:
+  group: stage-output-scope-correction
+  cancel-in-progress: false
+jobs:
+  stage:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/fix/generation-audit-recovery-20261009'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Apply exact reviewed source patch
+        run: |
+          test "$(git rev-parse HEAD^)" = b658417a03622ec67b9924e75466b597cf14481b
+          echo '9454fb82f26bddb7c5a8c3763d52e96a0b39a855e76c9ccf985e79a34981b6ea  scripts/output-scope-correction.patch' | sha256sum --check
+          git apply --unidiff-zero --check scripts/output-scope-correction.patch
+          git apply --unidiff-zero scripts/output-scope-correction.patch
+      - name: Test original request hashes, process scope, pricing and completed-response validation
+        run: |
+          node --test tests/studio-manufacturing-scope.test.ts tests/studio-protocol-contract.test.ts tests/generation-profile.test.ts tests/studio-quality-profiles.test.ts tests/shop-manufacturing.test.ts
+          PYTHONPATH=tools/model_construction python3 -B -m unittest test_response_phase test_construction_payload -q
+      - name: Publish only exact source objects; do not move any branch or deploy
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFile,lstat,mkdir,writeFile} from 'node:fs/promises';
+          import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          const expected={
+            'docs/CONTEST_STATUS.md':'af2f716d8e4b7bc8653429a07a1d0762210d695a4a43ee3943d726ae0e34dd99',
+            'src/lib/studioProtocol.ts':'ee00ce349ffbd96dc5846ed67a4bc7dd9144d3fa3d09fff82a2ab70c964f24ee',
+            'tests/generation-profile.test.ts':'b41199ced756dc3f8fc229534e680b558199a4ef2d96e7beef8c3ef626fd1498',
+            'tests/shop-manufacturing.test.ts':'80bb8419d83a0855ba678a173718f7b7b947f866bf23e0815193245a9a281707',
+            'tests/studio-manufacturing-scope.test.ts':'8d53457c988c3424911f3c40632925981bc2ed8bd2d1750bb91a3395bf4c49f8',
+            'tests/studio-protocol-contract.test.ts':'bec791e914768fc0389d6b67a6e17e0f7cfd243625264f47942cd4b8c8757b53'
+          };
+          const parent=process.env.GITHUB_SHA,branch='fix/generation-audit-recovery-20261009';
+          const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+          if(process.env.GITHUB_REPOSITORY!=='teslaeco/WORLDIFACT'||process.env.GITHUB_REF!=='refs/heads/'+branch||git('rev-parse','HEAD')!==parent)throw Error('Source scope mismatch');
+          const api=async(method,path,body)=>{
+            const response=await fetch('https://api.github.com/repos/teslaeco/WORLDIFACT/'+path,{
+              method,redirect:'error',signal:AbortSignal.timeout(20000),
+              headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json'},
+              ...(body===undefined?{}:{body:JSON.stringify(body)})});
+            if(!response.ok)throw Error('GitHub source operation failed: '+response.status);
+            return response.json();
+          };
+          if((await api('GET','git/ref/heads/'+branch)).object.sha!==parent)throw Error('Concurrent branch update');
+          const entries=[];
+          for(const [path,sha]of Object.entries(expected)){
+            const info=await lstat(path),bytes=await readFile(path);
+            if(!info.isFile()||info.isSymbolicLink()||bytes.length>1048576||createHash('sha256').update(bytes).digest('hex')!==sha)throw Error('Output bytes mismatch: '+path);
+            const blob=await api('POST','git/blobs',{encoding:'base64',content:bytes.toString('base64')});
+            if(blob.sha!==createHash('sha1').update(Buffer.from('blob '+bytes.length+'\0')).update(bytes).digest('hex'))throw Error('Uploaded blob mismatch');
+            entries.push({path,mode:'100644',type:'blob',sha:blob.sha});
+          }
+          for(const path of ['scripts/output-scope-correction.patch','.github/workflows/stage-output-scope.yml'])entries.push({path,mode:'100644',type:'blob',sha:null});
+          const tree=await api('POST','git/trees',{base_tree:git('rev-parse','HEAD^{tree}'),tree:entries});
+          if(tree.sha!=='f6f6f99c8ef507461bcdac5340e179e24395e0bb')throw Error('Complete reviewed tree mismatch');
+          const commit=await api('POST','git/commits',{message:'fix: scope physical fabrication rules to explicitly requested MAKE output\n\nStop imposing resin walls and process joints on ordinary digital models. Preserve input digests, references, prices, completion and unsupported-output refusal. Add failing-before regressions and record the owner-provided pre-build empty-scene diagnostic. Source correction only; no new model, production action or financial mutation. Remove temporary source-staging files.',tree:tree.sha,parents:[parent]});
+          const result={parent,commit:commit.sha,tree:tree.sha,changedFiles:Object.keys(expected),branchUpdated:false,productionChanged:false,paidGenerationRequested:false};
+          await mkdir('output-scope-evidence',{recursive:true});
+          await writeFile('output-scope-evidence/commit.json',JSON.stringify(result,null,2)+'\n');
+          console.log(JSON.stringify(result,null,2));
+          NODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: output-scope-source-${{ github.sha }}
+          path: output-scope-evidence/commit.json
+          retention-days: 2
+          if-no-files-found: error
+# No production environment, Oracle credentials, provider request or deployment.
+# This temporary adapter only stages the fixed source tree; it removes itself
+# from the candidate. The executor separately verifies the commit before a ref update.

@@ -1,0 +1,234 @@
+diff --git a/docs/CONTEST_STATUS.md b/docs/CONTEST_STATUS.md
+index 2c714b2..a1143ef 100644
+--- a/docs/CONTEST_STATUS.md
++++ b/docs/CONTEST_STATUS.md
+@@ -1105,0 +1106,52 @@ PR. No Oracle installation or production-restored claim is made by this commit.
++
++## Observed pre-build refusal and output-scope correction — 9 October 2026
++
++This supersedes the earlier statement that the failed-job exception was unknown.
++The owner supplied a redacted original-host read: `complete_scene_not_supported`,
++`WORLDIFACT_CONSTRUCTION_INCOMPLETE`, one request, known usage, a 1,800-second
++limit, and zero recorded Blender seconds. The decoder update had already been
++activated at 18:37:26 UTC. Do not reinstall it or infer a 900-second deadline,
++missing Blender method, invalid key, or failed provider transport from this read.
++No private identifiers, reference images or customer balances are copied here.
++
++In the exact installed decoder, this exception is emitted when the authenticated
++completed construction response contains an empty/whitespace `scene_json`.
++The planner explicitly permits this sentinel for an unsupported complete subject.
++The observed refusal remains legitimate to reject: it is not a completed model.
++The diagnostic does not disclose why the model chose to return that sentinel.
++
++A separate input-contract error was reproduced with the real
++`oracleStudioPayload`: ordinary game/globe, terrain, object and default figurine
++requests unconditionally received physical manufacturing requirements, including
++resin walls and process-specific splits/joints. The typed planner is required to
++satisfy the entire original brief and instructions. The same scoping issue was
++independently identified in Codex review 5475643326 on PR #245.
++
++The adapter now keeps units, dimensions, original references, digital validation
++and the prohibition on manufacturing-approval claims for every output. Extra
++physical process rules apply only to explicit fabrication hints in the original
++brief, not a model-kind label or the English verb "make". Direct no-print intent
++is respected for classification; the original prompt itself is never rewritten.
++Unrecognized intent does not grant MAKE approval. Real fabrication still needs
++its separate process-specific review. Standard completion, actual rendered-image
++review and rejection of unsupported/unfinished models are unchanged.
++
++Five new regression methods ran before the change: two passed and three failed.
++After the change, 32 focused protocol, profile, output-scope and manufacturing
++cases passed with no skipped cases. Original canonical input digests, image
++bytes/order, prices, request IDs and pricing selections are preserved. Seven
++synthetic Oracle wire hashes intentionally change because their instruction
++scope changed; the original input-hash fixtures were not altered. Existing
++manufacturing tests now distinguish explicit printable requests from digital
++ones instead of requiring the diagnosed incorrect unconditional rule.
++
++This is a tested request-contract correction, not proof of the AI's motivation
++or successful production generation. Full exact-head hosted verification remains
++required. No Oracle source, installer, secret, ledger, account/hold/settlement,
++price, model or asset was changed; no paid request or production deployment was
++performed. This adapter is bundled in the Worker, so its deployment is separate
++from the already-completed Oracle installation. Do not use a generic main merge
++that would resynchronize billing or overwrite live variables. Any eventual
++release must retain the existing exact-parent and preserve-billing controls.
++Production restoration remains unverified until a new real model, preview,
++download and owned-library save are observed under an approved bounded test.
+diff --git a/src/lib/studioProtocol.ts b/src/lib/studioProtocol.ts
+index d7a34fc..27c680b 100644
+--- a/src/lib/studioProtocol.ts
++++ b/src/lib/studioProtocol.ts
+@@ -6 +6,20 @@ import { studioPricingFor, validateStudioPricingSelection, type StudioPricing, t
+-const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for every generated asset:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
++const MANUFACTURING_HARD_RULES = `WORLDIFACT manufacturing hard rules for explicitly requested physical fabrication:\n- keep explicit physical units and requested X/Y/Z dimensions; never silently change scale;\n- remove or report non-manifold edges, open shells, self-intersections, duplicate/degenerate faces and zero-thickness surfaces where a MAKE version is requested;\n- do not create decorative needles, unsupported slivers or fragile connections that cannot survive the intended process;\n- for resin-print candidates, target at least 1.5 mm walls at approximately 100 mm scale and increase conservatively for larger parts when needed; do not apply one thickness blindly if it destroys appearance/function;\n- use practical splits, keyed joints and process-appropriate clearances when a one-piece build is unsafe;\n- preserve UV/material regions and provide a paintable path where applicable;\n- record deliberate geometry/thickness changes and unresolved blockers;\n- never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
++
++const DIGITAL_OUTPUT_RULES = `WORLDIFACT output scope and provenance:
++- Preserve the requested units, dimensions, silhouette, reference details and UV/material regions.
++- A game, terrain, object or figurine is a digital asset unless the original brief explicitly requests physical fabrication. A model-kind label alone does not request MAKE.
++- Validate the digital geometry and export, then inspect the actual current renders. Manufacturing certification and process-specific wall thicknesses, splits or joints are not prerequisites for digital-only output. Do not reject a supported digital model solely because its physical manufacturing suitability is unverified.
++- MAKE is unapproved; never label a generated file safe, production-ready, manufacturable or approved until a real B2B manufacturing partner accepts that exact revision.`
++
++// These bounded hints only select additional process guidance. They do not
++// change the original prompt, profile, admission, price or approval status.
++// In particular, English "make", a figurine label, a material, or a model of a
++// manufacturing machine is not an instruction to fabricate the output.
++const EXPLICIT_FABRICATION_REQUEST = /\bfor\s+(?:3d[ -]?print(?:ing)?|resin[ -]?print(?:ing)?|cnc\s+(?:machining|milling)|laser\s+cutting)\b|\b(?:(?:3d|resin)[ -])?printable\b|\b(?:output|target)\s*:\s*MAKE\b|\bMAKE\s+(?:output|version)\b|\b(?:do|pod)\s+(?:druku\s+3d|frezowania\s+cnc|ci[eę]cia\s+laserowego)\b/iu
++const NEGATED_FABRICATION_REQUEST = /\b(?:not|no|never|without)\s+(?:(?:intended|suitable|ready)\s+)?(?:for\s+)?(?:(?:(?:3d|resin)[ -])?print(?:able|ing)?|cnc\s+(?:machining|milling)|laser\s+cutting)\b|\b(?:do\s+not|don['’]t|never)\s+(?:prepare|make|design|optimi[sz]e)\b[^.!?;\n]{0,80}?\bfor\s+(?:(?:3d|resin)[ -]?printing|cnc\s+(?:machining|milling)|laser\s+cutting)\b|\b(?:nie|bez)\s+(?:(?:do|pod)\s+)?(?:druku\s+3d|frezowania\s+cnc|ci[eę]cia\s+laserowego)\b/giu
++
++function modelOutputRules(prompt: string): string {
++  // Ignore direct negations for classification only; retain them on the wire.
++  const requested = prompt.normalize('NFKC').replace(NEGATED_FABRICATION_REQUEST, '')
++  return DIGITAL_OUTPUT_RULES + (EXPLICIT_FABRICATION_REQUEST.test(requested) ? '\n\n' + MANUFACTURING_HARD_RULES : '')
++}
+@@ -201,0 +221 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
++  const outputRules = modelOutputRules(input.prompt)
+@@ -204 +224 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
+-    prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + MANUFACTURING_HARD_RULES,
++    prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + outputRules,
+@@ -210 +230 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
+-  const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${requestedModelKind}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use the supported scene JSON contract for the complete first build, inspect actual renders and successfully call finish_model before claiming completion. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; report open/non-manifold geometry, intersections, thin walls and fragile joints; never claim manufacturing approval.`
++  const instruction = `\n\nWORLDIFACT: build the requested editable 3D ${requestedModelKind}, not a brief or generic proxy. Export model.glb as a self-contained GLB with UV/PBR. Texture ceiling ${input.textureMaxSize}px; no false upscaling. Use all attached views of the same subject. Prioritize silhouette, anatomy and original details; do not replace a character with a building. Use the supported scene JSON contract for the complete first build, inspect actual renders and successfully call finish_model before claiming completion. GAME is unreviewed. MAKE is unapproved: preserve units and dimensions; never claim manufacturing approval.`
+@@ -221 +241 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
+-    agentInstructions: MANUFACTURING_HARD_RULES + '\n\n' + standardCompletionInstructions(studioPricing) + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
++    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(studioPricing) + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
+diff --git a/tests/generation-profile.test.ts b/tests/generation-profile.test.ts
+index d26ca1d..b0dd108 100644
+--- a/tests/generation-profile.test.ts
++++ b/tests/generation-profile.test.ts
+@@ -36 +36,3 @@ test('STANDARD photo jobs carry explicit reference-fidelity instructions to the
+-  assert.match(textOnly.agentInstructions, /manufacturing hard rules/)
++  assert.match(textOnly.agentInstructions, /output scope and provenance/)
++  assert.match(textOnly.agentInstructions, /never label.*manufactur.*approved/i)
++  assert.doesNotMatch(textOnly.agentInstructions, /1\.5 mm walls|keyed joints/)
+diff --git a/tests/shop-manufacturing.test.ts b/tests/shop-manufacturing.test.ts
+index a3c552e..5e8971f 100644
+--- a/tests/shop-manufacturing.test.ts
++++ b/tests/shop-manufacturing.test.ts
+@@ -66 +66 @@ test('ISS source retains hard manufacturing validation rules', () => {
+-test('STANDARD and FAST Studio payloads both receive the manufacturing hard rules', () => {
++test('explicit printable STANDARD and FAST outputs retain manufacturing rules, digital drafts do not', () => {
+@@ -71 +71 @@ test('STANDARD and FAST Studio payloads both receive the manufacturing hard rule
+-    worldId: 'enchanted-ai-shop', prompt: 'Create a compact chess knight', purpose: 'figurine', textureMaxSize: 2048, photos: [], generationProfile: FAST_DRAFT_PROFILE,
++    worldId: 'enchanted-ai-shop', prompt: 'Create a compact printable chess knight', purpose: 'figurine', textureMaxSize: 2048, photos: [], generationProfile: FAST_DRAFT_PROFILE,
+@@ -78,0 +79,4 @@ test('STANDARD and FAST Studio payloads both receive the manufacturing hard rule
++    const digital = oracleStudioPayload('12345678-1234-4234-8234-123456789abc', { ...input, prompt: 'Create a digital chess knight for a game.' })
++    const digitalInstructions = digital.prompt + ('agentInstructions' in digital ? digital.agentInstructions : '')
++    assert.doesNotMatch(digitalInstructions, /zero-thickness|1\.5 mm walls|keyed joints/)
++    assert.match(digitalInstructions, /B2B manufacturing partner accepts that exact revision/i)
+diff --git a/tests/studio-manufacturing-scope.test.ts b/tests/studio-manufacturing-scope.test.ts
+new file mode 100644
+index 0000000..ff3af5c
+--- /dev/null
++++ b/tests/studio-manufacturing-scope.test.ts
+@@ -0,0 +1,82 @@
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { oracleStudioPayload, validateStudioInput, inputDigest, prepareStudioInput, FAST_DRAFT_PROFILE } from '../src/lib/studioProtocol.ts'
++import type { StudioInput } from '../src/lib/studioProtocol.ts'
++import { STUDIO_PRICING, STUDIO_PRICING_REVISION } from '../src/lib/studioPricing.ts'
++
++const id = '33333333-3333-4333-8333-333333333333'
++const base: StudioInput = { worldId: 'enchanted-ai-shop', prompt: 'Create a textured globe with continents and oceans.', purpose: 'game', textureMaxSize: 4096, photos: [] }
++function payload(input: StudioInput) { return oracleStudioPayload(id, validateStudioInput(input)) }
++function instructions(input: StudioInput) {
++  const value = payload(input)
++  return 'agentInstructions' in value ? value.agentInstructions : value.prompt
++}
++const physicalConstraints = /1\.5 mm walls|practical splits, keyed joints|cannot survive the intended process/
++
++test('a visual globe, terrain, object and default figurine do not inherit fabrication requirements', () => {
++  for (const worldId of ['enchanted-ai-shop', 'ai-game-lab'] as const) {
++    for (const purpose of ['game', 'terrain', 'object', 'figurine'] as const) {
++      const input = { ...base, worldId, purpose }
++      assert.doesNotMatch(instructions(input), physicalConstraints)
++      assert.match(instructions(input), /never label.*manufactur.*approved/i)
++      assert.match(instructions(input), /preserve.*units.*dimensions/i)
++      assert.doesNotMatch(payload(input).prompt, /report open\/non-manifold geometry|thin walls and fragile joints/)
++      assert.match(instructions(input), /finish_model/)
++      assert.match(instructions(input), /USD 1\.75 guard/)
++    }
++  }
++})
++
++test('explicit fabrication requests retain the full physical rules independently of model-kind labels', () => {
++  for (const prompt of [
++    'Create a figurine for 3D printing.', 'Prepare a globe for resin printing.',
++    'Make a watertight 3D-printable chess piece.', 'Create a bracket for CNC machining.',
++    'Design this panel for laser cutting.', 'Create a printable chess knight.', 'Output: MAKE, a miniature vase.', 'Zaprojektuj figurkę do druku 3D.',
++    'Przygotuj element do frezowania CNC.', 'Panel do cięcia laserowego.',
++  ]) {
++    for (const purpose of ['figurine', 'object', 'game'] as const) {
++      assert.match(instructions({ ...base, prompt, purpose }), physicalConstraints, prompt)
++      assert.match(instructions({ ...base, prompt, purpose }), /never label.*manufactur.*approved/i)
++    }
++  }
++})
++
++test('English make is not the MAKE output path and explicit no-print requests are not fabricated', () => {
++  for (const prompt of [
++    'Make a realistic globe.', 'A 3D model of a printing press for a game.',
++    'A realistic resin-looking glass ornament.', 'Create a 3D model of a laser scanner.',
++    'Game only, not for 3D printing.', 'Not 3D-printable: a visual particle cloud.', 'Not printable: a game-only visual effect.',
++    'Do not prepare this for resin printing.', 'No CNC machining; this is a game prop.',
++    'Nie do druku 3D, tylko model do gry.', 'Bez frezowania CNC, wyłącznie wizualizacja.',
++  ]) assert.doesNotMatch(instructions({ ...base, prompt }), physicalConstraints, prompt)
++})
++
++test('scoping changes neither original input, receipt digest, references, nor price terms', async () => {
++  const image = 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64')
++  const input = validateStudioInput({ ...base, purpose: 'object', photos: [{ name: 'surface.jpg', view: 'front', dataUrl: image, textureMaxSize: 4096 }] })
++  const before = JSON.stringify(input), digest = await inputDigest(input)
++  const wire = payload(input)
++  assert.ok('agentInstructions' in wire)
++  assert.ok(wire.prompt.startsWith(input.prompt + '\n\n'))
++  assert.deepEqual(wire.photos, input.photos)
++  assert.equal(wire.id, id)
++  assert.equal('studioPricing' in wire, false)
++  assert.equal(JSON.stringify(input), before)
++  assert.equal(await inputDigest(input), digest)
++  assert.equal((await prepareStudioInput(input)).inputDigest, digest)
++  assert.match(wire.agentInstructions, /REFERENCE-FIDELITY MODE/)
++  for (const budgetTier of ['standard', 'extended'] as const) {
++    const selected = payload({ ...input, pricingRevision: STUDIO_PRICING_REVISION, budgetTier, acceptedPoints: STUDIO_PRICING[budgetTier].points })
++    assert.ok('studioPricing' in selected)
++    assert.deepEqual(selected.studioPricing, STUDIO_PRICING[budgetTier])
++  }
++})
++
++test('FAST keeps the existing profile and limits without imposing physical fabrication on a visual draft', () => {
++  const input = { ...base, purpose: 'object' as const, textureMaxSize: 2048 as const, generationProfile: FAST_DRAFT_PROFILE }
++  const wire = payload(input)
++  assert.equal(wire.generationProfile, FAST_DRAFT_PROFILE)
++  assert.doesNotMatch(wire.prompt, physicalConstraints)
++  assert.match(wire.prompt, /UNREVIEWED/)
++  assert.match(instructions({ ...input, prompt: 'Create a part for 3D printing.' }), physicalConstraints)
++})
+diff --git a/tests/studio-protocol-contract.test.ts b/tests/studio-protocol-contract.test.ts
+index ffad51d..7053baa 100644
+--- a/tests/studio-protocol-contract.test.ts
++++ b/tests/studio-protocol-contract.test.ts
+@@ -95 +95 @@ test('cabinet wording preserves selected price terms, legacy175 and the maximum
+-test('unrelated canonical digests and complete Oracle wire payloads remain byte-compatible with the prior adapter', async () => {
++test('canonical input digests remain byte-compatible while Oracle wire fixtures bind corrected output scope', async () => {
+@@ -97 +97,3 @@ test('unrelated canonical digests and complete Oracle wire payloads remain byte-
+-  // Synthetic fixtures captured from clean e36797e7; no user prompt, job or account data.
++  // Canonical input digests captured from e36797e7 stay unchanged. Oracle wire
++  // hashes intentionally include the corrected GAME/MAKE instruction scope.
++  // Synthetic fixtures only: no user prompt, job, account or provider data.
+@@ -99,6 +101,6 @@ test('unrelated canonical digests and complete Oracle wire payloads remain byte-
+-    ['A glazed teal teapot with a rounded handle.', 'figurine', [], 'fde3023881c1f982415e5671a4a46cff1ce65cdeca4c6d8559e86f438fd44253', '8e2190799f5afb455de7bcfcc857b58fdbe80e1707546834fadac36924c4e975'],
+-    ['An adult character wearing a circuit breaker badge.', 'figurine', photos, '8ab9a40689311eda50deaf971683d0529d04a538894de27027adc60649af327a', 'fc200276e417f7df73ce30817ea3097090cfdc157ae1b0c65aa50c3b0a8f652b'],
+-    ['A 1:24 scale miniature electrical cabinet for a diorama.', 'figurine', photos, '7ca962cff4d8a507222099b0a435a55522b64ecbd75e2fbe100c7a3c9912014f', '458e0ee194562d7235ca11610fd85f84817c6e476d717c1b4ec2f3601795503f'],
+-    ['An electrical cabinet with a narrow service door.', 'object', [], 'ac32eae3ea33f0f043b7a75b8971f8066ef2800d79a018aefac3deff926adf10', '80b8017d4077c1e5469d5558180cc3958cebb46b9acd9af53641cff99f6a1aaa'],
+-    ['A rocky valley with a small wooden footbridge.', 'terrain', photos, '19ed565c69937a96fa1045281bf27fef032ec54bec88862c2dd2ffdf7fb1e255', '4582aa9999d1642350b0c114b033a4bf08fe832642afc7aea00f1ee7c9dc6843'],
+-    ['A brass exploration drone with folding wings.', 'game', [], '7841686491ee4788183d5c5296b578c7c2c4667bbf59ce3cf431f622d25d4283', '33e63ed9b99f57cb8add508b6872d357a4232b8c41c8f8beaee0cf37607c7a37'],
++    ['A glazed teal teapot with a rounded handle.', 'figurine', [], 'fde3023881c1f982415e5671a4a46cff1ce65cdeca4c6d8559e86f438fd44253', '2826ec9d4c4fda3158d93f18ba9bdf16bdd9461c5670dc66187b6f37fab9cc15'],
++    ['An adult character wearing a circuit breaker badge.', 'figurine', photos, '8ab9a40689311eda50deaf971683d0529d04a538894de27027adc60649af327a', 'f36331b65d48bc61362aa4062c456ae276849884a2e27f603f557b15d0bdcae1'],
++    ['A 1:24 scale miniature electrical cabinet for a diorama.', 'figurine', photos, '7ca962cff4d8a507222099b0a435a55522b64ecbd75e2fbe100c7a3c9912014f', 'f88568265d6b91ed17cbacbd9ca78dfbd0fe4fb1cbcba6191cfb82a9fc041822'],
++    ['An electrical cabinet with a narrow service door.', 'object', [], 'ac32eae3ea33f0f043b7a75b8971f8066ef2800d79a018aefac3deff926adf10', 'fc652a907e409e7f68222bdfbfc4eee185ca5f000a55a9e6a42bca4afe0480f4'],
++    ['A rocky valley with a small wooden footbridge.', 'terrain', photos, '19ed565c69937a96fa1045281bf27fef032ec54bec88862c2dd2ffdf7fb1e255', '3ecd7aff9355665c17587d8942448527be4b8ca6c7e42ef78b4572ed552bd092'],
++    ['A brass exploration drone with folding wings.', 'game', [], '7841686491ee4788183d5c5296b578c7c2c4667bbf59ce3cf431f622d25d4283', '28014de408fef54f1b8bbd31dff0132e1bdf8e613bb032022386dd9440150093'],
+@@ -113 +115 @@ test('unrelated canonical digests and complete Oracle wire payloads remain byte-
+-  assert.equal(createHash('sha256').update(JSON.stringify(oracleStudioPayload(id, fast))).digest('hex'), 'cddf963e5c4af3d150b2c06c20da2afd5f807de54542526504cf36409e705fca')
++  assert.equal(createHash('sha256').update(JSON.stringify(oracleStudioPayload(id, fast))).digest('hex'), '096221e58b854382118a9a6a8d1dead3ad0a2d38539414af2111c2cd939abceb')
