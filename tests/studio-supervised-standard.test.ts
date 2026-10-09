@@ -1,7 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { testInput } from '../scripts/approved-output-scope-smoke.mjs'
 import { FAST_DRAFT_PROFILE, REFERENCE_FIDELITY_INSTRUCTIONS, inputDigest, oracleStudioPayload,
   prepareStudioInput, studioQualityProfile, validateStudioInput } from '../src/lib/studioProtocol.ts'
 import { STUDIO_PRICING, STUDIO_PRICING_REVISION } from '../src/lib/studioPricing.ts'
@@ -18,7 +17,7 @@ const photos = [{ name: 'reference.jpg', view: 'left', dataUrl: jpeg, textureMax
 // not derived by the new adapter or by a fake successful provider response.
 // Job receipt: run 38004410388; GLB fecefbf591d37f65f12aa8bcf44ad56efbfc58aa8bd0010356091adb7f9ba6d0.
 test('normal Shop adapter now emits exactly the accepted original-CLI MCC request', () => {
-  const payload = oracleStudioPayload(id, testInput())
+  const payload = oracleStudioPayload(id, validateStudioInput({"worldId":"enchanted-ai-shop","purpose":"object","textureMaxSize":2048,"photos":[],"prompt":"Create one complete freestanding industrial MCC electrical cabinet as an editable digital game asset, about 1.2 m wide, 2 m tall and 0.5 m deep. Its single hinged door is open approximately 100 degrees. Include a recessed backplate, three DIN rails with distinct circuit breakers, contactors, relays and PLC modules, a small HMI screen, red and green pushbuttons, a fan grille, slotted cable ducts and a bottom terminal strip. Model at least eight visibly routed cylindrical wires. Components must have real projecting 3D bodies and not be a photo on a plane. Use gray metal, off-white devices, dark terminals and colored wires. Build the complete cabinet in the first scene using the supported geometry and optional bounded initial edit. Inspect the actual front, side, back and three-quarter renders and finish the accepted result. Export a self-contained GLB. No room, background scene, brands, text labels or extra cabinet. Digital GAME output only; manufacturing and electrical safety are not validated. Keep the existing USD 1.75 budget and never start another job."}))
   assert.equal(digest(payload), '4333738b4bf67803fe1a0ef45aa2f09b0bb3d2d99965788abdd6b34374b006a6')
   assert.equal('studioPricing' in payload, false)
   assert.equal('generationProfile' in payload, false)
