@@ -1,0 +1,106 @@
+name: Stage exact decoder installer (no production access)
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+    paths: ['scripts/phase-installer-stage.py', 'scripts/phase-installer-test.source', 'scripts/phase-installer-guide.source', '.github/workflows/stage-phase-installer.yml']
+permissions:
+  contents: write
+concurrency:
+  group: stage-exact-decoder-installer
+  cancel-in-progress: false
+jobs:
+  stage:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/fix/generation-audit-recovery-20261009'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/WORLDIFACT
+          ref: 2380a7e2dad05a40b3753faf06c2635ed444be51
+          path: .context-ancestor
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .model-completion-source
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Expand exact reviewed update and verify all six output hashes
+        run: |
+          test "$(git hash-object scripts/phase-installer-stage.py)" = '27b6bfced37e438cd6363c677bfb18d92998b664'
+          test "$(git hash-object scripts/phase-installer-test.source)" = 'eca6990c26c6a858785f81c61fad535fe304daca'
+          python -B - <<'PY'
+          from pathlib import Path
+          source = Path('scripts/phase-installer-stage.py').read_text()
+          before = "p.write_text(p.read_text() + '''\n\n## Decoder update"
+          after = "p.write_text(p.read_text() + '''\n## Decoder update"
+          assert source.count(before) == 1
+          exec(compile(source.replace(before, after), 'reviewed-source-expansion', 'exec'), {'__name__': '__main__'})
+          PY
+      - name: Test decoder, exact predecessor, two-file update, rollback and legacy compatibility
+        env:
+          MODEL_CONTEXT_ANCESTOR_REPOSITORY: ${{ github.workspace }}/.context-ancestor
+          MODEL_COMPLETION_SOURCE: ${{ github.workspace }}/.model-completion-source/oracle_connector
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -B -m unittest discover -s tools/model_construction -p 'test_*.py' -v
+      - name: Create the tested source object without updating any branch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, lstat, mkdir, writeFile } from 'node:fs/promises';
+          import { createHash } from 'node:crypto';
+          import { execFileSync } from 'node:child_process';
+          const expected = {
+            'docs/CONTEST_STATUS.md':'5c34e5958f452eef30c5a362e690c70b2b133cc855e17b1050223f9d4437cadb',
+            'docs/RESPONSE_PHASE_INSTALL_20261009.md':'a7b368d916254c1d3c373bc366ce7dbf14e9edcf475a67a69b170a8c568d7822',
+            'tools/model_construction/construction_manifest.py':'41a8fe5f766a010139b1bc354a9216be104f133377eaaed719758f4a705c6fad',
+            'tools/model_construction/install_construction.py':'a5001b0fd92ff408e9c9a1f7b42cf0ef7e3cb223272a374a8ef7f3feac1c03e3',
+            'tools/model_construction/oracle_construction_launch.py':'8bfa682b53721404e8a0e82fd4b25b7c3b17b0d2b93b1377fa5f31273f2328d7',
+            'tools/model_construction/test_response_phase_update.py':'fa158780cfc8ee4a887383297fdd7a3353f0488221195fec6a1711acec8de1a5'};
+          const branch='fix/generation-audit-recovery-20261009', parent=process.env.GITHUB_SHA;
+          const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+          if(process.env.GITHUB_REPOSITORY!=='teslaeco/WORLDIFACT'||process.env.GITHUB_REF!=='refs/heads/'+branch||git('rev-parse','HEAD')!==parent)throw Error('Unexpected source scope');
+          const api=async(method,path,body)=>{
+            const response=await fetch('https://api.github.com/repos/teslaeco/WORLDIFACT/'+path,{
+              method,redirect:'error',signal:AbortSignal.timeout(20000),
+              headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json'},
+              ...(body===undefined?{}:{body:JSON.stringify(body)})});
+            if(!response.ok)throw Error('Source object operation failed with HTTP '+response.status);
+            return response.json();};
+          const current=await api('GET','git/ref/heads/'+branch);
+          if(current.object.sha!==parent)throw Error('Concurrent branch edit; no publication');
+          const entries=[];
+          for(const [path,sha]of Object.entries(expected)){
+            const info=await lstat(path),bytes=await readFile(path);
+            if(!info.isFile()||info.isSymbolicLink()||bytes.length>1048576||createHash('sha256').update(bytes).digest('hex')!==sha)throw Error('Unexpected output bytes');
+            const blob=await api('POST','git/blobs',{encoding:'base64',content:bytes.toString('base64')});
+            if(blob.sha!==createHash('sha1').update(Buffer.from('blob '+bytes.length+'\0')).update(bytes).digest('hex'))throw Error('Blob mismatch');
+            entries.push({path,mode:'100644',type:'blob',sha:blob.sha});}
+          for(const path of ['scripts/phase-installer-stage.py','scripts/phase-installer-test.source','scripts/phase-installer-guide.source','.github/workflows/stage-phase-installer.yml'])entries.push({path,mode:'100644',type:'blob',sha:null});
+          const tree=await api('POST','git/trees',{base_tree:git('rev-parse','HEAD^{tree}'),tree:entries});
+          if(tree.sha!=='73e74d7acc0b95c11e57e6a86709a6ae3fe8be0a')throw Error('Complete source tree mismatch');
+          const commit=await api('POST','git/commits',{message:'fix: install the response decoder on the existing initial-edit runtime\n\nAdd an explicit checksum-pinned two-file update, preserve historical receipts and financial state, retain all four offline gates and rollback/activation controls, and test failure and ambiguous outcomes. No production installation, secret export, model request or main deployment. Remove temporary source-staging files.',tree:tree.sha,parents:[parent]});
+          const receipt={parent,commit:commit.sha,tree:tree.sha,changedFiles:Object.keys(expected),branchUpdated:false,productionChanged:false,paidGenerationRequested:false};
+          await mkdir('phase-installer-evidence',{recursive:true});
+          await writeFile('phase-installer-evidence/commit.json',JSON.stringify(receipt,null,2)+'\n');
+          console.log(JSON.stringify(receipt,null,2));
+          NODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: phase-installer-commit-${{ github.sha }}
+          path: phase-installer-evidence/commit.json
+          retention-days: 2
+          if-no-files-found: error
+# Source-only staging. No Production environment, SSH key, provider secret,
+# ref update, deployment, historical one-off action or financial operation.
