@@ -8,14 +8,17 @@ derived, copied, generated, rotated, or printed by this launcher.
 """
 import argparse
 import base64
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import types
 import urllib.request
 
@@ -30,6 +33,9 @@ REFRESH_FILES = {
 PUBLIC_ROOT = 'https://raw.githubusercontent.com/teslaeco/WORLDIFACT/'
 TARGET = '141.148.242.30'
 SERVER_RSA_SHA256 = 'dc28e426f5ae4f85279c65e2d1313cc9d616ebb728583761326ec14ec1ea82d5'
+# Public server identity verified through the existing authenticated owner route.
+# This is neither an authentication key nor newly discovered trust.
+SERVER_KNOWN_HOST = '141.148.242.30 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDIPkvNqxvqDEL80cKV6NBb1F2vB/sy7p5KXb4rOBgVIsDKSpGruQCjGTNgxBUJJGBe08p7vlSYSXueUMHHZWonx4NRT9UNlAPpZ/mAY+Kfwmpipbt8ZjUsRWYwXzE1WCvKCcxWsZgpuFP4FNMq9iiNRXyLlt0MLQOnwSjDl9YmttMbCdcvIPphZYk6iYs+Q142EGHlf2efAvduh2ZVnhd0a0d4/x5xpCr2pP75vABdwItwwQrPFKeh7sdnR8wKB2QTzlRkV96GlKLD0ZpmJZsFHE0c7SNhbh7fBOrTLiEUOF2oOTdO67s89xaV+VMFZp7mmELB9usAuHKl1jN5XxWnzZyl07Gx0BnFYLtJoppxLr1b+ZrKnHVUkenZsh4xVxeJX3z2OQ2xmyc+B2q+yRz+hCM1FxQDrnm+m6RjtAOkZpMcEZ9+tXPJhYzNaUegscfOZaVOfeNYaZUPZopOFc5K8lMdr7M2EMYrdlg13q/vmnjqge8qYvOZ36eSvUn7w3s=\n'
 KEY_COMMENT = 'worldifact-maintenance-b6dce84d'
 CANCELLED_JOB = 'f91612e5-eb5a-4fec-9585-1ce08c9f38ad'
 LAUNCHER_PATH = 'tools/model_construction/oracle_construction_launch.py'
@@ -42,6 +48,79 @@ SSH_ENV = {'PATH': '/usr/bin:/bin', 'LANG': 'C', 'LC_ALL': 'C'}
 
 class RefreshError(RuntimeError):
     """Only fixed diagnostics are exposed by main, never exception contents."""
+
+
+DIAGNOSTICS = {
+    'local_preflight': frozenset(('local_check_failed', 'missing_local_file',
+        'invalid_public_key', 'host_trust_unavailable', 'host_pin_mismatch',
+        'unreviewed_release', 'timeout', 'interrupted')),
+    'download': frozenset(('package_unavailable', 'package_invalid', 'timeout', 'interrupted')),
+    'ssh': frozenset(('transport_failed', 'invalid_response', 'timeout', 'interrupted')),
+    'remote_refusal': frozenset(('refused', 'rolled_back', 'unconfirmed')),
+    'post_status': frozenset(('status_not_confirmed', 'timeout', 'interrupted')),
+    'preservation': frozenset(('local_files_changed', 'timeout', 'interrupted')),
+    'complete': frozenset((None,)),
+    'unknown': frozenset(('unconfirmed', 'interrupted')),
+}
+
+
+class StageError(RefreshError):
+    def __init__(self, stage, error):
+        self.stage, self.error = stage, error
+        super().__init__('refresh_not_confirmed')
+
+
+@contextmanager
+def at_stage(stage, default):
+    """Discard exception details; expose only reviewed finite categories."""
+    try:
+        yield
+    except StageError:
+        raise
+    except (Exception, KeyboardInterrupt) as error:
+        code = default
+        if isinstance(error, KeyboardInterrupt):
+            code = 'interrupted'
+        elif isinstance(error, (subprocess.TimeoutExpired, TimeoutError)):
+            code = 'timeout'
+        elif isinstance(error, FileNotFoundError) and stage == 'local_preflight':
+            code = 'missing_local_file'
+        elif isinstance(error, RefreshError):
+            code = {
+                'unfrozen_release': 'unreviewed_release',
+                'invalid_public_key': 'invalid_public_key',
+                'existing_host_trust_unavailable': 'host_trust_unavailable',
+                'invalid_existing_host_trust': 'host_trust_unavailable',
+                'server_key_missing': 'host_trust_unavailable',
+                'server_key_mismatch': 'host_pin_mismatch',
+                'invalid_compiled_host_pin': 'host_pin_mismatch',
+                'package_checksum': 'package_invalid',
+                'unexpected_package': 'package_invalid',
+                'unreviewed_package': 'package_invalid',
+                'invalid_package_file': 'package_invalid',
+                'unsafe_response': 'invalid_response',
+                'unsafe_refresh_result': 'invalid_response',
+                'duplicate_response_key': 'invalid_response',
+            }.get(str(error), default)
+        if code not in DIAGNOSTICS[stage]:
+            code = default
+        raise StageError(stage, code) from None
+
+
+@contextmanager
+def interruptible():
+    handlers = {}
+
+    def interrupted(_number, _frame):
+        raise KeyboardInterrupt()
+
+    try:
+        for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            handlers[number] = signal.signal(number, interrupted)
+        yield
+    finally:
+        for number, previous in handlers.items():
+            signal.signal(number, previous)
 
 
 class PrivateArgumentParser(argparse.ArgumentParser):
@@ -66,6 +145,19 @@ def frozen(commit):
             or set(REFRESH_FILES) != {'refresh_receiver.py', 'dispatcher.py', 'status.py'}
             or any(not exact_hex(value, 64) for value in REFRESH_FILES.values())):
         raise RefreshError('unfrozen_release')
+    pinned_host()
+
+
+def pinned_host():
+    if type(SERVER_KNOWN_HOST) is not str:
+        raise RefreshError('invalid_compiled_host_pin')
+    match = re.fullmatch(re.escape(TARGET) + r' ssh-rsa ([A-Za-z0-9+/]+={0,2})\n', SERVER_KNOWN_HOST)
+    if match is None:
+        raise RefreshError('invalid_compiled_host_pin')
+    canonical = ('ssh-rsa ' + match[1] + '\n').encode('ascii')
+    if not exact_hex(SERVER_RSA_SHA256, 64) or hashlib.sha256(canonical).hexdigest() != SERVER_RSA_SHA256:
+        raise RefreshError('invalid_compiled_host_pin')
+    return SERVER_KNOWN_HOST.encode('ascii')
 
 
 def verified_bytes(raw, expected):
@@ -186,8 +278,40 @@ def trusted_server(known_hosts, run):
             if hashlib.sha256(canonical).hexdigest() != SERVER_RSA_SHA256:
                 raise RefreshError('server_key_mismatch')
             found = True
+        elif parts[1] in ('ssh-ed25519', 'ecdsa-sha2-nistp256',
+                          'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521'):
+            # Original administrative access may have retained only this host
+            # algorithm. The separately verified RSA pin supplies SSH trust.
+            found = True
+        else:
+            raise RefreshError('invalid_existing_host_trust')
     if not found:
         raise RefreshError('server_key_missing')
+
+
+@contextmanager
+def temporary_trust(folder, home):
+    """Reuse the approved public pin without changing permanent host trust."""
+    raw = pinned_host()
+    temporary = tempfile.TemporaryDirectory(prefix='refresh-host-', dir=folder)
+    try:
+        root = Path(temporary.name)
+        owned_path(root, home, private=True, directory=True)
+        path = root / 'known_hosts'
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            if os.write(descriptor, raw) != len(raw):
+                raise RefreshError('temporary_trust_unconfirmed')
+            before = identity(os.fstat(descriptor))
+        finally:
+            os.close(descriptor)
+        if before != identity(owned_path(path, home, private=True)):
+            raise RefreshError('temporary_trust_unconfirmed')
+        yield path, before
+    finally:
+        # Cleanup can fail after a remote commit; never call that preflight.
+        with at_stage('preservation', 'local_files_changed'):
+            temporary.cleanup()
 
 
 def connection(key, known_hosts, command):
@@ -285,50 +409,73 @@ def check_restricted_status(key, known_hosts, run):
 
 
 def refresh(commit, *, home=None, run=None, reader=None):
-    frozen(commit)
     run = subprocess.run if run is None else run
     reader = public_file if reader is None else reader
-    home = Path.home() if home is None else Path(home)
-    folder = home / '.worldifact-maintenance-20261008'
-    key, public = folder / 'id_rsa', folder / 'id_rsa.pub'
-    admin, known_hosts = home / 'ssh-key-2026-09-06.key', home / '.ssh/known_hosts'
-    owned_path(folder, home, private=True, directory=True)
-    # Stat-only checks: never derive a public key from either private identity.
-    watched = {path: identity(owned_path(path, home, private=True)) for path in (key, admin)}
-    public_raw, trust_raw = read_public(public, home, 16384), read_public(known_hosts, home, 1048576)
-    dedicated_public = public_key(public_raw)
-    trusted_server(known_hosts, run)
-    source = {name: verified_bytes(reader(commit, 'tools/oracle_maintenance/' + name, digest), digest)
-              for name, digest in REFRESH_FILES.items()}
-    launcher_raw = verified_bytes(reader(SOURCE_COMMIT, LAUNCHER_PATH, NEW_LAUNCHER_SHA), NEW_LAUNCHER_SHA)
-    files = package_files(launcher_raw)
-    files.update({name: base64.b64encode(source[name]).decode('ascii')
-                  for name in ('dispatcher.py', 'status.py')})
-    if len(files) != 45:
-        raise RefreshError('unexpected_package')
-    payload = {'files': files, 'public_key': dedicated_public}
-    program = 'PAYLOAD = ' + repr(payload) + '\n' + source['refresh_receiver.py'].decode('utf-8')
+    with at_stage('local_preflight', 'local_check_failed'):
+        frozen(commit)
+        home = Path.home() if home is None else Path(home)
+        folder = home / '.worldifact-maintenance-20261008'
+        key, public = folder / 'id_rsa', folder / 'id_rsa.pub'
+        admin, known_hosts = home / 'ssh-key-2026-09-06.key', home / '.ssh/known_hosts'
+        owned_path(folder, home, private=True, directory=True)
+        # Stat-only checks: never derive a public key from either private identity.
+        watched = {path: identity(owned_path(path, home, private=True)) for path in (key, admin)}
+        public_raw, trust_raw = read_public(public, home, 16384), read_public(known_hosts, home, 1048576)
+        public_identities = {path: identity(owned_path(path, home)) for path in (public, known_hosts)}
+        dedicated_public = public_key(public_raw)
+        trusted_server(known_hosts, run)
+        with temporary_trust(folder, home) as (ssh_trust, trust_identity):
+            with at_stage('download', 'package_unavailable'):
+                source = {name: verified_bytes(reader(commit, 'tools/oracle_maintenance/' + name, digest), digest)
+                          for name, digest in REFRESH_FILES.items()}
+                launcher_raw = verified_bytes(reader(SOURCE_COMMIT, LAUNCHER_PATH, NEW_LAUNCHER_SHA), NEW_LAUNCHER_SHA)
+                files = package_files(launcher_raw)
+                files.update({name: base64.b64encode(source[name]).decode('ascii')
+                              for name in ('dispatcher.py', 'status.py')})
+                if len(files) != 45:
+                    raise RefreshError('unexpected_package')
+                payload = {'files': files, 'public_key': dedicated_public}
+                program = 'PAYLOAD = ' + repr(payload) + '\n' + source['refresh_receiver.py'].decode('utf-8')
 
-    def preserved():
-        for path, before in watched.items():
-            if before != identity(owned_path(path, home, private=True)):
-                raise RefreshError('local_identity_changed')
-        if (read_public(public, home, 16384) != public_raw
-                or read_public(known_hosts, home, 1048576) != trust_raw):
-            raise RefreshError('local_public_files_changed')
+            def preserved():
+                with at_stage('preservation', 'local_files_changed'):
+                    for path, before in watched.items():
+                        if before != identity(owned_path(path, home, private=True)):
+                            raise RefreshError('local_identity_changed')
+                    for path, before in public_identities.items():
+                        if before != identity(owned_path(path, home)):
+                            raise RefreshError('local_public_files_changed')
+                    if (read_public(public, home, 16384) != public_raw
+                            or read_public(known_hosts, home, 1048576) != trust_raw
+                            or identity(owned_path(ssh_trust, home, private=True)) != trust_identity):
+                        raise RefreshError('local_public_files_changed')
 
-    preserved()
-    try:
-        answer = run(connection(admin, known_hosts, '/usr/bin/python3 -I -B -'),
-                     input=program, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                     text=True, timeout=180, env=SSH_ENV, cwd='/')
-        observed = safe_result(parse_result(answer.stdout), answer.returncode)
-        if observed['phase'] == READY:
             preserved()
-            check_restricted_status(key, known_hosts, run)
-        return observed
-    finally:
-        preserved()
+            try:
+                with at_stage('ssh', 'transport_failed'):
+                    answer = run(connection(admin, ssh_trust, '/usr/bin/python3 -I -B -'),
+                                 input=program, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 text=True, timeout=180, env=SSH_ENV, cwd='/')
+                    if answer.returncode not in (0, 1):
+                        raise RefreshError('transport_failed')
+                with at_stage('ssh', 'invalid_response'):
+                    observed = safe_result(parse_result(answer.stdout), answer.returncode)
+                if observed['phase'] == READY:
+                    preserved()
+                    with at_stage('post_status', 'status_not_confirmed'):
+                        check_restricted_status(key, ssh_trust, run)
+                return observed
+            finally:
+                preserved()
+
+
+def failure(stage, error):
+    # Do not expose even a StageError's fields unless both are allowlisted.
+    if (type(stage) is not str or stage not in DIAGNOSTICS
+            or type(error) is not str or error not in DIAGNOSTICS[stage]):
+        stage, error = 'unknown', 'unconfirmed'
+    return {'phase': NOT_CONFIRMED, 'result': 'unconfirmed', 'keys_changed': False,
+            'runtime_changed': False, 'old_apply_retired': False, 'stage': stage, 'error': error}
 
 
 def main(argv=None):
@@ -344,10 +491,16 @@ def main(argv=None):
         print(json.dumps({'phase': 'PLAN_ONLY', 'keys_changed': False, 'runtime_changed': False}, sort_keys=True))
         return 0
     try:
-        observed = refresh(args.source_commit)
-    except (Exception, KeyboardInterrupt):
-        observed = {'phase': NOT_CONFIRMED, 'result': 'unconfirmed', 'keys_changed': False,
-                    'runtime_changed': False, 'old_apply_retired': False}
+        with interruptible():
+            observed = refresh(args.source_commit)
+        if observed['phase'] == READY:
+            observed = {**safe_result(observed, 0), 'stage': 'complete', 'error': None}
+        else:
+            observed = {**safe_result(observed, 1), 'stage': 'remote_refusal', 'error': observed['result']}
+    except StageError as error:
+        observed = failure(error.stage, error.error)
+    except (Exception, KeyboardInterrupt) as error:
+        observed = failure('unknown', 'interrupted' if isinstance(error, KeyboardInterrupt) else 'unconfirmed')
     print(json.dumps(observed, sort_keys=True))
     return 0 if observed['phase'] == READY else 1
 

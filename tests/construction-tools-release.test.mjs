@@ -52,8 +52,8 @@ const modification = (path, oldBlob = '3'.repeat(40), newBlob = '4'.repeat(40)) 
 function entry({ path: _path, ...value }) { return value }
 function fixtureManifest() {
   return {
-    revision: 'oracle-construction-tools-release-v9',
-    release: 'oracle-initial-edit-grant-refresh-source-only-20261008',
+    revision: 'oracle-construction-tools-release-v10',
+    release: 'oracle-refresh-trust-compatibility-source-only-20261009',
     baseCommit: BASE_COMMIT, sourceOnly: true, deployAllowed: false,
     preserveCloudflareDeployment: true, paidGenerationRequested: false, status: 'FROZEN',
     payload: { ...Object.fromEntries(Object.entries(BASE_PAYLOAD_BLOBS).map(([path, oldBlob]) =>
@@ -117,25 +117,24 @@ function dispatch(options = {}) {
   return selectConstructionToolsRelease({ cwd: root, ...fixture })
 }
 
-test('exact initial-edit and grant-refresh squash skips deployment before credentials', () => {
-  assert.equal(BASE_COMMIT, '93c6e85f1d4df0ace41ed1320791a325489a08e1')
+test('exact refresh-trust compatibility squash skips deployment before credentials', () => {
+  assert.equal(BASE_COMMIT, '3c5a499f3c6b9fe1400fb4715d2097b106327bf3')
   assert.equal(RECIPIENT_PATH, '.github/oracle-maintenance-recipient.pem')
   const changes = evidence().data.changes
-  assert.equal(REVIEWED_PATHS.length, 38)
+  assert.equal(REVIEWED_PATHS.length, 7)
   assert.deepEqual(changes.map(change => change.path).sort(), REVIEWED_PATHS)
   const additions = changes.filter(change => change.status === 'A')
-  assert.deepEqual(additions.map(change => change.path).sort(), [
-    'tools/model_construction/native_initial_edit_fixture.py',
-    'tools/model_construction/test_initial_edit_update.py',
+  assert.deepEqual(additions, [])
+  assert.deepEqual(REVIEWED_PATHS, [
+    WORKFLOW_PATH, CONFIG_PATH, SCRIPT_PATH, TEST_PATH,
+    'tools/oracle_maintenance/README.md',
     'tools/oracle_maintenance/refresh.py',
-    'tools/oracle_maintenance/refresh_receiver.py',
     'tools/oracle_maintenance/test_refresh.py',
-    'tools/oracle_maintenance/test_refresh_receiver.py',
   ].sort())
   for (const change of changes) {
     assert.equal(change.newMode, '100644')
-    assert.equal(change.oldMode, change.status === 'A' ? '000000' : '100644')
-    assert.equal(change.status, change.oldBlob === zero ? 'A' : 'M')
+    assert.equal(change.oldMode, '100644')
+    assert.equal(change.status, 'M')
   }
   assert.deepEqual(select(), { deployAllowed: false })
   assert.deepEqual(dispatch(), { deployAllowed: false })
@@ -171,7 +170,9 @@ test('partial source envelopes, unknown additions and every missing reviewed pat
     'ops/STANDARD_CONTEXT_TOOLS_RELEASE_20261007.json', OLD_SCRIPT_PATH,
     'tools/model_construction/test_construction_transaction.py',
     '.github/workflows/unknown.yml', '.github/workflows/oracle-maintenance-extra.yml',
-    'tools/oracle_maintenance/unreviewed.py']) {
+    'tools/oracle_maintenance/unreviewed.py', 'tools/oracle_maintenance/refresh_receiver.py',
+    'tools/oracle_maintenance/dispatcher.py', 'tools/oracle_maintenance/status.py',
+    'tools/model_construction/construction_payload.py', 'scripts/oracle-maintenance.mjs']) {
     reject({ changes: [...complete, addition(path)] })
   }
 })
@@ -336,6 +337,10 @@ test('historical transform compatibility cannot authorize an earlier release bas
     event: { before: '766e651af475323152b6fd6fb7b1bce0ac4a8586' } })
   reject({ parents: ['0eb81ff43e85e8eb191dc6081abf93171a258b18'],
     event: { before: '0eb81ff43e85e8eb191dc6081abf93171a258b18' } })
+  for (const earlierBase of ['93c6e85f1d4df0ace41ed1320791a325489a08e1',
+    'c4800202ff2418bb8eb4319c1b5868df8437f6a2']) {
+    reject({ parents: [earlierBase], event: { before: earlierBase } })
+  }
 })
 
 test('new wrapper leaves the old guard and public release markers byte-for-byte intact', () => {

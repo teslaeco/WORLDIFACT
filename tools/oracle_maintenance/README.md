@@ -35,6 +35,16 @@ the approved fixed production host. The server RSA public-key canonical bytes
 are pinned separately by SHA-256; this is not the dedicated authentication key's
 fingerprint.
 
+Original administrative access can legitimately retain only ED25519 or ECDSA
+host trust. The historical bootstrap used its authenticated RSA record in a
+temporary file and did not add it to permanent Cloud Shell trust. The refresh
+therefore embeds that same owner-verified public RSA record, checks its exact
+pin before any connection, and supplies it to both SSH calls in a private
+temporary file (0600 inside a 0700 directory). Strict host checking, fixed RSA
+algorithms, the original identities and the production target remain unchanged.
+No key scan or new host identity is accepted. Existing target trust must still
+be present; conflicting RSA records, revocation markers and unsafe files refuse.
+
 The script reads only the public half of the existing dedicated maintenance key
 and matches it to the exact existing forced-command entry. It neither reads the private key contents nor
 creates, replaces, copies, prints or asks for a private key. SSH uses the
@@ -42,6 +52,9 @@ existing identity for transport and one final read-only `status` check. Every
 `authorized_keys` byte, existing host pin, other key, GitHub secret and diagnostic
 encryption recipient remains intact. No firewall, account, sudoers or login
 setting changes. Do not run the historical bootstrap again for this upgrade.
+Permanent local trust and public/private file identities are watched throughout;
+even a same-byte replacement refuses. The temporary trust file is removed on
+normal exit, exceptions and handled interruption signals.
 
 ### Finite transaction and recovery
 
@@ -65,6 +78,20 @@ and reported as unconfirmed. Complete package/backup bytes remain for review;
 only recognized temporary staging bytes are removed. A repeated completed
 refresh is idempotent. Exclusive owner maintenance is required; an unknown or
 interrupted state is never assumed successful or silently repaired.
+
+The owner-facing result adds fixed `stage` and `error` categories. Stages identify
+local preflight, package download, SSH, a remote refusal/result, post-refresh
+status, local preservation, completion or an unknown boundary. Errors contain
+only allowlisted labels, including missing local files, invalid pins, transport
+failure, timeout and interruption. They never include paths, key data, command
+output or exception text. The remote receiver's result contract is unchanged.
+
+An `unconfirmed` wrapper result does not prove rollback or that the old operation
+is still installed. In particular, SSH, post-status or preservation failure can
+occur after the receiver committed. The legacy `old_apply_retired: false` field
+then means retirement was not confirmed, not that the server was observed in
+the old state. Reconcile authenticated read-only status before deciding what to
+do next. There is no automatic refresh, apply or transport retry.
 
 ### Freeze and run order
 

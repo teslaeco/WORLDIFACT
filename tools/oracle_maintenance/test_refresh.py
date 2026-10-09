@@ -7,6 +7,8 @@ import io
 import json
 import os
 from pathlib import Path
+import signal
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -68,9 +70,12 @@ class RefreshTests(unittest.TestCase):
         for name, value in [('SOURCE_COMMIT', self.commit_a),
                             ('NEW_LAUNCHER_SHA', hashlib.sha256(self.launcher).hexdigest()),
                             ('REFRESH_FILES', self.source_hashes),
+                            ('SERVER_KNOWN_HOST', refresh.TARGET + ' ' + self.server_key),
                             ('SERVER_RSA_SHA256', hashlib.sha256(self.server_key.encode()).hexdigest())]:
             self.stack.enter_context(patch.object(refresh, name, value))
         self.calls, self.downloads = [], []
+        self.temporary_hosts = []
+        self.lookup = '# Host found: line 2\n' + refresh.TARGET + ' ' + self.server_key
         self.reply = json.dumps(result())
         self.code = 0
 
@@ -86,8 +91,15 @@ class RefreshTests(unittest.TestCase):
         self.calls.append((argv, kwargs))
         if argv[0] == '/usr/bin/ssh-keygen':
             self.assertEqual(argv, ['/usr/bin/ssh-keygen', '-F', refresh.TARGET, '-f', str(self.trust)])
-            return subprocess.CompletedProcess(argv, 0, '# Host found: line 2\n' + refresh.TARGET + ' ' + self.server_key)
+            return subprocess.CompletedProcess(argv, 0, self.lookup)
         self.assertEqual(argv[0], '/usr/bin/ssh')
+        trust = Path(next(value.split('=', 1)[1] for value in argv if value.startswith('UserKnownHostsFile=')))
+        self.assertNotEqual(trust, self.trust)
+        self.assertEqual(trust.read_text(), refresh.SERVER_KNOWN_HOST)
+        self.assertEqual(stat.S_IMODE(trust.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(trust.parent.stat().st_mode), 0o700)
+        self.assertEqual(trust.parent.parent, self.folder)
+        self.temporary_hosts.append(trust)
         self.assertIs(kwargs['stderr'], subprocess.DEVNULL)
         self.assertEqual(kwargs['env'], refresh.SSH_ENV)
         self.assertEqual(argv[-2], refresh.TARGET)
@@ -109,6 +121,18 @@ class RefreshTests(unittest.TestCase):
         for path, (raw, info) in self.before.items():
             self.assertEqual(path.read_bytes(), raw)
             self.assertEqual(refresh.identity(path.stat()), info)
+        for path in self.temporary_hosts:
+            self.assertFalse(path.parent.exists())
+        self.assertFalse(list(self.folder.glob('refresh-host-*')))
+
+    def public_main(self, *, run=None, reader=None):
+        output = io.StringIO()
+        with redirect_stdout(output), patch.object(Path, 'home', return_value=self.home), \
+                patch.object(refresh, 'public_file', side_effect=reader or self.reader), \
+                patch.object(refresh.subprocess, 'run', side_effect=run or self.runner):
+            code = refresh.main(['--source-commit', self.commit_b, '--approve-grant-refresh',
+                                 '--approve-exact-cancelled-cleanup'])
+        return code, json.loads(output.getvalue())
 
     def test_exact_payload_and_existing_files_preserved_without_private_reads(self):
         opened = []
@@ -116,8 +140,14 @@ class RefreshTests(unittest.TestCase):
 
         def public_only(path, flags, *args, **kwargs):
             opened.append(Path(path))
-            self.assertIn(Path(path), (self.public, self.trust))
-            self.assertFalse(flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC))
+            self.assertNotIn(Path(path), (self.key, self.admin))
+            if flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC):
+                self.assertEqual(Path(path).name, 'known_hosts')
+                self.assertEqual(Path(path).parent.parent, self.folder)
+                self.assertTrue(flags & os.O_EXCL)
+                self.assertTrue(flags & os.O_NOFOLLOW)
+            elif Path(path) not in (self.public, self.trust):
+                self.assertTrue(Path(path).name.startswith('refresh-host-'))
             return original_open(path, flags, *args, **kwargs)
 
         with patch('os.open', side_effect=public_only), patch('builtins.open', side_effect=AssertionError('unexpected open')):
@@ -142,7 +172,7 @@ class RefreshTests(unittest.TestCase):
     def test_both_ssh_calls_disable_alternate_auth_trust_and_execution_routes(self):
         self.invoke()
         required = {'IdentitiesOnly=yes', 'IdentityAgent=none', 'StrictHostKeyChecking=yes',
-                    'UserKnownHostsFile=' + str(self.trust), 'GlobalKnownHostsFile=/dev/null',
+                    'GlobalKnownHostsFile=/dev/null',
                     'HostKeyAlgorithms=rsa-sha2-512,rsa-sha2-256', 'UpdateHostKeys=no',
                     'VerifyHostKeyDNS=no', 'CheckHostIP=yes', 'PreferredAuthentications=publickey',
                     'PasswordAuthentication=no', 'KbdInteractiveAuthentication=no', 'ForwardAgent=no',
@@ -156,6 +186,7 @@ class RefreshTests(unittest.TestCase):
             self.assertEqual(kwargs['cwd'], '/')
         self.assertNotIn('-n', self.calls[1][0])
         self.assertIn('-n', self.calls[2][0])
+        self.assertEqual(self.temporary_hosts[0], self.temporary_hosts[1])
 
     def test_missing_or_partial_key_pair_does_not_generate_or_download(self):
         for path in (self.key, self.public, self.admin, self.trust):
@@ -204,8 +235,25 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(self.invoke(run=hashed), result())
         self.assert_preserved()
 
+    def test_original_non_rsa_trust_uses_approved_temporary_rsa_pin(self):
+        # Public wire-format fixtures: an ED25519 public value and the NIST P-256
+        # base point. Neither fixture is used as a credential or SSH host pin.
+        point = bytes.fromhex('04'
+            '6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'
+            '4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')
+        for algorithm, words in (('ssh-ed25519', [bytes(range(32))]),
+                                 ('ecdsa-sha2-nistp256', [b'nistp256', point])):
+            with self.subTest(algorithm=algorithm):
+                fields = [algorithm.encode(), *words]
+                key = b64(b''.join(len(value).to_bytes(4, 'big') + value for value in fields))
+                self.lookup = refresh.TARGET + ' ' + algorithm + ' ' + key + '\n'
+                self.trust.write_text(self.lookup)
+                self.before[self.trust] = (self.trust.read_bytes(), refresh.identity(self.trust.stat()))
+                self.assertEqual(self.invoke(), result())
+                self.assert_preserved()
+
     def test_unknown_or_multiple_different_server_rsa_keys_refuse_before_download(self):
-        for output in ('', refresh.TARGET + ' ssh-ed25519 fixture\n',
+        for output in ('', refresh.TARGET + ' unknown-algorithm fixture\n',
                        refresh.TARGET + ' ssh-rsa invalid\n',
                        refresh.TARGET + ' ' + self.server_key + refresh.TARGET + ' ssh-rsa invalid\n',
                        '@revoked ' + refresh.TARGET + ' ' + self.server_key):
@@ -214,6 +262,20 @@ class RefreshTests(unittest.TestCase):
                 with self.assertRaises(refresh.RefreshError):
                     self.invoke(run=run)
                 self.assertEqual(run.call_count, 1)
+        self.assertFalse(self.downloads)
+
+    def test_changed_compiled_host_identity_refuses_before_local_reads_or_ssh(self):
+        for value in (refresh.SERVER_KNOWN_HOST.replace(refresh.TARGET, '192.0.2.1'),
+                      refresh.SERVER_KNOWN_HOST.replace('ssh-rsa', 'ssh-ed25519'),
+                      refresh.SERVER_KNOWN_HOST + 'extra\n',
+                      refresh.SERVER_KNOWN_HOST.replace('AAAAB3', 'AAAAB4')):
+            with self.subTest(value=value[:25]), patch.object(refresh, 'SERVER_KNOWN_HOST', value), \
+                    patch.object(refresh, 'owned_path') as inspect:
+                code, observed = self.public_main()
+                self.assertEqual(code, 1)
+                self.assertEqual(observed, refresh.failure('local_preflight', 'host_pin_mismatch'))
+                inspect.assert_not_called()
+        self.assertFalse(self.calls)
         self.assertFalse(self.downloads)
 
     def test_unfrozen_pins_and_nonimmutable_source_fail_before_reads(self):
@@ -309,6 +371,138 @@ class RefreshTests(unittest.TestCase):
             with self.assertRaises(refresh.RefreshError):
                 refresh.package_files(source)
 
+    def test_public_diagnostics_distinguish_boundaries_without_private_output(self):
+        def failed_download(*_args):
+            raise OSError('PRIVATE_DOWNLOAD_DETAIL')
+
+        def transport(argv, **kwargs):
+            if argv[0] == '/usr/bin/ssh-keygen':
+                return self.runner(argv, **kwargs)
+            self.calls.append((argv, kwargs))
+            return subprocess.CompletedProcess(argv, 255, 'PRIVATE_TRANSPORT_DETAIL')
+
+        def malformed(argv, **kwargs):
+            value = self.runner(argv, **kwargs)
+            if argv[-1] != 'status' and argv[0] == '/usr/bin/ssh':
+                value.stdout = 'PRIVATE_RESPONSE_DETAIL'
+            return value
+
+        def timed_out(argv, **kwargs):
+            if argv[0] == '/usr/bin/ssh-keygen':
+                return self.runner(argv, **kwargs)
+            self.calls.append((argv, kwargs))
+            raise subprocess.TimeoutExpired('PRIVATE_COMMAND', 180, output='PRIVATE_OUTPUT')
+
+        def status_denied(argv, **kwargs):
+            value = self.runner(argv, **kwargs)
+            if argv[-1] == 'status':
+                value.returncode, value.stdout = 255, 'PRIVATE_STATUS_DETAIL'
+            return value
+
+        cases = (({'reader': failed_download}, 'download', 'package_unavailable', 1),
+                 ({'run': transport}, 'ssh', 'transport_failed', 2),
+                 ({'run': malformed}, 'ssh', 'invalid_response', 2),
+                 ({'run': timed_out}, 'ssh', 'timeout', 2),
+                 ({'run': status_denied}, 'post_status', 'status_not_confirmed', 3))
+        for kwargs, stage, error, count in cases:
+            with self.subTest(stage=stage, error=error):
+                self.calls.clear()
+                code, observed = self.public_main(**kwargs)
+                self.assertEqual(code, 1)
+                self.assertEqual(observed, refresh.failure(stage, error))
+                self.assertEqual(len(self.calls), count)
+                self.assert_preserved()
+
+    def test_public_diagnostics_identify_missing_key_and_unknown_local_failure(self):
+        saved = self.key.with_name('saved-key')
+        self.key.rename(saved)
+        try:
+            code, observed = self.public_main()
+            self.assertEqual((code, observed), (1, refresh.failure('local_preflight', 'missing_local_file')))
+        finally:
+            saved.rename(self.key)
+        with patch.object(refresh, 'public_key', side_effect=RuntimeError('PRIVATE_KEY_DETAIL')):
+            code, observed = self.public_main()
+        self.assertEqual((code, observed), (1, refresh.failure('local_preflight', 'local_check_failed')))
+        self.assertFalse(self.calls)
+        self.assertFalse(self.downloads)
+
+    def test_identity_change_even_with_same_public_bytes_prevents_ready(self):
+        for path in (self.key, self.admin, self.public, self.trust):
+            with self.subTest(path=path):
+                original = self.before[path][0]
+
+                def changed(argv, **kwargs):
+                    value = self.runner(argv, **kwargs)
+                    if argv[-1] == '/usr/bin/python3 -I -B -':
+                        replacement = path.with_name(path.name + '.replacement')
+                        replacement.write_bytes(original)
+                        replacement.chmod(path.stat().st_mode & 0o777)
+                        replacement.replace(path)
+                    return value
+
+                self.calls.clear()
+                code, observed = self.public_main(run=changed)
+                self.assertEqual((code, observed), (1, refresh.failure('preservation', 'local_files_changed')))
+                self.assertEqual(len(self.calls), 2)
+                self.before[path] = (original, refresh.identity(path.stat()))
+                self.assert_preserved()
+
+    def test_temporary_trust_change_prevents_ssh_and_cleans_up(self):
+        def changed(commit, path, expected):
+            raw = self.reader(commit, path, expected)
+            if path == refresh.LAUNCHER_PATH:
+                temporary = next(self.folder.glob('refresh-host-*/known_hosts'))
+                temporary.write_text('PRIVATE_UNEXPECTED_TRUST')
+            return raw
+        code, observed = self.public_main(reader=changed)
+        self.assertEqual((code, observed), (1, refresh.failure('preservation', 'local_files_changed')))
+        self.assertEqual(len(self.calls), 1)
+        self.assert_preserved()
+
+    def test_signals_during_ssh_clean_private_trust_and_never_retry(self):
+        for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            with self.subTest(signal=number):
+                before = signal.getsignal(number)
+
+                def interrupted(argv, **kwargs):
+                    value = self.runner(argv, **kwargs)
+                    if argv[-1] == '/usr/bin/python3 -I -B -':
+                        signal.getsignal(number)(number, None)
+                    return value
+
+                self.calls.clear()
+                code, observed = self.public_main(run=interrupted)
+                self.assertEqual((code, observed), (1, refresh.failure('ssh', 'interrupted')))
+                self.assertEqual(len(self.calls), 2)
+                self.assertIs(signal.getsignal(number), before)
+                self.assert_preserved()
+
+    def test_cleanup_failure_after_remote_success_is_preservation_not_preflight(self):
+        cleanup = tempfile.TemporaryDirectory.cleanup
+
+        def unconfirmed(temporary):
+            cleanup(temporary)
+            raise OSError('PRIVATE_CLEANUP_DETAIL')
+
+        with patch.object(tempfile.TemporaryDirectory, 'cleanup', unconfirmed):
+            code, observed = self.public_main()
+        self.assertEqual((code, observed), (1, refresh.failure('preservation', 'local_files_changed')))
+        self.assertEqual(len(self.calls), 3)
+        self.assert_preserved()
+
+    def test_public_success_and_remote_refusal_keep_receiver_contract_distinct(self):
+        code, observed = self.public_main()
+        self.assertEqual((code, observed), (0, {**result(), 'stage': 'complete', 'error': None}))
+        for kind in ('refused', 'rolled_back', 'unconfirmed'):
+            with self.subTest(kind=kind):
+                self.calls.clear()
+                self.reply, self.code = json.dumps(result(kind)), 1
+                code, observed = self.public_main()
+                self.assertEqual((code, observed), (1, {**result(kind), 'stage': 'remote_refusal', 'error': kind}))
+                self.assertEqual(len(self.calls), 2)
+                self.assert_preserved()
+
 
 class RefreshPublicBoundaryTests(unittest.TestCase):
     def test_plan_only_has_no_local_reads_network_subprocess_or_refresh(self):
@@ -340,8 +534,20 @@ class RefreshPublicBoundaryTests(unittest.TestCase):
                 code = refresh.main(['--source-commit', 'a' * 40, '--approve-grant-refresh',
                                      '--approve-exact-cancelled-cleanup'])
             self.assertEqual(code, 1)
-            self.assertEqual(json.loads(output.getvalue()), result('unconfirmed'))
+            self.assertEqual(json.loads(output.getvalue()), refresh.failure('unknown',
+                'interrupted' if isinstance(error, KeyboardInterrupt) else 'unconfirmed'))
             apply.assert_called_once_with('a' * 40)
+
+    def test_unknown_diagnostic_fields_cannot_reveal_data_or_break_json_boundary(self):
+        for stage, error in (('PRIVATE_STAGE', 'PRIVATE_ERROR'), ('ssh', 'PRIVATE_ERROR'),
+                             ('ssh', ['PRIVATE_ERROR']), (None, 'timeout')):
+            output = io.StringIO()
+            with redirect_stdout(output), patch.object(refresh, 'refresh',
+                    side_effect=refresh.StageError(stage, error)):
+                code = refresh.main(['--source-commit', 'a' * 40, '--approve-grant-refresh',
+                                     '--approve-exact-cancelled-cleanup'])
+            self.assertEqual((code, json.loads(output.getvalue())),
+                             (1, refresh.failure('unknown', 'unconfirmed')))
 
     def test_result_schema_rejects_raw_extra_duplicate_and_inconsistent_fields(self):
         invalid = [{**result(), 'stdout': 'private'}, {**result(), 'keys_changed': 0},
