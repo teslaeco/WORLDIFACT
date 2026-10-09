@@ -1,6 +1,63 @@
-# WORLDIFACT — TerraformingPlanet Astra heroine released
+# WORLDIFACT — release deployed; live model acceptance still failing
 
-Updated 7 October 2026.
+Current operational evidence: 9 October 2026, 22:45 UTC.
+**NO-GO for claiming that production 3D generation is restored.**
+
+The owner explicitly approved the output-scope release and one test within the
+existing USD 1.75 cap, including failure. Duplicate chat approval was treated as
+one authorization. This current section supersedes earlier installation-pending
+or release-pending statements below; the remaining record is historical evidence.
+
+The exact application source `49a02609a3730976ec0744ecf01877d1fbf16859` was
+published by run 37999173987 as Cloudflare version
+`7d88f9d7-0c32-413f-bcae-b6d0776b54f3`. Its 12 HTML routes, 428 exact built assets
+and exclusive 100% traffic were verified at 22:28:38 UTC. The dedicated approved
+branch workflow omitted declared variables, used `--keep-vars`, retained original
+bindings/migrations and did not synchronize credentials or financial settings.
+Main remains `38e7048c4176fac4c9808203af5bd58a1ae7d10e`; no generic main release
+was invoked. The previous deployment ID is retained in the release artifact.
+
+The new public synthetic MCC test in run 37999751697 submitted exactly one job
+using the deployed Shop request adapter and the original authenticated Oracle.
+It returned `MODEL_FAILED`, not a deliverable. No customer point, hold, billing or
+library row was changed by this engineering test. It is not a signed-in browser
+or owned-library test. Its permanent approval tag is consumed; do not replay it,
+delete the tag/job, or run another paid attempt under this authorization. The
+maximum authorized provider cost was USD 1.75; actual invoiced cost is UNKNOWN.
+
+GET-only reads of this same synthetic test in runs 38000622694 and 38000867858
+confirmed a different boundary from the earlier empty-plan user report:
+
+- One Blender build reached candidate revision 1 with zero recorded tool failures.
+- Recorded total time: 227.53 seconds; AI: 113.44; Blender: 114.08.
+- The host recorded two request attempts, 11,261 input and 6,323 output tokens,
+  with `unknown_usage=false`. These counts are not an invoice or proof that both
+  attempts reached a billable generation endpoint.
+- Terminal detail: `construction_response_unconfirmed`; guard:
+  `WORLDIFACT_ASTRA_COST_GUARD`, reason `TOKEN_COUNT_UNAVAILABLE`, stage `count`.
+- Final assessment was not completed and no accepted final model was returned.
+
+The current typed Gateway wraps both a failed input-token-count call and a
+counted context/deadline/cancellation rejection into TOKEN_COUNT_UNAVAILABLE.
+Therefore this observation does NOT establish exhausted USD funds, a specific
+HTTP error, a too-large context, a 900-second deadline, or a provider outage.
+Do not remove the cost guard, fabricate an acceptance, relabel the preserved
+candidate as completed, or buy another trial to replace missing diagnostic data.
+The source review and retained same-job evidence, not another health check, are
+now the basis for the next correction. Source/CI success remains separate from
+new GLB, preview, download and account-library acceptance.
+
+Evidence artifact SHA-256 values:
+- Deployment: `6e716235c3355a53ac82ad758251b91bfb76b966146d66a2d87591a81a9e5490`
+- One-model report: `33be9b18d00de47d63a4fc716aa14d129c770391f7269d68186ea34ce6ecd431`
+- Same-job stage report: `80ffa88d6a2b6f1ad60c07ac9c38909b6a95fa842562b764bae7a679f95c37fa`
+- Count-guard reason: `2f8b62b6bfe0160adb296f831b192e29dfc85f7d46cf62c077dd1f9c7e901e2d`
+
+The completed one-off release/test/read workflow entrypoints are retired in the
+same evidence commit; their scripts, tests, runs, artifacts and consumed approval
+remain available. No production behavior is changed by this documentation cleanup.
+
+## Historical ledger (earlier claims are scoped to their recorded milestones)
 
 ## LOCAL REVIEW — paid membership points admission (7 October 2026)
 
