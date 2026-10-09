@@ -1,0 +1,48 @@
+name: Read the completed approved MCC test without resubmission
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+    paths: ['.github/workflows/output-scope-result-once.yml']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-output-scope-one-model
+  cancel-in-progress: false
+jobs:
+  read-result:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/fix/generation-audit-recovery-20261009' && github.event.before == '3ed09f0e7c63097d86f3db3ceea333f2baee52fe' && github.run_attempt == 1
+    environment:
+      name: production
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Require the original test receipt and unchanged reviewed implementation
+        run: |
+          test "$(git rev-parse HEAD^)" = 3ed09f0e7c63097d86f3db3ceea333f2baee52fe
+          test "$(git rev-parse refs/tags/worldifact-output-scope-smoke-20261010-once)" = 3ed09f0e7c63097d86f3db3ceea333f2baee52fe
+          git diff --exit-code 3ed09f0e7c63097d86f3db3ceea333f2baee52fe HEAD -- src server tools scripts/approved-output-scope-smoke.mjs
+          echo 'e251fad1ba32d90bb7f5951154c3c139cdc0c6324bd01037ed1211cf18f4c535  scripts/read-output-scope-result.mjs' | sha256sum --check
+          node scripts/read-output-scope-result.mjs --test
+      - name: Read two fixed GET routes for this synthetic test only
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: node scripts/read-output-scope-result.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: output-scope-test-result-${{ github.run_id }}
+          path: live-result-evidence/result.json
+          if-no-files-found: ignore
+          retention-days: 7
+# Only the newly created public synthetic engineering job from run37999751697.
+# No old customer job identifiers, generic job selector, new generation,
+# raw detail/prompt/log/secret output, financial operation or production edit.
