@@ -6,9 +6,9 @@ import { STUDIO_PRICING } from '../src/lib/studioPricing.ts'
 
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', other = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const item: HeldPointsReview = { id, channel: 'blueprint', model: 'astra', state: 'pending-cost', heldPoints: 250 }
-const point = (state: PointSettlement['state'], cost = 250): PointSettlement => ({ version: 1, state, heldPoints: ['held', 'pending-cost'].includes(state) ? cost : 0, chargedPoints: state === 'charged' ? cost : 0 })
+const point = (state: Exclude<PointSettlement['state'], 'waived'>, cost = 250): PointSettlement => ({ version: 1, state, heldPoints: ['held', 'pending-cost'].includes(state) ? cost : 0, chargedPoints: state === 'charged' ? cost : 0 })
 const ticket = `${id}.1791356400000.${'a'.repeat(64)}.${'b'.repeat(64)}`
-const current = (state: PointSettlement['state'] = 'pending-cost', tier?: 'standard' | 'extended') => ({ current: {
+const current = (state: Exclude<PointSettlement['state'], 'waived'> = 'pending-cost', tier?: 'standard' | 'extended') => ({ current: {
   receipt: { id, ticket, createdAt: new Date(1791356400000).toISOString(), ...(tier ? { pricing: STUDIO_PRICING[tier] } : {}) },
   fundingSource: PAID_POINTS_FUNDING, prompt: 'Private model prompt that must not be rendered', startedAt: '2026-10-07T00:00:00.000Z',
   financialState: state === 'held' ? 'reserved' : state === 'charged' ? 'completed' : 'failed',

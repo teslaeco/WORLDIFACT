@@ -418,6 +418,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       deploy_allowed: ${{ steps.scope.outputs.deploy_allowed }}
+      failed_hold_waiver: ${{ steps.scope.outputs.failed_hold_waiver }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -434,4 +435,60 @@ jobs:
           printf '%s  scripts/select-context-tools-release.mjs\n' '7c97d618461501290b1f1a95d345cf4911abbf54c16ab121ab48fefac343ea5a' | sha256sum -c - >&2
           printf '%s  scripts/select-construction-tools-release.mjs\n' '0837a2346e339f4e2510e5e000fb58baeeb074df50d36afb832d6fab68ad05bf' | sha256sum -c - >&2
           printf '%s  config/oracle-construction-tools-release.json\n' '6f0480500ed3ac2f5fb7f4099a8abb9c7e480524289c18feb52900426ae70c0e' | sha256sum -c - >&2
-          node scripts/select-construction-tools-release.mjs >> "$GITHUB_OUTPUT"
+          printf '%s  scripts/select-failed-hold-release.mjs\n' '8e0660119a84347e736df630c2ea9615d98715b61955188ca3d902ede6916735' | sha256sum -c - >&2
+          printf '%s  config/failed-hold-release.json\n' 'acd8e35de14db79a5e9d3b4b1fa92d5f637543df3e9301958d0b2e70b087e17e' | sha256sum -c - >&2
+          node scripts/select-failed-hold-release.mjs >> "$GITHUB_OUTPUT"
+
+  failed_hold_release:
+    needs: context_tools_preflight
+    if: needs.context_tools_preflight.result == 'success' && needs.context_tools_preflight.outputs.failed_hold_waiver == 'true' && (github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'DEPLOY'))
+    environment:
+      name: production
+      url: ${{ steps.failed_hold_receipt.outputs.url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Reverify exact incident release before credential setup
+        run: node scripts/select-failed-hold-release.mjs --require-waiver
+      - name: Check incident deployment input names and format
+        run: node scripts/release-check.ts credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - name: Prepare configuration preserving incident release
+        run: node scripts/prepare-failed-hold-release.mjs
+      - name: Dry-run incident Worker and assets
+        run: npx wrangler deploy --dry-run --config .failed-hold-release.wrangler.json --outdir .wrangler/preview
+      - name: Verify pinned public gallery files
+        run: node scripts/prepare-public-gallery.mjs --verify-dist
+      - name: Deploy incident Worker and assets with remote configuration preserved
+        run: |
+          if WRANGLER_LOG=none WRANGLER_WRITE_LOGS=false WRANGLER_SEND_METRICS=false WRANGLER_SEND_ERROR_REPORTS=false \
+            npx wrangler deploy --config .failed-hold-release.wrangler.json --keep-vars > /dev/null 2>&1; then
+            echo 'Deployment command completed; strict receipt and static verification follows.'
+          else
+            echo '::error::Deployment failed. Potentially private command output was suppressed.'
+            exit 1
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-failed-hold-deploy.ndjson
+      - name: Verify incident assets and exclusive Worker traffic
+        id: failed_hold_receipt
+        run: node scripts/check-failed-hold-release.mjs
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-failed-hold-deploy.ndjson
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

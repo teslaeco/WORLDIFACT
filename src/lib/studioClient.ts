@@ -1,7 +1,7 @@
 import { isStudioPricing, studioPricingFor, type StudioPricing } from './studioPricing.ts'
 import { JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, prepareStudioInput, readStudioGenerationTiming, studioPointsPending, studioPendingPointsDetail, validateStudioInput, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
 import { canSubmitNewDraft } from './studioDraft.ts'
-import { PAID_POINTS_FUNDING, PAID_POINTS_POLICY_HEADER, isPointSettlement, type PointSettlement } from './paidPointsFunding.ts'
+import { PAID_POINTS_FUNDING, PAID_POINTS_POLICY_HEADER, POINT_COST_WAIVED_DETAIL, isPointSettlement, type PointSettlement } from './paidPointsFunding.ts'
 
 // Upload is separate from provider execution: a large mobile request must not
 // inherit the short status-request deadline. Photos are uploaded only once.
@@ -38,6 +38,8 @@ function parseSavedStudioJob(value: unknown): SavedStudioJob {
   if (Object.hasOwn(value, 'fundingSource') && value.fundingSource !== PAID_POINTS_FUNDING) throw new Error('The saved job funding policy needs review. No replacement request was started.')
   const pricing = isStudioPricing(value.pricing) ? value.pricing : receipt.pricing
   if (Object.hasOwn(value, 'pointSettlement') && !isPointSettlement(value.pointSettlement, pricing?.points ?? (profile === FAST_DRAFT_PROFILE ? 50 : 250))) throw new Error('The saved job point settlement needs review. Keep this receipt; no new generation was started.')
+  if (isPointSettlement(value.pointSettlement) && value.pointSettlement.state === 'waived' &&
+    (!(value.fundingSource === PAID_POINTS_FUNDING || receipt.ticket.startsWith('held.')) || typeof value.rejection !== 'string' || value.rejection.length > 600)) throw new Error('The saved job waiver could not be verified. Keep this receipt for review.')
   return { receipt, prompt: value.prompt, startedAt: value.startedAt,
     ...(isStudioPricing(value.pricing) ? { pricing: { ...value.pricing } } : receipt.pricing ? { pricing: { ...receipt.pricing } } : {}),
     ...(typeof value.rejection === 'string' && value.rejection.length <= 600 ? { rejection: value.rejection } : {}),
@@ -52,14 +54,15 @@ export function parseStudioJob(value: unknown, id: string, expectedPoints?: numb
   const pricing = isStudioPricing(value.job.pricing) ? value.job.pricing : undefined
   if (Object.hasOwn(value.job, 'pointSettlement') && !isPointSettlement(value.job.pointSettlement, expectedPoints ?? pricing?.points ?? (expectedPaid ? 250 : undefined))) throw new Error('This job’s point settlement could not be verified. Keep its receipt for review; no charge or refund is inferred.')
   const pointSettlement = isPointSettlement(value.job.pointSettlement) ? { ...value.job.pointSettlement } : undefined
-  if (pointSettlement && (state === 'succeeded' ? pointSettlement.state !== 'charged' : ['failed', 'cancelled'].includes(state)
+  const waived = pointSettlement?.state === 'waived'
+  if (pointSettlement && (waived ? state !== 'failed' || !expectedPaid || value.job.refunded === true || value.job.reconciliationRequired === true || value.job.downloadAllowed === true || value.job.previewAvailable === true : state === 'succeeded' ? pointSettlement.state !== 'charged' : ['failed', 'cancelled'].includes(state)
     ? !['pending-cost', 'released'].includes(pointSettlement.state) : pointSettlement.state !== 'held')) throw new Error('This job’s generation and point settlement states disagree. Keep its receipt for review; no charge or refund is inferred.')
   const pointSettlementUnconfirmed = expectedPaid && !pointSettlement && ['failed', 'cancelled'].includes(state)
   const reconciliationRequired = value.job.reconciliationRequired === true
   const failureCode = state === 'failed' && STUDIO_FAILURE_CODES.includes(value.job.failureCode as NonNullable<StudioJob['failureCode']>) ? value.job.failureCode as StudioJob['failureCode'] : undefined
   const failureDetail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : undefined
   const generationTiming = ['succeeded', 'failed', 'cancelled'].includes(state) ? readStudioGenerationTiming(value.job.generationTiming) : undefined
-  return { id, state, ...(pricing ? { pricing: { ...pricing } } : {}), detail: pointSettlementUnconfirmed || studioPointsPending({ state, pointSettlement }) ? studioPendingPointsDetail(pointSettlement?.heldPoints) : reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : failureDetail || JOB_DETAILS[state], ...(failureCode ? { failureCode } : {}),
+  return { id, state, ...(pricing ? { pricing: { ...pricing } } : {}), detail: waived ? POINT_COST_WAIVED_DETAIL : pointSettlementUnconfirmed || studioPointsPending({ state, pointSettlement }) ? studioPendingPointsDetail(pointSettlement?.heldPoints) : reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : failureDetail || JOB_DETAILS[state], ...(failureCode ? { failureCode } : {}),
     ...(pointSettlementUnconfirmed ? { pointSettlementUnconfirmed: true } : {}),
     ...(pointSettlement ? { pointSettlement } : {}),
     ...(generationTiming ? { generationTiming } : {}),
@@ -74,7 +77,7 @@ class StudioResponseError extends Error {
   pointSettlement?: PointSettlement
   constructor(message: string, status: number, failureCode?: StudioJob['failureCode'], pointSettlement?: PointSettlement) { super(message); this.status = status; this.failureCode = failureCode; this.pointSettlement = pointSettlement }
 }
-async function responseJson(response: Response) {
+async function responseJson(response: Response, expectedId?: string, expectedPaid = false) {
   if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('The server did not return JSON. Your model was not replaced.')
   const reader = response.body?.getReader()
   if (!reader) throw new Error('The server response is empty.')
@@ -95,8 +98,9 @@ async function responseJson(response: Response) {
   if (!response.ok) {
     if (object(value) && Object.hasOwn(value, 'pointSettlement') && !isPointSettlement(value.pointSettlement)) throw new Error('This job’s point settlement could not be verified. Keep its receipt for review; no charge or refund is inferred.')
     const settlement = object(value) && isPointSettlement(value.pointSettlement) ? { ...value.pointSettlement } : undefined
+    if (settlement?.state === 'waived' && (!expectedPaid || !object(value) || value.requestId !== expectedId || value.state !== 'failed' || value.refunded === true)) throw new Error('This job’s waiver could not be verified. Keep its receipt for review; no charge or refund is inferred.')
     const failureCode = object(value) && STUDIO_FAILURE_CODES.includes(value.failureCode as NonNullable<StudioJob['failureCode']>) ? value.failureCode as StudioJob['failureCode'] : undefined
-    throw new StudioResponseError(studioPointsPending({ state: 'failed', pointSettlement: settlement }) ? studioPendingPointsDetail(settlement!.heldPoints) : failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : object(value) && typeof value.error === 'string' ? value.error.slice(0, 600) : `Request failed (${response.status}).`, response.status, failureCode, settlement)
+    throw new StudioResponseError(settlement?.state === 'waived' ? POINT_COST_WAIVED_DETAIL : studioPointsPending({ state: 'failed', pointSettlement: settlement }) ? studioPendingPointsDetail(settlement!.heldPoints) : failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : object(value) && typeof value.error === 'string' ? value.error.slice(0, 600) : `Request failed (${response.status}).`, response.status, failureCode, settlement)
   }
   return value
 }
@@ -160,6 +164,7 @@ export class StudioCoordinator {
     if (this.rejectedJob && this.saved?.pointSettlement) {
       this.rejectedJob.pointSettlement = this.saved.pointSettlement
       if (studioPointsPending(this.rejectedJob)) this.rejectedJob.detail = studioPendingPointsDetail(this.saved.pointSettlement.heldPoints)
+      if (this.saved.pointSettlement.state === 'waived') this.rejectedJob.detail = POINT_COST_WAIVED_DETAIL
     }
     if (this.rejectedJob && this.saved?.fundingSource === PAID_POINTS_FUNDING && !this.saved.pointSettlement) {
       this.rejectedJob.pointSettlementUnconfirmed = true; this.rejectedJob.detail = studioPendingPointsDetail()
@@ -182,7 +187,7 @@ export class StudioCoordinator {
       if (!object(value.current) || typeof value.current.prompt !== 'string' || value.current.prompt.length > 4000 ||
         typeof value.current.startedAt !== 'string' || !Number.isFinite(Date.parse(value.current.startedAt)) ||
         !['reserved','completed','failed'].includes(String(value.current.financialState))) throw new Error('The cloud job recovery record is invalid.')
-      const saved: SavedStudioJob = { receipt: readReceipt(value.current.receipt), prompt: value.current.prompt, startedAt: value.current.startedAt,
+      let saved: SavedStudioJob = { receipt: readReceipt(value.current.receipt), prompt: value.current.prompt, startedAt: value.current.startedAt,
         ...(isStudioPricing(value.current.pricing) ? { pricing: { ...value.current.pricing } } : {}),
         ...(value.current.fundingSource === PAID_POINTS_FUNDING ? { fundingSource: PAID_POINTS_FUNDING } : {}) }
       if (!saved.pricing && saved.receipt.pricing) saved.pricing = saved.receipt.pricing
@@ -190,6 +195,7 @@ export class StudioCoordinator {
       const job = parseStudioJob({ job: { id: saved.receipt.id, state: financial === 'completed' ? 'succeeded' : financial === 'failed' ? 'failed' : 'pending',
         failureCode: value.current.failureCode, pricing: saved.pricing,
         ...(Object.hasOwn(value.current, 'pointSettlement') ? { pointSettlement: value.current.pointSettlement } : {}) } }, saved.receipt.id, saved.pricing?.points, saved.fundingSource === PAID_POINTS_FUNDING)
+      saved = this.retainWaiver(saved, job)
       if (job.pointSettlement) saved.pointSettlement = job.pointSettlement
       this.rememberCostReview(saved, job, reviewKey)
       this.store.setItem(STUDIO_RECEIPT_KEY, JSON.stringify(saved))
@@ -197,7 +203,7 @@ export class StudioCoordinator {
       if (saved.pricing) job.pricing = saved.pricing
       const generationTiming = financial !== 'reserved' ? readStudioGenerationTiming(value.current.generationTiming) : undefined
       if (generationTiming) job.generationTiming = generationTiming
-      this.saved = saved; this.confirmedJob = job; this.rejectedJob = null
+      this.saved = saved; this.confirmedJob = job; this.rejectedJob = job.pointSettlement?.state === 'waived' ? job : null
       return { saved, job }
     } finally { this.recovering = false }
   }
@@ -235,6 +241,14 @@ export class StudioCoordinator {
     }
     if (existing === null) this.store.setItem(key, text)
     if (this.store.getItem(key) !== text) throw new Error('The previous receipt could not be retained. No new model was submitted.')
+  }
+  private retainWaiver(saved: SavedStudioJob, job: StudioJob): SavedStudioJob {
+    if (job.pointSettlement?.state !== 'waived') return saved
+    // Keep the original failed description and credential history before
+    // caching this final customer settlement. A waiver never creates a model.
+    this.preserveReceipt(saved)
+    return { ...saved, fundingSource: PAID_POINTS_FUNDING, pointSettlement: job.pointSettlement, rejection: POINT_COST_WAIVED_DETAIL,
+      ...(job.failureCode ? { rejectionCode: job.failureCode } : {}) }
   }
   async start(input: StudioInput, onPrepared: (saved: SavedStudioJob) => void, owner = '', replaceCompleted = false, fundingSource?: typeof PAID_POINTS_FUNDING): Promise<StudioJob> {
     if (fundingSource !== undefined && fundingSource !== PAID_POINTS_FUNDING) throw new Error('The new request funding policy could not be verified.')
@@ -275,7 +289,7 @@ export class StudioCoordinator {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': receipt.ticket, 'X-WORLDIFACT-Idempotency-Key': receipt.id, ...accessHeaders(owner), ...previousHeaders, ...fundingHeaders },
           body, signal: AbortSignal.timeout(STUDIO_SUBMIT_TIMEOUT_MS),
         })
-        const job = parseStudioJob(await responseJson(result), receipt.id, saved.pricing?.points ?? (saved.generationProfile === FAST_DRAFT_PROFILE ? 50 : 250), saved.fundingSource === PAID_POINTS_FUNDING)
+        const job = parseStudioJob(await responseJson(result, receipt.id, saved.fundingSource === PAID_POINTS_FUNDING), receipt.id, saved.pricing?.points ?? (saved.generationProfile === FAST_DRAFT_PROFILE ? 50 : 250), saved.fundingSource === PAID_POINTS_FUNDING)
         if (!job.pricing && saved.pricing) job.pricing = saved.pricing
         this.rememberCostReview(saved, job, reviewKey)
         this.confirmedJob = job; return job
@@ -306,8 +320,17 @@ export class StudioCoordinator {
       headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(STUDIO_POLL_TIMEOUT_MS),
     })
     try {
-      const job = parseStudioJob(await responseJson(response), saved.receipt.id, saved.pricing?.points ?? (saved.generationProfile === FAST_DRAFT_PROFILE ? 50 : 250), saved.fundingSource === PAID_POINTS_FUNDING || !!saved.pointSettlement)
+      const job = parseStudioJob(await responseJson(response, saved.receipt.id, saved.fundingSource === PAID_POINTS_FUNDING), saved.receipt.id, saved.pricing?.points ?? (saved.generationProfile === FAST_DRAFT_PROFILE ? 50 : 250), saved.fundingSource === PAID_POINTS_FUNDING || !!saved.pointSettlement)
       if (!job.pricing && saved.pricing) job.pricing = saved.pricing
+      if (job.pointSettlement?.state === 'waived') {
+        const settled = this.retainWaiver(saved, job)
+        if (this.saved?.receipt.id === job.id) {
+          const text = JSON.stringify(settled)
+          this.store.setItem(STUDIO_RECEIPT_KEY, text)
+          if (this.store.getItem(STUDIO_RECEIPT_KEY) !== text) throw new Error('The final waiver receipt could not be retained. No new generation was started.')
+          this.saved = settled; this.rejectedJob = job
+        }
+      }
       this.rememberCostReview(saved, job, reviewKey)
       if (this.saved?.receipt.id === job.id) this.confirmedJob = job
       return job
@@ -345,7 +368,7 @@ export class StudioCoordinator {
     const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}/${path}`, {
       headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(180_000),
     })
-    if (!response.ok) { await responseJson(response); throw new Error('The artifact is unavailable.') }
+    if (!response.ok) { await responseJson(response, saved.receipt.id, saved.fundingSource === PAID_POINTS_FUNDING); throw new Error('The artifact is unavailable.') }
     const maximum = format === 'model' ? STUDIO_MODEL_LIMIT : 512 * 1024 * 1024
     const declared = Number(response.headers.get('content-length') || 0)
     if (declared && declared > maximum) { await response.body?.cancel(); throw new Error('This export is too large for this download.') }

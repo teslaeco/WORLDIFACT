@@ -15,6 +15,7 @@ import {
   CONFIG_BLOB as CONSTRUCTION_CONFIG_BLOB, SCRIPT_PATH as CONSTRUCTION_SCRIPT,
   guardedWorkflow as constructionWorkflow,
 } from '../scripts/select-construction-tools-release.mjs'
+import { historicalWorkflow, HISTORICAL_TEST_BLOBS } from '../scripts/select-failed-hold-release.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const head = '1'.repeat(40), other = '2'.repeat(40), zero = '0'.repeat(40)
@@ -24,7 +25,9 @@ const scriptBytes = readFileSync(join(root, SCRIPT_PATH))
 // base workflow. Neither Git history nor a self-asserted derived fixture suffices.
 const originalIf = "github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'DEPLOY')"
 const guardedHeader = `jobs:\n  deploy:\n    needs: context_tools_preflight\n    if: needs.context_tools_preflight.result == 'success' && needs.context_tools_preflight.outputs.deploy_allowed == 'true' && (${originalIf})\n`
-const currentWorkflow = readFileSync(join(root, WORKFLOW_PATH), 'utf8')
+// Reconstruct the immutable prior workflow; the new release separately pins
+// this harness update and verifies the complete new workflow and test bytes.
+const currentWorkflow = historicalWorkflow(readFileSync(join(root, WORKFLOW_PATH), 'utf8'))
 const workflowParts = currentWorkflow.split('\n  context_tools_preflight:\n')
 assert.equal(workflowParts.length, 2, 'Exactly one appended preflight is required.')
 assert.equal(workflowParts[0].split(guardedHeader).length, 2, 'Exactly one guarded deploy header is required.')
@@ -124,7 +127,7 @@ test('the complete reviewed tools squash skips deploy and has exactly 26 bound f
   assert.equal(Object.keys(PAYLOAD_BLOBS).length, 22)
   assert.equal(blob(baseWorkflow), BASE_WORKFLOW_BLOB)
   assert.equal(readFileSync(join(root, MARKER_PATH), 'utf8'), MARKER_CONTENT)
-  assert.equal(readFileSync(join(root, WORKFLOW_PATH), 'utf8'), currentExpectedWorkflow)
+  assert.equal(currentWorkflow, currentExpectedWorkflow)
   // The historical guard and its TEST_BLOB remain immutable. This reviewed
   // harness adaptation is instead pinned by the new exact construction batch.
   assert.equal(constructionConfig.baseCommit, CONSTRUCTION_BASE)
@@ -132,7 +135,7 @@ test('the complete reviewed tools squash skips deploy and has exactly 26 bound f
     assert.equal(constructionConfig.status, 'FROZEN')
     assert.equal(blob(constructionConfigBytes), CONSTRUCTION_CONFIG_BLOB)
     assert.equal(constructionConfig.payload[TEST_PATH].oldBlob, TEST_BLOB)
-    assert.equal(constructionConfig.payload[TEST_PATH].newBlob, blob(readFileSync(join(root, TEST_PATH))))
+    assert.equal(constructionConfig.payload[TEST_PATH].newBlob, HISTORICAL_TEST_BLOBS[TEST_PATH])
   } else {
     assert.equal(constructionConfig.status, 'UNFROZEN_REFUSE')
   }
