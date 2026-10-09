@@ -1,0 +1,146 @@
+name: One isolated legacy USD 1.75 fixture
+on:
+  push:
+    branches: ['codex/legacy-usd175-fixture-20261009']
+    paths:
+      - '.github/workflows/model-legacy-usd175-fixture.yml'
+      - 'tools/model_construction/offline_legacy_usd175_experiment.py'
+      - 'tools/model_construction/test_offline_legacy_usd175_experiment.py'
+permissions:
+  contents: read
+concurrency:
+  group: legacy-usd175-fixture-20261009
+  cancel-in-progress: false
+jobs:
+  isolated-fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Refuse another branch, parent, attempt or expired execution
+        env:
+          REPOSITORY: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python3 - <<'PY'
+          import datetime, os
+          assert os.environ['REPOSITORY'] == 'teslaeco/WORLDIFACT'
+          assert os.environ['EVENT'] == 'push'
+          assert os.environ['REF'] == 'refs/heads/codex/legacy-usd175-fixture-20261009'
+          assert os.environ['BEFORE'] == '38e7048c4176fac4c9808203af5bd58a1ae7d10e'
+          assert os.environ['ATTEMPT'] == '1'
+          assert datetime.datetime.now(datetime.timezone.utc) < datetime.datetime(2026, 10, 9, 8, tzinfo=datetime.timezone.utc)
+          PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify the single exact-parent three-file addition
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          parent = '38e7048c4176fac4c9808203af5bd58a1ae7d10e'
+          values = subprocess.check_output(['git', 'rev-list', '--parents', '-n', '1', 'HEAD'], text=True).split()
+          assert len(values) == 2 and values[1] == parent
+          expected = {'.github/workflows/model-legacy-usd175-fixture.yml',
+            'tools/model_construction/offline_legacy_usd175_experiment.py',
+            'tools/model_construction/test_offline_legacy_usd175_experiment.py'}
+          changes = subprocess.check_output(['git', 'diff-tree', '--no-commit-id', '--name-status', '-r', 'HEAD'], text=True).splitlines()
+          assert {line.split('\t')[1] for line in changes} == expected
+          assert len(changes) == 3 and all(line.startswith('A\t') for line in changes)
+          PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/WORLDIFACT
+          ref: 2380a7e2dad05a40b3753faf06c2635ed444be51
+          path: .context-ancestor
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: .model-completion-source
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Assemble exact public ancestry into a new synthetic stage
+        run: |
+          python - <<'PY'
+          import json, pathlib, subprocess
+          root = pathlib.Path('.model-completion-source')
+          pin = 'd3f61b842dcfeda2ed794210caafc391919a75be'
+          def git(*args):
+              return subprocess.check_output(['git', '--no-replace-objects', '-C', str(root), *args])
+          assert git('rev-parse', 'HEAD').decode().strip() == pin
+          entries = []
+          for entry in git('ls-tree', '-r', '-z', pin).split(b'\0'):
+              if entry:
+                  metadata, path = entry.split(b'\t', 1)
+                  mode, kind, sha = metadata.decode().split()
+                  entries.append({'path': path.decode(), 'mode': mode, 'type': kind, 'sha': sha})
+          (root / 'pinned-tree.json').write_text(json.dumps({'sha': pin, 'truncated': False, 'tree': entries}))
+          PY
+          python -B tools/model_construction/assemble_test_runtime.py --ancestor .context-ancestor --source .model-completion-source/oracle_connector --destination .legacy-existing
+          python -B tools/model_construction/offline_legacy_usd175_experiment.py prepare --public .model-completion-source/oracle_connector --installed .legacy-existing --ancestor .context-ancestor --workspace .legacy-usd175
+      - name: Refusal and unchanged USD 1.75 accounting checks
+        env:
+          LEGACY_USD175_TEST_STAGE: ${{ github.workspace }}/.legacy-usd175/stage
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -B tools/model_construction/test_offline_legacy_usd175_experiment.py -v
+      - name: Prepare official checksum-verified CLI and Blender toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install --no-install-recommends -y podman uidmap slirp4netns fuse-overlayfs
+          python -B .legacy-usd175/stage/install_codex.py --destination .legacy-usd175/stage/tools/codex
+          mkdir .legacy-usd175/image
+          curl --fail --location --retry 2 https://download.blender.org/release/Blender4.3/blender-4.3.0-linux-x64.tar.xz --output .legacy-usd175/image/blender-4.3.0-linux-x64.tar.xz
+          curl --fail --location --retry 2 https://download.blender.org/release/Blender4.3/blender-4.3.0.sha256 --output .legacy-usd175/image/blender-4.3.0.sha256
+          (cd .legacy-usd175/image && sha256sum --check --ignore-missing blender-4.3.0.sha256 && tar -xf blender-4.3.0-linux-x64.tar.xz)
+          cat > .legacy-usd175/image/Containerfile <<'EOF'
+          FROM docker.io/library/ubuntu:24.04
+          RUN apt-get update && apt-get install --no-install-recommends -y libx11-6 libxi6 libxrender1 libxfixes3 libxkbcommon0 libsm6 libice6 libgl1 libegl1 libdbus-1-3 libgomp1 && rm -rf /var/lib/apt/lists/*
+          COPY blender-4.3.0-linux-x64 /opt/blender
+          ENTRYPOINT ["/opt/blender/blender"]
+          EOF
+          podman build --tag localhost/froge-blender:local .legacy-usd175/image
+          podman image inspect localhost/froge-blender:local --format '{{.Id}}' > .legacy-usd175/container-image-id.txt
+          .legacy-usd175/stage/tools/codex/codex --version
+      - name: Real pinned CLI, Code Mode, MCP and original Podman sandbox with no external network
+        run: |
+          set -o pipefail
+          mkdir .legacy-usd175/evidence
+          task_python=$(command -v python)
+          task_user=$(id -un)
+          task_root=$PWD
+          sudo timeout --signal=TERM --kill-after=60s 600s unshare --net -- /bin/bash -c '
+            set -euo pipefail
+            ip link set lo up
+            exec runuser -u "$1" -- env -i PATH="$2" HOME="$3" USER="$1" LOGNAME="$1" LANG=C.UTF-8 XDG_RUNTIME_DIR="$4" DBUS_SESSION_BUS_ADDRESS="$5" PYTHONDONTWRITEBYTECODE=1 "$6" -B "$7/tools/model_construction/offline_legacy_usd175_experiment.py" run --source "$7/.legacy-usd175/stage" --workspace "$7/.legacy-usd175/evidence"
+          ' fixture "$task_user" "$PATH" "$HOME" "${XDG_RUNTIME_DIR:-}" "${DBUS_SESSION_BUS_ADDRESS:-}" "$task_python" "$task_root" 2>&1 | tee .legacy-usd175/experiment.log
+      - name: Upload only synthetic experiment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: legacy-usd175-synthetic-evidence-${{ github.run_id }}
+          path: |
+            .legacy-usd175/experiment.log
+            .legacy-usd175/container-image-id.txt
+            .legacy-usd175/source-provenance.json
+            .legacy-usd175/evidence/original-gate.log
+            .legacy-usd175/evidence/legacy-usd175-evidence.json
+            .legacy-usd175/evidence/artifacts/model.glb
+            .legacy-usd175/evidence/artifacts/front.png
+            .legacy-usd175/evidence/artifacts/side.png
+            .legacy-usd175/evidence/artifacts/back.png
+            .legacy-usd175/evidence/artifacts/ledger.json
+            .legacy-usd175/evidence/artifacts/agent-usage.json
+            .legacy-usd175/evidence/artifacts/agent-tools.json
+            .legacy-usd175/evidence/artifacts/agent-outcome.json
+            .legacy-usd175/evidence/artifacts/codex-events.jsonl
+            .legacy-usd175/evidence/artifacts/codex-stderr.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 2
