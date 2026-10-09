@@ -1075,3 +1075,31 @@ hashes bind the corrected code without weakening checks. No Oracle installation,
 restart, main merge, deployment, payment/point change or paid test was performed.
 Production restoration remains unverified until the actual request and a newly
 accepted original GLB are checked. Existing building/MCC originals are unchanged.
+
+## Decoder update delivery — 9 October 2026
+
+All six pull-request workflows on `71ccc84d4dca71a19e2ac3583c05a4563ce7e3a3`
+completed successfully, including construction run 37965169861's native Blender
+job and Verify WORLDIFACT run 37965169576. These results cover the decoder source
+correction, not a production installation or an accepted new paid model.
+
+The installation gap is now addressed with a separate explicit
+`--update-response-phase` mode. It requires the entire frozen already-installed
+initial-edit source map and its valid receipt chain. It writes only the decoder
+and the top construction receipt, preserving previous initial-edit evidence and
+all older receipts. Existing idle fences, four offline gates, rollback protection
+and activation checks remain required. The owner-run checksum-pinned launcher
+passes this new mode explicitly; retired modes and conflicting flags refuse.
+No implicit update, secret export, broader SSH grant, job cancellation, financial
+change or paid generation is introduced. New transaction regressions cover the
+exact two-file write set, permissions/history preservation, failures before and
+after writes, gate failures, active/cancelled work and ambiguous activation.
+
+The original restricted GitHub maintenance grant supports fixed historical
+operations, not arbitrary SSH commands. Its stored credentials are not missing
+by definition, but they do not authorize new source bytes without a reviewed
+grant update. No such grant or account change is made by this repair. The
+[installation handoff](RESPONSE_PHASE_INSTALL_20261009.md) uses the original
+owner's existing SSH connection instead. The new installation mode must pass
+its exact-head hosted tests before delivery; their outcome is recorded in the
+PR. No Oracle installation or production-restored claim is made by this commit.

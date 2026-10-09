@@ -178,7 +178,7 @@ FILES.update({'construction_fence.py': ('tools/model_construction/construction_f
  'construction_health.py': ('tools/model_construction/construction_health.py',
                             '39e3c75e0be7288d87f18a2e48ef7dd9f41df36b'),
  'construction_manifest.py': ('tools/model_construction/construction_manifest.py',
-                              '62b430a0ff8b80c2780e7d47b1be4930c6fab531'),
+                              'bb2ddd0f9b8e62e955c74f2d54a76390747eecc3'),
  'construction_payload.py': ('tools/model_construction/construction_payload.py',
                              'a4d3db90b4934dbdd73bb311b8db19a469cf2628'),
  'construction_policy.py': ('tools/model_construction/construction_policy.py',
@@ -187,7 +187,7 @@ FILES.update({'construction_fence.py': ('tools/model_construction/construction_f
                                  '5c83a272b5b2207fbdf8ad510773b909e26c3499'),
  'gateway_patch.py': ('tools/model_construction/gateway_patch.py', '39095208cd1e90c03fc35f81f93a63535a0930b0'),
  'install_construction.py': ('tools/model_construction/install_construction.py',
-                             'b32a212282b38d7b7cf6175e4b2adacf5d04a047'),
+                             'ec72bef3a82b54039019745978c7533dcecab540'),
  'offline_construction.py': ('tools/model_construction/offline_construction.py',
                              '3f978bdce0d9158c1dd8d361b757d7b020a2f1ad'),
  'offline_legacy_standard.py': ('tools/model_construction/offline_legacy_standard.py',
@@ -247,7 +247,8 @@ try:
     with tempfile.TemporaryFile() as output:
         process=subprocess.Popen([sys.executable,'-B',str(folder/'install_construction.py'),'--approve-service-maintenance'] +
             (['--allow-cancelled-cleanup','--expected-cancelled-job',EXPECTED_CANCELLED_JOB] if ALLOW_CANCELLED_CLEANUP else []) +
-            (['--update-initial-edit'] if UPDATE_INITIAL_EDIT else []),
+            (['--update-initial-edit'] if UPDATE_INITIAL_EDIT else []) +
+            (['--update-response-phase'] if UPDATE_RESPONSE_PHASE else []),
             cwd=folder,stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT)
         def relay(number,_frame):
             if process.poll() is None:process.send_signal(number)
@@ -276,18 +277,18 @@ except (Exception,KeyboardInterrupt):
     print(json.dumps(failed,sort_keys=True),flush=True);raise SystemExit(1)
 '''
 
-def script(payload, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False):
+def script(payload, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False, update_response_phase=False):
     if approved is not True:raise LaunchError('Explicit maintenance approval is required.')
-    if type(update_payload) is not bool or type(update_initial_edit) is not bool:
+    if any(type(mode) is not bool for mode in (update_payload, update_initial_edit, update_response_phase)):
         raise LaunchError('Explicit update modes must be boolean.')
-    if update_payload and update_initial_edit:raise LaunchError('Conflicting update modes; no connection made.')
+    if sum((update_payload, update_initial_edit, update_response_phase)) > 1:raise LaunchError('Conflicting update modes; no connection made.')
     if update_payload:raise LaunchError('Payload update requires the historical pinned package; no connection made.')
     if type(allow_cancelled_cleanup) is not bool:raise LaunchError('Explicit cleanup consent must be boolean.')
     if (allow_cancelled_cleanup and (not isinstance(expected_cancelled_job,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',expected_cancelled_job))
             or not allow_cancelled_cleanup and expected_cancelled_job is not None):
         raise LaunchError('Cleanup requires the exact approved cancelled job identity; no connection made.')
     return ('EXPECTED='+repr({name:item[1] for name,item in FILES.items()})+'\nPAYLOAD='+repr(payload)
-            +'\nUPDATE_PAYLOAD='+repr(update_payload)+'\nUPDATE_INITIAL_EDIT='+repr(update_initial_edit)+'\nAPPROVED=True\nALLOW_CANCELLED_CLEANUP='+repr(allow_cancelled_cleanup)+'\nEXPECTED_CANCELLED_JOB='+repr(expected_cancelled_job)+'\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
+            +'\nUPDATE_PAYLOAD='+repr(update_payload)+'\nUPDATE_INITIAL_EDIT='+repr(update_initial_edit)+'\nUPDATE_RESPONSE_PHASE='+repr(update_response_phase)+'\nAPPROVED=True\nALLOW_CANCELLED_CLEANUP='+repr(allow_cancelled_cleanup)+'\nEXPECTED_CANCELLED_JOB='+repr(expected_cancelled_job)+'\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
             +'\nOUTPUT_LIMIT='+repr(OUTPUT_LIMIT)+'\n'+REMOTE)
 
 def invoke(ssh, program):
@@ -308,6 +309,7 @@ def main(argv=None):
     updates = parser.add_mutually_exclusive_group()
     updates.add_argument('--update-payload', action='store_true')
     updates.add_argument('--update-initial-edit', action='store_true')
+    updates.add_argument('--update-response-phase', action='store_true')
     parser.add_argument('--allow-cancelled-cleanup', action='store_true')
     parser.add_argument('--expected-cancelled-job')
     args = parser.parse_args(argv)
@@ -325,8 +327,10 @@ def main(argv=None):
     commit = source_commit(args.source_commit)
     payload = package(commit)
     program = script(payload, approved=True, allow_cancelled_cleanup=args.allow_cancelled_cleanup,
-                     expected_cancelled_job=args.expected_cancelled_job, update_initial_edit=args.update_initial_edit)
-    print('Running the exact reviewed initial-edit update. No paid model request.' if args.update_initial_edit
+                     expected_cancelled_job=args.expected_cancelled_job, update_initial_edit=args.update_initial_edit,
+                     update_response_phase=args.update_response_phase)
+    print('Running the exact reviewed response decoder update. No paid model request.' if args.update_response_phase
+          else 'Running the exact reviewed initial-edit update. No paid model request.' if args.update_initial_edit
           else 'Running the exact reviewed construction transaction. No paid model request.', flush=True)
     if args.allow_cancelled_cleanup:
         print('Explicit consent applies only to the single bound cancelled job. Its history and files are preserved.', flush=True)
