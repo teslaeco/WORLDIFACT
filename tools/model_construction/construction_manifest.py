@@ -32,7 +32,7 @@ PAYLOAD_AFTER = {**INSTALLED_V1, 'construction_payload.py': '3b7e5af5192724af4d7
 INITIAL_EDIT_BEFORE = dict(PAYLOAD_AFTER)
 INITIAL_EDIT_HELPERS = frozenset(('construction_payload.py', 'phased_controller.py', 'runtime_controller.py'))
 EXPECTED_AFTER = {**INITIAL_EDIT_BEFORE,
- 'construction_payload.py': '475e8251a2255775889d00d0611bb8954044cfd7f2dfba27c6735403408c35b8',
+ 'construction_payload.py': 'dc65d54672b657e260a1a4a24da6657e95581de479b55e6e8c9b26f93a49e2bb',
  'phased_controller.py': '1825f3cbff6e229799d22001481d8075a8e8b5c567e60b3736a9208126c99d6b',
  'runtime_controller.py': '9188b29c60ac26ab9f63781660db548b1757ee430fc4b33a43930f6868168b0d'}
 MODIFIED = runtime_patch.MODIFIED

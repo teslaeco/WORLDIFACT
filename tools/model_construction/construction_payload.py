@@ -315,17 +315,37 @@ def output_text(response):
             raise Refused('unexpected_provider_output:message_role')
         if item.get('status') != 'completed':
             raise Refused('unexpected_provider_output:message_status')
+        phase = item.get('phase')
+        if phase is not None and (not isinstance(phase, str)
+                or phase not in ('commentary', 'final_answer')):
+            raise Refused('unexpected_provider_output:message_phase')
+        content = item.get('content')
+        if not isinstance(content, list) or not content:
+            raise Refused('single_typed_output_required')
+        # Validate every message before selecting the final one. Ignoring a
+        # preamble must not hide a refusal, unfinished output or a tool result.
+        if any(isinstance(block, dict) and block.get('type') == 'refusal' for block in content):
+            raise Refused('provider_refused_scene_or_assessment')
+        if any(not isinstance(block, dict) or block.get('type') != 'output_text'
+                or not isinstance(block.get('text'), str)
+                or block.get('annotations', []) != [] for block in content):
+            raise Refused('single_typed_output_required')
         messages.append(item)
-    if len(messages) != 1 or not isinstance(messages[0].get('content'), list):
+    # Responses phase=commentary is an intermediate update, not a scene or
+    # assessment. Do not concatenate it with JSON, or choose the last message
+    # blindly. A multi-message answer needs one explicitly final last message.
+    # Missing/null phase remains compatible for the original single-message
+    # response. Raw-response authentication/usage checks run before this helper.
+    # https://developers.openai.com/api/docs/guides/reasoning#phase-parameter
+    answers = [item for item in messages if item.get('phase') != 'commentary']
+    if len(answers) != 1:
         raise Refused('single_typed_output_required')
-    content = messages[0]['content']
-    if any(isinstance(item, dict) and item.get('type') == 'refusal' for item in content):
-        raise Refused('provider_refused_scene_or_assessment')
-    if (len(content) != 1 or not isinstance(content[0], dict)
-            or content[0].get('type') != 'output_text' or not isinstance(content[0].get('text'), str)
-            or content[0].get('annotations', []) != []):
+    answer = answers[0]
+    if len(messages) > 1 and (answer.get('phase') != 'final_answer' or messages[-1] is not answer):
         raise Refused('single_typed_output_required')
-    return content[0]['text']
+    if len(answer['content']) != 1:
+        raise Refused('single_typed_output_required')
+    return answer['content'][0]['text']
 
 
 def parse_response(phase, inputs, packet, prepared, admission, receipt,

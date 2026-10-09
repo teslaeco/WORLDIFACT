@@ -272,6 +272,13 @@ class ScriptedProvider:
             'usage': {'input_tokens': 4096, 'output_tokens': 300, 'total_tokens': 4396,
                 'input_tokens_details': {'cached_tokens': 0, 'cache_write_tokens': 0},
                 'output_tokens_details': {'reasoning_tokens': 20}}}
+        # The documented intermediate message is deliberately not typed JSON.
+        # Every real Blender case must select only the final answer after the
+        # Gateway authenticated the complete, unmodified response and usage.
+        response['output'].insert(0, {'type': 'message', 'id': 'commentary_native_' + phase,
+            'role': 'assistant', 'status': 'completed', 'phase': 'commentary',
+            'content': [{'type': 'output_text', 'text': 'Synthetic intermediate update, not a scene or verdict.',
+                         'annotations': []}]})
         return FixtureResponse(b'data: ' + canonical({'type': 'response.completed', 'response': response}).encode() + b'\n\n')
 
 

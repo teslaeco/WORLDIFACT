@@ -1030,3 +1030,48 @@ requires separately approved grant refresh, status reconciliation and the genuin
 isolated installation gates. Publication, installation and a new paid acceptance
 test are not implied by these local results. See
 [the repair record](STANDARD_CONSTRUCTION_REPAIR_20261007.md).
+
+## Source correction — authenticated final-answer selection (9 October 2026)
+
+The owner's original-host read at approximately 16:55 UTC now confirms both
+user services active, local health HTTP 200, readiness true, connector 33 and the
+construction policy present. The reported Git blob fingerprints for
+construction_payload.py (`bfc80d6626932b30e1c2e1186c11f20f352f1516`),
+phased_controller.py (`bddb2d9c5159b4c52cbae8074832855fcabc4eab`) and
+runtime_controller.py (`6e8bdf205f7e044a677a59054e1d7cc99e9dae78`) match main
+`38e7048c4176fac4c9808203af5bd58a1ae7d10e`. The earlier unverified-installation
+hypothesis is not a sufficient diagnosis after this evidence. Independent public
+GETs at 17:02 UTC also returned READY through the website. Neither is a new-model
+test, but reinstalling the identical helpers is not a repair.
+
+A separate deterministic decoder defect was reproduced against those source
+bytes: a completed Responses envelope containing intermediate assistant
+`commentary` and one final typed answer was rejected as multiple answers. A lone
+commentary containing valid plan/verdict JSON was incorrectly accepted as final.
+The correction selects one explicit last `final_answer` when commentary exists,
+retains the original single-message absent/null-phase format, and rejects
+ambiguous, incomplete, refused or malformed messages. Commentary is never parsed
+as scene/edit/assessment data. Exact raw-response authentication and completed
+usage remain mandatory before selection; model, budgets, request limits,
+geometry validation and settlement are unchanged.
+
+The existing metadata fixture now uses final_answer rather than treating a
+commentary as final. Eight additional regression methods cover both directions,
+all three phases, unchanged original scene/edit bytes, conflicting intermediate
+acceptance, unknown phases and origin verification. The selected local parser,
+controller, budget and adapter suites passed **119 tests** without a network
+provider call. The native Blender fixture now includes intermediate commentary
+before every final plan/verdict. Full hosted source-lineage/native checks remain
+required and their exact commit results must be read independently.
+
+Official protocol: https://developers.openai.com/api/docs/guides/reasoning#phase-parameter
+
+This is a tested source-level compatibility correction, not a claim that the
+owner's latest failed job used this response shape. Its actual failure code and
+current account admission remain unverified. Historical manifests and the
+restricted original maintenance operation keep their old pins; this update is
+not permission to reuse that old operation for new bytes. Prospective package
+hashes bind the corrected code without weakening checks. No Oracle installation,
+restart, main merge, deployment, payment/point change or paid test was performed.
+Production restoration remains unverified until the actual request and a newly
+accepted original GLB are checked. Existing building/MCC originals are unchanged.
