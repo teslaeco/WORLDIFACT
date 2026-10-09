@@ -36,12 +36,19 @@ def validate_scene(raw, prompt):
     return value
 
 
+def validate_edit(code):
+    """Syntax-only double; unchanged sandbox coverage uses pinned native sources."""
+    compile(code, '<scripted-preflight>', 'exec')
+    return code, []
+
+
 class ScriptedPolicy:
     def __init__(self):
         self.actions = []; self.admissions = []; self.confirmed = []
         self.deny_action = None; self.deny_phase = None
         self.allow_correction = True; self.authenticated = True
         self.corrections = 0
+        self.allow_initial_edit = True; self.initial_edits = 0
 
     def check(self, action, inputs, candidate):
         self.actions.append(action)
@@ -61,6 +68,11 @@ class ScriptedPolicy:
         assert remaining == ('reassessment',)
         return self.allow_correction
 
+    def admit_initial_edit(self, inputs, remaining):
+        self.initial_edits += 1
+        assert remaining == ('inspection',)
+        return self.allow_initial_edit
+
 
 class ScriptedJob:
     def __init__(self, original):
@@ -69,11 +81,13 @@ class ScriptedJob:
         self.revision = self.attempts = 0; self.finished = False; self.records = []
         self.seen = set(); self.outcome = None; self.hash = 'a' * 64
         self.image = base64.b64encode(PNG).decode(); self.report = {'triangles': 20}
+        self.calls = []
 
     def record(self, name, status, error=None):
         self.records.append((name, status))
 
     def call(self, name, arguments):
+        self.calls.append((name, deepcopy(arguments)))
         if arguments['expected_revision'] != self.revision:
             raise ValueError('Stale revision')
         if name in ('build_model', 'edit_model'):
@@ -109,6 +123,7 @@ class ControllerTests(unittest.TestCase):
             required_views=lambda *_: {'front', 'side', 'back'},
             current_candidate=self.job.candidate, completed_outcome=lambda *_: self.job.outcome,
             check_arguments=lambda *_: None, verify_inputs=lambda *_: True,
+            prepare_code=validate_edit,
             tools=[{'name': name, 'inputSchema': {}} for name in
                    ('build_model', 'edit_model', 'inspect_render', 'finish_model')])
         self.reply_transform = lambda value: value
@@ -162,6 +177,164 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(tuple(r.data for r in self.packets[0].renders), (PNG, PNG, PNG))
         self.assertEqual([r.view for r in self.packets[0].renders], ['front', 'side', 'back'])
         self.assertEqual(len(self.policy.confirmed), 2)
+        self.assertEqual(self.policy.initial_edits, 0)
+
+    def test_initial_edit_precedes_all_five_final_revision_views_without_extra_response(self):
+        code = "detail = ellipsoid('detail', (0, 0, 0), (1, 1, 1), material)"
+        self.plan_value = pc.ScenePlan(pc.canonical(scene()), code)
+        self.adapter.required_views = lambda *_: {'front', 'side', 'back', 'face', 'three-quarter'}
+        preflight = []
+        def validate(code):
+            self.assertEqual(self.job.attempts, 0)
+            self.assertEqual(self.job.calls, [])
+            preflight.append(code)
+            return code, []
+        self.adapter.prepare_code = validate
+        result = self.controller.run()
+        self.assertEqual(preflight, [code, '\n' + code])
+        self.assertEqual([name for name, _ in self.job.calls],
+            ['build_model', 'edit_model'] + ['inspect_render'] * 5 + ['finish_model'])
+        self.assertEqual([args['expected_revision'] for _, args in self.job.calls], [0, 1] + [2] * 6)
+        self.assertEqual(self.job.calls[1][1]['code'], code)
+        self.assertEqual([r.view for r in self.packets[0].renders],
+                         ['front', 'side', 'back', 'face', 'three-quarter'])
+        self.assertEqual(result.candidate, self.packets[0].candidate)
+        self.assertEqual(result.candidate.revision, 2)
+        self.assertEqual(result.candidate.model_sha256, self.job.hash)
+        self.assertEqual(self.policy.initial_edits, 1)
+        self.assertEqual(self.response_number, 2)
+        self.assertEqual(len(self.policy.admissions), 2)
+        self.assertEqual(len(self.policy.confirmed), 2)
+        self.assertEqual(result.as_server_outcome()['revision'], 2)
+
+    def test_initial_edit_preserves_original_references_and_fingerprint(self):
+        refs = (pc.Reference(pc.canonical({'name': 'Back', 'view': 'back', 'custom': 17}), 'image/png', PNG),
+                pc.Reference(pc.canonical({'name': 'Front', 'view': 'front'}), 'image/png', PNG + b'original'))
+        inputs = pc.Inputs.freeze(self.original, refs)
+        self.plan_value = pc.ScenePlan(pc.canonical(scene()), 'obj.scale.x = 1.01')
+        controller = pc.Controller(inputs, self.adapter, self.policy, self.plan, self.assess, self.prepare)
+        controller.run()
+        self.assertEqual(len(self.callback_inputs), 2)
+        self.assertTrue(all(value.fingerprint == inputs.fingerprint and value.references == refs
+                            for value in self.callback_inputs))
+        self.assertEqual(self.packets[0].candidate.execution_id, inputs.request['execution_id'])
+
+    def test_initial_edit_bounds_and_original_validator_fail_before_any_build(self):
+        for code in ('', '  ', 1, False, {}, 'x' * 20001, 'return 1', 'if invalid syntax:'):
+            with self.subTest(code=str(code)[:40]):
+                self.setUp(); self.plan_value = pc.ScenePlan(pc.canonical(scene()), code)
+                with self.assertRaises((pc.Refused, SyntaxError)):
+                    self.controller.run()
+                self.assertEqual(self.job.calls, [])
+                self.assertEqual(self.job.attempts, 0)
+                self.assertEqual(self.policy.initial_edits, 0)
+                self.assertEqual(self.response_number, 1)
+        self.setUp(); self.plan_value = pc.ScenePlan(pc.canonical(scene()), 'obj.scale.x = 1')
+        def forbidden(_):
+            raise ValueError('original sandbox refused')
+        self.adapter.prepare_code = forbidden
+        with self.assertRaisesRegex(ValueError, 'original sandbox refused'):
+            self.controller.run()
+        self.assertEqual(self.job.calls, [])
+        self.setUp(); self.plan_value = pc.ScenePlan(pc.canonical(scene()), 'obj.scale.x = 1')
+        self.adapter.prepare_code = None
+        with self.assertRaisesRegex(pc.Refused, 'original_validator_required'):
+            self.controller.run()
+        self.assertEqual(self.job.calls, [])
+
+    def test_invalid_base_scene_is_not_replaced_by_initial_edit(self):
+        self.plan_value = pc.ScenePlan('{}', 'obj.scale.x = 1')
+        self.adapter.prepare_code = lambda _: self.fail('Invalid scene reached edit validation')
+        with self.assertRaises(ValueError):
+            self.controller.run()
+        self.assertEqual(self.job.calls, [])
+
+    def test_normalized_accumulated_initial_edit_is_preflighted_before_base_build(self):
+        self.plan_value = pc.ScenePlan(pc.canonical(scene()), 'original_code = 1')
+        codes = []
+        def validate(code):
+            codes.append(code)
+            if code.startswith('\n'):
+                raise ValueError('original accumulated-code bound')
+            return 'normalized_code = 1', []
+        self.adapter.prepare_code = validate
+        with self.assertRaisesRegex(ValueError, 'accumulated-code bound'):
+            self.controller.run()
+        self.assertEqual(codes, ['original_code = 1', '\nnormalized_code = 1'])
+        self.assertEqual(self.job.calls, [])
+
+    def test_initial_sequence_admission_and_cancellation_prevent_first_build(self):
+        for cancel in (False, True):
+            with self.subTest(cancel=cancel):
+                self.setUp(); self.plan_value = pc.ScenePlan(pc.canonical(scene()), 'obj.scale.x = 1')
+                if cancel:
+                    def admit(*_):
+                        self.policy.deny_action = 'before_build'
+                        return True
+                    self.policy.admit_initial_edit = admit
+                else:
+                    self.policy.allow_initial_edit = False
+                with self.assertRaises(pc.Refused):
+                    self.controller.run()
+                self.assertEqual(self.job.calls, [])
+                self.assertEqual(self.response_number, 1)
+                self.assert_no_finish()
+
+    def test_cancel_or_failure_between_initial_builds_cannot_inspect_intermediate(self):
+        for failure in ('build_failure', 'cancel', 'edit_failure', 'stale_candidate'):
+            with self.subTest(failure=failure):
+                self.setUp(); self.plan_value = pc.ScenePlan(pc.canonical(scene()), 'obj.scale.x = 1')
+                call = self.job.call
+                def interrupted(name, arguments):
+                    if name == 'build_model' and failure == 'build_failure':
+                        raise RuntimeError('Scripted base build failed')
+                    if name == 'edit_model' and failure == 'edit_failure':
+                        raise RuntimeError('Scripted edit build failed')
+                    result = call(name, arguments)
+                    if name == 'build_model':
+                        if failure == 'cancel':
+                            self.policy.deny_action = 'before_build'
+                        elif failure == 'stale_candidate':
+                            check = self.policy.check
+                            def mutate(action, inputs, candidate):
+                                if action == 'before_build':
+                                    self.job.hash = 'f' * 64
+                                return check(action, inputs, candidate)
+                            self.policy.check = mutate
+                    return result
+                self.job.call = interrupted
+                with self.assertRaises((pc.Refused, RuntimeError)):
+                    self.controller.run()
+                self.assertEqual(self.finished_calls('inspect_render'), 0)
+                self.assertEqual(self.response_number, 1)
+                self.assertEqual(self.job.revision, 0 if failure == 'build_failure' else 1)
+                self.assert_no_finish()
+                prior = deepcopy(self.job.calls)
+                with self.assertRaisesRegex(pc.Refused, 'single_use_no_retry'):
+                    self.controller.run()
+                self.assertEqual(self.job.calls, prior)
+
+    def test_initial_edit_can_have_one_independent_inspection_correction(self):
+        self.plan_value = pc.ScenePlan(pc.canonical(scene()), 'obj.scale.x = 1')
+        self.assessment_transform = lambda v: (replace(v, accepted=False, issues=('Needs adjustment.',),
+            correction=pc.EditPlan('obj.scale.x = 1.1')) if v.revision == 2 else v)
+        result = self.controller.run()
+        self.assertEqual(result.candidate.revision, 3)
+        self.assertEqual([packet.candidate.revision for packet in self.packets], [2, 3])
+        self.assertEqual(self.policy.initial_edits, 1)
+        self.assertEqual(self.policy.corrections, 1)
+        self.assertEqual(self.response_number, 3)
+        self.assertEqual(self.finished_calls('edit_model'), 2)
+
+    def test_initial_edit_on_scene_correction_is_refused_before_correction_admission(self):
+        self.assessment_transform = lambda v: replace(v, accepted=False, issues=('Needs correction.',),
+            correction=pc.ScenePlan(pc.canonical(scene()), 'obj.scale.x = 1'))
+        with self.assertRaisesRegex(pc.Refused, 'assessment_required'):
+            self.controller.run()
+        self.assertEqual(self.job.attempts, 1)
+        self.assertEqual(self.policy.corrections, 0)
+        self.assertEqual(self.policy.initial_edits, 0)
+        self.assert_no_finish()
 
     def test_original_prompt_metadata_and_reference_order_survive_all_callbacks(self):
         refs = (pc.Reference(pc.canonical({'name': 'Back', 'view': 'back', 'extra': 9}), 'image/png', PNG),

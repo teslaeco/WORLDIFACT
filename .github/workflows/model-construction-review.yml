@@ -90,6 +90,8 @@ jobs:
           curl --fail --location --retry 2 https://download.blender.org/release/Blender4.3/blender-4.3.0-linux-x64.tar.xz --output /tmp/blender-4.3.0-linux-x64.tar.xz
           curl --fail --location --retry 2 https://download.blender.org/release/Blender4.3/blender-4.3.0.sha256 --output /tmp/blender-4.3.0.sha256
           (cd /tmp && sha256sum --check --ignore-missing blender-4.3.0.sha256 && tar -xf blender-4.3.0-linux-x64.tar.xz)
+      - name: Install pinned PNG inspection dependency for inert native fixtures
+        run: python -m pip install Pillow==11.3.0
       - name: Actual geometry, renders, edits, export and original ledger
         env:
           MODEL_CONTEXT_ANCESTOR_REPOSITORY: ${{ github.workspace }}/.context-ancestor

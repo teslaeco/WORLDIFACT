@@ -6,7 +6,12 @@ installed MPC2 scene validator, Blender builder, sandboxed edit tools, current-G
 rendering and export implementation. FAST, cabinet, character, reference-only and
 existing USD 2/4 routes keep their existing selection rules.
 
-The model returns one complete scene plan. The host validates and builds it,
+The model returns one complete typed plan with `scene_json` and nullable
+`initial_edit`. The scene contains substantive geometry for every named component
+and all defining geometry available in the scene schema. One bounded, validated
+edit can complete remaining features such as generated image textures, UV mapping
+or material alpha before the first inspected candidate. The host validates and
+builds the scene, applies that optional edit through the existing sandbox,
 retrieves the actual current renders, and requests a separate assessment. An
 optional sandboxed correction requires capacity for a fresh assessment before
 rebuilding. Export requires the original completion checks. A rejected verdict
@@ -40,8 +45,10 @@ boundary without reading a live worker.
 `test_native_pipeline.py` is an explicitly selected integration gate. It exercises
 real native Blender geometry, GLB images, sandboxed edits, exports, the loopback
 Gateway and the original ledger. Only provider responses and activation proof are
-fixtures. Acceptance, rejection and revision-2 correction are covered. Native
-success does not establish Oracle container isolation or live model quality.
+fixtures. Acceptance, rejection, revision-2 correction, a globe with UVs and
+embedded image/alpha textures, and another textured object with a subsequent
+correction are covered. The globe uses invented geography. Native success does
+not establish Oracle container isolation, live model quality or account saving.
 
 The parser accepts the documented nullable `content` metadata on Responses
 reasoning items, validating each `reasoning_text` block before discarding it.
@@ -65,15 +72,20 @@ cost ledgers, account data, configured credentials, pricing terms and provider
 limits are preserved. Missing or changed source/receipt evidence refuses the
 operation. An unfrozen manifest cannot enter maintenance.
 
-For the exact receipt-verified construction-v1 installation, the explicit
-`--update-payload` mode updates only `construction_payload.py` and the top
-construction receipt. It requires the compiled predecessor source manifest,
-retains every older receipt unchanged, and runs the same four isolated gates.
-The worker is stopped only after idle admission and restarted through the
-existing activation latch. A failed update restores the original helper and
+For the exact receipt-verified construction-v1 installation with the installed
+Responses parser correction, explicit `--update-initial-edit` changes only
+`construction_payload.py`, `phased_controller.py`, `runtime_controller.py` and the
+top construction receipt. It requires the compiled 14-source predecessor
+manifest, retains every older receipt unchanged, and runs the same four isolated
+gates. The worker is stopped only after idle admission and restarted through the
+existing activation latch. A failed update restores the original helpers and
 receipt; ambiguous activation remains unconfirmed. The initial installation
-path continues to refuse an already installed helper set. Both modes require
-the separate maintenance approval flag and any exact cancelled-job consent.
+path continues to refuse an already installed helper set.
+
+This package refuses the historical `--update-payload` operation; only its
+original reviewed package implements that narrower update. No old command is
+silently redirected to a larger write set. Maintenance approval and any exact
+cancelled-job consent remain separate requirements.
 
 The existing idle-queue fence, process identity checks, pidfds, guardian and
 activation latch remain required. Cancelled-job cleanup is refused by default;

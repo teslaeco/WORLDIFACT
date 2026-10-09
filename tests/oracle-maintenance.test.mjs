@@ -18,12 +18,15 @@ const env = { GITHUB_REPOSITORY: 'teslaeco/WORLDIFACT', GITHUB_REF: 'refs/heads/
   ORACLE_MAINTENANCE_HOST: host, ORACLE_MAINTENANCE_KNOWN_HOSTS: knownHosts, ORACLE_MAINTENANCE_SSH_KEY: privateKey }
 const recipient = generateKeyPairSync('rsa', { modulusLength: 3072 })
 const publicPem = recipient.publicKey.export({ type: 'spki', format: 'pem' })
+const helperHashes = { 'construction_payload.py': 'a'.repeat(64), 'phased_controller.py': 'c'.repeat(64),
+  'runtime_controller.py': 'd'.repeat(64) }
 const status = { read_only: true, snapshot_stable: true, changed_components: [], parser_sha256: 'a'.repeat(64),
   parser_version: 'previous', receipt_sha256: 'b'.repeat(64), receipt_revision: 'worldifact-standard-construction-v1',
-  receipt_parser_sha256: 'a'.repeat(64), payload_update_revision: null, construction_health_verified: true,
+  receipt_parser_sha256: 'a'.repeat(64), payload_update_revision: 'responses-reasoning-content-v1', construction_health_verified: true,
+  helper_sha256: { ...helperHashes }, receipt_helper_sha256: { ...helperHashes }, initial_edit_revision: null,
   maintenance_present: false, recent_attempts: [], lock_file_present: false, observed_flock_holders: [],
   worker: { ActiveState: 'active', SubState: 'running', MainPID: '42' } }
-const dispatch = (patch = {}) => ({ revision: 'oracle-maintenance-b6dce84d-v1', action: 'status', result: 'ready_to_apply',
+const dispatch = (patch = {}) => ({ revision: 'oracle-maintenance-initial-edit-v1', action: 'status', result: 'ready_to_apply',
   status: structuredClone(status), installer: null, ...patch })
 const encoded = value => Buffer.from(JSON.stringify(value))
 const verified = { phase: 'WORLDIFACT_STANDARD_CONSTRUCTION_VERIFIED', revision: 'worldifact-standard-construction-v1',
@@ -45,8 +48,8 @@ test('accepts only literal public IPv4 and the three fixed actions', () => {
     '8.8.8.8 1.1.1.1', '127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1',
     '192.0.2.1', '198.51.100.1', '203.0.113.1', '198.18.0.1', '0.1.2.3', '224.0.0.1', '255.255.255.255', '::1'])
     assert.throws(() => validateHost(value), /^Error: INVALID_CONFIGURATION$/)
-  for (const action of ['status', 'reachability', 'apply-b6dce84d']) assert.equal(validateAction(action), action)
-  for (const action of ['', null, 'apply', 'status; id', 'status\n', '--help', 'apply-b6dce84d --force'])
+  for (const action of ['status', 'reachability', 'apply-initial-edit-v1']) assert.equal(validateAction(action), action)
+  for (const action of ['', null, 'apply', 'apply-b6dce84d', 'status; id', 'status\n', '--help', 'apply-initial-edit-v1 --force'])
     assert.throws(() => validateAction(action), /^Error: INVALID_ACTION$/)
 })
 
@@ -64,10 +67,10 @@ test('host trust permits one matching validated Ed25519, P256 or RSA2048+ key', 
 })
 
 test('SSH argv fixes identity, port and command with no shell, inherited agent, config, forwarding or authentication fallback', () => {
-  const invocation = buildSshInvocation('apply-b6dce84d', host, '/tmp/fixture/key', '/tmp/fixture/known_hosts', 'ssh-ed25519')
+  const invocation = buildSshInvocation('apply-initial-edit-v1', host, '/tmp/fixture/key', '/tmp/fixture/known_hosts', 'ssh-ed25519')
   assert.equal(invocation.file, '/usr/bin/ssh')
   assert.deepEqual(invocation.args.slice(0, 9), ['-F', '/dev/null', '-T', '-p', '22', '-l', 'opc', '-i', '/tmp/fixture/key'])
-  assert.deepEqual(invocation.args.slice(-3), ['--', host, 'apply-b6dce84d'])
+  assert.deepEqual(invocation.args.slice(-3), ['--', host, 'apply-initial-edit-v1'])
   assert.ok(invocation.args.includes('-n'))
   for (const option of ['BatchMode=yes', 'StrictHostKeyChecking=yes', 'IdentitiesOnly=yes', 'IdentityAgent=none',
     'ForwardAgent=no', 'ForwardX11=no', 'ClearAllForwardings=yes', 'Tunnel=no', 'ProxyCommand=none', 'ProxyJump=none',
@@ -155,17 +158,45 @@ test('dispatcher schema accepts finite status, known interrupted stages, and ins
   sample.status.observed_flock_holders = [{ pid: 123, state: 'S', start_ticks: 12345 }]
   validateDispatcherReport(encoded(sample), 'status')
   validateDispatcherReport(encoded(dispatch({ result: 'inconclusive', status: { read_only: true, snapshot_stable: false, refusal: 'unsafe_or_unavailable_read' } })), 'status')
-  const applied = dispatch({ action: 'apply-b6dce84d', result: 'updated', installer: verified })
-  validateDispatcherReport(encoded(applied), 'apply-b6dce84d')
+  const applied = dispatch({ action: 'apply-initial-edit-v1', result: 'updated', installer: verified })
+  applied.status.parser_version = 'updated'
+  applied.status.initial_edit_revision = 'typed-plan-initial-edit-v1'
+  validateDispatcherReport(encoded(applied), 'apply-initial-edit-v1')
   const refused = dispatch({ action: null, result: 'refused', status: null })
   validateDispatcherReport(encoded(refused), 'status', 1)
-  const unconfirmed = dispatch({ action: 'apply-b6dce84d', result: 'not_confirmed', installer: { ...verified,
+  const unconfirmed = dispatch({ action: 'apply-initial-edit-v1', result: 'not_confirmed', installer: { ...verified,
     phase: 'WORLDIFACT_STANDARD_CONSTRUCTION_NOT_CONFIRMED', activation_committed: false, previous_source_restored: true, refusal_code: 'verification_failed' } })
-  validateDispatcherReport(encoded(unconfirmed), 'apply-b6dce84d', 1)
+  validateDispatcherReport(encoded(unconfirmed), 'apply-initial-edit-v1', 1)
+})
+
+test('helper and receipt hashes permit exactly the three reviewed helper names and nullable digests', () => {
+  for (const field of ['helper_sha256', 'receipt_helper_sha256']) {
+    const sample = dispatch()
+    for (const helper of Object.keys(helperHashes)) sample.status[field][helper] = null
+    validateDispatcherReport(encoded(sample), 'status')
+    const mutations = [value => { value.status[field] = null }, value => { value.status[field] = [] },
+      value => { value.status[field] = privateKey }, value => { value.status[field]['unknown.py'] = 'e'.repeat(64) },
+      value => { delete value.status[field]['runtime_controller.py'] },
+      value => { value.status[field]['construction_payload.py'] = privateKey },
+      value => { value.status[field]['construction_payload.py'] = 'a'.repeat(63) },
+      value => { value.status[field]['phased_controller.py'] = 'A'.repeat(64) },
+      value => { value.status[field]['runtime_controller.py'] = { payload: privateKey } },
+      value => { delete value.status[field] }]
+    for (const mutate of mutations) {
+      const value = dispatch(); mutate(value)
+      assert.throws(() => validateDispatcherReport(encoded(value), 'status'), /^Error: INVALID_RESPONSE$/)
+    }
+  }
+  for (const initialEditRevision of ['', true, 'standard-initial-edit-v1', privateKey, { payload: privateKey }]) {
+    const value = dispatch(); value.status.initial_edit_revision = initialEditRevision
+    assert.throws(() => validateDispatcherReport(encoded(value), 'status'), /^Error: INVALID_RESPONSE$/)
+  }
+  const legacy = dispatch(); legacy.revision = 'oracle-maintenance-b6dce84d-v1'
+  assert.throws(() => validateDispatcherReport(encoded(legacy), 'status'), /^Error: INVALID_RESPONSE$/)
 })
 
 test('dispatcher rejects secret/freeform/unknown fields, bad bounds, action mismatch and dishonest exit results', () => {
-  const mutations = [value => { value.secret = privateKey }, value => { value.action = 'apply-b6dce84d' },
+  const mutations = [value => { value.secret = privateKey }, value => { value.action = 'apply-initial-edit-v1' },
     value => { value.result = 'private error' }, value => { value.status.worker.Token = privateKey },
     value => { value.status.parser_sha256 = privateKey }, value => { value.status.changed_components = ['private/path'] },
     value => { value.status.changed_components = ['worker', 'worker'] }, value => { value.status.read_only = false },
@@ -176,8 +207,8 @@ test('dispatcher rejects secret/freeform/unknown fields, bad bounds, action mism
   for (const bytes of [Buffer.from('private raw error'), Buffer.from([0xff]), Buffer.alloc(16385), Buffer.from('{}\n{}')])
     assert.throws(() => validateDispatcherReport(bytes, 'status'), /^Error: INVALID_RESPONSE$/)
   assert.throws(() => validateDispatcherReport(encoded(dispatch()), 'status', 1), /^Error: INVALID_RESPONSE$/)
-  const invalid = dispatch({ action: 'apply-b6dce84d', result: 'updated', installer: { ...verified, paid_generation_requested: true } })
-  assert.throws(() => validateDispatcherReport(encoded(invalid), 'apply-b6dce84d'), /^Error: INVALID_RESPONSE$/)
+  const invalid = dispatch({ action: 'apply-initial-edit-v1', result: 'updated', installer: { ...verified, paid_generation_requested: true } })
+  assert.throws(() => validateDispatcherReport(encoded(invalid), 'apply-initial-edit-v1'), /^Error: INVALID_RESPONSE$/)
 })
 
 test('evidence is authenticated ciphertext before any persistence, and recipient matches the RSA public-key requirement', async () => {
@@ -267,6 +298,11 @@ test('real evidence file contains ciphertext only with private permissions', asy
 test('workflow separates credential-free review from manual main-only maintenance and uploads only short-lived ciphertext', async () => {
   const workflow = await readFile(new URL('../.github/workflows/oracle-maintenance.yml', import.meta.url), 'utf8')
   assert.match(workflow, /default: status/)
+  assert.match(workflow, /options:\n          - status\n          - reachability\n          - apply-initial-edit-v1\n/)
+  assert.doesNotMatch(workflow, /apply-b6dce84d/)
+  assert.match(workflow, /test -f tools\/oracle_maintenance\/test_refresh\.py/)
+  assert.match(workflow, /test -f tools\/oracle_maintenance\/test_refresh_receiver\.py/)
+  assert.match(workflow, /python -B -m unittest discover -s tools\/oracle_maintenance -p 'test_\*\.py' -v/)
   assert.match(workflow, /permissions:\n  contents: read/)
   assert.match(workflow, /cancel-in-progress: false/)
   assert.match(workflow, /python: \['3\.9', '3\.12'\]/)

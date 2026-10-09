@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,56 @@ ROOT = HERE.parents[1]
 PIN = 'd3f61b842dcfeda2ed794210caafc391919a75be'
 ANCESTOR_PIN = '2380a7e2dad05a40b3753faf06c2635ed444be51'
 EDIT_CODE = 'body = bpy.data.objects.get("body")\nbody.scale.x *= 1.25'
+PROMPT = 'Synthetic native-MCP transport fixture; no user model or likeness request.'
+
+
+def export_proof(candidate, kind):
+    """Inspect the actual embedded GLB payload and original saved Blender state."""
+    from PIL import Image
+    raw = (candidate / 'model.glb').read_bytes()
+    magic, version, length = struct.unpack_from('<4sII', raw)
+    assert (magic, version, length) == (b'glTF', 2, len(raw))
+    json_length, json_type = struct.unpack_from('<II', raw, 12)
+    assert json_type == 0x4E4F534A
+    document = json.loads(raw[20:20 + json_length])
+    offset = 20 + json_length
+    binary_length, binary_type = struct.unpack_from('<II', raw, offset)
+    assert binary_type == 0x004E4942 and offset + 8 + binary_length == len(raw)
+    binary = raw[offset + 8:]
+    assert len(document['buffers']) == 1 and 'uri' not in document['buffers'][0]
+    primitives = [p for mesh in document['meshes'] for p in mesh['primitives']]
+    assert all('TEXCOORD_0' in p['attributes'] for p in primitives)
+    images = []
+    for entry in document.get('images', []):
+        assert entry['mimeType'] == 'image/png' and 'uri' not in entry
+        view = document['bufferViews'][entry['bufferView']]
+        data = binary[view.get('byteOffset', 0):view.get('byteOffset', 0) + view['byteLength']]
+        with Image.open(io.BytesIO(data)) as image:
+            rgba = image.convert('RGBA')
+            images.append({'name': entry.get('name'), 'sha256': digest(data),
+                'size': list(rgba.size), 'alpha_extrema': list(rgba.getchannel('A').getextrema()),
+                'distinct_rgba': len(rgba.getcolors(rgba.width * rgba.height))})
+    blend = json.loads((candidate / 'native-blend-proof.json').read_text())
+    assert all(item['uv_layers'] >= 1 for item in blend['meshes'])
+    assert all(item['packed'] for item in blend['images'])
+    materials = [{'name': m['name'], 'alpha_mode': m.get('alphaMode', 'OPAQUE'),
+                  'has_base_color_texture': 'baseColorTexture' in m.get('pbrMetallicRoughness', {})}
+                 for m in document['materials']]
+    if kind == 'globe_initial_edit':
+        assert len(primitives) == len(images) == len(materials) == 2
+        assert all(item['has_base_color_texture'] for item in materials)
+        assert sorted(item['alpha_mode'] for item in materials) == ['BLEND', 'OPAQUE']
+        assert any(item['alpha_extrema'][0] == 0 and 0 < item['alpha_extrema'][1] < 255 for item in images)
+        assert all(item['size'] == [256, 128] for item in images)
+    elif kind == 'box_initial_edit_correction':
+        assert len(primitives) == len(images) == len(materials) == 1
+        assert materials[0]['name'] == 'painted_checker' and materials[0]['has_base_color_texture']
+        assert images[0]['size'] == [64, 64] and images[0]['distinct_rgba'] >= 2
+    proof = {'glb_sha256': digest(raw), 'glb_bytes': len(raw), 'mesh_primitives': len(primitives),
+             'uv_primitives': len(primitives), 'images': images, 'materials': materials,
+             'saved_blend': blend}
+    (candidate / 'native-export-proof.json').write_text(json.dumps(proof, indent=2))
+    return proof
 
 
 def digest(raw):
@@ -100,10 +151,11 @@ class FixtureResponse(io.BytesIO):
 
 class ScriptedProvider:
     """Only the HTTPS response boundary is scripted; all local HTTP is real."""
-    def __init__(self, runner, runtime, spend, folder, scene, accepted, correction=False):
+    def __init__(self, runner, runtime, spend, folder, scene, accepted, correction=False, initial_edit=None):
         self.runner, self.runtime, self.spend = runner, runtime, spend
         self.folder, self.scene, self.accepted = folder, scene, accepted
         self.correction = correction
+        self.initial_edit = initial_edit
         self.before_model = None
         self.before_renders = None
         self.calls, self.counts, self.loopback, self.ports = [], [], [], set()
@@ -147,7 +199,7 @@ class ScriptedProvider:
         schema = wire['text']['format']['schema']
         assert schema['additionalProperties'] is False
         assert len(document['modeling_contract']['scene_schema']['properties']['parts']['items']['anyOf']) == 18
-        assert document['request']['prompt'] == 'Synthetic native-MCP transport box; no user model or likeness request.'
+        assert document['request']['prompt'] == PROMPT
         assert document['modeling_contract_task_fields_from_request'] == ['prompt', 'instructions']
         # A real original ledger hold must already exist before scripted HTTPS.
         with self.spend.ledger(self.folder) as (_, state):
@@ -156,12 +208,13 @@ class ScriptedProvider:
             assert self.spend.used(state) <= 1_750_000
         if phase == 'construction':
             assert not (self.folder / 'candidates').exists()
-            assert schema['properties'] == {'scene_json': {'type': 'string'}}
-            envelope = {'scene_json': canonical(self.scene)}
+            assert schema['properties'] == {'scene_json': {'type': 'string'},
+                                            'initial_edit': {'type': ['string', 'null']}}
+            envelope = {'scene_json': canonical(self.scene), 'initial_edit': self.initial_edit}
         else:
             import blender_mcp
             current = blender_mcp.current_candidate(self.folder)
-            revision = 2 if phase == 'reassessment' else 1
+            revision = 1 + int(self.initial_edit is not None) + int(phase == 'reassessment')
             assert current is not None and current['info']['revision'] == revision
             assert current['result']['triangles'] > 0
             assert current['identity'][0] > 20
@@ -182,7 +235,12 @@ class ScriptedProvider:
             state = document['current_model']
             assert state['scene'] == json.loads((current['path'] / 'scene.json').read_text())
             assert state['report'] == current['result']
-            assert EDIT_CODE in state['edits'] if revision == 2 else state['edits'] == ''
+            if self.initial_edit is not None:
+                assert self.initial_edit in state['edits'], 'Initial edit missing from first inspected revision'
+            if phase == 'reassessment':
+                assert EDIT_CODE in state['edits']
+            elif self.initial_edit is None:
+                assert state['edits'] == ''
             assert state['completion_contract']['structural_passed'] is True
             assert set(schema['properties']) == {'accepted', 'issues', 'summary', 'correction'}
             correcting = self.correction and phase == 'inspection'
@@ -233,6 +291,7 @@ def run_worker(public, installed, ancestor, workspace, blender):
     import construction_policy
     import astra_spend_v2 as spend
     import blender_mcp
+    from native_initial_edit_fixture import GLOBE_SCENE, GLOBE_EDIT, BOX_EDIT
     from phased_controller import RejectedForServer
     assert Path(runner.__file__).parent == stage
     assert Path(runtime.__file__).parent == stage
@@ -250,6 +309,16 @@ def run_worker(public, installed, ancestor, workspace, blender):
         expression = ('import sys;from pathlib import Path;sys.path.insert(0,' + repr(str(runtime_dir)) + ');'
             + ('from finalize import finalize;finalize' if final else 'from run import execute_job;execute_job')
             + '(Path(' + repr(str(candidate)) + '))')
+        # The review renderer imports the delivered GLB into a new scene. Read
+        # the separately saved original .blend to prove its images are packed
+        # and its UV layers survive independently of that render import.
+        expression += (';import bpy,json;'
+            + 'bpy.ops.wm.open_mainfile(filepath=' + repr(str(candidate / 'model.blend')) + ');'
+            + 'proof={"meshes":[{"name":o.name,"vertices":len(o.data.vertices),'
+              '"uv_layers":len(o.data.uv_layers)} for o in bpy.data.objects if o.type=="MESH"],'
+              '"images":[{"name":i.name,"packed":i.packed_file is not None,"size":list(i.size)}'
+              ' for i in bpy.data.images if i.users>0]};'
+            + 'Path(' + repr(str(candidate / 'native-blend-proof.json')) + ').write_text(json.dumps(proof))')
         log = candidate / ('native-finalize.log' if final else 'native-build.log')
         with log.open('wb') as output:
             result = subprocess.run([str(blender), '--background', '--factory-startup', '-t', '2',
@@ -262,12 +331,18 @@ def run_worker(public, installed, ancestor, workspace, blender):
     server.run_blender_finalize = lambda job_id, candidate, cancelled, timeout: native(job_id, candidate, cancelled, timeout, True)
     results = []
     scene = original_box(public)
+    cases = [('box_accepted', scene, True, False, None),
+             ('box_rejected', scene, False, False, None),
+             ('box_corrected', scene, True, True, None),
+             ('globe_initial_edit', GLOBE_SCENE, True, False, GLOBE_EDIT),
+             ('box_initial_edit_correction', scene, True, True, BOX_EDIT)]
     with patch.dict(sys.modules, {'server': server}), patch.object(construction_health, 'verified_health',
             return_value={'worldifactStandardConstructionPolicy': construction_policy.MODE}):
-        for index, (accepted, correction) in enumerate(((True, False), (False, False), (True, True)), 1):
+        for index, (kind, scene, accepted, correction, initial_edit) in enumerate(cases, 1):
             folder = workspace / 'jobs' / ('00000000-0000-4000-8000-%012d' % index)
             folder.mkdir(parents=True)
-            fixture = ScriptedProvider(runner, runtime, spend, folder, scene, accepted, correction)
+            fixture = ScriptedProvider(runner, runtime, spend, folder, scene, accepted, correction, initial_edit)
+            native_start = len(native_calls)
             expected_requests = 3 if correction else 2
             original_open = urllib.request.OpenerDirector.open
             original_connect = socket.socket.connect
@@ -282,8 +357,8 @@ def run_worker(public, installed, ancestor, workspace, blender):
                  patch.object(spend, 'settle_completed', wraps=spend.settle_completed) as settle:
                 try:
                     outcome = runtime.run(folder,
-                        'Synthetic native-MCP transport box; no user model or likeness request.',
-                        'WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:\nBuild the exact public synthetic box fixture.',
+                        PROMPT,
+                        'WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:\nBuild the complete synthetic offline fixture.',
                         'offline-unused-fixture-key', cancel, lambda text: None, gateway_factory=fixture.gateway)
                     assert accepted, 'A rejected assessment returned server success'
                     assert outcome['finished'] is True and outcome['accepted'] is True
@@ -297,7 +372,7 @@ def run_worker(public, installed, ancestor, workspace, blender):
             assert fixture.actual_gateway.completed is accepted
             outcome = blender_mcp.completed_outcome(folder)
             assert outcome is not None and outcome['accepted'] is accepted
-            assert outcome['revision'] == (2 if correction else 1)
+            assert outcome['revision'] == 1 + int(initial_edit is not None) + int(correction)
             current = blender_mcp.current_candidate(folder, outcome['execution_id'])
             assert current is not None and current['identity'][1] == outcome['model_sha256']
             for name in ('model.glb', 'model.blend', 'model.fbx', 'model.obj', 'model-mm.stl', 'model-ready.json'):
@@ -315,14 +390,25 @@ def run_worker(public, installed, ancestor, workspace, blender):
             calls = json.loads((folder / 'agent-tools.json').read_text())['calls']
             completed = [call['tool'] for call in calls if call['status'] == 'completed']
             assert completed.count('build_model') == completed.count('finish_model') == 1
-            assert completed.count('edit_model') == (1 if correction else 0)
+            assert completed.count('edit_model') == int(initial_edit is not None) + int(correction)
             assert completed.count('inspect_render') == (6 if correction else 3)
-            results.append({'accepted': accepted, 'correction': correction, 'revision': outcome['revision'], 'server_success_returned': accepted,
+            sequence = [name for name in completed if name in ('build_model', 'edit_model', 'inspect_render', 'finish_model')]
+            expected_sequence = ['build_model'] + (['edit_model'] if initial_edit is not None else [])
+            expected_sequence += ['inspect_render'] * 3
+            if correction:
+                expected_sequence += ['edit_model'] + ['inspect_render'] * 3
+            assert sequence == expected_sequence + ['finish_model'], 'First assessment inspected an incomplete construction'
+            proof = export_proof(current['path'], kind)
+            results.append({'case': kind, 'accepted': accepted, 'correction': correction,
+                'initial_edit': initial_edit is not None,
+                'revision': outcome['revision'], 'server_success_returned': accepted,
                 'actual_glb_sha256': outcome['model_sha256'], 'renders': fixture.render_hashes,
+                'render_directory': str((current['path'] / 'review').relative_to(workspace)),
+                'export_proof': proof, 'tool_sequence': sequence,
                 'before_correction_model_sha256': fixture.before_model,
                 'before_correction_renders': fixture.before_renders,
-                'ledger': ledger, 'provider_requests': fixture.calls, 'native_calls': native_calls[-3 if correction else -2:]})
-            print('NATIVE_PIPELINE_' + ('CORRECTED_ACCEPTED' if correction else 'ACCEPTED' if accepted else 'REJECTED') + '_VERIFIED', flush=True)
+                'ledger': ledger, 'provider_requests': fixture.calls, 'native_calls': native_calls[native_start:]})
+            print('NATIVE_PIPELINE_' + kind.upper() + '_VERIFIED', flush=True)
     evidence = {'scope': 'native Blender, actual JobTools, loopback Gateway and original ledger',
         'provider': 'explicit scripted count/Responses fixture; no network provider call',
         'activation': 'explicit fixture; no installed runtime claim',
@@ -353,14 +439,14 @@ class NativePipelineTests(unittest.TestCase):
         command = [sys.executable, str(Path(__file__).resolve()), '--native-worker',
                    str(source), str(installed), str(ancestor), str(workspace), str(blender)]
         with log.open('wb') as output:
-            result = subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=1000,
+            result = subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=1800,
                 env={'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'LANG': 'C.UTF-8',
                      'PYTHONDONTWRITEBYTECODE': '1'})
         self.assertEqual(result.returncode, 0, str(workspace) + '\n' + log.read_text()[-16000:])
         evidence = json.loads((workspace / 'native-evidence.json').read_text())
-        self.assertEqual([case['accepted'] for case in evidence['cases']], [True, False, True])
-        self.assertEqual([case['revision'] for case in evidence['cases']], [1, 1, 2])
-        self.assertEqual(len(evidence['native_calls']), 7)
+        self.assertEqual([case['accepted'] for case in evidence['cases']], [True, False, True, True, True])
+        self.assertEqual([case['revision'] for case in evidence['cases']], [1, 1, 2, 2, 3])
+        self.assertEqual(len(evidence['native_calls']), 14)
         self.assertIn('NATIVE_PIPELINE_VERIFIED', log.read_text())
         if retained:
             print('Native pipeline evidence: ' + str(workspace), flush=True)

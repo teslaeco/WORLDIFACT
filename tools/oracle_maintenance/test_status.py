@@ -16,6 +16,7 @@ import status
 REPO = Path(__file__).absolute().parents[2]
 HEALTH_SOURCE = REPO / 'tools/model_construction/construction_health.py'
 HEALTH = runpy.run_path(str(HEALTH_SOURCE))
+REVIEWED_HELPERS_AFTER = dict(status.HELPERS_AFTER)
 OLD = b'# synthetic previous parser\n'
 NEW = (REPO / 'tools/model_construction/construction_payload.py').read_bytes()
 
@@ -46,22 +47,29 @@ class StatusTests(unittest.TestCase):
         self.lock = self.home / '.local/state/worldifact-fast/installation.lock'
         self.lock.parent.mkdir()
         self.lock.write_bytes(b'')
-        old = patch.object(status, 'OLD_PARSER', sha(OLD))
-        old.start()
-        self.addCleanup(old.stop)
+        before = {name: sha(OLD if name == 'construction_payload.py' else ('# old ' + name + '\n').encode()) for name in status.HELPERS_BEFORE}
+        after = {name: sha((HEALTH_SOURCE.parent / name).read_bytes()) for name in status.HELPERS_AFTER}
+        for name, value in [('OLD_PARSER', sha(OLD)), ('NEW_PARSER', sha(NEW)),
+                            ('HELPERS_BEFORE', before), ('HELPERS_AFTER', after)]:
+            pin = patch.object(status, name, value)
+            pin.start()
+            self.addCleanup(pin.stop)
         self.install()
+        self.attempt('20261008T085127Z', result())
 
     def test_pure_helper_pin_and_new_parser_match_unchanged_reviewed_bytes(self):
         self.assertEqual(sha(HEALTH_SOURCE.read_bytes()), status.HEALTH_HASH)
         self.assertEqual(sha(NEW), status.NEW_PARSER)
+        self.assertEqual(REVIEWED_HELPERS_AFTER, {name: sha((HEALTH_SOURCE.parent / name).read_bytes())
+                                                   for name in REVIEWED_HELPERS_AFTER})
 
     def install(self, updated=False):
         for name in HEALTH['SOURCES'] | {'astra_spend.py', 'fast_preview.py'}:
             raw = ('# Synthetic attested source: ' + name + '\n').encode()
             if name == 'construction_health.py':
                 raw = HEALTH_SOURCE.read_bytes()
-            elif name == 'construction_payload.py':
-                raw = NEW if updated else OLD
+            elif name in status.HELPERS_BEFORE:
+                raw = (HEALTH_SOURCE.parent / name).read_bytes() if updated else (OLD if name == 'construction_payload.py' else ('# old ' + name + '\n').encode())
             (self.source / name).write_bytes(raw)
         hashes = {name: sha((self.source / name).read_bytes()) for name in HEALTH['SOURCES']}
         fenced = {'maintenance_fence': HEALTH['FENCE_REVISION'],
@@ -88,10 +96,13 @@ class StatusTests(unittest.TestCase):
         receipt = {'revision': HEALTH['REVISION'], 'sha256': hashes, **fenced,
                    'offline_phased_standard_pipeline': True,
                    'receipt_sha256': {name: sha((self.source / name).read_bytes()) for name in chain}}
+        receipt['payload_update'] = {'revision': 'responses-reasoning-content-v1',
+                                    'previous_construction_receipt_sha256': 'a' * 64,
+                                    'verified_generic_receipt_sha256': 'b' * 64}
         if updated:
-            receipt['payload_update'] = {'revision': 'responses-reasoning-content-v1',
-                                        'previous_construction_receipt_sha256': 'a' * 64,
-                                        'verified_generic_receipt_sha256': 'b' * 64}
+            receipt['initial_edit_update'] = {'revision': status.INITIAL_EDIT_REVISION,
+                                        'previous_construction_receipt_sha256': 'c' * 64,
+                                        'verified_generic_receipt_sha256': 'd' * 64}
         (self.source / HEALTH['RECEIPT']).write_text(json.dumps(receipt))
 
     def attempt(self, timestamp, report=None):
@@ -129,11 +140,34 @@ class StatusTests(unittest.TestCase):
 
     def test_updated_requires_current_receipt_and_completed_attempt(self):
         self.install(True)
+        old_attempt = self.attempt_root / 'standard-construction-20261008T085127Z-1234abcd/INSTALL_STATUS.json'
+        old_attempt.unlink()
         self.assertEqual(status.classify(self.probe()), 'inconclusive')
         self.attempt('20261008T090000Z', result())
         value = self.probe()
         self.assertEqual(value['parser_sha256'], status.NEW_PARSER)
         self.assertEqual(status.classify(value), 'already_updated')
+
+    def test_partial_or_unreceipted_helper_update_is_inconclusive(self):
+        self.install(True)
+        receipt = self.source / HEALTH['RECEIPT']
+        value = json.loads(receipt.read_text())
+        del value['initial_edit_update']
+        receipt.write_text(json.dumps(value))
+        self.assertEqual(status.classify(self.probe()), 'inconclusive')
+        self.install()
+        (self.source / 'phased_controller.py').write_bytes((HEALTH_SOURCE.parent / 'phased_controller.py').read_bytes())
+        self.assertEqual(status.classify(self.probe()), 'inconclusive')
+
+    def test_initial_edit_marker_must_be_complete_and_strict(self):
+        self.install(True)
+        receipt = self.source / HEALTH['RECEIPT']
+        original = json.loads(receipt.read_text())
+        for bad in ({'revision': status.INITIAL_EDIT_REVISION},
+                    {**original['initial_edit_update'], 'secret': 'never-print'},
+                    {**original['initial_edit_update'], 'verified_generic_receipt_sha256': 'bad'}):
+            receipt.write_text(json.dumps({**original, 'initial_edit_update': bad}))
+            self.assertEqual(self.probe().get('refusal'), 'unsafe_or_unavailable_read')
 
     def test_pending_latest_two_only_and_maintenance_busy(self):
         self.attempt('20261008T085126Z', {'secret': 'excluded'})
@@ -148,7 +182,7 @@ class StatusTests(unittest.TestCase):
 
     def test_interrupted_and_contradictory_attempts_refuse(self):
         attempt = self.attempt('20261008T090000Z')
-        for report in (None, status.STAGED, result(), result(False, None, None), result(False, False, False)):
+        for report in (None, status.STAGED, result(False, None, None), result(False, False, False)):
             with self.subTest(report=report):
                 if report is not None:
                     (attempt / 'INSTALL_STATUS.json').write_text(json.dumps(report))

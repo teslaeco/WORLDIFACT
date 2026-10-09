@@ -15,8 +15,15 @@ import subprocess
 
 
 REVISION = 'worldifact-standard-construction-v1'
-OLD_PARSER = 'fb47f6038cf7e43eb98371fdaaa9ad9e34e8fa06075a94a6653338747878fca1'
-NEW_PARSER = '3b7e5af5192724af4d7eb2943a09230c952fbd44905ec955f2ae2d7a6ec03a84'
+OLD_PARSER = '3b7e5af5192724af4d7eb2943a09230c952fbd44905ec955f2ae2d7a6ec03a84'
+NEW_PARSER = '475e8251a2255775889d00d0611bb8954044cfd7f2dfba27c6735403408c35b8'
+INITIAL_EDIT_REVISION = 'typed-plan-initial-edit-v1'
+HELPERS_BEFORE = {'construction_payload.py': OLD_PARSER,
+    'phased_controller.py': '713917ad4bc5f249323258fa1093d5f9d177b130a1c42fc20d628e0e25c5d605',
+    'runtime_controller.py': '53f08644296c58b7c6c77f91a484f4852074ae720dec89129559dd698e1aac0e'}
+HELPERS_AFTER = {'construction_payload.py': NEW_PARSER,
+    'phased_controller.py': '1825f3cbff6e229799d22001481d8075a8e8b5c567e60b3736a9208126c99d6b',
+    'runtime_controller.py': '9188b29c60ac26ab9f63781660db548b1757ee430fc4b33a43930f6868168b0d'}
 HEALTH_HASH = 'f63c2731c501fa73037ea0205e8bbd73e8cc58f93ab6601d51ba7bd271ae56cf'
 SUCCESS = 'WORLDIFACT_STANDARD_CONSTRUCTION_VERIFIED'
 FAILURE = 'WORLDIFACT_STANDARD_CONSTRUCTION_NOT_CONFIRMED'
@@ -243,10 +250,19 @@ def read_status(home=None):
         home = account_home() if home is None else Path(home)
         source, root = home / 'froge-connector', home / '.local/state/worldifact-astra-guard'
         reader = Reader()
-        parser, _ = reader.inspect(source / 'construction_payload.py', 1048576)
+        helpers = {name: digest(reader.inspect(source / name, 1048576)[0])
+                   for name in HELPERS_BEFORE}
+        parser_hash = helpers['construction_payload.py']
         receipt_raw, _ = reader.inspect(source / '.worldifact-standard-construction.json', 16384)
         receipt = parse_json(receipt_raw) if receipt_raw is not None else {}
         hashes, update = receipt.get('sha256', {}), receipt.get('payload_update', {})
+        initial = receipt.get('initial_edit_update')
+        if initial is not None and (type(initial) is not dict or set(initial) != {
+                'revision', 'previous_construction_receipt_sha256', 'verified_generic_receipt_sha256'}
+                or initial.get('revision') != INITIAL_EDIT_REVISION
+                or any(type(initial.get(key)) is not str or re.fullmatch(r'[0-9a-f]{64}', initial[key]) is None
+                       for key in ('previous_construction_receipt_sha256', 'verified_generic_receipt_sha256'))):
+            raise ValueError('unsafe_initial_edit_receipt')
         if type(hashes) is not dict or type(update) is not dict:
             raise ValueError('unsafe_receipt')
         _, marker = reader.inspect(source / '.worldifact-standard-maintenance.json', component='maintenance_marker')
@@ -272,9 +288,11 @@ def read_status(home=None):
             changed.add('lock_holders')
         if worker != worker_status(home):
             changed.add('worker')
-        parser_hash = digest(parser)
         return {'read_only': True, 'snapshot_stable': not changed, 'changed_components': sorted(changed),
-                'parser_sha256': parser_hash,
+                'parser_sha256': parser_hash, 'helper_sha256': helpers,
+                'receipt_helper_sha256': {name: scalar(hashes.get(name), r'[0-9a-f]{64}')
+                                          for name in HELPERS_BEFORE},
+                'initial_edit_revision': initial['revision'] if initial is not None else None,
                 'parser_version': {OLD_PARSER: 'previous', NEW_PARSER: 'updated'}.get(parser_hash, 'unknown'),
                 'receipt_sha256': digest(receipt_raw),
                 'receipt_revision': scalar(receipt.get('revision'), REVISION),
@@ -293,7 +311,9 @@ def classify(value):
         return 'busy'
     if (value.get('snapshot_stable') is not True or value.get('construction_health_verified') is not True
             or value.get('lock_file_present') is not True or value.get('receipt_revision') != REVISION
-            or value.get('receipt_parser_sha256') != value.get('parser_sha256')):
+            or value.get('receipt_parser_sha256') != value.get('parser_sha256')
+            or value.get('receipt_helper_sha256') != value.get('helper_sha256')
+            or value.get('payload_update_revision') != 'responses-reasoning-content-v1'):
         return 'inconclusive'
     worker = value.get('worker', {})
     if worker.get('ActiveState') != 'active' or worker.get('SubState') != 'running' or int(worker.get('MainPID', '0')) <= 0:
@@ -306,10 +326,11 @@ def classify(value):
         if latest['phase'] == FAILURE and (latest['previous_source_restored'] is not True
                                            or latest['activation_committed'] is not False):
             return 'inconclusive'
-    if value.get('parser_version') == 'updated':
-        return ('already_updated' if value.get('payload_update_revision') == 'responses-reasoning-content-v1'
+    if value.get('helper_sha256') == HELPERS_AFTER:
+        return ('already_updated' if value.get('initial_edit_revision') == INITIAL_EDIT_REVISION
                 and type(latest) is dict and latest['phase'] == SUCCESS else 'inconclusive')
-    if (value.get('parser_version') == 'previous' and value.get('payload_update_revision') is None
-            and (latest is None or latest['phase'] == FAILURE)):
+    if (value.get('helper_sha256') == HELPERS_BEFORE and value.get('initial_edit_revision') is None
+            and type(latest) is dict and (latest['phase'] == SUCCESS
+                or latest['phase'] == FAILURE and latest['previous_source_restored'] is True)):
         return 'ready_to_apply'
     return 'inconclusive'

@@ -26,12 +26,16 @@ class DispatcherTests(unittest.TestCase):
 
     def test_reviewed_launcher_pin_matches_unchanged_repository_bytes(self):
         path = Path(__file__).absolute().parents[2] / 'tools/model_construction/oracle_construction_launch.py'
-        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), dispatcher.LAUNCHER_HASH)
+        if dispatcher.LAUNCHER_HASH.startswith('PENDING_'):
+            with self.assertRaisesRegex(ValueError, 'unfrozen_release'):
+                dispatcher.verified_package(status, Path('/must-not-read'))
+        else:
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), dispatcher.LAUNCHER_HASH)
 
     def test_only_exact_original_commands_are_accepted(self):
-        for command in (None, '', 'status ', ' status', 'status\n', 'status\r\n', 'STATUS',
-                        'status --help', 'apply-b6dce84d --force', 'status; id', 'status && id',
-                        '$(id)', 'sftp', 'scp -t /tmp/file', 'bash', 'apply-b6dce84d\nstatus'):
+        for command in ('apply-b6dce84d', None, '', 'status ', ' status', 'status\n', 'status\r\n', 'STATUS',
+                        'status --help', 'apply-initial-edit-v1 --force', 'status; id', 'status && id',
+                        '$(id)', 'sftp', 'scp -t /tmp/file', 'bash', 'apply-initial-edit-v1\nstatus'):
             with self.subTest(command=command), patch.object(dispatcher, 'load_status') as load:
                 observed, code = dispatcher.dispatch(command)
                 self.assertEqual(code, 1)
@@ -58,7 +62,7 @@ class DispatcherTests(unittest.TestCase):
     def test_already_updated_is_idempotent(self):
         api = self.api(['already_updated'])
         with patch.object(dispatcher, 'verified_package') as package, patch.object(dispatcher, 'run_installer') as run:
-            value, code = dispatcher.dispatch('apply-b6dce84d', api=api)
+            value, code = dispatcher.dispatch('apply-initial-edit-v1', api=api)
         self.assertEqual((value['result'], code), ('already_updated', 0))
         self.assertIsNone(value['installer'])
         package.assert_not_called()
@@ -67,14 +71,14 @@ class DispatcherTests(unittest.TestCase):
     def test_busy_and_inconclusive_refuse_without_new_attempt(self):
         for state in ('busy', 'inconclusive'):
             with self.subTest(state=state), patch.object(dispatcher, 'run_installer') as run:
-                value, code = dispatcher.dispatch('apply-b6dce84d', api=self.api([state]))
+                value, code = dispatcher.dispatch('apply-initial-edit-v1', api=self.api([state]))
                 self.assertEqual((value['result'], code), (state, 1))
                 run.assert_not_called()
 
     def test_state_is_rechecked_after_package_validation(self):
         for second in ('already_updated', 'busy', 'inconclusive'):
             with self.subTest(second=second), patch.object(dispatcher, 'verified_package', return_value=Path('/fixed/package')), patch.object(dispatcher, 'run_installer') as run:
-                value, code = dispatcher.dispatch('apply-b6dce84d', api=self.api(['ready_to_apply', second]))
+                value, code = dispatcher.dispatch('apply-initial-edit-v1', api=self.api(['ready_to_apply', second]))
                 self.assertEqual(value['result'], second)
                 self.assertEqual(code, 0 if second == 'already_updated' else 1)
                 run.assert_not_called()
@@ -82,7 +86,7 @@ class DispatcherTests(unittest.TestCase):
     def test_success_requires_receipt_reconciliation_after_one_invocation(self):
         for after in ('already_updated', 'busy', 'inconclusive', 'ready_to_apply'):
             with self.subTest(after=after), patch.object(dispatcher, 'verified_package', return_value=Path('/fixed/package')), patch.object(dispatcher, 'run_installer', return_value=result()) as run:
-                value, code = dispatcher.dispatch('apply-b6dce84d', api=self.api(['ready_to_apply', 'ready_to_apply', after]))
+                value, code = dispatcher.dispatch('apply-initial-edit-v1', api=self.api(['ready_to_apply', 'ready_to_apply', after]))
                 self.assertEqual(value['result'], 'updated' if after == 'already_updated' else 'not_confirmed')
                 self.assertEqual(code, 0 if after == 'already_updated' else 1)
                 run.assert_called_once()
@@ -90,7 +94,7 @@ class DispatcherTests(unittest.TestCase):
     def test_failure_is_reconciled_without_automatic_retry_or_private_error(self):
         api = self.api(['ready_to_apply', 'ready_to_apply', 'inconclusive'])
         with patch.object(dispatcher, 'verified_package', return_value=Path('/fixed/package')), patch.object(dispatcher, 'run_installer', side_effect=ValueError('private output')) as run:
-            value, code = dispatcher.dispatch('apply-b6dce84d', api=api)
+            value, code = dispatcher.dispatch('apply-initial-edit-v1', api=api)
         self.assertEqual((value['result'], code), ('not_confirmed', 1))
         self.assertNotIn('private output', json.dumps(value))
         run.assert_called_once()
@@ -121,7 +125,7 @@ class PackageTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name)
-        self.package = self.home / '.local/share/worldifact-maintenance/update'
+        self.package = self.home / '.local/share/worldifact-maintenance/update-initial-edit-v1'
         self.package.mkdir(parents=True)
         raw = b'# synthetic package file\n'
         blob = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
@@ -132,6 +136,9 @@ class PackageTests(unittest.TestCase):
         launcher = ('import hashlib\nFILES = ' + repr(files) + '\n'
                     "def blob(raw): return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\\0' + raw).hexdigest()\n").encode()
         (self.package / 'oracle_construction_launch.py').write_bytes(launcher)
+        commit = patch.object(dispatcher, 'SOURCE_COMMIT', 'a' * 40)
+        commit.start()
+        self.addCleanup(commit.stop)
         pin = patch.object(dispatcher, 'LAUNCHER_HASH', hashlib.sha256(launcher).hexdigest())
         pin.start()
         self.addCleanup(pin.stop)
@@ -217,7 +224,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(observed, result())
         self.assertEqual(self.argv, ['/usr/bin/python3', '-I', '-B', '-c', dispatcher.INSTALL_ENTRY,
                                     '/fixed/package', '/fixed/package/install_construction.py',
-                                    '--update-payload', '--approve-service-maintenance',
+                                    '--update-initial-edit', '--approve-service-maintenance',
                                     '--allow-cancelled-cleanup', '--expected-cancelled-job',
                                     'f91612e5-eb5a-4fec-9585-1ce08c9f38ad'])
         self.assertNotIn('shell', self.kwargs)

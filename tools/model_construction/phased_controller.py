@@ -101,6 +101,7 @@ class Inputs:
 @dataclass(frozen=True)
 class ScenePlan:
     scene_json: str
+    initial_edit: str | None = None
 
 
 @dataclass(frozen=True)
@@ -210,6 +211,7 @@ class TrustedPolicy(Protocol):
     def check(self, action, inputs, candidate): ...
     def admit(self, phase, inputs, packet, prepared, remaining_phases): ...
     def confirm(self, admission, receipt): ...
+    def admit_initial_edit(self, inputs, remaining_phases): ...
     def admit_correction(self, inputs, packet, remaining_phases): ...
 
 
@@ -223,7 +225,7 @@ class JobToolsAdapter:
     No core module is imported or monkeypatched by this adapter.
     """
     def __init__(self, job, *, parse_scene, required_views, current_candidate,
-                 completed_outcome, check_arguments, tools, verify_inputs):
+                 completed_outcome, check_arguments, tools, verify_inputs, prepare_code=None):
         self.job = job
         self.parse_scene = parse_scene
         self.required_views = required_views
@@ -232,6 +234,7 @@ class JobToolsAdapter:
         self.check_arguments = check_arguments
         self.tools = {t['name']: t['inputSchema'] for t in tools}
         self.verify_inputs = verify_inputs
+        self.prepare_code = prepare_code
 
     def start(self, inputs):
         self.binding(inputs)
@@ -279,6 +282,18 @@ class JobToolsAdapter:
         if not isinstance(scene, dict):
             raise Refused('valid_complete_scene_required')
         return scene
+
+    def validate_initial_edit(self, code):
+        if (not isinstance(code, str) or not code.strip() or len(code) > 20000
+                or not callable(self.prepare_code)):
+            raise Refused('bounded_initial_edit_with_original_validator_required')
+        # Pure preflight through the original host policy, BEFORE either build.
+        # edit_model will run the same validator again and retain its existing
+        # accumulated-edit checks and isolated Blender execution boundary.
+        prepared, _ = self.prepare_code(code)
+        # A fresh edit_model prepends a newline to the normalized first edit;
+        # preflight that exact accumulated form too (including its byte bound).
+        self.prepare_code('\n' + prepared)
 
     def finish(self, candidate, verdict):
         if self.current() != candidate:
@@ -364,9 +379,9 @@ class Controller:
         return reply.value
 
     def build_and_inspect(self, plan, previous=None, previous_views=None):
-        self.guard('before_build', previous)
         if previous is not None and self.adapter.current() != previous:
             raise Refused('candidate_changed_before_correction')
+        initial_edit = None
         if isinstance(plan, EditPlan):
             if (previous is None or not isinstance(plan.code, str) or not plan.code.strip()
                     or len(plan.code) > 20000):
@@ -376,19 +391,37 @@ class Controller:
             views = previous_views
             name, arguments = 'edit_model', {'code': plan.code}
         else:
+            if isinstance(plan, ScenePlan) and previous is not None and plan.initial_edit is not None:
+                raise Refused('initial_edit_only_in_construction_plan')
             scene = self.adapter.validate(plan, self.inputs)
+            initial_edit = plan.initial_edit
+            if initial_edit is not None:
+                self.adapter.validate_initial_edit(initial_edit)
             views = self.adapter.required_views(self.inputs.request, scene)
             name, arguments = 'build_model', {'scene_json': canonical(scene)}
         supported = ('front', 'side', 'back', 'face', 'three-quarter')
         if (not isinstance(views, (set, frozenset)) or not {'front', 'side', 'back'} <= views
                 or not views <= set(supported)):
             raise Refused('complete_required_views_missing')
-        expected = previous.revision if previous else 0
-        self.adapter.call(name, {**arguments, 'expected_revision': expected})
-        self.guard('after_build', previous)
-        candidate = self.adapter.current()
-        if candidate.revision != expected + 1:
-            raise Refused('build_did_not_advance_current_revision')
+        sequence = [(name, arguments)]
+        if initial_edit is not None:
+            self.guard('before_initial_edit')
+            if self.policy.admit_initial_edit(self.inputs, ('inspection',)) is not True:
+                raise Refused('initial_edit_and_inspection_not_funded')
+            sequence.append(('edit_model', {'code': initial_edit}))
+        candidate = previous
+        for name, arguments in sequence:
+            self.guard('before_build', candidate)
+            if candidate is not None and self.adapter.current() != candidate:
+                raise Refused('candidate_changed_before_build')
+            expected = candidate.revision if candidate else 0
+            self.adapter.call(name, {**arguments, 'expected_revision': expected})
+            self.guard('after_build', candidate)
+            candidate = self.adapter.current()
+            if candidate.revision != expected + 1:
+                raise Refused('build_did_not_advance_current_revision')
+        # No intermediate candidate can stand in for the fully constructed
+        # initial model: every required image below belongs to its final GLB.
         renders = []
         for view in supported:
             if view not in views:
@@ -429,7 +462,8 @@ class Controller:
                 or not isinstance(value.summary, str) or not value.summary.strip() or len(value.summary) > 1200
                 or (value.accepted and (value.issues or value.correction is not None))
                 or (not value.accepted and not value.issues)
-                or (value.correction is not None and not isinstance(value.correction, (ScenePlan, EditPlan)))):
+                or (value.correction is not None and not isinstance(value.correction, (ScenePlan, EditPlan)))
+                or (isinstance(value.correction, ScenePlan) and value.correction.initial_edit is not None)):
             raise Refused('honest_current_render_assessment_required')
         if self.adapter.current() != packet.candidate:
             raise Refused('candidate_changed_during_assessment')

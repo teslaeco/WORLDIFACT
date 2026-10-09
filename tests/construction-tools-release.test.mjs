@@ -52,12 +52,13 @@ const modification = (path, oldBlob = '3'.repeat(40), newBlob = '4'.repeat(40)) 
 function entry({ path: _path, ...value }) { return value }
 function fixtureManifest() {
   return {
-    revision: 'oracle-construction-tools-release-v8',
-    release: 'oracle-key-boundary-source-only-20261008',
+    revision: 'oracle-construction-tools-release-v9',
+    release: 'oracle-initial-edit-grant-refresh-source-only-20261008',
     baseCommit: BASE_COMMIT, sourceOnly: true, deployAllowed: false,
     preserveCloudflareDeployment: true, paidGenerationRequested: false, status: 'FROZEN',
     payload: { ...Object.fromEntries(Object.entries(BASE_PAYLOAD_BLOBS).map(([path, oldBlob]) =>
-      [path, entry(modification(path, oldBlob, blob(readFileSync(join(root, path)))))])),
+      [path, entry(oldBlob === zero ? addition(path, blob(readFileSync(join(root, path))))
+        : modification(path, oldBlob, blob(readFileSync(join(root, path)))))])),
       [LEGACY_TEST_PATH]: { ...LEGACY_TEST_RECORD } },
   }
 }
@@ -116,20 +117,26 @@ function dispatch(options = {}) {
   return selectConstructionToolsRelease({ cwd: root, ...fixture })
 }
 
-test('exact six-modification key-boundary squash skips deployment before credentials', () => {
-  assert.equal(BASE_COMMIT, '3f6d7fcfd4cef8183b05fd1ff29176eec887cca4')
+test('exact initial-edit and grant-refresh squash skips deployment before credentials', () => {
+  assert.equal(BASE_COMMIT, '93c6e85f1d4df0ace41ed1320791a325489a08e1')
   assert.equal(RECIPIENT_PATH, '.github/oracle-maintenance-recipient.pem')
-  assert.deepEqual(REVIEWED_PATHS, [
-    '.github/workflows/cloudflare.yml', 'config/oracle-construction-tools-release.json',
-    'scripts/select-construction-tools-release.mjs', 'tests/construction-tools-release.test.mjs',
-    'scripts/oracle-maintenance.mjs', 'tests/oracle-maintenance.test.mjs',
-  ].sort())
-  assert.deepEqual(Object.keys(BASE_PAYLOAD_BLOBS).sort(), [TEST_PATH, 'scripts/oracle-maintenance.mjs', 'tests/oracle-maintenance.test.mjs'].sort())
   const changes = evidence().data.changes
-  assert.equal(REVIEWED_PATHS.length, 6)
+  assert.equal(REVIEWED_PATHS.length, 38)
   assert.deepEqual(changes.map(change => change.path).sort(), REVIEWED_PATHS)
-  assert.equal(changes.every(change => change.status === 'M'
-    && change.oldMode === '100644' && change.newMode === '100644'), true)
+  const additions = changes.filter(change => change.status === 'A')
+  assert.deepEqual(additions.map(change => change.path).sort(), [
+    'tools/model_construction/native_initial_edit_fixture.py',
+    'tools/model_construction/test_initial_edit_update.py',
+    'tools/oracle_maintenance/refresh.py',
+    'tools/oracle_maintenance/refresh_receiver.py',
+    'tools/oracle_maintenance/test_refresh.py',
+    'tools/oracle_maintenance/test_refresh_receiver.py',
+  ].sort())
+  for (const change of changes) {
+    assert.equal(change.newMode, '100644')
+    assert.equal(change.oldMode, change.status === 'A' ? '000000' : '100644')
+    assert.equal(change.status, change.oldBlob === zero ? 'A' : 'M')
+  }
   assert.deepEqual(select(), { deployAllowed: false })
   assert.deepEqual(dispatch(), { deployAllowed: false })
   assert.deepEqual(dispatch({ event: { ref: 'refs/heads/main' } }), { deployAllowed: false })
@@ -163,7 +170,6 @@ test('partial source envelopes, unknown additions and every missing reviewed pat
     'server/billing.ts', 'wrangler.jsonc', 'package.json', 'ops/AI_SHOP_UI_RELEASE_20261007.json',
     'ops/STANDARD_CONTEXT_TOOLS_RELEASE_20261007.json', OLD_SCRIPT_PATH,
     'tools/model_construction/test_construction_transaction.py',
-    'tools/model_construction/test_construction_gate_contract.py',
     '.github/workflows/unknown.yml', '.github/workflows/oracle-maintenance-extra.yml',
     'tools/oracle_maintenance/unreviewed.py']) {
     reject({ changes: [...complete, addition(path)] })
@@ -198,10 +204,12 @@ test('every changed file requires exact mode, old/new blob and status', () => {
   const complete = evidence().data.changes
   for (const target of complete) {
     for (const changed of [{ status: 'A', oldMode: '000000', oldBlob: zero },
-      { status: 'A' }, { oldMode: '000000' },
+      { status: 'A' }, { oldMode: '000000' }, { oldBlob: zero },
+      { status: 'M' }, { oldMode: '100644' },
       { status: 'D' }, { status: 'R100' }, { status: 'T' },
       { newMode: '120000' }, { newMode: '100755' }, { newMode: '160000' },
       { newBlob: '9'.repeat(40) }, { oldBlob: '8'.repeat(40) }, { oldMode: '100755' }]) {
+      if (Object.entries(changed).every(([key, value]) => target[key] === value)) continue
       reject({ changes: complete.map(change => change === target ? { ...change, ...changed } : change) })
     }
   }
@@ -238,9 +246,11 @@ test('manifest cannot change immutable baseline blobs, statuses, modes or exact 
     for (const patch of [{ oldBlob: '8'.repeat(40) },
       { oldMode: '000000' },
       { oldMode: '100755' }, { newMode: '100755' }, { newMode: '120000' },
-      { status: 'A', oldMode: '000000', oldBlob: zero }, { status: 'A' }, { status: 'D' },
+      { status: 'A', oldMode: '000000', oldBlob: zero }, { status: 'A' },
+      { status: 'M' }, { oldMode: '100644' }, { status: 'D' },
       { newBlob: zero }, { newBlob: original.payload[path].oldBlob },
       { extra: true }]) {
+      if (Object.entries(patch).every(([key, value]) => original.payload[path][key] === value)) continue
       const manifest = structuredClone(original)
       Object.assign(manifest.payload[path], patch)
       reject({ manifest })
@@ -248,11 +258,9 @@ test('manifest cannot change immutable baseline blobs, statuses, modes or exact 
     const missing = structuredClone(original)
     delete missing.payload[path]
     reject({ manifest: missing })
-    for (const replacement of ['tools/model_construction/runtime_controller.py',
-      'tools/model_construction/unknown.py', 'tools/model_construction/test_construction_transaction.py',
-      'tools/model_construction/test_construction_gate_contract.py',
-      'tests/context-tools-release.test.mjs',
-      'docs/CONTEST_STATUS.md', '.github/workflows/model-construction-review.yml']) {
+    for (const replacement of ['tools/model_construction/unknown.py',
+      'tools/model_construction/test_construction_transaction.py',
+      'docs/UNKNOWN_CONSTRUCTION.md', '.github/workflows/unknown-construction-review.yml']) {
       const manifest = structuredClone(missing)
       manifest.payload[replacement] = original.payload[path]
       reject({ manifest })
