@@ -1,0 +1,92 @@
+name: Stage exact response-phase correction (no production access)
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+    paths: ['scripts/generation-response-phase.patch']
+permissions:
+  contents: write
+concurrency:
+  group: stage-response-phase-correction
+  cancel-in-progress: false
+jobs:
+  stage:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/fix/generation-audit-recovery-20261009'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Apply only the checksum-reviewed patch and test the real decoder
+        run: |
+          echo '3167e4ac666df7dd35def14668f0c2e47a66706cbc20ab55ebf047ec8df189f4  scripts/generation-response-phase.patch' | sha256sum --check
+          git apply --check scripts/generation-response-phase.patch
+          git apply scripts/generation-response-phase.patch
+          cd tools/model_construction
+          python -B -m unittest test_response_phase test_construction_payload test_phased_controller test_construction_policy test_runtime_controller.CallbackTests test_runtime_controller.InitialEditPolicyTests test_runtime_controller.RoutingTests test_runtime_controller.ReferenceTests test_runtime_controller.FullStateTests -v
+      - name: Upload exact public source objects, without updating any branch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, lstat, mkdir, writeFile } from 'node:fs/promises';
+          import { createHash } from 'node:crypto';
+          import { execFileSync } from 'node:child_process';
+          const expected = {
+            'tools/model_construction/construction_payload.py':'dc65d54672b657e260a1a4a24da6657e95581de479b55e6e8c9b26f93a49e2bb',
+            'tools/model_construction/construction_manifest.py':'172bde80f5094202f249417e5a9cf20f4550c1ed6a1f9cd22750495a83add3b8',
+            'tools/model_construction/oracle_construction_launch.py':'06e88e5559c8c9a2de88da3be4b25c9a80eb29976a1ee31e941e085a9275e0e3',
+            'tools/model_construction/test_construction_payload.py':'b3614ccd55ea7226d3bdb45892bdceefcbd897587c85121cea58e506cc6250a1',
+            'tools/model_construction/test_response_phase.py':'47a8156ffb3688015cbfd3d43a90664603c61bc5262b0631a74370120020685f',
+            'tools/model_construction/test_native_pipeline.py':'1fa6632f44ddb6bdda7d6170f5bf71be30d919a942b64c5597ef1d40ca28f95d',
+            'docs/CONTEST_STATUS.md':'2e3686a08b2b178041adf9eb77d569b7530125c848ca745e9ef89027ac419fb5'
+          };
+          const branch = 'fix/generation-audit-recovery-20261009';
+          const parent = process.env.GITHUB_SHA;
+          const targetTree = '556581ecc6001d634d6c4fc9814197bdf2974c37';
+          if (process.env.GITHUB_REPOSITORY !== 'teslaeco/WORLDIFACT' || process.env.GITHUB_REF !== 'refs/heads/' + branch || !/^[a-f0-9]{40}$/.test(parent)) throw Error('Wrong source scope');
+          const git = (...args) => execFileSync('git', args, {encoding:'utf8'}).trim();
+          if (git('rev-parse','HEAD') !== parent) throw Error('Unexpected checkout');
+          const api = async (method, path, body) => {
+            const r = await fetch('https://api.github.com/repos/teslaeco/WORLDIFACT/' + path, {
+              method, redirect:'error', signal:AbortSignal.timeout(20000),
+              headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json'},
+              ...(body === undefined ? {} : {body:JSON.stringify(body)})});
+            if (!r.ok) throw Error('GitHub object operation failed with HTTP '+r.status);
+            return r.json();
+          };
+          const current = await api('GET','git/ref/heads/'+branch);
+          if (current.object.sha !== parent) throw Error('Concurrent branch change; no publication');
+          const entries = [];
+          for (const [path, hash] of Object.entries(expected)) {
+            const info=await lstat(path), bytes=await readFile(path);
+            if (!info.isFile() || info.isSymbolicLink() || bytes.length>1048576 || createHash('sha256').update(bytes).digest('hex')!==hash) throw Error('Source fingerprint mismatch: '+path);
+            const blob=await api('POST','git/blobs',{encoding:'base64',content:bytes.toString('base64')});
+            const expectedBlob=createHash('sha1').update(Buffer.from('blob '+bytes.length+'\0')).update(bytes).digest('hex');
+            if(blob.sha!==expectedBlob)throw Error('Uploaded blob mismatch');
+            entries.push({path,mode:'100644',type:'blob',sha:blob.sha});
+          }
+          for(const path of ['scripts/generation-response-phase.patch','.github/workflows/stage-response-phase-correction.yml']) entries.push({path,mode:'100644',type:'blob',sha:null});
+          const tree=await api('POST','git/trees',{base_tree:git('rev-parse','HEAD^{tree}'),tree:entries});
+          if(tree.sha!==targetTree)throw Error('Complete candidate tree does not match reviewed local source');
+          const commit=await api('POST','git/commits',{message:'fix: decode the final model response without mistaking commentary for a result\n\nPreserve authenticated whole-response evidence, model identity, budgets, request limits, geometry checks and existing financial state. Add eight regressions and exercise phased responses in the native Blender fixture. Source only: the original host and latest public path are ready, but the reported account failure and a new live GLB remain unverified. The temporary staging workflow and patch are removed in this commit.',tree:tree.sha,parents:[parent]});
+          const receipt={parent,commit:commit.sha,tree:tree.sha,changedFiles:Object.keys(expected),targetedTestsPassed:119,branchUpdated:false,productionChanged:false,paidGenerationRequested:false};
+          await mkdir('phase-correction-evidence',{recursive:true});
+          await writeFile('phase-correction-evidence/commit.json',JSON.stringify(receipt,null,2)+'\n');
+          console.log(JSON.stringify(receipt,null,2));
+          NODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: phase-correction-commit-${{ github.sha }}
+          path: phase-correction-evidence/commit.json
+          if-no-files-found: error
+          retention-days: 2
+# This temporary source-publication adapter never updates a ref or touches an
+# Oracle host, production environment, account, price, model, or provider API.
+# The executor verifies its exact tree before advancing the existing PR branch.
