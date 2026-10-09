@@ -1,0 +1,62 @@
+name: Read existing synthetic MCC budget-guard reason
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+    paths: ['.github/workflows/output-scope-cost-reason-once.yml']
+permissions:
+  contents: read
+jobs:
+  read:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/fix/generation-audit-recovery-20261009' && github.event.before == '5407b3dfa6f5006df4467a8ef4d76acd6ff4294f' && github.run_attempt == 1
+    environment:
+      name: production
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Check fixed test identity and read only its safe guard receipt
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: |
+          test "$(git rev-parse HEAD^)" = 5407b3dfa6f5006df4467a8ef4d76acd6ff4294f
+          test "$(git rev-parse refs/tags/worldifact-output-scope-smoke-20261010-once)" = 3ed09f0e7c63097d86f3db3ceea333f2baee52fe
+          git diff --exit-code 5407b3dfa6f5006df4467a8ef4d76acd6ff4294f HEAD -- scripts src server tools
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {mkdir,writeFile} from 'node:fs/promises';
+          import {JOB,bytes} from './scripts/approved-output-scope-smoke.mjs';
+          import {oracleOrigin} from './server/platform.ts';
+          const reasons=new Set(['PRICING_EXPIRED','PAYLOAD_POLICY_REJECTED','TOKEN_COUNT_UNAVAILABLE','TOKEN_COUNT_INVALID','INPUT_LIMIT','OUTPUT_ALLOWANCE_BELOW_MINIMUM','REQUEST_LIMIT','INSUFFICIENT_RESERVATION','LEDGER_INVALID','LEDGER_IO','RESERVATION_COLLISION','PREFLIGHT_UNKNOWN','JOB_SEALED','INVALID_PHASE_CAPACITY','CONSTRUCTION_CAP_UNREVIEWED']);
+          const stages=new Set(['pricing','payload','count','ledger','admission','persistence','preflight']);
+          const fields=['counted_input','input_ceiling','requested_output','minimum_output','affordable_output','remaining_micro_usd','required_minimum_micro_usd','requests','protected_remaining_micro_usd','protected_remaining_requests'];
+          const safe=v=>({reason:reasons.has(v?.reason)?v.reason:'UNKNOWN',stage:stages.has(v?.stage)?v.stage:'UNKNOWN',...Object.fromEntries(fields.filter(k=>Number.isSafeInteger(v?.[k])&&v[k]>=0&&v[k]<=4000000).map(k=>[k,v[k]]))});
+          assert.deepEqual(safe({reason:'SECRET',stage:'SECRET',raw:'SECRET',requests:'SECRET',counted_input:-1}),{reason:'UNKNOWN',stage:'UNKNOWN'});
+          assert.deepEqual(safe({reason:'TOKEN_COUNT_UNAVAILABLE',stage:'count',requests:2}),{reason:'TOKEN_COUNT_UNAVAILABLE',stage:'count',requests:2});
+          try {
+            const origin=oracleOrigin(process.env.ORACLE_ENDPOINT),token=process.env.ORACLE_API_TOKEN;
+            if(!origin||typeof token!=='string'||token.length<32||token.length>256||/\s/.test(token))throw Error();
+            const r=await fetch(origin+'/v1/jobs/'+JOB+'/quality',{method:'GET',redirect:'error',credentials:'omit',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+token,Accept:'application/json'}});
+            if(!r.headers.get('content-type')?.includes('application/json'))throw Error();
+            const q=JSON.parse((await bytes(r,262144)).toString());
+            if(q.state!=='failed'||q.agentUsage?.error_code!=='WORLDIFACT_ASTRA_COST_GUARD')throw Error();
+            const result={jobId:JOB,guard:safe(q.agentUsage.cost_guard),generationRequested:false,accountOperations:0};
+            await mkdir('guard-evidence',{recursive:true});await writeFile('guard-evidence/result.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result,null,2));
+          } catch {console.error('GUARD_REASON_UNAVAILABLE; no state changed.');process.exitCode=1;}
+          NODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: output-scope-guard-${{ github.run_id }}
+          path: guard-evidence/result.json
+          if-no-files-found: ignore
+          retention-days: 7
+# Fixed newly approved public synthetic test only. The original one-use model
+# approval remains consumed. This file has no POST, mutation or model execution.
