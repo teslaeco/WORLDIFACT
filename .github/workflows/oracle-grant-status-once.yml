@@ -1,0 +1,60 @@
+name: Read approved Oracle dispatcher status once
+on:
+  push:
+    branches: [diagnostics/oracle-grant-status-once-20261009]
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-oracle-maintenance
+  cancel-in-progress: false
+jobs:
+  offline-scope:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/diagnostics/oracle-grant-status-once-20261009' && github.event_name == 'push' && github.run_attempt == 1 && github.event.before == '3c5a499f3c6b9fe1400fb4715d2097b106327bf3'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Reject expired or out-of-scope source before Production access
+        run: node scripts/oracle-grant-status-once.mjs --gate
+      - name: Verify offline read-only, schema and privacy fixtures
+        run: node --test tests/oracle-grant-status-once.test.mjs tests/oracle-maintenance.test.mjs
+  status:
+    needs: offline-scope
+    if: needs.offline-scope.result == 'success' && github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/diagnostics/oracle-grant-status-once-20261009' && github.event_name == 'push' && github.run_attempt == 1 && github.event.before == '3c5a499f3c6b9fe1400fb4715d2097b106327bf3'
+    environment:
+      name: Production
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Read one fixed STATUS command and encrypt finite evidence
+        run: node scripts/oracle-grant-status-once.mjs --status
+        env:
+          ORACLE_MAINTENANCE_HOST: ${{ secrets.ORACLE_MAINTENANCE_HOST }}
+          ORACLE_MAINTENANCE_KNOWN_HOSTS: ${{ secrets.ORACLE_MAINTENANCE_KNOWN_HOSTS }}
+          ORACLE_MAINTENANCE_SSH_KEY: ${{ secrets.ORACLE_MAINTENANCE_SSH_KEY }}
+      - name: Upload ciphertext only, including safe failure evidence
+        if: ${{ always() && hashFiles('.oracle-grant-status-encrypted/report.enc.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: oracle-grant-status-encrypted-${{ github.run_id }}
+          path: .oracle-grant-status-encrypted/report.enc.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
