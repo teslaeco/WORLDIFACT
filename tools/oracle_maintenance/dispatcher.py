@@ -7,6 +7,7 @@ Bootstrap installs these files privately and checks their release hashes.
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import stat
@@ -15,14 +16,14 @@ import sys
 import tempfile
 
 
-REVISION = 'oracle-maintenance-b6dce84d-v1'
-SOURCE_COMMIT = 'b6dce84d1bd598ad88b0af934fa4384354271496'
-LAUNCHER_HASH = '9ef5cd1fc648e192be196dc56fa7fe0ab0292975bc58abc445cd6180bb1df313'
-COMMANDS = frozenset(('status', 'apply-b6dce84d'))
+REVISION = 'oracle-maintenance-initial-edit-v1'
+SOURCE_COMMIT = '5e375f0f7d6f42d8c4d8944fa024bfb474143c04'
+LAUNCHER_HASH = 'c87d9826480173dead7c175db75f0d4f143c8f8bc63fea753cc84ebc6e1e2f57'
+COMMANDS = frozenset(('status', 'apply-initial-edit-v1'))
 INSTALL_TIMEOUT = 3180
 OUTPUT_LIMIT = 32768
 WIRE_LIMIT = 16384
-INSTALL_FLAGS = ('--update-payload', '--approve-service-maintenance',
+INSTALL_FLAGS = ('--update-initial-edit', '--approve-service-maintenance',
                  '--allow-cancelled-cleanup', '--expected-cancelled-job',
                  'f91612e5-eb5a-4fec-9585-1ce08c9f38ad')
 # -I retains stdlib isolation; only the validated, fixed package enters sys.path.
@@ -76,7 +77,9 @@ def reject_repository_fallbacks(package):
 
 
 def verified_package(api, home):
-    package = home / '.local/share/worldifact-maintenance/update'
+    if not re.fullmatch(r'[0-9a-f]{40}', SOURCE_COMMIT) or not re.fullmatch(r'[0-9a-f]{64}', LAUNCHER_HASH):
+        raise ValueError('unfrozen_release')
+    package = home / '.local/share/worldifact-maintenance/update-initial-edit-v1'
     private_path(package, home)
     reject_repository_fallbacks(package)
     reader = api.Reader()

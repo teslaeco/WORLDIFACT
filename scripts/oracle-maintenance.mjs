@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const AAD = Buffer.from('WORLDIFACT_ORACLE_MAINTENANCE_V1')
 const LIMIT = 16_384
-const ACTIONS = ['status', 'reachability', 'apply-b6dce84d']
+const ACTIONS = ['status', 'reachability', 'apply-initial-edit-v1']
 const FAILURE_CODES = ['INVALID_ACTION', 'INVALID_CONFIGURATION', 'INVALID_CONTEXT', 'INVALID_RESPONSE', 'SSH_FAILED', 'SSH_UNREACHABLE', 'COMMAND_NOT_CONFIRMED', 'FAILED']
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const fail = code => { throw new Error(FAILURE_CODES.includes(code) ? code : 'FAILED') }
@@ -147,6 +147,12 @@ const matches = (value, pattern) => typeof value === 'string' && pattern.test(va
 const boolean = value => typeof value === 'boolean'
 const nullable = (value, predicate) => value === null || predicate(value)
 const digest = value => matches(value, /^[a-f0-9]{64}$/)
+const INITIAL_EDIT_HELPERS = ['construction_payload.py', 'phased_controller.py', 'runtime_controller.py']
+
+function helperHashes(value) {
+  exact(value, INITIAL_EDIT_HELPERS)
+  if (INITIAL_EDIT_HELPERS.some(key => !nullable(value[key], digest))) fail('INVALID_RESPONSE')
+}
 
 function installerReport(value, staged = false) {
   if (staged && value?.phase === 'STANDARD_CONSTRUCTION_STAGED_NOT_INSTALLED') {
@@ -174,7 +180,10 @@ function statusReport(value) {
   }
   exact(value, ['read_only', 'snapshot_stable', 'changed_components', 'parser_sha256', 'parser_version', 'receipt_sha256',
     'receipt_revision', 'receipt_parser_sha256', 'payload_update_revision', 'construction_health_verified',
-    'maintenance_present', 'recent_attempts', 'lock_file_present', 'observed_flock_holders', 'worker'])
+    'helper_sha256', 'receipt_helper_sha256', 'initial_edit_revision', 'maintenance_present', 'recent_attempts',
+    'lock_file_present', 'observed_flock_holders', 'worker'])
+  helperHashes(value.helper_sha256)
+  helperHashes(value.receipt_helper_sha256)
   const components = ['source_or_receipt', 'maintenance_marker', 'recent_attempts', 'attempt_selection', 'installer_lock', 'lock_holders', 'worker']
   if (value.read_only !== true || ['snapshot_stable', 'construction_health_verified', 'maintenance_present', 'lock_file_present'].some(key => !boolean(value[key])) ||
       !Array.isArray(value.changed_components) || value.changed_components.length > 7 ||
@@ -183,6 +192,7 @@ function statusReport(value) {
       !['previous', 'updated', 'unknown'].includes(value.parser_version) ||
       ![null, 'worldifact-standard-construction-v1'].includes(value.receipt_revision) ||
       ![null, 'responses-reasoning-content-v1'].includes(value.payload_update_revision) ||
+      ![null, 'typed-plan-initial-edit-v1'].includes(value.initial_edit_revision) ||
       !Array.isArray(value.recent_attempts) || value.recent_attempts.length > 2 ||
       !Array.isArray(value.observed_flock_holders) || value.observed_flock_holders.length > 16) fail('INVALID_RESPONSE')
   for (const attempt of value.recent_attempts) {
@@ -207,17 +217,17 @@ export function validateDispatcherReport(bytes, action, code = 0) {
   let report
   try { report = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) } catch { fail('INVALID_RESPONSE') }
   exact(report, ['revision', 'action', 'result', 'status', 'installer'])
-  if (report.revision !== 'oracle-maintenance-b6dce84d-v1' ||
+  if (report.revision !== 'oracle-maintenance-initial-edit-v1' ||
       !['ready_to_apply', 'already_updated', 'busy', 'inconclusive', 'updated', 'not_confirmed', 'refused'].includes(report.result) ||
       report.action !== action && !(report.action === null && report.result === 'refused' && report.status === null && report.installer === null) ||
       action === 'status' && (report.installer !== null || ['updated', 'not_confirmed'].includes(report.result)) ||
-      action === 'apply-b6dce84d' && report.result === 'ready_to_apply' ||
+      action === 'apply-initial-edit-v1' && report.result === 'ready_to_apply' ||
       report.installer !== null && !['updated', 'not_confirmed'].includes(report.result) ||
       report.result === 'updated' && report.installer?.phase !== 'WORLDIFACT_STANDARD_CONSTRUCTION_VERIFIED') fail('INVALID_RESPONSE')
   if (report.status !== null) statusReport(report.status)
   else if (report.result !== 'refused') fail('INVALID_RESPONSE')
   if (report.installer !== null) installerReport(report.installer)
-  const expectedCode = report.result === 'refused' || action === 'apply-b6dce84d' && !['updated', 'already_updated'].includes(report.result) ? 1 : 0
+  const expectedCode = report.result === 'refused' || action === 'apply-initial-edit-v1' && !['updated', 'already_updated'].includes(report.result) ? 1 : 0
   if (code !== expectedCode) fail('INVALID_RESPONSE')
   return report
 }

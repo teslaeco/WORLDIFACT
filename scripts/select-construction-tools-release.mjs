@@ -8,8 +8,8 @@ import {
   BASE_COMMIT as LEGACY_BASE_COMMIT,
 } from './select-context-tools-release.mjs'
 
-export const BASE_COMMIT = '3f6d7fcfd4cef8183b05fd1ff29176eec887cca4'
-export const BASE_WORKFLOW_BLOB = 'f96b89f0a70330f64f8c4af5243225966d4480ac'
+export const BASE_COMMIT = '93c6e85f1d4df0ace41ed1320791a325489a08e1'
+export const BASE_WORKFLOW_BLOB = '58f566ae42c906f9f75ee340f2f33ea512da5f3d'
 export const LEGACY_SCRIPT_BLOB = '465898752099691d8cee1ca989575c2b83febab3'
 export const SCRIPT_PATH = 'scripts/select-construction-tools-release.mjs'
 export const CONFIG_PATH = 'config/oracle-construction-tools-release.json'
@@ -19,18 +19,51 @@ export const RECIPIENT_PATH = '.github/oracle-maintenance-recipient.pem'
 export const RECIPIENT_BLOB = '32d65af26659ee221c0885709155426285993d91'
 // Freeze only after reviewing the complete single-parent squash payload.
 // Config excludes this script and the derived workflow, so there is no cycle.
-export const CONFIG_BLOB = '952240461e0d0b021a563d6d84608a77e7edbe67'
+export const CONFIG_BLOB = '61cb3831368742c6fb0016dea62db5207baa6dec'
 export const FAULT = 'CONSTRUCTION_TOOLS_RELEASE_NOT_VERIFIED'
-export const BASE_SCRIPT_BLOB = 'f821415a457befe0972cd7f35044e4823c5607e4'
-export const BASE_CONFIG_BLOB = '7389e47e9580953c3646c3076ec679caf2b5faa6'
-export const BASE_SCRIPT_SHA256 = 'bdf6d0adcf2d0a03faaa47864eb1776818ec80d350588b0005633eec30804b92'
-export const BASE_CONFIG_SHA256 = '0fee16eed10e739c967050d70c091f56ee64c8229f0fc09b5e3226d9543f40eb'
-// This finite source-only release normalizes SSH-key boundary whitespace.
-// The diagnostic recipient and all deployed runtime state remain unchanged.
+export const BASE_SCRIPT_BLOB = '1e7cae22ed1758297089cae350c275e4af42f370'
+export const BASE_CONFIG_BLOB = '952240461e0d0b021a563d6d84608a77e7edbe67'
+export const BASE_SCRIPT_SHA256 = '501d26033f2456393c4aca90f41cb46c653d6a8e545e7bcef9a251d7d9316d77'
+export const BASE_CONFIG_SHA256 = '5239d545bffff72c9fe31721a08b9d188650ab13a45e5e761b071f341083b33b'
+// This finite source-only release adds the bounded initial edit and explicitly
+// scoped maintenance-grant refresh sources. No runtime is installed or enabled.
+// Zero old blobs designate reviewed additions absent from the exact main base.
 export const BASE_PAYLOAD_BLOBS = Object.freeze({
-  [TEST_PATH]: 'e4134d3d4c7e9a62421dc65ed34364909def55df',
-  'scripts/oracle-maintenance.mjs': '641557bee57e2d22edca071dac8d36d2a764df90',
-  'tests/oracle-maintenance.test.mjs': 'ba701d390a734e5919253b4762fdd93d0768b606',
+  '.github/workflows/model-construction-review.yml': '25d483a00199022160f26f945aef34296e1ac31e',
+  '.github/workflows/oracle-maintenance.yml': '4f3c02c508a5ed650dae4fc772618cd3800a54b7',
+  'docs/CONTEST_STATUS.md': 'b07103c88f8bee8faa796cc30734038605af3fce',
+  'docs/STANDARD_CONSTRUCTION_REPAIR_20261007.md': 'a51e1b0900580b2f14bd6eca7ed9fd32379162ee',
+  'scripts/oracle-maintenance.mjs': 'f6aeda9409223b62f78114cc15605457793b98b1',
+  'tests/construction-tools-release.test.mjs': '241fac7d75339f0e627638486ebc11eaae1cf703',
+  'tests/oracle-maintenance.test.mjs': '5bc2d599689b37b8d47157d318b2b3c6917cec77',
+  'tools/model_construction/README.md': 'bf299a1ee82e414c3890b90ca1f6ad449eb86994',
+  'tools/model_construction/construction_manifest.py': '026a272d4c3ee41def9cafe89b362290119ba3ca',
+  'tools/model_construction/construction_payload.py': '5f83524154090d8eaa4eb92f3829a48f6772b133',
+  'tools/model_construction/install_construction.py': '3dcdb5d3119f54ed393699e11918380b47e2cee5',
+  'tools/model_construction/native_initial_edit_fixture.py': '0000000000000000000000000000000000000000',
+  'tools/model_construction/offline_construction.py': '40ceaf27b5d1721b5d392478d2c4cb11880b48c5',
+  'tools/model_construction/oracle_construction_launch.py': 'f7995965a2960869ff4da3557ed630ac6ecb0873',
+  'tools/model_construction/phased_controller.py': '8d7079c908411d67dc3f11bf65ca69b1d5a419bb',
+  'tools/model_construction/runtime_controller.py': 'c4124241ff5c5937f9f69728c1db6a012c6877d1',
+  'tools/model_construction/test_construction_gate_contract.py': '458274b9562da76ab1a979bb0c694bc8c54db096',
+  'tools/model_construction/test_construction_launcher.py': '176539fe07fe23c7596aaae3c7c3355ad65febbd',
+  'tools/model_construction/test_construction_manifest.py': '89f20fb01272f18eaf5fc8e0a8d8e7a1b641743a',
+  'tools/model_construction/test_construction_payload.py': '03aa049680fa240a72289b6c1ed46d5cda177722',
+  'tools/model_construction/test_construction_payload_update.py': '735c38288e8a37aab51804f998670ad369ba1e7c',
+  'tools/model_construction/test_initial_edit_update.py': '0000000000000000000000000000000000000000',
+  'tools/model_construction/test_native_pipeline.py': '7ccfa2f8e7d35e43367c625666887e3ed3902efc',
+  'tools/model_construction/test_offline_construction.py': '3d7a01658353b0d147d7a4217e5961f735c8cd18',
+  'tools/model_construction/test_phased_controller.py': 'e9966721c4fd15f5cd9e9c7410c56846212b3ae9',
+  'tools/model_construction/test_runtime_controller.py': '144fa37e8e30e3a1901c48e57b128d4408549a7d',
+  'tools/oracle_maintenance/README.md': '167c50aa87f0a24081b0ffbcce5c8efeb8913865',
+  'tools/oracle_maintenance/dispatcher.py': 'f4ab913f066aae80a80ae1257e7d6fcfac352ac7',
+  'tools/oracle_maintenance/refresh.py': '0000000000000000000000000000000000000000',
+  'tools/oracle_maintenance/refresh_receiver.py': '0000000000000000000000000000000000000000',
+  'tools/oracle_maintenance/status.py': '932f7f121bcb360f996f9a30f6fe45dd659e1758',
+  'tools/oracle_maintenance/test_dispatcher.py': 'af53eea32fe60164aea1b0fae626a71370e9dc60',
+  'tools/oracle_maintenance/test_refresh.py': '0000000000000000000000000000000000000000',
+  'tools/oracle_maintenance/test_refresh_receiver.py': '0000000000000000000000000000000000000000',
+  'tools/oracle_maintenance/test_status.py': '63b150daa3327078b8d41b645855bb817e958470',
 })
 // Preserve the historical context test's manifest contract without permitting
 // this unchanged path in the repair diff. Both historical hashes are immutable.
@@ -71,8 +104,8 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
   // ambiguous serialization, in addition to the compiled immutable blob pin.
   if (Buffer.compare(raw, Buffer.from(JSON.stringify(value, null, 2) + '\n')) !== 0
       || !sameKeys(value, CONFIG_KEYS)
-      || value.revision !== 'oracle-construction-tools-release-v8'
-      || value.release !== 'oracle-key-boundary-source-only-20261008'
+      || value.revision !== 'oracle-construction-tools-release-v9'
+      || value.release !== 'oracle-initial-edit-grant-refresh-source-only-20261008'
       || value.baseCommit !== BASE_COMMIT || value.sourceOnly !== true
       || value.deployAllowed !== false || value.preserveCloudflareDeployment !== true
       || value.paidGenerationRequested !== false || value.status !== 'FROZEN'
@@ -82,8 +115,9 @@ export function readManifest(raw, expectedBlob = CONFIG_BLOB) {
       || ENTRY_KEYS.some(key => value.payload[LEGACY_TEST_PATH][key] !== LEGACY_TEST_RECORD[key])) refused()
   for (const path of Object.keys(BASE_PAYLOAD_BLOBS)) {
     const entry = value.payload[path]
+    const added = BASE_PAYLOAD_BLOBS[path] === ZERO
     if (!sameKeys(entry, ENTRY_KEYS) || entry.newMode !== '100644'
-        || entry.oldMode !== '100644' || entry.status !== 'M'
+        || entry.oldMode !== (added ? '000000' : '100644') || entry.status !== (added ? 'A' : 'M')
         || entry.oldBlob !== BASE_PAYLOAD_BLOBS[path]
         || !sha(entry.newBlob) || entry.oldBlob === entry.newBlob) refused()
   }

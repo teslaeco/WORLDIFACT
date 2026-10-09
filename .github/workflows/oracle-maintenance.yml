@@ -25,7 +25,7 @@ on:
         options:
           - status
           - reachability
-          - apply-b6dce84d
+          - apply-initial-edit-v1
 permissions:
   contents: read
 concurrency:
@@ -49,8 +49,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - name: Verify credential-free dispatcher and runner fixtures
+      - name: Verify credential-free dispatcher, refresh receiver and runner fixtures
         run: |
+          test -f tools/oracle_maintenance/test_refresh.py
+          test -f tools/oracle_maintenance/test_refresh_receiver.py
           python -B -m unittest discover -s tools/oracle_maintenance -p 'test_*.py' -v
           node --test tests/oracle-maintenance.test.mjs
   maintenance:

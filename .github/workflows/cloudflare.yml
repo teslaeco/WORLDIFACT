@@ -432,6 +432,6 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s  scripts/select-context-tools-release.mjs\n' '7c97d618461501290b1f1a95d345cf4911abbf54c16ab121ab48fefac343ea5a' | sha256sum -c - >&2
-          printf '%s  scripts/select-construction-tools-release.mjs\n' '501d26033f2456393c4aca90f41cb46c653d6a8e545e7bcef9a251d7d9316d77' | sha256sum -c - >&2
-          printf '%s  config/oracle-construction-tools-release.json\n' '5239d545bffff72c9fe31721a08b9d188650ab13a45e5e761b071f341083b33b' | sha256sum -c - >&2
+          printf '%s  scripts/select-construction-tools-release.mjs\n' '10dc4ad57aa930abd79ed5e19a31cb3cd2c93b998edf972931b007d4aeb19104' | sha256sum -c - >&2
+          printf '%s  config/oracle-construction-tools-release.json\n' 'bbdc3a85da425fde712b1de22dc76340be77efa8a972e653dc5ba6107f6765ce' | sha256sum -c - >&2
           node scripts/select-construction-tools-release.mjs >> "$GITHUB_OUTPUT"
