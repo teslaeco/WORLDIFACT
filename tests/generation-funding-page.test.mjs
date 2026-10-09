@@ -200,8 +200,8 @@ test('GET client refuses authentication errors, redirects and oversized bodies w
 
 test('actual entrypoint isolates the diagnostic route from all ordinary account and app effects', async () => {
   const entryUrl = new URL('../src/main.tsx', import.meta.url), code = compile(await readFile(entryUrl, 'utf8'))
-  for (const path of ['/account/generation-funding', '/shop']) {
-    const App = () => {}, AccountProvider = () => {}, FundingPage = () => {}; let rendered
+  for (const path of ['/account/generation-funding', '/account/failed-hold-waiver', '/shop']) {
+    const App = () => {}, AccountProvider = () => {}, FundingPage = () => {}, WaiverPage = () => {}; let rendered
     runInNewContext(code, { exports: {}, document: { getElementById: () => ({}) }, window: { location: { pathname: path } }, require(id) {
       if (id === 'react') return React
       if (id === 'react/jsx-runtime') return localRequire(id)
@@ -210,13 +210,15 @@ test('actual entrypoint isolates the diagnostic route from all ordinary account 
       if (id === './App') return { __esModule: true, default: App }
       if (id === './lib/account') return { AccountProvider }
       if (id === './pages/GenerationFundingPage') return { __esModule: true, default: FundingPage }
+      if (id === './pages/FailedHoldWaiverPage') return { __esModule: true, default: WaiverPage }
       if (id.endsWith('.css')) return {}
       throw Error('Unexpected entry dependency: ' + id)
     } }, { filename: entryUrl.pathname, timeout: 1000 })
     const nodes = elements(rendered)
     assert.equal(nodes.some(node => node.type === FundingPage), path === '/account/generation-funding')
-    assert.equal(nodes.some(node => node.type === AccountProvider), path !== '/account/generation-funding')
-    assert.equal(nodes.some(node => node.type === App), path !== '/account/generation-funding')
+    assert.equal(nodes.some(node => node.type === WaiverPage), path === '/account/failed-hold-waiver')
+    assert.equal(nodes.some(node => node.type === AccountProvider), path === '/shop')
+    assert.equal(nodes.some(node => node.type === App), path === '/shop')
   }
 })
 

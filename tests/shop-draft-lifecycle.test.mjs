@@ -147,7 +147,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   const Component = await loadShopComponent({ react: hookReact, globals, adapters: {
     'react-router-dom': { useLocation: () => ({ pathname: '/shop', state: characterPrompt ? { worldPrompt: characterPrompt } : null }) },
     '../lib/account': { useAccount: () => accountState },
-    '../lib/studioClient': { ...clientModule, StudioCoordinator: class extends clientModule.StudioCoordinator { constructor(store, provided) { super(store, provided ?? fetcher) } }, checkStudio: () => clientModule.checkStudio(fetcher) },
+    '../lib/studioClient': { ...clientModule, StudioCoordinator: class extends clientModule.StudioCoordinator { constructor(store, provided, reviewOwner) { super(store, provided ?? fetcher, reviewOwner) } }, checkStudio: () => clientModule.checkStudio(fetcher) },
     '../lib/studioArchive': {
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
       saveStudioModel: async saved => { if (archiveSaveFailure) throw new Error('Local recovery storage unavailable'); if (!archive.has(saved.receipt.id)) archive.set(saved.receipt.id, { id: saved.receipt.id, prompt: saved.prompt, savedAt: saved.startedAt, byteLength: blob.size, sha256: 'new-fixture', review: 'UNREVIEWED' }); return archive.get(saved.receipt.id) },
@@ -820,6 +820,45 @@ test('budget-stopped Shop result explains absent completed preview/gallery while
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
     await assert.rejects(h.poll(), /Recovery should have scheduled a GET/)
   } finally { h.close() }
+})
+
+test('Shop reconciles an old held receipt to a waiver without financial recovery or generation and keeps it terminal on reentry', async () => {
+  const receipt = makeReceipt(oldId); receipt.ticket = 'held.' + receipt.ticket
+  const saved = { receipt, prompt: 'Original failed model description', startedAt: receipt.createdAt, fundingSource: PAID_POINTS_FUNDING,
+    pointSettlement: { version: 1, state: 'pending-cost', heldPoints: 250, chargedPoints: 0 } }
+  const reviewKey = clientModule.STUDIO_COST_REVIEW_KEY + 'owner-a', historyKey = clientModule.STUDIO_RECEIPT_HISTORY_PREFIX + oldId
+  const original = JSON.stringify(saved), initialStore = [[clientModule.STUDIO_RECEIPT_KEY, original], [reviewKey, JSON.stringify([saved])], [historyKey, original]]
+  const current = { ...fundedAccount, paidGenerationPolicy: PAID_POINTS_POLICY, credits: 1190, availableCredits: 1190, reservedCredits: 0 }
+  const options = { ready: true, detailedReady: true, withArchivedModel: false, accountLookup: () => Response.json(current), initialStore,
+    jobLookup: () => Response.json({ job: { id: oldId, state: 'failed', failureCode: 'ASTRA_COST_LIMIT',
+      pointSettlement: { version: 1, state: 'waived', heldPoints: 0, chargedPoints: 0, approvalId: 'failed-hold-waiver-20261009-v1' } } }) }
+  const h = await harness(options)
+  let restoredStore
+  try {
+    await h.poll()
+    const visible = text(h.all())
+    assert.match(visible, /Generation failed · customer point charge waived/)
+    assert.match(visible, /WORLDIFACT absorbs the recorded provider cost/)
+    assert.doesNotMatch(visible, /Reserved customer points were released|points held for cost review|Your model is complete/)
+    assert.equal(h.quote().quote.after, 940)
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, false)
+    assert.equal(h.storeData.get(historyKey), original)
+    assert.deepEqual(JSON.parse(h.storeData.get(reviewKey)), [])
+    assert.equal(h.byId('studio-prompt').props.value, saved.prompt)
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+    assert.equal(h.calls.some(call => call.path.endsWith('/model')), false)
+    assert.equal(h.archive.size, 0)
+    await assert.rejects(h.poll(), /Recovery should have scheduled a GET/)
+    restoredStore = [...h.storeData]
+  } finally { h.close() }
+  const restored = await harness({ ...options, initialStore: restoredStore })
+  try {
+    await restored.poll()
+    assert.match(text(restored.all()), /Generation failed · customer point charge waived/)
+    assert.equal(restored.calls.some(call => call.path.startsWith('/api/studio/jobs/')), false)
+    assert.equal(restored.calls.filter(call => call.method !== 'GET').length, 0)
+    assert.equal(restored.storeData.get(historyKey), original)
+  } finally { restored.close() }
 })
 
 test('switching models recomputes costs from the same snapshot and distinguishes detailed admission', async () => {

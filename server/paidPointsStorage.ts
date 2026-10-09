@@ -1,4 +1,5 @@
 import type { EntitlementStorage } from './entitlements.ts'
+import { verifyFailedHoldWaiverJob } from './failedHoldWaiver.ts'
 import { PAID_POINTS_FUNDING } from '../src/lib/paidPointsFunding.ts'
 
 export const PAID_POINTS_ROUTE_PREFIX = '/generation-v3'
@@ -8,7 +9,7 @@ const CURRENT = 'current-studio-job:v1'
 const PAID_CURRENT = 'current-studio-job:points-v2'
 const GENERATION_PATHS = new Set(['/status', '/reserve', '/reserve-overnight-test', '/settle', '/job', '/blueprint-status', '/blueprint-complete',
   '/blueprint-dispatch', '/studio-dispatch', '/studio-current', '/studio-current-clear', '/studio-close-missing', '/studio-library',
-  '/studio-provider-pending', '/provider-reconciliation-pending', '/reconcile-studio-provider', '/reconcile-blueprint-provider', '/generation-funding'])
+  '/studio-provider-pending', '/provider-reconciliation-pending', '/reconcile-studio-provider', '/reconcile-blueprint-provider', '/generation-funding', '/failed-hold-waiver'])
 export function generationPath(path: string) {
   const pathname = path.split('?')[0]
   return GENERATION_PATHS.has(pathname) || pathname.startsWith('/studio-library/')
@@ -19,7 +20,7 @@ function fence(job: Row) {
   return { fundingMode: PAID_POINTS_FENCE, paidPointsFingerprint: job.fingerprint, profile: job.profile, channel: job.channel,
     at: job.at, updatedAt: job.at, cost: 0, kind: 'free', state: 'failed', failureCode: 'MISSING_SUBMISSION' }
 }
-function matchingFence(value: unknown, job: Row) {
+export function matchingPaidPointsFence(value: unknown, job: Row) {
   const expected = fence(job)
   return row(value) && Object.keys(value).length === Object.keys(expected).length &&
     Object.entries(expected).every(([key, item]) => value[key] === item)
@@ -31,7 +32,8 @@ export function paidPointsStorage(storage: EntitlementStorage, valid: (value: un
   async function readJob(key: string) {
     const [paid, old] = await Promise.all([storage.get(PAID_POINTS_JOB_PREFIX + key.slice(4)), storage.get(key)])
     if (paid !== undefined) {
-      if (!valid(paid, key.slice(4)) || !row(paid) || !matchingFence(old, paid)) throw new Error('Unverified paid membership job')
+      if (!valid(paid, key.slice(4)) || !row(paid) || !matchingPaidPointsFence(old, paid)) throw new Error('Unverified paid membership job')
+      if (row(paid.pointSettlement) && paid.pointSettlement.state === 'waived' && !await verifyFailedHoldWaiverJob(storage, key.slice(4), paid)) throw new Error('Unverified failed-hold waiver')
       return paid
     }
     if (row(old) && ('fundingMode' in old || 'providerLiability' in old || 'pointSettlement' in old)) throw new Error('Unknown job funding mode')
@@ -67,8 +69,11 @@ export function paidPointsStorage(storage: EntitlementStorage, valid: (value: un
       if (key.startsWith('job:')) {
         if (row(value) && value.fundingMode === PAID_POINTS_FUNDING) {
           if (!valid(value, key.slice(4))) throw new Error('Invalid paid membership job write')
+          const priorPaid = await storage.get<Row>(PAID_POINTS_JOB_PREFIX + key.slice(4))
+          if (row(value.pointSettlement) && value.pointSettlement.state === 'waived' || row(priorPaid?.pointSettlement) && priorPaid.pointSettlement.state === 'waived')
+            throw new Error('Incident-waived jobs are immutable')
           const prior = await storage.get(key)
-          if (prior !== undefined && !matchingFence(prior, value)) throw new Error('Legacy job collision')
+          if (prior !== undefined && !matchingPaidPointsFence(prior, value)) throw new Error('Legacy job collision')
           await storage.put(PAID_POINTS_JOB_PREFIX + key.slice(4), value)
           if (prior === undefined) await storage.put(key, fence(value))
           return

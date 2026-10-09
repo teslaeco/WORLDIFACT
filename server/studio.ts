@@ -4,7 +4,7 @@ import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedSt
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from '../src/lib/generationAdmission.ts'
-import { PAID_POINTS_FUNDING, PAID_POINTS_POLICY, PAID_POINTS_POLICY_HEADER, POINT_COST_PENDING_DETAIL, type PointSettlement } from '../src/lib/paidPointsFunding.ts'
+import { PAID_POINTS_FUNDING, PAID_POINTS_POLICY, PAID_POINTS_POLICY_HEADER, POINT_COST_PENDING_DETAIL, POINT_COST_WAIVED_DETAIL, type PointSettlement } from '../src/lib/paidPointsFunding.ts'
 import { clearCurrentUserStudioJob, closeMissingStudioJob, currentUserStudioJob, entitlementStatus, markStudioDispatch, pendingUserStudioProvider, reconcileUserStudioProvider, reconcileUserBlueprintProvider, reserveUserGeneration, settleUserGeneration, userJobAccess, userStudioLibrary, userStudioLibraryModel, STUDIO_ORACLE_TIMEOUT_MS, EntitlementError, type EntitlementEnv, type OwnedStudioLibraryModel } from './entitlements.ts'
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import { astraRepairedMccGrant } from './astraRepairedMccGrant.ts'
@@ -203,6 +203,13 @@ type TimingObservation = { value?: StudioGenerationTiming }
 async function accountJob(env: StudioEnv, userId: string | undefined, id: string, state: StudioJob['state'], fetcher: typeof fetch = fetch, failureCode?: StudioJob['failureCode'], timingObservation?: TimingObservation): Promise<StudioJob> {
   if (!userId) return { id, state, detail: JOB_DETAILS[state] }
   const previous = await accountAccess(env, userId, id)
+  // Customer incident compensation is final and independent of the preserved
+  // provider liability. Reading this failed job must not reopen either ledger.
+  if (previous?.owned && previous.state === 'failed' && previous.pointSettlement?.state === 'waived') return {
+    id, state: 'failed', detail: POINT_COST_WAIVED_DETAIL, pointSettlement: previous.pointSettlement,
+    ...(previous.failureCode ? { failureCode: previous.failureCode } : {}), ...(previous.pricing ? { pricing: previous.pricing } : {}),
+    downloadAllowed: false, previewOnly: false, previewAvailable: false,
+  }
   if (previous?.state === 'failed' && !(previous.pointSettlement?.state === 'pending-cost' && state === 'succeeded')) { state = 'failed'; failureCode = previous.failureCode }
   if (previous?.state === 'completed') { state = 'succeeded'; failureCode = undefined }
   if (previous?.state === 'reserved' && previous.at && Date.now() - previous.at > STUDIO_JOB_WATCHDOG_MS && !['succeeded','failed','cancelled'].includes(state)) {
@@ -229,7 +236,7 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
   // never an uncommitted failure or a refund for a previously completed job.
   if (access?.state === 'failed') { state = 'failed'; failureCode = access.failureCode }
   if (access?.state === 'completed') { state = 'succeeded'; failureCode = undefined }
-  if (access?.providerBudgetPending === true) {
+  if (access?.providerBudgetPending === true && access.pointSettlement?.state !== 'waived') {
     await reconcileProviderReservation(env, userId, id, fetcher)
     access = await accountAccess(env, userId, id)
   }
@@ -245,8 +252,8 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
     const reason = completed ? 'MODEL_COMPLETED' : failureCode && STUDIO_FAILURE_CODES.includes(failureCode) ? failureCode : 'MODEL_FAILED'
     logStudioDiagnostic({ requestId: id, stage: completed ? 'COMPLETED' : 'FAILED', admission: 'RECOVERY_ONLY', reason, oracleDispatch: 'UNKNOWN', workerStatus: null })
   }
-  const detail = access?.pointSettlement?.state === 'pending-cost' ? POINT_COST_PENDING_DETAIL : failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : JOB_DETAILS[state]
-  const generationTiming = access?.owned && ['completed', 'failed'].includes(access.state!)
+  const detail = access?.pointSettlement?.state === 'waived' ? POINT_COST_WAIVED_DETAIL : access?.pointSettlement?.state === 'pending-cost' ? POINT_COST_PENDING_DETAIL : failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : JOB_DETAILS[state]
+  const generationTiming = access?.owned && access.pointSettlement?.state !== 'waived' && ['completed', 'failed'].includes(access.state!)
     ? timingObservation ? timingObservation.value : await oracleGenerationTiming(env, id, fetcher) : undefined
   return { id, state, detail, ...(access?.pointSettlement ? { pointSettlement: access.pointSettlement } : {}), ...(failureCode ? { failureCode } : {}), downloadAllowed: access!.downloadAllowed,
     ...(generationTiming ? { generationTiming } : {}),
@@ -550,7 +557,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       if (selectedJob && !current.job) throw new StudioError('This held request is not available in your account.', 404)
       if (!current.job) return json({ current: null, ...(expectedAccount ? { accountContract: TEST_ACCOUNT_CONTRACT } : {}) })
       if (!expectedAccount && current.job.fundingSource !== 'ordinary' && current.job.fundingSource !== PAID_POINTS_FUNDING) throw new StudioError('This current request uses separate or unverified funding. Recover its original signed receipt or refresh the approved test controls.', 409, 'ACCOUNT_ADMISSION_UNAVAILABLE')
-      const generationTiming = !selectedJob && ['completed', 'failed'].includes(current.job.state) ? await oracleGenerationTiming(env, current.job.id, fetcher) : undefined
+      const generationTiming = !selectedJob && current.job.pointSettlement?.state !== 'waived' && ['completed', 'failed'].includes(current.job.state) ? await oracleGenerationTiming(env, current.job.id, fetcher) : undefined
       const freshReceipt = await receipt(env, current.job.id, current.job.fingerprint, user.id, current.job.pricing, false, current.job.fundingSource === PAID_POINTS_FUNDING)
       return json({ ...(expectedAccount ? { accountContract: TEST_ACCOUNT_CONTRACT } : {}), current: {
         receipt: freshReceipt,
@@ -719,6 +726,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         // signed-receipt artifact behavior unchanged.
         if (!user) return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
         if (access?.owned) {
+          if (access.pointSettlement?.state === 'waived') throw new StudioError(POINT_COST_WAIVED_DETAIL, 409, access.failureCode, access.pointSettlement, auth.id)
           if (!access.downloadAllowed) throw new StudioError('SLOW models and textures require an active subscription to download. Your generated model is preserved.', 403)
           return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
         }

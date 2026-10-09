@@ -1,0 +1,205 @@
+{
+  "revision": "failed-hold-waiver-release-v1",
+  "baseCommit": "31c9e41a6f8a68bb6c7bbe748e79803f63835c36",
+  "status": "FROZEN",
+  "preserveRemoteConfiguration": true,
+  "deployOnly": true,
+  "payload": {
+    "docs/FAILED_HOLD_WAIVER_20261009.md": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "fe974a7efd05869c1a09b3de4a0665b7761af04e",
+      "status": "A"
+    },
+    "scripts/check-failed-hold-release.mjs": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "43c4db9c3fb930f599291fbc2e0071c3f9ab3f4b",
+      "status": "A"
+    },
+    "scripts/prepare-failed-hold-release.mjs": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "66bf99cda2e8efb84190763af59f6aa654979c41",
+      "status": "A"
+    },
+    "server/entitlements.ts": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "bcd1134625a20dbd428b028daa16802bbc9be3ac",
+      "newBlob": "33ea26b867a44e4ce6138b64007e4e306be262ce",
+      "status": "M"
+    },
+    "server/failedHoldWaiver.ts": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "9df62d9c1ce6b4e59dd15dce2d21f5905eaaf63f",
+      "status": "A"
+    },
+    "server/paidPointsStorage.ts": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "ee52d654fefafbe8e122f68b4c40ae2988e12456",
+      "newBlob": "bd42cafd980a38f944bbf740787af24b5e27ff2e",
+      "status": "M"
+    },
+    "server/studio.ts": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "d7346c58c57f552e6c37d4a5e0c8cd57ebddf469",
+      "newBlob": "14ef975cf75849813a539e9fcef606bb884b7843",
+      "status": "M"
+    },
+    "src/lib/failedHoldWaiver.ts": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "07a266efbc32e47a049afd2bb41893cca85c3bd1",
+      "status": "A"
+    },
+    "src/lib/paidPointsFunding.ts": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "995ae98a8b96bb7ff55e7f54a50333be5278fc45",
+      "newBlob": "0d58a0afd8532b9f0e75974b2498e6863b76463e",
+      "status": "M"
+    },
+    "src/lib/recoverHeldPoints.ts": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "75270c2b884593e2747211935a4de6a81714a964",
+      "newBlob": "0cf869c5b4afd0f2c9c2d1b1a29cf7dac36d81e1",
+      "status": "M"
+    },
+    "src/lib/studioClient.ts": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "d6f8dc47226a456ad47f3dbf4be3b3e0919c027f",
+      "newBlob": "2549a7ce048a836a1403235620a844a9dd86ab74",
+      "status": "M"
+    },
+    "src/main.tsx": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "3dae12b7f32c57a6d1a165f17f6c6963f5470d41",
+      "newBlob": "6aba849b6badc193ad4fca8c55aa6c095ffe57ee",
+      "status": "M"
+    },
+    "src/pages/FailedHoldWaiverPage.tsx": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "8a9722dc1b8e296a6470b65f46b6c89cf194031e",
+      "status": "A"
+    },
+    "src/pages/ShopPage.tsx": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "1e50e1a2704bfb18fc7ce980203a9d0bf3f83b8b",
+      "newBlob": "b74e90de31d966b91bec04445e07858eef930daa",
+      "status": "M"
+    },
+    "tests/construction-tools-release.test.mjs": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "143ac07c2d688eebe0cb11874b600a7d2c377f43",
+      "newBlob": "456a2bbd13d27aad9bb98d988086952b010699fa",
+      "status": "M"
+    },
+    "tests/context-tools-release.test.mjs": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "0635b96ed9861b7130200ee39a46d0f0bf43979c",
+      "newBlob": "ac84755fb2f0e540d404de7a27e2429e1612e1ab",
+      "status": "M"
+    },
+    "tests/failed-hold-release.test.mjs": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "9794175cafb098203220f721ac171f93d1e07de6",
+      "status": "A"
+    },
+    "tests/failed-hold-waiver-legacy-readers.test.mjs": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "fe384a2674a929ec2ef75285cc3f35ecca23628f",
+      "status": "A"
+    },
+    "tests/failed-hold-waiver-native.test.mjs": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "41eed2dd1e73eb149710646f0d3b360ee2ea719f",
+      "status": "A"
+    },
+    "tests/failed-hold-waiver-page.test.mjs": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "c48f4ac3e035587d2800de66a6ce5b548b7ad23d",
+      "status": "A"
+    },
+    "tests/failed-hold-waiver-rollback-overlay.test.mjs": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "7d0b7ad24839d65045aa5fe783815e638e5a6e64",
+      "status": "A"
+    },
+    "tests/failed-hold-waiver.test.ts": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "670f03ccc5c33ca143c3b3ef0e7086ac40870bfe",
+      "status": "A"
+    },
+    "tests/fixtures/failed-hold-waiver-prewaiver-v3.source.txt": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "a9d191bb0ac329e4c23305d048431853fa5af314",
+      "status": "A"
+    },
+    "tests/fixtures/failed-hold-waiver.ts": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "075f51a782b7bc2593a4bb22729cbde45d6d7737",
+      "status": "A"
+    },
+    "tests/generation-funding-page.test.mjs": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "497b3450ea5150f0e1efafa81b0701b79ca2a271",
+      "newBlob": "8b054386c253138dd145c492d1ac759b29bb2de0",
+      "status": "M"
+    },
+    "tests/recover-held-points.test.ts": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "b48275ad8d89f365737994412d47269f5666f691",
+      "newBlob": "7102278176fb4bc9d0f4cc85f688419c69450a13",
+      "status": "M"
+    },
+    "tests/shop-draft-lifecycle.test.mjs": {
+      "oldMode": "100644",
+      "newMode": "100644",
+      "oldBlob": "396f35049119b63a7cf6f2e6ebeca2bbed5fc58b",
+      "newBlob": "a9d333dac53362b08fd1759f44819cee6804fcf9",
+      "status": "M"
+    },
+    "tests/studio-waived-receipts.test.ts": {
+      "oldMode": "000000",
+      "newMode": "100644",
+      "oldBlob": "0000000000000000000000000000000000000000",
+      "newBlob": "f2869697bf8196d1224a6a98e426369d79536c10",
+      "status": "A"
+    }
+  }
+}
