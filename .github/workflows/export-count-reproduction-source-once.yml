@@ -1,0 +1,42 @@
+name: Export public preflight reproduction source once
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+    paths: ['.github/workflows/export-count-reproduction-source-once.yml']
+permissions:
+  contents: read
+jobs:
+  source:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.run_number == 1 && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/WORLDIFACT
+          ref: 2380a7e2dad05a40b3753faf06c2635ed444be51
+          path: ancestor
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: teslaeco/Froge-MPC-2-test
+          ref: d3f61b842dcfeda2ed794210caafc391919a75be
+          path: mpc2
+          persist-credentials: false
+      - name: Archive only tracked public source and exact original commit metadata
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          test "$(git -C ancestor rev-parse HEAD)" = 2380a7e2dad05a40b3753faf06c2635ed444be51
+          test "$(git -C mpc2 rev-parse HEAD)" = d3f61b842dcfeda2ed794210caafc391919a75be
+          git -C ancestor archive --format=tar.gz HEAD > evidence/ancestor.tar.gz
+          git -C ancestor cat-file commit HEAD > evidence/ancestor.commit
+          git -C mpc2 archive --format=tar.gz HEAD > evidence/mpc2.tar.gz
+          git -C mpc2 cat-file commit HEAD > evidence/mpc2.commit
+          sha256sum evidence/* > evidence/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-count-lineage-${{ github.run_id }}
+          path: evidence/
+          retention-days: 3
+          if-no-files-found: error
