@@ -2,7 +2,6 @@ name: Verify model completion without paid API
 on:
   pull_request:
     paths:
-      - 'docs/CODEX_GENERATION_RESCUE_20261009.md'
       - 'tools/model_completion/**'
       - 'tools/model_prebuild/**'
       - 'tools/model_context/**'

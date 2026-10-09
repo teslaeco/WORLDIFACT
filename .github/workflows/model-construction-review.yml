@@ -2,7 +2,6 @@ name: Verify bounded construction without paid generation
 on:
   pull_request:
     paths:
-      - 'docs/CODEX_GENERATION_RESCUE_20261009.md'
       - 'tools/model_construction/**'
       - 'docs/STANDARD_CONSTRUCTION_REPAIR_20261007.md'
       - '.github/workflows/model-construction-review.yml'
