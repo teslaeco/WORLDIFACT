@@ -808,7 +808,25 @@ export const IMAGE_RELEASE_PATHS = Object.freeze([
   "tests/shop-render-helper.mjs"
 ])
 
+export const IMAGE_PRICE_BASE = "4e4357f30b3c4407eff10635e13c16487dc66f99"
+export const IMAGE_PRICE_MARKER = "ops/IMAGE_FIVE_POINTS_RELEASE_20261011.json"
+export const IMAGE_PRICE_CONTENT = "{\n  \"release\": \"image-five-points-20261011\",\n  \"baseCommit\": \"4e4357f30b3c4407eff10635e13c16487dc66f99\",\n  \"preserveBilling\": true,\n  \"preserveRemoteVars\": true,\n  \"preserveSecrets\": true,\n  \"imagePoints\": 5,\n  \"priceRevision\": \"image-5-v2\",\n  \"legacyRecoveryOnly\": true,\n  \"paidTest\": false\n}\n"
+export const IMAGE_PRICE_PATHS = Object.freeze([
+  ".github/workflows/cloudflare.yml",
+  ".github/workflows/image-generation-readiness.yml",
+  "docs/CONTEST_STATUS.md",
+  "ops/IMAGE_FIVE_POINTS_RELEASE_20261011.json",
+  "scripts/select-failed-hold-release.mjs",
+  "scripts/select-pipeline-only-release.mjs",
+  "server/imageGeneration.ts",
+  "src/components/ImageGenerator.tsx",
+  "src/lib/imageGeneration.ts",
+  "tests/image-five-points-release.test.mjs",
+  "tests/image-generation.test.ts"
+])
+
 const scopes = [
+  { base: IMAGE_PRICE_BASE, marker: IMAGE_PRICE_MARKER, content: IMAGE_PRICE_CONTENT, paths: IMAGE_PRICE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: IMAGE_RELEASE_BASE, marker: IMAGE_RELEASE_MARKER, content: IMAGE_RELEASE_CONTENT, paths: IMAGE_RELEASE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: FORFEIT_RELEASE_BASE, marker: FORFEIT_RELEASE_MARKER, content: FORFEIT_RELEASE_CONTENT, paths: FORFEIT_RELEASE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: COMPACT_RELEASE_BASE, marker: COMPACT_RELEASE_MARKER, content: COMPACT_RELEASE_CONTENT, paths: COMPACT_RELEASE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
@@ -887,7 +905,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === IMAGE_PRICE_MARKER || scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

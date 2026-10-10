@@ -35,29 +35,29 @@ function png() {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', deflateSync(Buffer.alloc((1024 * 3 + 1) * 1024))), chunk('IEND', Buffer.alloc(0))])
 }
 const image = png()
-const input = (changes = {}) => ({ id: crypto.randomUUID(), prompt: 'A green and blue glass planet', model: IMAGE_MODELS[0], acceptedPoints: 25, revision: IMAGE_TERMS.revision, ...changes })
+const input = (changes = {}) => ({ id: crypto.randomUUID(), prompt: 'A green and blue glass planet', model: IMAGE_MODELS[0], acceptedPoints: 5, revision: IMAGE_TERMS.revision, ...changes })
 const env: ImageEnv = { OPENAI_API_KEY: 'test-only-not-a-secret', ENABLE_PAID_GENERATION: 'true', GENERATION_LIMITER: { async limit() { return { success: true } } },
   ACCOUNT_ENTITLEMENTS: { idFromName: name => name, get() { throw new Error('Not used in store tests') } } }
 const req = (path: string, body?: unknown) => new Request('https://internal' + path, { method: body ? 'POST' : 'GET', body: body ? JSON.stringify(body) : undefined })
 const success = () => Response.json({ data: [{ b64_json: image.toString('base64') }], usage: { input_tokens: 30, output_tokens: 1000, total_tokens: 1030 } }, { headers: { 'x-request-id': 'req_image_fixture' } })
 
 test('strict image price/model/input contract rejects spoofed owners, arbitrary costs and unsupported model IDs', () => {
-  assert.equal(parseImageInput(input()).acceptedPoints, 25)
+  assert.equal(parseImageInput(input()).acceptedPoints, 5)
   for (const change of [{ owner: alice }, { acceptedPoints: 0 }, { revision: 'old' }, { model: 'gpt-image-2.5' }, { prompt: 'x'.repeat(4001) }, { prompt: '  ' }, { n: 4 }]) assert.throws(() => parseImageInput(input(change)))
 })
 
-test('one provider response fixture saves a private PNG and charges exactly 25 points; replay never dispatches', async () => {
+test('one provider response fixture saves a private PNG and charges exactly 5 points; replay never dispatches', async () => {
   const storage = memory(), body = input(); let calls = 0
   await storage.put('customer-reserved-credits:v1', 40)
   const fetcher = (async (url: unknown, init?: RequestInit) => {
     calls++; assert.equal(url, 'https://api.openai.com/v1/images/generations'); assert.equal(init?.redirect, 'error')
-    assert.equal(await storage.get('customer-reserved-credits:v1'), 65)
+    assert.equal(await storage.get('customer-reserved-credits:v1'), 45)
     assert.deepEqual(JSON.parse(String(init?.body)), { model: body.model, prompt: body.prompt, n: 1, size: '1024x1024', quality: 'medium', output_format: 'png' })
     return success()
   }) as typeof fetch
   const first = await imageStore(req('/images', body), storage, env, alice, now, fetcher)
   const result = await readReply(first); assert.equal(result.job.state, 'completed'); assert.equal(result.job.settlement, 'charged')
-  assert.equal(await storage.get('balance'), 174); assert.equal(await storage.get('customer-reserved-credits:v1'), 40)
+  assert.equal(await storage.get('balance'), 194); assert.equal(await storage.get('customer-reserved-credits:v1'), 40)
   await imageStore(req('/images', body), storage, env, alice, now, fetcher)
   assert.equal(calls, 1)
   assert.equal((await imageStore(req('/images', { ...body, prompt: 'Changed prompt' }), storage, env, alice, now, fetcher)).status, 409)
@@ -76,7 +76,7 @@ test('concurrent same-ID and distinct-ID requests cannot duplicate dispatch or o
   assert.equal((await readReply(replay)).job.state, 'processing')
   assert.equal((await imageStore(req('/images', input()), storage, env, alice, now, fetcher)).status, 409)
   release(); await first; assert.equal(calls, 1)
-  await storage.put('customer-reserved-credits:v1', 170)
+  await storage.put('customer-reserved-credits:v1', 190)
   assert.equal((await imageStore(req('/images', input()), storage, env, alice, now, fetcher)).status, 402)
   assert.equal(calls, 1)
 })
@@ -96,7 +96,7 @@ test('known provider refusal releases only the image hold; transient/invalid res
     const storage = memory(), body = input(); let calls = 0
     const fetcher = (async () => { calls++; return response() }) as typeof fetch
     const result = await imageStore(req('/images', body), storage, env, alice, now, fetcher).then(readReply)
-    assert.equal(result.job.state, 'uncertain'); assert.equal(await storage.get('balance'), 199); assert.equal(await storage.get('customer-reserved-credits:v1'), 25)
+    assert.equal(result.job.state, 'uncertain'); assert.equal(await storage.get('balance'), 199); assert.equal(await storage.get('customer-reserved-credits:v1'), 5)
     await imageStore(req('/images', body), storage, env, alice, now, fetcher)
     assert.equal((await imageStore(req('/images', input()), storage, env, alice, now, fetcher)).status, 409); assert.equal(calls, 1)
   }
@@ -128,4 +128,44 @@ test('Durable Object binding rejects forged verified-account header targeting a 
   const object = new AccountEntitlements({ storage: memory(), id: { toString: () => 'account:v1:' + alice } }, env, now)
   const response = await object.fetch(new Request('https://internal/images', { headers: { 'X-WORLDIFACT-Verified-Account': bob } }))
   assert.equal(response.status, 403)
+})
+
+test('five-point admission respects the exact available balance and leaves other holds intact', async () => {
+  for (const available of [4, 5]) {
+    const storage = memory(); let calls = 0
+    await storage.put('balance', 50 + available)
+    await storage.put('customer-reserved-credits:v1', 50)
+    const response = await imageStore(req('/images', input()), storage, env, alice, now, (async () => { calls++; return success() }) as typeof fetch)
+    assert.equal(response.status, available === 5 ? 200 : 402)
+    assert.equal(calls, available === 5 ? 1 : 0)
+    assert.equal(await storage.get('balance'), available === 5 ? 50 : 54)
+    assert.equal(await storage.get('customer-reserved-credits:v1'), 50)
+  }
+})
+
+test('legacy 25-point recovery preserves fingerprints, records and holds without another provider call', async () => {
+  const legacy = input({ acceptedPoints: 25, revision: 'image-25-v1' })
+  assert.throws(() => parseImageInput(legacy))
+  assert.equal(parseImageInput(legacy, true).acceptedPoints, 25)
+  assert.throws(() => parseImageInput({ ...legacy, acceptedPoints: 5 }, true))
+  assert.throws(() => parseImageInput(input({ acceptedPoints: 25 }), true))
+  const originalBytes = new TextEncoder().encode(JSON.stringify({ ...legacy, revision: 'image-25-v1', points: 25, size: '1024x1024', quality: 'medium', format: 'png' }))
+  const fingerprint = [...new Uint8Array(await crypto.subtle.digest('SHA-256', originalBytes))].map(n => n.toString(16).padStart(2, '0')).join('')
+  const never = (async () => { throw new Error('Recovery must not dispatch') }) as typeof fetch
+  for (const state of ['processing', 'completed', 'failed', 'uncertain'] as const) {
+    const storage = memory()
+    const settlement = state === 'completed' ? 'charged' : state === 'failed' ? 'released' : 'held'
+    const job: ImageJob = { id: legacy.id, prompt: legacy.prompt, model: legacy.model, at: now(), updatedAt: now(), state, settlement, points: 25, fingerprint }
+    await storage.put('image-job:v1:' + legacy.id, job)
+    await storage.put('customer-reserved-credits:v1', settlement === 'held' ? 25 : 0)
+    const response = await imageStore(req('/images', legacy), storage, env, alice, now, never)
+    assert.equal(response.status, 200); assert.deepEqual((await readReply(response)).job, job)
+    assert.equal(await storage.get('balance'), 199)
+    assert.equal(await storage.get('customer-reserved-credits:v1'), settlement === 'held' ? 25 : 0)
+    assert.equal((await imageStore(req('/images', { ...legacy, prompt: 'Different image' }), storage, env, alice, now, never)).status, 409)
+  }
+  const storage = memory()
+  assert.equal((await imageStore(req('/images', legacy), storage, env, alice, now, never)).status, 409)
+  assert.equal(await storage.get('balance'), 199)
+  assert.equal(await storage.get('customer-reserved-credits:v1'), undefined)
 })

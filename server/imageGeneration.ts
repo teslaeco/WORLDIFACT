@@ -58,8 +58,8 @@ export async function imageApi(request: Request, env: ImageEnv, fetcher: typeof 
     }
     let body: string | undefined
     if (request.method === 'POST') {
-      try { body = JSON.stringify(parseImageInput(await boundedJson(request, 24_000))) }
-      catch { return json({ error: 'Use a valid image request with 3–4000 characters and the displayed 25-point price.' }, 400) }
+      try { body = JSON.stringify(parseImageInput(await boundedJson(request, 24_000), true)) }
+      catch { return json({ error: 'Use a valid image request with 3–4000 characters and the displayed 5-point price.' }, 400) }
     }
     const namespace = env.ACCOUNT_LEDGER_MODE === 'sandbox' ? 'account:sandbox:v1' : 'account:v1'
     const object = env.ACCOUNT_ENTITLEMENTS.get(env.ACCOUNT_ENTITLEMENTS.idFromName(`${namespace}:${account.id.toLowerCase()}`))
@@ -96,25 +96,27 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
   if (path !== '/images' || request.method !== 'POST') return json({ error: 'Unsupported image operation.' }, 405)
   if (!ready(env)) return json({ error: 'Image generation is unavailable.' }, 503)
   let input
-  try { input = parseImageInput(await boundedJson(request, 24_000)) } catch { return json({ error: 'Invalid image request.' }, 400) }
-  const fingerprint = await digest(new TextEncoder().encode(JSON.stringify({ ...input, ...IMAGE_TERMS })))
+  try { input = parseImageInput(await boundedJson(request, 24_000), true) } catch { return json({ error: 'Invalid image request.' }, 400) }
+  const fingerprint = await digest(new TextEncoder().encode(JSON.stringify({ ...input, ...IMAGE_TERMS, revision: input.revision, points: input.acceptedPoints })))
   // Replays bypass the rate limiter and never call the provider, even after expiry.
   const existing = await storage.get<ImageJob>(key(input.id))
   if (existing) return existing.fingerprint === fingerprint ? json({ job: existing }) : json({ error: 'This request ID belongs to another image description.' }, 409)
+  // Legacy IDs may only recover an existing job, never start a new 25-point charge.
+  if (input.revision !== IMAGE_TERMS.revision) return json({ error: 'Image pricing is now 5 points. Reload and start a new request at the current price.' }, 409)
   if (!(await env.GENERATION_LIMITER!.limit({ key: `image-generation:${accountId}` })).success) return json({ error: 'Please wait before generating again.' }, 429)
   const admission = await storage.transaction(async tx => {
     const duplicate = await tx.get<ImageJob>(key(input.id))
     if (duplicate) return { job: duplicate, started: false }
     const balance = await tx.get<number>('balance') ?? 0, held = await tx.get<number>(HELD) ?? 0
     if (!integer(balance) || !integer(held) || await tx.get('billingHold') === true) return { error: 'Your account needs a billing review.', status: 403 }
-    if (balance - held < IMAGE_TERMS.points) return { error: 'You need 25 available points to generate an image.', status: 402 }
+    if (balance - held < IMAGE_TERMS.points) return { error: 'You need 5 available points to generate an image.', status: 402 }
     const ids = await tx.get<string[]>(INDEX) ?? []
     if (ids.length >= 100) return { error: 'Your image library has reached its 100-request limit.', status: 409 }
     for (const id of ids) {
       const other = await tx.get<ImageJob>(key(id))
       if (other?.settlement === 'held') return { error: 'Check your existing image request before starting another.', status: 409 }
     }
-    const job: ImageJob = { id: input.id, prompt: input.prompt, model: input.model, at: now(), updatedAt: now(), state: 'processing', points: 25, settlement: 'held', fingerprint }
+    const job: ImageJob = { id: input.id, prompt: input.prompt, model: input.model, at: now(), updatedAt: now(), state: 'processing', points: IMAGE_TERMS.points, settlement: 'held', fingerprint }
     await tx.put(HELD, held + job.points)
     await tx.put(key(input.id), job)
     await tx.put(INDEX, [...ids, input.id])
@@ -133,14 +135,14 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
     if (!response.ok) {
       await response.body?.cancel()
       if ([400, 401, 403, 404, 422, 429].includes(response.status)) {
-        const detail = response.status === 429 ? 'The image provider is busy or its quota is exhausted. Your 25 points were released.'
-          : [401, 403, 404].includes(response.status) ? 'GPT Image 2.5 is not available with the configured API key. Your 25 points were released.'
-          : 'The image provider rejected this request. Try a different description. Your 25 points were released.'
+        const detail = response.status === 429 ? `The image provider is busy or its quota is exhausted. Your ${job.points} points were released.`
+          : [401, 403, 404].includes(response.status) ? `GPT Image 2.5 is not available with the configured API key. Your ${job.points} points were released.`
+          : `The image provider rejected this request. Try a different description. Your ${job.points} points were released.`
         const failed: ImageJob = { ...job, updatedAt: now(), state: 'failed', settlement: 'released', detail }
         await storage.transaction(async tx => {
           const current = await tx.get<ImageJob>(key(job.id)), held = await tx.get<number>(HELD)
-          if (current?.settlement !== 'held' || !integer(held) || held < 25) throw new Error('Settlement unavailable')
-          await tx.put(HELD, held - 25); await tx.put(key(job.id), failed)
+          if (current?.settlement !== 'held' || !integer(held) || held < job.points) throw new Error('Settlement unavailable')
+          await tx.put(HELD, held - job.points); await tx.put(key(job.id), failed)
         })
         return json({ job: failed })
       }
@@ -162,16 +164,16 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
     await storage.transaction(async tx => {
       const current = await tx.get<ImageJob>(key(job.id)), held = await tx.get<number>(HELD), balance = await tx.get<number>('balance')
       // A billing event may have reduced the balance during generation. Preserve that debt.
-      if (current?.settlement !== 'held' || !integer(held) || held < 25 || !Number.isSafeInteger(balance)) throw new Error('Settlement unavailable')
+      if (current?.settlement !== 'held' || !integer(held) || held < job.points || !Number.isSafeInteger(balance)) throw new Error('Settlement unavailable')
       for (let i = 0; i < completed.chunks!; i++) await tx.put(chunkKey(job.id, i), bytes.slice(i * CHUNK, (i + 1) * CHUNK))
-      await tx.put(HELD, held - 25); await tx.put('balance', balance! - 25); await tx.put(key(job.id), completed)
+      await tx.put(HELD, held - job.points); await tx.put('balance', balance! - job.points); await tx.put(key(job.id), completed)
     })
     return json({ job: completed })
   } catch {
     // Do not overwrite a completed transaction if its acknowledgement was lost.
     const current = await storage.get<ImageJob>(key(job.id))
     if (current?.state === 'completed' || current?.state === 'failed') return json({ job: current })
-    const uncertain: ImageJob = { ...job, state: 'uncertain', updatedAt: now(), detail: 'The provider outcome could not be confirmed. 25 points remain held for review; no second image request was sent.' }
+    const uncertain: ImageJob = { ...job, state: 'uncertain', updatedAt: now(), detail: `The provider outcome could not be confirmed. ${job.points} points remain held for review; no second image request was sent.` }
     await storage.put(key(job.id), uncertain)
     return json({ job: uncertain })
   }

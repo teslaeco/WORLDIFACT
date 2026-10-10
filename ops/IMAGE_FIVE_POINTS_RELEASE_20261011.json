@@ -1,0 +1,11 @@
+{
+  "release": "image-five-points-20261011",
+  "baseCommit": "4e4357f30b3c4407eff10635e13c16487dc66f99",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 5,
+  "priceRevision": "image-5-v2",
+  "legacyRecoveryOnly": true,
+  "paidTest": false
+}

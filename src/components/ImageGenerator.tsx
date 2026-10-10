@@ -32,9 +32,9 @@ export function ImageGenerator({ prompt, stage, onSettled }: { prompt: string; s
       if (epoch !== lifecycle.current) return
       const entries = library.jobs as ImageJob[]
       if (!Array.isArray(entries)) throw new Error('Image library is unavailable.')
-      setReady(status.ready === true && status.terms?.revision === IMAGE_TERMS.revision && status.terms?.points === 25)
+      setReady(status.ready === true && status.terms?.revision === IMAGE_TERMS.revision && status.terms?.points === IMAGE_TERMS.points)
       const saved = sessionStorage.getItem(pendingKey)
-      const pendingInput = saved ? parseImageInput(JSON.parse(saved)) : null
+      const pendingInput = saved ? parseImageInput(JSON.parse(saved), true) : null
       const pending = pendingInput?.id ?? ''
       setRetryInput(pendingInput)
       // A lost POST acknowledgement is recovery-only. Never automatically submit the saved ID.
@@ -104,7 +104,7 @@ export function ImageGenerator({ prompt, stage, onSettled }: { prompt: string; s
       {preview ? <><img className="image-generation-preview" src={preview} alt={selected?.prompt || 'Your generated image'} /><a className="image-download" href={preview} download={`worldifact-${selected?.id}.png`}>Download PNG</a></> :
         <div className="image-generation-empty"><h2>{busy ? 'Creating your image…' : selected?.state === 'completed' ? 'Loading your saved image…' : 'A new perspective.'}</h2><p>{busy ? 'You can return to this image library to recover the result.' : 'Describe your idea and generate a picture.'}</p></div>}
       {previewError && <p role="alert">{previewError}</p>}
-      {selected && <p role="status">{selected.state === 'completed' ? 'Saved to your account · 25 points charged.' : selected.detail || 'Generation in progress · 25 points held. Reload to check this same request.'}</p>}
+      {selected && <p role="status">{selected.state === 'completed' ? `Saved to your account · ${selected.points} points charged.` : selected.detail || `Generation in progress · ${selected.points} points held. Reload to check this same request.`}</p>}
       <div className="image-library"><h3>My images</h3><button type="button" disabled={busy} onClick={() => void reload()}>Reload library · no charge</button>
         {jobs.length === 0 && <p>Your completed graphics will be saved here.</p>}
         {jobs.map(job => <button className="image-library-entry" type="button" key={job.id} aria-pressed={selected?.id === job.id} onClick={() => { selectedId.current = job.id; setSelected(job) }}><strong>{job.prompt.slice(0, 100)}</strong><span>{job.state} · {new Date(job.at).toLocaleString()}</span></button>)}
@@ -114,14 +114,14 @@ export function ImageGenerator({ prompt, stage, onSettled }: { prompt: string; s
   return <>
     <div className="image-generation-controls">
       <label>Image model<select value={model} disabled={busy} onChange={e => setModel(e.target.value as ImageModel)}><option value={IMAGE_MODELS[0]}>GPT Image 2.5 Flare · faster</option><option value={IMAGE_MODELS[1]}>GPT Image 2.5 Sunburst · finer detail</option></select></label>
-      <p>25 points · one PNG · 1024 × 1024 · medium quality</p><small>Text to image. The reference photos in 3D settings are not sent in this mode.</small>
+      <p>{IMAGE_TERMS.points} points · one PNG · 1024 × 1024 · medium quality</p><small>Text to image. The reference photos in 3D settings are not sent in this mode.</small>
       {!user ? <p><Link to="/account">Sign in to generate images</Link></p> : <>
         {checked && !ready && <p role="status">Image generation is temporarily unavailable.</p>}
         {held && <p role="status">An image request is still open. Reload its status before starting another.</p>}
-        <button type="button" className="native-shop-generate" disabled={busy || loading || !checked || !ready || held || prompt.trim().length < 3 || prompt.length > 4000} onClick={() => void generate()}>{busy ? 'Creating image…' : 'Generate image · 25 points'}</button>
-        <small>25 points are held when you start and charged when the image is saved. A confirmed provider refusal releases them. An uncertain result stays held for review.</small>
+        <button type="button" className="native-shop-generate" disabled={busy || loading || !checked || !ready || held || prompt.trim().length < 3 || prompt.length > 4000} onClick={() => void generate()}>{busy ? 'Creating image…' : `Generate image · ${IMAGE_TERMS.points} points`}</button>
+        <small>{IMAGE_TERMS.points} points are held when you start and charged when the image is saved. A confirmed provider refusal releases them. An uncertain result stays held for review.</small>
       </>}
-      {retryInput && !busy && <button type="button" disabled={loading} onClick={() => void send(retryInput)}>Recover original request · same 25-point price</button>}
+      {retryInput && !busy && <button type="button" disabled={loading} onClick={() => void send(retryInput)}>Recover original request · {retryInput.acceptedPoints}-point original terms</button>}
       {error && <p className="native-shop-error" role="alert">{error}</p>}
     </div>
     {stage ? createPortal(display, stage) : null}
