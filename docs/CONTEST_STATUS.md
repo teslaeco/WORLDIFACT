@@ -1,6 +1,62 @@
+# 10 October 2026 — historical test coupling repaired; release/account gates remain separate
+
+The UI staging run 38047078893 failed at the immutable historical payload check:
+2071 of 2072 tests passed, but the changed ShopPage was compared with the original
+waiver release's blob. This correction preserves that manifest, every historical
+blob, the production selector and the entire Cloudflare workflow. The test now
+checks an independently captured payload from immutable commit 38e7048c against
+the original manifest, including the original test's own bytes. Added regressions
+reject changed/missing historical sources and prove that a later Shop edit gains
+no historical deployment authority. No assertion is skipped or hash repinned.
+
+The existing composer/point-display UI patch is applied, not merely left as a
+staging script. Its original requests, next drafts and saved models are retained.
+Coupon redemption remains INACTIVE. No customer balance, held-point waiver,
+provider funding, billing, coupon registration, secret or live model request is
+modified here. Prior denied financial operations must not be retried indirectly.
+Full candidate CI, production publication, authenticated account correction and
+LIVE generation remain distinct gates and require their own observed evidence.
+
+## Earlier evidence (preserved)
+
 # WORLDIFACT — supervised STANDARD restored and deployed; real MCC model verified
 
 Current evidence: 10 October 2026, 00:05:13 UTC.
+
+## 10 October 2026 — UI-only recovery and honest point/coupon status
+
+The owner requested automatic clearing of failed-generation forms, a points and
+promo-code interface, and resolution of held points. This change implements only
+the client-interface part. Previously denied point grants, coupon registration
+and credit-ledger changes are not retried through another tool or workflow.
+No new secret, point reset, waiver replay, coupon activation, account mutation,
+API model request or payment is part of this patch. The historical screenshot
+of a recorded waiver is not evidence that the current holds were released.
+
+The existing staged composer patch is completed with all previous protections:
+only an unchanged submitted draft clears on confirmed completion; newer text and
+references survive a late old result. The saved receipt, original model, pending
+review and server selection are preserved. The old failure is a collapsed history
+item, not the state of a new request. Held-point messages show the validated
+available, held and total figures and link to the existing read-only review.
+
+The subscription page now has a points/review section and a clearly inactive
+promo-code disclosure. Its disabled input cannot submit, store or redeem a code;
+it explicitly says that the prepared codes cannot add points. No raw coupon or
+account identifier is added to source, configuration or public artifacts. Account
+switches and refreshes must not display a stale amount as confirmed.
+
+Local verification uses the actual component and coordinator with synthetic HTTP
+and React lifecycle adapters, not a browser or paid provider. All 104 Shop draft
+lifecycle/unit cases and the point-display/membership cases pass after updating
+the old waiver fixture to type a new prompt before expecting Generate enabled.
+That fixture still checks the original waiver/readback and preserved history;
+no financial assertion was removed. Exact-head full CI and production release
+are separate checkpoints and will be recorded after completion.
+
+Customer held points are NOT zeroed, new points are NOT granted, and the prepared
+promo codes remain NOT ACTIVATED. The successful engine-only MCC test below does
+not establish signed-in account generation, current available balance or coupons.
 
 ## Verified release and real model
 

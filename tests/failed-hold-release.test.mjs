@@ -109,6 +109,21 @@ test('event metadata and dispatch confirmation cannot be forged or omitted', () 
     assert.throws(() => selectFailedHoldRelease(fixture), /FAILED_HOLD_RELEASE_NOT_VERIFIED/)
   }
 })
+function verifyHistoricalPayload(manifest, snapshot) {
+  assert.deepEqual(Object.keys(snapshot).sort(), ['sourceCommit', 'sources', 'version'])
+  assert.equal(snapshot.version, 1)
+  assert.equal(snapshot.sourceCommit, '38e7048c4176fac4c9808203af5bd58a1ae7d10e')
+  assert.ok(snapshot.sources && typeof snapshot.sources === 'object' && !Array.isArray(snapshot.sources))
+  assert.deepEqual(Object.keys(snapshot.sources).sort(), Object.keys(manifest.payload).sort())
+  for (const [path, record] of Object.entries(manifest.payload)) {
+    assert.equal(typeof snapshot.sources[path], 'string', path)
+    assert.equal(blob(snapshot.sources[path]), record.newBlob, path)
+  }
+}
+function historicalPayloadSnapshot() {
+  return JSON.parse(readFileSync(join(root, 'tests/fixtures/failed-hold-release-38e7048c.source.txt'), 'utf8'))
+}
+
 test('manifest and workflow are immutable and the existing deploy job remains byte-identical', () => {
   const raw = readFileSync(join(root, CONFIG_PATH))
   assert.equal(currentWorkflow, guardedWorkflow(baseWorkflow, sha256(scriptBytes), sha256(raw)))
@@ -122,7 +137,9 @@ test('manifest and workflow are immutable and the existing deploy job remains by
   if (CONFIG_BLOB === 'UNFROZEN_REFUSE') assert.throws(() => readManifest(raw), /FAILED_HOLD_RELEASE_NOT_VERIFIED/)
   else {
     const manifest = readManifest(raw)
-    for (const [path, record] of Object.entries(manifest.payload)) assert.equal(blob(readFileSync(join(root, path))), record.newBlob, path)
+    // Historical release integrity is separate from current application regressions.
+    // The production selector below still checks the actual candidate diff and blobs.
+    verifyHistoricalPayload(manifest, historicalPayloadSnapshot())
     assert.deepEqual(Object.fromEntries(Object.keys(HISTORICAL_TEST_BLOBS).map(path => [path, manifest.payload[path].oldBlob])), HISTORICAL_TEST_BLOBS)
     for (const suffix of ['\n', ' ']) assert.throws(() => readManifest(Buffer.concat([raw, Buffer.from(suffix)])), /FAILED_HOLD_RELEASE_NOT_VERIFIED/)
   }
@@ -263,4 +280,29 @@ test('CLI refuses missing evidence, unknown arguments, symlinked events and cred
     assert.match(result.stderr, /^FAILED_HOLD_RELEASE_NOT_VERIFIED:/); assert.doesNotMatch(result.stderr, /credential-leaked|private-fixture/)
     assert.equal(existsSync(join(directory, 'credential-leaked')), false)
   }
+})
+
+test('historical payload rejects substituted Shop/test bytes, missing paths and wrong release provenance', () => {
+  const manifest = readManifest(readFileSync(join(root, CONFIG_PATH)))
+  verifyHistoricalPayload(manifest, historicalPayloadSnapshot())
+  for (const path of ['src/pages/ShopPage.tsx', 'tests/failed-hold-release.test.mjs', 'server/entitlements.ts']) {
+    const changed = historicalPayloadSnapshot()
+    changed.sources[path] += '\n'
+    assert.throws(() => verifyHistoricalPayload(manifest, changed), { code: 'ERR_ASSERTION' })
+    const missing = historicalPayloadSnapshot()
+    delete missing.sources[path]
+    assert.throws(() => verifyHistoricalPayload(manifest, missing), { code: 'ERR_ASSERTION' })
+  }
+  for (const mutate of [x => { x.sourceCommit = '0'.repeat(40) }, x => { x.version = 2 },
+    x => { x.sources['src/unreviewed.ts'] = '' }, x => { x.extra = true }]) {
+    const changed = historicalPayloadSnapshot(); mutate(changed)
+    assert.throws(() => verifyHistoricalPayload(manifest, changed), { code: 'ERR_ASSERTION' })
+  }
+})
+test('a historical snapshot never authorizes a later Shop edit as the original waiver release', () => {
+  const fixture = evidence({ parents: [other], event: { before: other }, changes: [modification('src/pages/ShopPage.tsx')] })
+  let calls = 0
+  const decision = selectFailedHoldRelease({ ...fixture, legacySelector: () => { calls++; return { deployAllowed: false } } })
+  assert.equal(calls, 1)
+  assert.deepEqual(decision, { deployAllowed: false, failedHoldWaiver: false })
 })

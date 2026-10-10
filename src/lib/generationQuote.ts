@@ -6,6 +6,14 @@ export type QuotedModel = GenerationModel
 export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits' | 'blocked'; points: number | null; after: number | null; message: string; reason?: AdmissionFailureCode; fundingSource?: typeof PAID_POINTS_FUNDING }
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const integer = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+export type GenerationBalance = { total: number; held: number; available: number }
+/** Reject incomplete or inconsistent account amounts instead of inventing funds. */
+export function readGenerationBalance(account: unknown): GenerationBalance | undefined {
+  const value = object(account)
+  if (!integer(value.credits) || !integer(value.reservedCredits) || !integer(value.availableCredits) ||
+      value.reservedCredits > value.credits || value.availableCredits !== value.credits - value.reservedCredits) return undefined
+  return { total: value.credits, held: value.reservedCredits, available: value.availableCredits }
+}
 /** Non-binding display only. The server rechecks identity, model and funds atomically. */
 export function quoteGeneration(model: QuotedModel, account: unknown, billing: unknown, signedIn: boolean, detailed = false, budgetTier?: StudioBudgetTier): GenerationQuote {
   if (!signedIn) return { state: 'signin', points: null, after: null, message: 'Sign in to check your points and funded free allowance.' }

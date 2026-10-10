@@ -19,7 +19,7 @@ import { StudioCoordinator, checkStudio, type SavedStudioJob } from '../lib/stud
 import { prepareStudioPhoto } from '../lib/studioPhotos'
 import { listStudioModels, readStudioModel, saveStudioModel, type StudioArchiveEntry } from '../lib/studioArchive'
 import { mayExportCurrentJob, type StudioPreviewIdentity } from '../lib/studioView'
-import { canSubmitNewDraft } from '../lib/studioDraft'
+import { canSubmitNewDraft, sameShopDraft, type ShopDraftSnapshot } from '../lib/studioDraft'
 import { useAccount } from '../lib/account'
 import { useGenerationQuote } from '../lib/useGenerationQuote'
 import { inspectGLB } from '../lib/glb'
@@ -92,6 +92,8 @@ export default function ShopPage() {
   const deliveryInput = useRef<HTMLSelectElement>(null)
   const operations = useRef({ submit: false, artifact: false, photos: false, status: false })
   const [prompt, setPrompt] = useState('')
+  const submittedComposer = useRef<{ id: string; draft: ShopDraftSnapshot } | null>(null)
+  const [composerCleared, setComposerCleared] = useState(false)
   const [purpose, setPurpose] = useState<StudioInput['purpose']>('figurine')
   const [textureLimit, setTextureLimit] = useState<TextureLimit>(4096)
   const [profile, setProfile] = useState<GenerationProfile>('standard')
@@ -132,6 +134,9 @@ export default function ShopPage() {
   const [solReady, setSolReady] = useState(false)
   const [lunaReady, setLunaReady] = useState(false)
   const [astraReady, setAstraReady] = useState(false)
+  const composer = useMemo<ShopDraftSnapshot>(() => ({ prompt, purpose, textureLimit, profile, cheapModel, budgetTier, deliverable, creationMode, photos, dimensions, dimensionsEnabled }), [prompt, purpose, textureLimit, profile, cheapModel, budgetTier, deliverable, creationMode, photos, dimensions, dimensionsEnabled])
+  const latestComposer = useRef(composer)
+  useEffect(() => { latestComposer.current = composer }, [composer])
   const fast = profile === FAST_DRAFT_PROFILE
   const fastAvailable = cheapModel === 'luna' ? lunaReady : solReady
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
@@ -164,22 +169,34 @@ export default function ShopPage() {
     setPreview(null)
     return epoch.current
   }
+  const resetComposer = () => {
+    submittedComposer.current = null
+    setPrompt(''); setPhotos([]); setAcceptedBudgetRevision(null); setDimensionsEnabled(false)
+    setComposerCleared(true)
+  }
   const dismissFinishedJob = async () => {
     const client = coordinator.current
     if (testSavedSlot) { leaveTestRecovery(); return }
     if (!client || !saved || !terminal(job?.state) || operations.current.submit || operations.current.artifact) return
+    const selectionEpoch = epoch.current, selectedAccount = testIdentity.current.owner
+    operations.current.artifact = true; setArtifactBusy(true)
     try {
       await client.dismissCurrent(owner)
+      if (!mounted.current || epoch.current !== selectionEpoch || testIdentity.current.owner !== selectedAccount) return
       clearPreview()
       setSaved(null)
       setDiscoveredOwner(accountOwner)
       setJob(null)
       setSeconds(0)
       setError('')
-      setNotice('The finished cloud job was archived. Your description is still here and you can explicitly start a new model.')
+      if (sameShopDraft(latestComposer.current, composer)) resetComposer()
+      setNotice('The previous request is retained in history. Any newer draft is kept. No model, payment or points release was started.')
       promptInput.current?.focus()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The finished cloud job could not be dismissed safely.')
+      if (mounted.current && epoch.current === selectionEpoch && testIdentity.current.owner === selectedAccount) setError(e instanceof Error ? e.message : 'The finished cloud job could not be dismissed safely.')
+    } finally {
+      operations.current.artifact = false
+      if (mounted.current) setArtifactBusy(false)
     }
   }
 
@@ -224,6 +241,7 @@ export default function ShopPage() {
       const restored = client.restore()
       coordinator.current = client
       if (restored) {
+        submittedComposer.current = { id: restored.receipt.id, draft: { ...composer, prompt: restored.prompt, profile: restored.generationProfile || 'standard', deliverable: restored.generationProfile === FAST_DRAFT_PROFILE ? 'procedural-blueprint' : 'detailed-mesh', textureLimit: restored.generationProfile === FAST_DRAFT_PROFILE ? 2048 : composer.textureLimit } }
         setSaved(restored); setPrompt(restored.prompt)
         setProfile(restored.generationProfile || 'standard')
         setDeliverable(restored.generationProfile === FAST_DRAFT_PROFILE ? 'procedural-blueprint' : 'detailed-mesh')
@@ -340,6 +358,7 @@ export default function ShopPage() {
         const recovered = await client.recoverCurrent('', controller.signal)
         if (closed) return
         if (recovered) {
+          submittedComposer.current = !composer.prompt && !composer.photos.length ? { id: recovered.saved.receipt.id, draft: { ...composer, prompt: recovered.saved.prompt, profile: recovered.saved.generationProfile || 'standard', deliverable: recovered.saved.generationProfile === FAST_DRAFT_PROFILE ? 'procedural-blueprint' : 'detailed-mesh' } } : null
           setSaved(recovered.saved); setPrompt(value => value || recovered.saved.prompt)
           setProfile(recovered.saved.generationProfile || 'standard')
           setDeliverable(recovered.saved.generationProfile === FAST_DRAFT_PROFILE ? 'procedural-blueprint' : 'detailed-mesh')
@@ -455,6 +474,20 @@ export default function ShopPage() {
     return () => window.clearInterval(timer)
   }, [saved, job?.state, job?.reconciliationRequired])
 
+  useEffect(() => {
+    const tracked = submittedComposer.current
+    if (!tracked || !saved || tracked.id !== saved.receipt.id || job?.id !== saved.receipt.id ||
+        !terminal(job.state) || busy || photoBusy || artifactBusy || accountLoading || !accountOwner ||
+        recoveryAccountMismatch || testSavedSlot || testBlueprintSlot) return
+    // Consume once even when the next draft was edited. Later polling or a
+    // balance refresh cannot erase a draft typed after the terminal response.
+    submittedComposer.current = null
+    if (sameShopDraft(composer, tracked.draft)) {
+      setPrompt(''); setPhotos([]); setAcceptedBudgetRevision(null); setDimensionsEnabled(false)
+      setComposerCleared(true)
+    }
+  }, [saved, job, composer, busy, photoBusy, artifactBusy, accountLoading, accountOwner, recoveryAccountMismatch, testSavedSlot, testBlueprintSlot])
+
   const applyBlueprint = (result: GenerationResult, submittedPrompt: string, testSlot?: OvernightPanelSlot) => {
     if (testSlot && !testCurrent?.active()) return
     clearPreview()
@@ -504,6 +537,8 @@ export default function ShopPage() {
         const input: StudioInput = { worldId: 'enchanted-ai-shop', prompt: prompt.trim(), purpose, textureMaxSize: textureLimit, photos: photos.map(photo => ({ ...photo })), ...(selectedTier ? studioBudgetSelection(selectedTier, budgetAccepted) : {}) }
         const onPrepared = (selected: SavedStudioJob) => {
           if (!mounted.current) return
+          submittedComposer.current = { id: selected.receipt.id, draft: composer }
+          setComposerCleared(false)
           clearPreview(); setFastResult(null); setFastPrompt(''); setDemoPrompt(''); setAcceptedBudgetRevision(null)
           setSaved(selected); setJob({ id: selected.receipt.id, state: 'pending', detail: JOB_DETAILS.pending }); setSeconds(0)
           setTestSavedSlot(null); setTestBlueprintSlot(null); setRecovery(null)
@@ -550,7 +585,7 @@ export default function ShopPage() {
     const flags = operations.current
     if (!files || flags.photos || flags.submit || fast) return
     if (photos.length + files.length > DETAILED_REFERENCE_LIMIT) { setError('The detailed worker accepts up to four reference views. Add one to four photos; none will be silently omitted.'); return }
-    flags.photos = true; setPhotoBusy(true); setError('')
+    flags.photos = true; setPhotoBusy(true); setError(''); setComposerCleared(false)
     try {
       const additions: StudioPhoto[] = [], views = ['front', 'left', 'right', 'back', 'detail', 'other'] as const
       for (const file of Array.from(files)) additions.push(await prepareStudioPhoto(file, textureLimit, views[photos.length + additions.length]))
@@ -562,8 +597,7 @@ export default function ShopPage() {
   }
   const clearDraft = () => {
     if (operations.current.submit || operations.current.photos) return
-    if ((prompt || photos.length) && !window.confirm('Clear only the new description and reference images? The displayed model, archive and recovery receipt stay unchanged.')) return
-    setPrompt(''); setPhotos([]); setDeliverable(fast ? 'procedural-blueprint' : 'detailed-mesh'); setError('')
+    resetComposer(); setDeliverable(fast ? 'procedural-blueprint' : 'detailed-mesh'); setError('')
     promptInput.current?.focus()
   }
   const prepareIssDraft = (nextPrompt: string) => {
@@ -607,12 +641,14 @@ export default function ShopPage() {
   const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
   const runtimeReady = detailed ? !detailedProblem : fast ? fastAvailable : astraReady
   const activeReady = runtimeReady && accountReady && !cloudRecoveryPending && !currentRequestMessage
+  const previousFailure = !!savedJob && ['failed', 'cancelled'].includes(savedJob.state) && !preview && !fastResult && !demoPrompt && !busy
+  const PreviewContainer = previousFailure ? 'details' : 'div'
 
   return <main className="portal-page native-shop">
     <header className="native-shop-nav">
       <Link to="/world" className="shop-wordmark" aria-label="Back to WORLDIFACT"><ShopIcon kind="brand" /><span>WORLDIFACT</span></Link>
       <div className="shop-title"><h1>AI <span>SHOP</span></h1><p>Imagine. Create. Make it yours.</p></div>
-      <div className="shop-account-nav"><Link to="/account/credits" className="shop-points-link" aria-label="Available points and account"><ShopIcon kind="coins" /><span>{accountQuote.quote.state === 'credits' && accountQuote.quote.after !== null && accountQuote.quote.points !== null ? `${(accountQuote.quote.after + accountQuote.quote.points).toLocaleString()} pts` : 'Points'}</span></Link><Link to="/account" className="shop-avatar" aria-label={user ? 'Your account' : 'Sign in'}>{user ? (user.displayName || user.email || 'A').slice(0, 1).toUpperCase() : <ShopIcon kind="user" />}</Link><details className="shop-navigation-menu"><summary aria-label="Navigation">⌄</summary><nav aria-label="World portals"><Link to="/world">Back to world</Link><Link to="/account/models">My models</Link>{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></details></div>
+      <div className="shop-account-nav"><Link to="/account/credits" className="shop-points-link" aria-label="Available points and account"><ShopIcon kind="coins" /><span>{accountQuote.balance ? `${accountQuote.balance.available.toLocaleString()} pts` : accountQuote.quote.state === 'credits' && accountQuote.quote.after !== null && accountQuote.quote.points !== null ? `${(accountQuote.quote.after + accountQuote.quote.points).toLocaleString()} pts` : 'Points'}</span></Link><Link to="/account" className="shop-avatar" aria-label={user ? 'Your account' : 'Sign in'}>{user ? (user.displayName || user.email || 'A').slice(0, 1).toUpperCase() : <ShopIcon kind="user" />}</Link><details className="shop-navigation-menu"><summary aria-label="Navigation">⌄</summary><nav aria-label="World portals"><Link to="/world">Back to world</Link><Link to="/account/models">My models</Link>{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></details></div>
     </header>
     <section className="native-shop-workspace" aria-label="Create and preview your idea">
       <div className="native-shop-form">
@@ -620,9 +656,10 @@ export default function ShopPage() {
         <form onSubmit={generate} aria-describedby="studio-draft-help">
           <div className="shop-prompt-shell">
             <div className="shop-prompt-top"><label htmlFor="studio-prompt">What will you create?</label><span aria-hidden="true">✦</span></div>
-            <textarea ref={promptInput} id="studio-prompt" value={prompt} aria-describedby="studio-prompt-count" aria-invalid={prompt.length > BLUEPRINT_PROMPT_LIMIT} rows={3} disabled={busy} onChange={e => setPrompt(e.target.value)} placeholder="A floating island. A place to call home. Something only you can imagine…" required />
-            <div className="shop-prompt-bottom"><button type="button" className="shop-text-button" data-testid="clear-studio-draft" disabled={busy || photoBusy || !prompt.length} onClick={clearDraft}>Clear description</button><span id="studio-prompt-count" role="status">{prompt.length.toLocaleString()} / {BLUEPRINT_PROMPT_LIMIT.toLocaleString()}{prompt.length > BLUEPRINT_PROMPT_LIMIT && ' · Shorten before generating'}</span></div>
+            <textarea ref={promptInput} id="studio-prompt" value={prompt} aria-describedby="studio-prompt-count" aria-invalid={prompt.length > BLUEPRINT_PROMPT_LIMIT} rows={3} disabled={busy} onChange={e => { setPrompt(e.target.value); setComposerCleared(false) }} placeholder="A floating island. A place to call home. Something only you can imagine…" required />
+            <div className="shop-prompt-bottom"><button type="button" className="shop-text-button" data-testid="clear-studio-draft" disabled={busy || photoBusy || (!prompt.length && !photos.length)} onClick={clearDraft}>Clear description</button><span id="studio-prompt-count" role="status">{prompt.length.toLocaleString()} / {BLUEPRINT_PROMPT_LIMIT.toLocaleString()}{prompt.length > BLUEPRINT_PROMPT_LIMIT && ' · Shorten before generating'}</span></div>
           </div>
+          {composerCleared && <p className="shop-composer-reset" role="status">The description and references are cleared. Previous requests, models and point reviews remain saved. Clearing the form does not release held points.</p>}
           <div className="shop-composer-tools">
             <div className="shop-output-switch" role="group" aria-label="Creation type">
               <button type="button" aria-pressed={creationMode === 'model'} disabled={busy || photoBusy} onClick={() => { if (!operations.current.submit && !operations.current.photos) { creationModeRef.current = 'model'; setCreationMode('model') } }}><ShopIcon kind="cube" />Model 3D</button>
@@ -732,7 +769,8 @@ export default function ShopPage() {
         {recoveryError && <p className="native-shop-error" role="alert">{recoveryError}</p>}{serviceError && <p className="native-shop-error" role="alert">{serviceError}</p>}{error && <p className="native-shop-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
 
       </div>
-      <div className="native-shop-preview">
+      <PreviewContainer className={`native-shop-preview${previousFailure ? ' shop-previous-failure' : ''}`}>
+        {previousFailure && <summary>Previous failed request · saved for review, not a new generation</summary>}
         <div className="shop-stage-heading"><span className="shop-stage-status"><span aria-hidden="true" />{preview || fastResult ? 'Your creation' : saved || recovery ? 'Saved request' : 'Creation preview'}</span><span className="shop-stage-kind">{demoPrompt ? 'DEMO · MODEL 3D' : preview || fastResult || saved || recovery ? 'MODEL 3D' : creationMode === 'image' ? 'IMAGE' : 'MODEL 3D'}</span></div>
         {(busy || recovery?.failureCode) && (preview || fastResult || demoPrompt) && <p role="status"><strong>Previous preview preserved.</strong> {recovery?.failureCode ? <>The rejected request did not create this model. {blueprintAdmissionDetail(recovery.failureCode)}</> : 'The current request does not have a new preview yet.'}</p>}
         {cloudRecoveryPending && !saved ? <div className="native-shop-progress" role="status"><h2>{accountLoading ? 'Checking your account…' : recoveryError ? 'Cloud recovery needs attention' : 'Checking your cloud job…'}</h2><p>{recoveryError || 'WORLDIFACT is checking whether this account already has a model in progress. This never starts a new generation or point charge.'}</p></div> : fastResult ? <>
@@ -781,7 +819,7 @@ export default function ShopPage() {
         {saved && <p>{(job?.pricing ?? saved.pricing) ? `Original job: ${(job?.pricing ?? saved.pricing)!.points} points · ${(job?.pricing ?? saved.pricing)!.tier} model budget. Recovery does not change this price.` : 'Original job price is retained by the server; this recovery view does not apply the next draft’s price.'}</p>}
         {studioBudgetFailureAdvice(job, tiersReady) && <p>{studioBudgetFailureAdvice(job, tiersReady)}</p>}
         {saved && <div className="native-shop-actions">{testSavedSlot && terminal(job?.state) && <button type="button" disabled={busy || artifactBusy} onClick={leaveTestRecovery}>Close saved request</button>}<button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
-      </div>
+      </PreviewContainer>
     </section>
     <PublicModelGallery />
     <StudioGallery compact />

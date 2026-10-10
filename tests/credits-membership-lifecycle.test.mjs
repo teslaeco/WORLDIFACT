@@ -7,6 +7,7 @@ import { setImmediate as tick } from 'node:timers/promises'
 import React from 'react'
 import ts from 'typescript'
 import * as planPayment from '../src/lib/planPayment.ts'
+import { CreditToolsPanel } from './credit-tools-helper.mjs'
 
 const url = new URL('../src/pages/CreditsPage.tsx', import.meta.url), localRequire = createRequire(url)
 const compiled = ts.transpileModule(await readFile(url, 'utf8'), { fileName: url.pathname,
@@ -41,6 +42,7 @@ async function harness() {
     if(id==='../lib/paymentError')return{paymentErrorMessage:()=> 'Fixture error'}
     if(id==='../lib/planPayment')return planPayment
     if(id==='../components/BillingRecovery')return{__esModule:true,default:()=>null}
+    if(id==='../components/CreditToolsPanel')return{__esModule:true,default:CreditToolsPanel}
     if(id.endsWith('.css'))return{}
     throw new Error('Unexpected dependency '+id)
   }},{filename:url.pathname,timeout:1000})
