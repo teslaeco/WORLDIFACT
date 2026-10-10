@@ -1,3 +1,46 @@
+# 10 October 2026 — current generator incident remains unresolved
+
+The owner requested repair after a new `MODEL_BUDGET_EXCEEDED` result. Three
+GET-only incident inspections ran through the existing authenticated Oracle API:
+38081552531, 38081674367 and 38081737366. They did not submit, resume or cancel a
+model, seal a budget, or mutate points, accounts, prices or deployment settings.
+The reader publishes fixed numeric/enum evidence, never the prompt, credentials,
+original images, generated programs or arbitrary upstream diagnostics.
+
+The terminal incident has no final model, zero recorded Blender build attempts,
+revision zero, one completed MCP contract read, no recorded MCP failures, and
+17 recorded Code Mode calls without detected code errors. The usage report counts
+18 request attempts, 351837 input tokens and 5810 output tokens, with unknown
+usage false. Request-attempt counts do not prove every request was billable.
+The guard retained 434180 micro-USD of capacity and needed 464222 for its next
+minimum reservation (23065 counted input tokens, 2048 minimum output tokens).
+These figures describe reservation bounds, not the provider invoice.
+
+The initial inspection used an incorrect construction-health property name;
+its UNKNOWN construction value is superseded by the second and third readers.
+The correctly named health field confirms worldifact-standard-construction-v1,
+alongside standard-context-v2 and studio-pricing-v1. Public Shop status still
+selects legacy-usd175-v1 and reports tiersReady=false. The current request used
+the supervised route; this incident does not establish a missing installation.
+
+The evidence narrows the failure to pre-build execution without establishing
+what each successful Code Mode call computed. The API exposes aggregate tool
+and error records but not codex-events.jsonl. The available remote device list
+is empty. The restricted maintenance grant is not arbitrary shell access and
+was not expanded or repurposed. Do not increase the cap, switch to the previously
+failed typed route, retry the paid job, or claim generation is fixed from these
+read-only observations. The next required evidence is the exact job's original
+Codex event log, read through authorized host access.
+
+The incident reader's three focused tests passed locally and on the hosted
+runner. Local full verification recorded 2133/2137 passing tests: two existing
+subprocess timeout assertions failed under load and two Chromium tests could
+not run because Chromium was unavailable. Build and Worker dry-run passed.
+No runtime correction or production release was performed. A new accepted GLB,
+preview, download and owned-library save remain unverified.
+
+---
+
 # 10 October 2026 — approved forfeiture of four failed-request holds
 
 The owner explicitly confirmed removing 1,000 held points without refund and
