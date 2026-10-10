@@ -40,11 +40,13 @@ function CostNotice({ compact = false, model, busy = false, detailed = false, bu
   const providerCap = detailed && model === 'astra' && budgetTier ? STUDIO_PRICING[budgetTier].maxProviderCents : MODEL_CATALOG[model].maxProviderCents
   const fundingBlocked = quote.state === 'blocked' && quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
   const heldPointsBlocked = quote.state === 'blocked' && quote.reason === 'CREDITS_EXHAUSTED' && !!accountQuote.balance?.held
+  const adminFunded = quote.adminBudget === true
   const pointsFunded = quote.state === 'credits' && quote.fundingSource === PAID_POINTS_FUNDING
   return <section className={`generation-cost-notice${compact ? ' generation-cost-compact' : ''}`} aria-label="Selected model and cost for the next generation" aria-live="polite">
-    {!compact && <div><strong>{MODEL_CATALOG[model].label}</strong><span>{rate} points / paid generation</span></div>}
-    <p><b>{(checking || busy) && !fundingBlocked ? 'Checking next generation cost…' : quote.points === 0 ? 'Next generation: 0 points, subject to funded free capacity' : quote.points !== null ? `Next generation: ${quote.points} points` : 'Next generation cost: not yet verified'}</b>{quote.after !== null && !busy && <> · Balance after reservation: <strong>{quote.after} points</strong></>}</p>
+    {!compact && <div><strong>{MODEL_CATALOG[model].label}</strong><span>{adminFunded ? 'ADMIN provider budget' : `${rate} points / paid generation`}</span></div>}
+    <p><b>{(checking || busy) && !fundingBlocked ? 'Checking next generation cost…' : adminFunded ? 'Next generation: ADMIN budget, 0 customer points' : quote.points === 0 ? 'Next generation: 0 points, subject to funded free capacity' : quote.points !== null ? `Next generation: ${quote.points} points` : 'Next generation cost: not yet verified'}</b>{quote.after !== null && !busy && <> · Balance after reservation: <strong>{quote.after} points</strong></>}</p>
     {!compact && <p>This quote is for the next generation only. It does not report the status or charges of a saved request.</p>}
+    {adminFunded && <p>{quote.message} <a href="/api/account/admin-history">View private cost-bound history</a></p>}
     {pointsFunded && compact && <p className="shop-upfront-terms"><strong>{rate} points held before dispatch.</strong> Success costs {rate}. A confirmed no-dispatch or zero-cost failure releases the hold. Failed requests with possible API costs keep points unavailable until verified, including manual review. API limit: USD {(providerCap / 100).toFixed(2)}. No automatic retry or card charge.</p>}
     {pointsFunded && !compact && <p><strong>Before you generate:</strong> We hold {rate} points before dispatch. Success costs {rate} points. A proved pre-dispatch or zero-cost failure releases the hold. If a failed request may have incurred API costs, its points remain held until the cost is verified; manual review may be required. Held points are unavailable for other requests. The API limit for this request is USD {(providerCap / 100).toFixed(2)}. No automatic retry or card charge.</p>}
     {['blocked', 'signin', 'pending'].includes(quote.state) && <p>{nextGenerationQuoteMessage(quote)}{quote.state === 'signin' && <> <Link to="/account">Sign in →</Link></>}</p>}
@@ -61,10 +63,10 @@ function CostNotice({ compact = false, model, busy = false, detailed = false, bu
       {fundingBlocked && <p><a href="/account/generation-funding" target="_blank" rel="noopener noreferrer">Read-only funding details · opens in a new tab</a></p>}
       {['free', 'credits'].includes(quote.state) && <p>{quote.message}</p>}
       <p>{detailed ? 'Astra works with the existing Blender worker to build an editable model. One job uses one points reservation even when it has several bounded AI/tool steps. All accepted reference views are included. Results require visual review; no procedural substitute or manufacturing approval.' : model !== 'astra' ? 'The selected model creates a validated specification with a lightweight procedural preview. It is not the detailed Oracle mesh workflow.' : 'ASTRA uses one bounded server-side call to create a validated blueprint/specification and a locally derived procedural GAME GLB. The separate multi-call Oracle/Blender mesh workflow remains beta. MAKE still requires validation.'}</p>
-      <p>Use once from your points. No automatic batch, model upgrade or card charge. Failed attempts may return points. {pointsFunded
+      {!adminFunded && <p>Use once from your points. No automatic batch, model upgrade or card charge. Failed attempts may return points. {pointsFunded
         ? 'This paid-membership request uses your available points without a separate account API reserve. The selected model’s API cost limit and service readiness checks still apply. Earlier jobs keep their original funding terms.'
-        : 'For reserve-funded requests, only confirmed unused API funding can be restored; incurred or uncertain costs remain reserved.'}</p>
-      {!fundingBlocked && !heldPointsBlocked && <div><Link to="/account/credits">Plans & one-time prepaid credits →</Link><button type="button" disabled={!canRefresh} onClick={refresh}>Refresh points</button></div>}
+        : 'For reserve-funded requests, only confirmed unused API funding can be restored; incurred or uncertain costs remain reserved.'}</p>}
+      {!adminFunded && !fundingBlocked && !heldPointsBlocked && <div><Link to="/account/credits">Plans & one-time prepaid credits →</Link><button type="button" disabled={!canRefresh} onClick={refresh}>Refresh points</button></div>}
     </details>
   </section>
 }

@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react'
 import { readGenerationBalance } from '../lib/generationQuote'
 import './CreditToolsPanel.css'
 
 /** Display only. No grant, refund, coupon submission, or account mutation. */
-export default function CreditToolsPanel({ account, checking, signedIn }: {
-  account: unknown; checking: boolean; signedIn: boolean
+export default function CreditToolsPanel({ account, checking, signedIn, promotionTools }: {
+  account: unknown; checking: boolean; signedIn: boolean; promotionTools?: ReactNode
 }) {
   const balance = signedIn && !checking ? readGenerationBalance(account) : undefined
   return <section className="credit-tools" aria-labelledby="credit-tools-heading" id="credit-tools">
@@ -21,7 +22,7 @@ export default function CreditToolsPanel({ account, checking, signedIn }: {
       {signedIn && <a href="/account/generation-funding">Review existing requests · no generation</a>}
       <p>Clearing the generator form does not remove a point hold or erase a saved model.</p>
     </details>
-    <details className="credit-tools-promo">
+    {promotionTools ?? <details className="credit-tools-promo">
       <summary>Promo codes · not activated</summary>
       <p id="credit-promo-status" role="status">Promo redemption is not activated. Prepared codes cannot add points yet. Do not enter or share your codes here.</p>
       <fieldset disabled aria-describedby="credit-promo-status">
@@ -30,6 +31,6 @@ export default function CreditToolsPanel({ account, checking, signedIn }: {
         <button type="button">Redeem code · unavailable</button>
       </fieldset>
       <p>This section does not create a Stripe payment, change your membership, or start a model.</p>
-    </details>
+    </details>}
   </section>
 }
