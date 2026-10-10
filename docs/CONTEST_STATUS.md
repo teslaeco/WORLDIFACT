@@ -12,7 +12,16 @@ and an offline original-batch compiler. The compiler accepts exactly ten private
 codes, verified account UUID and start time, producing stable claim IDs, 1,000
 points each, one redemption and 30-day validity. It does not create replacement
 codes or activate anything. Twelve targeted operations tests pass locally; full
-hosted CI and actual authenticated configuration readback are pending.
+hosted CI remains pending (results will be recorded in PR #248).
+
+Authenticated Cloudflare readback PASSED at 2026-10-10T17:43:33Z in run
+38072893760, job 114273800678. The expected Worker version has exclusive 100%
+traffic and did not change during the read. Promotion enable/definitions and
+ADMIN enable/allocation bindings are all ABSENT. Account entitlements, both rate
+limiters, OpenAI, Oracle endpoint/token, owner token and Stripe secret bindings
+are PRESENT. No secret values or account/code data were printed or exported.
+This establishes the missing activation configuration, not account redemption,
+provider funding, validity of secret values or a successful real generation.
 
 The original encrypted batch remains unreadable. No raw codes, real account IDs,
 hashes or new credentials are committed. No credit grant, activation, Stripe
