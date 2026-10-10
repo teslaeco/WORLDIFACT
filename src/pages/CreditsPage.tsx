@@ -199,7 +199,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
         }}>{id === 'plans' ? 'Subscriptions' : 'Enter code'}</button>)}
     </div>
     <section id="credits-panel-code" role="tabpanel" aria-labelledby="credits-tab-code" hidden={tab !== 'code'}>
-      <PromotionRedemption accountId={user?.id ?? null} onRedeemed={refresh} />
+      <PromotionRedemption accountId={user?.id ?? null} onRedeemed={async () => { await refresh(); window.dispatchEvent(new Event('worldifact:balance-changed')) }} />
     </section>
     {error && <div className="credits-error" role="alert"><p>{error}</p>{!busy && <button className="credits-manage" disabled={checking} onClick={() => { setError(''); setChecking(true); void refresh() }}>Recheck account and payment options</button>}</div>}
     {notice && <p className={`credits-pending ${notice.tone === 'success' ? 'credits-success' : ''}`} role="status">{notice.text}</p>}
