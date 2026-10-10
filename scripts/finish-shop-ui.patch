@@ -1,0 +1,245 @@
+--- a/docs/CONTEST_STATUS.md
++++ b/docs/CONTEST_STATUS.md
+@@ -2,27 +2,40 @@
+ 
+ Current evidence: 10 October 2026, 00:05:13 UTC.
+ 
+-## 10 October 2026 — customer composer and held-point recovery
+-
+-The owner's current screenshots still show CREDITS_EXHAUSTED: 1,190 total,
+-1,000 held, 190 available; the selected failure is an older request, not proof
+-of a new post-release execution failure. The engine-only MCC pass below does
+-not constitute a passed signed-in account flow.
+-
+-The source correction clears only an unchanged submitted composer after a
+-confirmed terminal result, keeps edited next drafts, receipts and original
+-models, and collapses previous failures into a review disclosure. Blocking
+-quotes now expose validated available/held/total amounts and a direct existing
+-request-review link instead of promoting another purchase. Reset and quoting
+-perform no financial mutation, waiver, DELETE, or paid model submission.
+-The explicit close action still preserves its original receipt before clearing
+-selection, and protects drafts edited while that operation is pending.
+-
+-Current holds were not released. The historical fixed four-job waiver covers
+-7–8 October incidents and must not be repurposed for these later requests.
+-A changed displayed balance is not proof of verified provider cost. Exact-head
+-CI and preserving release results must be recorded independently in PR #245.
+-The current source change is not a claim that this account can generate yet.
++## 10 October 2026 — UI-only recovery and honest point/coupon status
++
++The owner requested automatic clearing of failed-generation forms, a points and
++promo-code interface, and resolution of held points. This change implements only
++the client-interface part. Previously denied point grants, coupon registration
++and credit-ledger changes are not retried through another tool or workflow.
++No new secret, point reset, waiver replay, coupon activation, account mutation,
++API model request or payment is part of this patch. The historical screenshot
++of a recorded waiver is not evidence that the current holds were released.
++
++The existing staged composer patch is completed with all previous protections:
++only an unchanged submitted draft clears on confirmed completion; newer text and
++references survive a late old result. The saved receipt, original model, pending
++review and server selection are preserved. The old failure is a collapsed history
++item, not the state of a new request. Held-point messages show the validated
++available, held and total figures and link to the existing read-only review.
++
++The subscription page now has a points/review section and a clearly inactive
++promo-code disclosure. Its disabled input cannot submit, store or redeem a code;
++it explicitly says that the prepared codes cannot add points. No raw coupon or
++account identifier is added to source, configuration or public artifacts. Account
++switches and refreshes must not display a stale amount as confirmed.
++
++Local verification uses the actual component and coordinator with synthetic HTTP
++and React lifecycle adapters, not a browser or paid provider. All 104 Shop draft
++lifecycle/unit cases and the point-display/membership cases pass after updating
++the old waiver fixture to type a new prompt before expecting Generate enabled.
++That fixture still checks the original waiver/readback and preserved history;
++no financial assertion was removed. Exact-head full CI and production release
++are separate checkpoints and will be recorded after completion.
++
++Customer held points are NOT zeroed, new points are NOT granted, and the prepared
++promo codes remain NOT ACTIVATED. The successful engine-only MCC test below does
++not establish signed-in account generation, current available balance or coupons.
+ 
+ ## Verified release and real model
+ 
+--- a/tests/shop-draft-lifecycle.test.mjs
++++ b/tests/shop-draft-lifecycle.test.mjs
+@@ -841,11 +841,14 @@
+     assert.match(visible, /WORLDIFACT absorbs the recorded provider cost/)
+     assert.doesNotMatch(visible, /Reserved customer points were released|points held for cost review|Your model is complete/)
+     assert.equal(h.quote().quote.after, 940)
+-    assert.equal(h.button('Generate Astra/Blender model').props.disabled, false)
++    assert.equal(h.button('Generate Astra/Blender model').props.disabled, true, 'empty reset composer cannot submit')
+     assert.equal(h.storeData.get(historyKey), original)
+     assert.deepEqual(JSON.parse(h.storeData.get(reviewKey)), [])
+     assert.equal(h.byId('studio-prompt').props.value, '', 'terminal composer resets without deleting the original failed description')
+     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).prompt, saved.prompt)
++    h.byId('studio-prompt').props.onChange({ target: { value: 'Next model after confirmed waiver' } })
++    await h.settle()
++    assert.equal(h.button('Generate Astra/Blender model').props.disabled, false, 'confirmed waiver still permits an explicit new draft')
+     assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+     assert.equal(h.calls.some(call => call.path.endsWith('/model')), false)
+     assert.equal(h.archive.size, 0)
+--- /dev/null
++++ b/src/components/CreditToolsPanel.tsx
+@@ -0,0 +1,35 @@
++import { readGenerationBalance } from '../lib/generationQuote'
++import './CreditToolsPanel.css'
++
++/** Display only. No grant, refund, coupon submission, or account mutation. */
++export default function CreditToolsPanel({ account, checking, signedIn }: {
++  account: unknown; checking: boolean; signedIn: boolean
++}) {
++  const balance = signedIn && !checking ? readGenerationBalance(account) : undefined
++  return <section className="credit-tools" aria-labelledby="credit-tools-heading" id="credit-tools">
++    <h2 id="credit-tools-heading">Points and promo codes</h2>
++    <details open className="credit-tools-review">
++      <summary>Available points and held requests</summary>
++      {balance ? <>
++        <dl aria-label="Confirmed point breakdown">
++          <div><dt>Available to use</dt><dd>{balance.available.toLocaleString()}</dd></div>
++          <div><dt>Held for requests</dt><dd>{balance.held.toLocaleString()}</dd></div>
++          <div><dt>Total balance</dt><dd>{balance.total.toLocaleString()}</dd></div>
++        </dl>
++        {balance.held > 0 && <p>Held points are not available for another request. A past waiver receipt is not a new refund. Review the existing requests before buying more points.</p>}
++      </> : <p role="status">{!signedIn ? 'Sign in to see your current point balance.' : checking ? 'Checking the current account balance…' : 'A complete current balance is not confirmed. Refresh the balance before generating.'}</p>}
++      {signedIn && <a href="/account/generation-funding">Review existing requests · no generation</a>}
++      <p>Clearing the generator form does not remove a point hold or erase a saved model.</p>
++    </details>
++    <details className="credit-tools-promo">
++      <summary>Promo codes · not activated</summary>
++      <p id="credit-promo-status" role="status">Promo redemption is not activated. Prepared codes cannot add points yet. Do not enter or share your codes here.</p>
++      <fieldset disabled aria-describedby="credit-promo-status">
++        <label htmlFor="credit-promo-code">Promotional code</label>
++        <input id="credit-promo-code" type="text" autoComplete="off" placeholder="Not activated" />
++        <button type="button">Redeem code · unavailable</button>
++      </fieldset>
++      <p>This section does not create a Stripe payment, change your membership, or start a model.</p>
++    </details>
++  </section>
++}
+--- /dev/null
++++ b/src/components/CreditToolsPanel.css
+@@ -0,0 +1,15 @@
++.credit-tools { margin: 1.5rem 0; padding: 1.25rem; border: 1px solid #294a57; border-radius: 18px; background: #101f2b; }
++.credit-tools h2 { margin: 0 0 1rem; font-size: 1.2rem; }
++.credit-tools details + details { margin-top: 1rem; border-top: 1px solid #294a57; padding-top: 1rem; }
++.credit-tools summary { cursor: pointer; font-weight: 650; padding: .3rem 0; }
++.credit-tools p { color: #b7cbd6; line-height: 1.55; }
++.credit-tools dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1.2rem 0; }
++.credit-tools dl div { min-width: 0; }
++.credit-tools dt { font-size: .83rem; color: #b7cbd6; }
++.credit-tools dd { font-size: 1.65rem; font-weight: 700; margin: .3rem 0; overflow-wrap: anywhere; }
++.credit-tools a { color: #98ddec; text-decoration: underline; }
++.credit-tools fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: .6rem; }
++.credit-tools input, .credit-tools button { min-height: 44px; padding: .65rem .8rem; border-radius: 8px; border: 1px solid #54707e; background: #132935; color: #c3d4df; font: inherit; }
++.credit-tools fieldset:disabled { opacity: .65; }
++.credit-tools :focus-visible { outline: 2px solid #9eeed9; outline-offset: 4px; }
++@media (max-width: 540px) { .credit-tools { padding: 1rem; } .credit-tools dl { grid-template-columns: 1fr; gap: .65rem; } .credit-tools dl div { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; } }
+--- a/src/pages/CreditsPage.tsx
++++ b/src/pages/CreditsPage.tsx
+@@ -3,6 +3,7 @@
+ import { accountRequest, useAccount, type AccountUser } from '../lib/account'
+ import { paymentErrorMessage } from '../lib/paymentError'
+ import BillingRecovery from '../components/BillingRecovery'
++import CreditToolsPanel from '../components/CreditToolsPanel'
+ import { onCachedBillingReturn, planPaymentAddress, planPaymentNotice } from '../lib/planPayment'
+ import './CreditsPage.css'
+ 
+@@ -185,6 +186,7 @@
+       <div><span>MEMBERSHIP</span><strong>{activePlan ? PLAN_NAMES[activePlan] : member ? 'Active membership · plan unverified' : 'Free'}</strong><small>{balance.subscription.expiresAt ? `Current period ends ${new Date(balance.subscription.expiresAt).toLocaleDateString()}` : 'Daily free generations included'}</small></div>
+       <button onClick={() => { setError(''); setChecking(true); void refresh() }} disabled={!!busy || checking}>{checking ? 'Refreshing…' : 'Refresh balance'}</button>
+     </section>}
++    <CreditToolsPanel account={balance} checking={checking || loading} signedIn={!!user} />
+     {!loading && !user && <div className="credits-signin"><div><strong>Your ideas, one account.</strong><p>Sign in before purchasing. Confirmed credits go to your WORLDIFAKT account.</p></div><Link className="credits-action secondary" to={signInHref}>Sign in or create an account ↗</Link></div>}
+     {error && <div className="credits-error" role="alert"><p>{error}</p>{!busy && <button className="credits-manage" disabled={checking} onClick={() => { setError(''); setChecking(true); void refresh() }}>Recheck account and payment options</button>}</div>}
+     {notice && <p className={`credits-pending ${notice.tone === 'success' ? 'credits-success' : ''}`} role="status">{notice.text}</p>}
+--- /dev/null
++++ b/tests/credit-tools-helper.mjs
+@@ -0,0 +1,21 @@
++import { readFile } from 'node:fs/promises'
++import { createRequire } from 'node:module'
++import { runInNewContext } from 'node:vm'
++import ts from 'typescript'
++import * as generationQuote from '../src/lib/generationQuote.ts'
++
++// Static React component rendering only, without a browser or external requests.
++const url = new URL('../src/components/CreditToolsPanel.tsx', import.meta.url)
++const localRequire = createRequire(url)
++const source = await readFile(url, 'utf8')
++const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: {
++  module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022,
++} }).outputText
++const module = { exports: {} }
++runInNewContext(code, { module, exports: module.exports, require(id) {
++  if (id === 'react/jsx-runtime') return localRequire(id)
++  if (id === '../lib/generationQuote') return generationQuote
++  if (id.endsWith('.css')) return {}
++  throw new Error('Unexpected point-display dependency: ' + id)
++} }, { filename: url.pathname, timeout: 1000 })
++export const CreditToolsPanel = module.exports.default
+--- /dev/null
++++ b/tests/credit-tools-panel.test.mjs
+@@ -0,0 +1,44 @@
++import test from 'node:test'
++import assert from 'node:assert/strict'
++import React from 'react'
++import { renderToStaticMarkup } from 'react-dom/server'
++import { CreditToolsPanel } from './credit-tools-helper.mjs'
++
++const held = { credits: 1190, reservedCredits: 1000, availableCredits: 190 }
++const render = props => renderToStaticMarkup(React.createElement(CreditToolsPanel, { account: held, signedIn: true, checking: false, ...props }))
++
++test('point review distinguishes available, held and total; it cannot submit a refund or generate', () => {
++  const html = render()
++  assert.match(html, /Available to use<\/dt><dd>190<\/dd>/)
++  assert.match(html, /Held for requests<\/dt><dd>1,000<\/dd>/)
++  assert.match(html, /Total balance<\/dt><dd>1,190<\/dd>/)
++  assert.match(html, /href="\/account\/generation-funding"/)
++  assert.match(html, /A past waiver receipt is not a new refund/)
++  assert.doesNotMatch(html, /<form|failed-hold-waiver|Payment confirmed|Points added|Redeemed successfully/)
++})
++
++test('signed-out, pending and inconsistent snapshots never show the old available balance', () => {
++  for (const props of [{ signedIn: false }, { checking: true }, { account: null },
++    { account: { ...held, availableCredits: 1190 } }, { account: { credits: 1190 } }]) {
++    const html = render(props)
++    assert.doesNotMatch(html, /<dd>/)
++    assert.match(html, /role="status"/)
++  }
++  assert.doesNotMatch(render({ signedIn: false }), /href="\/account\/generation-funding"/)
++})
++
++test('unactivated coupon UI is explicitly disabled and does not contain a redeem request path', () => {
++  const html = render()
++  assert.match(html, /Promo codes · not activated/)
++  assert.match(html, /<fieldset disabled="" aria-describedby="credit-promo-status">/)
++  assert.match(html, /type="button">Redeem code · unavailable/)
++  assert.doesNotMatch(html, /type="submit"|value="WF|\/api\/.*promo|action=/)
++  assert.match(html, /Prepared codes cannot add points yet/)
++})
++
++test('zero holds remain visible as zero without asserting any refund', () => {
++  const html = render({ account: { credits: 1190, reservedCredits: 0, availableCredits: 1190 } })
++  assert.match(html, /Available to use<\/dt><dd>1,190<\/dd>/)
++  assert.match(html, /Held for requests<\/dt><dd>0<\/dd>/)
++  assert.doesNotMatch(html, /A past waiver receipt|waiver recorded|funds restored/)
++})
+--- a/tests/credits-membership-lifecycle.test.mjs
++++ b/tests/credits-membership-lifecycle.test.mjs
+@@ -7,6 +7,7 @@
+ import React from 'react'
+ import ts from 'typescript'
+ import * as planPayment from '../src/lib/planPayment.ts'
++import { CreditToolsPanel } from './credit-tools-helper.mjs'
+ 
+ const url = new URL('../src/pages/CreditsPage.tsx', import.meta.url), localRequire = createRequire(url)
+ const compiled = ts.transpileModule(await readFile(url, 'utf8'), { fileName: url.pathname,
+@@ -41,6 +42,7 @@
+     if(id==='../lib/paymentError')return{paymentErrorMessage:()=> 'Fixture error'}
+     if(id==='../lib/planPayment')return planPayment
+     if(id==='../components/BillingRecovery')return{__esModule:true,default:()=>null}
++    if(id==='../components/CreditToolsPanel')return{__esModule:true,default:CreditToolsPanel}
+     if(id.endsWith('.css'))return{}
+     throw new Error('Unexpected dependency '+id)
+   }},{filename:url.pathname,timeout:1000})
