@@ -1,4 +1,4 @@
-# 10 October 2026 — host evidence and staged MCP transport repair
+# 10 October 2026 — verified Oracle MCP transport repair
 
 Owner-authorized Remote Desktop Commander reached Cloud Shell and the original
 administrative SSH identity successfully reached the known Oracle host with
@@ -17,7 +17,7 @@ The execution-error parser misses this actual isError envelope, allowing further
 provider turns. This is a reproduced defect, not proof of the lost original
 payload's size. Source identity is pinned in `tools/mcp_transport_repair/repair.py`.
 
-The final candidate bounds framing at 4 MiB before reading an entire line, allowing
+The installed patch bounds framing at 4 MiB before reading an entire line, allowing
 the existing 256,000-character argument validator to report oversize scenes
 without closing the process. Argument/build/geometry/provider limits remain
 unchanged. It recognizes MCP error envelopes and stops provider admission when
@@ -26,47 +26,50 @@ on the isolated patched copy returned the correct validation error, then handled
 the next request on the same MCP connection. These probes used scripted provider
 responses and no paid API. No original job was resumed, reset or overwritten.
 
-The original isolated generic Codex/MCP/Blender gate completed successfully:
-real GLB, texture, three renders, FBX, execution-error recovery and guard fixture
-checks passed; its actual source-bound generic receipt matches. The original
-controller was no longer running after reconnect. Its recorded source inventory
-still matched production. The remaining unchanged gates were resumed from that
-attested stage: cabinet and original CLI STANDARD both passed. The phased
-construction gate started; its result and cleanup remain UNKNOWN after a second
-loss of remote responses. No paid provider was contacted.
+Production activation PASSED on 10 October at approximately 21:49 UTC.
+The explicit `--update-transport` transaction installed the final 4 MiB release
+from commit `496b8c9f2120346993720357c3f920a4e3e9f2ae`. It accepted the exact old
+runtime, preserved the original fence/guardian/activation/rollback semantics,
+created the private backup `standard-construction-20261010T214044Z-c3c80d53`, and
+completed all four genuine offline gates against the exact final source before
+writing the two runtime modules and eight bound receipts. The earlier 2 MiB
+stage was preliminary only; it was not substituted for these final gates.
 
-Added an explicit `--update-transport` mode to the existing construction installer.
-It accepts only the current complete source manifest and the separately frozen
-transport release, preserves the original fence/guardian/activation/rollback
-transaction, and binds all eight affected receipts only after all four genuine
-offline gates. It does not expand or use the restricted SSH maintenance grant.
-The historical modes retain their source maps. The original admin SSH identity
-is the authorized installation path; no grant or credential has been changed.
-On the isolated Cloud Shell checkout with exact public ancestor dependencies,
-all 34 update tests passed, including eight transport transaction tests: every
-write failure before/after effect restores prior bytes, ambiguous activation
-never rolls back/retries, and jobs/state/payment data are preserved.
+The completed transaction reports `WORLDIFACT_STANDARD_CONSTRUCTION_VERIFIED`,
+activation_committed=true, job_rows_changed=false, paid_generation_requested=false,
+and provider_limits_changed=false. An independent post-install read compared all
+14 runtime hashes against the frozen transport map, validated the complete local
+receipt/health chain, and read the public Worker-to-Oracle status. Local health:
+ready=true, codexReady=true, connectorVersion=33, standard maintenance=false,
+construction-v1 verified and Astra cap=$1.75. Public `/api/studio/status`:
+READY, CONNECTOR_READY, detailedReady=true, costGuardReady=true,
+outputPolicyReady=true, newJobPolicy=legacy-usd175-v1. The live database still has
+87 succeeded, 71 failed and 1 cancelled job; no live model was submitted,
+resumed, reset or cancelled. Existing prices, points, subscriptions, invoices,
+credentials, tunnel configuration and provider budget policy were not changed.
 
-After those runs, the framing allowance was refined from 2 MiB to 4 MiB to cover
-the worst-case JSON escaping of 256,000 non-BMP Unicode characters. The nine
-focused tests pass for that final source. The 2 MiB stage is preliminary evidence,
-not verification of the final 4 MiB release. A remote upload/retest of the final
-release was attempted, but returned no result before the connection stopped.
-Its outcome is UNKNOWN; reconcile the isolated review checkout and test log
-before repeating. The production installer has NOT been invoked. Final source
-hashes are compiled in `construction_manifest.TRANSPORT_AFTER`.
+The final repair recognizes failed MCP envelopes, preserves existing argument
+limits, and stops additional provider requests when the tool transport closes.
+The 4 MiB bounded frame covers worst-case JSON expansion of a maximum-sized
+256,000-character non-BMP string. Nine focused tests pass. Eight final transport
+transaction tests pass, including every before/after-write fault, byte-exact
+rollback, state/mode preservation, and refusal to retry ambiguous activation.
+Earlier complete update testing also passed 34 tests. The wider Cloud Shell suite
+recorded 285 tests with three failures and four skips (two pidfd capability
+assertions and one replacement-identity check). Both supported GitHub Python 3.9
+and 3.12 policy/transaction jobs passed on `2706ac2c390802a4ce6e54a850a4540c3684058c`.
+GitHub general verification, Worker, launcher and review checks also passed;
+its separate native-Blender job was still running at this checkpoint.
+Local web verification passed 2,135/2,137 tests, with two unavailable-Chromium
+checks; Worker dry-run and diff checks passed.
 
-No production source, receipt, service, deployment, account, price or balance was
-changed. The repair is NOT installed and successful live AI generation remains
-unverified. Local full verification again passed 2,135/2,137 tests; the same two
-browser tests lack Chromium. Worker dry-run and diff checks passed.
-
-Continuation: reconnect the authorized device, read the phased gate and final
-transaction test logs, reconcile leftover test processes, then use the explicit
-transport installation transaction. All four gates must verify the final bytes
-again before production publication; earlier 2 MiB receipts cannot substitute.
-Do not repeat a lost-acknowledgment installation, mutate original jobs/budgets,
-manufacture receipts, or infer a successful paid Earth model from these fixtures.
+Source and installation evidence are in PR #251. Only the Oracle repair has been
+activated; no Cloudflare release was necessary or performed. No paid provider was
+called. The real offline gates prove CLI/MCP/Blender construction, revisions,
+inspection, rendering and export with scripted provider replies; they do not
+prove a new successful live Astra Earth model, its visual quality, or its account
+library publication. The original lost payload size remains unknown. Do not
+retry installation or reset the failed original request to manufacture that proof.
 
 # 10 October 2026 — earlier API-only incident observations
 
