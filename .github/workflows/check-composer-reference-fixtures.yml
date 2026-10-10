@@ -1,0 +1,50 @@
+name: Isolate Shop reference-fixture failures without production access
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+    paths: ['.github/workflows/check-composer-reference-fixtures.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.event.before == '8e0ac7bfae6614c1ce8f334f0f762dc096d4139e' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 8e0ac7bfae6614c1ce8f334f0f762dc096d4139e
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify existing expansion and print only inert fixture state
+        run: |
+          test "$(git hash-object scripts/stage-shop-composer.py)" = 2c8b6b9563300497f24430096ccdfd1aaeea18f5
+          python3 -B scripts/stage-shop-composer.py
+          python3 -B - <<'PY'
+          from pathlib import Path
+          p=Path('tests/shop-draft-lifecycle.test.mjs')
+          s=p.read_text()
+          needle="    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'new-view.png' }], value: 'new-view.png' } })"
+          assert needle in s
+          s=s.replace("    assert.equal(clear.props.disabled, false)", "    assert.equal(clear.props.disabled, false, text(h.all()))")
+          s=s.replace("assert.ok(h.all().some(n => n.type === 'img' && /Your reference 1/.test(n.props.alt || '')))", "assert.ok(h.all().some(n => n.type === 'img' && /Your reference 1/.test(n.props.alt || '')), text(h.all()))")
+          p.write_text(s)
+          PY
+          node --test --test-name-pattern='late terminal result|clear description also clears references' tests/shop-draft-lifecycle.test.mjs
+      - name: Retain only locked public test dependencies, not runner configuration
+        if: always()
+        run: |
+          mkdir -p fixture-evidence
+          tar -czf fixture-evidence/public-hook-packages.tar.gz node_modules/react node_modules/react-dom node_modules/react-router node_modules/react-router-dom node_modules/scheduler node_modules/typescript node_modules/cookie node_modules/set-cookie-parser
+          sha256sum fixture-evidence/public-hook-packages.tar.gz > fixture-evidence/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: public-composer-fixture-packages-${{ github.run_id }}
+          path: fixture-evidence/
+          retention-days: 2
+          if-no-files-found: error
