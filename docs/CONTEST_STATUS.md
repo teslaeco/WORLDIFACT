@@ -1511,3 +1511,53 @@ that would resynchronize billing or overwrite live variables. Any eventual
 release must retain the existing exact-parent and preserve-billing controls.
 Production restoration remains unverified until a new real model, preview,
 download and owned-library save are observed under an approved bounded test.
+
+
+## GPT Image 2.5 feature — 11 October 2026
+
+The owner confirmed that 3D generation works, requested image generation,
+authorized reuse of the existing OpenAI key, and selected 25 points per image.
+This change adds the separate Image mode and an account image library. One
+explicit request selects GPT Image 2.5 Flare or Sunburst, medium quality,
+1024x1024, PNG, text-only. Reference photos remain part of the 3D workflow.
+
+The existing account Durable Object verifies the authenticated account binding,
+reserves 25 available points atomically with an immutable request ID, dispatches
+one provider POST, and stores the original PNG in bounded chunks with SHA-256.
+Completion and the 25-point debit commit together. Known provider rejections
+release only that image hold. Network/server/invalid-output ambiguity retains
+its hold for review, blocks another image job, and never dispatches a retry.
+Explicit recovery reuses the original input and ID; an undelivered original
+request can be started once. Library reads and downloads never generate.
+There is no free/admin model substitution. The initial library retains up to
+100 requests per account; downloads of owned completed images are available.
+
+The provider uses the existing server-only OPENAI_API_KEY. The reviewed release
+preserves deployed variables, secrets, bindings, migrations, Stripe settings,
+subscription prices, existing job records and original model assets. The
+Oracle runtime is not changed. Image pricing is new; 3D pricing is unchanged.
+
+Focused tests cover input/price tampering, concurrent submissions, recovery,
+shared held-point accounting, exact saved PNG downloads, known refusals,
+uncertain failures, cross-account access and the Durable Object identity check.
+Provider responses in these tests are fixtures, not LIVE image evidence.
+A separate production-environment workflow performs GET-only checks for both
+exact model IDs. It never generates an image or prints the key/provider body.
+Official API contract: https://developers.openai.com/api/docs/guides/image-generation
+
+Local full verification initially encountered an automatic approval rejection
+on the existing ISS dependency downloader. All fourteen required public assets
+were instead copied from existing local files after verifying their original
+manifest size and SHA-256; no external fetch was needed for that preparation.
+Browser/device testing remains blocked by the recorded browser restriction.
+Final full-check, provider-access and deployment outcomes belong in the PR;
+this source change alone does not claim successful paid image generation.
+
+Image source validation: 2142 of 2144 local tests passed; the only failures were
+the existing native Chromium tests because Chromium is absent. Lint/typecheck,
+local HTTP smoke, production build, base Worker dry-run, preserving-config
+Worker dry-run and the complete exact-parent release fixture passed. Hosted
+GET-only model-access run 38094125542 verified both exact model IDs with the
+existing production secret; it generated no image. The deployment follow-up
+workflow checks image status/25-point terms and the anonymous library 401 using
+public GETs only. A successful model metadata lookup is not a paid image test.

@@ -123,6 +123,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
       if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt, mode }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': mode || 'demo' }, mode === 'live-fast' ? 'LIVE Sol procedural 3D draft' : 'DEMO local 3D preview') }
       if (id === '../components/ProjectAttachmentPicker') return { __esModule: true, default: ({ scope }) => React.createElement('section', { 'data-project-attachments': scope }, 'LOCAL REFERENCE project files') }
+      if (id === '../components/ImageGenerator') return { ImageGenerator: () => React.createElement('section', { 'data-image-generator': true }, 'Generate image · 25 points') }
       if (id === '../components/PublicModelGallery') return { __esModule: true, default: () => React.createElement('section', { 'data-public-model-gallery': true }, 'Public model examples') }
       if (id === '../components/StudioGallery') return { __esModule: true, default: () => React.createElement('section', { 'data-studio-gallery': 'device-archive' }, 'Your model gallery') }
       if (id.endsWith('.css')) return {}

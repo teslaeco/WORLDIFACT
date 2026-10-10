@@ -1,0 +1,10 @@
+{
+  "release": "gpt-image-25-generation-20261011",
+  "baseCommit": "49017e34cf5e36f7dbcfc74442512f32c52ab5e0",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 25,
+  "priceRevision": "image-25-v1",
+  "paidTest": false
+}

@@ -1,0 +1,54 @@
+name: Verify GPT Image 2.5 access without generation
+on:
+  workflow_run:
+    workflows: ['Publish WORLDIFACT and verify OpenAI setup']
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main, feat/image-25-20261011]
+    paths:
+      - '.github/workflows/image-generation-readiness.yml'
+      - 'scripts/check-image-provider.mjs'
+      - 'server/imageGeneration.ts'
+      - 'src/lib/imageGeneration.ts'
+permissions:
+  contents: read
+jobs:
+  model-access:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Check exact model IDs using the existing secret
+        run: node scripts/check-image-provider.mjs
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  published-route:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify public image configuration and private library boundary
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const origin = 'https://worldifact.xodobrox.workers.dev';
+          const status = await fetch(origin + '/api/images/status', { redirect: 'error', signal: AbortSignal.timeout(20000), headers: { 'Cache-Control': 'no-cache' } });
+          assert.equal(status.status, 200);
+          const data = await status.json();
+          assert.equal(data.ready, true);
+          assert.deepEqual(data.terms, { revision: 'image-25-v1', points: 25, size: '1024x1024', quality: 'medium', format: 'png' });
+          assert.deepEqual(data.models, ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst']);
+          const library = await fetch(origin + '/api/images', { redirect: 'error', signal: AbortSignal.timeout(20000) });
+          assert.equal(library.status, 401);
+          await library.body?.cancel();
+          console.log(JSON.stringify({ imageRoute: 'ready', points: 25, privateLibrary: 'login-required', paidRequests: 0 }));
+          JS

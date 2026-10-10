@@ -1771,7 +1771,7 @@ test('Image choice preserves the model draft and receipt and cannot fall through
     await h.settle()
     assert.equal(h.button('Image').props['aria-pressed'], true)
     assert.equal(h.byId('studio-prompt').props.value, 'A quiet blue forest')
-    assert.equal(h.button('Image generation not connected').props.disabled, true)
+    assert.equal(h.all().find(node => node.type?.name === 'ImageGenerator').props.prompt, 'A quiet blue forest')
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), before)
