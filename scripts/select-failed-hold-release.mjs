@@ -3,6 +3,7 @@ import { lstatSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { blob, sha256, parseRawChanges } from './select-context-tools-release.mjs'
+import { ADMIN_RELEASE_BASE, ADMIN_RELEASE_MARKER, selectPipelineReleaseOptions } from './select-pipeline-only-release.mjs'
 import { selectConstructionToolsRelease } from './select-construction-tools-release.mjs'
 
 export const BASE_COMMIT = '31c9e41a6f8a68bb6c7bbe748e79803f63835c36'
@@ -191,6 +192,20 @@ export function selectFailedHoldRelease({ cwd = process.cwd(), env = process.env
   if (scope.kind === 'push') {
     git(cwd, ['merge-base', '--is-ancestor', scope.before, head])
     if (scope.before !== parents[0]) changes = diff(scope.before)
+  }
+  // Separately approved source publication. The historical waiver stays frozen.
+  // Exact scope validation below grants deployment only, never a financial waiver.
+  if (parents.includes(ADMIN_RELEASE_BASE) || scope.before === ADMIN_RELEASE_BASE ||
+      [...immediate, ...changes].some(change => change.path === ADMIN_RELEASE_MARKER)) {
+    if (parents.length !== 1 || parents[0] !== ADMIN_RELEASE_BASE ||
+        scope.kind === 'push' && scope.before !== ADMIN_RELEASE_BASE) refused()
+    const release = selectPipelineReleaseOptions(cwd, git)
+    if (!release.aiShopUi || !release.preserveBilling || !release.preserveRemoteVars || !release.preserveSecrets) refused()
+    const workflow = git(cwd, ['show', `${head}:${WORKFLOW_PATH}`])
+    const prior = git(cwd, ['show', `${ADMIN_RELEASE_BASE}:${WORKFLOW_PATH}`])
+    const config = git(cwd, ['show', `${head}:${CONFIG_PATH}`])
+    if (blob(config) !== CONFIG_BLOB || workflow !== guardedWorkflow(historicalWorkflow(prior), sha256(scriptBytes), sha256(config))) refused()
+    return { deployAllowed: true, failedHoldWaiver: false }
   }
   const candidate = parents.includes(BASE_COMMIT) || scope.before === BASE_COMMIT
     || [...immediate, ...changes].some(change => /failed[-_]?hold|FailedHold/i.test(change.path))

@@ -1,3 +1,30 @@
+# 10 October 2026 — approved preserving publication after PR #246
+
+The owner approved merge and deployment. PR #246 merged as
+`1694538491240d7817715e786242b6a9100c6546`; its five PR workflows passed,
+including 2,097 tests. Main verification run 38068229423 also passed.
+Automatic publication 38068229473 incorrectly selected the legacy unscoped
+transport. The owner cancelled it during npm verification; all secret,
+billing synchronization and deployment steps were SKIPPED. No production
+mutation from that run is claimed.
+
+This follow-up fixes the selector CLI to fail closed for unscoped publication.
+It adds an exact-parent, exact-path, single-parent source-only release envelope.
+The existing `aiShopUi` transport flag is reused solely for its no-vars config,
+`--keep-vars`, skipped secret/payment synchronization and GET-only asset checks;
+it does not imply the payload is UI-only or grant account permissions.
+The preflight adds a separately approved exact source-release scope and updates its
+script checksum. The historical financial waiver manifest and validation remain
+unchanged; the new scope explicitly returns failedHoldWaiver=false.
+Bindings/migrations stay equal to the checked-in configuration used by the
+previous preserving release; current remote configuration still needs independent
+readback. No runtime source, account allocation or code registration changes.
+
+Merge this follow-up by SQUASH against the exact approved parent. Unexpected
+paths, parent changes, marker reuse or symlinks stop release before credentials.
+ADMIN and promotions remain unconfigured/inactive; paid tests need separate approval.
+Publication receipt and final CI will be recorded in the PR after completion.
+
 # 10 October 2026 — owner entitlement and tester redemption review candidate
 
 Current audited main is `c6b89b42010f24075a2340cbe3d7fa47a5ddc2a9`; PR #245 is merged.

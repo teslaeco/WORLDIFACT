@@ -686,7 +686,7 @@ test('missing history, malformed Git evidence and revision-like arguments cannot
   assert.doesNotMatch(script, /\.\.\.process\.env/)
 })
 
-test('actual local Git and CLI fail on missing history or extra arguments and default ordinary commits to false', () => {
+test('actual local Git and CLI fail on missing history or extra arguments and reject unscoped ordinary commits', () => {
   const directory = mkdtempSync(join(tmpdir(), 'pipeline-release-'))
   const script = fileURLToPath(new URL('../scripts/select-pipeline-only-release.mjs', import.meta.url))
   // Only local fixtures, with a minimal environment: no provider, secrets or network.
@@ -705,14 +705,16 @@ test('actual local Git and CLI fail on missing history or extra arguments and de
     git('add', 'README')
     git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'ordinary release')
     const ordinary = run(process.execPath, [script])
-    assert.equal(ordinary.status, 0, ordinary.stderr)
-    assert.equal(ordinary.stdout, 'preserve_billing=false\npreserve_remote_vars=false\n')
+    assert.equal(ordinary.status, 1, ordinary.stderr)
+    assert.equal(ordinary.stdout, '')
+    assert.match(ordinary.stderr, /stopped before credential setup/)
     const poisoned = spawnSync(process.execPath, [script], {
       cwd: directory, encoding: 'utf8', timeout: 15000,
       env: { ...env, GIT_DIR: '/missing/git', GIT_WORK_TREE: '/missing/tree', GIT_INDEX_FILE: '/missing/index', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.repositoryformatversion', GIT_CONFIG_VALUE_0: '999' },
     })
-    assert.equal(poisoned.status, 0, poisoned.stderr)
-    assert.equal(poisoned.stdout, 'preserve_billing=false\npreserve_remote_vars=false\n')
+    assert.equal(poisoned.status, 1, poisoned.stderr)
+    assert.equal(poisoned.stdout, '')
+    assert.match(poisoned.stderr, /stopped before credential setup/)
     const injection = run(process.execPath, [script, '--base', BASE_COMMIT])
     assert.equal(injection.status, 1)
     assert.equal(injection.stdout, '')

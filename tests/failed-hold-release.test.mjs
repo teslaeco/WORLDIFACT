@@ -143,7 +143,15 @@ test('manifest and workflow are immutable and the existing deploy job remains by
     assert.deepEqual(Object.fromEntries(Object.keys(HISTORICAL_TEST_BLOBS).map(path => [path, manifest.payload[path].oldBlob])), HISTORICAL_TEST_BLOBS)
     for (const suffix of ['\n', ' ']) assert.throws(() => readManifest(Buffer.concat([raw, Buffer.from(suffix)])), /FAILED_HOLD_RELEASE_NOT_VERIFIED/)
   }
-  for (const [path, expected] of Object.entries(PRESERVED_BLOBS)) assert.equal(blob(readFileSync(join(root, path))), expected, path)
+  for (const [path, expected] of Object.entries(PRESERVED_BLOBS)) {
+    // Freeze historical selector evidence; its current CLI intentionally rejects
+    // unscoped releases. Production waiver validation still uses actual blobs.
+    const source = path === 'scripts/select-pipeline-only-release.mjs'
+      ? 'tests/fixtures/pipeline-selector-ddd1ffd.source.txt' : path
+    assert.equal(blob(readFileSync(join(root, source))), expected, path)
+  }
+  const selectorPath = 'scripts/select-pipeline-only-release.mjs'
+  reject({ trees: { [selectorPath]: `100644 blob ${blob(readFileSync(join(root, selectorPath)))}\t${selectorPath}\0` } })
 })
 test('later waiver edits fail closed and unrelated events retain the prior strict guard decision', () => {
   for (const path of [SCRIPT_PATH, CONFIG_PATH, 'server/failedHoldWaiver.ts', 'tests/failed-hold-extra.test.mjs', 'ops/FAILED_HOLD_UNKNOWN.json'])
