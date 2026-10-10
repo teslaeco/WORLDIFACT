@@ -13,7 +13,9 @@ It adds an exact-parent, exact-path, single-parent source-only release envelope.
 The existing `aiShopUi` transport flag is reused solely for its no-vars config,
 `--keep-vars`, skipped secret/payment synchronization and GET-only asset checks;
 it does not imply the payload is UI-only or grant account permissions.
-No workflow guard or historical approval manifest is weakened or replaced.
+The preflight adds a separately approved exact source-release scope and updates its
+script checksum. The historical financial waiver manifest and validation remain
+unchanged; the new scope explicitly returns failedHoldWaiver=false.
 Bindings/migrations stay equal to the checked-in configuration used by the
 previous preserving release; current remote configuration still needs independent
 readback. No runtime source, account allocation or code registration changes.
