@@ -1,3 +1,25 @@
+# 10 October 2026 — existing credential audit and private batch preparation
+
+GitHub's authenticated environment settings confirm that Production already has
+the Cloudflare account/token secrets. They were used by successful publication
+38069527834 of main `3e8a4aafe244744e477126b2e514f16f10ac0163`, Worker version
+`4c819fd5-d99b-4504-b191-9b3dcb30600a`. Its secret/billing synchronization steps
+were skipped. All five PR #247 workflows passed; application verification had
+2,100 passing tests. Main verification 38069527919 also passed.
+
+This operations branch adds a GET-only runtime audit using those existing secrets
+and an offline original-batch compiler. The compiler accepts exactly ten private
+codes, verified account UUID and start time, producing stable claim IDs, 1,000
+points each, one redemption and 30-day validity. It does not create replacement
+codes or activate anything. Twelve targeted operations tests pass locally; full
+hosted CI and actual authenticated configuration readback are pending.
+
+The original encrypted batch remains unreadable. No raw codes, real account IDs,
+hashes or new credentials are committed. No credit grant, activation, Stripe
+change, provider funding, waiver replay or paid generation occurs in this change.
+See `docs/PROMOTION_ACTIVATION_RUNBOOK.md` for private staging, live verification
+and revocation. Runtime presence flags are not successful redemption evidence.
+
 # 10 October 2026 — approved preserving publication after PR #246
 
 The owner approved merge and deployment. PR #246 merged as
@@ -23,7 +45,8 @@ readback. No runtime source, account allocation or code registration changes.
 Merge this follow-up by SQUASH against the exact approved parent. Unexpected
 paths, parent changes, marker reuse or symlinks stop release before credentials.
 ADMIN and promotions remain unconfigured/inactive; paid tests need separate approval.
-Publication receipt and final CI will be recorded in the PR after completion.
+Publication completed in run 38069527834; final CI and receipt are recorded in
+PR #247 and the current entry above. Account activation remains separate.
 
 # 10 October 2026 — owner entitlement and tester redemption review candidate
 
