@@ -1,4 +1,68 @@
-# WORLDIFACT — supervised STANDARD produced an accepted MCC; default-route release pending
+# WORLDIFACT — supervised STANDARD restored and deployed; real MCC model verified
+
+Current evidence: 10 October 2026, 00:05:13 UTC.
+
+## Verified release and real model
+
+The new ordinary legacy-priced STANDARD request route is deployed. Source
+`3e86e009fd400f2185de67b1ecdd92761bc863ab` was published by
+[run 38007263065](https://github.com/teslaeco/WORLDIFACT/actions/runs/38007263065)
+as Cloudflare version `4278815f-5576-49f9-a74e-e3348302b412`. The release verified
+12 HTML routes, 428 exact built assets and exclusive 100% traffic. All six PR
+workflows passed on this exact source, including application run 38006428572
+and construction/native-Blender run 38006428584. The release repeated its full
+verification/build/foundation/dry-run checks before publication.
+
+Before that publication, one newly authorized real engineering MCC job in
+[run 38004410388](https://github.com/teslaeco/WORLDIFACT/actions/runs/38004410388)
+completed as `NEW_REVIEWED_GLB_VERIFIED` on the original supervised Codex/Blender
+route. The deployed adapter's ordinary request now matches that successful
+request's independently recorded wire checksum exactly. Host structural and
+rendered-image acceptance passed; two downloads returned identical GLB bytes.
+The local header/size/hash check also passed. This was a real provider response,
+not a fixture-only model or an original catalogue model reused as new evidence.
+
+- Model: 886,288 bytes; 63 meshes, 223 nodes, 7 materials and 2 embedded images.
+- Model SHA-256: `fecefbf591d37f65f12aa8bcf44ad56efbfc58aa8bd0010356091adb7f9ba6d0`.
+- Live-test artifact SHA-256: `a510c1f34c100cdf8cdb0b690034e85f94f42c0de8cee541d05eb4fad474996d`.
+- Release artifact SHA-256: `b42983f7aceff72f725f58b0936af9255b4cff98a9067a32e2732eb22e9b7768`.
+
+The previous exclusive version `7d88f9d7-0c32-413f-bcae-b6d0776b54f3` is retained
+in the deployment receipt for recovery. Main remains
+`38e7048c4176fac4c9808203af5bd58a1ae7d10e`; this was a reviewed branch release,
+not a main merge or reset. A future generic main publication must not overwrite
+this deployed correction or the existing remote financial configuration.
+
+## Preserved scope and remaining limitations
+
+The preserving release omitted declared variables and used `--keep-vars`. It did
+not synchronize secrets, change bindings/migrations, install Oracle code, change
+prices/subscriptions/points/old holds/funding, or alter saved jobs and original
+models. The paid engineering test had its existing USD 1.75 cap, made one job
+submission and no automatic resubmission. Actual invoiced API cost is UNKNOWN.
+Its permanent consumed approval and result remain; no repeat is authorized by
+this document. The completed release entrypoint is retired after its evidence
+is recorded, without changing deployed code or the retained recovery receipt.
+
+This restoration applies to ordinary unpriced STANDARD requests. Explicitly
+tier-priced jobs, specialized photo-cabinet/character profiles and FAST retain
+their previous request forms. The newer typed controller's particular token-count
+failure was not diagnosed or fixed by increasing limits: the already-present
+supervised path is selected before dispatch instead. Authentication, the original
+cost guard, reference data, completion instructions and actual-render review
+remain. Existing jobs are not re-routed after a paid failure.
+
+Signed-in browser flow, customer-owned library auto-save and physical Android
+acceptance have NOT been verified by the engineering test. Old held points were
+not released. This standard digital MCC asset is not a manufacturing/electrical
+safety approval or proof of historical photo-reconstruction quality. A single
+successful request is not a guarantee that every prompt or every supported
+profile is error-free. Full clean-session account acceptance remains separate.
+
+## Earlier source and investigation milestones (historical)
+
+All statuses, pending-release notes and approvals below describe their recorded
+past checkpoint, not the current deployment or permission for another charge.
 
 Current milestone: 10 October 2026 (source change after the 9 October UTC test).
 **GO for exact-head verification and a configuration-preserving release of the
