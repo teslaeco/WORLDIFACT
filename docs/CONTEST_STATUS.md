@@ -1,4 +1,46 @@
-# 10 October 2026 — current generator incident remains unresolved
+# 10 October 2026 — host evidence and staged MCP transport repair
+
+Owner-authorized Remote Desktop Commander reached Cloud Shell and the original
+administrative SSH identity successfully reached the known Oracle host with
+strict host checking. No SSH identity or grant was changed. The exact incident's
+`codex-events.jsonl` records one completed contract read followed by **16 failed
+build_model tool calls**, although `agent-tools.json` contains only the contract
+read. This supersedes the earlier implication that the AI simply spent all its
+turns planning: its build calls failed before the MCP tool recorder. The CLI was
+ephemeral; that log deliberately omits tool arguments and tool error details.
+The precise original transport failure cannot be recovered from these records.
+
+An isolated copy of the observed runtime reproduced the same logging pattern:
+a build request over 600,000 characters terminates the MCP process in `serve`,
+and subsequent calls return `Transport closed` without reaching its recorder.
+The execution-error parser misses this actual isError envelope, allowing further
+provider turns. This is a reproduced defect, not proof of the lost original
+payload's size. Source identity is pinned in `tools/mcp_transport_repair/repair.py`.
+
+The staged patch bounds framing at 2 MiB before reading an entire line, allowing
+the existing 256,000-character argument validator to report oversize scenes
+without closing the process. Argument/build/geometry/provider limits remain
+unchanged. It recognizes MCP error envelopes and stops provider admission when
+the transport is closed. Nine focused regression tests pass. A real CLI probe
+on the isolated patched copy returned the correct validation error, then handled
+the next request on the same MCP connection. These probes used scripted provider
+responses and no paid API. No original job was resumed, reset or overwritten.
+
+Full unchanged offline construction gates were started in a separate stateless
+stage. Remote calls stopped responding before their result could be read; their
+outcome and cleanup are UNKNOWN and must be reconciled before rerunning them.
+No production source, receipt, service, deployment, account, price or balance was
+changed. The repair is NOT installed and successful AI generation remains
+unverified. Do not manufacture updated integrity receipts without completed gates.
+Local full verification passed 2,135/2,137 tests; the two browser tests remain
+blocked by unavailable Chromium. Worker dry-run passed. The isolated gate runner
+is a verification utility, not an installation or service-maintenance command.
+
+Continuation: reconnect the existing device, reconcile the running gate and its
+logs, verify source/receipt identities, and prepare the reviewed idle-only
+backup/activation/rollback transaction before any production write.
+
+# 10 October 2026 — earlier API-only incident observations
 
 The owner requested repair after a new `MODEL_BUDGET_EXCEEDED` result. Three
 GET-only incident inspections ran through the existing authenticated Oracle API:
