@@ -773,6 +773,7 @@ export const FORFEIT_RELEASE_PATHS = Object.freeze([
   "src/main.tsx",
   "src/pages/HeldPointsForfeitPage.tsx",
   "tests/fixtures/held-points-forfeit.ts",
+  "tests/generation-funding-page.test.mjs",
   "tests/held-points-forfeit-native.test.mjs",
   "tests/held-points-forfeit-page.test.mjs",
   "tests/held-points-forfeit-recovery.test.ts",
