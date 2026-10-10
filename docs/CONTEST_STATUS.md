@@ -11,7 +11,22 @@ full green CI for the implementation parent, then a marker-only child commit.
 The operation preserves the active code, runtime and all unrelated bindings,
 performs one bounded secret merge-patch, never retries a write and verifies new
 exclusive 100% deployment. Thirteen synthetic activation tests pass locally.
-Hosted CI and actual activation remain pending; no live redemption is claimed.
+All five implementation-parent workflows PASSED on
+730f445ca3077363a0d2215f684d88ba1d373557; verification 38073965361 passed
+2,125 tests, lint, typecheck, HTTP, build and deploy checks. Marker-only commit
+42c4b790e7793195d83fd63146b444d690b7d100 triggered activation 38074125029,
+job 114277412936. It PASSED at 2026-10-10T18:01:54Z: active version
+`a5f53530-cbcd-4c76-87ba-c624e412751f`, exclusive 100% traffic, code/runtime
+and unrelated bindings preserved. Only the two promotion secrets were added.
+The ten code originals match the compiled definitions; expiry is
+2026-11-09T17:52:35.130Z. No code was redeemed by the operation and no balance,
+Stripe setting or provider funding was changed. Actual account redemption remains
+UNTESTED; a production account session is not present in this browser.
+
+GO: approved private batch configuration is active and ready for private delivery.
+NO-GO claim: full ADMIN-funded generation/library/download acceptance remains
+unverified. Existing five high development-dependency advisories are unchanged;
+no dependency change is included.
 See docs/PROMOTION_ACTIVATION_RUNBOOK.md for exact gates and revocation.
 
 # 10 October 2026 — existing credential audit and private batch preparation

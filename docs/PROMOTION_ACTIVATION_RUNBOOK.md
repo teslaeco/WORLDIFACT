@@ -60,8 +60,8 @@ Never attach the file to GitHub or publish it as an Actions artifact.
 Emergency disable sets only WORLDIFACT_PROMOTIONS_ENABLED to false using the
 existing deployment access; preserve definitions, claim/grant markers and ledger
 history. Re-enable only after reconciliation. If an individual code needs
-revocation, use the existing validated definition revocation field and preserve
-all other definitions. Disabling prevents new/unfinished redemptions; it does not
+revocation, remove its active definition after reconciling any unfinished grant,
+and preserve all other definitions plus its historical claim/grant records. Disabling prevents new/unfinished redemptions; it does not
 reverse already granted points. A source rollback must preserve runtime bindings.
 Removing the branch workflow retires the operation but does not revoke codes.
 Internal points do not fund provider API consumption. ADMIN budgets and any paid
