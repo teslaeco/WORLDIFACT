@@ -23,7 +23,7 @@ test('pricing grid precedes card management and card/button/keyboard share one a
   assert.equal((page.match(/openPlan\(id\)/g) ?? []).length, 3)
   assert.match(page, /closest\('button,a'\)/); assert.match(page, /actionLock\.current = true/)
   assert.match(page, /\/api\/billing\/plan-payment/); assert.doesNotMatch(page, /type="radio"/)
-  assert.match(page, /added to your existing balance/)
+  assert.match(page, /Points only; no membership/); assert.match(page, /visibleBalance.available.toLocaleString/)
 })
 
 test('browser Back recovery resets stale UI only for a persisted page and removes its listener', () => {

@@ -51,10 +51,16 @@ test('Shop keeps checkout-return and sign-in notices, while other routes keep fu
   assert.match(welcome, /Sign in/)
   const elsewhere = await render({ pathname: '/world' })
   assert.match(elsewhere, /account-status-brand/)
-  assert.match(elsewhere, /Credits/)
+  assert.match(elsewhere, /Available/)
 })
 test('stale held balances are not shown during account loading or after sign-out', async () => {
   const balance = { credits: 1000, reservedCredits: 250, availableCredits: 750, fastRemaining: 2 }
   assert.equal(await render({ balance, loading: true }), '')
   assert.equal(await render({ balance, signedIn: false }), '')
+})
+
+test('credits screen primary counter excludes reservations and hides duplicate breakdown', async () => {
+  const html = await render({pathname:'/account/credits',balance:{credits:1190,reservedCredits:1000,availableCredits:190,fastRemaining:2}})
+  assert.match(html, /Available<\/span><strong>190<\/strong>/)
+  assert.doesNotMatch(html, /Held:|1,190|Free drafts/)
 })

@@ -748,7 +748,9 @@ export const COMPACT_RELEASE_PATHS = Object.freeze([
   "tests/compact-credits-release.test.mjs",
   "tests/credits-membership-lifecycle.test.mjs",
   "tests/credits-offer.test.mjs",
-  "tests/promotion-ui.test.mjs"
+  "tests/plan-payment-ui.test.ts",
+  "tests/promotion-ui.test.mjs",
+  "tests/shop-account-chrome.test.mjs"
 ] )
 const scopes = [
   { base: COMPACT_RELEASE_BASE, marker: COMPACT_RELEASE_MARKER, content: COMPACT_RELEASE_CONTENT, paths: COMPACT_RELEASE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
