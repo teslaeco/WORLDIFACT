@@ -114,7 +114,8 @@ test('offline preparation rejects replacements in count, duplicates, malformed i
     { ...original(), codes: original().codes.slice(1) }, { ...original(), codes: [...original().codes, 'EXTRA_SYNTHETIC_CODE'] },
     { ...original(), codes: Array(10).fill('DUPLICATE_SYNTHETIC_CODE') },
     { ...original(), codes: [...original().codes.slice(1), 'invalid code with spaces'] },
-    { ...original(), accountId: 'owner@example.invalid' }, { ...original(), points: 9999 },
+    { ...original(), accountId: 'owner@example.invalid' }, { ...original(), accountId: [original().accountId] },
+    { ...original(), points: 9999 },
     { ...original(), startsAt: now - 300001 }, { ...original(), startsAt: now + 86400001 },
   ]
   for (const input of invalid) assert.throws(() => preparePrivateBatch(input, now), /PRIVATE_BATCH_INVALID/)

@@ -7,7 +7,7 @@ const fail = () => { throw new Error('PRIVATE_BATCH_INVALID') }
 const hash = value => createHash('sha256').update(value).digest('hex')
 export function preparePrivateBatch(input, now = Date.now()) {
   if (!input || Array.isArray(input) || Object.keys(input).sort().join(',') !== 'accountId,codes,startsAt' ||
-    !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(input.accountId ?? '') ||
+    typeof input.accountId !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(input.accountId) ||
     !Number.isSafeInteger(now) || !Number.isSafeInteger(input.startsAt) || input.startsAt < now - 300000 ||
     input.startsAt > now + 86400000 || !Array.isArray(input.codes) || input.codes.length !== 10 ||
     input.codes.some(code => typeof code !== 'string' || !/^[A-Za-z0-9_-]{12,128}$/.test(code)) ||
