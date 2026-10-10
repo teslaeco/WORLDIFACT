@@ -1,3 +1,27 @@
+# 10 October 2026 — compact subscriptions and code redemption
+
+Owner requested a compact panel with a code tab and a success burst. Removed the
+marketing essay and repeated credit/plan cards. Three subscription rows retain
+existing prices and checkout guards. Top-ups and billing recovery remain under
+collapsed details. Code access stays account-bound and verified server-side;
+only a newly confirmed grant triggers the brief visual celebration. Duplicate,
+failed and late responses do not celebrate. Reduced-motion users see the status.
+The primary counters now display validated available points, with reservations
+kept under details on the credits page. The supplied screenshot shows 190
+available plus 1,000 held, not 199. No 9-point grant, hold deletion, waiver replay
+or balance adjustment is included. Existing requests need reconciliation before
+any destructive settlement; no financial operation is disguised as a UI change.
+
+The prior private batch activation PASSED in run 38074125029, version
+a5f53530-cbcd-4c76-87ba-c624e412751f, ten single-use account-bound codes, 1,000
+points each, expiry 2026-11-09T17:52:35.130Z. Values stay private. This release
+uses the existing source-only preserving transport and an exact-parent/path
+scope; it preserves all runtime secrets including active promotion definitions,
+Stripe configuration, balances, provider budgets and Oracle. No provider call.
+Targeted UI tests pass; hosted full verification and production publication
+remain pending. Browser localhost checks remain blocked by the recorded policy.
+Rollback is a reviewed source-only release preserving all remote configuration.
+
 # 10 October 2026 — approved preserving publication after PR #246
 
 The owner approved merge and deployment. PR #246 merged as

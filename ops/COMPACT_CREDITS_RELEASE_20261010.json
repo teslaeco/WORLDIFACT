@@ -1,0 +1,10 @@
+{
+  "release": "compact-credits-ui-20261010",
+  "baseCommit": "3e8a4aafe244744e477126b2e514f16f10ac0163",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "activateAdmin": false,
+  "activatePromotions": false,
+  "paidGeneration": false
+}
