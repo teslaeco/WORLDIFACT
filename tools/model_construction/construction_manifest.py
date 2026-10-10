@@ -32,9 +32,16 @@ PAYLOAD_AFTER = {**INSTALLED_V1, 'construction_payload.py': '3b7e5af5192724af4d7
 INITIAL_EDIT_BEFORE = dict(PAYLOAD_AFTER)
 INITIAL_EDIT_HELPERS = frozenset(('construction_payload.py', 'phased_controller.py', 'runtime_controller.py'))
 EXPECTED_AFTER = {**INITIAL_EDIT_BEFORE,
+ 'construction_payload.py': 'dc65d54672b657e260a1a4a24da6657e95581de479b55e6e8c9b26f93a49e2bb',
+ 'phased_controller.py': '1825f3cbff6e229799d22001481d8075a8e8b5c567e60b3736a9208126c99d6b',
+ 'runtime_controller.py': '9188b29c60ac26ab9f63781660db548b1757ee430fc4b33a43930f6868168b0d'}
+# Complete initial-edit runtime observed on the owner host. This immutable
+# predecessor is not supplied by a receipt, flag, source checkout or caller.
+RESPONSE_PHASE_BEFORE = {**INITIAL_EDIT_BEFORE,
  'construction_payload.py': '475e8251a2255775889d00d0611bb8954044cfd7f2dfba27c6735403408c35b8',
  'phased_controller.py': '1825f3cbff6e229799d22001481d8075a8e8b5c567e60b3736a9208126c99d6b',
  'runtime_controller.py': '9188b29c60ac26ab9f63781660db548b1757ee430fc4b33a43930f6868168b0d'}
+RESPONSE_PHASE_HELPERS = frozenset(('construction_payload.py',))
 MODIFIED = runtime_patch.MODIFIED
 HELPERS = runtime_patch.HELPERS
 
@@ -59,7 +66,8 @@ def reviewed_sources(original):
 def reviewed_manifest(value):
     try:
         after = final_manifest()
-        return value == EXPECTED or value == after or value == payload_predecessor() or value == initial_edit_predecessor()
+        return (value == EXPECTED or value == after or value == payload_predecessor()
+                or value == initial_edit_predecessor() or value == response_phase_predecessor())
     except ValueError:
         return False
 
@@ -133,4 +141,35 @@ def initial_edit_changes(original, helpers):
     changed = {**original, **helpers}
     if {name: hashlib.sha256(raw).hexdigest() for name, raw in changed.items()} != final_manifest():
         raise ValueError('Initial-edit update differs from frozen runtime manifest.')
+    return changed
+
+
+def response_phase_predecessor():
+    """Require the exact already-installed initial-edit runtime, not older code."""
+    before, after = RESPONSE_PHASE_BEFORE, final_manifest()
+    if (not isinstance(before, dict) or set(before) != health.SOURCES
+            or any(not isinstance(value, str) or re.fullmatch('[a-f0-9]{64}', value) is None
+                   for value in before.values())
+            or {name for name in after if after[name] != before[name]} != RESPONSE_PHASE_HELPERS):
+        raise ValueError('Exact response-phase update manifest is not frozen.')
+    return dict(before)
+
+
+def reviewed_response_phase_sources(original):
+    if {name: hashlib.sha256(raw).hexdigest() for name, raw in original.items()} != response_phase_predecessor():
+        raise ValueError('Exact installed initial-edit construction source is required.')
+    return True
+
+
+def response_phase_changes(original, helpers):
+    reviewed_response_phase_sources(original)
+    if not isinstance(helpers, dict) or set(helpers) != RESPONSE_PHASE_HELPERS:
+        raise ValueError('Only the reviewed response decoder may change.')
+    raw = helpers['construction_payload.py']
+    if not isinstance(raw, bytes) or not 0 < len(raw) <= 1048576:
+        raise ValueError('Invalid bounded runtime helper.')
+    compile(raw, 'construction_payload.py', 'exec')
+    changed = {**original, **helpers}
+    if {name: hashlib.sha256(value).hexdigest() for name, value in changed.items()} != final_manifest():
+        raise ValueError('Response-phase update differs from frozen runtime manifest.')
     return changed

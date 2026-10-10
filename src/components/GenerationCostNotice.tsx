@@ -39,6 +39,7 @@ function CostNotice({ compact = false, model, busy = false, detailed = false, bu
   const rate = detailed && model === 'astra' && budgetTier ? STUDIO_PRICING[budgetTier].points : model === 'luna' ? 15 : model === 'sol' ? 50 : 250
   const providerCap = detailed && model === 'astra' && budgetTier ? STUDIO_PRICING[budgetTier].maxProviderCents : MODEL_CATALOG[model].maxProviderCents
   const fundingBlocked = quote.state === 'blocked' && quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
+  const heldPointsBlocked = quote.state === 'blocked' && quote.reason === 'CREDITS_EXHAUSTED' && !!accountQuote.balance?.held
   const pointsFunded = quote.state === 'credits' && quote.fundingSource === PAID_POINTS_FUNDING
   return <section className={`generation-cost-notice${compact ? ' generation-cost-compact' : ''}`} aria-label="Selected model and cost for the next generation" aria-live="polite">
     {!compact && <div><strong>{MODEL_CATALOG[model].label}</strong><span>{rate} points / paid generation</span></div>}
@@ -47,6 +48,12 @@ function CostNotice({ compact = false, model, busy = false, detailed = false, bu
     {pointsFunded && compact && <p className="shop-upfront-terms"><strong>{rate} points held before dispatch.</strong> Success costs {rate}. A confirmed no-dispatch or zero-cost failure releases the hold. Failed requests with possible API costs keep points unavailable until verified, including manual review. API limit: USD {(providerCap / 100).toFixed(2)}. No automatic retry or card charge.</p>}
     {pointsFunded && !compact && <p><strong>Before you generate:</strong> We hold {rate} points before dispatch. Success costs {rate} points. A proved pre-dispatch or zero-cost failure releases the hold. If a failed request may have incurred API costs, its points remain held until the cost is verified; manual review may be required. Held points are unavailable for other requests. The API limit for this request is USD {(providerCap / 100).toFixed(2)}. No automatic retry or card charge.</p>}
     {['blocked', 'signin', 'pending'].includes(quote.state) && <p>{nextGenerationQuoteMessage(quote)}{quote.state === 'signin' && <> <Link to="/account">Sign in →</Link></>}</p>}
+    {heldPointsBlocked && <div className="generation-held-points" role="status">
+      <p><strong>{accountQuote.balance!.available.toLocaleString()} available points</strong> · {accountQuote.balance!.held.toLocaleString()} held · {accountQuote.balance!.total.toLocaleString()} total.</p>
+      <p>New generation has not started. Previous failed requests need a points review; clearing the form or refreshing does not release those holds. Review them before buying more points.</p>
+      <a href="/account/generation-funding">Review existing held requests · no new generation</a>
+      <button type="button" disabled={!canRefresh} onClick={refresh}>Refresh available points</button>
+    </div>}
     {fundingBlocked && <button type="button" disabled={!canRefresh} onClick={refresh}>{checking ? 'Checking availability…' : 'Refresh availability'}</button>}
     <details><summary>Model details and billing</summary>
       {compact && <p>This quote is for the next generation only. It does not report the status or charges of a saved request.</p>}
@@ -57,7 +64,7 @@ function CostNotice({ compact = false, model, busy = false, detailed = false, bu
       <p>Use once from your points. No automatic batch, model upgrade or card charge. Failed attempts may return points. {pointsFunded
         ? 'This paid-membership request uses your available points without a separate account API reserve. The selected model’s API cost limit and service readiness checks still apply. Earlier jobs keep their original funding terms.'
         : 'For reserve-funded requests, only confirmed unused API funding can be restored; incurred or uncertain costs remain reserved.'}</p>
-      {!fundingBlocked && <div><Link to="/account/credits">Plans & one-time prepaid credits →</Link><button type="button" disabled={!canRefresh} onClick={refresh}>Refresh points</button></div>}
+      {!fundingBlocked && !heldPointsBlocked && <div><Link to="/account/credits">Plans & one-time prepaid credits →</Link><button type="button" disabled={!canRefresh} onClick={refresh}>Refresh points</button></div>}
     </details>
   </section>
 }

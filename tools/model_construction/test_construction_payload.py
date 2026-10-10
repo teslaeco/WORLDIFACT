@@ -327,7 +327,7 @@ class PayloadTests(unittest.TestCase):
             response['output'][0].update(content=[], status='completed',
                 encrypted_content='opaque-synthetic-fixture',
                 summary=[{'type': 'summary_text', 'text': 'Synthetic summary metadata.'}])
-            response['output'][-1].update(phase='commentary')
+            response['output'][-1].update(phase='final_answer')
         result = self.parse({'scene_json': pc.canonical(scene()), 'initial_edit': None}, change_response=completed_metadata)
         self.assertEqual(json.loads(result.scene_json), scene())
 

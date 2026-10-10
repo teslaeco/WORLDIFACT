@@ -1,0 +1,39 @@
+name: Generation recovery audit (no paid requests)
+on:
+  push:
+    branches: ['fix/generation-audit-recovery-20261009']
+permissions:
+  contents: read
+concurrency:
+  group: generation-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Test bounded public evidence collector
+        run: node --test tests/generation-recovery-audit.test.mjs
+      - name: Inventory and GET-only public evidence
+        run: node scripts/generation-recovery-audit.mjs "$RUNNER_TEMP/generation-audit"
+      - name: Package the exact public tracked source, without git configuration
+        run: git archive --format=tar.gz -o "$RUNNER_TEMP/generation-audit/public-source.tar.gz" HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: generation-audit-source-${{ github.sha }}
+          path: ${{ runner.temp }}/generation-audit/
+          retention-days: 2
+          if-no-files-found: error
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - run: npm run deploy:check
+# No production environment, provider key, financial operation or deployment.

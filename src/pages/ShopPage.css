@@ -299,3 +299,8 @@
 .shop-navigation-menu { position: relative; }
 .native-shop-nav .shop-navigation-menu nav { position: absolute; z-index: 25; top: 33px; right: 0; min-width: 172px; max-width: calc(100vw - 36px); margin-top: 7px; box-shadow: 0 14px 40px #0006; }
 @media (max-width: 900px) { .native-shop-nav { grid-template-columns: minmax(0, 1fr) auto; } }
+
+/* A terminal request is history, never the visual state of the next empty form. */
+.native-shop .shop-composer-reset { font-size: .86rem; line-height: 1.5; margin: 10px 0; }
+.native-shop .shop-previous-failure > summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
+.native-shop .shop-previous-failure:not([open]) { padding: 16px 22px; }

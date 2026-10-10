@@ -2,11 +2,11 @@ import type { StudioBudgetTier } from './studioPricing'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAccount } from './account'
 import { GENERATION_ACCOUNT_TIMEOUT_MS, readGenerationAccount, type GenerationAccountSnapshot } from './generationAccount'
-import { quoteGeneration, type GenerationQuote, type QuotedModel } from './generationQuote'
+import { quoteGeneration, readGenerationBalance, type GenerationBalance, type GenerationQuote, type QuotedModel } from './generationQuote'
 
 type Request = { owner: string | null; loading: boolean; busy: boolean; revision: number }
 type Snapshot = GenerationAccountSnapshot & { request: Request; settled: boolean }
-export type GenerationQuoteState = { quote: GenerationQuote; checking: boolean; canRefresh: boolean; refresh: () => void }
+export type GenerationQuoteState = { balance?: GenerationBalance; quote: GenerationQuote; checking: boolean; canRefresh: boolean; refresh: () => void }
 
 export function useGenerationQuote(model: QuotedModel, busy = false, detailed = false, budgetTier?: StudioBudgetTier): GenerationQuoteState {
   const { user, loading } = useAccount()
@@ -64,5 +64,6 @@ export function useGenerationQuote(model: QuotedModel, busy = false, detailed = 
     ? { state: 'pending' as const, points: null, after: null, message: loading ? 'Checking your account before generation.' : 'Checking current cost after this request. No new generation can start yet.' }
     : checking && currentQuote.reason !== 'PROVIDER_BUDGET_EXHAUSTED' ? { state: 'pending' as const, points: null, after: null, message: 'Checking your current points and model funding. No generation has started.' }
     : currentQuote
-  return { quote, checking, canRefresh: !!owner && !loading && !busy && !checking, refresh }
+  const balance = !checking && current?.settled && !current.authenticationRequired ? readGenerationBalance(current.account) : undefined
+  return { ...(balance ? { balance } : {}), quote, checking, canRefresh: !!owner && !loading && !busy && !checking, refresh }
 }

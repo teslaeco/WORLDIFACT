@@ -50,6 +50,7 @@ RECEIPTS = policy.CHAIN_RECEIPTS
 NEW_FILES = policy.RUNTIME_HELPERS | {policy.RECEIPT}
 WRITES = manifest.MODIFIED | NEW_FILES | RECEIPTS
 INITIAL_EDIT_WRITES = manifest.INITIAL_EDIT_HELPERS | {policy.RECEIPT}
+RESPONSE_PHASE_WRITES = manifest.RESPONSE_PHASE_HELPERS | {policy.RECEIPT}
 EXECUTABLE_FILES = frozenset(('tools/codex/codex', 'tools/codex/codex-code-mode-host',
                               'tools/codex/codex-binary.json', 'tools/codex/code-mode-host.json'))
 # ggml's Linux ARM backend tags contain a decimal architecture separator.
@@ -260,16 +261,21 @@ def original_sources(source):
     return original
 
 
-def installed_sources(source):
+def installed_sources(source, *, response_phase=False):
     original = {name: base.read_regular(source / name) for name in policy.SOURCES}
-    manifest.reviewed_installed_sources(original)
+    (manifest.reviewed_response_phase_sources if response_phase else manifest.reviewed_installed_sources)(original)
     return original
 
 
-def validate_installed_receipts(source, original):
-    manifest.reviewed_installed_sources({name: original[name] for name in policy.SOURCES})
+def installed_predecessor(response_phase=False):
+    return manifest.response_phase_predecessor() if response_phase else manifest.initial_edit_predecessor()
+
+
+def validate_installed_receipts(source, original, *, response_phase=False):
+    (manifest.reviewed_response_phase_sources if response_phase else manifest.reviewed_installed_sources)(
+        {name: original[name] for name in policy.SOURCES})
     proof = policy._json(base.read_regular(source / policy.RECEIPT, 16384))
-    if (proof.get('sha256') != manifest.initial_edit_predecessor()
+    if (proof.get('sha256') != installed_predecessor(response_phase)
             or any(proof.get(gate) is not True for gate in REQUIRED_GATES)
             or policy.verified_health(source) != {'worldifactStandardConstructionPolicy': policy.REVISION}):
         raise Refused('installed_construction_receipt_refused')
@@ -315,15 +321,15 @@ def verified_gate_hashes(changed, evidence):
     return hashes
 
 
-def initial_edit_update_receipt(original, changed, evidence, allow_cancelled_cleanup):
+def initial_edit_update_receipt(original, changed, evidence, allow_cancelled_cleanup, *, response_phase=False):
     hashes = verified_gate_hashes(changed, evidence)
     proof = policy._json(original[policy.RECEIPT])
     proof.update(sha256=hashes,
                  receipt_sha256={name: digest(original[name]) for name in RECEIPTS},
                  cancelled_cleanup_interruption_approved=allow_cancelled_cleanup,
                  **{gate: True for gate in REQUIRED_GATES})
-    proof['initial_edit_update'] = {
-        'revision': 'typed-plan-initial-edit-v1',
+    proof['response_phase_update' if response_phase else 'initial_edit_update'] = {
+        'revision': 'final-answer-selection-v1' if response_phase else 'typed-plan-initial-edit-v1',
         'previous_construction_receipt_sha256': digest(original[policy.RECEIPT]),
         'verified_generic_receipt_sha256': digest(evidence.generic_receipt),
     }
@@ -488,16 +494,20 @@ class Operations(legacy.Operations):
             raise Refused('unsupported_target')
         if self.source != self.home / 'froge-connector' or time.time() >= cache.legacy.VALID_UNTIL:
             raise Refused('source_or_pricing_review_refused')
-        update = getattr(self, 'update_initial_edit', False)
-        original = installed_sources(self.source) if update else original_sources(self.source)
+        response_phase = getattr(self, 'update_response_phase', False)
+        update = getattr(self, 'update_initial_edit', False) or response_phase
+        original = installed_sources(self.source, response_phase=response_phase) if update else original_sources(self.source)
         self.source_variant = 'PRICING'
-        self.expected_source_sha256 = manifest.initial_edit_predecessor() if update else dict(manifest.EXPECTED)
+        self.expected_source_sha256 = installed_predecessor(response_phase) if update else dict(manifest.EXPECTED)
         if (not legacy.studio_pricing.verified_health(self.source)
                 or not legacy.terminal_budget.verified_health(self.source)
                 or legacy.studio_pricing.maintenance_active(self.source)
                 or legacy.terminal_budget.maintenance_active(self.source)):
             raise Refused('existing_pricing_receipt_refused')
-        (validate_installed_receipts if update else validate_receipts)(self.source, original)
+        if update:
+            validate_installed_receipts(self.source, original, response_phase=response_phase)
+        else:
+            validate_receipts(self.source, original)
         if not legacy.prebuild_policy.verified_health(self.source) or not base.receipt_matches(self.source):
             raise Refused('existing_receipt_refused')
         if base.read_regular(self.source / 'astra_spend.py') != Path(cache.legacy.__file__).read_bytes():
@@ -618,13 +628,15 @@ class Operations(legacy.Operations):
             raise Refused('construction_health_unverified')
 
     def previous_health(self):
-        if getattr(self, 'update_initial_edit', False):
-            validate_installed_receipts(self.source, installed_sources(self.source))
+        response_phase = getattr(self, 'update_response_phase', False)
+        if getattr(self, 'update_initial_edit', False) or response_phase:
+            validate_installed_receipts(self.source, installed_sources(self.source, response_phase=response_phase),
+                                        response_phase=response_phase)
             return self.context_health()
         return legacy.Operations.context_health(self, revision=legacy.policy.REVISION)
 
 
-def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False):
+def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False, update_response_phase=False):
     if approved is not True:
         raise Refused('maintenance_approval_required')
     if type(allow_cancelled_cleanup) is not bool:
@@ -637,16 +649,20 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
         raise Refused('payload_update_mode_invalid')
     if type(update_initial_edit) is not bool:
         raise Refused('initial_edit_update_mode_invalid')
-    if update_payload and update_initial_edit:
+    if type(update_response_phase) is not bool:
+        raise Refused('response_phase_update_mode_invalid')
+    if sum((update_payload, update_initial_edit, update_response_phase)) > 1:
         raise Refused('conflicting_update_modes')
     if update_payload:
         raise Refused('payload_update_requires_historical_package')
     manifest.final_manifest()  # Before target reads, directories or service work.
-    if update_initial_edit:
-        manifest.initial_edit_predecessor()
-    absent = frozenset() if update_initial_edit else NEW_FILES
-    writes = INITIAL_EDIT_WRITES if update_initial_edit else WRITES
+    update = update_initial_edit or update_response_phase
+    if update:
+        installed_predecessor(update_response_phase)
+    absent = frozenset() if update else NEW_FILES
+    writes = RESPONSE_PHASE_WRITES if update_response_phase else INITIAL_EDIT_WRITES if update_initial_edit else WRITES
     operations.update_initial_edit = update_initial_edit
+    operations.update_response_phase = update_response_phase
     legacy.check_container_environment()
     operations.allow_cancelled_cleanup = allow_cancelled_cleanup
     operations.cancelled_job_ids = (expected_cancelled_job,) if allow_cancelled_cleanup else ()
@@ -657,18 +673,22 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
         raise Refused('maintenance_already_present')
     assert_absent(source, absent)
     operations.preflight()
-    original = installed_sources(source) if update_initial_edit else original_sources(source)
+    original = installed_sources(source, response_phase=update_response_phase) if update else original_sources(source)
     operations.source_variant = 'PRICING'
-    operations.expected_source_sha256 = manifest.initial_edit_predecessor() if update_initial_edit else dict(manifest.EXPECTED)
-    if update_initial_edit:
-        helpers = {name: base.read_regular(HERE / name) for name in manifest.INITIAL_EDIT_HELPERS}
-        changed = manifest.initial_edit_changes(original, helpers)
+    operations.expected_source_sha256 = installed_predecessor(update_response_phase) if update else dict(manifest.EXPECTED)
+    if update:
+        names = manifest.RESPONSE_PHASE_HELPERS if update_response_phase else manifest.INITIAL_EDIT_HELPERS
+        helpers = {name: base.read_regular(HERE / name) for name in names}
+        changed = (manifest.response_phase_changes if update_response_phase else manifest.initial_edit_changes)(original, helpers)
     else:
         helpers = {name: base.read_regular(HERE / name) for name in manifest.HELPERS}
         changed = manifest.changes(original, helpers)
     patched = {name: raw for name, raw in changed.items() if original.get(name) != raw}
-    original.update({name: base.read_regular(source / name, 16384) for name in RECEIPTS | ({policy.RECEIPT} if update_initial_edit else set())})
-    (validate_installed_receipts if update_initial_edit else validate_receipts)(source, original)
+    original.update({name: base.read_regular(source / name, 16384) for name in RECEIPTS | ({policy.RECEIPT} if update else set())})
+    if update:
+        validate_installed_receipts(source, original, response_phase=update_response_phase)
+    else:
+        validate_receipts(source, original)
     original_inventory = code_inventory(source)
     workspace.mkdir(mode=0o700, parents=True, exist_ok=False)
     modes = {name: stat.S_IMODE((source / name).stat().st_mode) for name in original}
@@ -705,9 +725,11 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
             assert_absent(source, absent)
             if any(base.read_regular(stage / name) != raw for name, raw in changed.items()):
                 raise Refused('verification_changed_source')
-            if update_initial_edit:
-                receipts = initial_edit_update_receipt(original, changed, evidence, allow_cancelled_cleanup)
-                base.atomic_write(workspace / 'INITIAL_EDIT_UPDATE_GENERIC_EVIDENCE.json', evidence.generic_receipt)
+            if update:
+                receipts = initial_edit_update_receipt(original, changed, evidence, allow_cancelled_cleanup,
+                                                       response_phase=update_response_phase)
+                witness = 'RESPONSE_PHASE_UPDATE_GENERIC_EVIDENCE.json' if update_response_phase else 'INITIAL_EDIT_UPDATE_GENERIC_EVIDENCE.json'
+                base.atomic_write(workspace / witness, evidence.generic_receipt)
                 staged_receipts = {**{name: original[name] for name in RECEIPTS}, **receipts}
             else:
                 receipts = rebound_receipts(original, changed, evidence, allow_cancelled_cleanup)
@@ -800,6 +822,7 @@ def main(argv=None):
     updates = parser.add_mutually_exclusive_group()
     updates.add_argument('--update-payload', action='store_true')
     updates.add_argument('--update-initial-edit', action='store_true')
+    updates.add_argument('--update-response-phase', action='store_true')
     parser.add_argument('--allow-cancelled-cleanup', action='store_true')
     parser.add_argument('--expected-cancelled-job')
     args = parser.parse_args(argv)
@@ -814,8 +837,8 @@ def main(argv=None):
     if args.update_payload:
         raise Refused('payload_update_requires_historical_package')
     manifest.final_manifest()
-    if args.update_initial_edit:
-        manifest.initial_edit_predecessor()
+    if args.update_initial_edit or args.update_response_phase:
+        installed_predecessor(args.update_response_phase)
     frozen_dependencies()
     def interrupted(*_):
         raise KeyboardInterrupt('Maintenance interrupted; preserve verified source.')
@@ -834,7 +857,8 @@ def main(argv=None):
         workspace = parent / ('standard-construction-' + time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '-' + uuid.uuid4().hex[:8])
         value = install(source, workspace, Operations(source, home), approved=True,
                         allow_cancelled_cleanup=args.allow_cancelled_cleanup,
-                        expected_cancelled_job=args.expected_cancelled_job, update_initial_edit=args.update_initial_edit)
+                        expected_cancelled_job=args.expected_cancelled_job, update_initial_edit=args.update_initial_edit,
+                        update_response_phase=args.update_response_phase)
         print(json.dumps(value, sort_keys=True))
         return value
 

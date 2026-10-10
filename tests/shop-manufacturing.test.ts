@@ -63,12 +63,12 @@ test('ISS source retains hard manufacturing validation rules', () => {
   assert.match(MANUFACTURING_HARD_RULES, /B2B manufacturing partner accepts that exact revision/i)
 })
 
-test('STANDARD and FAST Studio payloads both receive the manufacturing hard rules', () => {
+test('explicit printable STANDARD and FAST outputs retain manufacturing rules, digital drafts do not', () => {
   const standard: StudioInput = {
     worldId: 'enchanted-ai-shop', prompt: 'Create a printable chess knight', purpose: 'figurine', textureMaxSize: 4096, photos: [],
   }
   const fast: StudioInput = {
-    worldId: 'enchanted-ai-shop', prompt: 'Create a compact chess knight', purpose: 'figurine', textureMaxSize: 2048, photos: [], generationProfile: FAST_DRAFT_PROFILE,
+    worldId: 'enchanted-ai-shop', prompt: 'Create a compact printable chess knight', purpose: 'figurine', textureMaxSize: 2048, photos: [], generationProfile: FAST_DRAFT_PROFILE,
   }
   for (const input of [standard, fast]) {
     const payload = oracleStudioPayload('12345678-1234-4234-8234-123456789abc', input)
@@ -76,5 +76,9 @@ test('STANDARD and FAST Studio payloads both receive the manufacturing hard rule
     assert.match(instructions, /non-manifold/i)
     assert.match(instructions, /zero-thickness/i)
     assert.match(instructions, /B2B manufacturing partner accepts that exact revision/i)
+    const digital = oracleStudioPayload('12345678-1234-4234-8234-123456789abc', { ...input, prompt: 'Create a digital chess knight for a game.' })
+    const digitalInstructions = digital.prompt + ('agentInstructions' in digital ? digital.agentInstructions : '')
+    assert.doesNotMatch(digitalInstructions, /zero-thickness|1\.5 mm walls|keyed joints/)
+    assert.match(digitalInstructions, /B2B manufacturing partner accepts that exact revision/i)
   }
 })

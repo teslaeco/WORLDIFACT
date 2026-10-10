@@ -1,0 +1,15 @@
+.credit-tools { margin: 1.5rem 0; padding: 1.25rem; border: 1px solid #294a57; border-radius: 18px; background: #101f2b; }
+.credit-tools h2 { margin: 0 0 1rem; font-size: 1.2rem; }
+.credit-tools details + details { margin-top: 1rem; border-top: 1px solid #294a57; padding-top: 1rem; }
+.credit-tools summary { cursor: pointer; font-weight: 650; padding: .3rem 0; }
+.credit-tools p { color: #b7cbd6; line-height: 1.55; }
+.credit-tools dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1.2rem 0; }
+.credit-tools dl div { min-width: 0; }
+.credit-tools dt { font-size: .83rem; color: #b7cbd6; }
+.credit-tools dd { font-size: 1.65rem; font-weight: 700; margin: .3rem 0; overflow-wrap: anywhere; }
+.credit-tools a { color: #98ddec; text-decoration: underline; }
+.credit-tools fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: .6rem; }
+.credit-tools input, .credit-tools button { min-height: 44px; padding: .65rem .8rem; border-radius: 8px; border: 1px solid #54707e; background: #132935; color: #c3d4df; font: inherit; }
+.credit-tools fieldset:disabled { opacity: .65; }
+.credit-tools :focus-visible { outline: 2px solid #9eeed9; outline-offset: 4px; }
+@media (max-width: 540px) { .credit-tools { padding: 1rem; } .credit-tools dl { grid-template-columns: 1fr; gap: .65rem; } .credit-tools dl div { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; } }

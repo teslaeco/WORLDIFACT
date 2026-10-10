@@ -1,6 +1,269 @@
-# WORLDIFACT — TerraformingPlanet Astra heroine released
+# 10 October 2026 — historical test coupling repaired; release/account gates remain separate
 
-Updated 7 October 2026.
+The UI staging run 38047078893 failed at the immutable historical payload check:
+2071 of 2072 tests passed, but the changed ShopPage was compared with the original
+waiver release's blob. This correction preserves that manifest, every historical
+blob, the production selector and the entire Cloudflare workflow. The test now
+checks an independently captured payload from immutable commit 38e7048c against
+the original manifest, including the original test's own bytes. Added regressions
+reject changed/missing historical sources and prove that a later Shop edit gains
+no historical deployment authority. No assertion is skipped or hash repinned.
+
+The existing composer/point-display UI patch is applied, not merely left as a
+staging script. Its original requests, next drafts and saved models are retained.
+Coupon redemption remains INACTIVE. No customer balance, held-point waiver,
+provider funding, billing, coupon registration, secret or live model request is
+modified here. Prior denied financial operations must not be retried indirectly.
+Full candidate CI, production publication, authenticated account correction and
+LIVE generation remain distinct gates and require their own observed evidence.
+
+## Earlier evidence (preserved)
+
+# WORLDIFACT — supervised STANDARD restored and deployed; real MCC model verified
+
+Current evidence: 10 October 2026, 00:05:13 UTC.
+
+## 10 October 2026 — UI-only recovery and honest point/coupon status
+
+The owner requested automatic clearing of failed-generation forms, a points and
+promo-code interface, and resolution of held points. This change implements only
+the client-interface part. Previously denied point grants, coupon registration
+and credit-ledger changes are not retried through another tool or workflow.
+No new secret, point reset, waiver replay, coupon activation, account mutation,
+API model request or payment is part of this patch. The historical screenshot
+of a recorded waiver is not evidence that the current holds were released.
+
+The existing staged composer patch is completed with all previous protections:
+only an unchanged submitted draft clears on confirmed completion; newer text and
+references survive a late old result. The saved receipt, original model, pending
+review and server selection are preserved. The old failure is a collapsed history
+item, not the state of a new request. Held-point messages show the validated
+available, held and total figures and link to the existing read-only review.
+
+The subscription page now has a points/review section and a clearly inactive
+promo-code disclosure. Its disabled input cannot submit, store or redeem a code;
+it explicitly says that the prepared codes cannot add points. No raw coupon or
+account identifier is added to source, configuration or public artifacts. Account
+switches and refreshes must not display a stale amount as confirmed.
+
+Local verification uses the actual component and coordinator with synthetic HTTP
+and React lifecycle adapters, not a browser or paid provider. All 104 Shop draft
+lifecycle/unit cases and the point-display/membership cases pass after updating
+the old waiver fixture to type a new prompt before expecting Generate enabled.
+That fixture still checks the original waiver/readback and preserved history;
+no financial assertion was removed. Exact-head full CI and production release
+are separate checkpoints and will be recorded after completion.
+
+Customer held points are NOT zeroed, new points are NOT granted, and the prepared
+promo codes remain NOT ACTIVATED. The successful engine-only MCC test below does
+not establish signed-in account generation, current available balance or coupons.
+
+## Verified release and real model
+
+The new ordinary legacy-priced STANDARD request route is deployed. Source
+`3e86e009fd400f2185de67b1ecdd92761bc863ab` was published by
+[run 38007263065](https://github.com/teslaeco/WORLDIFACT/actions/runs/38007263065)
+as Cloudflare version `4278815f-5576-49f9-a74e-e3348302b412`. The release verified
+12 HTML routes, 428 exact built assets and exclusive 100% traffic. All six PR
+workflows passed on this exact source, including application run 38006428572
+and construction/native-Blender run 38006428584. The release repeated its full
+verification/build/foundation/dry-run checks before publication.
+
+Before that publication, one newly authorized real engineering MCC job in
+[run 38004410388](https://github.com/teslaeco/WORLDIFACT/actions/runs/38004410388)
+completed as `NEW_REVIEWED_GLB_VERIFIED` on the original supervised Codex/Blender
+route. The deployed adapter's ordinary request now matches that successful
+request's independently recorded wire checksum exactly. Host structural and
+rendered-image acceptance passed; two downloads returned identical GLB bytes.
+The local header/size/hash check also passed. This was a real provider response,
+not a fixture-only model or an original catalogue model reused as new evidence.
+
+- Model: 886,288 bytes; 63 meshes, 223 nodes, 7 materials and 2 embedded images.
+- Model SHA-256: `fecefbf591d37f65f12aa8bcf44ad56efbfc58aa8bd0010356091adb7f9ba6d0`.
+- Live-test artifact SHA-256: `a510c1f34c100cdf8cdb0b690034e85f94f42c0de8cee541d05eb4fad474996d`.
+- Release artifact SHA-256: `b42983f7aceff72f725f58b0936af9255b4cff98a9067a32e2732eb22e9b7768`.
+
+The previous exclusive version `7d88f9d7-0c32-413f-bcae-b6d0776b54f3` is retained
+in the deployment receipt for recovery. Main remains
+`38e7048c4176fac4c9808203af5bd58a1ae7d10e`; this was a reviewed branch release,
+not a main merge or reset. A future generic main publication must not overwrite
+this deployed correction or the existing remote financial configuration.
+
+## Preserved scope and remaining limitations
+
+The preserving release omitted declared variables and used `--keep-vars`. It did
+not synchronize secrets, change bindings/migrations, install Oracle code, change
+prices/subscriptions/points/old holds/funding, or alter saved jobs and original
+models. The paid engineering test had its existing USD 1.75 cap, made one job
+submission and no automatic resubmission. Actual invoiced API cost is UNKNOWN.
+Its permanent consumed approval and result remain; no repeat is authorized by
+this document. The completed release entrypoint is retired after its evidence
+is recorded, without changing deployed code or the retained recovery receipt.
+
+This restoration applies to ordinary unpriced STANDARD requests. Explicitly
+tier-priced jobs, specialized photo-cabinet/character profiles and FAST retain
+their previous request forms. The newer typed controller's particular token-count
+failure was not diagnosed or fixed by increasing limits: the already-present
+supervised path is selected before dispatch instead. Authentication, the original
+cost guard, reference data, completion instructions and actual-render review
+remain. Existing jobs are not re-routed after a paid failure.
+
+Signed-in browser flow, customer-owned library auto-save and physical Android
+acceptance have NOT been verified by the engineering test. Old held points were
+not released. This standard digital MCC asset is not a manufacturing/electrical
+safety approval or proof of historical photo-reconstruction quality. A single
+successful request is not a guarantee that every prompt or every supported
+profile is error-free. Full clean-session account acceptance remains separate.
+
+## Earlier source and investigation milestones (historical)
+
+All statuses, pending-release notes and approvals below describe their recorded
+past checkpoint, not the current deployment or permission for another charge.
+
+Current milestone: 10 October 2026 (source change after the 9 October UTC test).
+**GO for exact-head verification and a configuration-preserving release of the
+already tested existing route. No universal error-free or signed-in-account claim.**
+
+## A real completed model, not a scripted provider fixture
+
+The owner renewed authorization for one bounded paid engineering test. The
+comparison run [38004410388](https://github.com/teslaeco/WORLDIFACT/actions/runs/38004410388)
+used the original authenticated Oracle worker and the same MCC description,
+prices, completion guidance and USD 1.75 maximum. Only the fresh request's
+existing STANDARD selector differed: the original supervised CLI alias was
+chosen before dispatch. This was not a second submission of the failed job or a
+fallback after a provider error. The permanent one-use approval remains consumed.
+No additional paid model is authorized by this evidence document.
+
+That live job finished with `NEW_REVIEWED_GLB_VERIFIED`, not a candidate-only
+outcome. Host structural acceptance and rendered review passed. Two separate
+reads returned exactly the same original model. Downloaded GLB v2 bytes were
+independently checked locally:
+
+- Size: 886,288 bytes; 63 meshes, 223 nodes, 7 materials, 2 embedded images.
+- 2,996 unique triangles; 4,916 rendered triangles; 18 substantial meshes.
+- SHA-256: `fecefbf591d37f65f12aa8bcf44ad56efbfc58aa8bd0010356091adb7f9ba6d0`.
+- Artifact 11650961115 SHA-256: `a510c1f34c100cdf8cdb0b690034e85f94f42c0de8cee541d05eb4fad474996d`.
+
+This is an actual ordinary digital MCC game model, not proof of high-resolution
+photo reconstruction, manufacturing fitness or parity with every historical
+MCC/Meshy asset. Actual invoiced API cost is UNKNOWN; USD 1.75 is a ceiling, not
+a measured charge. Customer points, holds, subscriptions and owned-library rows
+were not changed by the engineering test. The signed-in Shop account flow and
+library auto-save are NOT established by this original-worker test.
+
+## Minimal compatible restoration
+
+`oracleStudioPayload` now chooses that exact successful request form for new
+ordinary unpriced STANDARD requests. The wire SHA-256 of the accepted MCC request
+is pinned in a regression; it is not derived from the new implementation.
+The entire completion recipe, actual-render inspection, finish_model acceptance,
+original prompt and references remain. Only the existing route header differs.
+The shared STANDARD completion/context policy and global USD 1.75 guard remain
+active on the original supervised executor. The newer typed controller's separate
+phase-admission scheduling is not asserted to be identical to the CLI policy.
+
+Explicit priced jobs, specialized photo-cabinet/character profiles and FAST keep
+their exact previous wire bytes. Canonical input digests and saved-job receipts
+are unchanged. Existing job recovery does not resubmit or re-route old jobs.
+No Oracle file, verification receipt, API model, rate/time limit, sandbox,
+financial policy, account balance, original building/MCC or saved model is changed.
+The update is in the Worker adapter; it requires no further Oracle installation.
+
+## Verification and count investigation
+
+The four new route regressions initially gave 1 pass / 3 failures against the
+original adapter. After restoration all four pass. Forty-four focused
+protocol/profile/manufacturing/one-use tests pass locally with no provider call.
+Four affected synthetic wire hashes changed by the single known header
+substitution; all seven original canonical input hashes remain unchanged.
+Five priced/specialized/FAST wire hashes remain byte-identical.
+
+An independent read of the exact reconstructed Oracle modules verified original
+STANDARD profile/context/completion guidance and USD 1.75 cap parity, with the
+routing decision different before Gateway creation and no job-state writes.
+The public pinned ancestor and MPC2 commit trees were reproduced from tracked
+source and verified commit objects, not installed customer data.
+
+The count-only native fixture probe in run
+[38002270919](https://github.com/teslaeco/WORLDIFACT/actions/runs/38002270919)
+returned HTTP 200 for all four exact public native requests: box construction
+10,280 tokens / inspection 13,582; globe construction 10,280 / inspection 14,494.
+Inspection used full text and three real 640x800 rendered images. All counts
+were within the existing phase bounds. No generation request was sent by that
+probe. These fixtures do NOT establish the precise cause of the earlier typed
+MCC count failure. No input limit was raised and no guessed tokenizer fallback
+or acceptance bypass was installed.
+
+The three completed probe/comparison workflow entrypoints are retired in this
+source commit. Original runs, artifacts, models and consumed approvals remain;
+no background paid continuation is configured. Full exact-head application and
+native CI plus a preserve-configuration Cloudflare release are pending at this
+source milestone. The current public version is still
+`7d88f9d7-0c32-413f-bcae-b6d0776b54f3` until its replacement is independently read.
+
+## Prior release and typed-path investigation (historical, not current default-route result)
+
+### Prior typed-path result
+
+Current operational evidence: 9 October 2026, 22:45 UTC.
+**NO-GO for claiming that production 3D generation is restored.**
+
+The owner explicitly approved the output-scope release and one test within the
+existing USD 1.75 cap, including failure. Duplicate chat approval was treated as
+one authorization. This current section supersedes earlier installation-pending
+or release-pending statements below; the remaining record is historical evidence.
+
+The exact application source `49a02609a3730976ec0744ecf01877d1fbf16859` was
+published by run 37999173987 as Cloudflare version
+`7d88f9d7-0c32-413f-bcae-b6d0776b54f3`. Its 12 HTML routes, 428 exact built assets
+and exclusive 100% traffic were verified at 22:28:38 UTC. The dedicated approved
+branch workflow omitted declared variables, used `--keep-vars`, retained original
+bindings/migrations and did not synchronize credentials or financial settings.
+Main remains `38e7048c4176fac4c9808203af5bd58a1ae7d10e`; no generic main release
+was invoked. The previous deployment ID is retained in the release artifact.
+
+The new public synthetic MCC test in run 37999751697 submitted exactly one job
+using the deployed Shop request adapter and the original authenticated Oracle.
+It returned `MODEL_FAILED`, not a deliverable. No customer point, hold, billing or
+library row was changed by this engineering test. It is not a signed-in browser
+or owned-library test. Its permanent approval tag is consumed; do not replay it,
+delete the tag/job, or run another paid attempt under this authorization. The
+maximum authorized provider cost was USD 1.75; actual invoiced cost is UNKNOWN.
+
+GET-only reads of this same synthetic test in runs 38000622694 and 38000867858
+confirmed a different boundary from the earlier empty-plan user report:
+
+- One Blender build reached candidate revision 1 with zero recorded tool failures.
+- Recorded total time: 227.53 seconds; AI: 113.44; Blender: 114.08.
+- The host recorded two request attempts, 11,261 input and 6,323 output tokens,
+  with `unknown_usage=false`. These counts are not an invoice or proof that both
+  attempts reached a billable generation endpoint.
+- Terminal detail: `construction_response_unconfirmed`; guard:
+  `WORLDIFACT_ASTRA_COST_GUARD`, reason `TOKEN_COUNT_UNAVAILABLE`, stage `count`.
+- Final assessment was not completed and no accepted final model was returned.
+
+The current typed Gateway wraps both a failed input-token-count call and a
+counted context/deadline/cancellation rejection into TOKEN_COUNT_UNAVAILABLE.
+Therefore this observation does NOT establish exhausted USD funds, a specific
+HTTP error, a too-large context, a 900-second deadline, or a provider outage.
+Do not remove the cost guard, fabricate an acceptance, relabel the preserved
+candidate as completed, or buy another trial to replace missing diagnostic data.
+The source review and retained same-job evidence, not another health check, are
+now the basis for the next correction. Source/CI success remains separate from
+new GLB, preview, download and account-library acceptance.
+
+Evidence artifact SHA-256 values:
+- Deployment: `6e716235c3355a53ac82ad758251b91bfb76b966146d66a2d87591a81a9e5490`
+- One-model report: `33be9b18d00de47d63a4fc716aa14d129c770391f7269d68186ea34ce6ecd431`
+- Same-job stage report: `80ffa88d6a2b6f1ad60c07ac9c38909b6a95fa842562b764bae7a679f95c37fa`
+- Count-guard reason: `2f8b62b6bfe0160adb296f831b192e29dfc85f7d46cf62c077dd1f9c7e901e2d`
+
+The completed one-off release/test/read workflow entrypoints are retired in the
+same evidence commit; their scripts, tests, runs, artifacts and consumed approval
+remain available. No production behavior is changed by this documentation cleanup.
+
+## Historical ledger (earlier claims are scoped to their recorded milestones)
 
 ## LOCAL REVIEW — paid membership points admission (7 October 2026)
 
@@ -1030,3 +1293,128 @@ requires separately approved grant refresh, status reconciliation and the genuin
 isolated installation gates. Publication, installation and a new paid acceptance
 test are not implied by these local results. See
 [the repair record](STANDARD_CONSTRUCTION_REPAIR_20261007.md).
+
+## Source correction — authenticated final-answer selection (9 October 2026)
+
+The owner's original-host read at approximately 16:55 UTC now confirms both
+user services active, local health HTTP 200, readiness true, connector 33 and the
+construction policy present. The reported Git blob fingerprints for
+construction_payload.py (`bfc80d6626932b30e1c2e1186c11f20f352f1516`),
+phased_controller.py (`bddb2d9c5159b4c52cbae8074832855fcabc4eab`) and
+runtime_controller.py (`6e8bdf205f7e044a677a59054e1d7cc99e9dae78`) match main
+`38e7048c4176fac4c9808203af5bd58a1ae7d10e`. The earlier unverified-installation
+hypothesis is not a sufficient diagnosis after this evidence. Independent public
+GETs at 17:02 UTC also returned READY through the website. Neither is a new-model
+test, but reinstalling the identical helpers is not a repair.
+
+A separate deterministic decoder defect was reproduced against those source
+bytes: a completed Responses envelope containing intermediate assistant
+`commentary` and one final typed answer was rejected as multiple answers. A lone
+commentary containing valid plan/verdict JSON was incorrectly accepted as final.
+The correction selects one explicit last `final_answer` when commentary exists,
+retains the original single-message absent/null-phase format, and rejects
+ambiguous, incomplete, refused or malformed messages. Commentary is never parsed
+as scene/edit/assessment data. Exact raw-response authentication and completed
+usage remain mandatory before selection; model, budgets, request limits,
+geometry validation and settlement are unchanged.
+
+The existing metadata fixture now uses final_answer rather than treating a
+commentary as final. Eight additional regression methods cover both directions,
+all three phases, unchanged original scene/edit bytes, conflicting intermediate
+acceptance, unknown phases and origin verification. The selected local parser,
+controller, budget and adapter suites passed **119 tests** without a network
+provider call. The native Blender fixture now includes intermediate commentary
+before every final plan/verdict. Full hosted source-lineage/native checks remain
+required and their exact commit results must be read independently.
+
+Official protocol: https://developers.openai.com/api/docs/guides/reasoning#phase-parameter
+
+This is a tested source-level compatibility correction, not a claim that the
+owner's latest failed job used this response shape. Its actual failure code and
+current account admission remain unverified. Historical manifests and the
+restricted original maintenance operation keep their old pins; this update is
+not permission to reuse that old operation for new bytes. Prospective package
+hashes bind the corrected code without weakening checks. No Oracle installation,
+restart, main merge, deployment, payment/point change or paid test was performed.
+Production restoration remains unverified until the actual request and a newly
+accepted original GLB are checked. Existing building/MCC originals are unchanged.
+
+## Decoder update delivery — 9 October 2026
+
+All six pull-request workflows on `71ccc84d4dca71a19e2ac3583c05a4563ce7e3a3`
+completed successfully, including construction run 37965169861's native Blender
+job and Verify WORLDIFACT run 37965169576. These results cover the decoder source
+correction, not a production installation or an accepted new paid model.
+
+The installation gap is now addressed with a separate explicit
+`--update-response-phase` mode. It requires the entire frozen already-installed
+initial-edit source map and its valid receipt chain. It writes only the decoder
+and the top construction receipt, preserving previous initial-edit evidence and
+all older receipts. Existing idle fences, four offline gates, rollback protection
+and activation checks remain required. The owner-run checksum-pinned launcher
+passes this new mode explicitly; retired modes and conflicting flags refuse.
+No implicit update, secret export, broader SSH grant, job cancellation, financial
+change or paid generation is introduced. New transaction regressions cover the
+exact two-file write set, permissions/history preservation, failures before and
+after writes, gate failures, active/cancelled work and ambiguous activation.
+
+The original restricted GitHub maintenance grant supports fixed historical
+operations, not arbitrary SSH commands. Its stored credentials are not missing
+by definition, but they do not authorize new source bytes without a reviewed
+grant update. No such grant or account change is made by this repair. The
+[installation handoff](RESPONSE_PHASE_INSTALL_20261009.md) uses the original
+owner's existing SSH connection instead. The new installation mode must pass
+its exact-head hosted tests before delivery; their outcome is recorded in the
+PR. No Oracle installation or production-restored claim is made by this commit.
+
+## Observed pre-build refusal and output-scope correction — 9 October 2026
+
+This supersedes the earlier statement that the failed-job exception was unknown.
+The owner supplied a redacted original-host read: `complete_scene_not_supported`,
+`WORLDIFACT_CONSTRUCTION_INCOMPLETE`, one request, known usage, a 1,800-second
+limit, and zero recorded Blender seconds. The decoder update had already been
+activated at 18:37:26 UTC. Do not reinstall it or infer a 900-second deadline,
+missing Blender method, invalid key, or failed provider transport from this read.
+No private identifiers, reference images or customer balances are copied here.
+
+In the exact installed decoder, this exception is emitted when the authenticated
+completed construction response contains an empty/whitespace `scene_json`.
+The planner explicitly permits this sentinel for an unsupported complete subject.
+The observed refusal remains legitimate to reject: it is not a completed model.
+The diagnostic does not disclose why the model chose to return that sentinel.
+
+A separate input-contract error was reproduced with the real
+`oracleStudioPayload`: ordinary game/globe, terrain, object and default figurine
+requests unconditionally received physical manufacturing requirements, including
+resin walls and process-specific splits/joints. The typed planner is required to
+satisfy the entire original brief and instructions. The same scoping issue was
+independently identified in Codex review 5475643326 on PR #245.
+
+The adapter now keeps units, dimensions, original references, digital validation
+and the prohibition on manufacturing-approval claims for every output. Extra
+physical process rules apply only to explicit fabrication hints in the original
+brief, not a model-kind label or the English verb "make". Direct no-print intent
+is respected for classification; the original prompt itself is never rewritten.
+Unrecognized intent does not grant MAKE approval. Real fabrication still needs
+its separate process-specific review. Standard completion, actual rendered-image
+review and rejection of unsupported/unfinished models are unchanged.
+
+Five new regression methods ran before the change: two passed and three failed.
+After the change, 32 focused protocol, profile, output-scope and manufacturing
+cases passed with no skipped cases. Original canonical input digests, image
+bytes/order, prices, request IDs and pricing selections are preserved. Seven
+synthetic Oracle wire hashes intentionally change because their instruction
+scope changed; the original input-hash fixtures were not altered. Existing
+manufacturing tests now distinguish explicit printable requests from digital
+ones instead of requiring the diagnosed incorrect unconditional rule.
+
+This is a tested request-contract correction, not proof of the AI's motivation
+or successful production generation. Full exact-head hosted verification remains
+required. No Oracle source, installer, secret, ledger, account/hold/settlement,
+price, model or asset was changed; no paid request or production deployment was
+performed. This adapter is bundled in the Worker, so its deployment is separate
+from the already-completed Oracle installation. Do not use a generic main merge
+that would resynchronize billing or overwrite live variables. Any eventual
+release must retain the existing exact-parent and preserve-billing controls.
+Production restoration remains unverified until a new real model, preview,
+download and owned-library save are observed under an approved bounded test.
