@@ -724,7 +724,7 @@ export const ADMIN_RELEASE_CONTENT = JSON.stringify({
 }, null, 2) + '\n'
 export const ADMIN_RELEASE_PATHS = Object.freeze([
   ADMIN_RELEASE_MARKER, 'scripts/select-pipeline-only-release.mjs',
-  'tests/admin-source-release.test.mjs', 'docs/CONTEST_STATUS.md',
+  'tests/admin-source-release.test.mjs', 'tests/pipeline-only-release.test.mjs', 'docs/CONTEST_STATUS.md',
 ].sort())
 const scopes = [
   { base: ADMIN_RELEASE_BASE, marker: ADMIN_RELEASE_MARKER, content: ADMIN_RELEASE_CONTENT, paths: ADMIN_RELEASE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
