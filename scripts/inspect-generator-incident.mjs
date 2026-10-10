@@ -10,7 +10,7 @@ export function evidence(health, job, quality) {
   const numeric = keys => Object.fromEntries(keys.map(key => [key, number(guard[key])]))
   return { readOnly: true, generationRequested: false,
     runtime: { ready: bool(health.ready), connectorVersion: number(health.connectorVersion),
-      construction: pick(health.worldifactConstructionPolicy, ['worldifact-standard-construction-v1']),
+      construction: pick(health.worldifactStandardConstructionPolicy, ['worldifact-standard-construction-v1']),
       context: pick(health.worldifactStandardContextPolicy, ['worldifact-standard-context-v1', 'worldifact-standard-context-v2']),
       tiers: pick(health.studioPricingRevision, ['studio-pricing-v1']),
       legacyCapUsd: health.astraBudgetMaxUsd === 1.75 ? 1.75 : null },
@@ -19,6 +19,11 @@ export function evidence(health, job, quality) {
       modelStatus: pick(job.modelStatus, ['draft', 'complete', 'ready']), hasModel: bool(quality.hasModel), finished: bool(quality.agent?.finished),
       requests: number(usage.requests), inputTokens: number(usage.input_tokens), outputTokens: number(usage.output_tokens),
       unknownUsage: bool(usage.unknown_usage),
+      tools: { total: number(quality.agentTools?.total_calls), failures: number(quality.agentTools?.failures), buildAttempts: number(quality.agentTools?.build_attempts), revision: number(quality.agentTools?.revision),
+        calls: (Array.isArray(quality.agentTools?.calls) ? quality.agentTools.calls.slice(-40) : []).map(call => ({
+          tool: pick(call.tool, ['get_modeling_contract', 'build_model', 'edit_model', 'get_current_model', 'inspect_render', 'finish_model', 'get_reference_photo']),
+          status: pick(call.status, ['started', 'succeeded', 'failed', 'ok']),
+          signals: ['scene_json', 'schema', 'parts', 'material', 'vertices', 'revision', 'timeout', 'contract', 'expected_revision', 'not found', 'unknown', 'invalid', 'Unexpected', 'required', 'parse', 'Nieprawid', 'code', 'missing'].filter(word => String(call.error ?? '').toLowerCase().includes(word.toLowerCase())) })) },
       guard: { reason: pick(guard.reason, ['INSUFFICIENT_RESERVATION', 'INPUT_LIMIT', 'REQUEST_LIMIT', 'LEDGER_INVALID', 'PRICING_EXPIRED']),
         stage: pick(guard.stage, ['admission', 'count', 'ledger', 'pricing']),
         ...numeric(['counted_input', 'input_ceiling', 'requested_output', 'minimum_output', 'affordable_output', 'remaining_micro_usd', 'required_minimum_micro_usd', 'requests', 'protected_remaining_micro_usd', 'protected_remaining_requests']) } } }
