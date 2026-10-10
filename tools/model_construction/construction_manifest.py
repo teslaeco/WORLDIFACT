@@ -66,7 +66,7 @@ def reviewed_sources(original):
 def reviewed_manifest(value):
     try:
         after = final_manifest()
-        return (value == EXPECTED or value == after or value == payload_predecessor()
+        return (value == EXPECTED or value == after or value == transport_manifest() or value == payload_predecessor()
                 or value == initial_edit_predecessor() or value == response_phase_predecessor())
     except ValueError:
         return False
@@ -172,4 +172,32 @@ def response_phase_changes(original, helpers):
     changed = {**original, **helpers}
     if {name: hashlib.sha256(value).hexdigest() for name, value in changed.items()} != final_manifest():
         raise ValueError('Response-phase update differs from frozen runtime manifest.')
+    return changed
+
+
+# Explicit transport repair release; historical modes retain their old maps.
+TRANSPORT_AFTER = {**EXPECTED_AFTER,
+    'blender_mcp.py': '54fa9734e848e9c8720e04ae8eddcc4c8a97546e3a64ef31c1bd88b37c317715',
+    'codex_runner.py': 'f3c9ce7ebcb629a823af0324c00a97bda35b63a99f15ff0804b6ea641c32c0bb',
+}
+
+def transport_manifest():
+    before, after = final_manifest(), TRANSPORT_AFTER
+    if (set(after) != health.SOURCES
+            or any(not isinstance(v, str) or re.fullmatch('[a-f0-9]{64}', v) is None for v in after.values())
+            or {n for n in before if before[n] != after[n]} != {'codex_runner.py', 'blender_mcp.py'}):
+        raise ValueError('Transport repair manifest is not frozen.')
+    return dict(after)
+
+def transport_changes(original):
+    if {n: hashlib.sha256(b).hexdigest() for n,b in original.items()} != final_manifest():
+        raise ValueError('Exact current construction runtime is required.')
+    from pathlib import Path
+    import sys
+    folder = Path(__file__).resolve().parent.parent / 'mcp_transport_repair'
+    if folder.is_dir(): sys.path.append(str(folder))
+    import repair
+    changed = {**original, **repair.patch_sources({n: original[n] for n in repair.EXPECTED})}
+    if {n: hashlib.sha256(b).hexdigest() for n,b in changed.items()} != transport_manifest():
+        raise ValueError('Transport repair differs from frozen release.')
     return changed

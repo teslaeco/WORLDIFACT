@@ -1,3 +1,119 @@
+# 10 October 2026 — verified Oracle MCP transport repair
+
+Owner-authorized Remote Desktop Commander reached Cloud Shell and the original
+administrative SSH identity successfully reached the known Oracle host with
+strict host checking. No SSH identity or grant was changed. The exact incident's
+`codex-events.jsonl` records one completed contract read followed by **16 failed
+build_model tool calls**, although `agent-tools.json` contains only the contract
+read. This supersedes the earlier implication that the AI simply spent all its
+turns planning: its build calls failed before the MCP tool recorder. The CLI was
+ephemeral; that log deliberately omits tool arguments and tool error details.
+The precise original transport failure cannot be recovered from these records.
+
+An isolated copy of the observed runtime reproduced the same logging pattern:
+a build request over 600,000 characters terminates the MCP process in `serve`,
+and subsequent calls return `Transport closed` without reaching its recorder.
+The execution-error parser misses this actual isError envelope, allowing further
+provider turns. This is a reproduced defect, not proof of the lost original
+payload's size. Source identity is pinned in `tools/mcp_transport_repair/repair.py`.
+
+The installed patch bounds framing at 4 MiB before reading an entire line, allowing
+the existing 256,000-character argument validator to report oversize scenes
+without closing the process. Argument/build/geometry/provider limits remain
+unchanged. It recognizes MCP error envelopes and stops provider admission when
+the transport is closed. Nine focused regression tests pass. A real CLI probe
+on the isolated patched copy returned the correct validation error, then handled
+the next request on the same MCP connection. These probes used scripted provider
+responses and no paid API. No original job was resumed, reset or overwritten.
+
+Production activation PASSED on 10 October at approximately 21:49 UTC.
+The explicit `--update-transport` transaction installed the final 4 MiB release
+from commit `496b8c9f2120346993720357c3f920a4e3e9f2ae`. It accepted the exact old
+runtime, preserved the original fence/guardian/activation/rollback semantics,
+created the private backup `standard-construction-20261010T214044Z-c3c80d53`, and
+completed all four genuine offline gates against the exact final source before
+writing the two runtime modules and eight bound receipts. The earlier 2 MiB
+stage was preliminary only; it was not substituted for these final gates.
+
+The completed transaction reports `WORLDIFACT_STANDARD_CONSTRUCTION_VERIFIED`,
+activation_committed=true, job_rows_changed=false, paid_generation_requested=false,
+and provider_limits_changed=false. An independent post-install read compared all
+14 runtime hashes against the frozen transport map, validated the complete local
+receipt/health chain, and read the public Worker-to-Oracle status. Local health:
+ready=true, codexReady=true, connectorVersion=33, standard maintenance=false,
+construction-v1 verified and Astra cap=$1.75. Public `/api/studio/status`:
+READY, CONNECTOR_READY, detailedReady=true, costGuardReady=true,
+outputPolicyReady=true, newJobPolicy=legacy-usd175-v1. The live database still has
+87 succeeded, 71 failed and 1 cancelled job; no live model was submitted,
+resumed, reset or cancelled. Existing prices, points, subscriptions, invoices,
+credentials, tunnel configuration and provider budget policy were not changed.
+
+The final repair recognizes failed MCP envelopes, preserves existing argument
+limits, and stops additional provider requests when the tool transport closes.
+The 4 MiB bounded frame covers worst-case JSON expansion of a maximum-sized
+256,000-character non-BMP string. Nine focused tests pass. Eight final transport
+transaction tests pass, including every before/after-write fault, byte-exact
+rollback, state/mode preservation, and refusal to retry ambiguous activation.
+Earlier complete update testing also passed 34 tests. The wider Cloud Shell suite
+recorded 285 tests with three failures and four skips (two pidfd capability
+assertions and one replacement-identity check). Both supported GitHub Python 3.9
+and 3.12 policy/transaction jobs passed on `2706ac2c390802a4ce6e54a850a4540c3684058c`.
+GitHub general verification, Worker, launcher and review checks also passed;
+its separate native-Blender job was still running at this checkpoint.
+Local web verification passed 2,135/2,137 tests, with two unavailable-Chromium
+checks; Worker dry-run and diff checks passed.
+
+Source and installation evidence are in PR #251. Only the Oracle repair has been
+activated; no Cloudflare release was necessary or performed. No paid provider was
+called. The real offline gates prove CLI/MCP/Blender construction, revisions,
+inspection, rendering and export with scripted provider replies; they do not
+prove a new successful live Astra Earth model, its visual quality, or its account
+library publication. The original lost payload size remains unknown. Do not
+retry installation or reset the failed original request to manufacture that proof.
+
+# 10 October 2026 — earlier API-only incident observations
+
+The owner requested repair after a new `MODEL_BUDGET_EXCEEDED` result. Three
+GET-only incident inspections ran through the existing authenticated Oracle API:
+38081552531, 38081674367 and 38081737366. They did not submit, resume or cancel a
+model, seal a budget, or mutate points, accounts, prices or deployment settings.
+The reader publishes fixed numeric/enum evidence, never the prompt, credentials,
+original images, generated programs or arbitrary upstream diagnostics.
+
+The terminal incident has no final model, zero recorded Blender build attempts,
+revision zero, one completed MCP contract read, no recorded MCP failures, and
+17 recorded Code Mode calls without detected code errors. The usage report counts
+18 request attempts, 351837 input tokens and 5810 output tokens, with unknown
+usage false. Request-attempt counts do not prove every request was billable.
+The guard retained 434180 micro-USD of capacity and needed 464222 for its next
+minimum reservation (23065 counted input tokens, 2048 minimum output tokens).
+These figures describe reservation bounds, not the provider invoice.
+
+The initial inspection used an incorrect construction-health property name;
+its UNKNOWN construction value is superseded by the second and third readers.
+The correctly named health field confirms worldifact-standard-construction-v1,
+alongside standard-context-v2 and studio-pricing-v1. Public Shop status still
+selects legacy-usd175-v1 and reports tiersReady=false. The current request used
+the supervised route; this incident does not establish a missing installation.
+
+The evidence narrows the failure to pre-build execution without establishing
+what each successful Code Mode call computed. The API exposes aggregate tool
+and error records but not codex-events.jsonl. The available remote device list
+is empty. The restricted maintenance grant is not arbitrary shell access and
+was not expanded or repurposed. Do not increase the cap, switch to the previously
+failed typed route, retry the paid job, or claim generation is fixed from these
+read-only observations. The next required evidence is the exact job's original
+Codex event log, read through authorized host access.
+
+The incident reader's three focused tests passed locally and on the hosted
+runner. Local full verification recorded 2133/2137 passing tests: two existing
+subprocess timeout assertions failed under load and two Chromium tests could
+not run because Chromium was unavailable. Build and Worker dry-run passed.
+No runtime correction or production release was performed. A new accepted GLB,
+preview, download and owned-library save remain unverified.
+
+---
+
 # 10 October 2026 — approved forfeiture of four failed-request holds
 
 The owner explicitly confirmed removing 1,000 held points without refund and
