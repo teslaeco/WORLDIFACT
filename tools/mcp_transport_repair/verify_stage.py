@@ -11,7 +11,7 @@ import sys
 import repair
 
 
-def main(package, source, workspace):
+def main(package, source, workspace, resume=False):
     package, source, workspace = map(Path, (package, source, workspace))
     sys.path.insert(0, str(package))
     import install_construction as installer
@@ -19,10 +19,22 @@ def main(package, source, workspace):
     installer.frozen_dependencies()
     originals = {name: base.read_regular(source / name) for name in repair.EXPECTED}
     patched = repair.patch_sources(originals)
-    workspace.mkdir(mode=0o700, exist_ok=False)
     stage = workspace / 'runtime'
-    copied = legacy.stage_runtime(source, stage, patched, {})
-    (workspace / 'copied-source.json').write_text(json.dumps(copied, sort_keys=True))
+    if resume:
+        base.safe_path(workspace)
+        copied = json.loads(base.read_regular(workspace / 'copied-source.json', 65536))
+        for name, digest in copied.items():
+            maximum = 300 * 1024**2 if name in installer.EXECUTABLE_FILES else 2 * 1024**2
+            if installer.digest(base.read_regular(source / name, maximum)) != digest:
+                raise ValueError('Production source changed since stage creation')
+            if base.read_regular(stage / name, maximum) != patched.get(name, base.read_regular(source / name, maximum)):
+                raise ValueError('Staged dependency changed')
+    else:
+        workspace.mkdir(mode=0o700, exist_ok=False)
+        copied = legacy.stage_runtime(source, stage, patched, {})
+        (workspace / 'copied-source.json').write_text(json.dumps(copied, sort_keys=True))
+    if {n: installer.digest(base.read_regular(stage / n)) for n in installer.policy.SOURCES} != installer.manifest.transport_manifest():
+        raise ValueError('Exact transport release is required')
 
     def fresh_state():
         state = stage / 'state'
@@ -30,9 +42,12 @@ def main(package, source, workspace):
         with sqlite3.connect(state / 'jobs.sqlite') as db:
             db.execute('CREATE TABLE jobs (id TEXT PRIMARY KEY, prompt TEXT NOT NULL, state TEXT NOT NULL, detail TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL)')
 
-    fresh_state()
-    generic = legacy.install_completion.Operations(stage, Path.home())
-    generic.verify(workspace)
+    if not resume:
+        fresh_state()
+        generic = legacy.install_completion.Operations(stage, Path.home())
+        generic.verify(workspace)
+    elif 'ASTRA_GUARD_OFFLINE_ROUNDTRIP_OK' not in base.read_regular(workspace / 'offline-verification.log', 1048576).decode():
+        raise ValueError('Completed original generic gate evidence is required')
     if not base.receipt_matches(stage):
         raise ValueError('Generic real Blender gate did not bind the source')
     generic_receipt = base.read_regular(stage / base.RECEIPT, 16384)
@@ -70,9 +85,9 @@ def main(package, source, workspace):
         if code != 0 or marker not in base.read_regular(log, 1048576).decode():
             raise ValueError('Offline gate failed: ' + name)
         if name == 'offline_construction.py':
-            installer.validate_phased_evidence(base.read_regular(proof / 'phased-standard-evidence.json', 65536))
+            installer.validate_phased_evidence(base.read_regular(proof / 'phased-standard-evidence.json', 65536), transport=True)
         elif name == 'offline_legacy_standard.py':
-            installer.validate_legacy_evidence(base.read_regular(proof / 'legacy-standard-evidence.json', 65536))
+            installer.validate_legacy_evidence(base.read_regular(proof / 'legacy-standard-evidence.json', 65536), transport=True)
         if (stage / 'state').exists():
             shutil.rmtree(stage / 'state')
         if base.read_regular(stage / base.RECEIPT, 16384) != generic_receipt:
@@ -94,4 +109,4 @@ def main(package, source, workspace):
 
 
 if __name__ == '__main__':
-    main(*sys.argv[1:])
+    main(*sys.argv[1:4], resume=sys.argv[4:] == ['--resume'])

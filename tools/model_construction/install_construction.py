@@ -50,6 +50,7 @@ RECEIPTS = policy.CHAIN_RECEIPTS
 NEW_FILES = policy.RUNTIME_HELPERS | {policy.RECEIPT}
 WRITES = manifest.MODIFIED | NEW_FILES | RECEIPTS
 INITIAL_EDIT_WRITES = manifest.INITIAL_EDIT_HELPERS | {policy.RECEIPT}
+TRANSPORT_WRITES = frozenset(('codex_runner.py', 'blender_mcp.py', policy.RECEIPT)) | RECEIPTS
 RESPONSE_PHASE_WRITES = manifest.RESPONSE_PHASE_HELPERS | {policy.RECEIPT}
 EXECUTABLE_FILES = frozenset(('tools/codex/codex', 'tools/codex/codex-code-mode-host',
                               'tools/codex/codex-binary.json', 'tools/codex/code-mode-host.json'))
@@ -261,21 +262,27 @@ def original_sources(source):
     return original
 
 
-def installed_sources(source, *, response_phase=False):
+def installed_sources(source, *, response_phase=False, transport=False):
     original = {name: base.read_regular(source / name) for name in policy.SOURCES}
-    (manifest.reviewed_response_phase_sources if response_phase else manifest.reviewed_installed_sources)(original)
+    if transport:
+        if {n: digest(b) for n,b in original.items()} != manifest.final_manifest():
+            raise Refused('transport_predecessor_refused')
+    else:
+        (manifest.reviewed_response_phase_sources if response_phase else manifest.reviewed_installed_sources)(original)
     return original
 
 
-def installed_predecessor(response_phase=False):
+def installed_predecessor(response_phase=False, transport=False):
+    if transport: return manifest.final_manifest()
     return manifest.response_phase_predecessor() if response_phase else manifest.initial_edit_predecessor()
 
 
-def validate_installed_receipts(source, original, *, response_phase=False):
-    (manifest.reviewed_response_phase_sources if response_phase else manifest.reviewed_installed_sources)(
-        {name: original[name] for name in policy.SOURCES})
+def validate_installed_receipts(source, original, *, response_phase=False, transport=False):
+    expected = installed_predecessor(response_phase, transport)
+    if {n: digest(original[n]) for n in policy.SOURCES} != expected:
+        raise Refused('installed_construction_source_refused')
     proof = policy._json(base.read_regular(source / policy.RECEIPT, 16384))
-    if (proof.get('sha256') != installed_predecessor(response_phase)
+    if (proof.get('sha256') != expected
             or any(proof.get(gate) is not True for gate in REQUIRED_GATES)
             or policy.verified_health(source) != {'worldifactStandardConstructionPolicy': policy.REVISION}):
         raise Refused('installed_construction_receipt_refused')
@@ -305,13 +312,13 @@ class GateEvidence:
     gates: frozenset
 
 
-def verified_gate_hashes(changed, evidence):
+def verified_gate_hashes(changed, evidence, *, transport=False):
     if (not isinstance(evidence, GateEvidence) or evidence.gates != REQUIRED_GATES
             or type(evidence.generic_receipt) is not bytes
             or not 0 < len(evidence.generic_receipt) <= 16384):
         raise Refused('complete_pipeline_evidence_required')
     hashes = {name: digest(raw) for name, raw in changed.items()}
-    if hashes != manifest.final_manifest():
+    if hashes != (manifest.transport_manifest() if transport else manifest.final_manifest()):
         raise Refused('frozen_source_identity_required')
     generic = policy._json(evidence.generic_receipt)
     if (generic.get('sources') != {name: hashes[name] for name in ('codex_runner.py', 'blender_mcp.py')}
@@ -336,8 +343,8 @@ def initial_edit_update_receipt(original, changed, evidence, allow_cancelled_cle
     return {policy.RECEIPT: encoded(proof)}
 
 
-def rebound_receipts(original, changed, evidence, allow_cancelled_cleanup):
-    hashes = verified_gate_hashes(changed, evidence)
+def rebound_receipts(original, changed, evidence, allow_cancelled_cleanup, *, transport=False):
+    hashes = verified_gate_hashes(changed, evidence, transport=transport)
     receipts = {policy.GENERIC_RECEIPT: evidence.generic_receipt}
     for name, (_revision, coverage) in policy.CHAIN_LAYOUT.items():
         proof = policy._json(original[name])
@@ -359,6 +366,9 @@ def rebound_receipts(original, changed, evidence, allow_cancelled_cleanup):
              'maintenance_fence': policy.FENCE_REVISION,
              'cancelled_cleanup_interruption_approved': allow_cancelled_cleanup,
              **{gate: True for gate in REQUIRED_GATES}}
+    if transport:
+        proof['transport_repair'] = {'revision': 'mcp-bounded-framing-v1',
+            'previous_construction_receipt_sha256': digest(original[policy.RECEIPT])}
     receipts[policy.RECEIPT] = encoded(proof)
     return receipts
 
@@ -377,7 +387,7 @@ def frozen_dependencies():
             raise Refused('construction_gate_changed')
 
 
-def validate_phased_evidence(raw):
+def validate_phased_evidence(raw, *, transport=False):
     """Bind the distinct real Podman witness, never a native/marker-only pass."""
     value = policy._json(raw)
     true_flags = {'isolated_podman_execution_verified', 'provider_fixture',
@@ -389,7 +399,7 @@ def validate_phased_evidence(raw):
         if not condition:
             raise Refused('phased_pipeline_evidence_unverified')
     require(set(value) == keys and value.get('revision') == policy.REVISION
-            and value.get('source_sha256') == manifest.final_manifest()
+            and value.get('source_sha256') == (manifest.transport_manifest() if transport else manifest.final_manifest())
             and all(value.get(key) is True for key in true_flags)
             and all(value.get(key) is False for key in false_flags))
     cases = value.get('cases')
@@ -456,7 +466,7 @@ def validate_phased_evidence(raw):
     return value
 
 
-def validate_legacy_evidence(raw):
+def validate_legacy_evidence(raw, *, transport=False):
     """Require the unchanged CLI gate with immutable synthetic tier terms."""
     value = policy._json(raw)
     true_flags = {'schema_verified', 'actual_images_verified', 'provider_fixture',
@@ -466,7 +476,7 @@ def validate_legacy_evidence(raw):
     fields = {'execution_id', 'terms', 'immutable_terms_sha256', 'ledger_cap_micro_usd',
               'ledger_policy_revision', 'requests', 'counts', 'scripted_exec_phases',
               'wait_responses', 'original_gate_sha256', 'source_sha256'} | true_flags | false_flags
-    if (set(value) != fields or value.get('source_sha256') != manifest.final_manifest()
+    if (set(value) != fields or value.get('source_sha256') != (manifest.transport_manifest() if transport else manifest.final_manifest())
             or not all(value.get(key) is True for key in true_flags)
             or not all(value.get(key) is False for key in false_flags)
             or not isinstance(value.get('execution_id'), str)
@@ -494,18 +504,19 @@ class Operations(legacy.Operations):
             raise Refused('unsupported_target')
         if self.source != self.home / 'froge-connector' or time.time() >= cache.legacy.VALID_UNTIL:
             raise Refused('source_or_pricing_review_refused')
+        transport = getattr(self, 'update_transport', False)
         response_phase = getattr(self, 'update_response_phase', False)
-        update = getattr(self, 'update_initial_edit', False) or response_phase
-        original = installed_sources(self.source, response_phase=response_phase) if update else original_sources(self.source)
+        update = getattr(self, 'update_initial_edit', False) or response_phase or transport
+        original = installed_sources(self.source, response_phase=response_phase, transport=transport) if update else original_sources(self.source)
         self.source_variant = 'PRICING'
-        self.expected_source_sha256 = installed_predecessor(response_phase) if update else dict(manifest.EXPECTED)
+        self.expected_source_sha256 = installed_predecessor(response_phase, transport) if update else dict(manifest.EXPECTED)
         if (not legacy.studio_pricing.verified_health(self.source)
                 or not legacy.terminal_budget.verified_health(self.source)
                 or legacy.studio_pricing.maintenance_active(self.source)
                 or legacy.terminal_budget.maintenance_active(self.source)):
             raise Refused('existing_pricing_receipt_refused')
         if update:
-            validate_installed_receipts(self.source, original, response_phase=response_phase)
+            validate_installed_receipts(self.source, original, response_phase=response_phase, transport=transport)
         else:
             validate_receipts(self.source, original)
         if not legacy.prebuild_policy.verified_health(self.source) or not base.receipt_matches(self.source):
@@ -597,9 +608,9 @@ class Operations(legacy.Operations):
             if marker not in base.read_regular(log, 1048576).decode():
                 raise Refused('construction_pipeline_unverified')
             if name == 'offline_construction.py':
-                validate_phased_evidence(base.read_regular(gate_workspace / 'phased-standard-evidence.json', 65536))
+                validate_phased_evidence(base.read_regular(gate_workspace / 'phased-standard-evidence.json', 65536), transport=getattr(self, 'update_transport', False))
             elif name == 'offline_legacy_standard.py':
-                validate_legacy_evidence(base.read_regular(gate_workspace / 'legacy-standard-evidence.json', 65536))
+                validate_legacy_evidence(base.read_regular(gate_workspace / 'legacy-standard-evidence.json', 65536), transport=getattr(self, 'update_transport', False))
             lease.assert_no_work()
             # Some historical verifiers remove their job, leaving empty state.
             # This is wholly synthetic; no live state was ever staged.
@@ -628,15 +639,16 @@ class Operations(legacy.Operations):
             raise Refused('construction_health_unverified')
 
     def previous_health(self):
+        transport = getattr(self, 'update_transport', False)
         response_phase = getattr(self, 'update_response_phase', False)
-        if getattr(self, 'update_initial_edit', False) or response_phase:
-            validate_installed_receipts(self.source, installed_sources(self.source, response_phase=response_phase),
-                                        response_phase=response_phase)
+        if getattr(self, 'update_initial_edit', False) or response_phase or transport:
+            validate_installed_receipts(self.source, installed_sources(self.source, response_phase=response_phase, transport=transport),
+                                        response_phase=response_phase, transport=transport)
             return self.context_health()
         return legacy.Operations.context_health(self, revision=legacy.policy.REVISION)
 
 
-def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False, update_response_phase=False):
+def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False, update_response_phase=False, update_transport=False):
     if approved is not True:
         raise Refused('maintenance_approval_required')
     if type(allow_cancelled_cleanup) is not bool:
@@ -651,16 +663,20 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
         raise Refused('initial_edit_update_mode_invalid')
     if type(update_response_phase) is not bool:
         raise Refused('response_phase_update_mode_invalid')
-    if sum((update_payload, update_initial_edit, update_response_phase)) > 1:
+    if type(update_transport) is not bool:
+        raise Refused('transport_update_mode_invalid')
+    if sum((update_payload, update_initial_edit, update_response_phase, update_transport)) > 1:
         raise Refused('conflicting_update_modes')
     if update_payload:
         raise Refused('payload_update_requires_historical_package')
     manifest.final_manifest()  # Before target reads, directories or service work.
-    update = update_initial_edit or update_response_phase
+    if update_transport: manifest.transport_manifest()
+    update = update_initial_edit or update_response_phase or update_transport
     if update:
-        installed_predecessor(update_response_phase)
+        installed_predecessor(update_response_phase, update_transport)
     absent = frozenset() if update else NEW_FILES
-    writes = RESPONSE_PHASE_WRITES if update_response_phase else INITIAL_EDIT_WRITES if update_initial_edit else WRITES
+    writes = TRANSPORT_WRITES if update_transport else RESPONSE_PHASE_WRITES if update_response_phase else INITIAL_EDIT_WRITES if update_initial_edit else WRITES
+    operations.update_transport = update_transport
     operations.update_initial_edit = update_initial_edit
     operations.update_response_phase = update_response_phase
     legacy.check_container_environment()
@@ -673,10 +689,12 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
         raise Refused('maintenance_already_present')
     assert_absent(source, absent)
     operations.preflight()
-    original = installed_sources(source, response_phase=update_response_phase) if update else original_sources(source)
+    original = installed_sources(source, response_phase=update_response_phase, transport=update_transport) if update else original_sources(source)
     operations.source_variant = 'PRICING'
-    operations.expected_source_sha256 = installed_predecessor(update_response_phase) if update else dict(manifest.EXPECTED)
-    if update:
+    operations.expected_source_sha256 = installed_predecessor(update_response_phase, update_transport) if update else dict(manifest.EXPECTED)
+    if update_transport:
+        changed = manifest.transport_changes(original)
+    elif update:
         names = manifest.RESPONSE_PHASE_HELPERS if update_response_phase else manifest.INITIAL_EDIT_HELPERS
         helpers = {name: base.read_regular(HERE / name) for name in names}
         changed = (manifest.response_phase_changes if update_response_phase else manifest.initial_edit_changes)(original, helpers)
@@ -686,7 +704,7 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
     patched = {name: raw for name, raw in changed.items() if original.get(name) != raw}
     original.update({name: base.read_regular(source / name, 16384) for name in RECEIPTS | ({policy.RECEIPT} if update else set())})
     if update:
-        validate_installed_receipts(source, original, response_phase=update_response_phase)
+        validate_installed_receipts(source, original, response_phase=update_response_phase, transport=update_transport)
     else:
         validate_receipts(source, original)
     original_inventory = code_inventory(source)
@@ -725,7 +743,10 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
             assert_absent(source, absent)
             if any(base.read_regular(stage / name) != raw for name, raw in changed.items()):
                 raise Refused('verification_changed_source')
-            if update:
+            if update_transport:
+                receipts = rebound_receipts(original, changed, evidence, allow_cancelled_cleanup, transport=True)
+                staged_receipts = receipts
+            elif update:
                 receipts = initial_edit_update_receipt(original, changed, evidence, allow_cancelled_cleanup,
                                                        response_phase=update_response_phase)
                 witness = 'RESPONSE_PHASE_UPDATE_GENERIC_EVIDENCE.json' if update_response_phase else 'INITIAL_EDIT_UPDATE_GENERIC_EVIDENCE.json'
@@ -823,6 +844,7 @@ def main(argv=None):
     updates.add_argument('--update-payload', action='store_true')
     updates.add_argument('--update-initial-edit', action='store_true')
     updates.add_argument('--update-response-phase', action='store_true')
+    updates.add_argument('--update-transport', action='store_true')
     parser.add_argument('--allow-cancelled-cleanup', action='store_true')
     parser.add_argument('--expected-cancelled-job')
     args = parser.parse_args(argv)
@@ -837,8 +859,8 @@ def main(argv=None):
     if args.update_payload:
         raise Refused('payload_update_requires_historical_package')
     manifest.final_manifest()
-    if args.update_initial_edit or args.update_response_phase:
-        installed_predecessor(args.update_response_phase)
+    if args.update_initial_edit or args.update_response_phase or args.update_transport:
+        installed_predecessor(args.update_response_phase, args.update_transport)
     frozen_dependencies()
     def interrupted(*_):
         raise KeyboardInterrupt('Maintenance interrupted; preserve verified source.')
@@ -858,7 +880,7 @@ def main(argv=None):
         value = install(source, workspace, Operations(source, home), approved=True,
                         allow_cancelled_cleanup=args.allow_cancelled_cleanup,
                         expected_cancelled_job=args.expected_cancelled_job, update_initial_edit=args.update_initial_edit,
-                        update_response_phase=args.update_response_phase)
+                        update_response_phase=args.update_response_phase, update_transport=args.update_transport)
         print(json.dumps(value, sort_keys=True))
         return value
 

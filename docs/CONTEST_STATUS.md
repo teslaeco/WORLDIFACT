@@ -17,7 +17,7 @@ The execution-error parser misses this actual isError envelope, allowing further
 provider turns. This is a reproduced defect, not proof of the lost original
 payload's size. Source identity is pinned in `tools/mcp_transport_repair/repair.py`.
 
-The staged patch bounds framing at 2 MiB before reading an entire line, allowing
+The final candidate bounds framing at 4 MiB before reading an entire line, allowing
 the existing 256,000-character argument validator to report oversize scenes
 without closing the process. Argument/build/geometry/provider limits remain
 unchanged. It recognizes MCP error envelopes and stops provider admission when
@@ -26,19 +26,47 @@ on the isolated patched copy returned the correct validation error, then handled
 the next request on the same MCP connection. These probes used scripted provider
 responses and no paid API. No original job was resumed, reset or overwritten.
 
-Full unchanged offline construction gates were started in a separate stateless
-stage. Remote calls stopped responding before their result could be read; their
-outcome and cleanup are UNKNOWN and must be reconciled before rerunning them.
-No production source, receipt, service, deployment, account, price or balance was
-changed. The repair is NOT installed and successful AI generation remains
-unverified. Do not manufacture updated integrity receipts without completed gates.
-Local full verification passed 2,135/2,137 tests; the two browser tests remain
-blocked by unavailable Chromium. Worker dry-run passed. The isolated gate runner
-is a verification utility, not an installation or service-maintenance command.
+The original isolated generic Codex/MCP/Blender gate completed successfully:
+real GLB, texture, three renders, FBX, execution-error recovery and guard fixture
+checks passed; its actual source-bound generic receipt matches. The original
+controller was no longer running after reconnect. Its recorded source inventory
+still matched production. The remaining unchanged gates were resumed from that
+attested stage: cabinet and original CLI STANDARD both passed. The phased
+construction gate started; its result and cleanup remain UNKNOWN after a second
+loss of remote responses. No paid provider was contacted.
 
-Continuation: reconnect the existing device, reconcile the running gate and its
-logs, verify source/receipt identities, and prepare the reviewed idle-only
-backup/activation/rollback transaction before any production write.
+Added an explicit `--update-transport` mode to the existing construction installer.
+It accepts only the current complete source manifest and the separately frozen
+transport release, preserves the original fence/guardian/activation/rollback
+transaction, and binds all eight affected receipts only after all four genuine
+offline gates. It does not expand or use the restricted SSH maintenance grant.
+The historical modes retain their source maps. The original admin SSH identity
+is the authorized installation path; no grant or credential has been changed.
+On the isolated Cloud Shell checkout with exact public ancestor dependencies,
+all 34 update tests passed, including eight transport transaction tests: every
+write failure before/after effect restores prior bytes, ambiguous activation
+never rolls back/retries, and jobs/state/payment data are preserved.
+
+After those runs, the framing allowance was refined from 2 MiB to 4 MiB to cover
+the worst-case JSON escaping of 256,000 non-BMP Unicode characters. The nine
+focused tests pass for that final source. The 2 MiB stage is preliminary evidence,
+not verification of the final 4 MiB release. A remote upload/retest of the final
+release was attempted, but returned no result before the connection stopped.
+Its outcome is UNKNOWN; reconcile the isolated review checkout and test log
+before repeating. The production installer has NOT been invoked. Final source
+hashes are compiled in `construction_manifest.TRANSPORT_AFTER`.
+
+No production source, receipt, service, deployment, account, price or balance was
+changed. The repair is NOT installed and successful live AI generation remains
+unverified. Local full verification again passed 2,135/2,137 tests; the same two
+browser tests lack Chromium. Worker dry-run and diff checks passed.
+
+Continuation: reconnect the authorized device, read the phased gate and final
+transaction test logs, reconcile leftover test processes, then use the explicit
+transport installation transaction. All four gates must verify the final bytes
+again before production publication; earlier 2 MiB receipts cannot substitute.
+Do not repeat a lost-acknowledgment installation, mutate original jobs/budgets,
+manufacture receipts, or infer a successful paid Earth model from these fixtures.
 
 # 10 October 2026 — earlier API-only incident observations
 
