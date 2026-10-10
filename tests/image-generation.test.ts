@@ -112,6 +112,7 @@ test('public API scopes image metadata/downloads to verified account and rejects
   const request = (path: string, data?: unknown, who = 'alice', extra = {}) => imageApi(new Request('https://worldifact.test/api/images' + path, {
     method: data ? 'POST' : 'GET', headers: { Cookie: `__Host-worldifact-access=${who}-token`, Origin: 'https://worldifact.test', 'Content-Type': 'application/json', ...extra }, body: data ? JSON.stringify(data) : undefined,
   }), apiEnv, auth)
+  assert.equal((await request('', body, ''))!.status, 401)
   assert.equal((await request('', body))!.status, 200)
   assert.equal((await request('/' + body.id, undefined, 'bob'))!.status, 404)
   assert.equal((await request('/' + body.id + '/file', undefined, 'bob'))!.status, 404)

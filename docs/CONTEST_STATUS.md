@@ -1552,3 +1552,12 @@ manifest size and SHA-256; no external fetch was needed for that preparation.
 Browser/device testing remains blocked by the recorded browser restriction.
 Final full-check, provider-access and deployment outcomes belong in the PR;
 this source change alone does not claim successful paid image generation.
+
+Image source validation: 2142 of 2144 local tests passed; the only failures were
+the existing native Chromium tests because Chromium is absent. Lint/typecheck,
+local HTTP smoke, production build, base Worker dry-run, preserving-config
+Worker dry-run and the complete exact-parent release fixture passed. Hosted
+GET-only model-access run 38094125542 verified both exact model IDs with the
+existing production secret; it generated no image. The deployment follow-up
+workflow checks image status/25-point terms and the anonymous library 401 using
+public GETs only. A successful model metadata lookup is not a paid image test.
