@@ -19,6 +19,9 @@ export function evidence(health, job, quality) {
       modelStatus: pick(job.modelStatus, ['draft', 'complete', 'ready']), hasModel: bool(quality.hasModel), finished: bool(quality.agent?.finished),
       requests: number(usage.requests), inputTokens: number(usage.input_tokens), outputTokens: number(usage.output_tokens),
       unknownUsage: bool(usage.unknown_usage),
+      execution: { failedCalls: number(quality.agentExecution?.failed_calls), calls: (Array.isArray(quality.agentExecution?.calls) ? quality.agentExecution.calls.slice(-40) : []).map(call => ({ request: number(call.request), errors: (Array.isArray(call.errors) ? call.errors : []).map(error => ({
+        type: pick(String(error).match(/(ReferenceError|TypeError|SyntaxError|RangeError|Error):/)?.[1], ['ReferenceError', 'TypeError', 'SyntaxError', 'RangeError', 'Error']),
+        signals: ['is not defined', 'is not a function', 'Cannot read properties', 'Unexpected token', 'Unexpected end', 'already been declared', 'JSON', 'load', 'store', 'contract', 'scene', 'schema', 'properties', 'parts', 'tools', 'undefined', 'null'].filter(word => String(error).includes(word)) })) })) },
       tools: { total: number(quality.agentTools?.total_calls), failures: number(quality.agentTools?.failures), buildAttempts: number(quality.agentTools?.build_attempts), revision: number(quality.agentTools?.revision),
         calls: (Array.isArray(quality.agentTools?.calls) ? quality.agentTools.calls.slice(-40) : []).map(call => ({
           tool: pick(call.tool, ['get_modeling_contract', 'build_model', 'edit_model', 'get_current_model', 'inspect_render', 'finish_model', 'get_reference_photo']),

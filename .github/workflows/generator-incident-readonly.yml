@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 24
       - name: Verify reviewed GET-only reader
-        run: echo "b3ca68aa56a1a0b52e58c4e96dae35c42d8a610629e4a90e44c4d1a7a9841182  scripts/inspect-generator-incident.mjs" | sha256sum -c -
+        run: echo "5436e8fa0136d70e482f5e6092686f4fc6a66181d9c607db9d4c3d4e2f57f6c0  scripts/inspect-generator-incident.mjs" | sha256sum -c -
       - run: node --test tests/generator-incident.test.mjs
       - name: Read fixed failed job and sanitized cost evidence
         run: node scripts/inspect-generator-incident.mjs
