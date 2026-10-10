@@ -1,0 +1,10 @@
+{
+  "release": "admin-source-only-20261010",
+  "baseCommit": "1694538491240d7817715e786242b6a9100c6546",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "activateAdmin": false,
+  "activatePromotions": false,
+  "paidGeneration": false
+}

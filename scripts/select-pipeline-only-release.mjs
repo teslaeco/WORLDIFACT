@@ -713,7 +713,21 @@ const releaseIntroductions = new Set([
   'tests/astra-project-budget.test.ts',
   'tests/studio-project-budget.test.ts',
 ])
+// Owner-approved source-only publication of merged PR #246. Reuse the existing
+// AI Shop preserving transport; this flag selects config/GET checks, not privileges.
+export const ADMIN_RELEASE_BASE = '1694538491240d7817715e786242b6a9100c6546'
+export const ADMIN_RELEASE_MARKER = 'ops/ADMIN_SOURCE_RELEASE_20261010.json'
+export const ADMIN_RELEASE_CONTENT = JSON.stringify({
+  release: 'admin-source-only-20261010', baseCommit: ADMIN_RELEASE_BASE,
+  preserveBilling: true, preserveRemoteVars: true, preserveSecrets: true,
+  activateAdmin: false, activatePromotions: false, paidGeneration: false,
+}, null, 2) + '\n'
+export const ADMIN_RELEASE_PATHS = Object.freeze([
+  ADMIN_RELEASE_MARKER, 'scripts/select-pipeline-only-release.mjs',
+  'tests/admin-source-release.test.mjs', 'docs/CONTEST_STATUS.md',
+].sort())
 const scopes = [
+  { base: ADMIN_RELEASE_BASE, marker: ADMIN_RELEASE_MARKER, content: ADMIN_RELEASE_CONTENT, paths: ADMIN_RELEASE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: AI_SHOP_UI_BASE_COMMIT, marker: AI_SHOP_UI_MARKER_PATH, content: AI_SHOP_UI_MARKER_CONTENT, paths: AI_SHOP_UI_REVIEWED_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: PAID_POINTS_ADMISSION_BASE_COMMIT, marker: PAID_POINTS_ADMISSION_MARKER_PATH, content: PAID_POINTS_ADMISSION_MARKER_CONTENT, paths: PAID_POINTS_ADMISSION_REVIEWED_PATHS, preserveRemoteVars: true, paidPointsAdmission: true, singleParent: true },
   { base: BOUNDED_SOFTWARE_PREVIEW_BASE_COMMIT, marker: BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH, content: BOUNDED_SOFTWARE_PREVIEW_MARKER_CONTENT, paths: BOUNDED_SOFTWARE_PREVIEW_REVIEWED_PATHS, preserveRemoteVars: true, boundedSoftwarePreview: true, singleParent: true },
@@ -788,7 +802,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {
@@ -826,6 +840,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     if (process.argv.length !== 2) refuse()
     const options = selectPipelineReleaseOptions()
+    // Unscoped publication must never fall through to secret/billing synchronization.
+    if (!options.preserveBilling || !options.preserveRemoteVars) refuse()
     console.log(`preserve_billing=${options.preserveBilling}\npreserve_remote_vars=${options.preserveRemoteVars}`)
     if (options.compatibleMccRollback) console.log('compatible_mcc_rollback=true')
     if (options.subscriptionUpgradeRepair) console.log('subscription_upgrade_repair=true')
