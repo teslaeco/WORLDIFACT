@@ -1,3 +1,31 @@
+# 10 October 2026 — owner entitlement and tester redemption review candidate
+
+Current audited main is `c6b89b42010f24075a2340cbe3d7fa47a5ddc2a9`; PR #245 is merged.
+Its recorded production version is `af724878-448c-42c4-83a3-3ca2a89ae91d`, not yet
+independently reread in the Cloudflare dashboard during this task. Earlier entries
+below that describe #245 release work as pending are historical, not current state.
+
+The new review branch introduces disabled-by-default, server-UUID-bound ADMIN
+funding independent of Stripe membership and customer point balances. It preserves
+runtime/global cost guards, isolated job fences, exact-once dispatch and same-user
+model recovery. Tester-code registration remains absent; no private code or live
+account identifier is committed. The live Stripe promotion-code list was empty.
+Stripe discount checkout is still disabled and its full-price invoice validator
+must be addressed separately before any discount activation.
+
+See `docs/ADMIN_ACCESS_REVIEW_20261010.md` for root cause, implemented scope,
+configuration contract, cost-evidence limits, rollback and activation gates.
+Public read-only evidence reports the legacy STANDARD route ready, not a successful
+signed-in generation. No paid test, production configuration change, point grant,
+code activation, merge or deployment occurred. Cloudflare login failed after Google
+confirmation; Oracle console was unavailable in this browser. These are audit
+access limitations, not proof the generator service is offline.
+
+GO: source review. NO-GO: production activation/full acceptance. Exact provider
+costs remain unknown; persisted Oracle liability bounds must not be called invoices.
+
+---
+
 # 10 October 2026 — historical test coupling repaired; release/account gates remain separate
 
 The UI staging run 38047078893 failed at the immutable historical payload check:

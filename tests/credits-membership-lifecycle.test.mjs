@@ -42,6 +42,8 @@ async function harness() {
     if(id==='../lib/paymentError')return{paymentErrorMessage:()=> 'Fixture error'}
     if(id==='../lib/planPayment')return planPayment
     if(id==='../components/BillingRecovery')return{__esModule:true,default:()=>null}
+    // Redemption has its own lifecycle suite; this harness covers membership selection.
+    if(id==='../components/PromotionRedemption')return{__esModule:true,default:()=>null}
     if(id==='../components/CreditToolsPanel')return{__esModule:true,default:CreditToolsPanel}
     if(id.endsWith('.css'))return{}
     throw new Error('Unexpected dependency '+id)

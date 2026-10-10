@@ -3,7 +3,7 @@ import { MODEL_CATALOG, type GenerationModel } from './modelCatalog.ts'
 import { ADMISSION_FAILURE_DETAILS, isAdmissionFailureCode, type AdmissionFailureCode } from './generationAdmission.ts'
 import { PAID_POINTS_POLICY, PAID_POINTS_FUNDING } from './paidPointsFunding.ts'
 export type QuotedModel = GenerationModel
-export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits' | 'blocked'; points: number | null; after: number | null; message: string; reason?: AdmissionFailureCode; fundingSource?: typeof PAID_POINTS_FUNDING }
+export type GenerationQuote = { state: 'pending' | 'signin' | 'free' | 'credits' | 'blocked'; points: number | null; after: number | null; message: string; reason?: AdmissionFailureCode; adminBudget?: true; fundingSource?: typeof PAID_POINTS_FUNDING }
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const integer = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 export type GenerationBalance = { total: number; held: number; available: number }
@@ -45,6 +45,15 @@ export function quoteGeneration(model: QuotedModel, account: unknown, billing: u
     if (admission.allowed !== true || admission.reason !== undefined)
       return { state: 'pending', points: null, after: null, message: 'Your current generation availability could not be verified. No payment is inferred.' }
     admissionVerified = true
+  }
+  const admin = object(value.admin)
+  if (Object.hasOwn(value, 'admin')) {
+    const cap = tier ? STUDIO_PRICING[tier].maxProviderCents : MODEL_CATALOG[model].maxProviderCents
+    if (!admissionVerified || admin.active !== true || admin.costEvidence !== 'reserved-ceiling' || !integer(admin.remainingProviderCents) ||
+        !integer(admin.committedProviderCents) || !integer(admin.maximumProviderCents) || admin.remainingProviderCents + admin.committedProviderCents !== admin.maximumProviderCents ||
+        !integer(admin.jobsRemaining) || admin.jobsRemaining < 1 || !integer(admin.expiresAt) || admin.expiresAt <= Date.now() || admin.remainingProviderCents < cap || value.billingReview !== false) return pendingAdmission()
+    return { state: 'credits', adminBudget: true, points: 0, after: integer(value.availableCredits) ? value.availableCredits : null,
+      message: `ADMIN budget: up to USD ${(cap / 100).toFixed(2)} reserved for this attempt. USD ${(admin.remainingProviderCents / 100).toFixed(2)} available. No customer points or subscription charge. Reserved costs are not actual provider invoices.` }
   }
   if (!integer(value.credits) || typeof subscription.active !== 'boolean' || costs.sol !== 50 || costs.astra !== 250 || (model === 'luna' && costs.luna !== 15))
     return { state: 'pending', points: null, after: null, message: 'Your current balance and generation cost could not be verified. No payment is inferred.' }

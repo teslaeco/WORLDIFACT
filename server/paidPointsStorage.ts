@@ -1,3 +1,4 @@
+import { ADMIN_JOB_PREFIX, adminJob, adminFence, matchingAdminFence, sameAllocation, validAdminFunding } from './adminEntitlement.ts'
 import type { EntitlementStorage } from './entitlements.ts'
 import { verifyFailedHoldWaiverJob } from './failedHoldWaiver.ts'
 import { PAID_POINTS_FUNDING } from '../src/lib/paidPointsFunding.ts'
@@ -7,7 +8,7 @@ export const PAID_POINTS_JOB_PREFIX = 'paid-points-job:v2:'
 export const PAID_POINTS_FENCE = 'paid-membership-fence-v2'
 const CURRENT = 'current-studio-job:v1'
 const PAID_CURRENT = 'current-studio-job:points-v2'
-const GENERATION_PATHS = new Set(['/status', '/reserve', '/reserve-overnight-test', '/settle', '/job', '/blueprint-status', '/blueprint-complete',
+const GENERATION_PATHS = new Set(['/admin-history', '/status', '/reserve', '/reserve-overnight-test', '/settle', '/job', '/blueprint-status', '/blueprint-complete',
   '/blueprint-dispatch', '/studio-dispatch', '/studio-current', '/studio-current-clear', '/studio-close-missing', '/studio-library',
   '/studio-provider-pending', '/provider-reconciliation-pending', '/reconcile-studio-provider', '/reconcile-blueprint-provider', '/generation-funding', '/failed-hold-waiver'])
 export function generationPath(path: string) {
@@ -30,7 +31,11 @@ export function matchingPaidPointsFence(value: unknown, job: Row) {
  * below run inside the caller's real Durable Object transaction. */
 export function paidPointsStorage(storage: EntitlementStorage, valid: (value: unknown, id?: string) => boolean): EntitlementStorage {
   async function readJob(key: string) {
-    const [paid, old] = await Promise.all([storage.get(PAID_POINTS_JOB_PREFIX + key.slice(4)), storage.get(key)])
+    const [paid, old, admin] = await Promise.all([storage.get(PAID_POINTS_JOB_PREFIX + key.slice(4)), storage.get(key), storage.get(ADMIN_JOB_PREFIX + key.slice(4))])
+    if (admin !== undefined) {
+      if (paid !== undefined || !adminJob(admin) || !row(admin) || !matchingAdminFence(old, admin)) throw new Error('Unverified admin job')
+      return admin
+    }
     if (paid !== undefined) {
       if (!valid(paid, key.slice(4)) || !row(paid) || !matchingPaidPointsFence(old, paid)) throw new Error('Unverified paid membership job')
       if (row(paid.pointSettlement) && paid.pointSettlement.state === 'waived' && !await verifyFailedHoldWaiverJob(storage, key.slice(4), paid)) throw new Error('Unverified failed-hold waiver')
@@ -67,6 +72,17 @@ export function paidPointsStorage(storage: EntitlementStorage, valid: (value: un
     },
     async put(key: string, value: unknown) {
       if (key.startsWith('job:')) {
+        if (row(value) && Object.hasOwn(value, 'adminFunding')) {
+          if (!adminJob(value) || await storage.get(PAID_POINTS_JOB_PREFIX + key.slice(4)) !== undefined) throw new Error('Invalid admin job write')
+          const previous = await storage.get<Record<string, unknown>>(ADMIN_JOB_PREFIX + key.slice(4))
+          if (previous && (!validAdminFunding(previous.adminFunding) || !validAdminFunding(value.adminFunding) || !sameAllocation(previous.adminFunding.allocation, value.adminFunding.allocation) || previous.adminFunding.capCents !== value.adminFunding.capCents)) throw new Error('Admin allocation is immutable')
+          const old = await storage.get(key)
+          if (old !== undefined && !matchingAdminFence(old, value)) throw new Error('Admin job collision')
+          await storage.put(ADMIN_JOB_PREFIX + key.slice(4), value)
+          if (old === undefined) await storage.put(key, adminFence(value))
+          return
+        }
+        if (await storage.get(ADMIN_JOB_PREFIX + key.slice(4)) !== undefined) throw new Error('Admin job cannot change funding')
         if (row(value) && value.fundingMode === PAID_POINTS_FUNDING) {
           if (!valid(value, key.slice(4))) throw new Error('Invalid paid membership job write')
           const priorPaid = await storage.get<Row>(PAID_POINTS_JOB_PREFIX + key.slice(4))

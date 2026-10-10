@@ -1,0 +1,51 @@
+{
+  "checkedAt": "2026-10-10T15:09:56.345Z",
+  "method": "GET_ONLY",
+  "authenticatedAccountChecked": false,
+  "generationRequested": false,
+  "paidGenerationVerified": false,
+  "results": [
+    {
+      "path": "/",
+      "status": 200,
+      "expectedContentType": true
+    },
+    {
+      "path": "/shop",
+      "status": 200,
+      "expectedContentType": true
+    },
+    {
+      "path": "/lab",
+      "status": 200,
+      "expectedContentType": true
+    },
+    {
+      "path": "/api/health",
+      "status": 200,
+      "expectedContentType": true,
+      "publicStatus": {
+        "jsonShape": "OBJECT",
+        "generationReady": true,
+        "mode": "READY"
+      }
+    },
+    {
+      "path": "/api/studio/status",
+      "status": 200,
+      "expectedContentType": true,
+      "publicStatus": {
+        "jsonShape": "OBJECT",
+        "ready": true,
+        "detailedReady": true,
+        "costGuardReady": true,
+        "photoReady": true,
+        "fastReady": true,
+        "tiersReady": false,
+        "reason": "READY",
+        "oracle": "CONNECTOR_READY",
+        "newJobPolicy": "legacy-usd175-v1"
+      }
+    }
+  ]
+}
