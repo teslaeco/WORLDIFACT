@@ -53,9 +53,9 @@ NEW_READER = '''    # A 256,000-character scene can exceed 600,000 wire characte
     # bounded transport envelope so validation can return a repairable error.
     # readline is bounded before allocation; pathological frames still close.
     while True:
-        raw = incoming.readline(2 * 1024 * 1024 + 1)
+        raw = incoming.readline(4 * 1024 * 1024 + 1)
         if not raw:break
-        if len(raw)>2 * 1024 * 1024:break
+        if len(raw)>4 * 1024 * 1024:break
 '''
 OLD_OBSERVE = '                        outer.observe_execution(payload)\n'
 NEW_OBSERVE = OLD_OBSERVE + '''                        if any(error.startswith('MCP_TRANSPORT_CLOSED:')

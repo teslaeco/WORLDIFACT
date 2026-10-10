@@ -56,7 +56,7 @@ class Transport(unittest.TestCase):
 
     def test_valid_maximum_string_survives_unicode_wire_expansion(self):
         request = {'id': 1, 'method': 'tools/call', 'params': {
-            'name': 'build_model', 'arguments': {'scene_json': '\u2603' * 256000, 'expected_revision': 0}}}
+            'name': 'build_model', 'arguments': {'scene_json': '\U0001f30d' * 256000, 'expected_revision': 0}}}
         wire = json.dumps(request) + '\n' + json.dumps({'id': 2, 'method': 'ping'}) + '\n'
         self.assertGreater(len(wire), 600000)
         self.assertEqual(self.read(wire), [request, {'id': 2, 'method': 'ping'}])
@@ -66,7 +66,7 @@ class Transport(unittest.TestCase):
         self.assertEqual(self.read(json.dumps(request) + '\n'), [request])
 
     def test_pathological_unterminated_frame_stops_with_bounded_read(self):
-        self.assertEqual(self.read('x' * (3 * 1024 * 1024)), [])
+        self.assertEqual(self.read('x' * (5 * 1024 * 1024)), [])
 
     def test_unknown_runtime_refused(self):
         with self.assertRaises(ValueError):

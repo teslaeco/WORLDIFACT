@@ -177,7 +177,7 @@ def response_phase_changes(original, helpers):
 
 # Explicit transport repair release; historical modes retain their old maps.
 TRANSPORT_AFTER = {**EXPECTED_AFTER,
-    'blender_mcp.py': '74e2b6f5906eef3568ebc95ee7215578c1ed39cacfc3aa13c97e0a58a53f38a4',
+    'blender_mcp.py': '54fa9734e848e9c8720e04ae8eddcc4c8a97546e3a64ef31c1bd88b37c317715',
     'codex_runner.py': 'f3c9ce7ebcb629a823af0324c00a97bda35b63a99f15ff0804b6ea641c32c0bb',
 }
 
