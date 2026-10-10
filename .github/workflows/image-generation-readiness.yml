@@ -1,0 +1,27 @@
+name: Verify GPT Image 2.5 access without generation
+on:
+  push:
+    branches: [main, feat/image-25-20261011]
+    paths:
+      - '.github/workflows/image-generation-readiness.yml'
+      - 'scripts/check-image-provider.mjs'
+      - 'server/imageGeneration.ts'
+      - 'src/lib/imageGeneration.ts'
+permissions:
+  contents: read
+jobs:
+  model-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Check exact model IDs using the existing secret
+        run: node scripts/check-image-provider.mjs
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

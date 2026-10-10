@@ -15,6 +15,7 @@ const ControlPage = lazy(async () => import('./pages/ControlPage'))
 const AccountPage = lazy(async () => import('./pages/AccountPage'))
 const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
 const OwnerReserveAdjustmentPage = lazy(async () => import('./pages/OwnerReserveAdjustmentPage'))
+const ImagesPage = lazy(async () => import('./pages/ImagesPage'))
 const ModelsPage = lazy(async () => import('./pages/ModelsPage'))
 const OvernightTestsPage = lazy(async () => import('./pages/OvernightTestsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/account/credits" element={<CreditsPage />} />
         <Route path="/account/owner-reserve-adjustment" element={<OwnerReserveAdjustmentPage />} />
         <Route path="/account/models" element={<ModelsPage />} />
+        <Route path="/account/images" element={<ImagesPage />} />
         <Route path="/account/overnight-tests" element={<OvernightTestsPage />} />
         <Route path="/account/reset" element={<ResetPasswordPage />} />
         <Route path="/control" element={<ControlPage />} />

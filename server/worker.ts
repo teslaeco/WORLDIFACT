@@ -1,3 +1,4 @@
+import { imageApi, type ImageEnv } from './imageGeneration.ts';
 import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, blueprintReferences, blueprintDelivery, blueprintFingerprint, blueprintRequestId, DETAILED_MESH_BLOCKED } from '../src/lib/blueprintRequest.ts';
 import { ORACLE_WORLD_IDS, platformApi } from "./platform.ts";
 import type { PlatformEnv } from "./platform.ts";
@@ -30,7 +31,7 @@ import { budgetSettings } from "./budget.ts";
 import { blueprintModel, blueprintReservationMicroUsd, MODEL_CATALOG, type BlueprintModel } from "../src/lib/modelCatalog.ts";
 import type { BudgetEnv, BudgetNamespace } from "./budget.ts";
 export { GenerationBudget } from "./budget.ts";
-export interface Env extends BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv {
+export interface Env extends ImageEnv, BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   OPENAI_FAST_MODEL?: string;
@@ -89,6 +90,8 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     if (env.ENFORCE_ACCOUNT_ENTITLEMENTS !== 'true') return json({ error: 'Account-bound overnight testing is unavailable.', noCharge: true }, 503);
     url = new URL(target, url.origin); request = new Request(url, request); overnightTest = true;
   }
+  const images = await imageApi(request, env, fetcher);
+  if (images) return images;
   const privateWorld = await privateWorldApi(request, env, fetcher);
   if (privateWorld) return privateWorld;
   const decor = await decorApi(request, fetcher);

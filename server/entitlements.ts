@@ -1,3 +1,4 @@
+import { imageStore, type ImageEnv } from './imageGeneration.ts'
 import { PROMOTION_NAMESPACE, promotionRegistry, applyPromotion, promotionApi, type PromotionEnv } from './promotionCodes.ts'
 import { adminAllocation, adminBudget, reserveAdminBudget, adminDispatchAllowed, adminJob, validAdminFunding, type AdminEnv, type AdminAllocation, type AdminFunding } from './adminEntitlement.ts'
 import { validateGenerationResult, type GenerationResult } from '../src/lib/blueprint.ts'
@@ -879,6 +880,13 @@ export class AccountEntitlements {
       return bound ? adminAllocation(this.supportEnv, verifiedAccount, this.now()) : null
     }
     try {
+      if (requestedPath === '/images' || requestedPath.startsWith('/images/')) {
+        const prefix = this.supportEnv.ACCOUNT_LEDGER_MODE === 'sandbox' ? 'account:sandbox:v1' : 'account:v1'
+        const bound = verifiedAccount && ACCOUNT_ID.test(verifiedAccount) && this.supportEnv.ACCOUNT_ENTITLEMENTS && this.durableObjectId !== null &&
+          this.durableObjectId === String(this.supportEnv.ACCOUNT_ENTITLEMENTS.idFromName(`${prefix}:${verifiedAccount.toLowerCase()}`))
+        if (!bound) return json({ error: 'Verified image account required.' }, 403)
+        return await imageStore(request, this.storage, this.supportEnv as ImageEnv, verifiedAccount!.toLowerCase(), this.now)
+      }
       if (path === '/promo-claim' || path === '/promo-read') {
         const namespace = this.supportEnv.ACCOUNT_LEDGER_MODE === 'sandbox' ? PROMOTION_NAMESPACE + ':sandbox' : PROMOTION_NAMESPACE
         if (!this.supportEnv.ACCOUNT_ENTITLEMENTS || this.durableObjectId !== String(this.supportEnv.ACCOUNT_ENTITLEMENTS.idFromName(namespace))) return json({ error: 'Wrong promotion namespace.' }, 403)
