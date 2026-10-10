@@ -33,3 +33,12 @@ test('late response after account unmount cannot refresh another account or publ
  const h=harness(async(_p,body)=>body?pending:{active:true,kind:'internal-points',providerFunding:false});await h.settle()
  h.enter('TEST_ONLY_NOT_A_REAL_CODE');await h.settle();h.click();h.close();resolve({redeemed:true,repeated:false,points:1000});await h.settle();assert.equal(h.refreshes,0)
 })
+
+test('celebration requires a new confirmed grant; repeats and failures never celebrate',async()=>{
+ for(const response of [{redeemed:true,repeated:false,points:1000},{redeemed:true,repeated:true,points:1000},{redeemed:false,points:1000}]){
+  const h=harness(async(_p,body)=>body?response:{active:true,kind:'internal-points',providerFunding:false})
+  await h.settle();h.enter('TEST_ONLY_NOT_A_REAL_CODE');await h.settle();h.click();await h.settle()
+  assert.equal(h.nodes.some(n=>n.props?.className==='promo-burst'),response.redeemed===true&&response.repeated===false)
+  h.close()
+ }
+})

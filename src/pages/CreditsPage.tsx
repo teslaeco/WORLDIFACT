@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { accountRequest, useAccount, type AccountUser } from '../lib/account'
 import { paymentErrorMessage } from '../lib/paymentError'
 import BillingRecovery from '../components/BillingRecovery'
-import CreditToolsPanel from '../components/CreditToolsPanel'
+import { readGenerationBalance } from '../lib/generationQuote'
 import { onCachedBillingReturn, planPaymentAddress, planPaymentNotice } from '../lib/planPayment'
 import './CreditsPage.css'
 
@@ -35,6 +35,7 @@ export default function CreditsPage() {
 
 function CreditsContent({ user, loading }: { user: AccountUser | null; loading: boolean }) {
   const [search, setSearch] = useSearchParams()
+  const [tab, setTab] = useState<'plans' | 'code'>('plans')
   const signInHref = `/login?next=${encodeURIComponent(`/account/credits${search.toString() ? `?${search.toString()}` : ''}`)}`
   const owner = user?.id ?? null
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
@@ -177,18 +178,29 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
     }
   }
 
-  return <main className="credits-page">
+  const visibleBalance = !checking && !loading ? readGenerationBalance(balance) : undefined
+
+  return <main className="credits-page credits-compact">
     <header><Link to="/" className="credits-wordmark">WORLDIFAKT</Link><Link to={user ? '/account' : signInHref}>{user ? user.displayName : 'Sign in'} ↗</Link></header>
-    <section className="credits-heading"><span>CHOOSE QUALITY · KEEP COSTS CONTROLLED</span><h1>Sol for speed.<br /><em>Astra when quality matters.</em></h1><p>Free accounts share a SOL / LUNA draft allowance. Active paid Creator, Pro and Studio members can request models while enough points are available for each request. Per-job API cost limits, account billing checks and runtime availability still apply.</p></section>
-    {user && balance && <section className="credits-balance" aria-label="Your account balance">
-      <div><span>YOUR CREDITS</span><strong>{balance.credits.toLocaleString()}</strong><small>{(balance.reservedCredits ?? 0) > 0
-        ? `${(balance.reservedCredits ?? 0).toLocaleString()} points held for requests or pending cost review · ${(balance.availableCredits ?? balance.credits).toLocaleString()} available`
-        : `${Math.floor(Math.max(0, balance.credits) / 50)} SOL attempts from points${activePlan ? ` or ${Math.floor(Math.max(0, balance.credits) / 250)} ASTRA attempts` : ''} · check current generation availability in the Shop`}</small></div>
-      <div><span>MEMBERSHIP</span><strong>{activePlan ? PLAN_NAMES[activePlan] : member ? 'Active membership · plan unverified' : 'Free'}</strong><small>{balance.subscription.expiresAt ? `Current period ends ${new Date(balance.subscription.expiresAt).toLocaleDateString()}` : 'Daily free generations included'}</small></div>
-      <button onClick={() => { setError(''); setChecking(true); void refresh() }} disabled={!!busy || checking}>{checking ? 'Refreshing…' : 'Refresh balance'}</button>
-    </section>}
-    <CreditToolsPanel account={balance} checking={checking || loading} signedIn={!!user} promotionTools={<PromotionRedemption accountId={user?.id ?? null} onRedeemed={refresh} />} />
-    {!loading && !user && <div className="credits-signin"><div><strong>Your ideas, one account.</strong><p>Sign in before purchasing. Confirmed credits go to your WORLDIFAKT account.</p></div><Link className="credits-action secondary" to={signInHref}>Sign in or create an account ↗</Link></div>}
+    <h1>Subscriptions & points</h1>
+    <section className="credits-balance" aria-label="Your account balance">
+      <div><span>AVAILABLE POINTS</span><strong>{visibleBalance ? visibleBalance.available.toLocaleString() : user ? '…' : '—'}</strong></div>
+      <div><span>MEMBERSHIP</span><b>{activePlan ? PLAN_NAMES[activePlan] : member ? 'Active' : 'Free'}</b></div>
+      {user && <button onClick={() => { setError(''); setChecking(true); void refresh() }} disabled={!!busy || checking}>{checking ? 'Refreshing…' : 'Refresh balance'}</button>}
+    </section>
+    {!loading && !user && <Link className="credits-action" to={signInHref}>Sign in</Link>}
+    <div className="credits-tabs" role="tablist" aria-label="Account tools">
+      {(['plans', 'code'] as const).map(id => <button key={id} id={`credits-tab-${id}`} role="tab" aria-selected={tab === id} aria-controls={`credits-panel-${id}`} tabIndex={tab === id ? 0 : -1}
+        onClick={() => setTab(id)} onKeyDown={event => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+          event.preventDefault()
+          const next = event.key === 'Home' ? 'plans' : event.key === 'End' ? 'code' : tab === 'plans' ? 'code' : 'plans'
+          setTab(next); document.getElementById(`credits-tab-${next}`)?.focus()
+        }}>{id === 'plans' ? 'Subscriptions' : 'Enter code'}</button>)}
+    </div>
+    <section id="credits-panel-code" role="tabpanel" aria-labelledby="credits-tab-code" hidden={tab !== 'code'}>
+      <PromotionRedemption accountId={user?.id ?? null} onRedeemed={async () => { await refresh(); window.dispatchEvent(new Event('worldifact:balance-changed')) }} />
+    </section>
     {error && <div className="credits-error" role="alert"><p>{error}</p>{!busy && <button className="credits-manage" disabled={checking} onClick={() => { setError(''); setChecking(true); void refresh() }}>Recheck account and payment options</button>}</div>}
     {notice && <p className={`credits-pending ${notice.tone === 'success' ? 'credits-success' : ''}`} role="status">{notice.text}</p>}
     {cancelled && !notice && <p className="credits-pending" role="status">You returned from checkout without confirming here. Check your balance and payment history before trying again.</p>}
@@ -198,49 +210,37 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
     {!checking && !membershipReady && !billing?.topupReady && !paypal?.ready && <p className="credits-pending" role="status">Secure checkout is being prepared. Purchasing is not available yet.</p>}
     {(billing?.mode === 'test' || paypal?.mode === 'sandbox') && <p className="credits-pending" role="status">{billing?.mode === 'test' ? 'Card / Google Pay checkout is in test mode. ' : ''}{paypal?.mode === 'sandbox' ? 'PayPal checkout is in sandbox mode. ' : ''}Test payments are not real purchases.</p>}
     {balance?.billingReview && <p className="credits-error" role="alert">Purchasing is paused while your payment history is reviewed.</p>}
+    <section id="credits-panel-plans" role="tabpanel" aria-labelledby="credits-tab-plans" hidden={tab !== 'plans'}>
     <section className="credits-plans" aria-label="Generation plans">
-      <article><span className="credits-plan-tag">EXPLORE</span><h2>Free SOL / LUNA</h2><div className="credits-price"><strong>$0</strong><span>Try WORLDIFACT without exposing the platform to Astra costs.</span></div><ul><li><b>2 shared SOL / LUNA draft attempts</b> in every rolling 24 hours when funded SOL capacity is available</li><li>FAST draft downloads included</li><li><b>No free Astra fallback</b> — if SOL capacity is unavailable, no expensive Astra request is silently charged</li></ul>{balance && <div className="credits-remaining">Personal allowance: {balance.free.fastRemaining} shared drafts; funded capacity is checked at submission</div>}<Link className="credits-action secondary" to={user ? '/shop' : signInHref}>{user ? 'Create with SOL' : 'Create a free account'} ↗</Link></article>
       {([
-        ['creator','Creator SOL','$29.99','1,500 credits','Example point mix: 2 standard ASTRA + 20 SOL, or 6 standard ASTRA attempts','LUNA 15 · SOL 50 · ASTRA from 250 points; available points required'],
-        ['pro','Pro ASTRA','$99.99','4,500 credits','Example point use: 90 SOL, 300 LUNA or 18 standard ASTRA attempts','LUNA 15 · SOL 50 · ASTRA from 250 points; available points required'],
-        ['studio','Studio ASTRA','$149.99','7,500 credits','Example point use: 150 SOL, 500 LUNA or 30 standard ASTRA attempts','LUNA 15 · SOL 50 · ASTRA from 250 points; available points required'],
-      ] as const).map(([id,name,price,credits,capacity,models]) => <article
-        key={id}
+        ['creator','Creator SOL','$29.99','1,500'],
+        ['pro','Pro ASTRA','$99.99','4,500'],
+        ['studio','Studio ASTRA','$149.99','7,500'],
+      ] as const).map(([id,name,price,credits]) => <article key={id}
         className={`credits-selectable-plan${selectedPlan === id && purchaseKind === 'subscription' ? ' credits-featured' : ''}`}
-        tabIndex={canOpenPlan(id) ? 0 : -1}
-        aria-label={`Open secure billing for ${name}`}
-        aria-disabled={!canOpenPlan(id)}
-        onClick={(event) => {
-          if ((event.target as HTMLElement).closest('button,a')) return
-          openPlan(id)
-        }}
-        onKeyDown={(event) => {
-          if (event.target !== event.currentTarget || !['Enter', ' '].includes(event.key)) return
-          event.preventDefault()
-          openPlan(id)
-        }}
-      >
-        <span className="credits-plan-tag">{id.toUpperCase()}{activePlan === id ? ' · YOUR ACTIVE PLAN' : ''}</span>
-        <h2>{name}</h2>
-        <div className="credits-price"><div><strong>{price}</strong><b> USD / month</b></div><span>{credits} every confirmed paid month</span></div>
-        <ul><li><b>{capacity}</b></li><li>{models}</li><li>These are examples, not fixed generation-count quotas. All active paid plans support ASTRA without an additional monthly attempt quota. Available points and per-job API cost limits still apply; successful output is not guaranteed.</li></ul>
-        {billing?.plans?.[id]?.blockedReason === 'ASTRA_COST_GUARD_REQUIRED' && <p className="credits-method-note">ASTRA purchasing is temporarily paused while the live generation and export check is completed. No payment will be taken for an unavailable plan.</p>}
-        <p className="credits-method-note">Confirmed plan credits are added to your existing balance, never substituted for it. Opening payment does not add credits.</p>
-        <button className="credits-action" disabled={!canOpenPlan(id)} onClick={() => openPlan(id)}>{busy === 'plan' && selectedPlan === id ? 'Opening secure payment…' : member && (balance?.subscription.plan??'creator')===id ? 'Manage current subscription ↗' : billing?.plans?.[id]?.checkoutReady===false ? 'Temporarily unavailable · no charge' : `Subscribe ${price} / month ↗`}</button>
+        tabIndex={canOpenPlan(id) ? 0 : -1} aria-label={`Open secure billing for ${name}`} aria-disabled={!canOpenPlan(id)}
+        onClick={event => { if (!(event.target as HTMLElement).closest('button,a')) openPlan(id) }}
+        onKeyDown={event => { if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openPlan(id) } }}>
+        <div><span className="credits-plan-tag">{id.toUpperCase()}{activePlan === id ? ' · YOUR ACTIVE PLAN' : ''}</span><h2>{name}</h2><small>{credits} points / month</small></div>
+        <div className="credits-price"><strong>{price}</strong><small>USD / month</small></div>
+        <button className="credits-action" disabled={!canOpenPlan(id)} onClick={() => openPlan(id)}>{busy === 'plan' && selectedPlan === id ? 'Opening…' : member && (balance?.subscription.plan??'creator')===id ? 'Manage subscription' : billing?.plans?.[id]?.checkoutReady===false ? 'Unavailable' : 'Select plan'}</button>
       </article>)}
-      <article>
-        <span className="credits-plan-tag">TOP-UP</span><h2>1,500 extra credits</h2>
-        <div className="credits-price"><div><strong>$29.99</strong><b> USD once</b></div><span>No automatic renewal</span></div>
-        <ul><li>30 extra SOL generations</li><li>Astra needs active paid membership, enough available points and runtime availability. Creator, Pro and Studio can use added points without a separate monthly attempt quota; per-job API cost limits still apply.</li><li>Top-up alone does not unlock ASTRA or membership-only access</li></ul>
-        {!member && <label><input type="checkbox" checked={understandsPack} disabled={!user || !!busy} onChange={event => setUnderstandsPack(event.target.checked)} /><span>I understand this adds credits only and does not unlock ASTRA.</span></label>}
-        <button className="credits-action secondary" disabled={!canBuyPack || !billing?.topupReady} onClick={() => { setPurchaseKind('topup'); void checkout('card', { kind: 'topup' }) }}>{busy === 'card' && purchaseKind === 'topup' ? 'Opening secure checkout…' : 'Buy $29.99 top-up'} ↗</button>
-        <button className="credits-action credits-paypal" disabled={!canBuyPack || !paypal?.ready} onClick={() => { setPurchaseKind('topup'); void checkout('paypal', { kind: 'topup' }) }}>{busy === 'paypal' ? 'Opening PayPal…' : 'Pay once with PayPal'} ↗</button>
-      </article>
-      {user && member && billing?.checkoutReady && <article><span className="credits-plan-tag">ACTIVE</span><h2>{balance?.subscription.plan ? `Current plan: ${balance.subscription.plan.toUpperCase()}` : 'Manage membership'}</h2><p>Existing subscribers keep their current price until they explicitly change plan. Use Stripe billing management to cancel or update payment details.</p><button className="credits-manage" disabled={!canManage} onClick={() => void checkout('portal')}>{busy === 'portal' ? 'Opening account…' : 'Manage subscription'}</button></article>}
     </section>
-    <BillingRecovery enabled={!!user && !loading} onRefresh={refresh} />
-    <section className="credits-trust" aria-label="Payment privacy"><strong>Secure checkout. Private payment details.</strong><p>Card and wallet details are entered with the payment provider. WORLDIFAKT does not collect your full card number or display the seller’s bank account details.</p></section>
-    <p className="credits-footnote">FAST is the SOL path. Detailed ASTRA uses 250 points for the standard model budget or 500 points for the extended budget when that option is verified as available and explicitly accepted. Standard describes one model's budget, not your membership plan; upgrading to Pro does not automatically select the 500-point budget. Astra blueprints remain 250 points. Attempt counts above illustrate how one points grant can be used; they are not fixed generation-count quotas. Active paid members can keep requesting models while enough points remain available, with per-job API cost limits and service readiness checks. For example, the existing 1,500-credit Creator grant covers two standard Astra attempts plus twenty Sol attempts; other point mixes are allowed. WORLDIFACT never silently falls back from SOL to ASTRA when the cheaper route is unavailable. A GAME model still needs separate validation for physical manufacturing.</p>
+    <details className="credits-extra"><summary>More options</summary>
+      <p>Free: $0 · 2 shared SOL / LUNA drafts per day, when available.</p>
+      <Link to={user ? '/shop' : signInHref}>Open generator ↗</Link>
+      <h2>1,500 extra credits</h2><p>$29.99 USD once · no renewal. Points only; no membership.</p>
+      {!member && <label><input type="checkbox" checked={understandsPack} disabled={!user || !!busy} onChange={event => setUnderstandsPack(event.target.checked)} /> I understand this does not unlock ASTRA.</label>}
+      <div className="credits-topup-actions"><button className="credits-action secondary" disabled={!canBuyPack || !billing?.topupReady} onClick={() => { setPurchaseKind('topup'); void checkout('card', { kind: 'topup' }) }}>Buy $29.99 top-up ↗</button>
+      <button className="credits-action secondary" disabled={!canBuyPack || !paypal?.ready} onClick={() => { setPurchaseKind('topup'); void checkout('paypal', { kind: 'topup' }) }}>Pay once with PayPal ↗</button></div>
+    </details>
+    </section>
+    {user && <details className="credits-extra"><summary>Account details & payments</summary>
+      {visibleBalance && <p>{visibleBalance.held.toLocaleString()} points reserved · {visibleBalance.total.toLocaleString()} total.</p>}
+      <Link to="/account/generation-funding">Review reserved requests ↗</Link>
+      {balance?.subscription.expiresAt && <p>Current period ends {new Date(balance.subscription.expiresAt).toLocaleDateString()}</p>}
+      <BillingRecovery enabled={!!user && !loading} onRefresh={refresh} />
+    </details>}
     <footer><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/world">Back to the portals →</Link></footer>
   </main>
 }

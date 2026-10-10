@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { setImmediate as tick } from 'node:timers/promises'
 import React from 'react'
 import ts from 'typescript'
+import * as generationQuote from '../src/lib/generationQuote.ts'
 import * as planPayment from '../src/lib/planPayment.ts'
 import { CreditToolsPanel } from './credit-tools-helper.mjs'
 
@@ -27,7 +28,7 @@ async function harness() {
   }
   const accountRequest=async(path,body)=>{
     calls.push({path,body:body===undefined?undefined:JSON.parse(JSON.stringify(body))})
-    if(path==='/api/account/entitlements')return{credits:4500,subscription:{active:true,plan,expiresAt:null},free:{fastRemaining:2},billingReview:false}
+    if(path==='/api/account/entitlements')return{credits:1190,reservedCredits:1000,availableCredits:190,subscription:{active:true,plan,expiresAt:null},free:{fastRemaining:2},billingReview:false}
     if(path==='/api/billing/status')return{portalReady:true,checkoutReady:true,topupReady:true,subscriptionInterval:'month',plans:Object.fromEntries(['creator','pro','studio'].map(id=>[id,{checkoutReady:true}]))}
     if(path==='/api/billing/paypal/status')return{ready:false}
     if(path==='/api/billing/plan-payment')return{state:'review'}
@@ -41,6 +42,7 @@ async function harness() {
     if(id==='../lib/account')return{useAccount:()=>({user:{id:owner,displayName:owner},loading:false}),accountRequest}
     if(id==='../lib/paymentError')return{paymentErrorMessage:()=> 'Fixture error'}
     if(id==='../lib/planPayment')return planPayment
+    if(id==='../lib/generationQuote')return generationQuote
     if(id==='../components/BillingRecovery')return{__esModule:true,default:()=>null}
     // Redemption has its own lifecycle suite; this harness covers membership selection.
     if(id==='../components/PromotionRedemption')return{__esModule:true,default:()=>null}
@@ -52,7 +54,7 @@ async function harness() {
   const featured=()=>elements(tree).filter(n=>n.type==='article'&&n.props.className?.includes('credits-featured')).map(n=>text(elements(n).find(c=>c.type==='h2')))
   const refresh=async()=>{const button=elements(tree).find(n=>n.type==='button'&&text(n)==='Refresh balance');assert.ok(button);button.props.onClick();await settle()}
   await settle()
-  return{calls,featured,refresh,text:()=>text(tree),async upgrade(value){plan=value;await refresh()},async choose(value){const article=elements(tree).find(n=>n.type==='article'&&n.props['aria-label']===`Open secure billing for ${value}`);assert.ok(article);const button=elements(article).find(n=>n.type==='button');button.props.onClick();await settle()},async account(id,value){owner=id;plan=value;dirty=true;await settle()},close(){for(const slot of slots)slot?.cleanup?.()}}
+  return{calls,featured,refresh,nodes:()=>elements(tree),async tab(id){elements(tree).find(n=>n.props.id===`credits-tab-${id}`).props.onClick();await settle()},text:()=>text(tree),async upgrade(value){plan=value;await refresh()},async choose(value){const article=elements(tree).find(n=>n.type==='article'&&n.props['aria-label']===`Open secure billing for ${value}`);assert.ok(article);const button=elements(article).find(n=>n.type==='button');button.props.onClick();await settle()},async account(id,value){owner=id;plan=value;dirty=true;await settle()},close(){for(const slot of slots)slot?.cleanup?.()}}
 }
 
 test('confirmed Pro membership is selected and named, and follows a later verified upgrade',async()=>{
@@ -71,4 +73,15 @@ test('explicit offer choice survives refresh, while another account gets its own
     await h.account('owner-b','pro');assert.deepEqual(h.featured(),['Pro ASTRA']);assert.match(h.text(),/MEMBERSHIPPro ASTRA/)
     assert.equal(h.calls.filter(c=>c.body!==undefined).length,1)
   }finally{h.close()}
+})
+
+test('compact balance shows spendable points and code tab does not initiate any financial action',async()=>{
+ const h=await harness();try{
+  assert.match(h.text(),/AVAILABLE POINTS190/)
+  assert.doesNotMatch(h.text(),/AVAILABLE POINTS1,190/)
+  await h.tab('code')
+  assert.equal(h.nodes().find(n=>n.props.id==='credits-panel-code').props.hidden,false)
+  assert.equal(h.nodes().find(n=>n.props.id==='credits-panel-plans').props.hidden,true)
+  assert.equal(h.calls.filter(c=>c.body!==undefined).length,0)
+ }finally{h.close()}
 })
