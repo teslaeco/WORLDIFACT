@@ -1561,3 +1561,25 @@ GET-only model-access run 38094125542 verified both exact model IDs with the
 existing production secret; it generated no image. The deployment follow-up
 workflow checks image status/25-point terms and the anonymous library 401 using
 public GETs only. A successful model metadata lookup is not a paid image test.
+
+
+## Owner-approved image price adjustment — 2026-10-11
+
+The owner approved reducing new GPT Image 2.5 requests from 25 to 5 points,
+including room for operating costs and owner earnings. This supersedes the
+initial image price above; 3D pricing, subscription prices, existing balances,
+Stripe settings and Oracle remain unchanged. The new contract is image-5-v2.
+
+At USD 29.99 / 1500 points, five points yield about USD 0.10 gross revenue.
+The official GPT Image 2.5 calculator estimates 439 output tokens at medium
+1024x1024: USD 0.01317 output, or USD 0.01817 with an illustrative 1000 text
+input tokens. The approximately USD 0.082 remaining is before infrastructure,
+payment fees, taxes and other expenses; it is not a guaranteed net commission.
+Actual per-request usage has not been measured by a paid generation test.
+
+Historical jobs retain their stored 25-point terms and fingerprint. Replaying
+an existing legacy ID only returns its record; legacy IDs missing from storage
+are rejected before provider dispatch and must use a new five-point request.
+Current settlements and UI messages use each job's stored points. The exact
+reviewed release preserves runtime variables, secrets and billing configuration.
+Focused accounting/recovery tests and deployment evidence are recorded in the PR.
