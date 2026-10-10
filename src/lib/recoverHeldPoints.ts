@@ -1,5 +1,5 @@
 import { MODEL_CATALOG, type GenerationModel } from './modelCatalog.ts'
-import { PAID_POINTS_FUNDING, POINT_COST_WAIVED_DETAIL, isPointSettlement, type PointSettlement } from './paidPointsFunding.ts'
+import { PAID_POINTS_FUNDING, isManualPointClosure, manualPointClosureDetail, isPointSettlement, type PointSettlement } from './paidPointsFunding.ts'
 import { isStudioPricing, type StudioPricing } from './studioPricing.ts'
 
 export type HeldPointsReview = { id: string; channel: 'studio' | 'blueprint'; model: GenerationModel; state: 'held' | 'pending-cost'; heldPoints: number }
@@ -26,12 +26,12 @@ function normalizedState(state: unknown, channel: 'studio' | 'blueprint'): HeldP
   return invalid()
 }
 function checkedSettlement(value: unknown, state: HeldPointsRecovery['state'], points: number, allowWaived = false): PointSettlement {
-  if (!isPointSettlement(value, points) || (value.state === 'waived' ? !allowWaived || state !== 'failed' : state === 'pending' ? value.state !== 'held' : state === 'completed' ? value.state !== 'charged' : !['pending-cost', 'released'].includes(value.state))) return invalid()
+  if (!isPointSettlement(value, points) || (isManualPointClosure(value) ? !allowWaived || state !== 'failed' : state === 'pending' ? value.state !== 'held' : state === 'completed' ? value.state !== 'charged' : !['pending-cost', 'released'].includes(value.state))) return invalid()
   return { ...value }
 }
 function outcome(state: HeldPointsRecovery['state'], pointSettlement?: PointSettlement): HeldPointsRecovery {
   const detail = !pointSettlement ? UNCONFIRMED
-    : pointSettlement.state === 'waived' ? POINT_COST_WAIVED_DETAIL
+    : isManualPointClosure(pointSettlement) ? manualPointClosureDetail(pointSettlement)
     : pointSettlement.state === 'pending-cost' ? `${pointSettlement.heldPoints} points remain held pending provider-cost review. No points have been charged or released. Manual review is needed if final provider cost cannot be confirmed; checking an unchanged cost-limit receipt does not establish final spending.`
     : pointSettlement.state === 'held' ? `${pointSettlement.heldPoints} points remain held for this existing request. Generation is not yet settled. No replacement generation was started.`
     : pointSettlement.state === 'released' ? 'The held points were released. No points were charged for this failed request.'
@@ -129,7 +129,7 @@ async function checkExistingRequest(fetcher: typeof fetch, item: HeldPointsRevie
   if (current.reservedPoints !== selectedSettlement.heldPoints) return invalid()
   // The authenticated owned snapshot already establishes this final incident
   // waiver. It needs no signed job recovery or further provider-cost check.
-  if (selectedSettlement.state === 'waived') {
+  if (isManualPointClosure(selectedSettlement)) {
     if (current.owned === false || current.conflict === true || current.refunded === true) return invalid()
     return outcome('failed', selectedSettlement)
   }
@@ -139,7 +139,7 @@ async function checkExistingRequest(fetcher: typeof fetch, item: HeldPointsRevie
   if (pricingKey(statusTerms) !== pricingKey(terms)) return invalid()
   if (!Object.hasOwn(value.job, 'pointSettlement')) return outcome(state)
   const finalSettlement = checkedSettlement(value.job.pointSettlement, state, item.heldPoints, value.job.state === 'failed')
-  if (finalSettlement.state === 'waived' && (value.job.refunded === true || value.job.reconciliationRequired === true || value.job.downloadAllowed === true || value.job.previewAvailable === true)) return invalid()
+  if (isManualPointClosure(finalSettlement) && (value.job.refunded === true || value.job.reconciliationRequired === true || value.job.downloadAllowed === true || value.job.previewAvailable === true)) return invalid()
   if (['charged', 'released'].includes(selectedSettlement.state) && finalSettlement.state !== selectedSettlement.state || selectedSettlement.state === 'pending-cost' && finalSettlement.state === 'held') return invalid()
   return outcome(state, finalSettlement)
 }

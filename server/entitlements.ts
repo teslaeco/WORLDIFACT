@@ -21,6 +21,7 @@ import { isStoredInvoiceReference, readGenerationFundingEvidenceQuery, type Gene
 import { BLUEPRINT_RECONCILIATION_TERMS, blueprintRetainedCents, validateBlueprintTerminalUsage, type BlueprintTerminalUsage } from './blueprintTerminalUsage.ts'
 import { PAID_POINTS_POLICY, PAID_POINTS_FUNDING, isPointSettlement, type PointSettlement } from '../src/lib/paidPointsFunding.ts'
 import { PAID_POINTS_ROUTE_PREFIX, generationPath, paidPointsStorage } from './paidPointsStorage.ts'
+import { heldPointsForfeitApi, heldPointsForfeitLedgerRoute } from './heldPointsForfeit.ts'
 import { failedHoldWaiverApi, failedHoldWaiverLedgerRoute } from './failedHoldWaiver.ts'
 import { ownerReserveAdjustmentApi, ownerReserveAdjustmentLedgerRoute } from './ownerReserveAdjustment.ts'
 
@@ -152,7 +153,7 @@ export function paidPointsJob(value: unknown, id?: string): value is Job & { fun
   const fields = ['pointSettlement', 'fundingMode', 'providerLiability', 'blueprintProviderModel', 'pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile',
     'failureCode', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'billingMode', 'state', 'studioDispatch', 'studioDispatchUntil', 'blueprintDispatch', 'blueprintDispatchUntil']
   if (job.fundingMode !== PAID_POINTS_FUNDING || Object.keys(job).some(key => !fields.includes(key)) || !terms || job.kind !== 'credits' || job.cost !== terms.points || !isPointSettlement(job.pointSettlement, job.cost) ||
-      !(job.state === 'reserved' && job.pointSettlement.state === 'held' || job.state === 'completed' && job.pointSettlement.state === 'charged' || job.state === 'failed' && ['pending-cost', 'released', 'waived'].includes(job.pointSettlement.state)) ||
+      !(job.state === 'reserved' && job.pointSettlement.state === 'held' || job.state === 'completed' && job.pointSettlement.state === 'charged' || job.state === 'failed' && ['pending-cost', 'released', 'waived', 'forfeited'].includes(job.pointSettlement.state)) ||
       !['reserved', 'completed', 'failed'].includes(job.state) || !['fast', 'slow'].includes(job.profile) ||
       !Number.isSafeInteger(job.at) || job.at <= 0 || !Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at ||
       typeof job.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(job.fingerprint) || !marker || typeof marker !== 'object' || Array.isArray(marker) ||
@@ -170,7 +171,7 @@ export function paidPointsJob(value: unknown, id?: string): value is Job & { fun
   if (job.channel === 'studio' ? job.profile !== 'slow' || job.billingMode !== 'hold-v1' || job.blueprintDispatch !== undefined :
       job.channel !== 'blueprint' || job.billingMode !== 'hold-v1' || job.studioDispatch !== undefined || job.pricing !== undefined || !boundBlueprintProviderModel(job)) return false
   if (!['ready-v1', 'claimed-v1'].includes(String(dispatch)) || (dispatch === 'ready-v1' ? until !== undefined : !Number.isSafeInteger(until) || Number(until) <= job.at || Number(until) > job.at + (job.channel === 'studio' ? STUDIO_SUBMISSION_GRACE_MS : BLUEPRINT_JOB_WINDOW_MS))) return false
-  if (job.pointSettlement?.state === 'waived' && (job.channel !== 'studio' || job.cost !== 250 || marker.capCents !== 175 || marker.state !== 'bounded' || marker.maximumLiabilityCents <= 0 || marker.evidence?.kind !== 'studio-terminal')) return false
+  if (['waived', 'forfeited'].includes(String(job.pointSettlement?.state)) && (job.channel !== 'studio' || job.cost !== 250 || marker.capCents !== 175 || marker.state !== 'bounded' || marker.maximumLiabilityCents <= 0 || marker.evidence?.kind !== 'studio-terminal')) return false
   if (job.pointSettlement?.state === 'released' && (marker.state !== 'bounded' || marker.maximumLiabilityCents !== 0)) return false
   if (job.pointSettlement?.state === 'pending-cost' && marker.state === 'bounded' && marker.maximumLiabilityCents === 0) return false
   if (marker.state === 'unsubmitted') return job.state === 'reserved' && dispatch === 'ready-v1' && marker.maximumLiabilityCents === 0 && !Object.hasOwn(marker, 'evidence')
@@ -387,7 +388,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
   if (Object.hasOwn(job, 'fundingMode') && !paidPointsJob(job, id)) throw new Error('Unknown settlement funding mode')
   if (paidPointsJob(job, id)) {
     const point = job.pointSettlement!
-    if (point.state === 'charged' || point.state === 'released' || point.state === 'waived') return { settled: true, repeated: true, pointSettlement: point }
+    if (point.state === 'charged' || point.state === 'released' || point.state === 'waived' || point.state === 'forfeited') return { settled: true, repeated: true, pointSettlement: point }
     if (job.state === 'failed' && next === 'failed') return { settled: true, repeated: true, pointSettlement: point }
     if (next === 'completed' && (job.providerLiability.state === 'unsubmitted' || job.state === 'failed' && !validatedLateCompletion)) return { settled: false, pointSettlement: point }
     let providerLiability = job.providerLiability
@@ -893,6 +894,12 @@ export class AccountEntitlements {
         const matches = pointsProtocol && !!account && ACCOUNT_ID.test(account) && !!this.supportEnv.ACCOUNT_ENTITLEMENTS && this.durableObjectId !== null &&
           this.durableObjectId === String(this.supportEnv.ACCOUNT_ENTITLEMENTS.idFromName(`account:v1:${account.toLowerCase()}`))
         return await failedHoldWaiverLedgerRoute(request, this.storage, this.supportEnv, matches, paidPointsJob, now)
+      }
+      if (path === '/held-points-forfeit') {
+        const account = request.headers.get('X-WORLDIFACT-Verified-Account')
+        const matches = pointsProtocol && !!account && ACCOUNT_ID.test(account) && !!this.supportEnv.ACCOUNT_ENTITLEMENTS && this.durableObjectId !== null &&
+          this.durableObjectId === String(this.supportEnv.ACCOUNT_ENTITLEMENTS.idFromName(`account:v1:${account.toLowerCase()}`))
+        return await heldPointsForfeitLedgerRoute(request, this.storage, this.supportEnv, matches, paidPointsJob, now)
       }
       if (path === '/owner-reserve-adjustment') {
         const account = request.headers.get('X-WORLDIFACT-Verified-Account')
@@ -1970,6 +1977,7 @@ export async function entitlementApi(request: Request, env: AccountEnv & Entitle
     } catch { return json({ error: 'History unavailable.' }, 503) }
   }
   if (new URL(request.url).pathname === '/api/account/promotions') return promotionApi(request, env, fetcher)
+  if (new URL(request.url).pathname === '/api/account/held-points-forfeit') return heldPointsForfeitApi(request, env, fetcher)
   if (new URL(request.url).pathname === '/api/account/failed-hold-waiver') return failedHoldWaiverApi(request, env, fetcher)
   if (new URL(request.url).pathname === '/api/account/owner-reserve-adjustment') return ownerReserveAdjustmentApi(request, env, fetcher)
   if (['/api/account/generation-funding', '/api/overnight-tests/status'].includes(new URL(request.url).pathname)) {

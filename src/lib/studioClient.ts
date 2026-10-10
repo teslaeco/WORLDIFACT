@@ -1,7 +1,7 @@
 import { isStudioPricing, studioPricingFor, type StudioPricing } from './studioPricing.ts'
 import { JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, prepareStudioInput, readStudioGenerationTiming, studioPointsPending, studioPendingPointsDetail, validateStudioInput, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
 import { canSubmitNewDraft } from './studioDraft.ts'
-import { PAID_POINTS_FUNDING, PAID_POINTS_POLICY_HEADER, POINT_COST_WAIVED_DETAIL, isPointSettlement, type PointSettlement } from './paidPointsFunding.ts'
+import { PAID_POINTS_FUNDING, PAID_POINTS_POLICY_HEADER, isManualPointClosure, manualPointClosureDetail, isPointSettlement, type PointSettlement } from './paidPointsFunding.ts'
 
 // Upload is separate from provider execution: a large mobile request must not
 // inherit the short status-request deadline. Photos are uploaded only once.
@@ -38,7 +38,7 @@ function parseSavedStudioJob(value: unknown): SavedStudioJob {
   if (Object.hasOwn(value, 'fundingSource') && value.fundingSource !== PAID_POINTS_FUNDING) throw new Error('The saved job funding policy needs review. No replacement request was started.')
   const pricing = isStudioPricing(value.pricing) ? value.pricing : receipt.pricing
   if (Object.hasOwn(value, 'pointSettlement') && !isPointSettlement(value.pointSettlement, pricing?.points ?? (profile === FAST_DRAFT_PROFILE ? 50 : 250))) throw new Error('The saved job point settlement needs review. Keep this receipt; no new generation was started.')
-  if (isPointSettlement(value.pointSettlement) && value.pointSettlement.state === 'waived' &&
+  if (isPointSettlement(value.pointSettlement) && isManualPointClosure(value.pointSettlement) &&
     (!(value.fundingSource === PAID_POINTS_FUNDING || receipt.ticket.startsWith('held.')) || typeof value.rejection !== 'string' || value.rejection.length > 600)) throw new Error('The saved job waiver could not be verified. Keep this receipt for review.')
   return { receipt, prompt: value.prompt, startedAt: value.startedAt,
     ...(isStudioPricing(value.pricing) ? { pricing: { ...value.pricing } } : receipt.pricing ? { pricing: { ...receipt.pricing } } : {}),
@@ -54,7 +54,7 @@ export function parseStudioJob(value: unknown, id: string, expectedPoints?: numb
   const pricing = isStudioPricing(value.job.pricing) ? value.job.pricing : undefined
   if (Object.hasOwn(value.job, 'pointSettlement') && !isPointSettlement(value.job.pointSettlement, expectedPoints ?? pricing?.points ?? (expectedPaid ? 250 : undefined))) throw new Error('This job’s point settlement could not be verified. Keep its receipt for review; no charge or refund is inferred.')
   const pointSettlement = isPointSettlement(value.job.pointSettlement) ? { ...value.job.pointSettlement } : undefined
-  const waived = pointSettlement?.state === 'waived'
+  const waived = isManualPointClosure(pointSettlement)
   if (pointSettlement && (waived ? state !== 'failed' || !expectedPaid || value.job.refunded === true || value.job.reconciliationRequired === true || value.job.downloadAllowed === true || value.job.previewAvailable === true : state === 'succeeded' ? pointSettlement.state !== 'charged' : ['failed', 'cancelled'].includes(state)
     ? !['pending-cost', 'released'].includes(pointSettlement.state) : pointSettlement.state !== 'held')) throw new Error('This job’s generation and point settlement states disagree. Keep its receipt for review; no charge or refund is inferred.')
   const pointSettlementUnconfirmed = expectedPaid && !pointSettlement && ['failed', 'cancelled'].includes(state)
@@ -62,7 +62,7 @@ export function parseStudioJob(value: unknown, id: string, expectedPoints?: numb
   const failureCode = state === 'failed' && STUDIO_FAILURE_CODES.includes(value.job.failureCode as NonNullable<StudioJob['failureCode']>) ? value.job.failureCode as StudioJob['failureCode'] : undefined
   const failureDetail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : undefined
   const generationTiming = ['succeeded', 'failed', 'cancelled'].includes(state) ? readStudioGenerationTiming(value.job.generationTiming) : undefined
-  return { id, state, ...(pricing ? { pricing: { ...pricing } } : {}), detail: waived ? POINT_COST_WAIVED_DETAIL : pointSettlementUnconfirmed || studioPointsPending({ state, pointSettlement }) ? studioPendingPointsDetail(pointSettlement?.heldPoints) : reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : failureDetail || JOB_DETAILS[state], ...(failureCode ? { failureCode } : {}),
+  return { id, state, ...(pricing ? { pricing: { ...pricing } } : {}), detail: waived ? manualPointClosureDetail(pointSettlement) : pointSettlementUnconfirmed || studioPointsPending({ state, pointSettlement }) ? studioPendingPointsDetail(pointSettlement?.heldPoints) : reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : failureDetail || JOB_DETAILS[state], ...(failureCode ? { failureCode } : {}),
     ...(pointSettlementUnconfirmed ? { pointSettlementUnconfirmed: true } : {}),
     ...(pointSettlement ? { pointSettlement } : {}),
     ...(generationTiming ? { generationTiming } : {}),
@@ -98,9 +98,9 @@ async function responseJson(response: Response, expectedId?: string, expectedPai
   if (!response.ok) {
     if (object(value) && Object.hasOwn(value, 'pointSettlement') && !isPointSettlement(value.pointSettlement)) throw new Error('This job’s point settlement could not be verified. Keep its receipt for review; no charge or refund is inferred.')
     const settlement = object(value) && isPointSettlement(value.pointSettlement) ? { ...value.pointSettlement } : undefined
-    if (settlement?.state === 'waived' && (!expectedPaid || !object(value) || value.requestId !== expectedId || value.state !== 'failed' || value.refunded === true)) throw new Error('This job’s waiver could not be verified. Keep its receipt for review; no charge or refund is inferred.')
+    if (isManualPointClosure(settlement) && (!expectedPaid || !object(value) || value.requestId !== expectedId || value.state !== 'failed' || value.refunded === true)) throw new Error('This job’s waiver could not be verified. Keep its receipt for review; no charge or refund is inferred.')
     const failureCode = object(value) && STUDIO_FAILURE_CODES.includes(value.failureCode as NonNullable<StudioJob['failureCode']>) ? value.failureCode as StudioJob['failureCode'] : undefined
-    throw new StudioResponseError(settlement?.state === 'waived' ? POINT_COST_WAIVED_DETAIL : studioPointsPending({ state: 'failed', pointSettlement: settlement }) ? studioPendingPointsDetail(settlement!.heldPoints) : failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : object(value) && typeof value.error === 'string' ? value.error.slice(0, 600) : `Request failed (${response.status}).`, response.status, failureCode, settlement)
+    throw new StudioResponseError(isManualPointClosure(settlement) ? manualPointClosureDetail(settlement) : studioPointsPending({ state: 'failed', pointSettlement: settlement }) ? studioPendingPointsDetail(settlement!.heldPoints) : failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : object(value) && typeof value.error === 'string' ? value.error.slice(0, 600) : `Request failed (${response.status}).`, response.status, failureCode, settlement)
   }
   return value
 }
@@ -164,7 +164,7 @@ export class StudioCoordinator {
     if (this.rejectedJob && this.saved?.pointSettlement) {
       this.rejectedJob.pointSettlement = this.saved.pointSettlement
       if (studioPointsPending(this.rejectedJob)) this.rejectedJob.detail = studioPendingPointsDetail(this.saved.pointSettlement.heldPoints)
-      if (this.saved.pointSettlement.state === 'waived') this.rejectedJob.detail = POINT_COST_WAIVED_DETAIL
+      if (isManualPointClosure(this.saved.pointSettlement)) this.rejectedJob.detail = manualPointClosureDetail(this.saved.pointSettlement)
     }
     if (this.rejectedJob && this.saved?.fundingSource === PAID_POINTS_FUNDING && !this.saved.pointSettlement) {
       this.rejectedJob.pointSettlementUnconfirmed = true; this.rejectedJob.detail = studioPendingPointsDetail()
@@ -203,7 +203,7 @@ export class StudioCoordinator {
       if (saved.pricing) job.pricing = saved.pricing
       const generationTiming = financial !== 'reserved' ? readStudioGenerationTiming(value.current.generationTiming) : undefined
       if (generationTiming) job.generationTiming = generationTiming
-      this.saved = saved; this.confirmedJob = job; this.rejectedJob = job.pointSettlement?.state === 'waived' ? job : null
+      this.saved = saved; this.confirmedJob = job; this.rejectedJob = isManualPointClosure(job.pointSettlement) ? job : null
       return { saved, job }
     } finally { this.recovering = false }
   }
@@ -243,11 +243,11 @@ export class StudioCoordinator {
     if (this.store.getItem(key) !== text) throw new Error('The previous receipt could not be retained. No new model was submitted.')
   }
   private retainWaiver(saved: SavedStudioJob, job: StudioJob): SavedStudioJob {
-    if (job.pointSettlement?.state !== 'waived') return saved
+    if (!isManualPointClosure(job.pointSettlement)) return saved
     // Keep the original failed description and credential history before
     // caching this final customer settlement. A waiver never creates a model.
     this.preserveReceipt(saved)
-    return { ...saved, fundingSource: PAID_POINTS_FUNDING, pointSettlement: job.pointSettlement, rejection: POINT_COST_WAIVED_DETAIL,
+    return { ...saved, fundingSource: PAID_POINTS_FUNDING, pointSettlement: job.pointSettlement, rejection: manualPointClosureDetail(job.pointSettlement),
       ...(job.failureCode ? { rejectionCode: job.failureCode } : {}) }
   }
   async start(input: StudioInput, onPrepared: (saved: SavedStudioJob) => void, owner = '', replaceCompleted = false, fundingSource?: typeof PAID_POINTS_FUNDING): Promise<StudioJob> {
@@ -322,7 +322,7 @@ export class StudioCoordinator {
     try {
       const job = parseStudioJob(await responseJson(response, saved.receipt.id, saved.fundingSource === PAID_POINTS_FUNDING), saved.receipt.id, saved.pricing?.points ?? (saved.generationProfile === FAST_DRAFT_PROFILE ? 50 : 250), saved.fundingSource === PAID_POINTS_FUNDING || !!saved.pointSettlement)
       if (!job.pricing && saved.pricing) job.pricing = saved.pricing
-      if (job.pointSettlement?.state === 'waived') {
+      if (isManualPointClosure(job.pointSettlement)) {
         const settled = this.retainWaiver(saved, job)
         if (this.saved?.receipt.id === job.id) {
           const text = JSON.stringify(settled)

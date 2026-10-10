@@ -752,7 +752,37 @@ export const COMPACT_RELEASE_PATHS = Object.freeze([
   "tests/promotion-ui.test.mjs",
   "tests/shop-account-chrome.test.mjs"
 ] )
+export const FORFEIT_RELEASE_BASE = '09639730fc093d4371c7dae56a0c3903fefed03a'
+export const FORFEIT_RELEASE_MARKER = 'ops/HELD_POINTS_FORFEIT_RELEASE_20261010.json'
+export const FORFEIT_RELEASE_CONTENT = "{\n  \"release\": \"held-points-forfeit-source-20261010\",\n  \"baseCommit\": \"09639730fc093d4371c7dae56a0c3903fefed03a\",\n  \"preserveBilling\": true,\n  \"preserveRemoteVars\": true,\n  \"preserveSecrets\": true,\n  \"activateAdmin\": false,\n  \"activatePromotions\": false,\n  \"paidGeneration\": false,\n  \"applyPointCorrection\": false\n}\n"
+export const FORFEIT_RELEASE_PATHS = Object.freeze([
+  ".github/workflows/cloudflare.yml",
+  "docs/CONTEST_STATUS.md",
+  "docs/HELD_POINTS_FORFEIT_20261010.md",
+  "ops/HELD_POINTS_FORFEIT_RELEASE_20261010.json",
+  "scripts/select-failed-hold-release.mjs",
+  "scripts/select-pipeline-only-release.mjs",
+  "server/entitlements.ts",
+  "server/heldPointsForfeit.ts",
+  "server/paidPointsStorage.ts",
+  "server/studio.ts",
+  "src/lib/heldPointsForfeit.ts",
+  "src/lib/paidPointsFunding.ts",
+  "src/lib/recoverHeldPoints.ts",
+  "src/lib/studioClient.ts",
+  "src/main.tsx",
+  "src/pages/HeldPointsForfeitPage.tsx",
+  "tests/fixtures/held-points-forfeit.ts",
+  "tests/generation-funding-page.test.mjs",
+  "tests/held-points-forfeit-native.test.mjs",
+  "tests/held-points-forfeit-page.test.mjs",
+  "tests/held-points-forfeit-recovery.test.ts",
+  "tests/held-points-forfeit-release.test.mjs",
+  "tests/held-points-forfeit.test.ts",
+  "tests/recover-held-points.test.ts"
+])
 const scopes = [
+  { base: FORFEIT_RELEASE_BASE, marker: FORFEIT_RELEASE_MARKER, content: FORFEIT_RELEASE_CONTENT, paths: FORFEIT_RELEASE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: COMPACT_RELEASE_BASE, marker: COMPACT_RELEASE_MARKER, content: COMPACT_RELEASE_CONTENT, paths: COMPACT_RELEASE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: ADMIN_RELEASE_BASE, marker: ADMIN_RELEASE_MARKER, content: ADMIN_RELEASE_CONTENT, paths: ADMIN_RELEASE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: AI_SHOP_UI_BASE_COMMIT, marker: AI_SHOP_UI_MARKER_PATH, content: AI_SHOP_UI_MARKER_CONTENT, paths: AI_SHOP_UI_REVIEWED_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
@@ -829,7 +859,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

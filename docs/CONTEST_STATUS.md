@@ -1,3 +1,18 @@
+# 10 October 2026 — approved forfeiture of four failed-request holds
+
+The owner explicitly confirmed removing 1,000 held points without refund and
+retaining **190 available**. Fresh authenticated readback still shows
+1,190 total / 1,000 held / 190 available. The implementation adds an account-bound,
+exact-job, exact-baseline one-time transaction and immutable `forfeited` audit;
+provider liability, historical waiver, subscriptions, codes and models remain
+unchanged. No paid generation or Stripe call. See
+[the operation and rollback instructions](HELD_POINTS_FORFEIT_20261010.md).
+Native SQLite and authorization tests run on inert fixtures. Source publication
+and actual authenticated application remain pending CI and production readback;
+this entry does not claim that the 1,000 live holds have already been removed.
+The approved merge/deploy scope uses a new exact-parent source-only release;
+publication itself performs no balance mutation.
+
 # 10 October 2026 — compact subscriptions and code redemption
 
 Owner requested a compact panel with a code tab and a success burst. Removed the
@@ -18,8 +33,7 @@ points each, expiry 2026-11-09T17:52:35.130Z. Values stay private. This release
 uses the existing source-only preserving transport and an exact-parent/path
 scope; it preserves all runtime secrets including active promotion definitions,
 Stripe configuration, balances, provider budgets and Oracle. No provider call.
-Targeted UI tests pass; hosted full verification and production publication
-remain pending. Browser localhost checks remain blocked by the recorded policy.
+PR #249 merged as 09639730fc093d4371c7dae56a0c3903fefed03a. All five PR workflows passed; verification ran 2,106 tests. Publication run 38075384317 succeeded, Worker version 4101fc23-0917-40a5-8fc0-f1186892af44. Authenticated production browser verified the compact tabs, enabled private-code input and 190 available points. No real code was consumed by the verification. Browser localhost checks remain blocked by the recorded policy.
 Rollback is a reviewed source-only release preserving all remote configuration.
 
 # 10 October 2026 — approved preserving publication after PR #246

@@ -1,5 +1,6 @@
 import { ADMIN_JOB_PREFIX, adminJob, adminFence, matchingAdminFence, sameAllocation, validAdminFunding } from './adminEntitlement.ts'
 import type { EntitlementStorage } from './entitlements.ts'
+import { verifyHeldPointsForfeitJob } from './heldPointsForfeit.ts'
 import { verifyFailedHoldWaiverJob } from './failedHoldWaiver.ts'
 import { PAID_POINTS_FUNDING } from '../src/lib/paidPointsFunding.ts'
 
@@ -10,7 +11,7 @@ const CURRENT = 'current-studio-job:v1'
 const PAID_CURRENT = 'current-studio-job:points-v2'
 const GENERATION_PATHS = new Set(['/admin-history', '/status', '/reserve', '/reserve-overnight-test', '/settle', '/job', '/blueprint-status', '/blueprint-complete',
   '/blueprint-dispatch', '/studio-dispatch', '/studio-current', '/studio-current-clear', '/studio-close-missing', '/studio-library',
-  '/studio-provider-pending', '/provider-reconciliation-pending', '/reconcile-studio-provider', '/reconcile-blueprint-provider', '/generation-funding', '/failed-hold-waiver'])
+  '/studio-provider-pending', '/provider-reconciliation-pending', '/reconcile-studio-provider', '/reconcile-blueprint-provider', '/generation-funding', '/failed-hold-waiver', '/held-points-forfeit'])
 export function generationPath(path: string) {
   const pathname = path.split('?')[0]
   return GENERATION_PATHS.has(pathname) || pathname.startsWith('/studio-library/')
@@ -39,6 +40,7 @@ export function paidPointsStorage(storage: EntitlementStorage, valid: (value: un
     if (paid !== undefined) {
       if (!valid(paid, key.slice(4)) || !row(paid) || !matchingPaidPointsFence(old, paid)) throw new Error('Unverified paid membership job')
       if (row(paid.pointSettlement) && paid.pointSettlement.state === 'waived' && !await verifyFailedHoldWaiverJob(storage, key.slice(4), paid)) throw new Error('Unverified failed-hold waiver')
+      if (row(paid.pointSettlement) && paid.pointSettlement.state === 'forfeited' && !await verifyHeldPointsForfeitJob(storage, key.slice(4), paid)) throw new Error('Unverified held-points forfeiture')
       return paid
     }
     if (row(old) && ('fundingMode' in old || 'providerLiability' in old || 'pointSettlement' in old)) throw new Error('Unknown job funding mode')
@@ -86,7 +88,7 @@ export function paidPointsStorage(storage: EntitlementStorage, valid: (value: un
         if (row(value) && value.fundingMode === PAID_POINTS_FUNDING) {
           if (!valid(value, key.slice(4))) throw new Error('Invalid paid membership job write')
           const priorPaid = await storage.get<Row>(PAID_POINTS_JOB_PREFIX + key.slice(4))
-          if (row(value.pointSettlement) && value.pointSettlement.state === 'waived' || row(priorPaid?.pointSettlement) && priorPaid.pointSettlement.state === 'waived')
+          if (row(value.pointSettlement) && ['waived', 'forfeited'].includes(String(value.pointSettlement.state)) || row(priorPaid?.pointSettlement) && ['waived', 'forfeited'].includes(String(priorPaid.pointSettlement.state)))
             throw new Error('Incident-waived jobs are immutable')
           const prior = await storage.get(key)
           if (prior !== undefined && !matchingPaidPointsFence(prior, value)) throw new Error('Legacy job collision')
