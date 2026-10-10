@@ -1,0 +1,11 @@
+{
+  "release": "held-points-forfeit-source-20261010",
+  "baseCommit": "09639730fc093d4371c7dae56a0c3903fefed03a",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "activateAdmin": false,
+  "activatePromotions": false,
+  "paidGeneration": false,
+  "applyPointCorrection": false
+}
