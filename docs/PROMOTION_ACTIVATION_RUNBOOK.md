@@ -1,64 +1,68 @@
 # Private promotion activation
 
-The owner authorized the original ten account-bound, single-use 1,000-point codes,
-valid for 30 days. This is NOT authority to replay historical denied point
-corrections, change Stripe, add provider funding or create a replacement batch.
+## Exact approval and scope
 
-## Existing access
+On 10 October 2026 the owner explicitly requested a NEW private list, registration,
+activation and delivery only after activation. This supersedes the previous
+original-batch-only restriction. The approved replacement consists of ten
+account-bound, single-use codes, 1,000 internal points each, valid for 30 days.
+It does not authorize historical denied point corrections, Stripe changes,
+provider funding, ADMIN allocation or paid generation. The original encrypted
+file remains preserved; its unreadability is no longer the activation blocker.
 
-GitHub environment `Production` already contains `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID`. The successful preserving release used these credentials.
-No new token, login account, permission expansion or credential export is required
-for the reviewed Actions route. Never print secret values or put them in artifacts.
+## Private preparation
 
-The dedicated audit workflow runs only on the named operations branch, attempt 1.
-It uses three authenticated Cloudflare GETs: deployments, the pinned active version,
-and deployments again. It stops on split traffic, version drift or concurrent
-publication. Output is an explicit allowlist of presence booleans and flag states;
-no raw configuration, account IDs, code hashes or API error bodies are logged.
-It neither deploys nor calls account ledgers, Stripe or generation providers.
-Official API: https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/get/
+Verify the owner UUID against the authenticated account record. Generate ten
+cryptographically random codes privately, outside the repository. The offline
+compiler accepts accountId, startsAt and codes on stdin and writes only hashed
+definitions to an exclusive mode-0600 private file. Raw codes, account identity
+and hashes must never appear in commits, public logs or Actions artifacts.
+Stage compiled definitions only in Production environment secret
+WORLDIFACT_PROMOTION_BATCH_20261010. Existing Cloudflare account/token secrets
+supply deployment access; no credentials are exported or permissions expanded.
 
-## Original batch preparation
+## One-time activation gates
 
-Obtain the original batch through the owner's private channel. Its existing PDF is
-encrypted; unreadable content is a blocker, never justification to replace codes.
-Do not ask for encryption passwords or sign-in credentials in chat.
+The branch-only activation workflow is dormant until a NEW regular marker file
+.github/activation/private-promotion-20261010.json is added in its own commit.
+First publish and pass all five CI workflows for the implementation parent.
+The marker names that exact reviewedParent and the explicit approval identifier.
+Runtime guards enforce the repository, owner actor, operations branch, push event,
+first attempt, single parent and marker-only addition. Reruns are rejected.
 
-`scripts/prepare-private-promotion-batch.mjs` accepts a private JSON object on stdin:
-`accountId` (verified auth record UUID), `startsAt` (UTC epoch milliseconds), and
-`codes` (exactly ten original strings). Do not put these values in shell arguments,
-GitHub inputs, commits or logs. The only CLI argument is an output filename in a
-private directory outside the repository. Output creation is exclusive, mode 0600.
-Raw codes are omitted; claim IDs are stable for the same code/account.
-Preparation DOES NOT activate codes and does not prove provider funding.
+The activation validates exactly ten definitions, a single account, 1,000 points,
+one redemption, identical start times and 30-day expiry. It uses authenticated
+Cloudflare GETs to require the known active version with exclusive 100% traffic,
+no existing promotion bindings, no newer unpublished version and no concurrent
+publication. A single PATCH /secrets-bulk sets only promotion definitions and the
+enabled flag, atomically, preserving omitted secrets. No retry is permitted after
+an ambiguous write. No account ledger or generation provider endpoint is called.
 
-## Activation gates and preservation
+After writing, require a new stable active version at 100%, identical code etag,
+handlers, runtime and all unrelated bindings; only two secret bindings may be
+added. Emit an allowlisted receipt without identity, hashes or secret values.
+An uncertain write means STOP and inspect metadata, never rerun activation.
+Official API: https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/secrets/methods/bulk_update/
 
-1. Confirm the authenticated owner UUID and original code compatibility. Preserve
-   original codes and existing claim identities; never silently regenerate either.
-2. Read active Cloudflare configuration through the existing token. If definitions
-   already exist, stop for reconciliation; never replace unknown definitions.
-3. Stage only the approved hashed definitions privately, keeping promotions disabled
-   until verified. Registration must preserve all other secrets, vars, bindings,
-   subscriptions, balances, held points, stored models and historical receipts.
-4. Enable only this approved batch, record deployment metadata and the exact bounded
-   terms privately. A verified rollback disables promotions without deleting claims.
-   This branch does not implement or execute that production mutation.
-5. Verify the owner's authenticated GET `/api/account/promotions` returns active.
-   Real redemption must add exactly 1,000 points once; repeat must add zero. A test
-   consumes one original code and must be recorded as redeemed, not delivered as
-   unused. Do not manufacture replacement codes or reverse ledgers to hide the test.
-6. Deliver the private file only after activation/readback; identify any used code.
-   Current audit presence results alone cannot be called successful redemption.
+## Verification and delivery
 
-Emergency disable pauses new and unfinished redemptions. Preserve claim/grant audit
-markers. These internal points do not fund provider API consumption; ADMIN budget
-allocation and a paid generation test remain separate bounded operations.
+Passing synthetic tests proves authorization, duplicate protection and preservation
+behavior in tests. Successful API publication/readback proves batch configuration
+activation; it is not proof of a real account redemption or provider funding.
+The owner redeems through Account / Credits (Subscriptions), using the verified
+account. A real redemption consumes a code; do not label it unused, replace it or
+reverse its ledger to conceal the test. Deliver the ten private codes only after
+the deployment receipt verifies activation, with exact expiry and account scope.
+Never attach the file to GitHub or publish it as an Actions artifact.
 
-## Rollback of this operations change
+## Revocation and rollback
 
-Close the operations PR/remove its branch to retire the branch-only GET workflow.
-No production rollback is needed because it performs no mutation. Delete local
-private staging files through the owner's normal retention policy; never attach
-them to a public issue, PR, Actions artifact or repository release.
+Emergency disable sets only WORLDIFACT_PROMOTIONS_ENABLED to false using the
+existing deployment access; preserve definitions, claim/grant markers and ledger
+history. Re-enable only after reconciliation. If an individual code needs
+revocation, use the existing validated definition revocation field and preserve
+all other definitions. Disabling prevents new/unfinished redemptions; it does not
+reverse already granted points. A source rollback must preserve runtime bindings.
+Removing the branch workflow retires the operation but does not revoke codes.
+Internal points do not fund provider API consumption. ADMIN budgets and any paid
+real-generation test require their own bounded approval.

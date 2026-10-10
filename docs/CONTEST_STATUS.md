@@ -1,3 +1,19 @@
+# 10 October 2026 — explicitly approved NEW private ten-code batch
+
+The owner explicitly requested a new list, activation and private delivery only
+once active. This supersedes the original-batch-only restriction. The scope is
+ten account-bound single-use internal point codes, 1,000 points each, 30 days.
+The owner auth record was verified read-only; identity and code data stay private.
+No Stripe change, direct balance correction, ADMIN budget or paid job is included.
+
+Added a one-time branch-only activation workflow and script. Publication requires
+full green CI for the implementation parent, then a marker-only child commit.
+The operation preserves the active code, runtime and all unrelated bindings,
+performs one bounded secret merge-patch, never retries a write and verifies new
+exclusive 100% deployment. Thirteen synthetic activation tests pass locally.
+Hosted CI and actual activation remain pending; no live redemption is claimed.
+See docs/PROMOTION_ACTIVATION_RUNBOOK.md for exact gates and revocation.
+
 # 10 October 2026 — existing credential audit and private batch preparation
 
 GitHub's authenticated environment settings confirm that Production already has
@@ -11,8 +27,9 @@ This operations branch adds a GET-only runtime audit using those existing secret
 and an offline original-batch compiler. The compiler accepts exactly ten private
 codes, verified account UUID and start time, producing stable claim IDs, 1,000
 points each, one redemption and 30-day validity. It does not create replacement
-codes or activate anything. Twelve targeted operations tests pass locally; full
-hosted CI remains pending (results will be recorded in PR #248).
+codes or activate anything. Twelve targeted operations tests pass locally. All five hosted PR workflows
+passed on 9219f49; verification 38073086134 passed 2,112 tests, lint, typecheck,
+HTTP tests, build and deploy checks.
 
 Authenticated Cloudflare readback PASSED at 2026-10-10T17:43:33Z in run
 38072893760, job 114273800678. The expected Worker version has exclusive 100%
@@ -23,9 +40,10 @@ are PRESENT. No secret values or account/code data were printed or exported.
 This establishes the missing activation configuration, not account redemption,
 provider funding, validity of secret values or a successful real generation.
 
-The original encrypted batch remains unreadable. No raw codes, real account IDs,
-hashes or new credentials are committed. No credit grant, activation, Stripe
-change, provider funding, waiver replay or paid generation occurs in this change.
+The original encrypted batch remains unreadable; the subsequent explicit new-batch
+approval below supersedes that blocker. No raw codes, real account IDs, hashes or
+new credentials are committed. The read-only audit performed no activation or
+financial mutation.
 See `docs/PROMOTION_ACTIVATION_RUNBOOK.md` for private staging, live verification
 and revocation. Runtime presence flags are not successful redemption evidence.
 
