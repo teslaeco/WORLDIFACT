@@ -1,3 +1,67 @@
+# 10 October 2026 — explicitly approved NEW private ten-code batch
+
+The owner explicitly requested a new list, activation and private delivery only
+once active. This supersedes the original-batch-only restriction. The scope is
+ten account-bound single-use internal point codes, 1,000 points each, 30 days.
+The owner auth record was verified read-only; identity and code data stay private.
+No Stripe change, direct balance correction, ADMIN budget or paid job is included.
+
+Added a one-time branch-only activation workflow and script. Publication requires
+full green CI for the implementation parent, then a marker-only child commit.
+The operation preserves the active code, runtime and all unrelated bindings,
+performs one bounded secret merge-patch, never retries a write and verifies new
+exclusive 100% deployment. Thirteen synthetic activation tests pass locally.
+All five implementation-parent workflows PASSED on
+730f445ca3077363a0d2215f684d88ba1d373557; verification 38073965361 passed
+2,125 tests, lint, typecheck, HTTP, build and deploy checks. Marker-only commit
+42c4b790e7793195d83fd63146b444d690b7d100 triggered activation 38074125029,
+job 114277412936. It PASSED at 2026-10-10T18:01:54Z: active version
+`a5f53530-cbcd-4c76-87ba-c624e412751f`, exclusive 100% traffic, code/runtime
+and unrelated bindings preserved. Only the two promotion secrets were added.
+The ten code originals match the compiled definitions; expiry is
+2026-11-09T17:52:35.130Z. No code was redeemed by the operation and no balance,
+Stripe setting or provider funding was changed. Actual account redemption remains
+UNTESTED; a production account session is not present in this browser.
+
+GO: approved private batch configuration is active and ready for private delivery.
+NO-GO claim: full ADMIN-funded generation/library/download acceptance remains
+unverified. Existing five high development-dependency advisories are unchanged;
+no dependency change is included.
+See docs/PROMOTION_ACTIVATION_RUNBOOK.md for exact gates and revocation.
+
+# 10 October 2026 — existing credential audit and private batch preparation
+
+GitHub's authenticated environment settings confirm that Production already has
+the Cloudflare account/token secrets. They were used by successful publication
+38069527834 of main `3e8a4aafe244744e477126b2e514f16f10ac0163`, Worker version
+`4c819fd5-d99b-4504-b191-9b3dcb30600a`. Its secret/billing synchronization steps
+were skipped. All five PR #247 workflows passed; application verification had
+2,100 passing tests. Main verification 38069527919 also passed.
+
+This operations branch adds a GET-only runtime audit using those existing secrets
+and an offline original-batch compiler. The compiler accepts exactly ten private
+codes, verified account UUID and start time, producing stable claim IDs, 1,000
+points each, one redemption and 30-day validity. It does not create replacement
+codes or activate anything. Twelve targeted operations tests pass locally. All five hosted PR workflows
+passed on 9219f49; verification 38073086134 passed 2,112 tests, lint, typecheck,
+HTTP tests, build and deploy checks.
+
+Authenticated Cloudflare readback PASSED at 2026-10-10T17:43:33Z in run
+38072893760, job 114273800678. The expected Worker version has exclusive 100%
+traffic and did not change during the read. Promotion enable/definitions and
+ADMIN enable/allocation bindings are all ABSENT. Account entitlements, both rate
+limiters, OpenAI, Oracle endpoint/token, owner token and Stripe secret bindings
+are PRESENT. No secret values or account/code data were printed or exported.
+This establishes the missing activation configuration, not account redemption,
+provider funding, validity of secret values or a successful real generation.
+
+The original encrypted batch remains unreadable; the subsequent explicit new-batch
+approval below supersedes that blocker. No raw codes, real account IDs, hashes or
+new credentials are committed. The read-only audit performed no activation or
+financial mutation.
+See `docs/PROMOTION_ACTIVATION_RUNBOOK.md` for private staging, live verification
+and revocation. Runtime presence flags are not successful redemption evidence.
+
 # 10 October 2026 — approved preserving publication after PR #246
 
 The owner approved merge and deployment. PR #246 merged as
@@ -23,7 +87,8 @@ readback. No runtime source, account allocation or code registration changes.
 Merge this follow-up by SQUASH against the exact approved parent. Unexpected
 paths, parent changes, marker reuse or symlinks stop release before credentials.
 ADMIN and promotions remain unconfigured/inactive; paid tests need separate approval.
-Publication receipt and final CI will be recorded in the PR after completion.
+Publication completed in run 38069527834; final CI and receipt are recorded in
+PR #247 and the current entry above. Account activation remains separate.
 
 # 10 October 2026 — owner entitlement and tester redemption review candidate
 
