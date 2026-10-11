@@ -5,7 +5,7 @@ on:
     types: [completed]
     branches: [main]
   push:
-    branches: [main, fix/image-five-points-20261011]
+    branches: [main, fix/image-worker-transport-20261011]
     paths:
       - '.github/workflows/image-generation-readiness.yml'
       - 'scripts/check-image-provider.mjs'
@@ -45,10 +45,11 @@ jobs:
           assert.equal(status.status, 200);
           const data = await status.json();
           assert.equal(data.ready, true);
+          assert.equal(data.transportRevision, 'image-manual-v1');
           assert.deepEqual(data.terms, { revision: 'image-5-v2', points: 5, size: '1024x1024', quality: 'medium', format: 'png' });
           assert.deepEqual(data.models, ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst']);
           const library = await fetch(origin + '/api/images', { redirect: 'error', signal: AbortSignal.timeout(20000) });
           assert.equal(library.status, 401);
           await library.body?.cancel();
-          console.log(JSON.stringify({ imageRoute: 'ready', points: 5, privateLibrary: 'login-required', paidRequests: 0 }));
+          console.log(JSON.stringify({ imageRoute: 'ready', points: 5, transportRevision: data.transportRevision, privateLibrary: 'login-required', paidRequests: 0 }));
           JS

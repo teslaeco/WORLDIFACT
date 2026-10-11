@@ -1583,3 +1583,35 @@ are rejected before provider dispatch and must use a new five-point request.
 Current settlements and UI messages use each job's stored points. The exact
 reviewed release preserves runtime variables, secrets and billing configuration.
 Focused accounting/recovery tests and deployment evidence are recorded in the PR.
+
+
+## Image Worker transport failure and bounded recovery — 2026-10-11
+
+Owner screenshot: GPT Image 2.5 Flare request from 01:52 Amsterdam was uncertain
+and retained 25 points. The previous deployment checks proved configuration
+and model metadata access, not a successful image request.
+
+Reproduced in the actual workerd/SQLite runtime at the deployed compatibility
+date: native fetch with redirect:error throws TypeError before outbound I/O.
+The reproduction counted zero provider calls. Node fetch fixtures did not model
+this restriction. Production now uses redirect:manual and does not follow 3xx.
+The native regression saves and downloads a valid >3 MB PNG, charges five points
+once, preserves other holds, and confirms replay never calls the provider again.
+
+Historical uncertain image holds can be released during owner-authenticated
+library reads/recovery only when the current runtime proves the same Request
+construction error and the exact old writer fingerprint, message, timestamps,
+price and absence of provider/output/new-transport evidence match. The bounded
+writer window is 2026-10-10T23:17:06Z through 2026-10-11T00:30:00Z; other records
+remain unchanged. Atomic compare-and-release preserves balance and other holds.
+New jobs carry image-manual-v1 so unknown new outcomes cannot qualify.
+This is a proven pre-dispatch recovery, not a refund inferred from failure.
+
+A first-branch-push-only workflow performs one real fixed Flare medium1024
+request through native imageStore in an isolated test ledger, using the existing
+server key. It has no retries, no access to customer accounts and no customer
+point charge. Subsequent pushes, reruns and main merges do not repeat it.
+Only byte count, SHA-256, state and token usage are logged. Final paid-test and
+deployment evidence belongs in the repair PR. The misleading existing 3D preview
+notice is hidden while Image is selected. Browser/device appearance remains
+unverified; the preserved configuration release does not change 3D or Oracle.

@@ -50,7 +50,7 @@ test('one provider response fixture saves a private PNG and charges exactly 5 po
   const storage = memory(), body = input(); let calls = 0
   await storage.put('customer-reserved-credits:v1', 40)
   const fetcher = (async (url: unknown, init?: RequestInit) => {
-    calls++; assert.equal(url, 'https://api.openai.com/v1/images/generations'); assert.equal(init?.redirect, 'error')
+    calls++; assert.equal(url, 'https://api.openai.com/v1/images/generations'); assert.equal(init?.redirect, 'manual')
     assert.equal(await storage.get('customer-reserved-credits:v1'), 45)
     assert.deepEqual(JSON.parse(String(init?.body)), { model: body.model, prompt: body.prompt, n: 1, size: '1024x1024', quality: 'medium', output_format: 'png' })
     return success()

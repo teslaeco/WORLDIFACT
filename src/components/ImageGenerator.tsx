@@ -21,6 +21,8 @@ export function ImageGenerator({ prompt, stage, onSettled }: { prompt: string; s
   const [error, setError] = useState(''), [jobs, setJobs] = useState<ImageJob[]>([]), [selected, setSelected] = useState<ImageJob | null>(null)
   const [preview, setPreview] = useState(''), [previewError, setPreviewError] = useState('')
   const [retryInput, setRetryInput] = useState<ImageInput | null>(null)
+  const settlementCallback = useRef(onSettled)
+  useEffect(() => { settlementCallback.current = onSettled }, [onSettled])
   const lifecycle = useRef(0), submitting = useRef(false), selectedId = useRef<string | null>(null)
   const owner = user?.id, pendingKey = owner ? `worldifact:image-request:v1:${owner}` : ''
   const reload = useCallback(async () => {
@@ -43,7 +45,7 @@ export function ImageGenerator({ prompt, stage, onSettled }: { prompt: string; s
         setChecked(false)
         throw new Error('Your last image request has not appeared yet. Reload its status before starting another; no automatic retry will be sent.')
       }
-      if (original && original.settlement !== 'held') { sessionStorage.removeItem(pendingKey); setRetryInput(null) }
+      if (original && original.settlement !== 'held') { sessionStorage.removeItem(pendingKey); setRetryInput(null); if (original.recovery) settlementCallback.current() }
       setJobs(entries)
       const next = entries.find(job => job.id === selectedId.current) ?? entries.find(job => job.settlement === 'held') ?? entries[0] ?? null
       selectedId.current = next?.id ?? null; setSelected(next); setChecked(true)
