@@ -90,7 +90,6 @@
   border-radius: 10px;
   color: #c1d0d7;
 }
-.studio-gallery-compact .studio-gallery-grid article:nth-child(n+7) { display: none; }
 @media (max-width: 760px) {
   .studio-gallery { margin: 16px 0 22px; padding: 14px; }
   .studio-gallery-heading { display: grid; }
@@ -108,3 +107,9 @@
 .creation-studio .studio-model-thumbnail small{color:#bed6d9}
 .creation-studio .studio-gallery-heading-actions{flex-wrap:wrap}
 .creation-studio .studio-gallery-heading-actions :is(button,a){min-height:44px;display:inline-flex;align-items:center}
+
+/* Expansion changes row count, never the Shop's visual layout. */
+.creation-studio.native-shop .studio-gallery .studio-gallery-grid article{background:var(--studio-panel);color:var(--studio-text);border-color:var(--studio-line)}
+.creation-studio.native-shop .studio-gallery .shop-gallery-details{color:var(--studio-muted)}
+.creation-studio.native-shop .studio-gallery .studio-model-thumbnail small{color:#bed6d9;font-size:9px}
+.creation-studio.native-shop .studio-gallery .studio-gallery-heading-actions a{color:var(--studio-accent)}

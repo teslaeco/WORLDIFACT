@@ -1,3 +1,15 @@
+# 11 October 2026 — keep library expansion visually consistent
+
+PR #258 passed 2,178 hosted tests and deployed successfully. Production inspection
+confirmed seven real thumbnails (six account records and one device copy), decoded
+360px images, and expand/collapse behavior. Exhausting the signed cursor returned
+no additional account models. Visual QA found expanded mode dropped the Shop style
+class. Retain that class and remove the obsolete CSS six-card cap; React already
+limits collapsed rows. Explicit theme rules preserve readable sandstone cards,
+labels and links. No transport, generation or financial behavior changes.
+Use the exact-parent preserving release; rollback is another reviewed source-only
+release retaining all models, points, receipts and remote configuration.
+
 # 11 October 2026 — real library thumbnails and inline expansion
 
 Owner-requested follow-up to the library screenshot: actual static geometry
