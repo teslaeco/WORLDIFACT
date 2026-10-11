@@ -22,7 +22,7 @@ jobs:
           node-version: 24
       - run: node --test tests/probe-photo-admission.test.mjs
       - name: Verify non-billable invalid-ID probe
-        run: echo "4a7a4bdfc54471bd1f300304457584ca98209bc11c043e44f152736d54aadbcc  scripts/probe-photo-admission.mjs" | sha256sum -c -
+        run: echo "6c3549e6d8564ce037c4870a008e0c58953ec3eab893939125ed65d8a402188a  scripts/probe-photo-admission.mjs" | sha256sum -c -
       - name: Validate synthetic photo with invalid ID and empty prompt
         run: node scripts/probe-photo-admission.mjs
         env:
