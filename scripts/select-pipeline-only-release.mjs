@@ -985,8 +985,10 @@ export const STUDIO_REFERENCE_PATHS = Object.freeze([
   "scripts/select-failed-hold-release.mjs",
   "scripts/select-pipeline-only-release.mjs",
   "server/studio.ts",
+  "src/lib/recoverHeldPoints.ts",
   "src/lib/studioProtocol.ts",
   "src/lib/studioReadbackGuide.ts",
+  "tests/recover-held-points.test.ts",
   "tests/studio-api.test.ts",
   "tests/studio-reference-envelope.test.ts",
   "tests/studio-reference-release.test.mjs"

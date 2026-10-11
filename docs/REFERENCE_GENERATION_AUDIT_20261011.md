@@ -65,6 +65,10 @@ Official references reviewed:
 - https://developers.openai.com/api/docs/models/gpt-6.1-sol
 - https://developers.openai.com/api/docs/models/gpt-6-luna
 
+The explicit account request check now displays only the allowlisted recorded
+failure code alongside the point-settlement result. Private prompts, signed
+receipts and raw Oracle errors remain hidden. It adds no network calls.
+
 ## Validation
 
 Local lint and TypeScript pass. Of 2,192 tests, 2,190 pass; the two native
