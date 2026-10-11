@@ -20,7 +20,7 @@ export function evidence(value) {
     detailCode: category(value.detail, known), usageCode: category(usage.error_code, known), failureCode: category(value.failure?.detail, known),
     timing: numbers(value.timing, ['total_seconds', 'ai_seconds', 'blender_seconds']),
     costGuard: numbers(usage.cost_guard, ['remaining_micro_usd', 'required_minimum_micro_usd', 'requested_output', 'minimum_output']),
-    tools: { ...numbers(tools, ['total_calls', 'failures', 'build_attempts', 'revision']), calls: (Array.isArray(tools.calls) ? tools.calls : []).slice(-20).map(c => ({
+    tools: { ...numbers(tools, ['total_calls', 'failures', 'build_attempts', 'revision']), calls: (Array.isArray(tools.calls) ? tools.calls : []).filter((c, i, all) => c.status === 'failed' || i < 6 || i >= all.length - 2).map(c => ({
       tool: names.has(c?.tool) ? c.tool : 'UNKNOWN', status: ['started', 'succeeded', 'failed', 'completed'].includes(c?.status) ? c.status : 'UNKNOWN',
       code: category(c?.error, known), ...numbers(c, ['revision', 'attempt', 'elapsed_seconds']) })) } }
 }
