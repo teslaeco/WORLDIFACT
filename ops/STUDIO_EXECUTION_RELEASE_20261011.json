@@ -1,0 +1,11 @@
+{
+  "release": "studio-execution-20261011",
+  "baseCommit": "d694584cda23283312d6db087ae02e7296e2b6b0",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "providerCalls": 0,
+  "oracleInstallation": false,
+  "imagePoints": 5,
+  "referenceLimit": 4
+}

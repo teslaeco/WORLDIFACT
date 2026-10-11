@@ -1,5 +1,24 @@
 # 11 October 2026 — bounded reference admission correction
 
+At 19:31 UTC the restored command connection confirmed both original Oracle
+user services active and zero nonterminal database jobs. Read-only provider
+ledger inspection distinguishes the latest five-response text failure from
+the missing photo job; account-held points remain unreconciled. A further
+reproduced defect selected character anatomy requirements for object references
+containing words such as `many` or `command`. Unicode word boundaries now fix
+that classifier locally; focused profile/envelope tests pass 8/8. Prompt/photo
+bytes, financial limits and existing account records remain unchanged.
+
+Continuation after Cloud Shell reconnection: original Oracle worker/tunnel are
+active. The latest inspected text job made five Astra calls but zero Blender
+builds, ending WORLDIFACT_MODEL_INCOMPLETE after 25.52 seconds. The screenshot
+photo job has no Oracle row; root cause and cost remain unconfirmed. A local
+proposal requires tool use for unfinished supervised jobs and retains the single
+admitted Worker submission during a bounded client disconnect window. Eight
+exact-handler fixture tests and twelve Studio tests pass. Neither proposal is
+installed or deployed; see tools/model_execution/README.md for remaining gates.
+No new paid generation, ledger correction or limit change occurred.
+
 A reproducible photo/MAKE cabinet request exceeded Oracle's 12,000 UTF-16
 instruction limit before job creation. The compact readback guide now fits;
 the full prompt/instruction/body envelope is checked before point or global
