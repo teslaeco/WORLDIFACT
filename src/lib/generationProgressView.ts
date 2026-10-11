@@ -18,7 +18,7 @@ export type GenerationProgressView = {
   detail: string
   kind: 'idle' | 'active' | 'review' | 'failed' | 'complete'
   /** Equal confirmed milestones, never a measurement of work or remaining time. */
-  percent: 25 | 50 | 75 | 100 | null
+  percent: 0 | 25 | 50 | 75 | 100 | null
   stage: string
   elapsed: string | null
 }
@@ -54,6 +54,6 @@ export function generationProgressView({ job, artifact, trackedSeconds }: Genera
   const [title, stage] = stages[job.state]
   // State is authoritative on every render. A lower/retrying state is never
   // hidden behind a monotonic maximum or an elapsed-time animation.
-  const percent = job.state === 'pending' ? null : job.state === 'queued' ? 25 : 50
+  const percent = job.state === 'pending' ? 0 : job.state === 'queued' ? 25 : 50
   return { ...base, percent, kind: 'active', title, stage, detail: job.detail }
 }

@@ -644,51 +644,51 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       let payload: string
       try { payload = validateOracleStudioPayload(oracleStudioPayload(auth.id, input), checked.promptMaxLength) }
       catch (error) { throw new StudioError(error instanceof Error ? error.message : 'Invalid reference request. No points were reserved.', 400) }
-      let admittedPointSettlement: PointSettlement | undefined
-      if (user) {
-        const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { paidPointsPolicy: auth.held ? request.headers.get(PAID_POINTS_POLICY_HEADER) : undefined, ...(auth.held ? { requiredFundingMode: PAID_POINTS_FUNDING } : {}), channel: 'studio', prompt: input.prompt, supportIdentity: user, ...(overnightTest ? { overnightTest: true } : { repairedMccInputEligible: repairedMccInputEligible(prepareMetadata(input)), projectBudgetInputEligible: repairedMccInputEligible(prepareMetadata(input)) }), ...(pricing ? { pricing } : {}) })
-        admittedPointSettlement = userReservation.pointSettlement
-        if (userReservation.repeated && userReservation.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed', fetcher), recoveryOnly: true }, 202)
-        if (!userReservation.allowed) {
-          const conflict = ['REQUEST_PAYLOAD_MISMATCH', 'JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(userReservation.reason ?? '')
-          const reason: AdmissionFailureCode = isAdmissionFailureCode(userReservation.reason) ? userReservation.reason : conflict ? 'ACCOUNT_REQUEST_CONFLICT' : 'ACCOUNT_ADMISSION_UNAVAILABLE'
-          logStudioDiagnostic({ requestId: auth.id, stage: 'FAILED', admission: 'REFUSED', reason, oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
-          throw new StudioError(ADMISSION_FAILURE_DETAILS[reason], 429, reason)
-        }
-        if (userReservation.repeated) {
-          logStudioDiagnostic({ requestId: auth.id, stage: 'ADMISSION', admission: 'RECOVERY_ONLY', reason: 'EXISTING_ACCOUNT_RESERVATION', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
-          return json({ job: await accountJob(env, user.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
-        }
-      }
-      // Keep the operator budget independent from customer credits. A rejected
-      // global reservation cannot create an Oracle job and releases customer credit.
-      let reserved: Response
-      try {
-        reserved = await budget(env).fetch(new Request('https://budget.internal/reserve-studio', { method: 'POST', body: JSON.stringify({ id: auth.id, ...(checked.trial ? { profile: FAST_DRAFT_PROFILE } : {}) }), signal: AbortSignal.timeout(5000) }))
-        if (reserved.status === 409) return json({ job: await accountJob(env, user?.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
-        if (!reserved.ok || (await reserved.json() as { allowed?: boolean }).allowed !== true) throw new StudioError('The cumulative allowance is exhausted or unavailable. No new job was submitted.', reserved.status === 429 ? 429 : 503)
-      } catch (error) {
-        if (user) await settleUserGeneration(env, user.id, auth.id, 'failed', 'STUDIO_ALLOWANCE_UNAVAILABLE')
-        logStudioDiagnostic({ requestId: auth.id, stage: 'FAILED', admission: 'REFUSED', reason: 'STUDIO_ALLOWANCE_UNAVAILABLE', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
-        throw new StudioError(STUDIO_FAILURE_DETAILS.STUDIO_ALLOWANCE_UNAVAILABLE, error instanceof StudioError ? error.status : 503, 'STUDIO_ALLOWANCE_UNAVAILABLE')
-      }
-      logStudioDiagnostic({ requestId: auth.id, stage: 'ADMITTED', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
-      try {
-        // A poll may have closed the account reservation while the global
-        // budget call was pending. Claim exactly once before any Oracle POST.
+      // Retain the single validated request BEFORE its first financial write.
+      // A disconnect during reserve/claim must not strand an admitted hold before
+      // a lifetime promise exists. This is still bounded by Workers' 30s window;
+      // it is not a durable queue, an acceptance guarantee or permission to retry.
+      const submission = (async () => {
+        let admittedPointSettlement: PointSettlement | undefined
         if (user) {
-          const claim = await markStudioDispatch(env, user.id, auth.id, auth.hash)
-          // No await between this expiry check and the actual Oracle fetch.
-          if (!claim.dispatch || Date.now() >= claim.deadline) {
-            logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'RECOVERY_ONLY', reason: 'DISPATCH_FENCE_REFUSED', oracleDispatch: 'CLAIM_REFUSED', workerStatus: null })
+          const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { paidPointsPolicy: auth.held ? request.headers.get(PAID_POINTS_POLICY_HEADER) : undefined, ...(auth.held ? { requiredFundingMode: PAID_POINTS_FUNDING } : {}), channel: 'studio', prompt: input.prompt, supportIdentity: user, ...(overnightTest ? { overnightTest: true } : { repairedMccInputEligible: repairedMccInputEligible(prepareMetadata(input)), projectBudgetInputEligible: repairedMccInputEligible(prepareMetadata(input)) }), ...(pricing ? { pricing } : {}) })
+          admittedPointSettlement = userReservation.pointSettlement
+          if (userReservation.repeated && userReservation.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed', fetcher), recoveryOnly: true }, 202)
+          if (!userReservation.allowed) {
+            const conflict = ['REQUEST_PAYLOAD_MISMATCH', 'JOB_MODEL_MISMATCH', 'JOB_QUALITY_PROFILE_MISMATCH', 'JOB_CHANNEL_MISMATCH', 'JOB_PROFILE_MISMATCH'].includes(userReservation.reason ?? '')
+            const reason: AdmissionFailureCode = isAdmissionFailureCode(userReservation.reason) ? userReservation.reason : conflict ? 'ACCOUNT_REQUEST_CONFLICT' : 'ACCOUNT_ADMISSION_UNAVAILABLE'
+            logStudioDiagnostic({ requestId: auth.id, stage: 'FAILED', admission: 'REFUSED', reason, oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
+            throw new StudioError(ADMISSION_FAILURE_DETAILS[reason], 429, reason)
+          }
+          if (userReservation.repeated) {
+            logStudioDiagnostic({ requestId: auth.id, stage: 'ADMISSION', admission: 'RECOVERY_ONLY', reason: 'EXISTING_ACCOUNT_RESERVATION', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
             return json({ job: await accountJob(env, user.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
           }
         }
-        // Keep the already-admitted single dispatch alive if the browser closes.
-        // The Oracle timeout is 25s; Workers grants at most 30s after disconnect.
-        // This protects transport/receipt handling, never the long Blender run.
-        // Register the same promise we await: no queue, retry or second POST.
-        const submission = (async () => {
+        // Keep the operator budget independent from customer credits. A rejected
+        // global reservation cannot create an Oracle job and releases customer credit.
+        let reserved: Response
+        try {
+          reserved = await budget(env).fetch(new Request('https://budget.internal/reserve-studio', { method: 'POST', body: JSON.stringify({ id: auth.id, ...(checked.trial ? { profile: FAST_DRAFT_PROFILE } : {}) }), signal: AbortSignal.timeout(5000) }))
+          if (reserved.status === 409) return json({ job: await accountJob(env, user?.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
+          if (!reserved.ok || (await reserved.json() as { allowed?: boolean }).allowed !== true) throw new StudioError('The cumulative allowance is exhausted or unavailable. No new job was submitted.', reserved.status === 429 ? 429 : 503)
+        } catch (error) {
+          if (user) await settleUserGeneration(env, user.id, auth.id, 'failed', 'STUDIO_ALLOWANCE_UNAVAILABLE')
+          logStudioDiagnostic({ requestId: auth.id, stage: 'FAILED', admission: 'REFUSED', reason: 'STUDIO_ALLOWANCE_UNAVAILABLE', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
+          throw new StudioError(STUDIO_FAILURE_DETAILS.STUDIO_ALLOWANCE_UNAVAILABLE, error instanceof StudioError ? error.status : 503, 'STUDIO_ALLOWANCE_UNAVAILABLE')
+        }
+        logStudioDiagnostic({ requestId: auth.id, stage: 'ADMITTED', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
+        try {
+          // A poll may have closed the account reservation while the global
+          // budget call was pending. Claim exactly once before any Oracle POST.
+          if (user) {
+            const claim = await markStudioDispatch(env, user.id, auth.id, auth.hash)
+            // No await between this expiry check and the actual Oracle fetch.
+            if (!claim.dispatch || Date.now() >= claim.deadline) {
+              logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'RECOVERY_ONLY', reason: 'DISPATCH_FENCE_REFUSED', oracleDispatch: 'CLAIM_REFUSED', workerStatus: null })
+              return json({ job: await accountJob(env, user.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
+            }
+          }
           logStudioDiagnostic({ requestId: auth.id, stage: 'SENT_TO_PROVIDER', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'CLAIMED', workerStatus: null })
           let response: Response
           try {
@@ -709,13 +709,13 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
           if (value.id !== auth.id || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new Error('Unconfirmed acceptance')
           const completed = await completedOracleStatus(env, auth.id, value, fetcher)
           return json({ job: await accountJob(env, user?.id, auth.id, completed.state as StudioJob['state'], fetcher, oracleFailureCode(completed), completed.timingObservation) }, 202)
-        })()
-        context?.waitUntil(submission.then(() => undefined, () => undefined))
-        return await submission
-      } catch (error) {
-        if (error instanceof StudioError) throw error
-        return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending, ...(admittedPointSettlement ? { pointSettlement: admittedPointSettlement } : {}), ...(pricing ? { pricing } : {}) } }, 202)
-      }
+        } catch (error) {
+          if (error instanceof StudioError) throw error
+          return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending, ...(admittedPointSettlement ? { pointSettlement: admittedPointSettlement } : {}), ...(pricing ? { pricing } : {}) } }, 202)
+        }
+      })()
+      context?.waitUntil(submission.then(() => undefined, () => undefined))
+      return await submission
     }
     const match = new RegExp(`^/api/studio/jobs/(${UUID})(?:/(model|exports/(?:pbr|fbx|blend)))?$`).exec(url.pathname)
     if (match && request.method === 'GET') {

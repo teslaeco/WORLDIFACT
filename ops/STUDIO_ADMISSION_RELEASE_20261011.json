@@ -1,0 +1,11 @@
+{
+  "release": "studio-admission-20261011",
+  "baseCommit": "d69748f9336fb650aa83b4b90d674dac4ff1ca23",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "providerCalls": 0,
+  "oracleInstallation": false,
+  "imagePoints": 5,
+  "referenceLimit": 4
+}

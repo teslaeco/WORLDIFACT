@@ -9,7 +9,7 @@ test('only confirmed milestones set estimated progress, independent of elapsed t
   for (const state of ['pending', 'queued', 'generating', 'retrying', 'building'] as const) {
     for (const trackedSeconds of [0, 7, 60, 3600, 86400]) {
       const view = generationProgressView({ job: job(state), trackedSeconds })
-      assert.equal(view.percent, state === 'pending' ? null : state === 'queued' ? 25 : 50)
+      assert.equal(view.percent, state === 'pending' ? 0 : state === 'queued' ? 25 : 50)
       assert.equal(view.kind, 'active')
       assert.equal(view.detail, JOB_DETAILS[state])
     }
@@ -82,6 +82,6 @@ test('admission refusals and missing submissions do not claim generation started
 
 test('stage estimates follow retries and backward states without smoothing or a remembered maximum', () => {
   const sequence = ['queued', 'generating', 'building', 'retrying', 'queued', 'pending', 'succeeded', 'failed'] as const
-  assert.deepEqual(sequence.map(state => generationProgressView({ job: job(state), trackedSeconds: 86400 }).percent), [25, 50, 50, 50, 25, null, 75, null])
+  assert.deepEqual(sequence.map(state => generationProgressView({ job: job(state), trackedSeconds: 86400 }).percent), [25, 50, 50, 50, 25, 0, 75, null])
   assert.equal(generationProgressView({ job: null, trackedSeconds: 86400 }).percent, null)
 })

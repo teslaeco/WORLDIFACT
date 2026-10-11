@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { AccountEntitlements, entitlementCall, type EntitlementStorage } from '../server/entitlements.ts'
 import { GenerationBudget, type BudgetStorage } from '../server/budget.ts'
-import { studioApi, type StudioEnv } from '../server/studio.ts'
+import { studioApi, type StudioEnv, type StudioExecutionContext } from '../server/studio.ts'
 import { prepareStudioInput, type StudioInput, type StudioJob, type StudioReceipt } from '../src/lib/studioProtocol.ts'
 import { STUDIO_PRICING, STUDIO_PRICING_REVISION, type StudioBudgetTier, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { detailedGLBFixture, detailedHealthFixture } from './detailed-studio-fixture.ts'
@@ -57,11 +57,11 @@ function fixture() {
     if (/^\/v1\/jobs\/[a-f0-9-]+$/.test(path)) return Response.json({ id: path.split('/').pop(), state, ...statusFields })
     throw new Error('Unexpected fixture request: ' + path)
   }) as typeof fetch
-  const call = (path: string, method = 'GET', body?: unknown, receipt?: PricedReceipt, user: 'alice' | 'bob' = 'alice') => studioApi(new Request(origin + path, {
+  const call = (path: string, method = 'GET', body?: unknown, receipt?: PricedReceipt, user: 'alice' | 'bob' = 'alice', context?: StudioExecutionContext) => studioApi(new Request(origin + path, {
     method, headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: `__Host-worldifact-access=${user}-token`,
       ...(receipt ? { 'X-WORLDIFACT-Job': receipt.ticket, 'X-WORLDIFACT-Idempotency-Key': receipt.id } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  }), env, fetcher)
+  }), env, fetcher, false, context)
   const account = (id = alice) => stores.get(`account:v1:${id}`)!
   const balances = async (id = alice) => ({ points: await account(id).get('balance'), held: await account(id).get('customer-reserved-credits:v1') ?? 0,
     provider: await account(id).get('provider-budget-cents:v1'), global: (await (await budget.fetch(new Request('https://budget.internal/status'))).json() as { used: number }).used })
@@ -424,4 +424,41 @@ test('unknown new-job policy refuses admission while already admitted pricing re
   const recovered = await (await f.call('/api/studio/jobs', 'POST', body, receipt)).json() as { recoveryOnly: boolean; job: StudioJob }
   assert.equal(recovered.recoveryOnly, true); assert.deepEqual(recovered.job.pricing, STUDIO_PRICING.extended)
   assert.deepEqual(await f.balances(), before); assert.equal(f.submitted.length, 1)
+})
+
+
+test('submission lifetime is registered while the first customer hold acknowledgement is still pending', async () => {
+  const f = fixture(); await f.fund()
+  const receipt = await f.prepare()
+  const namespace = f.env.ACCOUNT_ENTITLEMENTS!
+  const deferred = () => {
+    let resolve!: () => void
+    const promise = new Promise<void>(done => { resolve = done })
+    return { promise, resolve }
+  }
+  const held = deferred(), release = deferred()
+  f.env.ACCOUNT_ENTITLEMENTS = { idFromName: name => namespace.idFromName(name), get(id) {
+    const ledger = namespace.get(id)
+    return { async fetch(request) {
+      const response = await ledger.fetch(request)
+      if (new URL(request.url).pathname.endsWith('/reserve')) {
+        held.resolve(); await release.promise
+      }
+      return response
+    } }
+  } }
+  const retained: Promise<unknown>[] = []
+  const pending = f.call('/api/studio/jobs', 'POST', selected('standard'), receipt, 'alice', { waitUntil: promise => { retained.push(promise) } })
+  await held.promise
+  try {
+    assert.equal((await f.balances()).held, 250, 'The ledger has already committed the hold')
+    assert.equal(f.submitted.length, 0, 'Oracle has not been contacted yet')
+    assert.equal(retained.length, 1, 'Disconnect protection must already exist at this irreversible boundary')
+  } finally { release.resolve() }
+  assert.equal((await pending).status, 202)
+  await Promise.all(retained)
+  assert.equal(f.submitted.length, 1)
+  assert.equal((await f.balances()).held, 250)
+  assert.equal((await f.call('/api/studio/jobs', 'POST', selected('standard'), receipt)).status, 202)
+  assert.equal(f.submitted.length, 1, 'Recovery must never submit a second job')
 })
