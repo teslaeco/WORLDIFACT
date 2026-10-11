@@ -8,6 +8,9 @@ export type ImageJob = {
   state: 'processing' | 'completed' | 'failed' | 'uncertain'
   points: 5 | 25; settlement: 'held' | 'charged' | 'released'
   fingerprint: string; bytes?: number; chunks?: number; sha256?: string; detail?: string
+  transportRevision?: 'image-manual-v1'
+  diagnostic?: { stage: 'transport' | 'response' | 'decode' | 'storage'; status?: number }
+  recovery?: 'legacy-redirect-before-dispatch'
   providerRequestId?: string; usage?: { input_tokens: number; output_tokens: number; total_tokens: number }
 }
 export function parseImageInput(v: unknown, allowLegacyRecovery = false): ImageInput {

@@ -17,6 +17,36 @@ const key = (id: string) => `image-job:v1:${id}`
 const chunkKey = (id: string, index: number) => `image-file:v1:${id}:${index}`
 const digest = async (bytes: Uint8Array) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>))].map(n => n.toString(16).padStart(2, '0')).join('')
 const integer = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0
+
+// Only the two historical image writers used native fetch with redirect:error.
+// Workerd rejects that option while constructing the request, before any I/O.
+// Prove that runtime behavior here; never infer unused spend from a timeout.
+async function recoverLegacyRedirectHold(storage: EntitlementStorage, job: ImageJob, now: () => number): Promise<ImageJob> {
+  let unsupported = false
+  try { new Request('https://api.openai.com/v1/images/generations', { redirect: 'error' }) }
+  catch (error) { unsupported = error instanceof TypeError && error.message.startsWith('Invalid redirect value, must be one of "follow" or "manual"') }
+  if (!unsupported || job.state !== 'uncertain' || job.settlement !== 'held' ||
+      job.transportRevision !== undefined || job.diagnostic !== undefined || job.recovery !== undefined ||
+      job.providerRequestId !== undefined || job.usage !== undefined || job.bytes !== undefined || job.chunks !== undefined || job.sha256 !== undefined ||
+      ![5, 25].includes(job.points) || !IMAGE_ID.test(job.id) || !IMAGE_MODELS.includes(job.model) ||
+      typeof job.prompt !== 'string' || job.prompt.length < 3 || job.prompt.length > 4000 ||
+      !integer(job.at) || !integer(job.updatedAt) || job.updatedAt < job.at || job.updatedAt - job.at > 180_000 ||
+      job.at < Date.parse('2026-10-10T23:17:06Z') || job.at > Date.parse('2026-10-11T00:30:00Z') ||
+      job.detail !== `The provider outcome could not be confirmed. ${job.points} points remain held for review; no second image request was sent.`) return job
+  const revision = job.points === 25 ? 'image-25-v1' : 'image-5-v2'
+  const original = { id: job.id, prompt: job.prompt, model: job.model, acceptedPoints: job.points, revision,
+    points: job.points, size: '1024x1024', quality: 'medium', format: 'png' }
+  if (await digest(new TextEncoder().encode(JSON.stringify(original))) !== job.fingerprint) return job
+  return storage.transaction(async tx => {
+    const current = await tx.get<ImageJob>(key(job.id)), held = await tx.get<number>(HELD)
+    if (JSON.stringify(current) !== JSON.stringify(job) || !integer(held) || held < job.points) return current ?? job
+    const recovered: ImageJob = { ...job, state: 'failed', settlement: 'released', updatedAt: now(), recovery: 'legacy-redirect-before-dispatch',
+      detail: `The previous request stopped before contacting the image provider because of a server compatibility error. Your ${job.points} reserved points were released. You can generate a new image for 5 points.` }
+    await tx.put(HELD, held - job.points)
+    await tx.put(key(job.id), recovered)
+    return recovered
+  })
+}
 async function boundedJson(response: Request | Response, max: number): Promise<unknown> {
   if (Number(response.headers.get('content-length')) > max) throw new Error('Payload too large.')
   const reader = response.body?.getReader()
@@ -42,7 +72,7 @@ export async function imageApi(request: Request, env: ImageEnv, fetcher: typeof 
       request.method !== 'GET' && request.headers.get('Origin') !== url.origin)
     return json({ error: 'Same-origin image access required.' }, 403)
   if (url.pathname === '/api/images/status' && request.method === 'GET')
-    return json({ ready: ready(env), terms: IMAGE_TERMS, models: IMAGE_MODELS })
+    return json({ ready: ready(env), terms: IMAGE_TERMS, models: IMAGE_MODELS, transportRevision: 'image-manual-v1' })
   const suffix = url.pathname.slice('/api/images'.length)
   if (!(suffix === '' && ['GET', 'POST'].includes(request.method) || /^\/[a-f0-9-]{36}(?:\/file)?$/.test(suffix) && request.method === 'GET'))
     return json({ error: 'Image route not found.' }, 404)
@@ -75,13 +105,17 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
   if (request.method === 'GET') {
     if (path === '/images') {
       const ids = await storage.get<string[]>(INDEX) ?? []
-      const jobs = await Promise.all(ids.map(id => storage.get<ImageJob>(key(id))))
+      const jobs = await Promise.all(ids.map(async id => {
+        const job = await storage.get<ImageJob>(key(id))
+        return job ? recoverLegacyRedirectHold(storage, job, now) : undefined
+      }))
       return json({ jobs: jobs.filter(Boolean).reverse(), terms: IMAGE_TERMS })
     }
     const match = /^\/images\/([a-f0-9-]{36})(\/file)?$/.exec(path)
     if (!match || !IMAGE_ID.test(match[1])) return json({ error: 'Image not found.' }, 404)
-    const job = await storage.get<ImageJob>(key(match[1]))
-    if (!job) return json({ error: 'Image not found in this account.' }, 404)
+    const saved = await storage.get<ImageJob>(key(match[1]))
+    if (!saved) return json({ error: 'Image not found in this account.' }, 404)
+    const job = await recoverLegacyRedirectHold(storage, saved, now)
     if (!match[2]) return json({ job })
     if (job.state !== 'completed' || !job.bytes || !job.chunks) return json({ error: 'This image is not ready.' }, 409)
     const bytes = new Uint8Array(job.bytes); let offset = 0
@@ -100,7 +134,7 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
   const fingerprint = await digest(new TextEncoder().encode(JSON.stringify({ ...input, ...IMAGE_TERMS, revision: input.revision, points: input.acceptedPoints })))
   // Replays bypass the rate limiter and never call the provider, even after expiry.
   const existing = await storage.get<ImageJob>(key(input.id))
-  if (existing) return existing.fingerprint === fingerprint ? json({ job: existing }) : json({ error: 'This request ID belongs to another image description.' }, 409)
+  if (existing) return existing.fingerprint === fingerprint ? json({ job: await recoverLegacyRedirectHold(storage, existing, now) }) : json({ error: 'This request ID belongs to another image description.' }, 409)
   // Legacy IDs may only recover an existing job, never start a new 25-point charge.
   if (input.revision !== IMAGE_TERMS.revision) return json({ error: 'Image pricing is now 5 points. Reload and start a new request at the current price.' }, 409)
   if (!(await env.GENERATION_LIMITER!.limit({ key: `image-generation:${accountId}` })).success) return json({ error: 'Please wait before generating again.' }, 429)
@@ -116,7 +150,7 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
       const other = await tx.get<ImageJob>(key(id))
       if (other?.settlement === 'held') return { error: 'Check your existing image request before starting another.', status: 409 }
     }
-    const job: ImageJob = { id: input.id, prompt: input.prompt, model: input.model, at: now(), updatedAt: now(), state: 'processing', points: IMAGE_TERMS.points, settlement: 'held', fingerprint }
+    const job: ImageJob = { id: input.id, prompt: input.prompt, model: input.model, at: now(), updatedAt: now(), state: 'processing', points: IMAGE_TERMS.points, settlement: 'held', fingerprint, transportRevision: 'image-manual-v1' }
     await tx.put(HELD, held + job.points)
     await tx.put(key(input.id), job)
     await tx.put(INDEX, [...ids, input.id])
@@ -125,13 +159,15 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
   if ('error' in admission) return json({ error: admission.error }, admission.status)
   if (!admission.started) return admission.job.fingerprint === fingerprint ? json({ job: admission.job }) : json({ error: 'Request conflict.' }, 409)
   const job = admission.job
+  let stage: 'transport' | 'response' | 'decode' | 'storage' = 'transport', providerStatus: number | undefined
   // Exactly one external POST. An uncertain outcome is never automatically retried or refunded.
   try {
     const response = await fetcher('https://api.openai.com/v1/images/generations', {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(180_000),
+      method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(180_000),
       headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: input.model, prompt: input.prompt, n: 1, size: IMAGE_TERMS.size, quality: IMAGE_TERMS.quality, output_format: 'png' }),
     })
+    stage = 'response'; providerStatus = response.status
     if (!response.ok) {
       await response.body?.cancel()
       if ([400, 401, 403, 404, 422, 429].includes(response.status)) {
@@ -148,6 +184,7 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
       }
       throw new Error('Uncertain provider response')
     }
+    stage = 'decode'
     const result = await boundedJson(response, Math.ceil(MAX_BYTES / 3) * 4 + 16_384) as { data?: { b64_json?: unknown }[]; usage?: unknown }
     const b64 = result?.data?.length === 1 ? result.data[0]?.b64_json : undefined
     if (typeof b64 !== 'string' || b64.length > Math.ceil(MAX_BYTES / 3) * 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) throw new Error('Invalid image payload')
@@ -161,6 +198,7 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
     const providerId = response.headers.get('x-request-id')
     const completed: ImageJob = { ...job, state: 'completed', settlement: 'charged', updatedAt: now(), bytes: bytes.length, chunks: Math.ceil(bytes.length / CHUNK), sha256: await digest(bytes),
       ...(providerId && /^[\w-]{1,180}$/.test(providerId) ? { providerRequestId: providerId } : {}), ...(proof ? { usage: proof } : {}) }
+    stage = 'storage'
     await storage.transaction(async tx => {
       const current = await tx.get<ImageJob>(key(job.id)), held = await tx.get<number>(HELD), balance = await tx.get<number>('balance')
       // A billing event may have reduced the balance during generation. Preserve that debt.
@@ -173,7 +211,7 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
     // Do not overwrite a completed transaction if its acknowledgement was lost.
     const current = await storage.get<ImageJob>(key(job.id))
     if (current?.state === 'completed' || current?.state === 'failed') return json({ job: current })
-    const uncertain: ImageJob = { ...job, state: 'uncertain', updatedAt: now(), detail: `The provider outcome could not be confirmed. ${job.points} points remain held for review; no second image request was sent.` }
+    const uncertain: ImageJob = { ...job, state: 'uncertain', updatedAt: now(), diagnostic: { stage, ...(providerStatus !== undefined ? { status: providerStatus } : {}) }, detail: `The provider outcome could not be confirmed. ${job.points} points remain held for review; no second image request was sent.` }
     await storage.put(key(job.id), uncertain)
     return json({ job: uncertain })
   }

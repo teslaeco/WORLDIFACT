@@ -1,0 +1,11 @@
+{
+  "release": "image-runtime-repair-20261011",
+  "baseCommit": "1f1ee656bf3b7d86fcfe190064aae97039e986d0",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 5,
+  "transportRevision": "image-manual-v1",
+  "legacyRecovery": "proven-pre-dispatch-only",
+  "paidTest": "one-fixed-image-isolated-ledger"
+}
