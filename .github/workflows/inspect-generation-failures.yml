@@ -22,7 +22,7 @@ jobs:
           node-version: 24
       - run: node --test tests/inspect-generation-failures.test.mjs
       - name: Verify read-only collector
-        run: echo "d632c34a01843949a33874dcd8bc60ece94f8cb34a6fe448d5b2a3475c9c7077  scripts/inspect-generation-failures.mjs" | sha256sum -c -
+        run: echo "42f5109d74d43851548cb73c68b4b1640be9fe1fcd6581a4719b34125c74d20b  scripts/inspect-generation-failures.mjs" | sha256sum -c -
       - name: Read existing incident status and quality only
         run: node scripts/inspect-generation-failures.mjs
         env:
