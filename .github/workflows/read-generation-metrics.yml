@@ -1,0 +1,31 @@
+name: Read historical generation metrics without changes
+on:
+  push:
+    branches: [fix/generation-diagnosis-20261011]
+    paths: ['scripts/read-generation-metrics.mjs', '.github/workflows/read-generation-metrics.yml']
+permissions:
+  contents: read
+concurrency:
+  group: incident-generation-readonly-20261011
+  cancel-in-progress: false
+jobs:
+  inspect:
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: node --test tests/read-generation-metrics.test.mjs
+      - name: Verify read-only collector
+        run: echo "3428bf66879239367c14e8c3c47176574a36c9966f8c1e7cbbc25bfe760ca712  scripts/read-generation-metrics.mjs" | sha256sum -c -
+      - name: Read fixed historical worker analytics only
+        run: node scripts/read-generation-metrics.mjs
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
