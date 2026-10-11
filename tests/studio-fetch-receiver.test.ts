@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { StudioCoordinator, readSavedStudioJob, type ReceiptStore } from '../src/lib/studioClient.ts'
@@ -30,8 +31,8 @@ function transport(store: ReceiptStore, loseSubmitResponse = false) {
     }
     if (path === `/api/studio/jobs/${id}`) return Promise.resolve(Response.json({ job: { id, state: 'succeeded' } }))
     if (path === `/api/studio/jobs/${id}/model` || path === `/api/studio/jobs/${id}/exports/pbr`) {
-      // Transport bytes only; the existing real-GLB tests cover model parsing.
-      return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Length': '3' } }))
+      const bytes = readFileSync(new URL('../public/world-assets/giant-building/terrace-tower-e7e96cc3.' + (path.endsWith('/model') ? 'glb' : 'textures.zip'), import.meta.url))
+      return Promise.resolve(new Response(bytes, { headers: { 'Content-Length': String(bytes.length) } }))
     }
     return Promise.reject(new Error('Unexpected request in binding regression'))
   }
@@ -51,8 +52,8 @@ test('default browser fetch has the global receiver for prepare, one submit, pol
   const client = new StudioCoordinator(store)
   assert.equal((await client.start(input, () => {})).state, 'building')
   assert.equal((await client.poll()).state, 'succeeded')
-  assert.equal((await client.artifact('model')).size, 3)
-  assert.equal((await client.artifact('pbr')).size, 3)
+  assert.ok((await client.artifact('model')).size > 20)
+  assert.ok((await client.artifact('pbr')).size > 30)
   assert.deepEqual(calls, [
     { path: '/api/studio/prepare', method: 'POST' },
     { path: '/api/studio/jobs', method: 'POST' },
@@ -69,7 +70,7 @@ test('explicitly injected fetch is receiver-safe and a lost response plus reload
   const restored = new StudioCoordinator(store, fetcher)
   assert.equal(restored.restore()?.receipt.id, id)
   assert.equal((await restored.poll()).state, 'succeeded')
-  assert.equal((await restored.artifact('model')).size, 3)
+  assert.ok((await restored.artifact('model')).size > 20)
   await assert.rejects(restored.start(input, () => {}), /already selected/)
   assert.equal(calls.filter(call => call.path === '/api/studio/jobs').length, 1)
   assert.equal(calls.filter(call => call.path === '/api/studio/prepare').length, 1)

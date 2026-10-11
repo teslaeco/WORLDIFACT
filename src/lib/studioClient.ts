@@ -1,3 +1,4 @@
+import { validateStudioArtifactHeader } from './studioArtifact.ts'
 import { isStudioPricing, studioPricingFor, type StudioPricing } from './studioPricing.ts'
 import { JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, STUDIO_MODEL_LIMIT, STUDIO_RECONCILIATION_DETAIL, FAST_DRAFT_PROFILE, generationProfile, prepareStudioInput, readStudioGenerationTiming, studioPointsPending, studioPendingPointsDetail, validateStudioInput, type StudioInput, type StudioReceipt, type StudioJob, type StudioStatus } from './studioProtocol.ts'
 import { canSubmitNewDraft } from './studioDraft.ts'
@@ -382,7 +383,9 @@ export class StudioCoordinator {
       chunks.push(new Uint8Array(next.value))
     }
     if (!size || (declared && size !== declared)) throw new Error('The artifact download was interrupted. Retry this artifact, not generation.')
-    return new Blob(chunks, { type: format === 'model' ? 'model/gltf-binary' : format === 'pbr' ? 'application/zip' : 'application/octet-stream' })
+    const blob = new Blob(chunks, { type: format === 'model' ? 'model/gltf-binary' : format === 'pbr' ? 'application/zip' : 'application/octet-stream' })
+    await validateStudioArtifactHeader(format, blob)
+    return blob
   }
   clearSelection() {
     if (this.submitting) throw new Error('Wait for submission to finish before changing jobs.')

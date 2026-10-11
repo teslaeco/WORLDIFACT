@@ -1766,3 +1766,38 @@ native-Chromium regressions because Chromium is absent here; this is not browser
 verification. All 123 focused Shop/creation tests passed, including four-reference
 transmission and existing recovery/account-isolation invariants. Lint and type
 checks passed. Public deployment evidence is added to the PR after publication.
+
+## Generator continuation — 11 October 2026, after PR #261
+
+Current main/deployment were rechecked at 9a17d0bc. Deployment 38156400332
+succeeded; public Studio readiness confirms four-photo support and the legacy
+USD1.75 policy. Full photo-to-GLB acceptance, six detailed model/mode variants,
+a one-minute measured pipeline, per-job reconciliation of the reported 1000
+held points, account library/download persistence and device tests remain
+UNVERIFIED. Readiness and the deliberately invalid photo probe are not proof
+of generation. Desktop Commander is offline; Oracle itself is not inferred off.
+
+The continuation patch adds bounded content recognition for artifact downloads
+on the server and client, refusing HTTP-200 error pages masquerading as exports.
+It corrects the separate Game Lab jewel to 12 hexagons and 6 squares, preserving
+the original FORGE sculpture/asset. No live generation, settlement, secret,
+Stripe/subscription/price change, merge or deployment occurred. See
+GENERATOR_CONTINUATION_20261011.md for the requirement matrix, exact evidence,
+format-validation limitations and the required Oracle reconnection step.
+
+Continuation validation: 23 focused tests pass; full local suite 2204/2206
+passes, with both native Chromium cases blocked by the absent executable.
+Lint/typecheck, HTTP smoke, build and Worker dry-run pass. Historical texture
+archive CRCs pass (10 entries); existing binary FBX is version 7400. None of
+these checks is a new live model, authenticated account or device acceptance.
+The patch includes a narrowly scoped preserving release gate for later review.
+
+Follow-up screenshots at 20:25 Amsterdam show 1500 held / 135 available /
+1635 total, superseding the earlier aggregate 1000/635 observation. The displayed
+failed request retains 250 points; no per-job reconciliation is inferred.
+Historical read-only run 38154450233 independently confirms a different failed
+job took 275.81 seconds (AI 114.65, Blender 161.16), with no final model. It does
+not diagnose or settle the new screenshot jobs. Main remains 9a17d0bc, Desktop
+Commander remains offline, and the local patch is unpublished after an automatic
+approval-review rejection of push. See the continuation report for exact
+evidence, remaining access needs and publication authorization.
