@@ -66,7 +66,7 @@ def reviewed_sources(original):
 def reviewed_manifest(value):
     try:
         after = final_manifest()
-        return (value == EXPECTED or value == after or value == payload_predecessor()
+        return (value == EXPECTED or value == after or value == execution_predecessor() or value == execution_manifest() or value == payload_predecessor()
                 or value == initial_edit_predecessor() or value == response_phase_predecessor())
     except ValueError:
         return False
@@ -172,4 +172,48 @@ def response_phase_changes(original, helpers):
     changed = {**original, **helpers}
     if {name: hashlib.sha256(value).hexdigest() for name, value in changed.items()} != final_manifest():
         raise ValueError('Response-phase update differs from frozen runtime manifest.')
+    return changed
+
+
+# Complete transport-repaired runtime observed on the owner host. Historical
+# install modes retain their exact maps; no receipt or CLI can supply authority.
+EXECUTION_BEFORE = {**EXPECTED_AFTER,
+    'blender_mcp.py': '54fa9734e848e9c8720e04ae8eddcc4c8a97546e3a64ef31c1bd88b37c317715',
+    'codex_runner.py': 'f3c9ce7ebcb629a823af0324c00a97bda35b63a99f15ff0804b6ea641c32c0bb',
+}
+EXECUTION_AFTER = {**EXECUTION_BEFORE,
+    'codex_runner.py': '7a5ba3b7a1c5fbd631ab826945b7d50369000964fc600d52c28f7f47e5f25b37',
+}
+
+
+def execution_predecessor():
+    before = EXECUTION_BEFORE
+    if (set(before) != health.SOURCES or
+            any(not isinstance(v, str) or re.fullmatch('[a-f0-9]{64}', v) is None for v in before.values()) or
+            {n for n in before if before[n] != final_manifest()[n]} != {'codex_runner.py', 'blender_mcp.py'}):
+        raise ValueError('Exact installed transport runtime is required.')
+    return dict(before)
+
+
+def execution_manifest():
+    before, after = execution_predecessor(), EXECUTION_AFTER
+    if (set(after) != health.SOURCES or
+            any(not isinstance(v, str) or re.fullmatch('[a-f0-9]{64}', v) is None for v in after.values()) or
+            {n for n in before if before[n] != after[n]} != {'codex_runner.py'}):
+        raise ValueError('Supervised execution manifest is not frozen.')
+    return dict(after)
+
+
+def execution_changes(original):
+    if {n: hashlib.sha256(b).hexdigest() for n, b in original.items()} != execution_predecessor():
+        raise ValueError('Exact installed transport runtime is required.')
+    from pathlib import Path
+    import sys
+    folder = Path(__file__).resolve().parent.parent / 'model_execution'
+    if folder.is_dir():
+        sys.path.append(str(folder))
+    import require_tools
+    changed = {**original, 'codex_runner.py': require_tools.transform(original['codex_runner.py'])}
+    if {n: hashlib.sha256(b).hexdigest() for n, b in changed.items()} != execution_manifest():
+        raise ValueError('Execution change differs from frozen release.')
     return changed

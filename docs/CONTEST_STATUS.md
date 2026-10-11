@@ -1,3 +1,39 @@
+# 11 October 2026 — admission release and supervised execution continuation
+
+PR #264 merged as e7ea1ab7b4daf23cffa4f2ac7a34456dce225e36 and deployed
+successfully in run 38172888300 at 20:39 UTC. Cloudflare version:
+4769695e-b644-4472-b21b-6f86163493c9. Hosted verification passed 2,218 tests;
+the publication check matched 12 HTML routes and 435 exact built files.
+The Worker retains admission before its first financial write and the composer
+shows confirmed workflow milestones plus elapsed time. Neither check is a new
+live text/photo model or a measured phone disconnect test.
+
+Authenticated account inspection reconciled the visible aggregate to eight
+separate 250-point holds (2,000 held); no balances or settlements were changed.
+Both latest failed requests returned ORACLE_JOB_MISSING and have no Oracle
+job row or directory. Their actual failure before persistence remains unproven.
+An automatic approval review rejected an authenticated public-tunnel probe;
+only a loopback invalid-input check and transport-log reads were used afterward.
+The local invalid body returned HTTP 400 without creating a job or invoking AI.
+
+The successful earlier industrial transformer exists in the account library,
+previews through the browser's explicit software fallback, and downloads as a
+structurally parsed GLB 2: 1,948,296 bytes, 86 meshes, 44,200 rendered triangles,
+three embedded images, no external image URIs. Its Oracle timing is 262.8 seconds,
+not the one-minute target. This historical success does not prove the latest
+repairs or manufacturing suitability. The original Earth FBX also downloaded
+and parsed: FBX 7400, 66 geometry nodes, 149,388 vertex scalars and 282,112 polygon
+indices. A real phone/WebGL test and new photo generation remain unverified.
+
+A separate exact Oracle execution transaction is now prepared for the earlier
+text-only completion defect: unfinished supervised requests require tool use.
+It preserves the already-installed MCP repair; it does not bulk-merge PR #251.
+See tools/model_execution/README.md. Source/rollback tests are not installation
+or LIVE evidence. Sol and Luna remain draft-only, six detailed model/mode
+combinations are incomplete, and no label-only upgrade is claimed.
+
+---
+
 # 11 October 2026 — request admission lifetime and visible progress
 
 PRs #262 and #263 are merged and deployed; latest main before this change is

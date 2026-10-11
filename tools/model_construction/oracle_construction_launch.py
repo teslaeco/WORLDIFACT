@@ -20,7 +20,7 @@ import urllib.request
 
 PUBLIC_ROOT = 'https://raw.githubusercontent.com/teslaeco/WORLDIFACT/'
 ANCESTOR_COMMIT = '2380a7e2dad05a40b3753faf06c2635ed444be51'
-CURRENT_PREFIXES = ('tools/model_context_upgrade/', 'tools/model_construction/')
+CURRENT_PREFIXES = ('tools/model_context_upgrade/', 'tools/model_construction/', 'tools/model_execution/')
 LIMIT = 262144
 OUTPUT_LIMIT = 32768
 INSTALL_TIMEOUT = 3180
@@ -172,13 +172,14 @@ FILES.update({
 # Old package files retain exact historical pins. New activation bytes are
 # pinned only after the complete local source and transaction review.
 FILES['oracle_upgrade_launch.py'] = ('tools/model_context_upgrade/oracle_upgrade_launch.py', '6cf4f14acb5fb4e525d8e040fc0df6dc8f7e44a3')
-NEW_FILES = ('construction_health.py', 'construction_payload.py', 'construction_policy.py', 'phased_controller.py', 'runtime_controller.py', 'construction_spend_patch.py', 'gateway_patch.py', 'runtime_patch.py', 'construction_manifest.py', 'construction_fence.py', 'install_construction.py', 'offline_legacy_standard.py', 'offline_construction.py')
+NEW_FILES = ('construction_health.py', 'construction_payload.py', 'construction_policy.py', 'phased_controller.py', 'runtime_controller.py', 'construction_spend_patch.py', 'gateway_patch.py', 'runtime_patch.py', 'construction_manifest.py', 'construction_fence.py', 'install_construction.py', 'offline_legacy_standard.py', 'offline_construction.py', 'require_tools.py')
+FILES['require_tools.py'] = ('tools/model_execution/require_tools.py', '28cf63c3a39db949ca114d707990b4c16ac0ec46')
 FILES.update({'construction_fence.py': ('tools/model_construction/construction_fence.py',
                            '6f00159558709482cee93eca323c94c7663dbb4b'),
  'construction_health.py': ('tools/model_construction/construction_health.py',
                             '39e3c75e0be7288d87f18a2e48ef7dd9f41df36b'),
  'construction_manifest.py': ('tools/model_construction/construction_manifest.py',
-                              'bb2ddd0f9b8e62e955c74f2d54a76390747eecc3'),
+                              '83e5a7f8da4b16cc7f6beafcb62de8b3e63ad815'),
  'construction_payload.py': ('tools/model_construction/construction_payload.py',
                              'a4d3db90b4934dbdd73bb311b8db19a469cf2628'),
  'construction_policy.py': ('tools/model_construction/construction_policy.py',
@@ -187,7 +188,7 @@ FILES.update({'construction_fence.py': ('tools/model_construction/construction_f
                                  '5c83a272b5b2207fbdf8ad510773b909e26c3499'),
  'gateway_patch.py': ('tools/model_construction/gateway_patch.py', '39095208cd1e90c03fc35f81f93a63535a0930b0'),
  'install_construction.py': ('tools/model_construction/install_construction.py',
-                             'ec72bef3a82b54039019745978c7533dcecab540'),
+                             'f6b1190bc2da3c44d86e84a34f714c89e2c0d8c9'),
  'offline_construction.py': ('tools/model_construction/offline_construction.py',
                              '3f978bdce0d9158c1dd8d361b757d7b020a2f1ad'),
  'offline_legacy_standard.py': ('tools/model_construction/offline_legacy_standard.py',
@@ -226,7 +227,8 @@ failed={'phase':'WORLDIFACT_STANDARD_CONSTRUCTION_NOT_CONFIRMED','revision':REVI
 try:
     if APPROVED is not True:raise ValueError('approval absent')
     if type(ALLOW_CANCELLED_CLEANUP) is not bool:raise ValueError('invalid cleanup consent')
-    if type(UPDATE_PAYLOAD) is not bool or type(UPDATE_INITIAL_EDIT) is not bool:raise ValueError('invalid update mode')
+    if any(type(mode) is not bool for mode in (UPDATE_PAYLOAD, UPDATE_INITIAL_EDIT, UPDATE_RESPONSE_PHASE, UPDATE_EXECUTION)):raise ValueError('invalid update mode')
+    if sum((UPDATE_PAYLOAD, UPDATE_INITIAL_EDIT, UPDATE_RESPONSE_PHASE, UPDATE_EXECUTION)) > 1:raise ValueError('conflicting modes')
     if UPDATE_PAYLOAD:raise ValueError('historical payload package required')
     if (ALLOW_CANCELLED_CLEANUP and (not isinstance(EXPECTED_CANCELLED_JOB,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',EXPECTED_CANCELLED_JOB))
             or not ALLOW_CANCELLED_CLEANUP and EXPECTED_CANCELLED_JOB is not None):raise ValueError('invalid cleanup identity')
@@ -248,7 +250,8 @@ try:
         process=subprocess.Popen([sys.executable,'-B',str(folder/'install_construction.py'),'--approve-service-maintenance'] +
             (['--allow-cancelled-cleanup','--expected-cancelled-job',EXPECTED_CANCELLED_JOB] if ALLOW_CANCELLED_CLEANUP else []) +
             (['--update-initial-edit'] if UPDATE_INITIAL_EDIT else []) +
-            (['--update-response-phase'] if UPDATE_RESPONSE_PHASE else []),
+            (['--update-response-phase'] if UPDATE_RESPONSE_PHASE else []) +
+            (['--update-execution'] if UPDATE_EXECUTION else []),
             cwd=folder,stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT)
         def relay(number,_frame):
             if process.poll() is None:process.send_signal(number)
@@ -277,18 +280,18 @@ except (Exception,KeyboardInterrupt):
     print(json.dumps(failed,sort_keys=True),flush=True);raise SystemExit(1)
 '''
 
-def script(payload, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False, update_response_phase=False):
+def script(payload, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False, update_response_phase=False, update_execution=False):
     if approved is not True:raise LaunchError('Explicit maintenance approval is required.')
-    if any(type(mode) is not bool for mode in (update_payload, update_initial_edit, update_response_phase)):
+    if any(type(mode) is not bool for mode in (update_payload, update_initial_edit, update_response_phase, update_execution)):
         raise LaunchError('Explicit update modes must be boolean.')
-    if sum((update_payload, update_initial_edit, update_response_phase)) > 1:raise LaunchError('Conflicting update modes; no connection made.')
+    if sum((update_payload, update_initial_edit, update_response_phase, update_execution)) > 1:raise LaunchError('Conflicting update modes; no connection made.')
     if update_payload:raise LaunchError('Payload update requires the historical pinned package; no connection made.')
     if type(allow_cancelled_cleanup) is not bool:raise LaunchError('Explicit cleanup consent must be boolean.')
     if (allow_cancelled_cleanup and (not isinstance(expected_cancelled_job,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',expected_cancelled_job))
             or not allow_cancelled_cleanup and expected_cancelled_job is not None):
         raise LaunchError('Cleanup requires the exact approved cancelled job identity; no connection made.')
     return ('EXPECTED='+repr({name:item[1] for name,item in FILES.items()})+'\nPAYLOAD='+repr(payload)
-            +'\nUPDATE_PAYLOAD='+repr(update_payload)+'\nUPDATE_INITIAL_EDIT='+repr(update_initial_edit)+'\nUPDATE_RESPONSE_PHASE='+repr(update_response_phase)+'\nAPPROVED=True\nALLOW_CANCELLED_CLEANUP='+repr(allow_cancelled_cleanup)+'\nEXPECTED_CANCELLED_JOB='+repr(expected_cancelled_job)+'\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
+            +'\nUPDATE_PAYLOAD='+repr(update_payload)+'\nUPDATE_INITIAL_EDIT='+repr(update_initial_edit)+'\nUPDATE_RESPONSE_PHASE='+repr(update_response_phase)+'\nUPDATE_EXECUTION='+repr(update_execution)+'\nAPPROVED=True\nALLOW_CANCELLED_CLEANUP='+repr(allow_cancelled_cleanup)+'\nEXPECTED_CANCELLED_JOB='+repr(expected_cancelled_job)+'\nREVISION='+repr(REVISION)+'\nINSTALL_TIMEOUT='+repr(INSTALL_TIMEOUT)
             +'\nOUTPUT_LIMIT='+repr(OUTPUT_LIMIT)+'\n'+REMOTE)
 
 def invoke(ssh, program):
@@ -310,6 +313,7 @@ def main(argv=None):
     updates.add_argument('--update-payload', action='store_true')
     updates.add_argument('--update-initial-edit', action='store_true')
     updates.add_argument('--update-response-phase', action='store_true')
+    updates.add_argument('--update-execution', action='store_true')
     parser.add_argument('--allow-cancelled-cleanup', action='store_true')
     parser.add_argument('--expected-cancelled-job')
     args = parser.parse_args(argv)
@@ -328,8 +332,9 @@ def main(argv=None):
     payload = package(commit)
     program = script(payload, approved=True, allow_cancelled_cleanup=args.allow_cancelled_cleanup,
                      expected_cancelled_job=args.expected_cancelled_job, update_initial_edit=args.update_initial_edit,
-                     update_response_phase=args.update_response_phase)
-    print('Running the exact reviewed response decoder update. No paid model request.' if args.update_response_phase
+                     update_response_phase=args.update_response_phase, update_execution=args.update_execution)
+    print('Running the exact reviewed supervised execution update. No paid model request.' if args.update_execution
+          else 'Running the exact reviewed response decoder update. No paid model request.' if args.update_response_phase
           else 'Running the exact reviewed initial-edit update. No paid model request.' if args.update_initial_edit
           else 'Running the exact reviewed construction transaction. No paid model request.', flush=True)
     if args.allow_cancelled_cleanup:

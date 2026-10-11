@@ -13,6 +13,19 @@ export const SCRIPT_PATH = 'scripts/select-failed-hold-release.mjs'
 export const CONFIG_PATH = 'config/failed-hold-release.json'
 // Freeze the complete payload first, then this manifest pin, then the derived workflow.
 export const CONFIG_BLOB = 'db69ce0a4bb6f453941cb2f8254ff137c2307b2c'
+
+export const EXECUTION_TOOLS_BASE = 'e7ea1ab7b4daf23cffa4f2ac7a34456dce225e36'
+export const EXECUTION_TOOLS_PAYLOAD = Object.freeze({
+  "docs/CONTEST_STATUS.md": "d08b37dc82337f1f4f8ec1f37420c113c68c91f1",
+  "tools/model_construction/construction_manifest.py": "83e5a7f8da4b16cc7f6beafcb62de8b3e63ad815",
+  "tools/model_construction/install_construction.py": "f6b1190bc2da3c44d86e84a34f714c89e2c0d8c9",
+  "tools/model_construction/oracle_construction_launch.py": "1f2f004ae66de245313987751abf2847a51935c3",
+  "tools/model_construction/test_construction_launcher.py": "544d7f5d76b3e0580d4292ef0966d36846275a9f",
+  "tools/model_construction/test_execution_update.py": "2cdf247c54b2b5affb9d7a7ad8e2574483ff3184",
+  "tools/model_execution/README.md": "28e7ca994e023bee5463b07c0de5fdfc227ca461",
+  "tests/execution-tools-release.test.mjs": "058533efd45b3725b7d41927ba71cb894b7c8a54"
+})
+
 export const FAULT = 'FAILED_HOLD_RELEASE_NOT_VERIFIED'
 export const PRESERVED_BLOBS = Object.freeze({
   'scripts/select-context-tools-release.mjs': '465898752099691d8cee1ca989575c2b83febab3',
@@ -192,6 +205,24 @@ export function selectFailedHoldRelease({ cwd = process.cwd(), env = process.env
   if (scope.kind === 'push') {
     git(cwd, ['merge-base', '--is-ancestor', scope.before, head])
     if (scope.before !== parents[0]) changes = diff(scope.before)
+  }
+  // Exact Oracle tools publication: preserve the current Cloudflare release and
+  // all financial state. The only workflow edit refreshes this guard checksum.
+  if (parents.includes(EXECUTION_TOOLS_BASE) || scope.before === EXECUTION_TOOLS_BASE) {
+    if (parents.length !== 1 || parents[0] !== EXECUTION_TOOLS_BASE ||
+        scope.kind === 'push' && scope.before !== EXECUTION_TOOLS_BASE) refused()
+    const expected = { ...EXECUTION_TOOLS_PAYLOAD, [SCRIPT_PATH]: blob(scriptBytes) }
+    const expectedPaths = [...Object.keys(expected), WORKFLOW_PATH].sort()
+    if (changes.length !== expectedPaths.length || changes.map(change => change.path).sort().join('\0') !== expectedPaths.join('\0')) refused()
+    for (const change of changes) {
+      if (change.newMode !== '100644' || !['A', 'M'].includes(change.status) ||
+          (change.path !== WORKFLOW_PATH && change.newBlob !== expected[change.path])) refused()
+    }
+    const prior = git(cwd, ['show', `${EXECUTION_TOOLS_BASE}:${WORKFLOW_PATH}`])
+    const after = git(cwd, ['show', `${head}:${WORKFLOW_PATH}`])
+    const oldHash = 'd74667e751f0001ba7a81f895b1de65a697a73871363f2ea992bbf83f4eaf4c1'
+    if (prior.split(oldHash).length !== 2 || after !== prior.replace(oldHash, sha256(scriptBytes))) refused()
+    return { deployAllowed: false, failedHoldWaiver: false }
   }
   // Separately approved source publication. The historical waiver stays frozen.
   // Exact scope validation below grants deployment only, never a financial waiver.

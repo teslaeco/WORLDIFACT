@@ -16,7 +16,7 @@ import oracle_construction_launch as launcher
 
 
 def package_bytes(path):
-    root = Path(__file__).resolve().parents[2] if path.startswith(('tools/model_context_upgrade/', 'tools/model_construction/')) else lineage.lineage.ANCESTOR
+    root = Path(__file__).resolve().parents[2] if path.startswith(('tools/model_context_upgrade/', 'tools/model_construction/', 'tools/model_execution/')) else lineage.lineage.ANCESTOR
     return (root / path).read_bytes()
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -61,6 +61,24 @@ class LauncherTests(unittest.TestCase):
             self.assertIn('ALLOW_CANCELLED_CLEANUP=False', program)
             self.assertIn('EXPECTED_CANCELLED_JOB=None', program)
             compile(program, 'pinned-update-wrapper', 'exec')
+    def test_explicit_execution_mode_is_boolean_and_reaches_installer(self):
+        for invalid in (1, None, 'true'):
+            with self.assertRaises(launcher.LaunchError):
+                launcher.script('inert', approved=True, update_execution=invalid)
+        for enabled in (False, True):
+            with patch.object(launcher, 'package', return_value='inert'), \
+                 patch.object(launcher, 'connection', return_value=['INERT']), \
+                 patch.object(launcher, 'invoke', return_value=success()) as invoke:
+                args = ['--source-commit', COMMIT, '--approve-service-maintenance']
+                if enabled:
+                    args.append('--update-execution')
+                launcher.main(args)
+            program = invoke.call_args.args[1]
+            self.assertIn('UPDATE_EXECUTION=' + repr(enabled), program)
+            self.assertIn("(['--update-execution'] if UPDATE_EXECUTION else [])", program)
+            self.assertIn('ALLOW_CANCELLED_CLEANUP=False', program)
+            self.assertIn('EXPECTED_CANCELLED_JOB=None', program)
+            compile(program, 'pinned-update-wrapper', 'exec')
     def test_retired_or_conflicting_modes_refuse_before_package_or_connection(self):
         with patch.object(launcher, 'package', side_effect=AssertionError('download')), \
              patch.object(launcher, 'connection', side_effect=AssertionError('remote')):
@@ -89,9 +107,9 @@ class LauncherTests(unittest.TestCase):
         prior = lineage.installer
         import oracle_upgrade_launch
         self.assertEqual(len(oracle_upgrade_launch.FILES),28)
-        self.assertEqual(len(launcher.NEW_FILES),13)
+        self.assertEqual(len(launcher.NEW_FILES),14)
         self.assertEqual(set(launcher.FILES),set(oracle_upgrade_launch.FILES) | {'oracle_upgrade_launch.py'} | set(launcher.NEW_FILES))
-        self.assertEqual(len(launcher.FILES),42)
+        self.assertEqual(len(launcher.FILES),43)
         self.assertNotIn('inspect_candidate_readonly.py',launcher.FILES)
         self.assertNotIn('test_native_pipeline.py',launcher.FILES)
         self.assertGreater(launcher.INSTALL_TIMEOUT,prior.INSTALL_TIMEOUT if hasattr(prior,'INSTALL_TIMEOUT') else 2400)

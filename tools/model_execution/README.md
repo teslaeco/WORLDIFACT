@@ -1,7 +1,7 @@
 # Supervised execution completion proposal
 
-Status: LOCAL, NOT INSTALLED. No provider request, service restart, deployment,
-account mutation or historical job continuation has been performed.
+Status: Oracle execution update prepared; NOT INSTALLED. The separate Worker
+admission/progress fix was deployed by PR #264. No new paid model was requested.
 
 The owner reconnected Oracle Cloud Shell using Node 22 on 11 October 2026.
 The existing SSH key and strict known-host entry reached the original generator.
@@ -42,19 +42,15 @@ https://developers.openai.com/api/docs/guides/function-calling#tool-choice
 
 ## Proposed submission lifetime change
 
-The Worker forwards its actual context to Studio. Only after full input
-validation, admission and the one-use dispatch fence does Studio retain the
-same submission/receipt-handling promise through `context.waitUntil`. The HTTP
-handler still awaits that promise and returns its actual outcome. No retry,
-queue consumer, new receipt or additional reservation is added. Rejected and
-recovered submissions register no new background dispatch.
-
-Oracle's existing submission timeout is 25 seconds. Cloudflare permits at most
-30 seconds after disconnection; this is bounded protection for transmission and
-acceptance handling, not a durable-delivery guarantee or background Blender
-execution. Validation reads and admission before dispatch are not protected by
-this new promise. This is a concrete missing lifecycle protection, not proof
-that disconnection caused the reported photo-job incident.
+The Worker forwards its actual context to Studio. PR #264 retains the single
+validated submission promise before its first account reservation. Validation,
+authentication and Oracle payload checks still precede any financial write.
+The HTTP handler awaits that same promise. Existing reservations recover only;
+there is no retry, queue consumer or additional reservation. This closes the
+previous disconnect window while the account reserve/dispatch calls were awaited.
+Oracle's existing submission timeout is 25 seconds. Workers allow at most
+30 seconds after disconnection. This is bounded protection, not durable delivery
+or proof that disconnection caused the missing historical jobs.
 
 https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil
 
@@ -120,3 +116,26 @@ A paid acceptance test is separate, with at most the original USD 1.75 for one
 explicitly approved job and no automatic repeat. Sol/Luna detailed modeling,
 six model/mode combinations, full account persistence and point reconciliation
 remain unfinished. No one-minute acceptance is claimed.
+
+## Exact Oracle installation transaction
+
+The new `--update-execution` mode accepts only the complete 14-file runtime
+observed after the transport repair already installed from PR #251. It changes
+only codex_runner.py and rebinds all eight source receipts after the four genuine
+CLI/MCP/Blender gates pass against the complete isolated candidate. It preserves
+the existing idle fence, process identity guardian, activation latch, source
+inventory, budget ceilings, backup and pre-activation rollback. An ambiguous
+activation must never be retried. Existing historical modes retain their pins.
+
+The launcher binds the current transform, installer and source manifest by Git
+blob hashes while retaining all historical dependency and offline gate pins.
+No production receipt is created from unit tests or an earlier stage. The eight
+transaction tests cover every before/after-write failure, exact rollback, unknown
+source/receipt rejection, busy/cancelled history, duplicate installation and
+ambiguous activation. Eight exact observed-runner AST tests also pass. The full
+local Python run reports 286 tests, three process-namespace errors in existing
+kernel-guard tests, and one unavailable native-Blender skip; these limits must
+not be reported as a complete passing run. Hosted CI and the final native gates
+remain required. There is one historical cancelled job on Oracle; the unchanged
+installer requires explicit consent bound to that job before interrupting any
+remaining cleanup during a service restart. It never changes the job record.
