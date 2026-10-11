@@ -1,3 +1,21 @@
+# 11 October 2026 — real library thumbnails and inline expansion
+
+Owner-requested follow-up to the library screenshot: actual static geometry
+thumbnails replace generic cube icons, with Expand/Collapse library in AI Shop
+and explicit pagination beyond the loaded page. The full account library link
+remains. Cards inherit Cosmos/Egypt colors for readable titles and controls.
+Visible cards load one at a time using existing authenticated artifact GETs,
+with a 16 MiB thumbnail cap, existing bounded geometry decoder and no WebGL
+contexts or animation loops. Unsupported files retain the explicit full preview.
+Thumbnails are simplified, untextured images, not a claim of final appearance.
+Private thumbnail URLs live only in component memory, are revoked on teardown,
+and pending work is aborted on account change. No models are copied publicly.
+Tests cover expansion/collapse, pagination, serial/cancelled work, byte caps,
+account receipts and existing ownership/recovery behavior. Full CI and production
+visual evidence are recorded in the PR. No provider job or financial mutation.
+Use the exact-parent, exact-path preserving release. Rollback through a reviewed
+source-only release; retain original models, receipts, points and remote settings.
+
 # 11 October 2026 — production preview contrast correction
 
 PR #256 passed all five workflows (2,169 tests), deployed successfully, and

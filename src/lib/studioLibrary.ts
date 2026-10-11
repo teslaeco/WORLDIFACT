@@ -120,7 +120,7 @@ export async function getStudioLibraryModel(accountId: string, id: string, signa
 }
 
 /** Fetch only the explicitly selected GLB. Local records never prove ownership. */
-export async function readStudioLibraryModel(accountId: string, model: StudioLibraryModel, signal: AbortSignal, fetcher: Fetcher = browserFetch): Promise<Blob> {
+export async function readStudioLibraryModel(accountId: string, model: StudioLibraryModel, signal: AbortSignal, fetcher: Fetcher = browserFetch, maximum = STUDIO_MODEL_LIMIT): Promise<Blob> {
   if (!accountId) throw new Error('Sign in to open an account model.')
   let verified = parseModel(model)
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -140,7 +140,7 @@ export async function readStudioLibraryModel(accountId: string, model: StudioLib
       }
       throw new Error('This account model is unavailable.')
     }
-    const blob = new Blob(await bytes(response, STUDIO_MODEL_LIMIT, requestSignal), { type: 'model/gltf-binary' })
+    const blob = new Blob(await bytes(response, Math.min(maximum, STUDIO_MODEL_LIMIT), requestSignal), { type: 'model/gltf-binary' })
     signal.throwIfAborted()
     return blob
   }

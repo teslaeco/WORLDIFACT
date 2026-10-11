@@ -68,7 +68,7 @@ async function harness({ locals = [], owner = 'owner-a', loading = false, reques
   }
   const preview = props => React.createElement('preview', props)
   const modules = {
-    react, 'react-router-dom': { Link: 'a' }, './OracleModelPreview': preview,
+    react, 'react-router-dom': { Link: 'a' }, './OracleModelPreview': preview, './StudioModelThumbnail': 'thumbnail',
     '../lib/account': { useAccount: () => ({ user: owner ? { id: owner } : null, loading, refresh }) },
     '../lib/studioArchive': { ...archive, readStudioModel: async key => { localReads.push(key); return localBlob ? localBlob(key) : archive.readStudioModel(key) } },
     '../lib/studioLibrary': { ...library,
@@ -520,5 +520,21 @@ test('closing a selected preview cancels delayed downloads and prevents a late s
     pending.resolve(new Response(fixtureGLB())); await h.settle()
     assert.equal(h.preview(), undefined); assert.equal(h.downloads.length, 0)
     assert.equal(h.urls.size, 0); assert.equal(h.button('Preview 3D', h.articles()[0]).props.disabled, false)
+  } finally { h.close() }
+})
+
+
+test('compact library expands all loaded models in place and exposes cursor pagination without fetching artifacts', async () => {
+  const models = Array.from({ length: 9 }, (_, i) => model(`00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, `Saved model ${i}`))
+  const h = await harness({ compact: true, io: path => page(path.includes('cursor=') ? [model(otherId, 'Next page model')] : models, path.includes('cursor=') ? null : pageCursor) })
+  try {
+    assert.equal(h.articles().length, 6)
+    await h.click('Expand library'); assert.equal(h.articles().length, 9)
+    assert.equal(h.button('Collapse library').props['aria-expanded'], true)
+    await h.click('Load more account models'); assert.equal(h.articles().length, 10)
+    assert.equal(artifacts(h).length, 0)
+    await h.click('Collapse library'); assert.equal(h.articles().length, 6)
+    await h.click('Expand library'); assert.equal(h.articles().length, 10)
+    assert.equal(h.calls.length, 2)
   } finally { h.close() }
 })
