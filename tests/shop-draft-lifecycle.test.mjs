@@ -248,7 +248,7 @@ test('new reference selection and draft clearing preserve the displayed old mode
   try {
     await h.poll()
     const before = h.description()
-    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'new-reference.png' }], value: 'new-reference.png' } })
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'new-reference.png', type: 'image/jpeg', size: 1024 }], value: 'new-reference.png' } })
     await h.settle()
     assert.ok(h.all().some(n => n.type === 'img' && /Your reference 1/.test(n.props.alt || '')))
     const fastOption = h.all().find(n => n.type === 'option' && n.props.value === FAST_DRAFT_PROFILE)
@@ -488,7 +488,7 @@ test('Shop retains 3,500 characters and four views when the detailed worker is u
   try {
     const brief = ('Create a realistic adult heroine with silver hair. ' + 'outfit '.repeat(550)).slice(0,3500)
     h.byId('studio-prompt').props.onChange({ target: { value: brief } })
-    h.byId('studio-photos').props.onChange({ target: { files: Array.from({length:4},(_,i)=>({name:`view-${i}.jpg`})), value:'views' } })
+    h.byId('studio-photos').props.onChange({ target: { files: Array.from({length:4},(_,i)=>({name:`view-${i}.jpg`,type:'image/jpeg',size:1024})), value:'views' } })
     await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, brief)
     assert.equal(h.byId('studio-prompt').props.maxLength, undefined, 'No silent text truncation')
@@ -504,7 +504,7 @@ test('Shop transmits all four explicitly accepted procedural reference views in 
   const h=await harness({ready:true,withExistingJob:false})
   try {
     h.byId('studio-prompt').props.onChange({target:{value:'MCC cabinet procedural study'}})
-    h.byId('studio-photos').props.onChange({target:{files:Array.from({length:4},(_,i)=>({name:`cabinet-${i}.jpg`})),value:'views'}})
+    h.byId('studio-photos').props.onChange({target:{files:Array.from({length:4},(_,i)=>({name:`cabinet-${i}.jpg`,type:'image/jpeg',size:1024})),value:'views'}})
     await h.settle()
     h.byId('studio-deliverable').props.onChange({target:{value:'procedural-blueprint'}});await h.settle()
     assert.equal(h.button('Generate GPT-6 Astra blueprint').props.disabled,false)
@@ -522,7 +522,7 @@ test('a real character request selects the signed Studio route, keeps all views 
   try {
     const prompt = ('Recreate this adult silver-haired woman, no orb. ' + 'outfit '.repeat(550)).slice(0,3499) + '.'
     h.byId('studio-prompt').props.onChange({ target: { value: prompt } })
-    h.byId('studio-photos').props.onChange({ target: { files: Array.from({length:4},(_,i)=>({name:`view-${i}.jpg`})), value:'views' } })
+    h.byId('studio-photos').props.onChange({ target: { files: Array.from({length:4},(_,i)=>({name:`view-${i}.jpg`,type:'image/jpeg',size:1024})), value:'views' } })
     await h.settle()
     assert.equal(h.button('Generate Astra/Blender model').props.disabled,false)
     const first=h.form().props.onSubmit({preventDefault(){}}), duplicate=h.form().props.onSubmit({preventDefault(){}})
@@ -1095,7 +1095,7 @@ test('input changes clear extended consent, and unavailable tier recovery requir
       assert.equal(h.byId('studio-budget-consent').props.checked, false, id)
     }
     await accept()
-    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'front.jpg' }], value: 'front' } }); await h.settle()
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'front.jpg', type: 'image/jpeg', size: 1024 }], value: 'front' } }); await h.settle()
     assert.equal(h.byId('studio-budget-consent').props.checked, false)
     await accept(); h.status.tiersReady = false
     await h.button('Refresh availability').props.onClick(); await h.settle()
@@ -1831,7 +1831,7 @@ test('late terminal result never clears a next prompt or references edited befor
   try {
     h.byId('studio-prompt').props.onChange({ target: { value: 'My next globe, not the previous request' } })
     await h.settle()
-    await h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'new-view.png' }], value: 'new-view.png' } })
+    await h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'new-view.png', type: 'image/jpeg', size: 1024 }], value: 'new-view.png' } })
     await h.settle(); await h.poll()
     assert.equal(h.byId('studio-prompt').props.value, 'My next globe, not the previous request')
     assert.ok(h.all().some(n => n.type === 'img' && /Your reference 1/.test(n.props.alt || '')))
@@ -1879,7 +1879,7 @@ test('clear description also clears references when text is already empty withou
   const h = await harness({ ready: true, detailedReady: true })
   try {
     await h.poll()
-    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'new-view.png' }], value: 'new-view.png' } })
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'new-view.png', type: 'image/jpeg', size: 1024 }], value: 'new-view.png' } })
     await h.settle()
     const clear = h.all().find(n => n.props['data-testid'] === 'clear-studio-draft')
     assert.equal(clear.props.disabled, false)
@@ -1901,10 +1901,10 @@ test('theme changes persist without submitting, and excess references preserve t
       assert.equal(h.storeData.get('worldifact:studio-theme:v1'), String(value))
       assert.equal(h.byId('studio-prompt').props.value, 'A sandstone observatory')
     }
-    h.byId('studio-photos').props.onChange({ target: { files: Array.from({ length: 4 }, (_, i) => ({ name: `view-${i}.jpg` })), value: 'views' } }); await h.settle()
-    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'fifth.jpg' }], value: 'fifth' } }); await h.settle()
+    h.byId('studio-photos').props.onChange({ target: { files: Array.from({ length: 4 }, (_, i) => ({ name: `view-${i}.jpg`, type: 'image/jpeg', size: 1024 })), value: 'views' } }); await h.settle()
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'fifth.jpg', type: 'image/jpeg', size: 1024 }], value: 'fifth' } }); await h.settle()
     assert.equal(h.all().filter(n => n.type === 'img' && /Your reference/.test(n.props.alt || '')).length, 4)
-    assert.match(text(h.all()), /up to four reference views/)
+    assert.match(text(h.all()), /up to 4 reference images|Invalid attachments/)
     h.button('Remove reference 4').props.onClick(); await h.settle()
     assert.equal(h.byId('studio-photos').props.disabled, false)
     assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)

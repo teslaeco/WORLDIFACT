@@ -24,8 +24,11 @@ export default function CreationProgress({ active = false, label = 'Ready to cre
       aria-valuemin={active ? 0 : undefined} aria-valuemax={active ? 100 : undefined}
       aria-valuenow={active && percent !== null ? percent : undefined}
       aria-valuetext={active ? percent !== null ? `${percent}% of workflow milestones confirmed; not time remaining` : 'In progress; completion percentage is unavailable' : undefined}>
-      {active && <span className="creation-progress-dots" aria-hidden="true">{[0, 1, 2, 3, 4].map(i => <i key={i} style={{ animationDelay: `${i * .14}s` }} />)}</span>}
-      {percent !== null && <strong className="creation-progress-percent">{percent}%</strong>}
+      <div className="creation-led-meter" data-indeterminate={active && percent === null}>
+        <svg viewBox="0 0 100 100" aria-hidden="true"><circle className="creation-led-track" cx="50" cy="50" r="44" /><circle className="creation-led-arc" cx="50" cy="50" r="44" pathLength="100" style={{ strokeDasharray: percent === null ? '22 78' : `${percent} ${100 - percent}` }} /></svg>
+      {active && percent === null && <span className="creation-progress-dots" aria-hidden="true">{[0, 1, 2, 3, 4].map(i => <i key={i} style={{ animationDelay: `${i * .14}s` }} />)}</span>}
+      {percent !== null ? <strong className="creation-progress-percent">{percent}%</strong> : !active && <span aria-hidden="true" className="creation-ready-mark">✦</span>}
+      </div>
       <span>{label}</span>
       {active && <small>{percent !== null ? 'Confirmed stages · not time remaining' : 'Working · completion time varies'}</small>}
     </div>

@@ -14,3 +14,13 @@
 @keyframes creation-dot{0%,70%,100%{opacity:.25;transform:translateY(0)}35%{opacity:1;transform:translateY(-5px)}}
 @media(max-width:600px){.creation-progress{min-height:220px;padding:12px}.creation-progress-sculpture{width:170px;height:150px}}
 @media(prefers-reduced-motion:reduce){.creation-progress-dots i{animation:none}}
+.creation-led-meter{position:relative;display:grid;place-items:center;width:92px;height:92px;margin:-12px 0 3px;border-radius:50%;background:radial-gradient(circle,#36a6c111,transparent 70%);filter:drop-shadow(0 0 9px #68efd940)}
+.creation-led-meter svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);fill:none;stroke-width:2.5}
+.creation-led-track{stroke:var(--studio-line,#345059)}
+.creation-led-arc{stroke:var(--studio-accent,#79edc9);stroke-linecap:round;filter:drop-shadow(0 0 3px #5decc9)}
+.creation-led-meter[data-indeterminate=true] svg{animation:creation-led-turn 2.4s linear infinite}
+.creation-progress[data-moving=false] .creation-led-meter svg{animation:none}
+.creation-led-meter .creation-progress-percent{font-size:23px}
+.creation-ready-mark{font-size:28px;color:var(--studio-accent,#79edc9)}
+@keyframes creation-led-turn{to{transform:rotate(270deg)}}
+@media(prefers-reduced-motion:reduce){.creation-led-meter svg{animation:none!important}}

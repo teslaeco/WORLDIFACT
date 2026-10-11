@@ -1,0 +1,11 @@
+{
+  "release": "shop-attachments-20261011",
+  "baseCommit": "eee1d82e928d81dbc210bdb7ac55c5765b6a9a47",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 5,
+  "referenceLimit": 4,
+  "originalReferenceTotalBytes": 41943040,
+  "providerCalls": 0
+}

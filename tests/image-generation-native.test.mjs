@@ -49,3 +49,21 @@ test('legacy recovery refuses new transport, provider evidence, changed fingerpr
  const job=legacy(25);await runtime.call('/fixture-seed',{'balance':199,'customer-reserved-credits:v1':24,'image-index:v1':[job.id],['image-job:v1:'+job.id]:job})
  await runtime.call('/images');assert.deepEqual(await runtime.call('/fixture-inspect').then(r=>r.json()),{balance:199,held:24});assert.equal(calls,0)
 })
+
+test('native Worker transports all four JPEG references as multipart without persisting them or dispatching a replay',{timeout:60000},async t=>{
+ const bytes=png();let calls=0
+ const runtime=await imageRuntime(async request=>{
+   calls++;assert.equal(request.url,'https://api.openai.com/v1/images/edits')
+   const form=await request.formData(),files=form.getAll('image[]')
+   assert.equal(files.length,4);assert.equal(form.get('n'),'1');assert.equal(form.get('quality'),'medium')
+   for(const file of files){assert.equal(file.type,'image/jpeg');assert.equal(file.size,23)}
+   return Response.json({data:[{b64_json:bytes.toString('base64')}]})
+ });t.after(()=>runtime.close())
+ await runtime.call('/fixture-seed',{'balance':199,'customer-reserved-credits:v1':0,'image-index:v1':[]})
+ const photo={name:'fixture.jpg',view:'front',textureMaxSize:4096,dataUrl:'data:image/jpeg;base64,'+Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64')}
+ const body={...input(),references:Array(4).fill(photo)}
+ const first=await runtime.call('/images',body).then(r=>r.json());assert.equal(first.job.state,'completed',JSON.stringify(first))
+ await runtime.call('/images',body);assert.equal(calls,1)
+ assert.deepEqual(await runtime.call('/fixture-inspect').then(r=>r.json()),{balance:194,held:0})
+ assert.doesNotMatch(JSON.stringify(await runtime.call('/images').then(r=>r.json())),/data:image|references/)
+})

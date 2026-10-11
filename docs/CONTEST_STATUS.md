@@ -1,3 +1,14 @@
+# 11 October 2026 — four references, Cosmos/Egypt and local OBJ export
+
+Customer-requested follow-up to PR #255: one plus button next to model selection,
+up to four reference images / 40 MiB original files combined in 3D and Image modes,
+real multipart reference-guided image requests, two themes, LED stage progress
+and OBJ from the authorized model. Preview remains above the prompt; existing
+FBX/Blender/GLB/texture/PNG downloads remain. Implementation and synthetic/native
+tests are recorded in [the review and rollback notes](SHOP_ATTACHMENTS_20261011.md).
+Production UI and CI evidence will be recorded in the PR after publication.
+No paid provider test, Stripe mutation, new code activation or point correction.
+
 # 10 October 2026 — approved forfeiture of four failed-request holds
 
 The owner explicitly confirmed removing 1,000 held points without refund and
