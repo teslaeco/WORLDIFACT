@@ -1,3 +1,14 @@
+# 11 October 2026 — production preview contrast correction
+
+PR #256 passed all five workflows (2,169 tests), deployed successfully, and
+production accepted four references in 3D and Image mode. Local OBJ download
+from an existing model contained 55,541 vertices and 99,328 faces without a new
+provider request. Production visual inspection found legacy preview notes using
+a fixed light color on sandstone; this follow-up inherits the active theme color.
+The same exact-parent, source-only preserving release protects remote settings,
+secrets, billing and jobs. Roll back only through another reviewed source release.
+No real reference-guided paid generation was executed.
+
 # 11 October 2026 — four references, Cosmos/Egypt and local OBJ export
 
 Customer-requested follow-up to PR #255: one plus button next to model selection,

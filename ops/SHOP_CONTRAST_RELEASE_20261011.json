@@ -1,0 +1,11 @@
+{
+  "release": "shop-contrast-20261011",
+  "baseCommit": "72c4cde16be8a8f0d03b8cc62e5ea03a13948a3f",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 5,
+  "referenceLimit": 4,
+  "originalReferenceTotalBytes": 41943040,
+  "providerCalls": 0
+}
