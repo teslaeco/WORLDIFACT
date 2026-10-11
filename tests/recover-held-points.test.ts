@@ -180,3 +180,19 @@ test('aborting an owned selection before reading it prevents the signed status r
   await assert.rejects(recoverHeldPoints(f.fetcher, { ...item, channel: 'studio' }, controller.signal), /interrupted/)
   assert.equal(f.calls.length, 1)
 })
+
+test('existing Studio check retains only the allowlisted original failure alongside honest point settlement', async()=>{
+  for(const code of ['ORACLE_SUBMISSION_REJECTED','ORACLE_JOB_MISSING','MODEL_BUDGET_EXCEEDED']) {
+    const saved=current();const f=fixture({current:{...saved.current,failureCode:code}}, {job:{id,state:'failed',pointSettlement:point('pending-cost')}})
+    const result=await recoverHeldPoints(f.fetcher,{...item,channel:'studio'})
+    assert.match(result.detail,new RegExp('Recorded failure: '+code));assert.match(result.detail,/No points have been charged or released/)
+    assert.doesNotMatch(JSON.stringify(result),/Private model prompt|"ticket"|"receipt"/);assert.equal(f.calls.length,2)
+  }
+})
+test('unknown private errors and stale failure codes on completed jobs are never displayed',async()=>{
+  for(const [code,state] of [['private provider prompt trace','failed'],['ORACLE_JOB_MISSING','succeeded']] as const){
+    const saved=current();const f=fixture({current:{...saved.current,failureCode:code}}, {job:{id,state,pointSettlement:point(state==='failed'?'pending-cost':'charged')}})
+    const result=await recoverHeldPoints(f.fetcher,{...item,channel:'studio'})
+    assert.doesNotMatch(result.detail,/Recorded failure|private provider/)
+  }
+})

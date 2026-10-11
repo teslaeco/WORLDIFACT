@@ -1,0 +1,11 @@
+{
+  "release": "studio-reference-envelope-20261011",
+  "baseCommit": "ce535c55ba76f5051a3ef1a7673f5b1c539f9319",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 5,
+  "referenceLimit": 4,
+  "originalReferenceTotalBytes": 41943040,
+  "providerCalls": 0
+}
