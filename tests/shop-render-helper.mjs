@@ -45,6 +45,20 @@ export async function loadProgressOrb() {
   return module.exports
 }
 
+export async function loadCreationProgress() {
+  const url = new URL('../src/components/CreationProgress.tsx', import.meta.url)
+  const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
+  const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
+  runInNewContext(code, { module, exports: module.exports, require(id) {
+    if (id === '../lib/generationProgressView') return progressView
+    if (id === './GenerationSculpture') return { __esModule: true, default: () => React.createElement('img', { src: '/world-assets/polyhedron-led-poster.svg', alt: '', 'data-webgl-stub': true }) }
+    if (id.endsWith('.css')) return {}
+    if (['react', 'react/jsx-runtime'].includes(id)) return localRequire(id)
+    throw new Error(`Unexpected progress dependency: ${id}`)
+  } }, { filename: url.pathname, timeout: 1000 })
+  return module.exports
+}
+
 async function loadQuoteHook(react, account, globals) {
   const url = new URL('../src/lib/useGenerationQuote.ts', import.meta.url)
   const source = await readFile(url, 'utf8'), module = { exports: {} }
@@ -104,7 +118,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
   const source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
   const account = adapters['../lib/account'] || { useAccount: () => ({ user: null, loading: true }) }
   const quoteHook = await loadQuoteHook(react, account, globals)
-  const shopOptions = await loadShopManufacturingOptions(react), costNotice = await loadCostNotice(quoteHook), progressOrb = await loadProgressOrb()
+  const shopOptions = await loadShopManufacturingOptions(react), costNotice = await loadCostNotice(quoteHook), progressOrb = await loadProgressOrb(), creationProgress = await loadCreationProgress()
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, {
     crypto: globalThis.crypto, ...globals, module, exports: module.exports,
@@ -118,12 +132,14 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions
       if (id === '../components/GenerationCostNotice') return costNotice
+      if (id === '../lib/generationProgressView') return progressView
+      if (id === '../components/CreationProgress') return creationProgress
       if (id === '../components/GenerationProgressOrb') return progressOrb
       if (id === '../components/LiveSolPreview') return { __esModule: true, default: ({ prompt }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': 'live-fast' }, 'LIVE Sol blueprint-derived GLB') }
       if (id === '../components/OracleModelPreview') return { __esModule: true, default: () => React.createElement('span', null, 'WebGL renderer is not exercised by this server render') }
       if (id === '../components/DemoShopPreview') return { __esModule: true, default: ({ prompt, mode }) => React.createElement('span', { 'data-demo-prompt': prompt, 'data-demo-mode': mode || 'demo' }, mode === 'live-fast' ? 'LIVE Sol procedural 3D draft' : 'DEMO local 3D preview') }
       if (id === '../components/ProjectAttachmentPicker') return { __esModule: true, default: ({ scope }) => React.createElement('section', { 'data-project-attachments': scope }, 'LOCAL REFERENCE project files') }
-      if (id === '../components/ImageGenerator') return { ImageGenerator: () => React.createElement('section', { 'data-image-generator': true }, 'Generate image · 25 points') }
+      if (id === '../components/ImageGenerator') return { ImageGenerator: ({ active }) => React.createElement('section', { 'data-image-generator': true, hidden: !active }, 'Generate image · 5 points') }
       if (id === '../components/PublicModelGallery') return { __esModule: true, default: () => React.createElement('section', { 'data-public-model-gallery': true }, 'Public model examples') }
       if (id === '../components/StudioGallery') return { __esModule: true, default: () => React.createElement('section', { 'data-studio-gallery': 'device-archive' }, 'Your model gallery') }
       if (id.endsWith('.css')) return {}

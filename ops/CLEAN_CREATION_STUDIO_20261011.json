@@ -1,0 +1,10 @@
+{
+  "release": "clean-creation-studio-20261011",
+  "baseCommit": "cea18bda18da3547b44ad243d9d63b41fd5cc283",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 5,
+  "referenceLimit": 4,
+  "providerCalls": 0
+}

@@ -45,8 +45,8 @@ test('existing STANDARD receipts remain readable and unknown saved modes fail cl
 test('actual Shop initial render restores detailed Astra by default and keeps FAST gated until Sol LIVE health is confirmed', async () => {
   const html = await renderShopMarkup()
   assert.equal((html.match(/id="studio-mode"/g) || []).length, 1)
-  assert.match(html, /GPT-6 ASTRA — 250 points per job/)
-  assert.match(html, /<option value="fast-draft-v1" disabled="">GPT-6\.1 SOL/)
+  assert.match(html, /Slow \/ Quality · GPT-6 Astra/)
+  assert.match(html, /<option value="fast-draft-v1" disabled="">Fast · GPT-6\.1 Sol/)
   assert.match(html, /Sol\/Luna generation is awaiting verified worker readiness/)
   assert.match(html, /Generate Astra\/Blender model · 250 points/)
   assert.match(html, /Back to WORLDIFACT/)
