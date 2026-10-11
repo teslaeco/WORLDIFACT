@@ -158,3 +158,21 @@ test('photo bytes and requested texture limit reach the existing protocol, never
   assert.equal((await blocked.call('/api/studio/prepare', 'POST', body)).status, 409)
   assert.equal(posts(blocked).length, 0)
 })
+
+test('four-reference MAKE cabinet reaches v33 admission once with the complete bounded instruction envelope', async () => {
+  const f = fixture()
+  const jpeg = 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64')
+  const value = validateStudioInput({ ...input, purpose: 'object', prompt: 'Industrial electrical cabinet for 3D printing',
+    photos: ['front','left','right','back'].map(view=>({name:view+'.jpg',view,dataUrl:jpeg,textureMaxSize:4096})) })
+  const receipt = await data(f.call('/api/studio/prepare','POST',value))
+  const response = await f.call('/api/studio/jobs','POST',value,receipt.ticket)
+  assert.equal(response.status,202)
+  const wire=JSON.parse(String(posts(f)[0].init?.body))
+  assert.ok(wire.agentInstructions.length<=12000,'Oracle checks UTF-16 instruction length before creating the job')
+  assert.equal(wire.photos.length,4);assert.equal(wire.photos[0].dataUrl,jpeg)
+  assert.match(wire.agentInstructions,/manufacturing hard rules/)
+  assert.match(wire.agentInstructions,/Reference 2: left/)
+  assert.equal(posts(f).length,1)
+  await f.call('/api/studio/jobs','POST',value,receipt.ticket)
+  assert.equal(posts(f).length,1,'reference retries never create a second paid dispatch')
+})

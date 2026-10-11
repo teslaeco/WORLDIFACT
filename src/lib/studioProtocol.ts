@@ -95,6 +95,8 @@ export function studioQualityProfile(input: Pick<StudioInput, 'prompt' | 'photos
 
 
 export const STUDIO_BODY_LIMIT = 9 * 1024 * 1024
+// Oracle v33 measures this field in UTF-16 code units, as JavaScript does.
+export const STUDIO_AGENT_INSTRUCTION_LIMIT = 12_000
 export const STUDIO_MODEL_LIMIT = 48 * 1024 * 1024
 export const STUDIO_POLL_MS = 25_000
 export const FAST_DRAFT_PROFILE = 'fast-draft-v1' as const
@@ -252,6 +254,18 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   return { id, prompt: input.prompt + instruction, ...(studioPricing ? { studioPricing } : {}),
     agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(studioPricing, !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels + '\n\n' + STUDIO_READBACK_GUIDE,
     ...(photos.length ? { photos } : {}) }
+}
+
+/** Check the complete wire envelope before any reservation/dispatch. Never
+ * truncate a customer brief, photo, safety rule or completion requirement. */
+export function validateOracleStudioPayload(payload: ReturnType<typeof oracleStudioPayload>, promptMaxLength: number) {
+  if (payload.prompt.length > promptMaxLength) throw new Error(`Shorten the description: the worker accepts ${promptMaxLength} characters including export instructions.`)
+  if ('agentInstructions' in payload && payload.agentInstructions.length > STUDIO_AGENT_INSTRUCTION_LIMIT)
+    throw new Error('This reference request exceeds the worker instruction limit. No points were reserved. Keep the original images and contact support.')
+  const body = JSON.stringify(payload)
+  if (new TextEncoder().encode(body).byteLength > STUDIO_BODY_LIMIT)
+    throw new Error('The prepared reference upload exceeds the worker request limit. No points were reserved.')
+  return body
 }
 export async function inputDigest(input: StudioInput): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(input)))

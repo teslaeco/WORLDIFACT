@@ -14,7 +14,7 @@ import { astraProjectBudget } from './astraProjectBudget.ts'
 import { studioPricingFor, type StudioPricing } from '../src/lib/studioPricing.ts'
 import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioNewJobPolicy.ts'
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
-import { inputDigest, oracleStudioPayload, readStudioGenerationTiming, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata, type StudioLibraryModel, type StudioLibraryPage, type StudioGenerationTiming } from '../src/lib/studioProtocol.ts'
+import { inputDigest, oracleStudioPayload, validateOracleStudioPayload, readStudioGenerationTiming, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata, type StudioLibraryModel, type StudioLibraryPage, type StudioGenerationTiming } from '../src/lib/studioProtocol.ts'
 
 export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; STUDIO_NEW_JOB_POLICY?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
@@ -634,6 +634,9 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       }
       if (Date.now() - auth.issued > (pricing ? 5 : 30) * 60_000) throw new StudioError('This unsubmitted receipt expired. Review your inputs and current price before preparing another.', 409)
       const checked = await preflight(request, env, fetcher, prepareMetadata(input), user?.id)
+      let payload: string
+      try { payload = validateOracleStudioPayload(oracleStudioPayload(auth.id, input), checked.promptMaxLength) }
+      catch (error) { throw new StudioError(error instanceof Error ? error.message : 'Invalid reference request. No points were reserved.', 400) }
       let admittedPointSettlement: PointSettlement | undefined
       if (user) {
         const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { paidPointsPolicy: auth.held ? request.headers.get(PAID_POINTS_POLICY_HEADER) : undefined, ...(auth.held ? { requiredFundingMode: PAID_POINTS_FUNDING } : {}), channel: 'studio', prompt: input.prompt, supportIdentity: user, ...(overnightTest ? { overnightTest: true } : { repairedMccInputEligible: repairedMccInputEligible(prepareMetadata(input)), projectBudgetInputEligible: repairedMccInputEligible(prepareMetadata(input)) }), ...(pricing ? { pricing } : {}) })
@@ -664,7 +667,6 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       }
       logStudioDiagnostic({ requestId: auth.id, stage: 'ADMITTED', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
       try {
-        const payload = JSON.stringify(oracleStudioPayload(auth.id, input))
         // A poll may have closed the account reservation while the global
         // budget call was pending. Claim exactly once before any Oracle POST.
         if (user) {

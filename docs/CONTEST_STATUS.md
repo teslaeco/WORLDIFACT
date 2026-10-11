@@ -1,3 +1,21 @@
+# 11 October 2026 — bounded reference admission correction
+
+A reproducible photo/MAKE cabinet request exceeded Oracle's 12,000 UTF-16
+instruction limit before job creation. The compact readback guide now fits;
+the full prompt/instruction/body envelope is checked before point or global
+reservation, without truncating original inputs or weakening completion gates.
+Regression coverage includes all reference views/profiles, four images,
+standard/extended historical terms, size boundaries and duplicate dispatch.
+See `REFERENCE_GENERATION_AUDIT_20261011.md` for evidence and remaining blockers.
+
+The newly reported photo job remains unconfirmed: Oracle 404 is not proof of
+zero cost or a diagnosed cause. Live Worker settings show required secret
+bindings present and generation enabled, but observability disabled. Sol's
+screenshot shows a real provider response feeding a limited procedural shape
+catalogue. Detailed Sol/Luna, six real API speed/model combinations and a
+one-minute complete-model guarantee are NOT implemented or verified here.
+No paid test or financial/secret/runtime change was performed.
+
 # 11 October 2026 — model failure diagnosis and readback contract correction
 
 Authenticated GET-only Oracle investigation of the reported text-only failure
