@@ -1,5 +1,6 @@
 // WORLDIFACT adapter to the existing Froge /v1/jobs contract; no new AI provider.
 // Reviewed reference: Froge-MPC-2-test @ d3f61b842dcfeda2ed794210caafc391919a75be.
+import { STUDIO_READBACK_GUIDE } from './studioReadbackGuide.ts'
 import { ADMISSION_FAILURE_CODES, ADMISSION_FAILURE_DETAILS } from './generationAdmission.ts'
 import { studioPricingFor, validateStudioPricingSelection, type StudioPricing, type StudioPricingSelection } from './studioPricing.ts'
 
@@ -133,8 +134,14 @@ export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating'
 export function studioPointsPending(job: Pick<StudioJob, 'state' | 'pointSettlement' | 'pointSettlementUnconfirmed'> | null | undefined): boolean {
   return !!job && ['failed', 'cancelled'].includes(job.state) && (job.pointSettlementUnconfirmed === true || ['held', 'pending-cost'].includes(job.pointSettlement?.state ?? ''))
 }
-export function studioPendingPointsDetail(heldPoints?: number): string {
-  return `Generation ended without a completed model. ${heldPoints === undefined ? 'The point settlement is unconfirmed' : `${heldPoints} points remain held for cost review`}; no final point charge or release is confirmed. Authoritative final API cost is required. If it is unavailable, manual review is needed; reading the same cost-limit receipt again does not establish exact spending. Keep this job ID. Other requests can use your remaining available points; no automatic retry or replacement model was started.`
+export function studioPendingPointsDetail(heldPoints?: number, failureCode?: StudioFailureCode): string {
+  const reason = failureCode === 'MODEL_BUDGET_EXCEEDED' || failureCode === 'ASTRA_COST_LIMIT'
+    ? 'The provider budget stopped generation before review and export finished. Repeating the same request may consume more API budget; review this failure first. '
+    : failureCode === 'ORACLE_JOB_MISSING' ? 'Oracle cannot find the submitted job. Keep its request ID for support; a missing record does not establish zero API cost. '
+    : failureCode === 'ORACLE_JOB_INCOMPLETE' ? 'Model review and export did not finish. '
+    : failureCode === 'STUDIO_TIMEOUT' ? 'The generation recovery window expired. '
+    : ''
+  return `${reason}Generation ended without a completed model. ${heldPoints === undefined ? 'The point settlement is unconfirmed' : `${heldPoints} points remain held for cost review`}; no final point charge or release is confirmed. Authoritative final API cost is required. If it is unavailable, manual review is needed; reading the same cost-limit receipt again does not establish exact spending. Keep this job ID. Other requests can use your remaining available points; no automatic retry or replacement model was started.`
 }
 export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   ...ADMISSION_FAILURE_DETAILS,
@@ -243,7 +250,7 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
     : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
   return { id, prompt: input.prompt + instruction, ...(studioPricing ? { studioPricing } : {}),
-    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(studioPricing, !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels,
+    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(studioPricing, !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels + '\n\n' + STUDIO_READBACK_GUIDE,
     ...(photos.length ? { photos } : {}) }
 }
 export async function inputDigest(input: StudioInput): Promise<string> {

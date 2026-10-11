@@ -237,7 +237,7 @@ function CreditsContent({ user, loading }: { user: AccountUser | null; loading: 
     </section>
     {user && <details className="credits-extra"><summary>Account details & payments</summary>
       {visibleBalance && <p>{visibleBalance.held.toLocaleString()} points reserved · {visibleBalance.total.toLocaleString()} total.</p>}
-      <Link to="/account/generation-funding">Review reserved requests ↗</Link>
+      <a href="/account/generation-funding">Review reserved requests ↗</a>
       {balance?.subscription.expiresAt && <p>Current period ends {new Date(balance.subscription.expiresAt).toLocaleDateString()}</p>}
       <BillingRecovery enabled={!!user && !loading} onRefresh={refresh} />
     </details>}

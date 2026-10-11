@@ -77,7 +77,7 @@ function AccountStatusContent({ signedIn, loading }: { signedIn: boolean; loadin
         {signedIn && <button type="button" className="account-status-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Refresh credit balance">Refresh</button>}
       </div>
     </div>}
-    {shop && signedIn && !loading && balance && balance.reservedCredits > 0 && <p className="account-status-shop-hold"><span><b>{balance.reservedCredits} points held</b> · {balance.availableCredits} available</span><Link to="/account/generation-funding">Review holds</Link></p>}
+    {shop && signedIn && !loading && balance && balance.reservedCredits > 0 && <p className="account-status-shop-hold"><span><b>{balance.reservedCredits} points held</b> · {balance.availableCredits} available</span><a href="/account/generation-funding">Review holds</a></p>}
     {signedIn && error && <p className="account-status-error" role="status">{error}{shop && <button type="button" className="account-status-refresh" onClick={() => setRevision(value => value + 1)} aria-label="Refresh credit balance">Refresh</button>}</p>}
     {returning && <section className={`account-status-return ${notice.tone === 'success' && signedIn ? 'is-confirmed' : ''}`} aria-label="Welcome back from checkout">
       <p role="status">{signedIn ? notice.text : 'Welcome back to WORLDIFACT! Sign in to the account used at checkout to check your membership and credits. Please do not pay again while confirmation is pending.'}</p>

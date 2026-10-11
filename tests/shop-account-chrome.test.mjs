@@ -21,7 +21,7 @@ async function render({ pathname = '/shop', search = '', signedIn = true, loadin
   runInNewContext(code, { URLSearchParams, module, exports: module.exports, require(id) {
     if (id === 'react') return hooks
     if (id === 'react/jsx-runtime') return localRequire(id)
-    if (id === 'react-router-dom') return { useLocation: () => ({ pathname, search, hash: '' }), useNavigate: () => () => {}, Link: ({ to, children, ...props }) => React.createElement('a', { ...props, href: to }, children) }
+    if (id === 'react-router-dom') return { useLocation: () => ({ pathname, search, hash: '' }), useNavigate: () => () => {}, Link: ({ to, children, ...props }) => React.createElement('a', { ...props, href: to, 'data-client-router': 'true' }, children) }
     if (id === '../lib/account') return { useAccount: () => ({ user: signedIn ? { id: 'fixture' } : null, loading }) }
     if (id === '../lib/accountBalance') return balances
     if (id.endsWith('.css')) return {}
@@ -63,4 +63,13 @@ test('credits screen primary counter excludes reservations and hides duplicate b
   const html = await render({pathname:'/account/credits',balance:{credits:1190,reservedCredits:1000,availableCredits:190,fastRemaining:2}})
   assert.match(html, /Available<\/span><strong>190<\/strong>/)
   assert.doesNotMatch(html, /Held:|1,190|Free drafts/)
+})
+
+// This endpoint is bootstrapped outside App's client router. A client Link
+// previously hit the wildcard route and silently redirected to the home page.
+test('held-request review uses a full document navigation to the standalone account page', async () => {
+  const html = await render({ balance: { credits: 1000, reservedCredits: 250, availableCredits: 750, fastRemaining: 2 } })
+  assert.match(html, /<a href="\/account\/generation-funding">Review holds<\/a>/)
+  const credits = await readFile(new URL('../src/pages/CreditsPage.tsx', import.meta.url), 'utf8')
+  assert.match(credits, /<a href="\/account\/generation-funding">Review reserved requests ↗<\/a>/)
 })
