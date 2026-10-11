@@ -1,3 +1,4 @@
+import { FAST_DRAFT_PROFILE } from '../src/lib/studioProtocol.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -7,26 +8,17 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 
-test('composer puts the idea first, with model controls in Settings and cost before Generate', async () => {
+test('composer places the model next to the prompt and advanced delivery in Settings', async () => {
   const html = await renderShopMarkup()
-  const modes = html.indexOf('class="shop-generation-modes"')
-  const picker = html.indexOf('class="shop-model-picker"')
-  const select = html.indexOf('id="studio-mode"')
+  const select = html.indexOf('id="studio-mode"'), prompt = html.indexOf('id="studio-prompt"')
+  const settings = html.indexOf('class="shop-settings"'), delivery = html.indexOf('id="studio-deliverable"')
   const cost = html.indexOf('aria-label="Selected model and cost for the next generation"')
-  const prompt = html.indexOf('id="studio-prompt"')
-  const delivery = html.indexOf('id="studio-deliverable"')
   const generate = html.indexOf('class="native-shop-generate"')
-  const settings = html.indexOf('class="shop-settings"')
-  assert.ok(prompt >= 0 && settings > prompt && modes > settings && picker > modes && select > picker && delivery > select && cost > delivery && generate > cost)
-  assert.doesNotMatch(html.slice(settings, html.indexOf('>', settings)), /open=/, 'Settings starts collapsed')
+  assert.ok(prompt >= 0 && select > prompt && settings > select && delivery > settings && cost > delivery && generate > cost)
+  assert.doesNotMatch(html.slice(settings, html.indexOf('>', settings)), /open=/)
   assert.equal((html.match(/id="studio-mode"/g) || []).length, 1)
-  assert.equal((html.match(/class="shop-generation-mode"/g) || []).length, 2)
-  assert.match(html, /SLOW · QUALITY/)
-  assert.match(html, /FAST · DRAFT/)
-  assert.doesNotMatch(html.slice(picker, select), /\bhidden(?:=|>|\s)/)
-  assert.match(html, /AI model · Model AI/)
-  assert.match(html, /GPT-6 ASTRA — 250 points/)
-  assert.match(html, /GPT-6\.1 SOL — 50 points/)
+  assert.match(html, /Slow \/ Quality · GPT-6 Astra/)
+  assert.match(html, /Fast · GPT-6\.1 Sol · draft/)
 })
 test('cost notice has readable light text on an explicit dark surface', async () => {
   const css = await readFile(new URL('../src/components/GenerationCostNotice.css', import.meta.url), 'utf8')
@@ -60,7 +52,7 @@ test('historical SLOW is the detailed default and native mode changes never subm
   const html = await renderShopMarkup()
   assert.match(html, /<option value="detailed-mesh" selected=""/)
   assert.doesNotMatch(html, /<option value="procedural-blueprint" selected=""/)
-  assert.match(html, /<button type="button" class="shop-generation-mode" aria-label="Select GPT-6 Astra, 250 points per generation" aria-pressed="true"/)
+  assert.match(html, /<option value="standard" selected=""/)
   assert.match(html, /<select id="studio-deliverable"/)
 
   // Execute the real restored mode handlers without mounting effects. These
@@ -97,16 +89,14 @@ test('historical SLOW is the detailed default and native mode changes never subm
   byId('studio-deliverable').props.onChange({ target: { value: 'procedural-blueprint' } })
   nodes = render()
   assert.equal(byId('studio-deliverable').props.value, 'procedural-blueprint')
-  const slow = nodes.find(node => node.props['aria-label']?.startsWith('Select GPT-6 Astra'))
-  assert.equal(slow.props.type, 'button')
-  slow.props.onClick(); slow.props.onClick(); nodes = render()
+  byId('studio-mode').props.onChange({ target: { value: 'standard' } }); nodes = render()
+  byId('studio-mode').props.onChange({ target: { value: 'standard' } }); nodes = render()
   assert.equal(byId('studio-deliverable').props.value, 'detailed-mesh')
   assert.equal(byId('studio-mode').props.value, 'standard')
   assert.equal(byId('studio-prompt').props.value, 'Keep this detailed castle draft')
-  const fast = nodes.find(node => node.props['aria-label']?.startsWith('Select GPT-6.1 Sol'))
-  assert.equal(fast.props.type, 'button')
+  const fast = nodes.find(node => node.type === 'option' && node.props.value === FAST_DRAFT_PROFILE)
   assert.equal(fast.props.disabled, true, 'Unverified Sol readiness keeps FAST unavailable')
-  fast.props.onClick(); nodes = render()
+  byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); nodes = render()
   assert.equal(byId('studio-mode').props.value, 'standard', 'Even a retained unavailable FAST handler cannot change the draft route')
   assert.deepEqual(calls, [])
 })

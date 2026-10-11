@@ -74,7 +74,7 @@ test('historical Shop portal keeps the real model form and its separate world-bl
   assert.match(html, /data-world="enchanted-ai-shop"/)
   assert.match(html, /<details class="portal-generator-drawer portal-page shop-world-disclosure">/, 'Secondary world tools start collapsed')
   assert.match(html, /<summary>Create a world blueprint with GPT-6 Astra<\/summary>/)
-  assert.match(html, /AI model · Model AI/)
+  assert.match(html, /3D model/)
   assert.match(html, /Back to WORLDIFACT/)
   assert.match(html, /id="studio-prompt"/)
   assert.match(html, /Generate Astra\/Blender model/)

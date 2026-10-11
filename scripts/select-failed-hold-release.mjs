@@ -3,7 +3,7 @@ import { lstatSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { blob, sha256, parseRawChanges } from './select-context-tools-release.mjs'
-import { IMAGE_RUNTIME_BASE, IMAGE_RUNTIME_MARKER, IMAGE_PRICE_BASE, IMAGE_PRICE_MARKER, IMAGE_RELEASE_BASE, IMAGE_RELEASE_MARKER, FORFEIT_RELEASE_BASE, FORFEIT_RELEASE_MARKER, COMPACT_RELEASE_BASE, COMPACT_RELEASE_MARKER, ADMIN_RELEASE_BASE, ADMIN_RELEASE_MARKER, selectPipelineReleaseOptions } from './select-pipeline-only-release.mjs'
+import { CLEAN_STUDIO_BASE, CLEAN_STUDIO_MARKER, IMAGE_RUNTIME_BASE, IMAGE_RUNTIME_MARKER, IMAGE_PRICE_BASE, IMAGE_PRICE_MARKER, IMAGE_RELEASE_BASE, IMAGE_RELEASE_MARKER, FORFEIT_RELEASE_BASE, FORFEIT_RELEASE_MARKER, COMPACT_RELEASE_BASE, COMPACT_RELEASE_MARKER, ADMIN_RELEASE_BASE, ADMIN_RELEASE_MARKER, selectPipelineReleaseOptions } from './select-pipeline-only-release.mjs'
 import { selectConstructionToolsRelease } from './select-construction-tools-release.mjs'
 
 export const BASE_COMMIT = '31c9e41a6f8a68bb6c7bbe748e79803f63835c36'
@@ -195,7 +195,7 @@ export function selectFailedHoldRelease({ cwd = process.cwd(), env = process.env
   }
   // Separately approved source publication. The historical waiver stays frozen.
   // Exact scope validation below grants deployment only, never a financial waiver.
-  const sourceScope = [[IMAGE_RUNTIME_BASE, IMAGE_RUNTIME_MARKER], [IMAGE_PRICE_BASE, IMAGE_PRICE_MARKER], [IMAGE_RELEASE_BASE, IMAGE_RELEASE_MARKER], [FORFEIT_RELEASE_BASE, FORFEIT_RELEASE_MARKER], [COMPACT_RELEASE_BASE, COMPACT_RELEASE_MARKER], [ADMIN_RELEASE_BASE, ADMIN_RELEASE_MARKER]].find(([base, marker]) =>
+  const sourceScope = [[CLEAN_STUDIO_BASE, CLEAN_STUDIO_MARKER], [IMAGE_RUNTIME_BASE, IMAGE_RUNTIME_MARKER], [IMAGE_PRICE_BASE, IMAGE_PRICE_MARKER], [IMAGE_RELEASE_BASE, IMAGE_RELEASE_MARKER], [FORFEIT_RELEASE_BASE, FORFEIT_RELEASE_MARKER], [COMPACT_RELEASE_BASE, COMPACT_RELEASE_MARKER], [ADMIN_RELEASE_BASE, ADMIN_RELEASE_MARKER]].find(([base, marker]) =>
     parents.includes(base) || scope.before === base || [...immediate, ...changes].some(change => change.path === marker))
   if (sourceScope) {
     const [sourceBase] = sourceScope

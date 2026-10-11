@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useAccount } from '../lib/account'
 import { IMAGE_MODELS, IMAGE_TERMS, parseImageInput, type ImageInput, type ImageJob, type ImageModel } from '../lib/imageGeneration'
+import CreationProgress from './CreationProgress'
 import './ImageGenerator.css'
 
 async function imageRequest(path: string, input?: unknown) {
@@ -14,13 +15,14 @@ async function imageRequest(path: string, input?: unknown) {
   return value
 }
 
-export function ImageGenerator({ prompt, stage, onSettled }: { prompt: string; stage: HTMLElement | null; onSettled: () => void }) {
+export function ImageGenerator({ prompt, stage, modelSlot, active = true, onBusyChange, onSettled }: { prompt: string; stage: HTMLElement | null; modelSlot?: HTMLElement | null; active?: boolean; onBusyChange?: (busy: boolean) => void; onSettled: () => void }) {
   const { user, loading } = useAccount()
   const [model, setModel] = useState<ImageModel>(IMAGE_MODELS[0])
   const [ready, setReady] = useState(false), [checked, setChecked] = useState(false), [busy, setBusy] = useState(false)
   const [error, setError] = useState(''), [jobs, setJobs] = useState<ImageJob[]>([]), [selected, setSelected] = useState<ImageJob | null>(null)
   const [preview, setPreview] = useState(''), [previewError, setPreviewError] = useState('')
   const [retryInput, setRetryInput] = useState<ImageInput | null>(null)
+  useEffect(() => { onBusyChange?.(busy) }, [busy, onBusyChange])
   const settlementCallback = useRef(onSettled)
   useEffect(() => { settlementCallback.current = onSettled }, [onSettled])
   const lifecycle = useRef(0), submitting = useRef(false), selectedId = useRef<string | null>(null)
@@ -72,7 +74,7 @@ export function ImageGenerator({ prompt, stage, onSettled }: { prompt: string; s
   }, [owner, selected])
   const held = jobs.some(job => job.settlement === 'held')
   async function generate() {
-    if (!owner || loading || submitting.current || !checked || !ready || held || prompt.trim().length < 3 || prompt.length > 4000) return
+    if (!active || !owner || loading || submitting.current || !checked || !ready || held || prompt.trim().length < 3 || prompt.length > 4000) return
     await send({ id: crypto.randomUUID(), prompt, model, acceptedPoints: IMAGE_TERMS.points, revision: IMAGE_TERMS.revision })
   }
   async function send(input: ImageInput) {
@@ -100,32 +102,34 @@ export function ImageGenerator({ prompt, stage, onSettled }: { prompt: string; s
       if (epoch === lifecycle.current) { setError(e instanceof Error ? e.message : 'Check your image library before another request.'); setChecked(false) }
     } finally { if (epoch === lifecycle.current) { submitting.current = false; setBusy(false) } }
   }
+  const modelPicker = <label className="studio-model-select">Image model<select value={model} disabled={busy} onChange={e => setModel(e.target.value as ImageModel)}><option value={IMAGE_MODELS[0]}>Fast · GPT Image 2.5 Flare</option><option value={IMAGE_MODELS[1]}>Slow / Quality · GPT Image 2.5 Sunburst</option></select></label>
   const display = <div className="image-generation-stage">
-    <div className="shop-stage-heading"><span>Your images</span><span>GPT IMAGE 2.5</span></div>
-    {!owner || loading ? <p>Sign in to view your private image library.</p> : <>
-      {preview ? <><img className="image-generation-preview" src={preview} alt={selected?.prompt || 'Your generated image'} /><a className="image-download" href={preview} download={`worldifact-${selected?.id}.png`}>Download PNG</a></> :
-        <div className="image-generation-empty"><h2>{busy ? 'Creating your image…' : selected?.state === 'completed' ? 'Loading your saved image…' : 'A new perspective.'}</h2><p>{busy ? 'You can return to this image library to recover the result.' : 'Describe your idea and generate a picture.'}</p></div>}
-      {previewError && <p role="alert">{previewError}</p>}
-      {selected && <p role="status">{selected.state === 'completed' ? `Saved to your account · ${selected.points} points charged.` : selected.detail || `Generation in progress · ${selected.points} points held. Reload to check this same request.`}</p>}
-      <div className="image-library"><h3>My images</h3><button type="button" disabled={busy} onClick={() => void reload()}>Reload library · no charge</button>
-        {jobs.length === 0 && <p>Your completed graphics will be saved here.</p>}
-        {jobs.map(job => <button className="image-library-entry" type="button" key={job.id} aria-pressed={selected?.id === job.id} onClick={() => { selectedId.current = job.id; setSelected(job) }}><strong>{job.prompt.slice(0, 100)}</strong><span>{job.state} · {new Date(job.at).toLocaleString()}</span></button>)}
-      </div>
+    {!owner || loading ? <CreationProgress label="Sign in to create" /> : <>
+    {busy || selected?.state === 'processing' ? <CreationProgress active label="Creating your image" /> : preview ? <>
+      <img className="image-generation-preview" src={preview} alt={selected?.prompt || 'Your generated image'} />
+      <div className="studio-result-actions"><span>Saved to your account</span><a className="image-download" href={preview} download={`worldifact-${selected?.id}.png`}>↓ Download PNG</a></div>
+    </> : <CreationProgress active={selected?.state === 'completed' && !previewError} label={previewError ? 'Preview unavailable · refresh status' : selected?.state === 'completed' ? 'Loading your image' : selected?.state === 'failed' ? 'Image not generated' : selected?.state === 'uncertain' ? 'Check request status' : 'Ready to create'} />}
+    {previewError && <p role="alert">{previewError}</p>}
+    {!busy && selected && selected.state !== 'completed' && <p className="studio-result-message" role="status">{selected.detail || `Generation in progress · ${selected.points} points held.`}</p>}
+    {owner && <details className="image-library"><summary>My images{jobs.length > 0 ? ` · ${jobs.length}` : ''}</summary>
+      <button type="button" disabled={busy} onClick={() => void reload()}>Refresh status</button>
+      {jobs.length === 0 && <p>Your images will appear here.</p>}
+      <div className="image-library-list">{jobs.map(job => <button className="image-library-entry" type="button" disabled={busy} key={job.id} aria-pressed={selected?.id === job.id} onClick={() => { selectedId.current = job.id; setSelected(job) }}><strong>{job.prompt.slice(0, 100)}</strong><span>{job.state} · {new Date(job.at).toLocaleString()}</span></button>)}</div>
+    </details>}
     </>}
   </div>
   return <>
-    <div className="image-generation-controls">
-      <label>Image model<select value={model} disabled={busy} onChange={e => setModel(e.target.value as ImageModel)}><option value={IMAGE_MODELS[0]}>GPT Image 2.5 Flare · faster</option><option value={IMAGE_MODELS[1]}>GPT Image 2.5 Sunburst · finer detail</option></select></label>
-      <p>{IMAGE_TERMS.points} points · one PNG · 1024 × 1024 · medium quality</p><small>Text to image. The reference photos in 3D settings are not sent in this mode.</small>
+    <div className="image-generation-controls" hidden={!active}>
+      {modelSlot ? createPortal(modelPicker, modelSlot) : modelPicker}
       {!user ? <p><Link to="/account">Sign in to generate images</Link></p> : <>
         {checked && !ready && <p role="status">Image generation is temporarily unavailable.</p>}
-        {held && <p role="status">An image request is still open. Reload its status before starting another.</p>}
+        {held && <p role="status">An image request is still open. Check its status in My images.</p>}
         <button type="button" className="native-shop-generate" disabled={busy || loading || !checked || !ready || held || prompt.trim().length < 3 || prompt.length > 4000} onClick={() => void generate()}>{busy ? 'Creating image…' : `Generate image · ${IMAGE_TERMS.points} points`}</button>
-        <small>{IMAGE_TERMS.points} points are held when you start and charged when the image is saved. A confirmed provider refusal releases them. An uncertain result stays held for review.</small>
+        <details className="studio-billing-details"><summary>{IMAGE_TERMS.points} points · PNG · 1024 × 1024</summary><p>Medium quality. Text to image; 3D reference photos are not used. {IMAGE_TERMS.points} points are held when you start and charged when the image is saved. A confirmed provider refusal releases them. An uncertain result stays held for review.</p></details>
       </>}
       {retryInput && !busy && <button type="button" disabled={loading} onClick={() => void send(retryInput)}>Recover original request · {retryInput.acceptedPoints}-point original terms</button>}
       {error && <p className="native-shop-error" role="alert">{error}</p>}
     </div>
-    {stage ? createPortal(display, stage) : null}
+    {stage && active ? createPortal(display, stage) : null}
   </>
 }

@@ -1,9 +1,11 @@
+import CreationProgress from '../components/CreationProgress'
+import { generationProgressView } from '../lib/generationProgressView'
 import { ImageGenerator } from '../components/ImageGenerator'
 /* eslint-disable react/refs -- Owner epochs invalidate scoped test actions during account transitions before effects settle. */
 import { STUDIO_PRICING, type StudioBudgetTier } from '../lib/studioPricing'
 import { hasStudioBudgetConsent, studioBudgetFailureAdvice, studioBudgetSelection, studioTiersReady } from '../lib/studioTierSelection'
 import { detailedUnavailable, DETAILED_REFERENCE_LIMIT } from '../lib/detailedStudio'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { MODEL_CATALOG, type DraftModel, type GenerationModel } from '../lib/modelCatalog'
 import OracleModelPreview from '../components/OracleModelPreview'
@@ -29,10 +31,11 @@ import { type GenerationResult } from '../lib/blueprint'
 import { formatStudioGenerationDuration, JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, studioPointsPending, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
 import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../lib/generationAdmission'
 import { BlueprintClient, blueprintRecoveryDetail, type BlueprintRecovery } from '../lib/blueprintClient'
-import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, BLUEPRINT_REFERENCE_BYTES, blueprintDelivery, blueprintReferences, type BlueprintDelivery } from '../lib/blueprintRequest'
+import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, blueprintDelivery, blueprintReferences, type BlueprintDelivery } from '../lib/blueprintRequest'
 import { OvernightTestClient, type OvernightPanelRow, type OvernightPanelSlot } from '../lib/overnightTestClient'
 import { assertOrdinaryRequestsSettled, shopCloudRecoveryFetch, shopTestSelectionKey, testSlot } from '../lib/shopTestFunding'
 import './ShopPage.css'
+import './CreationStudio.css'
 
 const REASONS: Record<string, string> = {
   DISABLED_OR_EXPIRED: 'The server generation window is disabled or expired. You can edit the next model below; only paid submission is disabled.',
@@ -127,6 +130,11 @@ export default function ShopPage() {
   const [search, setSearch] = useState('')
   const [imageStage, setImageStage] = useState<HTMLDivElement | null>(null)
   const [creationMode, setCreationMode] = useState<'model' | 'image'>('model')
+  const [imageModelSlot, setImageModelSlot] = useState<HTMLDivElement | null>(null)
+  const [imageBusy, setImageBusy] = useState(false)
+  const [theme, setTheme] = useState(0)
+  useEffect(() => { try { const value = Number(window.localStorage.getItem('worldifact:studio-theme:v1')); if (Number.isFinite(value)) setTheme(Math.round(Math.max(0, Math.min(100, value)) / 50) * 50) } catch { /* Storage is optional. */ } }, [])
+  const changeTheme = (value: number) => { setTheme(value); try { window.localStorage.setItem('worldifact:studio-theme:v1', String(value)) } catch { /* Keep the current session usable. */ } }
   const creationModeRef = useRef<'model' | 'image'>('model')
   const [dimensions, setDimensions] = useState<ClientDimensions>(DEFAULT_DIMENSIONS_MM)
   const [dimensionsEnabled, setDimensionsEnabled] = useState(false)
@@ -644,69 +652,102 @@ export default function ShopPage() {
   const runtimeReady = detailed ? !detailedProblem : fast ? fastAvailable : astraReady
   const activeReady = runtimeReady && accountReady && !cloudRecoveryPending && !currentRequestMessage
   const previousFailure = !!savedJob && ['failed', 'cancelled'].includes(savedJob.state) && !preview && !fastResult && !demoPrompt && !busy
+  const progress = generationProgressView({ job: savedJob })
   const PreviewContainer = previousFailure ? 'details' : 'div'
 
-  return <main className="portal-page native-shop">
+  return <main className="portal-page native-shop creation-studio" data-theme={theme === 100 ? 'ancient' : theme === 50 ? 'temple' : 'modern'} style={{ '--antique': `${theme === 100 ? 100 : 0}%`, '--antique-opacity': theme / 100 } as CSSProperties}>
     <header className="native-shop-nav">
       <Link to="/world" className="shop-wordmark" aria-label="Back to WORLDIFACT"><ShopIcon kind="brand" /><span>WORLDIFACT</span></Link>
       <div className="shop-title"><h1>AI <span>SHOP</span></h1><p>Imagine. Create. Make it yours.</p></div>
-      <div className="shop-account-nav"><Link to="/account/credits" className="shop-points-link" aria-label="Available points and account"><ShopIcon kind="coins" /><span>{accountQuote.balance ? `${accountQuote.balance.available.toLocaleString()} pts` : accountQuote.quote.state === 'credits' && accountQuote.quote.after !== null && accountQuote.quote.points !== null ? `${(accountQuote.quote.after + accountQuote.quote.points).toLocaleString()} pts` : 'Points'}</span></Link><Link to="/account" className="shop-avatar" aria-label={user ? 'Your account' : 'Sign in'}>{user ? (user.displayName || user.email || 'A').slice(0, 1).toUpperCase() : <ShopIcon kind="user" />}</Link><details className="shop-navigation-menu"><summary aria-label="Navigation">⌄</summary><nav aria-label="World portals"><Link to="/world">Back to world</Link><Link to="/account/models">My models</Link>{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></details></div>
+      <div className="shop-account-nav"><Link to="/account/credits" className="shop-points-link" aria-label="Available points and account"><ShopIcon kind="coins" /><span>{accountQuote.balance ? `${accountQuote.balance.available.toLocaleString()} pts` : accountQuote.quote.state === 'credits' && accountQuote.quote.after !== null && accountQuote.quote.points !== null ? `${(accountQuote.quote.after + accountQuote.quote.points).toLocaleString()} pts` : 'Points'}</span></Link><Link to="/account" className="shop-avatar" aria-label={user ? 'Your account' : 'Sign in'}>{user ? (user.displayName || user.email || 'A').slice(0, 1).toUpperCase() : <ShopIcon kind="user" />}</Link><details className="shop-navigation-menu"><summary aria-label="Navigation">⌄</summary><nav aria-label="World portals"><Link to="/world">Back to world</Link><Link to="/account/models">My models</Link><Link to="/account/images">My images</Link>{PORTALS.map(portal => <Link key={portal.id} to={portal.route}>{portal.shortTitle}</Link>)}</nav></details></div>
     </header>
+    <div className="studio-toolbar"><span className="studio-eyebrow">YOUR CREATIVE SPACE</span><label className="studio-theme-slider" htmlFor="studio-theme"><span>Modern</span><input id="studio-theme" type="range" min="0" max="100" step="50" value={theme} aria-label="Interface style" aria-valuetext={theme === 100 ? 'Ancient sandstone' : theme === 50 ? 'Neon temple' : 'Modern'} onChange={e => changeTheme(Number(e.target.value))} /><span>Ancient</span></label></div>
     <section className="native-shop-workspace" aria-label="Create and preview your idea">
+      <div ref={setImageStage} className="native-shop-preview" hidden={creationMode !== 'image'} />
+      <PreviewContainer hidden={creationMode === 'image'} className={`native-shop-preview${previousFailure ? ' shop-previous-failure' : ''}`}>
+        {previousFailure && <summary>Previous failed request · saved for review, not a new generation</summary>}
+        <div className="shop-stage-heading"><span className="shop-stage-status"><span aria-hidden="true" />{preview || fastResult ? 'Your creation' : saved || recovery ? 'Saved request' : 'Creation preview'}</span><span className="shop-stage-kind">{demoPrompt ? 'DEMO · MODEL 3D' : preview || fastResult || saved || recovery ? 'MODEL 3D' : creationMode === 'image' ? 'IMAGE' : 'MODEL 3D'}</span></div>
+        {(busy || recovery?.failureCode) && (preview || fastResult || demoPrompt) && <p role="status"><strong>Previous preview preserved.</strong> {recovery?.failureCode ? <>The rejected request did not create this model. {blueprintAdmissionDetail(recovery.failureCode)}</> : 'The current request does not have a new preview yet.'}</p>}
+        {busy || (savedJob && progress.kind === 'active') || (recovery?.state === 'pending') ? <CreationProgress active label={savedJob && progress.kind === 'active' ? progress.title : 'Submitting your request'} percent={savedJob && progress.kind === 'active' ? progress.percent : null} /> : cloudRecoveryPending && !saved ? <CreationProgress active label="Checking your account" /> : fastResult ? <>
+          <LiveSolPreview result={fastResult} prompt={fastPrompt} />
+          <small hidden data-testid="fast-result-description">{fastResult.assetSpec?.summary ?? fastResult.blueprint.title}</small>
+          {dimensionsEnabled && <p className="shop-preview-dimensions">FAST draft target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
+          <small>This result is a procedural blueprint, not a faithful image-to-mesh reconstruction. Choose Detailed 3D model for the separate Astra/Blender workflow.</small>
+        </> : demoPrompt ? <>
+          <DemoShopPreview prompt={demoPrompt} />
+          {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
+          <small>This DEMO preview is not a generated production mesh and is not manufacturing-ready.</small>
+        </> : preview ? <>
+          {preview.url ? <OracleModelPreview url={preview.url} label="Your 3D product preview" targetDimensionsMm={dimensionsEnabled ? [dimensions.xMm, dimensions.yMm, dimensions.zMm] : undefined} customerMode /> : <p role="status">This preview could not be displayed. Your generation result is preserved.</p>}
+          <small hidden data-testid="result-description">Submitted description: {preview.label}</small>
+          {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
+        </> : saved && savedJob?.state === 'succeeded' && savedJob.downloadAllowed !== false ? <CreationProgress active={artifactBusy} label={artifactBusy ? 'Loading your model' : 'Model ready · reload preview'} percent={artifactBusy ? 75 : null} /> : saved ? <div className="native-shop-progress">
+          <p className="shop-visually-hidden" style={{ overflowWrap: 'anywhere' }}>Selected saved job: {saved.receipt.id} · Status: {savedStatusLabel}</p>
+          <h2>{savedWaived ? 'Generation failed · customer point charge waived' : studioPointsPending(job) ? job?.pointSettlementUnconfirmed ? 'Generation failed · settlement unconfirmed' : 'Generation failed · points held for cost review' : job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your SLOW model is ready' : savedStatusUnknown ? 'Saved request needs a recovery check' : isAdmissionFailureCode(job?.failureCode) ? 'Generation was not started' : job?.failureCode === 'MISSING_SUBMISSION' ? 'The upload was not confirmed' : job?.state === 'failed' ? 'Saved request did not finish' : job?.state === 'cancelled' ? 'Saved request was cancelled' : busy ? 'Uploading your model request…' : job?.state === 'pending' ? 'Checking whether your request was accepted…' : 'Preparing your model…'}</h2>
+          <p>{job?.reconciliationRequired ? job.detail : job?.state === 'succeeded' && job.downloadAllowed === false
+            ? 'Model and texture downloads require an active subscription. Your result is preserved; a protected image preview is not available on this worker yet.'
+            : terminal(job?.state)
+            ? job?.state === 'succeeded' ? 'Your model is complete. Recover this job to reload the same result.' : job?.state === 'cancelled' ? job.detail : job && (job.failureCode || job.detail !== JOB_DETAILS[job.state]) ? job.detail : 'That job is finished, but its original failure reason was not saved. Keep the job ID below for diagnosis. Your description is preserved; no automatic retry was started.'
+            : busy ? 'Your description and photos are being uploaded. This receipt identifies your request; it does not yet confirm that generation has started.'
+            : job?.state === 'pending' ? JOB_DETAILS.pending : 'The generator accepted this job. Return to this browser to recover the same job; no second generation is needed.'}</p>
+          {job?.state === 'succeeded' && job.downloadAllowed === false && <Link to="/account/credits">View subscription & credits</Link>}
+          {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={() => void dismissFinishedJob()}>Start a new model</button>}
+        </div> : busy && !recovery ? <div className="native-shop-progress" role="status"><h2>Submitting your blueprint request…</h2><p>No result for this request is displayed yet. Keep this page open while its status is confirmed.</p></div> : recovery ? <div className="native-shop-progress" role="status">
+          <h2>{recovery.pointSettlementUnconfirmed ? 'Blueprint failed · settlement unconfirmed' : recovery.pointSettlement?.state === 'pending-cost' ? 'Blueprint failed · points held for cost review' : recovery.failureCode ? 'Generation was not started' : recovery.state === 'failed' ? 'Previous blueprint attempt did not finish' : recovery.state === 'completed' ? 'Your blueprint result can be recovered' : 'Checking whether your blueprint request was accepted…'}</h2>
+          <p>{blueprintRecoveryDetail(recovery) || (recovery.failureCode ? blueprintAdmissionDetail(recovery.failureCode) : 'No result for this request is displayed. Recover the same request below; this does not start another paid generation.')}</p>
+          {(recovery.pointSettlement?.state === 'pending-cost' || recovery.pointSettlementUnconfirmed) && <p><a href="/account/generation-funding" target="_blank" rel="noopener noreferrer">Review all held-point requests · account record</a></p>}
+          <p>Request ID: {recovery.id}{recovery.failureCode && <> · Reason: {recovery.failureCode}</>}</p>
+        </div> : <>
+          <CreationProgress />
+        </>}
+        <details className="studio-result-details" hidden={!saved}><summary>Result details</summary>
+        {saved && terminal(savedJob?.state) && <p className="shop-recorded-generation-time">Recorded worker generation time: <strong>{formatStudioGenerationDuration(savedJob?.generationTiming)}</strong> · Excludes upload and queue time.</p>}
+        {saved && <p>{(job?.pricing ?? saved.pricing) ? `Original job: ${(job?.pricing ?? saved.pricing)!.points} points · ${(job?.pricing ?? saved.pricing)!.tier} model budget. Recovery does not change this price.` : 'Original job price is retained by the server; this recovery view does not apply the next draft’s price.'}</p>}
+        {studioBudgetFailureAdvice(job, tiersReady) && <p>{studioBudgetFailureAdvice(job, tiersReady)}</p>}
+        </details>
+        {saved && <div className="native-shop-actions">{testSavedSlot && terminal(job?.state) && <button type="button" disabled={busy || artifactBusy} onClick={leaveTestRecovery}>Close saved request</button>}<button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
+      </PreviewContainer>
       <div className="native-shop-form">
         <p id="studio-draft-help" className="shop-visually-hidden">Describe your idea, choose an output, then review its price before generating. Editing keeps the saved request and preview unchanged.</p>
         <form onSubmit={generate} aria-describedby="studio-draft-help">
           <div className="shop-prompt-shell">
             <div className="shop-prompt-top"><label htmlFor="studio-prompt">What will you create?</label><span aria-hidden="true">✦</span></div>
-            <textarea ref={promptInput} id="studio-prompt" value={prompt} aria-describedby="studio-prompt-count" aria-invalid={prompt.length > BLUEPRINT_PROMPT_LIMIT} rows={3} disabled={busy} onChange={e => { setPrompt(e.target.value); setComposerCleared(false) }} placeholder="A floating island. A place to call home. Something only you can imagine…" required />
-            <div className="shop-prompt-bottom"><button type="button" className="shop-text-button" data-testid="clear-studio-draft" disabled={busy || photoBusy || (!prompt.length && !photos.length)} onClick={clearDraft}>Clear description</button><span id="studio-prompt-count" role="status">{prompt.length.toLocaleString()} / {BLUEPRINT_PROMPT_LIMIT.toLocaleString()}{prompt.length > BLUEPRINT_PROMPT_LIMIT && ' · Shorten before generating'}</span></div>
-          </div>
-          {composerCleared && <p className="shop-composer-reset" role="status">The description and references are cleared. Previous requests, models and point reviews remain saved. Clearing the form does not release held points.</p>}
-          <div className="shop-composer-tools">
-            <div className="shop-output-switch" role="group" aria-label="Creation type">
-              <button type="button" aria-pressed={creationMode === 'model'} disabled={busy || photoBusy} onClick={() => { if (!operations.current.submit && !operations.current.photos) { creationModeRef.current = 'model'; setCreationMode('model') } }}><ShopIcon kind="cube" />Model 3D</button>
-              <button type="button" aria-pressed={creationMode === 'image'} disabled={busy || photoBusy} onClick={() => { if (!operations.current.submit && !operations.current.photos) { creationModeRef.current = 'image'; setCreationMode('image') } }}><ShopIcon kind="image" />Image</button>
-            </div>
-            <details className="shop-settings" hidden={creationMode === 'image'}>
-              <summary><ShopIcon kind="sliders" />Settings{photos.length > 0 && <span className="shop-reference-count">{photos.length}</span>}</summary>
-              <div className="shop-settings-panel">
-          <fieldset className="shop-generation-modes" disabled={busy || photoBusy}>
-            <legend>Choose generation mode</legend>
-            <p>Choose the AI model before generating. One click starts one job; the selected model is never upgraded automatically.</p>
-            <div className="shop-generation-mode-grid">
-              <button type="button" className="shop-generation-mode" aria-label={`Select GPT-6 Astra, ${selectedPoints} points per generation`} aria-pressed={!fast} onClick={() => { if (operations.current.submit || operations.current.photos) return; setProfile('standard'); setDeliverable('detailed-mesh'); if (textureLimit === 2048) setTextureLimit(4096) }}>
-                <strong>SLOW · QUALITY</strong>
-                <span>GPT-6 ASTRA · {selectedPoints} points / generation</span>
-                <span>Detailed Oracle/Blender workflow · reference images · up to 4K</span>
-              </button>
-              <button type="button" className="shop-generation-mode" aria-label="Select GPT-6.1 Sol, 50 points per paid generation" aria-pressed={fast && cheapModel === 'sol'} disabled={!solReady || !!photos.length || purpose === 'terrain'} onClick={() => { if (operations.current.submit || operations.current.photos || !solReady || photos.length || purpose === 'terrain') return; setCheapModel('sol'); setProfile(FAST_DRAFT_PROFILE); setDeliverable('procedural-blueprint'); setTextureLimit(2048) }}>
-                <strong>FAST · DRAFT</strong>
-                <span>GPT-6.1 SOL · 50 points / paid generation</span>
-                <span>GPT-6.1 Sol procedural draft · text-only · usually seconds</span>
-              </button>
-            </div>
-            <small>{!solReady ? 'FAST is waiting for the verified GPT-6.1 Sol worker. SLOW · QUALITY can still use the Oracle/Blender workflow when it is ready.' : photos.length ? 'FAST is text-only in this version. Your reference images are kept for SLOW · QUALITY.' : purpose === 'terrain' ? 'FAST does not support terrain in this Shop revision. Use SLOW · QUALITY.' : fast && prompt.length > 2000 ? 'Shorten FAST text to 2000 characters or switch to SLOW · QUALITY.' : fast ? 'FAST sends one server-side GPT-6.1 Sol request and builds a lightweight procedural 3D draft from the validated result. Use SLOW · QUALITY for detailed Oracle/Blender output.' : 'SLOW · QUALITY uses the detailed Oracle/Blender workflow. FAST is the lighter Sol procedural draft.'}</small>
-          </fieldset>
-          <div className="shop-model-picker" role="group" aria-labelledby="studio-mode-label">
-            <label id="studio-mode-label" htmlFor="studio-mode">AI model · Model AI</label>
+            <textarea ref={promptInput} id="studio-prompt" value={prompt} aria-describedby="studio-prompt-count" aria-invalid={prompt.length > BLUEPRINT_PROMPT_LIMIT} rows={3} disabled={busy || imageBusy} onChange={e => { setPrompt(e.target.value); setComposerCleared(false) }} placeholder="A floating island. A place to call home. Something only you can imagine…" required />
+            <div className="studio-prompt-model" hidden={creationMode !== 'model'}>          <div className="studio-model-select" role="group" aria-labelledby="studio-mode-label">
+            <label id="studio-mode-label" htmlFor="studio-mode">3D model</label>
             <select id="studio-mode" value={fast && cheapModel === 'luna' ? 'luna' : profile} disabled={busy || photoBusy} onChange={e => {
+              if (operations.current.submit || operations.current.photos || imageBusy) return
               const next = e.target.value === 'luna' ? FAST_DRAFT_PROFILE : generationProfile(e.target.value)
               const nextModel = e.target.value === 'luna' ? 'luna' : 'sol'
               if (next === FAST_DRAFT_PROFILE && (!(nextModel === 'luna' ? lunaReady : solReady) || photos.length || purpose === 'terrain')) return
               setCheapModel(nextModel)
               setProfile(next)
-              if (next === 'standard') setDeliverable('detailed-mesh')
+              if (next === 'standard') { setDeliverable('detailed-mesh'); if (textureLimit === 2048) setTextureLimit(4096) }
               if (next === FAST_DRAFT_PROFILE) { setDeliverable('procedural-blueprint'); setTextureLimit(2048) }
-            }}><option value="standard">GPT-6 ASTRA — {selectedPoints} points per job</option><option value={FAST_DRAFT_PROFILE} disabled={!solReady || !!photos.length || purpose === 'terrain'}>GPT-6.1 SOL — 50 points / paid generation</option><option value="luna" disabled={!lunaReady || !!photos.length || purpose === 'terrain'}>GPT-6 LUNA — 15 points / paid generation</option></select>
+            }}><option value="standard">Slow / Quality · GPT-6 Astra</option><option value={FAST_DRAFT_PROFILE} disabled={!solReady || !!photos.length || purpose === 'terrain'}>Fast · GPT-6.1 Sol · draft</option><option value="luna" disabled={!lunaReady || !!photos.length || purpose === 'terrain'}>Fast · GPT-6 Luna · draft</option></select>
           </div>
+            </div>
+            <div className="studio-prompt-model" ref={setImageModelSlot} hidden={creationMode !== 'image'} />
+            <div className="shop-prompt-bottom"><button type="button" className="shop-text-button" data-testid="clear-studio-draft" disabled={busy || photoBusy || imageBusy || (!prompt.length && !photos.length)} onClick={clearDraft}>Clear description</button><span id="studio-prompt-count" role="status">{prompt.length.toLocaleString()} / {BLUEPRINT_PROMPT_LIMIT.toLocaleString()}{prompt.length > BLUEPRINT_PROMPT_LIMIT && ' · Shorten before generating'}</span></div>
+          </div>
+          <div className="studio-references" hidden={creationMode !== 'model'}>          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Choose Slow / Quality to add images' : photoBusy ? 'Preparing reference images…' : `＋ Reference images · ${photos.length}/${photoLimit}`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= photoLimit} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Up to 4 images · JPG, PNG or WebP · front, left, right, back.</small>
+          <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
+          </div>
+          {composerCleared && <p className="shop-composer-reset" role="status">The description and references are cleared. Previous requests, models and point reviews remain saved. Clearing the form does not release held points.</p>}
+          <div className="shop-composer-tools">
+            <div className="shop-output-switch" role="group" aria-label="Creation type">
+              <button type="button" aria-pressed={creationMode === 'model'} disabled={busy || photoBusy || imageBusy} onClick={() => { if (!operations.current.submit && !operations.current.photos && !imageBusy) { creationModeRef.current = 'model'; setCreationMode('model') } }}><ShopIcon kind="cube" />Model 3D</button>
+              <button type="button" aria-pressed={creationMode === 'image'} disabled={busy || photoBusy || imageBusy} onClick={() => { if (!operations.current.submit && !operations.current.photos && !imageBusy) { creationModeRef.current = 'image'; setCreationMode('image') } }}><ShopIcon kind="image" />Image</button>
+            </div>
+            <details className="shop-settings" hidden={creationMode === 'image'}>
+              <summary><ShopIcon kind="sliders" />Settings{photos.length > 0 && <span className="shop-reference-count">{photos.length}</span>}</summary>
+              <div className="shop-settings-panel">
           <p className="shop-model-guidance">{detailed ? 'Detailed models use Astra + Blender. Sol and Luna create procedural concepts only.' : 'Sol and Luna are text-only procedural drafts. Astra also supports image references.'} {!solReady && !lunaReady ? 'Sol/Luna generation is awaiting verified worker readiness.' : !solReady ? 'Sol is awaiting verified worker readiness.' : !lunaReady ? 'Luna is awaiting verified worker readiness.' : ''}</p>
           <div className="shop-internal-only" hidden>
             <small>Detailed models use the signed Astra/Blender job route. Procedural concepts use the separate blueprint route. Both preserve their own recovery identifiers.</small>
             <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
             <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
           </div>
-          <label className="native-shop-upload" htmlFor="studio-photos">{fast ? 'Reference images require the standard quality path' : photoBusy ? 'Preparing reference images…' : `Add ASTRA references · JPG / PNG / WebP · ${photos.length}/${photoLimit}`}</label><input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy || photoBusy || fast || photos.length >= photoLimit} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} /><small>Up to four reference views for a detailed model: front / left / right / back. One, two or three are also accepted. Every accepted view is transmitted. Combined prepared size: {BLUEPRINT_REFERENCE_BYTES / 1048576} MB. Sol/Luna remain text-only.</small>
-          <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy} />
           <label htmlFor="studio-deliverable">What should be delivered?</label>
           <select ref={deliveryInput} id="studio-deliverable" value={deliverable} disabled={busy || photoBusy} onChange={e => setDeliverable(e.target.value as BlueprintDelivery)}>
@@ -733,21 +774,23 @@ export default function ShopPage() {
             </details>
           </div>
           {creationMode === 'model' ? <>
-            <div className="shop-selected-route"><span>{detailed ? 'Detailed 3D' : 'Procedural concept'} · {MODEL_CATALOG[fast ? cheapModel : 'astra'].label}</span><span>{photos.length ? `${photos.length} reference${photos.length === 1 ? '' : 's'}` : 'Text to 3D'}</span></div>
-            <GenerationCostNotice compact model={fast ? cheapModel : 'astra'} busy={busy} detailed={detailed} budgetTier={selectedTier} accountQuote={accountQuote} />
+            <div className="shop-selected-route shop-visually-hidden"><span>{detailed ? 'Detailed 3D' : 'Procedural concept'} · {MODEL_CATALOG[fast ? cheapModel : 'astra'].label}</span><span>{photos.length ? `${photos.length} reference${photos.length === 1 ? '' : 's'}` : 'Text to 3D'}</span></div>
+            <GenerationCostNotice minimal compact model={fast ? cheapModel : 'astra'} busy={busy} detailed={detailed} budgetTier={selectedTier} accountQuote={accountQuote} />
           {detailed && status?.newJobPolicy === 'legacy-usd175-v1' && !accountQuote.quote.fundingSource && <p>One Astra/Blender model: 250 points on success, with the original USD 1.75 API budget. A failed model can still incur API costs. Existing jobs keep their saved price.</p>}
           {detailed && !tiersReady && budgetTier === 'extended' && <div role="status"><p>The selected 500-point budget is no longer available. No generation started. Choose the standard budget explicitly to continue when it is available.</p><button type="button" disabled={busy || photoBusy} onClick={() => { setBudgetTier('standard'); setAcceptedBudgetRevision(null) }}>Use standard model budget · 250 points</button></div>}
           {detailed && tiersReady && budgetTier === 'extended' && <div className="shop-budget-acceptance">            {budgetTier === 'extended' && <label htmlFor="studio-budget-consent"><input id="studio-budget-consent" type="checkbox" checked={budgetAccepted} onChange={e => setAcceptedBudgetRevision(e.target.checked ? draftBudgetRevision : null)} />I explicitly accept 500 points for one attempt with this description and these reference images.</label>}<small>Changing this draft requires a new acceptance. A higher budget does not guarantee completion or quality.</small></div>}
             {detailedProblem && <p className={checking || accountLoading ? "shop-next-status" : "native-shop-error"} role="status">{detailedAvailabilityMessage} {saved && 'Existing requests keep their own status and price.'}</p>}
             {!detailedProblem && (cloudRecoveryPending || currentRequestMessage) && <p className="shop-next-status" role="status">{cloudRecoveryPending ? recoveryError || 'Checking your saved requests…' : currentRequestMessage}</p>}
-          </> : <ImageGenerator key={user?.id ?? 'guest'} prompt={prompt} stage={imageStage} onSettled={() => void refresh()} />}
+          </> : null}
+          <ImageGenerator key={user?.id ?? 'guest'} prompt={prompt} stage={imageStage} modelSlot={imageModelSlot} active={creationMode === 'image'} onBusyChange={setImageBusy} onSettled={() => void refresh()} />
 <div className="shop-generate-row">{creationMode === 'model' ? <>
           <button className="native-shop-generate" aria-label={fundingBlocked ? accountQuote.checking ? 'Checking availability' : 'Check availability · generation funding · no charge' : busy ? 'Creating · checking model request' : undefined} type={fundingBlocked ? 'button' : 'submit'} disabled={fundingBlocked ? !accountQuote.canRefresh || busy || photoBusy || artifactBusy || checking : !canGenerate} onClick={fundingBlocked ? () => { if (accountQuote.canRefresh && !busy && !photoBusy && !artifactBusy && !checking) void refresh() } : undefined}><span className="shop-visually-hidden">{fundingBlocked ? accountQuote.checking ? 'Checking generation funding…' : 'Check generation funding · no charge' : busy ? 'Checking model request…' : detailed ? budgetTier === 'extended' && !tiersReady ? 'Review model budget availability' : `Generate Astra/Blender model · ${selectedPoints} points` : fast ? `Generate ${MODEL_CATALOG[cheapModel].label} draft · ${MODEL_CATALOG[cheapModel].creditsPerGeneration} points or funded free allowance` : 'Generate GPT-6 Astra blueprint · 250 points'}</span><span aria-hidden="true">{fundingBlocked ? accountQuote.checking ? 'Checking…' : 'Check availability' : busy ? 'Creating…' : 'Generate'}</span><span aria-hidden="true"><ShopIcon kind="arrow" /></span></button><details className="shop-generation-help"><summary>Plans, free drafts and limits</summary><small>Free: up to 2 shared Sol/Luna drafts per rolling 24 hours when funded capacity is available. Paid Luna uses 15 points, Sol 50 and Astra blueprints 250. Detailed Astra uses the selected model budget. Astra requires eligible membership and verified runtime activation. There is no free Astra fallback. Manufacturing and delivery are separate.</small></details>
-</> : null}</div>          {recovery && <div role="status"><p>Request {recovery.id} · {recovery.state}. Recovering it does not start another paid generation.</p>{recovery.failureCode && <p>{blueprintAdmissionDetail(recovery.failureCode)}</p>}<button type="button" disabled={busy || artifactBusy} onClick={() => recoverBlueprint()}>Recover same request · no extra charge</button>{recovery.state !== 'pending' && <button type="button" disabled={busy} onClick={newBlueprintAttempt}>{testBlueprintSlot ? 'Close saved request' : 'Start a new paid attempt'}</button>}</div>}
+</> : null}</div>          {creationMode === 'model' && recovery && <div role="status"><p>Request {recovery.id} · {recovery.state}. Recovering it does not start another paid generation.</p>{recovery.failureCode && <p>{blueprintAdmissionDetail(recovery.failureCode)}</p>}<button type="button" disabled={busy || artifactBusy} onClick={() => recoverBlueprint()}>Recover same request · no extra charge</button>{recovery.state !== 'pending' && <button type="button" disabled={busy} onClick={newBlueprintAttempt}>{testBlueprintSlot ? 'Close saved request' : 'Start a new paid attempt'}</button>}</div>}
 
 
           <button type="button" className="shop-internal-only" hidden disabled={busy || photoBusy} onClick={clearDraft}>Clear next-model draft</button>
         </form>
+        <details className="studio-request-tools" hidden={creationMode !== 'model'}><summary>Request details &amp; recovery</summary>
         {saved && <details className="shop-customer-status shop-saved-details" aria-label="Saved Shop request"><summary>Saved request details</summary>
           <p><strong>Saved Shop request selected on this device.</strong> {testSavedSlot && 'This is an existing test-funded receipt; new test submissions are not available in this form.'} This may differ from your newest account model. <Link to="/account/models">Open account model library →</Link></p>
           <p className="native-shop-job-diagnostic" style={{ overflowWrap: 'anywhere' }}>Job ID: {saved.receipt.id} · Last known status: {savedStatusLabel}{savedJob?.failureCode && <> · Reason: {savedJob.failureCode}</>}</p>
@@ -768,64 +811,14 @@ export default function ShopPage() {
         <details className="shop-customer-status shop-availability-details"><summary>Service status &amp; recovery</summary><div role="status"><strong>{checking || accountQuote.checking ? 'Checking availability…' : !accountReady ? accountQuote.quote.state === 'signin' ? 'Sign in to generate' : 'Next generation is unavailable for this account' : cloudRecoveryPending ? 'Resolve cloud recovery before generating' : currentRequestMessage ? 'Next generation is waiting for the selected request' : detailed ? activeReady ? 'Astra/Blender model generation available' : 'Astra/Blender awaiting readiness' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} draft generation available` : 'ASTRA blueprint generation available' : 'Generation temporarily unavailable'}</strong><p>{!accountReady ? nextGenerationQuoteMessage(accountQuote.quote) : cloudRecoveryPending ? recoveryError || 'Checking for an existing model before another generation can start.' : currentRequestMessage ? currentRequestMessage : detailed ? detailedAvailabilityMessage || 'Your explicit request starts one signed model job. Recovery and downloads never start another generation.' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} creates a validated specification and a lightweight procedural 3D draft.` : 'ASTRA creates a validated premium specification and a procedural downloadable GAME GLB in one bounded call.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{creationMode === 'model' && !activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || artifactBusy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking || accountQuote.checking} onClick={() => void refresh()}>Refresh availability</button></div></details>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}
-        {recoveryError && <p className="native-shop-error" role="alert">{recoveryError}</p>}{serviceError && <p className="native-shop-error" role="alert">{serviceError}</p>}{error && <p className="native-shop-error" role="alert">{error}</p>}{creationMode === 'model' && notice && <p role="status">{notice}</p>}
+        </details>
+        {creationMode === 'model' && <>{recoveryError && <p className="native-shop-error" role="alert">{recoveryError}</p>}{serviceError && <p className="native-shop-error" role="alert">{serviceError}</p>}{error && <p className="native-shop-error" role="alert">{error}</p>}{notice && <details className="studio-notice"><summary>Request update</summary><p role="status">{notice}</p></details>}</>}
 
       </div>
-      <div ref={setImageStage} className="native-shop-preview" hidden={creationMode !== 'image'} />
-      <PreviewContainer hidden={creationMode === 'image'} className={`native-shop-preview${previousFailure ? ' shop-previous-failure' : ''}`}>
-        {previousFailure && <summary>Previous failed request · saved for review, not a new generation</summary>}
-        <div className="shop-stage-heading"><span className="shop-stage-status"><span aria-hidden="true" />{preview || fastResult ? 'Your creation' : saved || recovery ? 'Saved request' : 'Creation preview'}</span><span className="shop-stage-kind">{demoPrompt ? 'DEMO · MODEL 3D' : preview || fastResult || saved || recovery ? 'MODEL 3D' : creationMode === 'image' ? 'IMAGE' : 'MODEL 3D'}</span></div>
-        {(busy || recovery?.failureCode) && (preview || fastResult || demoPrompt) && <p role="status"><strong>Previous preview preserved.</strong> {recovery?.failureCode ? <>The rejected request did not create this model. {blueprintAdmissionDetail(recovery.failureCode)}</> : 'The current request does not have a new preview yet.'}</p>}
-        {cloudRecoveryPending && !saved ? <div className="native-shop-progress" role="status"><h2>{accountLoading ? 'Checking your account…' : recoveryError ? 'Cloud recovery needs attention' : 'Checking your cloud job…'}</h2><p>{recoveryError || 'WORLDIFACT is checking whether this account already has a model in progress. This never starts a new generation or point charge.'}</p></div> : fastResult ? <>
-          <LiveSolPreview result={fastResult} prompt={fastPrompt} />
-          <small hidden data-testid="fast-result-description">{fastResult.assetSpec?.summary ?? fastResult.blueprint.title}</small>
-          {dimensionsEnabled && <p className="shop-preview-dimensions">FAST draft target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
-          <small>This result is a procedural blueprint, not a faithful image-to-mesh reconstruction. Choose Detailed 3D model for the separate Astra/Blender workflow.</small>
-        </> : demoPrompt ? <>
-          <DemoShopPreview prompt={demoPrompt} />
-          {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
-          <small>This DEMO preview is not a generated production mesh and is not manufacturing-ready.</small>
-        </> : preview ? <>
-          {preview.url ? <OracleModelPreview url={preview.url} label="Your 3D product preview" targetDimensionsMm={dimensionsEnabled ? [dimensions.xMm, dimensions.yMm, dimensions.zMm] : undefined} customerMode /> : <p role="status">This preview could not be displayed. Your generation result is preserved.</p>}
-          <small hidden data-testid="result-description">Submitted description: {preview.label}</small>
-          {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
-        </> : saved ? <div className="native-shop-progress">
-          <p style={{ overflowWrap: 'anywhere' }}>Selected saved job: {saved.receipt.id} · Status: {savedStatusLabel}</p>
-          <h2>{savedWaived ? 'Generation failed · customer point charge waived' : studioPointsPending(job) ? job?.pointSettlementUnconfirmed ? 'Generation failed · settlement unconfirmed' : 'Generation failed · points held for cost review' : job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your SLOW model is ready' : savedStatusUnknown ? 'Saved request needs a recovery check' : isAdmissionFailureCode(job?.failureCode) ? 'Generation was not started' : job?.failureCode === 'MISSING_SUBMISSION' ? 'The upload was not confirmed' : job?.state === 'failed' ? 'Saved request did not finish' : job?.state === 'cancelled' ? 'Saved request was cancelled' : busy ? 'Uploading your model request…' : job?.state === 'pending' ? 'Checking whether your request was accepted…' : 'Preparing your model…'}</h2>
-          <p>{job?.reconciliationRequired ? job.detail : job?.state === 'succeeded' && job.downloadAllowed === false
-            ? 'Model and texture downloads require an active subscription. Your result is preserved; a protected image preview is not available on this worker yet.'
-            : terminal(job?.state)
-            ? job?.state === 'succeeded' ? 'Your model is complete. Recover this job to reload the same result.' : job?.state === 'cancelled' ? job.detail : job && (job.failureCode || job.detail !== JOB_DETAILS[job.state]) ? job.detail : 'That job is finished, but its original failure reason was not saved. Keep the job ID below for diagnosis. Your description is preserved; no automatic retry was started.'
-            : busy ? 'Your description and photos are being uploaded. This receipt identifies your request; it does not yet confirm that generation has started.'
-            : job?.state === 'pending' ? JOB_DETAILS.pending : 'The generator accepted this job. Return to this browser to recover the same job; no second generation is needed.'}</p>
-          {job?.state === 'succeeded' && job.downloadAllowed === false && <Link to="/account/credits">View subscription & credits</Link>}
-          {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={() => void dismissFinishedJob()}>Start a new model</button>}
-        </div> : busy && !recovery ? <div className="native-shop-progress" role="status"><h2>Submitting your blueprint request…</h2><p>No result for this request is displayed yet. Keep this page open while its status is confirmed.</p></div> : recovery ? <div className="native-shop-progress" role="status">
-          <h2>{recovery.pointSettlementUnconfirmed ? 'Blueprint failed · settlement unconfirmed' : recovery.pointSettlement?.state === 'pending-cost' ? 'Blueprint failed · points held for cost review' : recovery.failureCode ? 'Generation was not started' : recovery.state === 'failed' ? 'Previous blueprint attempt did not finish' : recovery.state === 'completed' ? 'Your blueprint result can be recovered' : 'Checking whether your blueprint request was accepted…'}</h2>
-          <p>{blueprintRecoveryDetail(recovery) || (recovery.failureCode ? blueprintAdmissionDetail(recovery.failureCode) : 'No result for this request is displayed. Recover the same request below; this does not start another paid generation.')}</p>
-          {(recovery.pointSettlement?.state === 'pending-cost' || recovery.pointSettlementUnconfirmed) && <p><a href="/account/generation-funding" target="_blank" rel="noopener noreferrer">Review all held-point requests · account record</a></p>}
-          <p>Request ID: {recovery.id}{recovery.failureCode && <> · Reason: {recovery.failureCode}</>}</p>
-        </div> : <>
-          <div className="shop-empty-stage">
-            <svg className="shop-creation-art" viewBox="0 0 600 340" fill="none" aria-hidden="true">
-              <defs><linearGradient id="shop-orbit-ink" x1="150" y1="20" x2="480" y2="310" gradientUnits="userSpaceOnUse"><stop stopColor="#71ffd1" /><stop offset="1" stopColor="#5e99ff" /></linearGradient><radialGradient id="shop-orbit-glow"><stop stopColor="#39cbbc" stopOpacity=".18" /><stop offset="1" stopColor="#39cbbc" stopOpacity="0" /></radialGradient></defs>
-              <ellipse cx="300" cy="184" rx="248" ry="144" fill="url(#shop-orbit-glow)" />
-              <g stroke="url(#shop-orbit-ink)"><ellipse cx="300" cy="179" rx="224" ry="61" opacity=".2" transform="rotate(-14 300 179)" /><ellipse cx="300" cy="179" rx="171" ry="103" opacity=".3" transform="rotate(28 300 179)" /><ellipse cx="300" cy="179" rx="99" ry="146" opacity=".2" transform="rotate(32 300 179)" /><path d="m300 75 91 53v105l-91 53-91-53V128Z" fill="#0c242b" strokeWidth="1.5" /><path d="m209 128 91 53 91-53M300 181v105M252 104l91 53v103M348 103l-96 53v102M209 181l91 53 91-53" opacity=".6" /><path d="m277 153 23-14 24 14v28l-24 14-23-14Z" fill="#46e8bc" fillOpacity=".15" /><path d="m277 153 23 14 24-14M300 167v28" /><path d="M74 256h66m-33-33v66M452 56h26m-13-13v26" opacity=".5" /></g>
-              <g fill="#9df4e2"><circle cx="485" cy="126" r="4" /><circle cx="134" cy="117" r="2.5" /><circle cx="344" cy="310" r="2" /><circle cx="437" cy="284" r="1.5" /></g>
-            </svg>
-            <h2>{creationMode === 'image' ? 'A new perspective.' : 'An idea. A new dimension.'}</h2>
-            <p>{creationMode === 'image' ? 'Your generated image will appear here.' : 'Your own creation belongs here.'}</p>
-            <span className="shop-empty-caption">{creationMode === 'image' ? 'READY FOR YOUR IMAGE' : 'WAITING FOR YOUR FIRST CREATION'}</span>
-          </div>
-        </>}
-        {saved && terminal(savedJob?.state) && <p className="shop-recorded-generation-time">Recorded worker generation time: <strong>{formatStudioGenerationDuration(savedJob?.generationTiming)}</strong> · Excludes upload and queue time.</p>}
-        {saved && <p>{(job?.pricing ?? saved.pricing) ? `Original job: ${(job?.pricing ?? saved.pricing)!.points} points · ${(job?.pricing ?? saved.pricing)!.tier} model budget. Recovery does not change this price.` : 'Original job price is retained by the server; this recovery view does not apply the next draft’s price.'}</p>}
-        {studioBudgetFailureAdvice(job, tiersReady) && <p>{studioBudgetFailureAdvice(job, tiersReady)}</p>}
-        {saved && <div className="native-shop-actions">{testSavedSlot && terminal(job?.state) && <button type="button" disabled={busy || artifactBusy} onClick={leaveTestRecovery}>Close saved request</button>}<button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
-      </PreviewContainer>
+
     </section>
-    <PublicModelGallery />
-    <StudioGallery compact />
+    <details className="studio-library-disclosure"><summary>Explore creations</summary><PublicModelGallery /></details>
+    <details className="studio-library-disclosure"><summary>My models</summary><StudioGallery compact /></details>
     <details className="shop-manufacturing-disclosure"><summary><span>Bring it into the real world</span><span>Manufacturing options +</span></summary><p className="shop-beta-note"><strong>Experimental beta.</strong> Manufacturing and delivery require a separate production review and price approval.</p><ShopManufacturingOptions dimensions={dimensions} dimensionsEnabled={dimensionsEnabled} hasGeneratedModel={!!preview && preview.origin === 'job'} onDimensionsChange={setDimensions} onDimensionsEnabledChange={setDimensionsEnabled} onPrepareIssDraft={prepareIssDraft} /></details>
     <section className="shop-internal-only" hidden aria-labelledby="studio-archive-title"><h2 id="studio-archive-title">Your models · device archive</h2><p>Completed originals are saved on this device, not automatically published to a store. Clearing browser storage removes this archive; keep explicit file backups.</p><label>Find a saved model<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions" /></label><div className="native-shop-archive">{archive.filter(item => item.prompt.toLowerCase().includes(search.toLowerCase())).map(item => <article key={item.id}><strong>{item.prompt}</strong><small>{(item.byteLength / 1048576).toFixed(1)} MB · UNREVIEWED</small><button type="button" disabled={busy || (!!saved && !terminal(job?.state)) || artifactBusy} onClick={() => void openArchived(item)}>Open saved model</button></article>)}</div>{archive.length === 0 && <p>No models saved on this device yet. Existing private Froge archives have not been copied or deleted.</p>}</section>
     <footer className="shop-customer-footer"><Link to="/world" className="shop-wordmark"><ShopIcon kind="brand" /><span>WORLDIFACT</span></Link><span>YOURS TO IMAGINE.</span><span>AI SHOP · BETA</span><a className="shop-internal-only" hidden href={REFERENCE_LINKS.modelGenerator} target="_blank" rel="noopener noreferrer">Original Froge Studio</a></footer>

@@ -1,3 +1,20 @@
 .image-generation-controls{display:grid;gap:1rem;padding:1rem 0}.image-generation-controls label{display:grid;gap:.5rem}.image-generation-controls select{padding:.8rem;background:#0b212a;color:#e2fff7;border:1px solid #3c726e;border-radius:12px}.image-generation-controls p{margin:0}.image-generation-controls small{color:#a3baba;line-height:1.5}.image-generation-stage{padding:1.4rem;min-width:0}.image-generation-preview{display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:16px;margin:1rem auto}.image-generation-empty{min-height:310px;display:grid;align-content:center;text-align:center;color:#b7d4d0;background:radial-gradient(ellipse,#14333b,transparent 70%)}.image-download{display:inline-block;border:1px solid #65dcc2;border-radius:12px;padding:.8rem 1rem;color:#b1ffe2}.image-library{margin-top:1.5rem;display:grid;gap:.6rem}.image-library-entry{display:grid;gap:.4rem;text-align:left;padding:.8rem;border:1px solid #335b61;border-radius:10px;background:#10242b;color:#e4f6f4;overflow-wrap:anywhere}.image-library-entry[aria-pressed=true]{border-color:#70edc5}.image-library-entry span{font-size:.8rem;color:#abc6c5}
 
 .native-shop-preview[hidden]{display:none!important}
+
+.image-generation-controls[hidden]{display:none}
+.image-generation-controls .studio-billing-details{color:var(--studio-muted,#a6bfbf);font-size:12px;text-align:center}
+.studio-billing-details summary{padding:10px;min-height:44px;cursor:pointer}
+.studio-billing-details p{font-size:12px;text-align:left}
+.creation-studio .image-generation-controls{padding:0;gap:8px}
+.creation-studio .image-generation-stage{padding:0}
+.creation-studio .image-generation-preview{max-height:50vh;margin:0 auto;border-radius:14px}
+.studio-result-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 4px;font-size:12px;color:var(--studio-muted,#a6bfbf)}
+.creation-studio .image-download{color:var(--studio-accent);border-color:var(--studio-line);font-size:13px;min-height:44px}
+.creation-studio .studio-result-message{font-size:13px;color:var(--studio-muted);padding:0 10px}
+.image-library>summary{cursor:pointer;min-height:44px;padding:12px 4px;font-size:13px}
+.image-library-list{display:grid;gap:8px;max-height:280px;overflow:auto;margin-top:10px}
+.creation-studio .image-library{display:block;margin:0 4px;border-top:1px solid var(--studio-line);color:var(--studio-muted)}
+.creation-studio .image-library button{background:var(--studio-panel);color:var(--studio-text);border-color:var(--studio-line)}
+.creation-studio .image-library-entry span{color:var(--studio-muted)}
+.creation-studio .image-library-entry[aria-pressed=true]{border-color:var(--studio-accent)}

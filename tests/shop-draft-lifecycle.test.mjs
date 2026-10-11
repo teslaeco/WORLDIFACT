@@ -193,7 +193,7 @@ test('restored completed knight stays editable and unavailable FAST cannot bypas
     const before = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), originalDescription = h.description(), beforeCalls = h.calls.length
     h.byId('studio-prompt').props.onChange({ target: { value: 'Create a blue rook now' } })
     h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } })
-    h.all().find(node => node.props['aria-label']?.startsWith('Select GPT-6.1 Sol')).props.onClick()
+    h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } })
     await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, 'Create a blue rook now')
     assert.equal(h.byId('studio-mode').props.value, 'standard')
@@ -358,7 +358,7 @@ test('a lost submission response keeps acceptance unknown and recovers the same 
     h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     assert.match(text(h.all()), /Last known status: awaiting acceptance confirmation/)
-    assert.match(text(h.all()), /Checking whether your request was accepted/)
+    assert.ok(h.all().some(node => node.props.active && node.props.label === 'Confirming your request' && node.props.percent === null))
     assert.doesNotMatch(text(h.all()) + h.quoteMarkup(), /No Oracle generation was submitted|no points were reserved|current model is being completed/i)
     const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
     h.button('Recover this job').props.onClick(); await h.settle(); await h.poll()
@@ -428,7 +428,7 @@ test('missing local receipt recovers the current cloud job before the sample pre
   try {
     await h.settle()
     assert.ok(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), 'fresh cloud receipt is restored into local recovery storage')
-    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Checking whether your request was accepted…'))
+    assert.ok(h.all().some(node => node.props.active && node.props.label === 'Confirming your request' && node.props.percent === null))
     assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
     assert.equal(h.calls.filter(call => call.path === '/api/studio/jobs' && call.method === 'POST').length, 0)
     assert.ok(h.calls.some(call => call.path === '/api/studio/current' && call.method === 'GET'))
@@ -554,12 +554,11 @@ test('reconciled succeeded Studio job loads the same GLB and never starts anothe
 })
 
 
-test('confirmed empty cloud recovery shows original vector empty state, never a fabricated generated model', async () => {
+test('confirmed empty cloud recovery shows the brand sculpture, never a fabricated generated model', async () => {
   const h = await harness({ withExistingJob: false })
   try {
     assert.ok(h.calls.some(call => call.path === '/api/studio/current' && call.method === 'GET'))
-    assert.ok(h.all().some(node => node.props.className === 'shop-creation-art' && node.props['aria-hidden'] === 'true'))
-    assert.match(text(h.all()), /WAITING FOR YOUR FIRST CREATION/)
+    assert.ok(h.all().some(node => node.type?.name === 'CreationProgress' && !node.props.active))
     assert.equal(h.all().some(node => node.type === 'img'), false)
     assert.equal(h.calls.filter(call => call.method === 'POST').length, 0)
   } finally { h.close() }
@@ -574,7 +573,7 @@ test('a pending cloud lookup blocks both blueprint and detailed submissions unti
       h.byId('studio-prompt').props.onChange({ target: { value: detailed ? 'Recreate this detailed adult character model' : 'A blue rook concept' } })
       h.byId('studio-deliverable').props.onChange({ target: { value: detailed ? 'detailed-mesh' : 'procedural-blueprint' } })
       await h.settle()
-      assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Checking your cloud job…'))
+      assert.ok(h.all().some(node => node.props.active && node.props.label === 'Checking your account'))
       assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
       assert.equal(h.button(detailed ? 'Generate Astra/Blender model' : 'Generate GPT-6 Astra blueprint').props.disabled, true)
       await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
@@ -607,7 +606,7 @@ test('repeated cloud lookup failures retain the recovery gate and retry GET unti
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
     assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
     assert.ok(h.delays.slice(0, 5).every(delay => delay >= 5000 && delay <= 120000))
-    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Checking whether your request was accepted…'))
+    assert.ok(h.all().some(node => node.props.active && node.props.label === 'Confirming your request' && node.props.percent === null))
   } finally { h.close() }
 })
 
@@ -663,7 +662,7 @@ test('a completed model whose preview download is interrupted never receives fai
   try {
     await h.poll()
     const visible = text(h.all())
-    assert.match(visible, /Your model is complete/)
+    assert.ok(h.all().some(node => node.props.label === 'Model ready · reload preview' && !node.props.active))
     assert.doesNotMatch(visible, /original failure reason was not saved/)
     assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
   } finally { h.close() }
@@ -1603,19 +1602,19 @@ for (const nextSelection of ['astra-2', 'sol']) test(`account switch clears the 
 })
 
 
-test('restored SLOW and FAST cards select exact routes and require a separate Generate action', async () => {
+test('SLOW and FAST model options select exact routes and require a separate Generate action', async () => {
   const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
   try {
     assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
     assert.equal(h.byId('studio-mode').props.value, 'standard')
     h.byId('studio-prompt').props.onChange({ target: { value: 'Blue medieval rook' } }); await h.settle()
-    const slow = () => h.all().find(node => node.props['aria-label']?.startsWith('Select GPT-6 Astra'))
-    const fast = () => h.all().find(node => node.props['aria-label']?.startsWith('Select GPT-6.1 Sol'))
-    fast().props.onClick(); fast().props.onClick(); await h.settle()
+    const slow = () => h.byId('studio-mode').props.onChange({ target: { value: 'standard' } })
+    const fast = () => h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } })
+    fast(); fast(); await h.settle()
     assert.equal(h.byId('studio-mode').props.value, FAST_DRAFT_PROFILE)
     assert.equal(h.byId('studio-deliverable').props.value, 'procedural-blueprint')
     assert.equal(h.quote().quote.points, 50)
-    slow().props.onClick(); slow().props.onClick(); await h.settle()
+    slow(); slow(); await h.settle()
     assert.equal(h.byId('studio-mode').props.value, 'standard')
     assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
     assert.equal(h.quote().quote.points, 250)
@@ -1889,5 +1888,25 @@ test('clear description also clears references when text is already empty withou
     assert.equal(h.all().some(n => n.type === 'img' && /Your reference 1/.test(n.props.alt || '')), false)
     assert.match(h.description(), /Original brown chess knight/)
     assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+
+test('theme changes persist without submitting, and excess references preserve the first four', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A sandstone observatory' } })
+    for (const value of [50, 100, 0]) {
+      h.byId('studio-theme').props.onChange({ target: { value: String(value) } }); await h.settle()
+      assert.equal(h.storeData.get('worldifact:studio-theme:v1'), String(value))
+      assert.equal(h.byId('studio-prompt').props.value, 'A sandstone observatory')
+    }
+    h.byId('studio-photos').props.onChange({ target: { files: Array.from({ length: 4 }, (_, i) => ({ name: `view-${i}.jpg` })), value: 'views' } }); await h.settle()
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'fifth.jpg' }], value: 'fifth' } }); await h.settle()
+    assert.equal(h.all().filter(n => n.type === 'img' && /Your reference/.test(n.props.alt || '')).length, 4)
+    assert.match(text(h.all()), /up to four reference views/)
+    h.button('Remove reference 4').props.onClick(); await h.settle()
+    assert.equal(h.byId('studio-photos').props.disabled, false)
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
   } finally { h.close() }
 })

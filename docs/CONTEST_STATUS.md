@@ -1615,3 +1615,45 @@ Only byte count, SHA-256, state and token usage are logged. Final paid-test and
 deployment evidence belongs in the repair PR. The misleading existing 3D preview
 notice is hidden while Image is selected. Browser/device appearance remains
 unverified; the preserved configuration release does not change 3D or Oracle.
+
+
+## Clean creation studio — 2026-10-11
+
+Owner confirmed image generation now works and requested a simpler Shop using
+the attached modern, neon-temple and ancient sandstone references. The actual
+image/model preview now precedes the prompt in DOM and visual order. The existing
+WORLDIFACT sculpture replaces the empty illustration and active text panels;
+confirmed 3D workflow milestones are labelled as stages, never time remaining.
+Images use indeterminate dots because the provider returns no completion percent.
+An interrupted completed-model download shows a reload action, not a running job.
+
+One model selector sits inside the composer. Images expose Fast / Flare and
+Slow / Quality / Sunburst, using the existing exact IDs and five-point contract.
+The official OpenAI image-prompting guide describes Flare as optimized for speed
+and Sunburst as optimized for quality; no fixed latency is promised. The existing
+API key and provider request/settlement implementation are unchanged. No live
+provider calls are part of this UI release.
+
+Three contrast-safe themes are selected by a native range slider and remembered
+locally; denied storage leaves the current interface functional. Four reference
+images with view labels/removal sit outside advanced settings. Existing prepare,
+size/count validation and all-four-view transmission remain active. Draft edits,
+mode selection and theme changes never submit paid requests. Image work remains
+mounted across mode changes; pending sends disable switching and prompt editing.
+History, recovery, full billing terms and manufacturing remain in disclosures.
+Exact price, brief hold terms, actionable errors and extended-budget acceptance
+remain visible. Images are saved privately as before; no new gallery publication.
+
+Verification covers actual component lifecycle, theme persistence, rejection of
+a fifth reference without dropping the first four, same-request recovery and
+stage-vs-time accessibility. Node fixtures are not LIVE or device evidence.
+Browser/device appearance remains unverified under the existing browser block.
+The release selector binds a new marker, exact current-main parent and source
+file list, using the existing preserving deployment path. Final test and public
+asset verification results belong in the PR evidence.
+
+Local final suite: 2158/2160 tests passed. The only failures are the two existing
+native-Chromium regressions because Chromium is absent here; this is not browser
+verification. All 123 focused Shop/creation tests passed, including four-reference
+transmission and existing recovery/account-isolation invariants. Lint and type
+checks passed. Public deployment evidence is added to the PR after publication.
