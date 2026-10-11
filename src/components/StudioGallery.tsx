@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import OracleModelPreview from './OracleModelPreview'
+import StudioModelThumbnail from './StudioModelThumbnail'
 import { useAccount } from '../lib/account'
 import { listStudioModels, readStudioModel, STUDIO_ARCHIVE_EVENT, STUDIO_ARCHIVE_SIGNAL_KEY, type StudioArchiveEntry } from '../lib/studioArchive'
 import { getStudioLibraryModel, isStudioLibraryTemporaryError, isStudioLibraryId, listStudioLibrary, readStudioLibraryModel, StudioLibraryAccountError } from '../lib/studioLibrary'
@@ -40,6 +41,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
   const [cloud, setCloud] = useState<CloudState>(emptyCloud)
   const [target, setTarget] = useState<{ owner: string; id: string; model?: StudioLibraryModel; error?: string } | null>(null)
   const [query, setQuery] = useState('')
+  const [expanded, setExpanded] = useState(false)
   const [selected, setSelected] = useState<{ owner: string; row: Row; url: string; byteLength: number } | null>(null)
   const [activity, setActivity] = useState({ owner: '', busyId: '', error: '' })
   const [localError, setLocalError] = useState('')
@@ -163,8 +165,8 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     const items = needle ? rows.filter(item => item.model.prompt.toLowerCase().includes(needle)) : rows
-    return compact ? items.slice(0, 6) : items
-  }, [rows, query, compact])
+    return compact && !expanded ? items.slice(0, 6) : items
+  }, [rows, query, compact, expanded])
   const cloudVisible = !!owner && cloud.owner === owner
   const busyId = activity.owner === owner ? activity.busyId : ''
   const currentSelection = selected?.owner === owner ? selected : null
@@ -254,7 +256,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
     }
   }
 
-  return <section className={`studio-gallery ${compact ? 'studio-gallery-compact' : ''}`} aria-labelledby="studio-gallery-title">
+  return <section className={`studio-gallery ${compact && !expanded ? 'studio-gallery-compact' : ''}`} aria-labelledby="studio-gallery-title">
     <div className="studio-gallery-heading">
       <div>
         {!compact && <span className="studio-gallery-eyebrow">MY 3D MODELS</span>}
@@ -263,7 +265,8 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
       </div>
       <div className="studio-gallery-heading-actions">
         <button type="button" disabled={loading || (cloudVisible && cloud.loading)} onClick={() => { void refreshLocal(); void loadAccountPage(true) }}>{loading || (cloudVisible && cloud.loading) ? 'Refreshing…' : 'Refresh'}</button>
-        {compact && <Link to="/account/models">View all →</Link>}
+        {compact && <button type="button" aria-expanded={expanded} aria-controls="studio-gallery-models" onClick={() => setExpanded(value => !value)}>{expanded ? 'Collapse library' : 'Expand library'}</button>}
+        <Link to="/account/models">Open full library →</Link>
       </div>
     </div>
 
@@ -290,9 +293,9 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
     {!loading && !(cloudVisible && cloud.loading) && !error && rows.length === 0 && <p className="studio-gallery-empty">No completed models were found here yet. Completed Studio models appear on your account automatically. Local Studio and procedural blueprint files saved in this browser also appear here.</p>}
     {!loading && rows.length > 0 && filtered.length === 0 && <p className="studio-gallery-empty">No saved models match this search.</p>}
 
-    <div className="studio-gallery-grid">
+    <div className="studio-gallery-grid" id="studio-gallery-models">
       {filtered.map(item => <article key={item.key} aria-label={item.origin === 'account' && item.model.id === requestedModelId ? 'Requested account model' : undefined}>
-        {compact && <div className="shop-gallery-model-mark" aria-label="3D model file, preview available on request"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1"><path d="m24 4 18 10v20L24 44 6 34V14Z" /><path d="m6 14 18 10 18-10M24 24v20m-9-35 18 10v20m-9-10L6 19m18 10 18-10" /></svg></div>}
+        <StudioModelThumbnail key={item.key} owner={owner} source={item} accountSignal={scope.current?.owner === owner ? scope.current.controller.signal : undefined} onAccountError={invalidateAccount} />
         <strong>{item.model.prompt}</strong>
         <small>{item.origin === 'account' ? 'Account model · Studio · UNREVIEWED' : item.model.source === 'blueprint' ? `Device copy · Procedural blueprint · ${item.model.generation.model} · UNREVIEWED` : 'Device copy · Studio · UNREVIEWED'}</small>
         <details className="shop-gallery-details" open={!compact}><summary>File details</summary>
@@ -312,6 +315,6 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         </div>
       </article>)}
     </div>
-    {cloudVisible && cloud.cursor && !compact && <button type="button" disabled={cloud.loading} onClick={() => void loadAccountPage()}>{cloud.loading ? 'Loading…' : 'Load more account models'}</button>}
+    {cloudVisible && cloud.cursor && (!compact || expanded) && <button type="button" disabled={cloud.loading} onClick={() => void loadAccountPage()}>{cloud.loading ? 'Loading…' : 'Load more account models'}</button>}
   </section>
 }

@@ -1,0 +1,11 @@
+{
+  "release": "shop-library-20261011",
+  "baseCommit": "ce6df72958fff944419b9e080f95e178f96b58e1",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 5,
+  "referenceLimit": 4,
+  "originalReferenceTotalBytes": 41943040,
+  "providerCalls": 0
+}
