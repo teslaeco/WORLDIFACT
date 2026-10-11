@@ -1,3 +1,26 @@
+# 11 October 2026 — real file references in the existing generator
+
+The owner requested file attachment as a reference for a new model. The composer
+now accepts bounded GLB/OBJ/STL geometry (20 MiB, 300,000 triangles) and prepares
+front/left/back images locally for the existing four-photo Astra contract.
+TXT/MD/CSV/JSON briefs are appended completely to the visible description;
+invalid UTF-8, binary content and the existing 4,000-character combined limit
+are rejected without silent truncation. Adding a file never starts generation.
+Source files remain unchanged. This does not import or edit original geometry
+in Blender. Unsupported PDF/FBX/BLEND/ZIP require conversion; the existing
+project archive remains storage and is not misrepresented as generator input.
+
+Geometry parsing and component lifecycle checks use synthetic files; the three
+rendered photo payloads are stubbed in lifecycle tests. Actual mobile/WebGL
+rendering and new paid model success remain unverified. The existing source-only
+release envelope preserves billing, remote variables and secrets. Publication
+evidence will be recorded in the PR. Local lint/typecheck, 2,231 tests, HTTP
+smoke and production build passed. The remaining two native Chromium tests are
+BLOCKED locally because Chrome is unavailable; hosted CI must pass them before
+merge. No browser preview or paid generation was substituted.
+
+---
+
 # 11 October 2026 — admission release and supervised execution continuation
 
 PR #264 merged as e7ea1ab7b4daf23cffa4f2ac7a34456dce225e36 and deployed
@@ -25,11 +48,14 @@ repairs or manufacturing suitability. The original Earth FBX also downloaded
 and parsed: FBX 7400, 66 geometry nodes, 149,388 vertex scalars and 282,112 polygon
 indices. A real phone/WebGL test and new photo generation remain unverified.
 
-A separate exact Oracle execution transaction is now prepared for the earlier
-text-only completion defect: unfinished supervised requests require tool use.
-It preserves the already-installed MCP repair; it does not bulk-merge PR #251.
-See tools/model_execution/README.md. Source/rollback tests are not installation
-or LIVE evidence. Sol and Luna remain draft-only, six detailed model/mode
+PR #265 merged as 31e00ca2e469484ea957e35c77ab12062af617bc. Its exact Oracle
+execution transaction was installed on 11 October after explicit approval for
+the single historical cancelled-job binding. All four offline pipeline gates
+passed in 520.91 seconds; activation_committed=true, job_rows_changed=false,
+paid_generation_requested=false and provider_limits_changed=false. The existing
+MPC2 generator and saved transformer are preserved. Unfinished supervised
+requests now require tool use; this is installation evidence, not a new paid
+model or photo-generation acceptance. See tools/model_execution/README.md. Sol and Luna remain draft-only, six detailed model/mode
 combinations are incomplete, and no label-only upgrade is claimed.
 
 ---
