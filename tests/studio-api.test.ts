@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { studioApi, type StudioEnv } from '../server/studio.ts'
+import { studioApi, type StudioEnv, type StudioExecutionContext } from '../server/studio.ts'
+import { handle } from '../server/worker.ts'
 import { GenerationBudget, type BudgetStorage } from '../server/budget.ts'
 import { validateStudioInput, type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
 const origin = 'https://worldifact.test'
@@ -46,9 +47,64 @@ function fixture(used = 5) {
   const call = (path: string, method = 'GET', body?: unknown, ticket?: string, requestOrigin = origin) => studioApi(new Request(origin + path, {
     method, headers: { Origin: requestOrigin, 'Content-Type': 'application/json', ...(ticket ? { 'X-WORLDIFACT-Job': ticket } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   }), env, fetcher)
-  return { env, values, calls, call, object, loseResponse: () => { acceptLost = true }, blockPhotos: () => { photoReady = false }, corruptModel: () => { invalidModel = true }, corruptExport: () => { invalidExport = true } }
+  return { env, values, calls, call, object, fetcher, loseResponse: () => { acceptLost = true }, blockPhotos: () => { photoReady = false }, corruptModel: () => { invalidModel = true }, corruptExport: () => { invalidExport = true } }
 }
 const posts = (f: ReturnType<typeof fixture>) => f.calls.filter(c => c.url.endsWith('/v1/jobs') && c.init?.method === 'POST')
+
+test('Worker retains exactly the admitted submission promise through receipt parsing, without resubmission', async () => {
+  const f = fixture(), prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  const retained: Promise<unknown>[] = []
+  const deferred = () => {
+    let resolve!: () => void
+    const promise = new Promise<void>(done => { resolve = done })
+    return { promise, resolve }
+  }
+  const registered = deferred(), dispatched = deferred(), release = deferred()
+  const context: StudioExecutionContext = { waitUntil(promise) {
+    assert.equal(this, context, 'Preserve native context receiver')
+    retained.push(promise); registered.resolve()
+  } }
+  const fetcher: typeof fetch = async (url, init) => {
+    if (String(url).endsWith('/v1/jobs') && init?.method === 'POST') {
+      dispatched.resolve()
+      await release.promise
+    }
+    return f.fetcher(url, init)
+  }
+  const request = () => new Request(origin + '/api/studio/jobs', { method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': prepared.ticket }, body: JSON.stringify(input) })
+  const pending = handle(request(), f.env, fetcher, context)
+  await Promise.all([dispatched.promise, registered.promise])
+  assert.equal(retained.length, 1)
+  let retainedDone = false
+  void retained[0].then(() => { retainedDone = true })
+  await Promise.resolve()
+  assert.equal(retainedDone, false)
+  assert.equal((await handle(request(), f.env, fetcher, context)).status, 202)
+  assert.equal(retained.length, 1, 'Recovery does not schedule another submission')
+  release.resolve()
+  assert.equal((await data(pending)).job.state, 'building')
+  await retained[0]
+  assert.equal(posts(f).length, 1)
+  assert.equal(f.values.get('reserved-attempts'), 6)
+})
+
+test('failed admission schedules no background task; uncertain dispatch is retained once and never retried', async () => {
+  const f = fixture(), prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  const retained: Promise<unknown>[] = []
+  const context: StudioExecutionContext = { waitUntil(promise) { retained.push(promise) } }
+  const request = (ticket: string) => new Request(origin + '/api/studio/jobs', { method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': ticket }, body: JSON.stringify(input) })
+  assert.equal((await studioApi(request('invalid'), f.env, f.fetcher, false, context)).status, 401)
+  assert.equal(retained.length, 0)
+  f.loseResponse()
+  assert.equal((await data(studioApi(request(prepared.ticket), f.env, f.fetcher, false, context))).job.state, 'pending')
+  await Promise.all(retained)
+  assert.equal(retained.length, 1)
+  assert.equal((await studioApi(request(prepared.ticket), f.env, f.fetcher, false, context)).status, 202)
+  assert.equal(retained.length, 1)
+  assert.equal(posts(f).length, 1)
+})
 
 test('status and preparation consume no attempt; a signed job consumes one original cumulative slot', async () => {
   const f = fixture(), status = await data(f.call('/api/studio/status'))

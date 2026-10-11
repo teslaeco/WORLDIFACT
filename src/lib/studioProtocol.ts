@@ -78,7 +78,10 @@ export const REFERENCE_CHARACTER_INSTRUCTIONS = `WORLDIFACT REFERENCE CHARACTER 
 - Review front, side and back before export. If face, hands, clothing layers or silhouette collapse, repair them before returning the GLB.`
 
 const ELECTRICAL_CABINET_REQUEST = /(electrical\s+(?:control\s+)?cabinet|switchgear|motor\s+control\s+cent(?:er|re)|\bmcc\b|distribution\s+panel|control\s+panel|din\s*rail|terminal\s+block|breaker|contactor|relay|rozdzieln|szaf.{0,24}(?:elektr|sterown)|bezpiecznik|stycznik|przeka[źz]nik|listw.{0,20}zacisk|okablowan)/iu
-const CHARACTER_REQUEST = /(adult\s+(?:woman|man|female|male)|character|heroine|figurine|person|human|woman|girl|man|posta[cć]|kobiet|m[eę][żz]czyzn|figur[kc])/iu
+// Match words, not "man" inside "many", "command" or "manufacturing".
+// Unicode boundaries retain Polish inflections without treating accented
+// letters as separators (JavaScript's ASCII-oriented \b would do that).
+const CHARACTER_REQUEST = /(?:^|[^\p{L}\p{N}_])(?:adult\s+(?:woman|man|female|male)|characters?|heroines?|figurines?|persons?|humans?|women|woman|girls?|men|man|posta[cć]\p{L}*|kobiet\p{L}*|m[eę][żz]czyzn\p{L}*|figur[kc]\p{L}*)(?=$|[^\p{L}\p{N}_])/iu
 // Resolve only an explicit cabinet description against the Shop's figurine
 // default. These narrower hints do not select a quality profile or infer scale.
 const EXPLICIT_INDUSTRIAL_CABINET_REQUEST = /^(?:(?:create|build|make|model|generate|reconstruct)\s+)?(?:(?:a|an|the|this|realistic|detailed|photorealistic|full[- ]size|full[- ]scale)\s+)*(?:(?:industrial|electrical|mcc|switchgear|motor\s+control\s+cent(?:er|re))\s+)+(?:control\s+)?cabinet\b|^(?:(?:stw[oó]rz|zbuduj|wygeneruj|odtw[oó]rz|wymodeluj|model)\s+)?(?:(?:realistyczn[ąay]|szczeg[oó][łl]ow[ąay]|przemys[łl]ow[ąay]|tę|tą)\s+)*szaf(?:a|ę|ą|y|ie)\s+(?:elektryczn|sterownicz|rozdzielcz)\p{L}*/iu

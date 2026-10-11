@@ -41,6 +41,29 @@ test('unrelated or text-only models stay on the standard structural contract',()
   assert.equal(passesStudioStructuralQuality(inspectGLB(detailedGLBFixture().buffer),'standard'),true)
 })
 
+test('object references do not acquire anatomy requirements from word fragments',()=>{
+  for (const prompt of ['A chess board with many separate pieces', 'A command console with LEDs',
+    'A manufacturing machine', 'A German locomotive', 'A humanlike abstract lamp']) {
+    for (const purpose of ['figurine','game'] as const) {
+      const input:StudioInput={worldId:'enchanted-ai-shop',purpose,textureMaxSize:4096,photos:[photo('front')],prompt}
+      assert.equal(studioQualityProfile(input),'standard',prompt)
+      const payload=oracleStudioPayload('22222222-2222-4222-8234-222222222222',input)
+      assert.ok('agentInstructions' in payload)
+      assert.doesNotMatch(payload.agentInstructions,/WORLDIFACT REFERENCE CHARACTER/)
+      assert.ok(payload.prompt.startsWith(prompt))
+      assert.deepEqual(payload.photos,input.photos)
+    }
+  }
+})
+
+test('whole character words and Polish inflections preserve reference quality gates',()=>{
+  for (const prompt of ['A woman, wearing a dress', 'Two men in spacesuits', 'A girl with a helmet',
+    'A human character', 'Model postaci kobiety', 'Figurka mężczyzny', 'Odtwórz tę postać', 'Model figurki']) {
+    assert.equal(studioQualityProfile({prompt,purpose:'figurine',photos:[photo('front')]}),REFERENCE_CHARACTER_PROFILE,prompt)
+    assert.equal(studioQualityProfile({prompt,purpose:'figurine',photos:[]}),'standard',prompt)
+  }
+})
+
 test('flat/sparse detailed outputs fail cabinet and character gates while dense assemblies pass',()=>{
   const sparse=inspectGLB(detailedGLBFixture().buffer)
   assert.equal(passesStudioStructuralQuality(sparse,INDUSTRIAL_ELECTRICAL_PROFILE),false)

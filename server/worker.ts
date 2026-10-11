@@ -112,7 +112,7 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
   if (avatar) return avatar;
   const projectFiles = await projectFileApi(request, env, fetcher);
   if (projectFiles) return projectFiles;
-  if (url.pathname === "/api/studio" || url.pathname.startsWith("/api/studio/")) return studioApi(request, env, fetcher, overnightTest);
+  if (url.pathname === "/api/studio" || url.pathname.startsWith("/api/studio/")) return studioApi(request, env, fetcher, overnightTest, context);
   if (url.pathname.startsWith("/api/oracle/jobs")) return oracleJobApi(request, env, fetcher);
   if (url.pathname === "/api/platform" || url.pathname.startsWith("/api/platform/")) return platformApi(request, env, fetcher);
   if (url.pathname.startsWith('/api/blueprint/requests/')) {

@@ -476,7 +476,8 @@ async function modelOrExport(env: StudioEnv, id: string, format: string, fetcher
   })
   return new Response(stream, { headers: { 'Content-Type': profile.type, 'Content-Length': String(size), 'Content-Disposition': `attachment; filename="WORLDIFACT-${id}-${profile.name}"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-WORLDIFACT-Provenance': 'GENERATED-UNREVIEWED' } })
 }
-export async function studioApi(request: Request, env: StudioEnv, fetcher: typeof fetch = fetch, overnightTest = false): Promise<Response> {
+export interface StudioExecutionContext { waitUntil(promise: Promise<unknown>): void }
+export async function studioApi(request: Request, env: StudioEnv, fetcher: typeof fetch = fetch, overnightTest = false, context?: StudioExecutionContext): Promise<Response> {
   const url = new URL(request.url)
   try {
     if (request.method !== 'GET' && request.headers.get('Origin') !== url.origin) throw new StudioError('Same-origin request required.', 403)
@@ -683,26 +684,34 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
             return json({ job: await accountJob(env, user.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
           }
         }
-        logStudioDiagnostic({ requestId: auth.id, stage: 'SENT_TO_PROVIDER', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'CLAIMED', workerStatus: null })
-        let response: Response
-        try {
-          response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: payload })
-        } catch (error) {
-          logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'ADMITTED', reason: 'ORACLE_NO_RESPONSE', oracleDispatch: 'NO_RESPONSE', workerStatus: null })
-          throw error
-        }
-        logStudioDiagnostic({ requestId: auth.id, stage: 'PROVIDER_RESPONSE', admission: 'ADMITTED', reason: response.ok ? 'ORACLE_RESPONSE' : 'ORACLE_REJECTED', oracleDispatch: 'RESPONSE', workerStatus: response.status })
-        if ([400, 409, 422, 429].includes(response.status)) {
-          const failureCode = await submissionFailureCode(response)
-          const settlement = user ? await settleUserGeneration(env, user.id, auth.id, 'failed', failureCode) : undefined
-          logStudioDiagnostic({ requestId: auth.id, stage: 'FAILED', admission: 'REFUSED', reason: failureCode, oracleDispatch: 'RESPONSE', workerStatus: response.status })
-          throw new StudioError(settlement?.pointSettlement?.state === 'pending-cost' ? POINT_COST_PENDING_DETAIL : STUDIO_FAILURE_DETAILS[failureCode], response.status, failureCode, settlement?.pointSettlement, auth.id)
-        }
-        if (!response.ok) { await response.body?.cancel(); throw new Error('Unconfirmed acceptance') }
-        const value = await limitedJson(response, 16_384)
-        if (value.id !== auth.id || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new Error('Unconfirmed acceptance')
-        const completed = await completedOracleStatus(env, auth.id, value, fetcher)
-        return json({ job: await accountJob(env, user?.id, auth.id, completed.state as StudioJob['state'], fetcher, oracleFailureCode(completed), completed.timingObservation) }, 202)
+        // Keep the already-admitted single dispatch alive if the browser closes.
+        // The Oracle timeout is 25s; Workers grants at most 30s after disconnect.
+        // This protects transport/receipt handling, never the long Blender run.
+        // Register the same promise we await: no queue, retry or second POST.
+        const submission = (async () => {
+          logStudioDiagnostic({ requestId: auth.id, stage: 'SENT_TO_PROVIDER', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'CLAIMED', workerStatus: null })
+          let response: Response
+          try {
+            response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: payload })
+          } catch (error) {
+            logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'ADMITTED', reason: 'ORACLE_NO_RESPONSE', oracleDispatch: 'NO_RESPONSE', workerStatus: null })
+            throw error
+          }
+          logStudioDiagnostic({ requestId: auth.id, stage: 'PROVIDER_RESPONSE', admission: 'ADMITTED', reason: response.ok ? 'ORACLE_RESPONSE' : 'ORACLE_REJECTED', oracleDispatch: 'RESPONSE', workerStatus: response.status })
+          if ([400, 409, 422, 429].includes(response.status)) {
+            const failureCode = await submissionFailureCode(response)
+            const settlement = user ? await settleUserGeneration(env, user.id, auth.id, 'failed', failureCode) : undefined
+            logStudioDiagnostic({ requestId: auth.id, stage: 'FAILED', admission: 'REFUSED', reason: failureCode, oracleDispatch: 'RESPONSE', workerStatus: response.status })
+            throw new StudioError(settlement?.pointSettlement?.state === 'pending-cost' ? POINT_COST_PENDING_DETAIL : STUDIO_FAILURE_DETAILS[failureCode], response.status, failureCode, settlement?.pointSettlement, auth.id)
+          }
+          if (!response.ok) { await response.body?.cancel(); throw new Error('Unconfirmed acceptance') }
+          const value = await limitedJson(response, 16_384)
+          if (value.id !== auth.id || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new Error('Unconfirmed acceptance')
+          const completed = await completedOracleStatus(env, auth.id, value, fetcher)
+          return json({ job: await accountJob(env, user?.id, auth.id, completed.state as StudioJob['state'], fetcher, oracleFailureCode(completed), completed.timingObservation) }, 202)
+        })()
+        context?.waitUntil(submission.then(() => undefined, () => undefined))
+        return await submission
       } catch (error) {
         if (error instanceof StudioError) throw error
         return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending, ...(admittedPointSettlement ? { pointSettlement: admittedPointSettlement } : {}), ...(pricing ? { pricing } : {}) } }, 202)
