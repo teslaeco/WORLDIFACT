@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
@@ -19,7 +20,7 @@ function fixture(used = 5) {
   const object = new GenerationBudget({ storage }, env)
   env.GENERATION_BUDGET = { idFromName: name => name, get: () => object }
   const calls: { url: string; init?: RequestInit }[] = []
-  let acceptLost = false, photoReady = true, invalidModel = false
+  let acceptLost = false, photoReady = true, invalidModel = false, invalidExport = false
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: String(url), init })
     assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer oracle-test-only'); assert.equal(init?.redirect, 'manual')
@@ -33,13 +34,19 @@ function fixture(used = 5) {
       view.setUint32(0, invalidModel ? 0 : 0x46546c67, true); view.setUint32(4, 2, true); view.setUint32(8, 24, true)
       return new Response(bytes, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': '24' } })
     }
-    if (String(url).includes('/exports/')) return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Length': '3', 'Content-Type': 'application/zip' } })
+    if (String(url).includes('/exports/')) {
+      const format = String(url).split('/').at(-1)
+      const bytes = invalidExport ? new TextEncoder().encode('<html>export failed</html>') : format === 'blend'
+        ? new TextEncoder().encode('BLENDER-v405DATA')
+        : readFileSync(new URL('../public/world-assets/giant-building/terrace-tower-e7e96cc3.' + (format === 'fbx' ? 'fbx' : 'textures.zip'), import.meta.url))
+      return new Response(bytes, { headers: { 'Content-Length': String(bytes.length), 'Content-Type': 'application/octet-stream' } })
+    }
     return Response.json({ state: 'succeeded', detail: 'PRIVATE detail must not be echoed' })
   }) as typeof fetch
   const call = (path: string, method = 'GET', body?: unknown, ticket?: string, requestOrigin = origin) => studioApi(new Request(origin + path, {
     method, headers: { Origin: requestOrigin, 'Content-Type': 'application/json', ...(ticket ? { 'X-WORLDIFACT-Job': ticket } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   }), env, fetcher)
-  return { env, values, calls, call, object, loseResponse: () => { acceptLost = true }, blockPhotos: () => { photoReady = false }, corruptModel: () => { invalidModel = true } }
+  return { env, values, calls, call, object, loseResponse: () => { acceptLost = true }, blockPhotos: () => { photoReady = false }, corruptModel: () => { invalidModel = true }, corruptExport: () => { invalidExport = true } }
 }
 const posts = (f: ReturnType<typeof fixture>) => f.calls.filter(c => c.url.endsWith('/v1/jobs') && c.init?.method === 'POST')
 
@@ -109,7 +116,7 @@ test('GLB and texture exports need the exact receipt and never trigger generatio
   assert.equal((await f.call(path + '/model')).status, 401)
   const glb = await f.call(path + '/model', 'GET', undefined, prepared.ticket)
   assert.equal(glb.status, 200); assert.equal((await glb.arrayBuffer()).byteLength, 24); assert.match(glb.headers.get('Content-Disposition')!, /attachment/)
-  assert.equal((await (await f.call(path + '/exports/pbr', 'GET', undefined, prepared.ticket)).arrayBuffer()).byteLength, 3)
+  assert.ok((await (await f.call(path + '/exports/pbr', 'GET', undefined, prepared.ticket)).arrayBuffer()).byteLength > 30)
   f.corruptModel(); assert.equal((await f.call(path + '/model', 'GET', undefined, prepared.ticket)).status, 502)
   assert.equal(posts(f).length, 0)
 })
@@ -175,4 +182,16 @@ test('four-reference MAKE cabinet reaches v33 admission once with the complete b
   assert.equal(posts(f).length,1)
   await f.call('/api/studio/jobs','POST',value,receipt.ticket)
   assert.equal(posts(f).length,1,'reference retries never create a second paid dispatch')
+})
+
+ test('a 200 export error is refused without another generation or budget change', async () => {
+  const f = fixture(), prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  f.corruptExport()
+  for (const format of ['fbx', 'blend', 'pbr']) {
+    const result = await f.call(`/api/studio/jobs/${prepared.id}/exports/${format}`, 'GET', undefined, prepared.ticket)
+    assert.equal(result.status, 502)
+    assert.match(JSON.stringify(await result.json()), /does not match/)
+  }
+  assert.equal(posts(f).length, 0)
+  assert.equal(f.values.get('reserved-attempts'), 5)
 })

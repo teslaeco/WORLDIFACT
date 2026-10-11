@@ -18,10 +18,11 @@ test('native Chromium reproduces the old invocation error and accepts the repair
   const compile = name => ts.transpileModule(readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText.replace(/^export /gm, '')
+  const artifact = compile('studioArtifact')
   const admission = compile('generationAdmission'), pricing = compile('studioPricing'), pointSettlement = compile('paidPointsFunding'), readback = compile('studioReadbackGuide')
   const protocol = compile('studioProtocol').replace(/^import .+ from ['"]\.\/(?:generationAdmission|studioPricing|studioReadbackGuide)\.ts['"];?\s*$/gm, ''), draft = compile('studioDraft')
-  const client = compile('studioClient').replace(/^import .+ from ['"]\.\/(?:studioProtocol|studioDraft|studioPricing|paidPointsFunding)\.ts['"];?\s*$/gm, '')
-  assert.doesNotMatch(admission + pricing + pointSettlement + readback + protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
+  const client = compile('studioClient').replace(/^import .+ from ['"]\.\/(?:studioArtifact|studioProtocol|studioDraft|studioPricing|paidPointsFunding)\.ts['"];?\s*$/gm, '')
+  assert.doesNotMatch(artifact + admission + pricing + pointSettlement + readback + protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
   // A top-level inert data: document has no secure-context SubtleCrypto. Keep
   // this receiver/transport test off all network origins and adapt ONLY digest
   // with precomputed real SHA-256 fixtures; manifest security has its own tests.
@@ -63,7 +64,18 @@ test('native Chromium reproduces the old invocation error and accepts the repair
       } else if (path === '/api/studio/jobs/' + id || path === '/api/studio/jobs/' + nextId) body = { job: { id: path.endsWith(nextId) ? nextId : id, state: 'succeeded' } };
       else {
         check(path.startsWith('/api/studio/jobs/' + id + '/'), 'Unexpected artifact route');
-        return nativeFetch.call(this, 'data:application/octet-stream;base64,AQID', { signal: init?.signal });
+        // Minimal recognized headers exercise transport, not complete model files.
+        const format = path.split('/').at(-1), bytes = new Uint8Array(40);
+        if (format === 'model') {
+          const view = new DataView(bytes.buffer);
+          view.setUint32(0, 0x46546c67, true); view.setUint32(4, 2, true); view.setUint32(8, 40, true);
+        } else if (format === 'pbr') bytes.set([80, 75, 3, 4]);
+        else if (format === 'blend') bytes.set(new TextEncoder().encode('BLENDER-v405'));
+        else {
+          bytes.set([75,97,121,100,97,114,97,32,70,66,88,32,66,105,110,97,114,121,32,32,0,26,0]);
+          new DataView(bytes.buffer).setUint32(23, 7400, true);
+        }
+        return nativeFetch.call(this, 'data:application/octet-stream;base64,' + btoa(String.fromCharCode(...bytes)), { signal: init?.signal });
       }
       return nativeFetch.call(this, 'data:application/json,' + encodeURIComponent(JSON.stringify(body)), { signal: init?.signal });
     }
@@ -87,7 +99,7 @@ test('native Chromium reproduces the old invocation error and accepts the repair
       const restored = new StudioCoordinator(store);
       check(restored.restore().receipt.id === id, 'Reload changed the job');
       check((await restored.poll()).state === 'succeeded', 'Native status fetch failed');
-      for (const format of ['model', 'pbr', 'fbx', 'blend']) check((await restored.artifact(format)).size === 3, 'Native artifact fetch failed: ' + format);
+      for (const format of ['model', 'pbr', 'fbx', 'blend']) check((await restored.artifact(format)).size === 40, 'Native artifact fetch failed: ' + format);
       check(calls.length === 7, 'Unexpected initial request count');
       check(calls.filter(call => call.path === '/api/studio/jobs' && call.method === 'POST').length === 1, 'Duplicate generation intent');
       const next = await restored.start({ ...input, prompt: 'Create a new rook', textureMaxSize: 2048, photos: [], generationProfile: FAST_DRAFT_PROFILE }, () => {}, '', true);
@@ -99,7 +111,7 @@ test('native Chromium reproduces the old invocation error and accepts the repair
     } finally { globalThis.fetch = nativeFetch; }
   } catch (error) { result.textContent = 'FAIL: ' + error.message; }
 })();`
-  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + admission + '\n' + pricing + '\n' + pointSettlement + '\n' + readback + '\n' + protocol + '\n' + draft + '\n' + client + '\n' + exercise + '</script>'
+  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + artifact + '\n' + admission + '\n' + pricing + '\n' + pointSettlement + '\n' + readback + '\n' + protocol + '\n' + draft + '\n' + client + '\n' + exercise + '</script>'
   const profile = mkdtempSync(join(tmpdir(), 'worldifact-native-fetch-'))
   try {
     const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking', '--no-first-run', '--no-default-browser-check',

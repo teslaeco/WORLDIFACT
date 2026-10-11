@@ -1,0 +1,10 @@
+{
+  "release": "artifact-integrity-20261011",
+  "baseCommit": "9a17d0bc2c56f5caceeb2c7bd19daa6550441398",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "providerCalls": 0,
+  "imagePoints": 5,
+  "referenceLimit": 4
+}

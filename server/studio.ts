@@ -1,3 +1,4 @@
+import { ARTIFACT_PROBE_BYTES, hasStudioArtifactHeader, type StudioArtifactFormat } from '../src/lib/studioArtifact.ts'
 import { inspectGLB } from '../src/lib/glb.ts'
 import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
@@ -444,17 +445,22 @@ async function modelOrExport(env: StudioEnv, id: string, format: string, fetcher
   const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()
   if (model && !['model/gltf-binary', 'application/octet-stream'].includes(contentType || '')) { await response.body.cancel(); throw new StudioError('The worker did not return a GLB.', 502) }
   const reader = response.body.getReader(), initial: Uint8Array[] = []; let initialSize = 0
-  if (model) {
-    while (initialSize < 12) {
-      const next = await reader.read()
-      if (next.done) { await reader.cancel(); throw new StudioError('The model download is incomplete.', 502) }
-      initial.push(next.value); initialSize += next.value.byteLength
-      if (initialSize > size) { await reader.cancel(); throw new StudioError('The model size is invalid.', 502) }
-    }
-    const first = new Uint8Array(12); let at = 0
-    for (const chunk of initial) { const part = chunk.subarray(0, Math.min(12 - at, chunk.length)); first.set(part, at); at += part.length; if (at === 12) break }
-    const header = new DataView(first.buffer)
-    if (header.getUint32(0, true) !== 0x46546c67 || header.getUint32(4, true) !== 2 || header.getUint32(8, true) !== size) { await reader.cancel(); throw new InvalidStudioModelError('The worker returned an invalid GLB container.', 502) }
+  const probeLength = Math.min(size, model ? 12 : ARTIFACT_PROBE_BYTES)
+  while (initialSize < probeLength) {
+    const next = await reader.read()
+    if (next.done) { await reader.cancel(); throw new StudioError('The artifact download is incomplete.', 502) }
+    initial.push(next.value); initialSize += next.value.byteLength
+    if (initialSize > size) { await reader.cancel(); throw new StudioError('The artifact size is invalid.', 502) }
+  }
+  const first = new Uint8Array(probeLength); let at = 0
+  for (const chunk of initial) {
+    const part = chunk.subarray(0, probeLength - at); first.set(part, at); at += part.length
+    if (at === probeLength) break
+  }
+  if (!hasStudioArtifactHeader(format as StudioArtifactFormat, first, size)) {
+    await reader.cancel()
+    if (model) throw new InvalidStudioModelError('The worker returned an invalid GLB container.', 502)
+    throw new StudioError('The worker returned a file that does not match the requested export format. Retry the artifact, not generation.', 502)
   }
   let received = 0
   const stream = new ReadableStream<Uint8Array>({
