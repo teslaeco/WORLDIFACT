@@ -62,7 +62,7 @@ export function parseStudioJob(value: unknown, id: string, expectedPoints?: numb
   const failureCode = state === 'failed' && STUDIO_FAILURE_CODES.includes(value.job.failureCode as NonNullable<StudioJob['failureCode']>) ? value.job.failureCode as StudioJob['failureCode'] : undefined
   const failureDetail = failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : undefined
   const generationTiming = ['succeeded', 'failed', 'cancelled'].includes(state) ? readStudioGenerationTiming(value.job.generationTiming) : undefined
-  return { id, state, ...(pricing ? { pricing: { ...pricing } } : {}), detail: waived ? manualPointClosureDetail(pointSettlement) : pointSettlementUnconfirmed || studioPointsPending({ state, pointSettlement }) ? studioPendingPointsDetail(pointSettlement?.heldPoints) : reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : failureDetail || JOB_DETAILS[state], ...(failureCode ? { failureCode } : {}),
+  return { id, state, ...(pricing ? { pricing: { ...pricing } } : {}), detail: waived ? manualPointClosureDetail(pointSettlement) : pointSettlementUnconfirmed || studioPointsPending({ state, pointSettlement }) ? studioPendingPointsDetail(pointSettlement?.heldPoints, failureCode) : reconciliationRequired ? STUDIO_RECONCILIATION_DETAIL : failureDetail || JOB_DETAILS[state], ...(failureCode ? { failureCode } : {}),
     ...(pointSettlementUnconfirmed ? { pointSettlementUnconfirmed: true } : {}),
     ...(pointSettlement ? { pointSettlement } : {}),
     ...(generationTiming ? { generationTiming } : {}),
@@ -100,7 +100,7 @@ async function responseJson(response: Response, expectedId?: string, expectedPai
     const settlement = object(value) && isPointSettlement(value.pointSettlement) ? { ...value.pointSettlement } : undefined
     if (isManualPointClosure(settlement) && (!expectedPaid || !object(value) || value.requestId !== expectedId || value.state !== 'failed' || value.refunded === true)) throw new Error('This job’s waiver could not be verified. Keep its receipt for review; no charge or refund is inferred.')
     const failureCode = object(value) && STUDIO_FAILURE_CODES.includes(value.failureCode as NonNullable<StudioJob['failureCode']>) ? value.failureCode as StudioJob['failureCode'] : undefined
-    throw new StudioResponseError(isManualPointClosure(settlement) ? manualPointClosureDetail(settlement) : studioPointsPending({ state: 'failed', pointSettlement: settlement }) ? studioPendingPointsDetail(settlement!.heldPoints) : failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : object(value) && typeof value.error === 'string' ? value.error.slice(0, 600) : `Request failed (${response.status}).`, response.status, failureCode, settlement)
+    throw new StudioResponseError(isManualPointClosure(settlement) ? manualPointClosureDetail(settlement) : studioPointsPending({ state: 'failed', pointSettlement: settlement }) ? studioPendingPointsDetail(settlement!.heldPoints, failureCode) : failureCode ? STUDIO_FAILURE_DETAILS[failureCode] : object(value) && typeof value.error === 'string' ? value.error.slice(0, 600) : `Request failed (${response.status}).`, response.status, failureCode, settlement)
   }
   return value
 }
@@ -163,11 +163,11 @@ export class StudioCoordinator {
     this.rejectedJob = this.saved?.rejection ? { id: this.saved.receipt.id, ...(this.saved.pricing ? { pricing: this.saved.pricing } : {}), state: 'failed', detail: this.saved.rejectionCode ? STUDIO_FAILURE_DETAILS[this.saved.rejectionCode] : this.saved.rejection, ...(this.saved.rejectionCode ? { failureCode: this.saved.rejectionCode } : {}) } : null
     if (this.rejectedJob && this.saved?.pointSettlement) {
       this.rejectedJob.pointSettlement = this.saved.pointSettlement
-      if (studioPointsPending(this.rejectedJob)) this.rejectedJob.detail = studioPendingPointsDetail(this.saved.pointSettlement.heldPoints)
+      if (studioPointsPending(this.rejectedJob)) this.rejectedJob.detail = studioPendingPointsDetail(this.saved.pointSettlement.heldPoints, this.rejectedJob.failureCode)
       if (isManualPointClosure(this.saved.pointSettlement)) this.rejectedJob.detail = manualPointClosureDetail(this.saved.pointSettlement)
     }
     if (this.rejectedJob && this.saved?.fundingSource === PAID_POINTS_FUNDING && !this.saved.pointSettlement) {
-      this.rejectedJob.pointSettlementUnconfirmed = true; this.rejectedJob.detail = studioPendingPointsDetail()
+      this.rejectedJob.pointSettlementUnconfirmed = true; this.rejectedJob.detail = studioPendingPointsDetail(undefined, this.rejectedJob.failureCode)
     }
     this.confirmedJob = this.rejectedJob
     return this.saved
@@ -301,7 +301,7 @@ export class StudioCoordinator {
           if (error.pointSettlement?.state === 'held') return { id: receipt.id, state: 'pending', pointSettlement: error.pointSettlement, detail: 'The points remain held while this request’s result is unconfirmed. Recover the same job; no charge, refund or replacement is inferred.' }
           if (error.pointSettlement?.state === 'charged') return { id: receipt.id, state: 'pending', detail: 'The response and point settlement disagree. Recover the same job; no charge or refund is inferred.' }
           this.rejectedJob = { id: receipt.id, ...(saved.pricing ? { pricing: saved.pricing } : {}), state: 'failed', detail: error.message, ...(error.failureCode ? { failureCode: error.failureCode } : {}), ...(error.pointSettlement ? { pointSettlement: error.pointSettlement } : {}) }
-          if (saved.fundingSource === PAID_POINTS_FUNDING && !error.pointSettlement) { this.rejectedJob.pointSettlementUnconfirmed = true; this.rejectedJob.detail = studioPendingPointsDetail() }
+          if (saved.fundingSource === PAID_POINTS_FUNDING && !error.pointSettlement) { this.rejectedJob.pointSettlementUnconfirmed = true; this.rejectedJob.detail = studioPendingPointsDetail(undefined, this.rejectedJob.failureCode) }
           this.confirmedJob = this.rejectedJob
           this.saved = { ...saved, rejection: error.message, ...(error.failureCode ? { rejectionCode: error.failureCode } : {}), ...(error.pointSettlement ? { pointSettlement: error.pointSettlement } : {}) }
           this.rememberCostReview(this.saved, this.rejectedJob, reviewKey)

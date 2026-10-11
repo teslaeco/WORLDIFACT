@@ -1,0 +1,11 @@
+{
+  "release": "studio-readback-20261011",
+  "baseCommit": "a551636aab833ac69acbb23f7b5e7d5da48268c9",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 5,
+  "referenceLimit": 4,
+  "originalReferenceTotalBytes": 41943040,
+  "providerCalls": 0
+}

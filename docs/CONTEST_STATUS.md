@@ -1,3 +1,42 @@
+# 11 October 2026 — model failure diagnosis and readback contract correction
+
+Authenticated GET-only Oracle investigation of the reported text-only failure
+confirmed MODEL_BUDGET_EXCEEDED / WORLDIFACT_ASTRA_COST_GUARD, ten model requests,
+known usage, two successful build revisions and no completed final model.
+The failed tool calls were an unsupported inspect_render view enum and a
+get_current_model page limit outside its allowed range. The final request needed
+575,942 micro-USD of conservative admission while 566,299 remained. These are
+reservation bounds, not an invoice or permission to increase the ceiling.
+The second reported request exists in the account ledger but its Oracle status
+returned HTTP 404. Its root cause and final cost remain unconfirmed; no balance
+or historical receipt was changed. Evidence: read-only diagnostic branch
+fix/generation-diagnosis-20261011, runs 38149725966 through 38150223033.
+
+New detailed-job instructions explicitly list the existing valid view/section
+enums, the 1..16000 page bound, revision/hash binding and Unicode next_offset
+semantics. The tested summary example retains complete scene/edit data in
+Code Mode storage while presenting current reports, errors and completion
+requirements without duplicating geometry into every model turn. This is agent
+guidance, not a new enforced runtime, guaranteed cost saving or successful live
+model. Canonical prompts/photos, pricing, executor selection, acceptance gates
+and safety controls remain unchanged. Old wire hashes are retained in tests
+after removing only the new appendix; they are not reused as live proof.
+
+Budget and missing-job reasons now survive the pending-cost message instead of
+being hidden behind generic settlement text. Shop and credits links perform a
+full navigation to the standalone held-request review, fixing the reproduced
+client-router redirect to home. No points, Stripe, secrets or Oracle files change.
+Regression tests execute the summary snippet, preserve its errors/data, check
+both text/reference transports and held-point semantics, and preserve historical
+request commitments. Full CI and deployment evidence belongs in the review PR.
+
+GO for exact-parent preserving source release after green CI. NO-GO for claiming
+both generation paths restored until separately approved bounded real tests
+produce new GLBs, verified previews/downloads and owned library entries. The
+photo-job 404 remains unresolved. No paid engineering request has been sent.
+Rollback: source-only preserving release; retain models, original receipts,
+remote configuration and all financial records. Do not rerun consumed tests.
+
 # 11 October 2026 — keep library expansion visually consistent
 
 PR #258 passed 2,178 hosted tests and deployed successfully. Production inspection

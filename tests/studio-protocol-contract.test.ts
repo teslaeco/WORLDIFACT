@@ -1,3 +1,4 @@
+import { STUDIO_READBACK_GUIDE } from '../src/lib/studioReadbackGuide.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
@@ -92,7 +93,7 @@ test('cabinet wording preserves selected price terms, legacy175 and the maximum 
   }
 })
 
-test('canonical input digests remain byte-compatible while wire fixtures bind the restored supervised route', async () => {
+test('canonical inputs and historical wire fields remain unchanged except the readback appendix', async () => {
   const photos = [{ name: 'ceramic-reference.jpg', view: 'left' as const, dataUrl: jpeg, subject: 'Synthetic protocol reference', textureMaxSize: 4096 as const }]
   // Canonical input digests captured from e36797e7 stay unchanged. Oracle wire
   // hashes include the corrected GAME/MAKE scope and, for ordinary unpriced
@@ -109,7 +110,7 @@ test('canonical input digests remain byte-compatible while wire fixtures bind th
   for (const [prompt, purpose, references, digest, payloadDigest] of cases) {
     const input = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt: ` ${prompt} `, purpose, textureMaxSize: 4096, photos: references })
     assert.equal(await inputDigest(input), digest, prompt)
-    assert.equal(createHash('sha256').update(JSON.stringify(oracleStudioPayload(id, input))).digest('hex'), payloadDigest, prompt)
+    assert.equal(createHash('sha256').update(JSON.stringify(beforeReadbackGuide(oracleStudioPayload(id, input)))).digest('hex'), payloadDigest, prompt)
   }
   const fast = validateStudioInput({ worldId: 'enchanted-ai-shop', prompt: 'An industrial control cabinet with two doors.', purpose: 'figurine', photos: [], textureMaxSize: 2048, generationProfile: FAST_DRAFT_PROFILE })
   assert.equal(await inputDigest(fast), 'd7d424db5ca5ddc2f64fb3ee9c05cd65126de33e745413bd8b6dd569df0efffd')
@@ -211,3 +212,11 @@ test('unfinished generator drafts have an allowlisted terminal code with no succ
   assert.match(STUDIO_FAILURE_DETAILS.ORACLE_JOB_INCOMPLETE, /unfinished draft before completing model review and export/)
   assert.match(STUDIO_FAILURE_DETAILS.ORACLE_JOB_INCOMPLETE, /Reserved customer points were released; no automatic retry/)
 })
+
+// Preserve historical wire evidence exactly after removing only the new,
+// separately tested readback appendix. New live success is NOT inferred here.
+function beforeReadbackGuide<T extends { id: string; agentInstructions?: string }>(payload: T): T {
+  if (!payload.agentInstructions) return payload
+  assert.ok(payload.agentInstructions.endsWith('\n\n' + STUDIO_READBACK_GUIDE))
+  return { ...payload, agentInstructions: payload.agentInstructions.slice(0, -('\n\n' + STUDIO_READBACK_GUIDE).length) }
+}
