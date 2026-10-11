@@ -1,0 +1,11 @@
+{
+  "release": "library-theme-20261011",
+  "baseCommit": "981bc14b9b2d62665c1baf80a1d610322f68fe7f",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "imagePoints": 5,
+  "referenceLimit": 4,
+  "originalReferenceTotalBytes": 41943040,
+  "providerCalls": 0
+}

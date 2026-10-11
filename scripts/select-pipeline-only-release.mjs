@@ -937,7 +937,22 @@ export const SHOP_LIBRARY_PATHS = Object.freeze([
   "tests/studio-thumbnail.test.ts"
 ])
 
+export const LIBRARY_THEME_BASE = "981bc14b9b2d62665c1baf80a1d610322f68fe7f"
+export const LIBRARY_THEME_MARKER = "ops/LIBRARY_THEME_RELEASE_20261011.json"
+export const LIBRARY_THEME_CONTENT = "{\n  \"release\": \"library-theme-20261011\",\n  \"baseCommit\": \"981bc14b9b2d62665c1baf80a1d610322f68fe7f\",\n  \"preserveBilling\": true,\n  \"preserveRemoteVars\": true,\n  \"preserveSecrets\": true,\n  \"imagePoints\": 5,\n  \"referenceLimit\": 4,\n  \"originalReferenceTotalBytes\": 41943040,\n  \"providerCalls\": 0\n}\n"
+export const LIBRARY_THEME_PATHS = Object.freeze([
+  ".github/workflows/cloudflare.yml",
+  "docs/CONTEST_STATUS.md",
+  "ops/LIBRARY_THEME_RELEASE_20261011.json",
+  "scripts/select-failed-hold-release.mjs",
+  "scripts/select-pipeline-only-release.mjs",
+  "src/components/StudioGallery.css",
+  "src/components/StudioGallery.tsx",
+  "tests/library-theme-release.test.mjs"
+])
+
 const scopes = [
+  { base: LIBRARY_THEME_BASE, marker: LIBRARY_THEME_MARKER, content: LIBRARY_THEME_CONTENT, paths: LIBRARY_THEME_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: SHOP_LIBRARY_BASE, marker: SHOP_LIBRARY_MARKER, content: SHOP_LIBRARY_CONTENT, paths: SHOP_LIBRARY_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: SHOP_CONTRAST_BASE, marker: SHOP_CONTRAST_MARKER, content: SHOP_CONTRAST_CONTENT, paths: SHOP_CONTRAST_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: SHOP_ATTACHMENTS_BASE, marker: SHOP_ATTACHMENTS_MARKER, content: SHOP_ATTACHMENTS_CONTENT, paths: SHOP_ATTACHMENTS_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
@@ -1022,7 +1037,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === SHOP_LIBRARY_MARKER || scope.marker === SHOP_CONTRAST_MARKER || scope.marker === SHOP_ATTACHMENTS_MARKER || scope.marker === CLEAN_STUDIO_MARKER || scope.marker === IMAGE_RUNTIME_MARKER || scope.marker === IMAGE_PRICE_MARKER || scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === LIBRARY_THEME_MARKER || scope.marker === SHOP_LIBRARY_MARKER || scope.marker === SHOP_CONTRAST_MARKER || scope.marker === SHOP_ATTACHMENTS_MARKER || scope.marker === CLEAN_STUDIO_MARKER || scope.marker === IMAGE_RUNTIME_MARKER || scope.marker === IMAGE_PRICE_MARKER || scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

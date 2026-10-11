@@ -256,7 +256,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
     }
   }
 
-  return <section className={`studio-gallery ${compact && !expanded ? 'studio-gallery-compact' : ''}`} aria-labelledby="studio-gallery-title">
+  return <section className={`studio-gallery ${compact ? 'studio-gallery-compact' : ''}`} aria-labelledby="studio-gallery-title">
     <div className="studio-gallery-heading">
       <div>
         {!compact && <span className="studio-gallery-eyebrow">MY 3D MODELS</span>}
