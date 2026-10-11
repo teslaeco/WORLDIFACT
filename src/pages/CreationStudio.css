@@ -122,3 +122,6 @@
 .creation-studio .studio-references>small{font-size:10px;margin-top:0}
 .creation-studio .studio-result-details>summary{min-height:36px;padding:8px 4px}
 @media(max-width:600px){.creation-studio[data-theme=ancient]{background-size:25px auto,25px auto,auto,auto;background-position:left 1px top 120px,right 1px top 120px,center,center}.studio-attachment-toolbar{gap:8px}.creation-studio .studio-model-select select{font-size:12px}.studio-future-themes{font-size:9px}.creation-studio .studio-attach-plus{flex-basis:44px}}
+
+/* Preview status must remain readable on both dark and sandstone surfaces. */
+.creation-studio .oracle-model-preview .result-note{color:var(--studio-muted)}
