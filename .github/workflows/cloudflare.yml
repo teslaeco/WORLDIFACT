@@ -435,7 +435,7 @@ jobs:
           printf '%s  scripts/select-context-tools-release.mjs\n' '7c97d618461501290b1f1a95d345cf4911abbf54c16ab121ab48fefac343ea5a' | sha256sum -c - >&2
           printf '%s  scripts/select-construction-tools-release.mjs\n' '0837a2346e339f4e2510e5e000fb58baeeb074df50d36afb832d6fab68ad05bf' | sha256sum -c - >&2
           printf '%s  config/oracle-construction-tools-release.json\n' '6f0480500ed3ac2f5fb7f4099a8abb9c7e480524289c18feb52900426ae70c0e' | sha256sum -c - >&2
-          printf '%s  scripts/select-failed-hold-release.mjs\n' '5bc405e44673b742c0b33397ab938a8bf7d42b52170b8ff2dfad3ebc640f1abe' | sha256sum -c - >&2
+          printf '%s  scripts/select-failed-hold-release.mjs\n' '752b171bc1356d8ef5e64f9ace4b8341e18e98b16354124e21ce8d3fb08cb2fd' | sha256sum -c - >&2
           printf '%s  config/failed-hold-release.json\n' 'acd8e35de14db79a5e9d3b4b1fa92d5f637543df3e9301958d0b2e70b087e17e' | sha256sum -c - >&2
           node scripts/select-failed-hold-release.mjs >> "$GITHUB_OUTPUT"
 

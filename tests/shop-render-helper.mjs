@@ -1,4 +1,5 @@
 import * as attachments from '../src/lib/referenceAttachments.ts'
+import * as fileReferences from '../src/lib/studioFileReferences.ts'
 import * as studioPricing from '../src/lib/studioPricing.ts'
 import * as studioTierSelection from '../src/lib/studioTierSelection.ts'
 import * as detailedStudio from '../src/lib/detailedStudio.ts'
@@ -122,13 +123,14 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
   const shopOptions = await loadShopManufacturingOptions(react), costNotice = await loadCostNotice(quoteHook), progressOrb = await loadProgressOrb(), creationProgress = await loadCreationProgress()
   const code = ts.transpileModule(source, { fileName: url.pathname, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
   runInNewContext(code, {
-    crypto: globalThis.crypto, ...globals, module, exports: module.exports,
+    crypto: globalThis.crypto, Error, ...globals, module, exports: module.exports,
     require(id) {
-      const modules = { '../lib/referenceAttachments': attachments, '../lib/overnightTestClient': overnightClient, '../lib/shopTestFunding': shopTestFunding, '../lib/studioPricing': studioPricing, '../lib/studioTierSelection': studioTierSelection, '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
+      const modules = { '../lib/studioFileReferences': fileReferences, '../lib/referenceAttachments': attachments, '../lib/overnightTestClient': overnightClient, '../lib/shopTestFunding': shopTestFunding, '../lib/studioPricing': studioPricing, '../lib/studioTierSelection': studioTierSelection, '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/generationAdmission': generationAdmission, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
         '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }
       if (id === '../lib/account') return account
+      if (id === '../lib/modelReferencePhotos' && adapters[id]) return adapters[id]
       if (id === '../lib/useGenerationQuote') return quoteHook
       if (id in modules) return adapters[id] || modules[id]
       if (id === '../components/ShopManufacturingOptions') return shopOptions

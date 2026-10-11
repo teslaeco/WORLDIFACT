@@ -60,7 +60,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, submittedAt, artifactFailure = false, artifactMalformed = false, archiveSaveFailure = false, withArchivedModel = true, solReady = ready, lunaReady = solReady, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, healthLookup, testPool, initialStore, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, submittedAt, artifactFailure = false, artifactMalformed = false, archiveSaveFailure = false, withArchivedModel = true, solReady = ready, lunaReady = solReady, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, healthLookup, testPool, initialStore, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery, referenceRenderer } = {}) {
   const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   if (receiptCreatedAt) selected.receipt.createdAt = receiptCreatedAt
   if (submittedAt) selected.startedAt = submittedAt
@@ -152,6 +152,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
       listStudioModels: async () => [...archive.values()], readStudioModel: async () => blob,
       saveStudioModel: async saved => { if (archiveSaveFailure) throw new Error('Local recovery storage unavailable'); if (!archive.has(saved.receipt.id)) archive.set(saved.receipt.id, { id: saved.receipt.id, prompt: saved.prompt, savedAt: saved.startedAt, byteLength: blob.size, sha256: 'new-fixture', review: 'UNREVIEWED' }); return archive.get(saved.receipt.id) },
     },
+    '../lib/modelReferencePhotos': { modelReferencePhotos: referenceRenderer ?? (() => { throw new Error('Unexpected model render') }) },
     '../lib/studioPhotos': { prepareStudioPhoto: async (file, size, view) => ({ name: file.name, view, dataUrl: 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64'), textureMaxSize: size }) },
   } })
   const settle = async () => {
@@ -1914,5 +1915,72 @@ test('theme changes persist without submitting, and excess references preserve t
     h.button('Remove reference 4').props.onClick(); await h.settle()
     assert.equal(h.byId('studio-photos').props.disabled, false)
     assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+
+test('file brief is complete, visible and reaches the existing Studio request only after submit', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, state: 'building' })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Build my reference' } }); await h.settle()
+    const file = new File(['Precise wooden frame, 12 slats.'], 'brief.txt')
+    h.byId('studio-reference-file').props.onChange({ target: { files: [file], value: 'brief' } }); await h.settle()
+    const prompt = h.byId('studio-prompt').props.value
+    assert.equal(prompt, 'Build my reference\n\nReference brief (brief.txt):\nPrecise wooden frame, 12 slats.')
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const posts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
+    assert.equal(posts.length, 1); assert.equal(JSON.parse(posts[0].body).prompt, prompt)
+  } finally { h.close() }
+})
+
+test('model file delivers all three prepared views through the existing photo contract', async () => {
+  const photo = 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64')
+  const received = []
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, state: 'building', referenceRenderer: async (bytes, name, kind) => {
+    received.push({ bytes: new TextDecoder().decode(bytes), name, kind })
+    return ['front','left','back'].map(view => ({ name: name + view, view, dataUrl: photo, textureMaxSize: 4096 }))
+  } })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Use this model as a reference' } }); await h.settle()
+    h.byId('studio-reference-file').props.onChange({ target: { files: [new File(['local geometry'], 'shape.obj')], value: 'shape' } }); await h.settle()
+    assert.deepEqual(received, [{ bytes: 'local geometry', name: 'shape.obj', kind: 'obj' }])
+    assert.equal(h.all().filter(n => n.type === 'img' && /Your reference/.test(n.props.alt || '')).length, 3)
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    const posts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
+    assert.equal(posts.length, 1)
+    assert.deepEqual(JSON.parse(posts[0].body).photos.map(p => p.view), ['front','left','back'])
+    assert.equal(h.calls.filter(c => c.path === '/api/blueprint').length, 0)
+  } finally { h.close() }
+})
+
+test('pending file blocks submit and cannot insert private text after an account switch', async () => {
+  let finish
+  const waiting = new Promise(resolve => { finish = resolve })
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
+  try {
+    h.byId('studio-prompt').props.onChange({ target: { value: 'Keep this prompt' } }); await h.settle()
+    h.byId('studio-reference-file').props.onChange({ target: { files: [{ name: 'private.txt', size: 12, arrayBuffer: () => waiting }], value: 'private' } }); await h.settle()
+    assert.equal(h.byId('studio-prompt').props.disabled, true)
+    assert.equal(h.byId('studio-reference-file').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+    await h.account({ user: { id: 'owner-b' }, loading: false })
+    finish(new TextEncoder().encode('Private brief').buffer); await h.settle()
+    assert.doesNotMatch(h.byId('studio-prompt').props.value, /Private brief/)
+    assert.equal(h.byId('studio-reference-file').props.disabled, false)
+  } finally { h.close() }
+})
+
+test('oversized combined references reject model bytes before reading', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
+  try {
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'photo.jpg', type: 'image/jpeg', size: 30 * 1024 * 1024 }], value: 'photo' } }); await h.settle()
+    let reads = 0
+    h.byId('studio-reference-file').props.onChange({ target: { files: [{ name: 'model.glb', size: 20 * 1024 * 1024, arrayBuffer: () => { reads++; throw Error('Must not read') } }], value: 'model' } }); await h.settle()
+    assert.equal(reads, 0)
+    assert.ok(h.all().some(n => /Attachments must total 40 MB/.test(text(n))))
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
   } finally { h.close() }
 })

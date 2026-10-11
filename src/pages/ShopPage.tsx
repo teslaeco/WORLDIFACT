@@ -1,4 +1,5 @@
 import { validateReferenceSelection } from '../lib/referenceAttachments'
+import { STUDIO_REFERENCE_FILE_ACCEPT, appendReferenceText, referenceFileKind } from '../lib/studioFileReferences'
 import CreationProgress from '../components/CreationProgress'
 import { generationProgressView } from '../lib/generationProgressView'
 import { ImageGenerator } from '../components/ImageGenerator'
@@ -617,6 +618,43 @@ export default function ShopPage() {
     resetComposer(); setDeliverable(fast ? 'procedural-blueprint' : 'detailed-mesh'); setError('')
     promptInput.current?.focus()
   }
+  const addReferenceFile = async (file?: File) => {
+    const flags = operations.current
+    if (!file || flags.photos || flags.submit || imageBusy || creationModeRef.current !== 'model' || fast) return
+    let kind: ReturnType<typeof referenceFileKind>
+    try {
+      kind = referenceFileKind(file)
+      if (kind !== 'text' && photos.length > photoLimit - 3) throw new Error('A model file needs three reference slots. Keep at most one image before adding it.')
+      if (kind !== 'text') validateReferenceSelection(photos.map(photo => ({ size: referenceSizes.current.get(photo.dataUrl) ?? 0 })),
+        [0, 1, 2].map(index => ({ type: 'image/jpeg', size: Math.floor(file.size / 3) + (index < file.size % 3 ? 1 : 0) })))
+    } catch (error) { setError(error instanceof Error ? error.message : 'Invalid reference file.'); return }
+    const ownerEpoch = testIdentity.current.epoch, description = prompt
+    flags.photos = true; setPhotoBusy(true); setError('')
+    setNotice(kind === 'text' ? 'Reading your reference brief…' : 'Preparing front, left and back views of your model locally…')
+    const active = () => mounted.current && ownerEpoch === testIdentity.current.epoch
+    try {
+      const bytes = await file.arrayBuffer()
+      if (!active()) return
+      if (kind === 'text') {
+        const next = appendReferenceText(description, file.name, bytes)
+        if (!active()) return
+        setPrompt(next)
+        setNotice('The complete file text is in your description. Review it before generating; no generation has started.')
+      } else {
+        const { modelReferencePhotos } = await import('../lib/modelReferencePhotos')
+        if (!active()) return
+        const additions = await modelReferencePhotos(bytes, file.name, kind)
+        if (!active()) return
+        const all = [...photos, ...additions]
+        blueprintReferences({ references: all.map(photo => ({ dataUrl: photo.dataUrl, view: photo.view })) })
+        additions.forEach((photo, index) => referenceSizes.current.set(photo.dataUrl, Math.floor(file.size / 3) + (index < file.size % 3 ? 1 : 0)))
+        setPhotos(all); setDeliverable('detailed-mesh'); setTextureLimit(4096)
+        setNotice(`Three views of ${file.name} are attached as visual references. Review them before generating. The original model stays unchanged; ${kind === 'glb' ? 'embedded appearance is rendered where supported' : 'OBJ/STL references show geometry without external textures'}.`)
+      }
+      setComposerCleared(false)
+    } catch (error) { if (active()) { setNotice(''); setError(error instanceof Error ? error.message : 'This reference file could not be prepared. Nothing was attached.') } }
+    finally { flags.photos = false; if (mounted.current) setPhotoBusy(false) }
+  }
   const prepareIssDraft = (nextPrompt: string) => {
     if (operations.current.submit || operations.current.photos) return
     setPrompt(nextPrompt)
@@ -723,9 +761,10 @@ export default function ShopPage() {
         <form onSubmit={generate} aria-describedby="studio-draft-help">
           <div className="shop-prompt-shell">
             <div className="shop-prompt-top"><label htmlFor="studio-prompt">What will you create?</label><span aria-hidden="true">✦</span></div>
-            <textarea ref={promptInput} id="studio-prompt" value={prompt} aria-describedby="studio-prompt-count" aria-invalid={prompt.length > BLUEPRINT_PROMPT_LIMIT} rows={3} disabled={busy || imageBusy} onChange={e => { setPrompt(e.target.value); setComposerCleared(false) }} placeholder="A floating island. A place to call home. Something only you can imagine…" required />
+            <textarea ref={promptInput} id="studio-prompt" value={prompt} aria-describedby="studio-prompt-count" aria-invalid={prompt.length > BLUEPRINT_PROMPT_LIMIT} rows={3} disabled={busy || photoBusy || imageBusy} onChange={e => { setPrompt(e.target.value); setComposerCleared(false) }} placeholder="A floating island. A place to call home. Something only you can imagine…" required />
             <div className="studio-attachment-toolbar">
               <button type="button" className="studio-attach-plus" disabled={busy || photoBusy || imageBusy || (creationMode === 'model' && fast) || photos.length >= photoLimit} onClick={() => document.getElementById('studio-photos')?.click()} aria-label="Add reference images" title="Add up to 4 images · 40 MB total"><span aria-hidden="true">＋</span></button>
+              <button type="button" className="shop-text-button" hidden={creationMode !== 'model'} disabled={busy || photoBusy || imageBusy || fast} onClick={() => document.getElementById('studio-reference-file')?.click()} title="GLB / OBJ / STL model views or a TXT / MD / CSV / JSON brief">Add reference file</button>
             <div className="studio-prompt-model" hidden={creationMode !== 'model'}>          <div className="studio-model-select" role="group" aria-labelledby="studio-mode-label">
             <label id="studio-mode-label" htmlFor="studio-mode">3D model</label>
             <select id="studio-mode" value={fast && cheapModel === 'luna' ? 'luna' : profile} disabled={busy || photoBusy} onChange={e => {
@@ -745,6 +784,8 @@ export default function ShopPage() {
             <div className="shop-prompt-bottom"><button type="button" className="shop-text-button" data-testid="clear-studio-draft" disabled={busy || photoBusy || imageBusy || (!prompt.length && !photos.length)} onClick={clearDraft}>Clear description</button><span id="studio-prompt-count" role="status">{prompt.length.toLocaleString()} / {BLUEPRINT_PROMPT_LIMIT.toLocaleString()}{prompt.length > BLUEPRINT_PROMPT_LIMIT && ' · Shorten before generating'}</span></div>
           </div>
           <div className="studio-references">
+            <input id="studio-reference-file" type="file" className="native-shop-file" accept={STUDIO_REFERENCE_FILE_ACCEPT} aria-label="Add a model or text file as a generation reference" disabled={busy || photoBusy || imageBusy || fast || creationMode !== 'model'} onChange={e => { void addReferenceFile(e.target.files?.[0]); e.target.value = '' }} />
+            {creationMode === 'model' && <details className="studio-file-help"><summary>Reference file formats</summary><small>GLB / OBJ / STL · up to 20 MB and 300,000 triangles · creates three image references. TXT / MD / CSV / JSON · adds the complete brief to your description within its 4,000-character limit. Choose Astra. Other formats, including PDF, FBX, BLEND and ZIP, need conversion first. Files in the project archive under Settings are stored separately and are not generation inputs.</small></details>}
             <input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" aria-label="Add reference images · up to 4, 40 MB total" disabled={busy || photoBusy || imageBusy || (creationMode === 'model' && fast) || photos.length >= photoLimit} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} />
             <small>{photoBusy ? 'Preparing attachments…' : `Up to 4 images · 40 MB total · ${photos.length}/4 attached`}{creationMode === 'model' && fast ? ' · Choose Astra for references' : ''}</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy || imageBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy || imageBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
