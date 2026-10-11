@@ -358,7 +358,7 @@ test('a lost submission response keeps acceptance unknown and recovers the same 
     h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     assert.match(text(h.all()), /Last known status: awaiting acceptance confirmation/)
-    assert.ok(h.all().some(node => node.props.active && node.props.label === 'Confirming your request' && node.props.percent === null))
+    assert.ok(h.all().some(node => node.props.active && node.props.label === 'Confirming your request' && node.props.percent === 0))
     assert.doesNotMatch(text(h.all()) + h.quoteMarkup(), /No Oracle generation was submitted|no points were reserved|current model is being completed/i)
     const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
     h.button('Recover this job').props.onClick(); await h.settle(); await h.poll()
@@ -428,7 +428,7 @@ test('missing local receipt recovers the current cloud job before the sample pre
   try {
     await h.settle()
     assert.ok(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), 'fresh cloud receipt is restored into local recovery storage')
-    assert.ok(h.all().some(node => node.props.active && node.props.label === 'Confirming your request' && node.props.percent === null))
+    assert.ok(h.all().some(node => node.props.active && node.props.label === 'Confirming your request' && node.props.percent === 0))
     assert.equal(h.all().some(node => node.type === 'img' && node.props.alt === 'Example 3D product preview'), false)
     assert.equal(h.calls.filter(call => call.path === '/api/studio/jobs' && call.method === 'POST').length, 0)
     assert.ok(h.calls.some(call => call.path === '/api/studio/current' && call.method === 'GET'))
@@ -606,7 +606,7 @@ test('repeated cloud lookup failures retain the recovery gate and retry GET unti
     assert.equal(JSON.parse(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)).receipt.id, oldId)
     assert.equal(h.calls.filter(call => call.method === 'POST' && call.path !== '/api/billing/recovery').length, 0)
     assert.ok(h.delays.slice(0, 5).every(delay => delay >= 5000 && delay <= 120000))
-    assert.ok(h.all().some(node => node.props.active && node.props.label === 'Confirming your request' && node.props.percent === null))
+    assert.ok(h.all().some(node => node.props.active && node.props.label === 'Confirming your request' && node.props.percent === 0))
   } finally { h.close() }
 })
 
@@ -1870,6 +1870,12 @@ test('active or unverified requests do not clear the draft or allow replacement'
       await h.poll()
       assert.equal(h.byId('studio-prompt').props.value, 'Original brown chess knight')
       assert.equal(h.button('Generate Astra/Blender model').props.disabled, true)
+      const progress = h.all().find(node => node.type?.name === 'CreationProgress' && node.props.active)
+      assert.ok(progress, 'Progress must remain visible above the composer')
+      assert.equal(progress.props.percent, state === 'pending' ? 0 : 50)
+      assert.ok(progress.props.stage)
+      assert.match(progress.props.elapsed, /\d+:\d{2}/)
+      assert.equal(h.all().some(node => node.type === 'details' && node.props.className?.includes('shop-previous-failure')), false)
       assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
     } finally { h.close() }
   }

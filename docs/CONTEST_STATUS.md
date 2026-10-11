@@ -1,3 +1,44 @@
+# 11 October 2026 — request admission lifetime and visible progress
+
+PRs #262 and #263 are merged and deployed; latest main before this change is
+`d69748f9336fb650aa83b4b90d674dac4ff1ca23`. Hosted CI passed 2213/2213 tests;
+deployment 38169903237 published version c8058986-986e-4ff3-a318-40afc706b6bf.
+These releases did not establish end-to-end generator success.
+
+A subsequent report still shows ORACLE_JOB_MISSING, with additional held
+points. These are distinct request reservations, not one job's charge. Their
+identities were read from the authenticated production account without changes;
+private account details are not published here. Oracle transport logs and
+comparison to the reported successful transformer remain unverified.
+Desktop Commander lists a stale Online device; the actual read-only command
+request timed out. This does not prove the Oracle VM is offline.
+
+The prior retention promise started after account/global reservation and dispatch
+claim. This change registers it before the first customer financial write, after
+all existing authentication, input and payload preflight. The same single
+reservation/claim/submission sequence remains awaited. A deferred real-ledger
+fixture reproduces the old unprotected hold boundary and verifies retention now
+exists before the reserve acknowledgement returns. Recovery never sends another
+Oracle POST. Workers' 30-second disconnection limit remains; this is not durable
+queueing or proof of the specific incident's root cause.
+
+Pending model requests show 0% confirmed milestones, explicitly awaiting
+acceptance. Queue/start/worker-finished milestones remain 25/50/75%; elapsed
+tracking time and the current stage are now visible above the composer. No timer
+advances progress. Failed requests and unknown provider image progress do not
+claim completion. Existing saved models and financial records remain unchanged.
+
+Local validation: lint and TypeScript passed; 2216/2218 application tests passed.
+The two native Chromium tests cannot run because this local image lacks Chrome.
+Real HTTP smoke, production build, Worker dry-run and diff checks passed.
+Hosted CI remains required before merge. No browser fixture proves paid success.
+
+Oracle's required-tool proposal remains NOT INSTALLED. Prior isolated native
+Codex/MCP/Blender tests used inert AI; they do not prove a live model. Sol/Luna
+remain limited drafts. Full text/photo generation, six model/mode combinations,
+actual mobile/desktop acceptance, measured live timing and per-job point
+reconciliation remain outstanding. No new paid call or automatic retry occurred.
+
 # 11 October 2026 — bounded reference admission correction
 
 At 19:31 UTC the restored command connection confirmed both original Oracle
@@ -15,8 +56,8 @@ builds, ending WORLDIFACT_MODEL_INCOMPLETE after 25.52 seconds. The screenshot
 photo job has no Oracle row; root cause and cost remain unconfirmed. A local
 proposal requires tool use for unfinished supervised jobs and retains the single
 admitted Worker submission during a bounded client disconnect window. Eight
-exact-handler fixture tests and twelve Studio tests pass. Neither proposal is
-installed or deployed; see tools/model_execution/README.md for remaining gates.
+exact-handler fixture tests and twelve Studio tests pass. The Worker proposal was deployed in PR #263; the Oracle proposal remains
+uninstalled; see tools/model_execution/README.md for remaining gates.
 No new paid generation, ledger correction or limit change occurred.
 
 A reproducible photo/MAKE cabinet request exceeded Oracle's 12,000 UTF-16

@@ -663,7 +663,7 @@ export default function ShopPage() {
   const runtimeReady = detailed ? !detailedProblem : fast ? fastAvailable : astraReady
   const activeReady = runtimeReady && accountReady && !cloudRecoveryPending && !currentRequestMessage
   const previousFailure = !!savedJob && ['failed', 'cancelled'].includes(savedJob.state) && !preview && !fastResult && !demoPrompt && !busy
-  const progress = generationProgressView({ job: savedJob })
+  const progress = generationProgressView({ job: savedJob, trackedSeconds: seconds })
   const PreviewContainer = previousFailure ? 'details' : 'div'
 
   return <main className="portal-page native-shop creation-studio" data-theme={theme === 100 ? 'ancient' : 'modern'} style={{ '--antique': `${theme === 100 ? 100 : 0}%`, '--antique-opacity': theme / 100 } as CSSProperties}>
@@ -679,7 +679,7 @@ export default function ShopPage() {
         {previousFailure && <summary>Previous failed request · saved for review, not a new generation</summary>}
         <div className="shop-stage-heading"><span className="shop-stage-status"><span aria-hidden="true" />{preview || fastResult ? 'Your creation' : saved || recovery ? 'Saved request' : 'Creation preview'}</span><span className="shop-stage-kind">{preview?.origin === 'job' && <span className="studio-complete-badge">100% · </span>}{demoPrompt ? 'DEMO · MODEL 3D' : preview || fastResult || saved || recovery ? 'MODEL 3D' : creationMode === 'image' ? 'IMAGE' : 'MODEL 3D'}</span></div>
         {(busy || recovery?.failureCode) && (preview || fastResult || demoPrompt) && <p role="status"><strong>Previous preview preserved.</strong> {recovery?.failureCode ? <>The rejected request did not create this model. {blueprintAdmissionDetail(recovery.failureCode)}</> : 'The current request does not have a new preview yet.'}</p>}
-        {busy || (savedJob && progress.kind === 'active') || (recovery?.state === 'pending') ? <CreationProgress active label={savedJob && progress.kind === 'active' ? progress.title : 'Submitting your request'} percent={savedJob && progress.kind === 'active' ? progress.percent : null} /> : cloudRecoveryPending && !saved ? <CreationProgress active label="Checking your account" /> : fastResult ? <>
+        {busy || (savedJob && progress.kind === 'active') || (recovery?.state === 'pending') ? <CreationProgress active label={savedJob && progress.kind === 'active' ? progress.title : 'Submitting your request'} percent={savedJob && progress.kind === 'active' ? progress.percent : null} stage={savedJob && progress.kind === 'active' ? progress.stage : undefined} elapsed={savedJob && progress.kind === 'active' ? progress.elapsed : undefined} /> : cloudRecoveryPending && !saved ? <CreationProgress active label="Checking your account" /> : fastResult ? <>
           <LiveSolPreview result={fastResult} prompt={fastPrompt} />
           <small hidden data-testid="fast-result-description">{fastResult.assetSpec?.summary ?? fastResult.blueprint.title}</small>
           {dimensionsEnabled && <p className="shop-preview-dimensions">FAST draft target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}

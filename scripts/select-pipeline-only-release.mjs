@@ -1037,7 +1037,30 @@ export const STUDIO_EXECUTION_PATHS = Object.freeze([
   "tools/model_execution/test_require_tools.py"
 ])
 
+export const STUDIO_ADMISSION_BASE = "d69748f9336fb650aa83b4b90d674dac4ff1ca23"
+export const STUDIO_ADMISSION_MARKER = "ops/STUDIO_ADMISSION_RELEASE_20261011.json"
+export const STUDIO_ADMISSION_CONTENT = "{\n  \"release\": \"studio-admission-20261011\",\n  \"baseCommit\": \"d69748f9336fb650aa83b4b90d674dac4ff1ca23\",\n  \"preserveBilling\": true,\n  \"preserveRemoteVars\": true,\n  \"preserveSecrets\": true,\n  \"providerCalls\": 0,\n  \"oracleInstallation\": false,\n  \"imagePoints\": 5,\n  \"referenceLimit\": 4\n}\n"
+export const STUDIO_ADMISSION_PATHS = Object.freeze([
+  ".github/workflows/cloudflare.yml",
+  "docs/CONTEST_STATUS.md",
+  "ops/STUDIO_ADMISSION_RELEASE_20261011.json",
+  "scripts/select-failed-hold-release.mjs",
+  "scripts/select-pipeline-only-release.mjs",
+  "server/studio.ts",
+  "src/components/CreationProgress.tsx",
+  "src/lib/generationProgressView.ts",
+  "src/pages/ShopPage.tsx",
+  "tests/creation-studio.test.mjs",
+  "tests/generation-progress-orb.test.mjs",
+  "tests/generation-progress-view.test.ts",
+  "tests/shop-draft-lifecycle.test.mjs",
+  "tests/studio-admission-release.test.mjs",
+  "tests/studio-api.test.ts",
+  "tests/studio-priced-submission.test.ts"
+])
+
 const scopes = [
+  { base: STUDIO_ADMISSION_BASE, marker: STUDIO_ADMISSION_MARKER, content: STUDIO_ADMISSION_CONTENT, paths: STUDIO_ADMISSION_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: STUDIO_EXECUTION_BASE, marker: STUDIO_EXECUTION_MARKER, content: STUDIO_EXECUTION_CONTENT, paths: STUDIO_EXECUTION_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: ARTIFACT_INTEGRITY_BASE, marker: ARTIFACT_INTEGRITY_MARKER, content: ARTIFACT_INTEGRITY_CONTENT, paths: ARTIFACT_INTEGRITY_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: STUDIO_REFERENCE_BASE, marker: STUDIO_REFERENCE_MARKER, content: STUDIO_REFERENCE_CONTENT, paths: STUDIO_REFERENCE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
@@ -1127,7 +1150,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === STUDIO_EXECUTION_MARKER || scope.marker === ARTIFACT_INTEGRITY_MARKER || scope.marker === STUDIO_REFERENCE_MARKER || scope.marker === STUDIO_READBACK_MARKER || scope.marker === LIBRARY_THEME_MARKER || scope.marker === SHOP_LIBRARY_MARKER || scope.marker === SHOP_CONTRAST_MARKER || scope.marker === SHOP_ATTACHMENTS_MARKER || scope.marker === CLEAN_STUDIO_MARKER || scope.marker === IMAGE_RUNTIME_MARKER || scope.marker === IMAGE_PRICE_MARKER || scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === STUDIO_ADMISSION_MARKER || scope.marker === STUDIO_EXECUTION_MARKER || scope.marker === ARTIFACT_INTEGRITY_MARKER || scope.marker === STUDIO_REFERENCE_MARKER || scope.marker === STUDIO_READBACK_MARKER || scope.marker === LIBRARY_THEME_MARKER || scope.marker === SHOP_LIBRARY_MARKER || scope.marker === SHOP_CONTRAST_MARKER || scope.marker === SHOP_ATTACHMENTS_MARKER || scope.marker === CLEAN_STUDIO_MARKER || scope.marker === IMAGE_RUNTIME_MARKER || scope.marker === IMAGE_PRICE_MARKER || scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

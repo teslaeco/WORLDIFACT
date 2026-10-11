@@ -81,7 +81,7 @@ test('Worker retains exactly the admitted submission promise through receipt par
   await Promise.resolve()
   assert.equal(retainedDone, false)
   assert.equal((await handle(request(), f.env, fetcher, context)).status, 202)
-  assert.equal(retained.length, 1, 'Recovery does not schedule another submission')
+  assert.equal(retained.length, 2, 'Recovery is retained but never schedules another Oracle submission')
   release.resolve()
   assert.equal((await data(pending)).job.state, 'building')
   await retained[0]
@@ -102,7 +102,7 @@ test('failed admission schedules no background task; uncertain dispatch is retai
   await Promise.all(retained)
   assert.equal(retained.length, 1)
   assert.equal((await studioApi(request(prepared.ticket), f.env, f.fetcher, false, context)).status, 202)
-  assert.equal(retained.length, 1)
+  assert.equal(retained.length, 2)
   assert.equal(posts(f).length, 1)
 })
 

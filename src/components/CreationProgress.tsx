@@ -3,11 +3,14 @@ import GenerationSculpture from './GenerationSculpture'
 import './CreationProgress.css'
 
 /** A waiting animation, never an elapsed-time estimate of provider completion. */
-export default function CreationProgress({ active = false, label = 'Ready to create', percent = null }: {
+export default function CreationProgress({ active = false, label = 'Ready to create', percent = null, stage, elapsed }: {
   active?: boolean
   label?: string
   /** Confirmed workflow milestones only. Omit when the provider reports no progress. */
   percent?: number | null
+  stage?: string
+  /** Request tracking time, including upload and queue; never a completion estimate. */
+  elapsed?: string | null
 }) {
   const [reduced, setReduced] = useState(true)
   const [paused, setPaused] = useState(false)
@@ -30,7 +33,9 @@ export default function CreationProgress({ active = false, label = 'Ready to cre
       {percent !== null ? <strong className="creation-progress-percent">{percent}%</strong> : !active && <span aria-hidden="true" className="creation-ready-mark">✦</span>}
       </div>
       <span>{label}</span>
-      {active && <small>{percent !== null ? 'Confirmed stages · not time remaining' : 'Working · completion time varies'}</small>}
+      {active && stage && <small>{stage}</small>}
+      {active && elapsed && <small>Elapsed {elapsed} · includes upload and waiting</small>}
+      {active && <small>{percent === 0 ? 'Waiting for acceptance · generation has not been confirmed' : percent !== null ? 'Confirmed stages · not time remaining' : 'Working · completion time varies'}</small>}
     </div>
     {!reduced && <button type="button" className="creation-motion-toggle" aria-pressed={paused} aria-label={paused ? 'Resume animation' : 'Pause animation'} onClick={() => setPaused(value => !value)}>{paused ? '▷' : 'Ⅱ'}</button>}
   </div>

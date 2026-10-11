@@ -34,3 +34,19 @@ test('preview precedes prompt in DOM; models and four-reference input are outsid
   assert.match(html, /class="studio-attachment-toolbar"/)
   assert.match(html, /\/account\/images/)
 })
+
+
+test('unaccepted model shows zero confirmed stages and elapsed time without inventing completion', async () => {
+  const { default: Progress } = await loadCreationProgress()
+  const html = renderToStaticMarkup(React.createElement(Progress, {
+    active: true, label: 'Confirming your request', percent: 0,
+    stage: 'Awaiting acceptance', elapsed: '1:12',
+  }))
+  assert.match(html, /aria-valuenow="0"/)
+  assert.match(html, /0%/)
+  assert.match(html, /generation has not been confirmed/)
+  assert.match(html, /Elapsed 1:12/)
+  assert.match(html, /includes upload and waiting/)
+  assert.match(html, /Awaiting acceptance/)
+  assert.doesNotMatch(html, /100%|Model saved|time remaining:|estimated completion/)
+})
