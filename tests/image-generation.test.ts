@@ -169,3 +169,32 @@ test('legacy 25-point recovery preserves fingerprints, records and holds without
   assert.equal(await storage.get('balance'), 199)
   assert.equal(await storage.get('customer-reserved-credits:v1'), undefined)
 })
+
+const reference = { name: 'fixture.jpg', view: 'front' as const, textureMaxSize: 4096 as const,
+  dataUrl: 'data:image/jpeg;base64,' + Buffer.from([255,216,255,192,0,17,8,0,16,0,16,3,1,17,0,2,17,0,3,17,0,255,217]).toString('base64') }
+test('four references reach one multipart image edit; private inputs are not stored or returned and replay is idempotent', async () => {
+  const storage = memory(), body = input({ references: Array.from({ length: 4 }, (_, i) => ({ ...reference, name: `photo-${i}.jpg` })) }); let calls = 0
+  const fetcher = (async (url: unknown, init?: RequestInit) => {
+    calls++; assert.equal(url, 'https://api.openai.com/v1/images/edits'); assert.equal(init?.redirect, 'manual')
+    assert.ok(init?.body instanceof FormData)
+    assert.equal(new Headers(init.headers).has('Content-Type'), false)
+    const form = init.body as FormData
+    assert.equal(form.getAll('image[]').length, 4); assert.equal(form.get('model'), body.model); assert.equal(form.get('n'), '1')
+    for (const file of form.getAll('image[]')) { assert.ok(file instanceof File); assert.equal(file.type, 'image/jpeg'); assert.equal(file.size, 23) }
+    return success()
+  }) as typeof fetch
+  const first = await imageStore(req('/images', body), storage, env, alice, now, fetcher).then(readReply)
+  assert.equal(first.job.state, 'completed'); assert.equal(first.job.points, 5)
+  assert.doesNotMatch(JSON.stringify(first), /data:image|photo-0|references/)
+  await imageStore(req('/images', body), storage, env, alice, now, fetcher)
+  assert.equal(calls, 1); assert.equal(await storage.get('balance'), 194)
+  assert.equal((await imageStore(req('/images', { ...body, references: [reference] }), storage, env, alice, now, fetcher)).status, 409)
+  assert.equal(calls, 1)
+})
+test('invalid image references fail before reservations or provider calls', async () => {
+  for (const references of [[], Array(5).fill(reference), [{ ...reference, dataUrl: 'https://untrusted.invalid/private.jpg' }], [{ ...reference, dataUrl: 'data:image/jpeg;base64,AAAA' }], [{ ...reference, textureMaxSize: 9999 }]]) {
+    const storage = memory()
+    const result = await imageStore(req('/images', input({ references })), storage, env, alice, now, async () => { throw Error('Must not dispatch') })
+    assert.equal(result.status, 400); assert.equal(await storage.get('balance'), 199); assert.equal(await storage.get('customer-reserved-credits:v1'), undefined)
+  }
+})

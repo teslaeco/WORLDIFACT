@@ -1,4 +1,4 @@
-import { IMAGE_ID, IMAGE_MODELS, IMAGE_TERMS, parseImageInput, type ImageJob } from '../src/lib/imageGeneration.ts'
+import { IMAGE_ID, IMAGE_REQUEST_MAX_BYTES, IMAGE_MODELS, IMAGE_TERMS, parseImageInput, type ImageJob } from '../src/lib/imageGeneration.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
 import type { EntitlementEnv, EntitlementStorage } from './entitlements.ts'
 
@@ -88,7 +88,7 @@ export async function imageApi(request: Request, env: ImageEnv, fetcher: typeof 
     }
     let body: string | undefined
     if (request.method === 'POST') {
-      try { body = JSON.stringify(parseImageInput(await boundedJson(request, 24_000), true)) }
+      try { body = JSON.stringify(parseImageInput(await boundedJson(request, IMAGE_REQUEST_MAX_BYTES), true)) }
       catch { return json({ error: 'Use a valid image request with 3–4000 characters and the displayed 5-point price.' }, 400) }
     }
     const namespace = env.ACCOUNT_LEDGER_MODE === 'sandbox' ? 'account:sandbox:v1' : 'account:v1'
@@ -130,7 +130,7 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
   if (path !== '/images' || request.method !== 'POST') return json({ error: 'Unsupported image operation.' }, 405)
   if (!ready(env)) return json({ error: 'Image generation is unavailable.' }, 503)
   let input
-  try { input = parseImageInput(await boundedJson(request, 24_000), true) } catch { return json({ error: 'Invalid image request.' }, 400) }
+  try { input = parseImageInput(await boundedJson(request, IMAGE_REQUEST_MAX_BYTES), true) } catch { return json({ error: 'Invalid image request.' }, 400) }
   const fingerprint = await digest(new TextEncoder().encode(JSON.stringify({ ...input, ...IMAGE_TERMS, revision: input.revision, points: input.acceptedPoints })))
   // Replays bypass the rate limiter and never call the provider, even after expiry.
   const existing = await storage.get<ImageJob>(key(input.id))
@@ -162,10 +162,20 @@ export async function imageStore(request: Request, storage: EntitlementStorage, 
   let stage: 'transport' | 'response' | 'decode' | 'storage' = 'transport', providerStatus: number | undefined
   // Exactly one external POST. An uncertain outcome is never automatically retried or refunded.
   try {
-    const response = await fetcher('https://api.openai.com/v1/images/generations', {
+    const parameters = { model: input.model, prompt: input.prompt, n: 1, size: IMAGE_TERMS.size, quality: IMAGE_TERMS.quality, output_format: 'png' }
+    let body: string | FormData = JSON.stringify(parameters)
+    if (input.references?.length) {
+      body = new FormData()
+      for (const [name, value] of Object.entries(parameters)) body.append(name, String(value))
+      for (const [index, reference] of input.references.entries()) {
+        const bytes = Uint8Array.from(atob(reference.dataUrl.split(',')[1]), ch => ch.charCodeAt(0))
+        body.append('image[]', new Blob([bytes], { type: 'image/jpeg' }), `reference-${index + 1}.jpg`)
+      }
+    }
+    const response = await fetcher(`https://api.openai.com/v1/images/${input.references?.length ? 'edits' : 'generations'}`, {
       method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(180_000),
-      headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: input.model, prompt: input.prompt, n: 1, size: IMAGE_TERMS.size, quality: IMAGE_TERMS.quality, output_format: 'png' }),
+      headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}) },
+      body,
     })
     stage = 'response'; providerStatus = response.status
     if (!response.ok) {
