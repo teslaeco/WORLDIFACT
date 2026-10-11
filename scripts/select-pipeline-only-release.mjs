@@ -952,6 +952,7 @@ export const STUDIO_READBACK_PATHS = Object.freeze([
   "src/lib/studioReadbackGuide.ts",
   "src/pages/CreditsPage.tsx",
   "tests/shop-account-chrome.test.mjs",
+  "tests/studio-native-fetch-browser.test.mjs",
   "tests/studio-protocol-contract.test.ts",
   "tests/studio-readback-guide.test.ts",
   "tests/studio-readback-release.test.mjs",
