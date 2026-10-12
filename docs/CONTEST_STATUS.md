@@ -1,3 +1,9 @@
+# 12 October 2026 20:19 CEST — Oracle SQLite aggregate inspection (VERIFIED / UNKNOWN / BLOCKED)
+
+VERIFIED: User-operated read-only SQLite probe of `/home/opc/froge-connector/state/jobs.sqlite` returned 421,888-byte database, no WAL file in snapshot, one app table `jobs` with columns `id, prompt, state, detail, created, updated`; totals 167 jobs: 92 succeeded, 74 failed, 1 cancelled. Totals are across the stored history, not repeated sequential acceptance. No writes, reruns, paid API calls or customer ledger changes were made.
+
+UNKNOWN: Categories and time distribution of 74 failures; original signed requests that returned `ORACLE_JOB_MISSING` can be **absent from Oracle SQLite** entirely and must be traced via Worker/account audit events. Do not call all failed rows missing, and do not treat SQLite aggregate success as fixed dispatch. Next obtain privacy-safe recent error categories and correlation. NO-GO.
+
 # 12 October 2026 20:15 CEST — VM SSH operational evidence (VERIFIED / UNKNOWN / BLOCKED)
 
 VERIFIED: User-operated SSH reached `froge-blender` (`opc`); `froge-worker.service` and `froge-tunnel.service` active/running, `NRestarts=0` at time of inspection. Disk `/`: 83 GB total / 44 GB free / 48% used. User-journal keyword search for 12h reported no listed matches (not proof of zero errors). Located candidate active job database at `/home/opc/froge-connector/state/jobs.sqlite`, distinct from archived cleanup databases.
