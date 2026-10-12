@@ -4,7 +4,7 @@ import OracleModelPreview from './OracleModelPreview'
 import StudioModelThumbnail from './StudioModelThumbnail'
 import { useAccount } from '../lib/account'
 import { listStudioModels, readStudioModel, STUDIO_ARCHIVE_EVENT, STUDIO_ARCHIVE_SIGNAL_KEY, type StudioArchiveEntry } from '../lib/studioArchive'
-import { getStudioLibraryModel, isStudioLibraryTemporaryError, isStudioLibraryId, listStudioLibrary, readStudioLibraryModel, StudioLibraryAccountError } from '../lib/studioLibrary'
+import { getStudioLibraryModel, isStudioLibraryTemporaryError, isStudioLibraryId, listStudioLibrary, readStudioLibraryModel, readStudioLibraryExport, StudioLibraryAccountError } from '../lib/studioLibrary'
 import { formatStudioGenerationDuration, type StudioLibraryModel } from '../lib/studioProtocol'
 import { inspectGLB } from '../lib/glb'
 import { previewFileName } from '../lib/studioView'
@@ -194,9 +194,10 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
     setActivity({ owner, busyId: '', error: '' })
   }
 
-  async function open(item: Row, download: boolean, trigger?: HTMLButtonElement) {
+  async function open(item: Row, download: boolean, trigger?: HTMLButtonElement, format: 'model' | 'fbx' | 'blend' | 'pbr' = 'model') {
     const activeOwner = owner
     if (currentOwner.current !== activeOwner || (item.origin === 'account' && !activeOwner)) return
+    if (format !== 'model' && (item.origin !== 'account' || !download)) return
     if (!download) previewTrigger.current = trigger ?? null
     operation.current?.controller.abort()
     const active = { owner: activeOwner, controller: new AbortController() }
@@ -230,13 +231,19 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         }
       }
       const blob = selectedItem.origin === 'account'
-        ? await readStudioLibraryModel(activeOwner, selectedItem.model, active.controller.signal)
+        ? format === 'model'
+          ? await readStudioLibraryModel(activeOwner, selectedItem.model, active.controller.signal)
+          : await readStudioLibraryExport(activeOwner, selectedItem.model, format, active.controller.signal)
         : await readStudioModel(selectedItem.model.id)
       if (!valid()) return
-      const data = await blob.arrayBuffer()
-      if (!valid()) return
-      inspectGLB(data)
-      if (download) downloadBlob(blob, previewFileName({ id: item.model.id, origin: 'archive', label: item.model.prompt }))
+      if (format === 'model') {
+        const data = await blob.arrayBuffer()
+        if (!valid()) return
+        inspectGLB(data)
+      }
+      if (download) downloadBlob(blob, format === 'model'
+        ? previewFileName({ id: item.model.id, origin: 'archive', label: item.model.prompt })
+        : `WORLDIFACT-${item.model.id}-${format === 'pbr' ? 'textures.zip' : `model.${format}`}`)
       else {
         if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
         const url = URL.createObjectURL(blob)
@@ -278,6 +285,13 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
       </div>
       <div className="studio-gallery-actions">
         <button type="button" disabled={!!busyId} onClick={() => void open(currentSelection.row, true)}>Download original GLB</button>
+        {currentSelection.row.origin === 'account' && <details>
+          <summary>Other original files</summary>
+          <p>Downloads are available when the original generation saved this format.</p>
+          <button type="button" disabled={!!busyId} onClick={() => void open(currentSelection.row, true, undefined, 'fbx')}>Download FBX</button>
+          <button type="button" disabled={!!busyId} onClick={() => void open(currentSelection.row, true, undefined, 'blend')}>Download BLEND</button>
+          <button type="button" disabled={!!busyId} onClick={() => void open(currentSelection.row, true, undefined, 'pbr')}>Download texture ZIP</button>
+        </details>}
         <button type="button" onClick={closePreview}>Close preview</button>
       </div>
       <OracleModelPreview url={currentSelection.url} label={currentSelection.row.model.prompt} customerMode />
