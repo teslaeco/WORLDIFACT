@@ -669,7 +669,7 @@ export default function ShopPage() {
     const flags = operations.current, scope = testSavedSlot ? testCurrent : null
     const exportOwnerEpoch = testIdentity.current.epoch
     if (testSavedSlot && !scope?.active()) return
-    if (flags.artifact || !saved || !mayExportCurrentJob(saved.receipt.id, job?.state, preview) || !coordinator.current) return
+    if (flags.submit || flags.artifact || fastResult || demoPrompt || !saved || !mayExportCurrentJob(saved.receipt.id, job?.state, preview) || !coordinator.current) return
     if (job?.downloadAllowed === false || (saved.generationProfile === FAST_DRAFT_PROFILE && !['model', 'blend', 'obj'].includes(format))) return
     flags.artifact = true; setArtifactBusy(true); setError('')
     try {
@@ -697,7 +697,8 @@ export default function ShopPage() {
   }
   const canGenerate = creationMode === 'model' && accountReady && !otherSavedPending && !testSavedSlot && !testBlueprintSlot && !cloudRecoveryPending && !checking && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
     (detailed ? !detailedProblem && (budgetTier === 'standard' || (tiersReady && budgetAccepted)) && prompt.length <= (status?.promptMaxLength ?? 0) : fast ? fastAvailable && !photos.length && purpose !== 'terrain' : astraReady && photos.length <= BLUEPRINT_REFERENCE_LIMIT)
-  const canExport = mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
+  const showingStudioResult = !busy && !fastResult && !demoPrompt && recovery?.state !== 'pending'
+  const canExport = showingStudioResult && mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
   const runtimeReady = detailed ? !detailedProblem : fast ? fastAvailable : astraReady
   const activeReady = runtimeReady && accountReady && !cloudRecoveryPending && !currentRequestMessage
   const previousFailure = !!savedJob && ['failed', 'cancelled'].includes(savedJob.state) && !preview && !fastResult && !demoPrompt && !busy
@@ -715,7 +716,7 @@ export default function ShopPage() {
       <div ref={setImageStage} className="native-shop-preview" hidden={creationMode !== 'image'} />
       <PreviewContainer hidden={creationMode === 'image'} className={`native-shop-preview${previousFailure ? ' shop-previous-failure' : ''}`}>
         {previousFailure && <summary>Previous failed request · saved for review, not a new generation</summary>}
-        <div className="shop-stage-heading"><span className="shop-stage-status"><span aria-hidden="true" />{preview || fastResult ? 'Your creation' : saved || recovery ? 'Saved request' : 'Creation preview'}</span><span className="shop-stage-kind">{preview?.origin === 'job' && <span className="studio-complete-badge">100% · </span>}{demoPrompt ? 'DEMO · MODEL 3D' : preview || fastResult || saved || recovery ? 'MODEL 3D' : creationMode === 'image' ? 'IMAGE' : 'MODEL 3D'}</span></div>
+        <div className="shop-stage-heading"><span className="shop-stage-status"><span aria-hidden="true" />{preview || fastResult ? 'Your creation' : saved || recovery ? 'Saved request' : 'Creation preview'}</span><span className="shop-stage-kind">{showingStudioResult && preview?.origin === 'job' && <span className="studio-complete-badge">100% · </span>}{demoPrompt ? 'DEMO · MODEL 3D' : preview || fastResult || saved || recovery ? 'MODEL 3D' : creationMode === 'image' ? 'IMAGE' : 'MODEL 3D'}</span></div>
         {(busy || recovery?.failureCode) && (preview || fastResult || demoPrompt) && <p role="status"><strong>Previous preview preserved.</strong> {recovery?.failureCode ? <>The rejected request did not create this model. {blueprintAdmissionDetail(recovery.failureCode)}</> : 'The current request does not have a new preview yet.'}</p>}
         {busy || (savedJob && progress.kind === 'active') || (recovery?.state === 'pending') ? <CreationProgress active label={savedJob && progress.kind === 'active' ? progress.title : 'Submitting your request'} percent={savedJob && progress.kind === 'active' ? progress.percent : null} stage={savedJob && progress.kind === 'active' ? progress.stage : undefined} elapsed={savedJob && progress.kind === 'active' ? progress.elapsed : undefined} /> : cloudRecoveryPending && !saved ? <CreationProgress active label="Checking your account" /> : fastResult ? <>
           <LiveSolPreview result={fastResult} prompt={fastPrompt} />
@@ -749,12 +750,12 @@ export default function ShopPage() {
         </div> : <>
           <CreationProgress />
         </>}
-        <details className="studio-result-details" hidden={!saved}><summary>Result details</summary>
+        <details className="studio-result-details" hidden={!saved || !showingStudioResult}><summary>Result details</summary>
         {saved && terminal(savedJob?.state) && <p className="shop-recorded-generation-time">Recorded worker generation time: <strong>{formatStudioGenerationDuration(savedJob?.generationTiming)}</strong> · Excludes upload and queue time.</p>}
         {saved && <p>{(job?.pricing ?? saved.pricing) ? `Original job: ${(job?.pricing ?? saved.pricing)!.points} points · ${(job?.pricing ?? saved.pricing)!.tier} model budget. Recovery does not change this price.` : 'Original job price is retained by the server; this recovery view does not apply the next draft’s price.'}</p>}
         {studioBudgetFailureAdvice(job, tiersReady) && <p>{studioBudgetFailureAdvice(job, tiersReady)}</p>}
         </details>
-        {saved && <div className="native-shop-actions">{testSavedSlot && terminal(job?.state) && <button type="button" disabled={busy || artifactBusy} onClick={leaveTestRecovery}>Close saved request</button>}<button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button><button type="button" disabled={artifactBusy} title="Static geometry and UVs; use GLB or Blender for textures and rigs" onClick={() => void exportFile('obj')}>OBJ</button>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
+        {saved && showingStudioResult && <div className="native-shop-actions">{testSavedSlot && terminal(job?.state) && <button type="button" disabled={busy || artifactBusy} onClick={leaveTestRecovery}>Close saved request</button>}<button type="button" disabled={busy || artifactBusy} onClick={() => job?.state === 'succeeded' ? void loadResult(saved) : setRetry(v => v + 1)}>Recover this job / reload result</button>{canExport && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('model')}>Download model · GLB</button><button type="button" disabled={artifactBusy} title="Static geometry and UVs; use GLB or Blender for textures and rigs" onClick={() => void exportFile('obj')}>OBJ</button>{saved.generationProfile !== FAST_DRAFT_PROFILE && <><button type="button" disabled={artifactBusy} onClick={() => void exportFile('pbr')}>Download available PBR textures</button><button type="button" disabled={artifactBusy} onClick={() => void exportFile('fbx')}>FBX</button></>}<button type="button" disabled={artifactBusy} onClick={() => void exportFile('blend')}>Blender</button></>}</div>}
       </PreviewContainer>
       <div className="native-shop-form">
         <p id="studio-draft-help" className="shop-visually-hidden">Describe your idea, choose an output, then review its price before generating. Editing keeps the saved request and preview unchanged.</p>
