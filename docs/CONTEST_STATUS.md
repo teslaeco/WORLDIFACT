@@ -1,3 +1,11 @@
+# 12 October 2026 — P0 generation reliability isolation (VERIFIED / UNKNOWN / BLOCKED)
+
+VERIFIED: Isolated branch `fix/p0-generation-library-20261012` includes the signed-receipt library visibility change from draft #273 and replaces the fixed-snapshot Chromium native fetch harness with a browser protocol that waits for a terminal PASS or FAIL. No real provider dispatch, billing, customer asset or production configuration was changed.
+
+UNKNOWN: Intermittent `ORACLE_JOB_MISSING` root cause and provider acceptance/expense remain unverified. The remote Oracle terminal is not responding to commands even though its connection shows Online. No paid or deployed acceptance has been claimed.
+
+BLOCKED: Full production reliability release requires exact-head green CI plus correlated Oracle/Worker durable job logs, reconciliation invariants, and deployment review. See `docs/GENERATION_P0_RELIABILITY_20261012.md`. No auto-retry of ambiguous paid POSTs and no assumption of zero charge after Oracle 404.
+
 # 12 October 2026 — intermittent generation / account-library incident: targeted visibility fix
 
 On branch `fix/shop-saved-model-visibility-20261012`, the Shop compact gallery is bound to the currently selected **completed** Studio receipt. It uses the existing authenticated direct account model lookup, rather than assuming that a random UUID-keyed 64-row history page contains the latest model. No new provider requests, settlements, point waivers, configuration changes or production deployment were performed in this patch. See `docs/GENERATION_LIBRARY_INCIDENT_20261012.md` for evidence, limitations and the remaining `ORACLE_JOB_MISSING` investigation. CI is pending; do not mark this change deployed or claim the Oracle failure fixed.
