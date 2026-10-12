@@ -1,3 +1,9 @@
+# 12 October 2026 — Safe Oracle failure audit and offline tests (VERIFIED / UNKNOWN / BLOCKED)
+
+VERIFIED: Isolated PR #274 now contains `tools/oracle_diagnostics/failure_audit.py` (SQLite read-only, no user/private row fields in stdout, bilingual fixed-category aggregates) and `test_failure_audit.py`. Synthetic fixture tests run in Cloud Shell: 3 passed, with leaked-content assertions. No paid provider POST or production VM mutation was made.
+
+UNKNOWN: Result of running this updated classifier on actual VM, true distribution of 74 failed records, missing-request correlation and deployed Oracle POST idempotency semantics. A local connector source snapshot is reference-only, not proof that deployed VM matches it. BLOCKED / NO-GO until VM/Worker per-request durable acknowledgement and privacy-safe cross-tier reconciliation. See `docs/GENERATION_P0_RELIABILITY_20261012.md`.
+
 # 12 October 2026 20:28 CEST — Read-only failure-detail classification (VERIFIED / UNKNOWN / BLOCKED)
 
 VERIFIED: On `froge-blender`, user-operated SQLite `mode=ro`, `PRAGMA query_only=ON`, and `PRAGMA quick_check` returned `ok`. All 74 historically failed job records were categorized `OTHER_OR_UNCLASSIFIED` by a restricted JSON diagnostic-key classifier; it deliberately discards unparseable/plain-text detail and unrecognized keys. This does not prove the absence of failure information or identify `ORACLE_JOB_MISSING`.
