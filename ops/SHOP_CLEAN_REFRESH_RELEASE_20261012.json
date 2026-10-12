@@ -1,0 +1,11 @@
+{
+  "release": "shop-clean-refresh-20261012",
+  "baseCommit": "a39fcdc9653e8ca61c1bda91b42db139437b34d6",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "providerCalls": 0,
+  "oracleInstallation": false,
+  "imagePoints": 5,
+  "referenceLimit": 4
+}

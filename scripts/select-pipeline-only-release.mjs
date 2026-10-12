@@ -1165,7 +1165,23 @@ export const STUDIO_STATUS_RECOVERY_PATHS = Object.freeze([
   "tests/studio-status-recovery-release.test.mjs"
 ])
 
+export const SHOP_CLEAN_REFRESH_BASE = "a39fcdc9653e8ca61c1bda91b42db139437b34d6"
+export const SHOP_CLEAN_REFRESH_MARKER = "ops/SHOP_CLEAN_REFRESH_RELEASE_20261012.json"
+export const SHOP_CLEAN_REFRESH_CONTENT = "{\n  \"release\": \"shop-clean-refresh-20261012\",\n  \"baseCommit\": \"a39fcdc9653e8ca61c1bda91b42db139437b34d6\",\n  \"preserveBilling\": true,\n  \"preserveRemoteVars\": true,\n  \"preserveSecrets\": true,\n  \"providerCalls\": 0,\n  \"oracleInstallation\": false,\n  \"imagePoints\": 5,\n  \"referenceLimit\": 4\n}\n"
+export const SHOP_CLEAN_REFRESH_PATHS = Object.freeze([
+  ".github/workflows/cloudflare.yml",
+  "docs/CONTEST_STATUS.md",
+  "ops/SHOP_CLEAN_REFRESH_RELEASE_20261012.json",
+  "scripts/select-failed-hold-release.mjs",
+  "scripts/select-pipeline-only-release.mjs",
+  "src/pages/ShopPage.tsx",
+  "tests/creation-studio.test.mjs",
+  "tests/shop-clean-refresh-release.test.mjs",
+  "tests/shop-draft-lifecycle.test.mjs"
+])
+
 const scopes = [
+  { base: SHOP_CLEAN_REFRESH_BASE, marker: SHOP_CLEAN_REFRESH_MARKER, content: SHOP_CLEAN_REFRESH_CONTENT, paths: SHOP_CLEAN_REFRESH_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: STUDIO_STATUS_RECOVERY_BASE, marker: STUDIO_STATUS_RECOVERY_MARKER, content: STUDIO_STATUS_RECOVERY_CONTENT, paths: STUDIO_STATUS_RECOVERY_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: SOL_LUNA_BLENDER_BASE, marker: SOL_LUNA_BLENDER_MARKER, content: SOL_LUNA_BLENDER_CONTENT, paths: SOL_LUNA_BLENDER_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: SOL_LUNA_RESULT_BASE, marker: SOL_LUNA_RESULT_MARKER, content: SOL_LUNA_RESULT_CONTENT, paths: SOL_LUNA_RESULT_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
@@ -1260,7 +1276,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === STUDIO_STATUS_RECOVERY_MARKER || scope.marker === SOL_LUNA_BLENDER_MARKER || scope.marker === SOL_LUNA_RESULT_MARKER || scope.marker === STUDIO_FILE_REFERENCE_MARKER || scope.marker === STUDIO_ADMISSION_MARKER || scope.marker === STUDIO_EXECUTION_MARKER || scope.marker === ARTIFACT_INTEGRITY_MARKER || scope.marker === STUDIO_REFERENCE_MARKER || scope.marker === STUDIO_READBACK_MARKER || scope.marker === LIBRARY_THEME_MARKER || scope.marker === SHOP_LIBRARY_MARKER || scope.marker === SHOP_CONTRAST_MARKER || scope.marker === SHOP_ATTACHMENTS_MARKER || scope.marker === CLEAN_STUDIO_MARKER || scope.marker === IMAGE_RUNTIME_MARKER || scope.marker === IMAGE_PRICE_MARKER || scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === SHOP_CLEAN_REFRESH_MARKER || scope.marker === STUDIO_STATUS_RECOVERY_MARKER || scope.marker === SOL_LUNA_BLENDER_MARKER || scope.marker === SOL_LUNA_RESULT_MARKER || scope.marker === STUDIO_FILE_REFERENCE_MARKER || scope.marker === STUDIO_ADMISSION_MARKER || scope.marker === STUDIO_EXECUTION_MARKER || scope.marker === ARTIFACT_INTEGRITY_MARKER || scope.marker === STUDIO_REFERENCE_MARKER || scope.marker === STUDIO_READBACK_MARKER || scope.marker === LIBRARY_THEME_MARKER || scope.marker === SHOP_LIBRARY_MARKER || scope.marker === SHOP_CONTRAST_MARKER || scope.marker === SHOP_ATTACHMENTS_MARKER || scope.marker === CLEAN_STUDIO_MARKER || scope.marker === IMAGE_RUNTIME_MARKER || scope.marker === IMAGE_PRICE_MARKER || scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {
