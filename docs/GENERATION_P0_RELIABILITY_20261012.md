@@ -84,3 +84,15 @@ VERIFIED (CODE): Reverted protected `.github/workflows/ci.yml` to the exact main
 IMPLEMENTED (MOCK ONLY): `tests/studio-api.test.ts` now includes a ten-sequential-job test: ten distinct signed receipts, exactly one mocked Oracle POST per new job, recovery-only repeat for each ID and aggregate ten reservations. No real model generation, customer points, paid provider calls, production service modification or deployment. Await exact HEAD main CI confirmation; these fixtures do not establish Oracle VM persistence or reliable live generation.
 
 NO-GO remains for P0 reliability until actual missing signed receipt is correlated across Cloudflare/DO/Oracle, durable ack strategy is validated, and authorized capped real multiple-job acceptance passes. Preserve existing assets, holds, subscriptions and Stripe.
+
+## 2026-10-12 — full historical PR review and lost-acknowledgement mitigation
+
+Reviewed the repository pull-request timeline #1–#274 (API), tracing #169 (account-signed durable recovery), #186 (late-dispatch fence), #208 (safe admission diagnostics), #231 (paid-points holding), #251 (MCP framing/provider transport), #254 (native image dispatch), #263/#264 (Worker lifetime), #268/#269 (Astra/Sol/Luna routing and recovery), and #270/#273/#274 (native test, library recovery). Source evidence still does NOT prove durable cross-system Oracle ingress after a lost POST.
+
+IMPLEMENTED on this isolated branch: after an unexpected Oracle POST/acceptance acknowledgement error, attempt one bounded 2.5-second **read-only GET for exactly the same signed UUID**, only accepting verified id and a known nonterminal Oracle state. A successful lookup returns the observed state rather than pretending the job was missing. A 404, unavailable response or mismatched/terminal data stays pending with original receipt and existing unresolved funding, with **no second provider POST** and no automatic refund. The existing one-use account dispatch fence remains unchanged. This mitigates lost acknowledgements; it **does not persist a request that was never delivered to Oracle**, so the root P0 is not closed.
+
+Added tests for lost acknowledgement with Oracle GET confirmation, absent job remaining pending, one-use recovery, ten sequential mocked jobs with same-receipt replays, and the six-model/mode native Miniflare test from draft PR #270. Updated the existing held-points regression to distinguish transport loss from a verified GET-recovered building job without modifying financial expectations. Exact-head CI must pass.
+
+The handoff for the remaining durable ingress fix is written to `docs/CODEX_ORACLE_DURABLE_ADMISSION_P0_20261012.md`. Codex CLI was not present in connected Cloud Shell, so this file is a task specification, **not** an asynchronously running Codex process.
+
+Status: NO-GO for a complete production reliability fix until Oracle's durable staged admission and once-only start acknowledgement are implemented, live VM source is verified, original missing receipt is correlated, end-to-end repeated acceptance is proven and release is approved. No production merge/deploy/provider billing/VM state/Stripe/points operation.
