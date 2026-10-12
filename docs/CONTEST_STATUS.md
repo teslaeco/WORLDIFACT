@@ -1,3 +1,11 @@
+# 12 October 2026 — Oracle P0 operational follow-up (VERIFIED / UNKNOWN / BLOCKED)
+
+VERIFIED: Live OCI confirms `froge-blender` RUNNING (Amsterdam), VM Cloud Agent Run Command plugin RUNNING; production GET `/api/studio/status` reports connector READY and Astra/Sol/Luna standard/fast routes. PR #274 had 5/5 successful hosted runs on exact commit `4fe2e0fe79b3acc213ca9607c12ab3308a8abe6b` before this documentation update.
+
+UNKNOWN: This does not prove Oracle durable job acceptance or repeated successful generations. One non-billing, read-only OCI Run Command remains ACCEPTED/VISIBLE without execution output; no VM logs, SQLite rows or provider cost receipt yet. The root cause of intermittent `ORACLE_JOB_MISSING` is **still unverified**.
+
+BLOCKED / NO-GO: Do not merge or deploy as a complete reliability fix, auto-reissue ambiguous paid POSTs, settle unresolved liabilities without evidence, or change subscriptions/points/Stripe. First obtain redacted VM job logs and durable receipt evidence, run mocked and sequential repeated-generation tests, then request production GO. See `docs/GENERATION_P0_RELIABILITY_20261012.md`.
+
 # 12 October 2026 — P0 generation reliability isolation (VERIFIED / UNKNOWN / BLOCKED)
 
 VERIFIED: Isolated branch `fix/p0-generation-library-20261012` includes the signed-receipt library visibility change from draft #273 and replaces the fixed-snapshot Chromium native fetch harness with a browser protocol that waits for a terminal PASS or FAIL. No real provider dispatch, billing, customer asset or production configuration was changed.
