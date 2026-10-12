@@ -1,3 +1,9 @@
+# 12 October 2026 20:28 CEST — Read-only failure-detail classification (VERIFIED / UNKNOWN / BLOCKED)
+
+VERIFIED: On `froge-blender`, user-operated SQLite `mode=ro`, `PRAGMA query_only=ON`, and `PRAGMA quick_check` returned `ok`. All 74 historically failed job records were categorized `OTHER_OR_UNCLASSIFIED` by a restricted JSON diagnostic-key classifier; it deliberately discards unparseable/plain-text detail and unrecognized keys. This does not prove the absence of failure information or identify `ORACLE_JOB_MISSING`.
+
+UNKNOWN: Plain-text versus JSON shape of `jobs.detail`, timestamp distribution, specific categories of provider/Blender failures, and original missing-job receipt correlation. Next: privacy-safe format histogram and allowlisted counters over raw-vs-JSON representations (never print original content). NO-GO: no paid generation, point/refund change, VM mutation, or merge/deployment; see `docs/GENERATION_P0_RELIABILITY_20261012.md`.
+
 # 12 October 2026 20:19 CEST — Oracle SQLite aggregate inspection (VERIFIED / UNKNOWN / BLOCKED)
 
 VERIFIED: User-operated read-only SQLite probe of `/home/opc/froge-connector/state/jobs.sqlite` returned 421,888-byte database, no WAL file in snapshot, one app table `jobs` with columns `id, prompt, state, detail, created, updated`; totals 167 jobs: 92 succeeded, 74 failed, 1 cancelled. Totals are across the stored history, not repeated sequential acceptance. No writes, reruns, paid API calls or customer ledger changes were made.
