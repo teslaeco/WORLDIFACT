@@ -1,0 +1,11 @@
+{
+  "release": "sol-luna-result-20261012",
+  "baseCommit": "3db45add7f5e38043b19677d22ca90e614d2a333",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "providerCalls": 0,
+  "oracleInstallation": false,
+  "imagePoints": 5,
+  "referenceLimit": 4
+}

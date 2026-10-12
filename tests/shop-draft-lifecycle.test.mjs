@@ -60,7 +60,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, submittedAt, artifactFailure = false, artifactMalformed = false, archiveSaveFailure = false, withArchivedModel = true, solReady = ready, lunaReady = solReady, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, healthLookup, testPool, initialStore, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery, referenceRenderer } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, submittedAt, artifactFailure = false, artifactMalformed = false, archiveSaveFailure = false, withArchivedModel = true, solReady = ready, lunaReady = solReady, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, healthLookup, testPool, initialStore, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery, referenceRenderer, prepareResponse } = {}) {
   const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   if (receiptCreatedAt) selected.receipt.createdAt = receiptCreatedAt
   if (submittedAt) selected.startedAt = submittedAt
@@ -109,6 +109,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
       evidence: { providerResponseId: 'resp_ui_fixture', receivedAt: new Date().toISOString(), blueprintSha256: 'f'.repeat(64), inputTokens: null, outputTokens: null, totalTokens: null },
       delivery: { kind: 'procedural-blueprint', referenceCount: JSON.parse(init.body).references.length, fallbackUsed: false },
     })
+    if (path === '/api/studio/prepare' && prepareResponse) return prepareResponse()
     if (path === '/api/studio/prepare') { const body = JSON.parse(init.body); return Response.json({ ...makeReceipt(newId), ...(body.pricingRevision ? { pricing: STUDIO_PRICING[body.budgetTier] } : {}) }) }
     if (method === 'POST' && submissionRejection) return Response.json({ error: 'PRIVATE_UPSTREAM_MESSAGE', failureCode: submissionRejection }, { status: submissionRejectionStatus })
     if (method === 'POST' && submissionResponse) return submissionResponse()
@@ -1982,5 +1983,49 @@ test('oversized combined references reject model bytes before reading', async ()
     assert.equal(reads, 0)
     assert.ok(h.all().some(n => /Attachments must total 40 MB/.test(text(n))))
     assert.equal(h.calls.filter(c => c.method === 'POST').length, 0)
+  } finally { h.close() }
+})
+
+
+test('new submission hides the previous 100 percent badge while preserving its original model', async () => {
+  let release
+  const pending = new Promise(resolve => { release = resolve })
+  const h = await harness({ ready: true, detailedReady: true, prepareResponse: () => pending })
+  try {
+    await h.poll()
+    const complete = () => h.all().some(n => n.props.className === 'studio-complete-badge')
+    assert.equal(complete(), true)
+    const original = h.archive.get(oldId), before = h.description()
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A new chessboard' } }); await h.settle()
+    const request = h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(complete(), false, 'Old completion cannot label the pending next request')
+    assert.equal(h.archive.get(oldId), original)
+    assert.ok(h.all().some(n => /Previous preview preserved/.test(text(n))))
+    release(Response.json({ error: 'TEST_PREPARATION_REFUSED' }, { status: 400 }))
+    await request; await h.settle()
+    assert.equal(h.description(), before)
+    assert.equal(h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST').length, 0)
+    assert.equal(h.archive.get(oldId), original)
+  } finally { h.close() }
+})
+
+for (const selectedModel of ['sol', 'luna']) test(`${selectedModel} result cannot expose the previous Astra download controls or completion`, async () => {
+  const h = await harness({ ready: true })
+  try {
+    await h.poll()
+    assert.ok(h.all().some(n => n.type === 'button' && text(n) === 'Download model · GLB'))
+    const storedBefore = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A green chess rook' } })
+    h.byId('studio-mode').props.onChange({ target: { value: selectedModel === 'sol' ? FAST_DRAFT_PROFILE : 'luna' } })
+    await h.settle()
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.match(h.fastDescription(), /Compact procedural FAST draft/)
+    const oldExports = ['Download model · GLB','OBJ','Download available PBR textures','FBX','Blender']
+    assert.equal(h.all().some(n => n.type === 'button' && oldExports.includes(text(n))), false,
+      'Visible procedural result must not download the older saved Astra model')
+    assert.equal(h.all().some(n => n.props.className === 'studio-complete-badge'), false)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), storedBefore)
+    assert.equal(h.archive.get(oldId).sha256, 'original')
+    assert.equal(h.calls.filter(c => c.path === '/api/blueprint' && c.method === 'POST').length, 1)
   } finally { h.close() }
 })

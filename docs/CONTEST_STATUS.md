@@ -1923,3 +1923,23 @@ not diagnose or settle the new screenshot jobs. Main remains 9a17d0bc, Desktop
 Commander remains offline, and the local patch is unpublished after an automatic
 approval-review rejection of push. See the continuation report for exact
 evidence, remaining access needs and publication authorization.
+
+
+## Sol/Luna routing audit and result identity repair — 2026-10-12
+
+All 256 PR records were inventoried; routing-relevant changes were traced through
+current code. Both exact models returned real successful Responses API results
+in two owner-authorized Shop tests. They remain procedural specification/local
+geometry paths; detailed Oracle/Blender support for Sol/Luna is NOT implemented.
+See SOL_LUNA_PR_AUDIT_20261012.md for the complete PR inventory and evidence.
+
+Production reproduced stale Astra export controls below Sol/Luna previews and
+a prior 100% badge during a new request. The patch ties these controls to the
+visible result, retains historical files/receipts and blocks old export handlers
+during submission. Incorrect Astra-only preview copy is corrected. All 116
+focused lifecycle tests pass, including both new regressions that failed before
+the fix. Full local suite: 2237/2239 pass; the two Chromium tests are unavailable locally and remain mandatory in hosted CI. Lint, TypeScript and HTTP smoke pass. Deployment evidence will be recorded after publication.
+
+This release changes no provider routes, models, prices, budgets or secrets.
+Oracle Desktop Commander is offline, so no new detailed-model installation or
+full Sol/Luna Blender test is claimed. Do not mark that requirement complete.
