@@ -1,3 +1,9 @@
+# 12 October 2026 20:15 CEST — VM SSH operational evidence (VERIFIED / UNKNOWN / BLOCKED)
+
+VERIFIED: User-operated SSH reached `froge-blender` (`opc`); `froge-worker.service` and `froge-tunnel.service` active/running, `NRestarts=0` at time of inspection. Disk `/`: 83 GB total / 44 GB free / 48% used. User-journal keyword search for 12h reported no listed matches (not proof of zero errors). Located candidate active job database at `/home/opc/froge-connector/state/jobs.sqlite`, distinct from archived cleanup databases.
+
+UNKNOWN: SQLite schema, persistent acceptance and the root cause of `ORACLE_JOB_MISSING`, including existing held costs. Do not expose job IDs, customer private artifacts or raw logs publicly. Next: **read-only** SQLite metadata/counts plus redacted cross-tier correlation. NO-GO for production reliability release; no paid calls, point changes, restart or deployment.
+
 # 12 October 2026 — Oracle P0 operational follow-up (VERIFIED / UNKNOWN / BLOCKED)
 
 VERIFIED: Live OCI confirms `froge-blender` RUNNING (Amsterdam), VM Cloud Agent Run Command plugin RUNNING; production GET `/api/studio/status` reports connector READY and Astra/Sol/Luna standard/fast routes. PR #274 had 5/5 successful hosted runs on exact commit `4fe2e0fe79b3acc213ca9607c12ab3308a8abe6b` before this documentation update.
