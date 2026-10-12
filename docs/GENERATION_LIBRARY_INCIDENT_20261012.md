@@ -17,9 +17,18 @@ account preview through existing authenticated export routes. Missing exports
 stay unavailable, expired tickets renew only for the same owned model, and logout
 aborts an in-flight download. No conversion or provider submission is added.
 
-Local verification passes 2,283/2,283 Node tests, including 29 gallery/transport
+Local verification now passes 2,290/2,290 Node tests, including 29 gallery/transport
 checks and real SQLite Durable Object restart recovery with mocked Oracle. Library
 pagination tests retain all 68 completed models in a 260-record history. These are
 local results, not a verified customer account on production. The PR records hosted
 checks for its final commit. Do not mark the missing-job incident fixed or claim
 deployment from these results.
+
+The latest owner Cloud Shell screenshot establishes seven exact source hashes,
+healthy SQLite, 43.58 GiB free and two active services. The matching server's
+restart handler incorrectly fails queued work; this regression is reproduced and
+fixed in an uninstalled Oracle candidate. Thirty new Python tests and negotiated
+Worker STAGE/START cover durable input, same-ID recovery and no repeated paid
+dispatch. Full installed receipt authentication, a reviewed gated installer,
+actual VM acceptance and original receipt/billing correlation remain incomplete.
+No production repair or deployment is claimed.

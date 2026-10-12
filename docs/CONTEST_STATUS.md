@@ -6,22 +6,32 @@ FBX/BLEND/texture ZIP downloads. Corrected the two maintenance test provenance
 errors using independently hash-verified historical fixtures, preserving every
 production security pin and restricted SSH command.
 
-LOCAL RESULTS: `npm run verify` PASS (2,283/2,283 Node tests, zero skipped, lint,
+LOCAL RESULTS: `npm run verify` PASS (2,290/2,290 Node tests, zero skipped, lint,
 TypeScript, real local HTTP and build); maintenance Python 107/107; model execution
 7/7; privacy diagnostic 3/3; pinned Chess/Terra assembly and deployment dry-run PASS.
 Actual SQLite-backed Worker restart tests retain once-only dispatch and owned
 original downloads. Oracle/providers are mocked in those tests.
 
+ORACLE CANDIDATE: Seven source hashes in the latest owner Cloud Shell screenshot
+match reconstructed public bytes. The exact startup SQL incorrectly fails queued
+jobs; the regression is reproduced and fixed in an uninstalled candidate.
+Durable nonbillable STAGE, once-only START, fsynced inputs, bounded local recovery
+and negotiated Worker support pass 30 Python tests plus Worker/native restart
+fixtures. Twelve sequential mocked requests retain all six model/mode selections.
+The screenshot confirms SQLite integrity, 167 historical rows, active worker and
+tunnel, and 43.58 GiB free; it does not prove new durable acceptance.
+
 LIVE READ-ONLY: Main-only authenticated Oracle health workflow
 [38307117617](https://github.com/teslaeco/WORLDIFACT/actions/runs/38307117617) passed.
 Public root, Shop, Lab and two health/status endpoints returned HTTP 200 at 20:56
 UTC. Current main's successful publication is run 38246794816 at `d70adf1`; no new
-version was deployed. Direct VM source/SQLite correlation and current Cloudflare
+version was deployed. Direct signed-request/SQLite correlation and current Cloudflare
 version UUID remain unavailable from this environment.
 
 BLOCKED: Original missing-receipt/provider correlation, verified Oracle durable
-ingress and restart/disk recovery, real account-library recovery, and a preserving
-production release scope. No paid generation, merge, deployment, customer-balance,
+ingress and live restart/disk recovery, full installed receipt authentication,
+a reviewed installer preserving all genuine native gates, real account-library
+recovery, and a preserving production release scope. No paid generation, merge, deployment, customer-balance,
 Stripe, secret, provider-budget or customer-file changes. PR #274 remains draft;
 its latest exact-head hosted checks must pass before release review. See
 [full evidence and rollback gates](GENERATION_P0_RECOVERY_VALIDATION_20261012.md).

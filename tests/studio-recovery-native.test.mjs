@@ -14,7 +14,7 @@ const ORIGIN = 'https://recovery.example.test'
 
 // Real Worker + SQLite Durable Objects across complete workerd restarts.
 // Oracle/provider/storage responses are inert fixtures, not live VM evidence.
-test('native receipt fences, late completion, account library and original exports survive Worker restarts without redispatch', { timeout: 60_000 }, async t => {
+for (const durableAdmission of [false, true]) test(`native ${durableAdmission ? 'durable staged' : 'legacy'} admission, library and original exports survive Worker restarts without redispatch`, { timeout: 60_000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'worldifact-recovery-'))
   const bundle = await build({ stdin: { resolveDir: fileURLToPath(new URL('..', import.meta.url)), sourcefile: 'native-recovery.ts', contents: `
     import { studioApi } from './server/studio.ts';
@@ -47,7 +47,7 @@ test('native receipt fences, late completion, account library and original expor
     blend: new TextEncoder().encode('BLENDER-v405INERT_NATIVE_PROJECT'),
     pbr: await readFile(new URL('../public/world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip', import.meta.url)),
   }
-  const jobs = new Map(), posts = new Map(), inputs = new Map()
+  const jobs = new Map(), posts = new Map(), inputs = new Map(), staged = new Map()
   let missingNext = false, rateLimitReads = false
   const options = convertV4MiniflareOptions({ modules: true, compatibilityDate: '2026-09-14', cf: false,
     script: bundle.outputFiles[0].text, resourcePersistencePath: directory, isolatedResourcePersistencePath: directory,
@@ -64,9 +64,28 @@ test('native receipt fences, late completion, account library and original expor
       assert.equal(url.hostname, 'recovery.trycloudflare.com', 'No live destination is permitted')
       assert.equal(request.headers.get('Authorization'), 'Bearer inert-recovery-oracle')
       if (url.pathname === '/v1/health') return Response.json({ ...detailedHealthFixture,
+        ...(durableAdmission ? { studioAdmissionRevision: 'oracle-durable-admission-v1' } : {}),
         studioExecutionRevision: 'studio-execution-v1', studioExecutionModels: ['astra', 'sol', 'luna'], studioExecutionModes: ['standard', 'fast'] })
-      if (url.pathname === '/v1/jobs' && request.method === 'POST') {
-        const input = await request.json()
+      if (url.pathname === '/v1/jobs/stage' && request.method === 'POST') {
+        assert.equal(durableAdmission, true)
+        const raw = await request.text(), input = JSON.parse(raw)
+        const proof = { revision: 'oracle-durable-admission-v1', id: input.id,
+          owner: request.headers.get('X-WORLDIFACT-Owner'), fingerprint: request.headers.get('X-WORLDIFACT-Fingerprint'),
+          payloadSha256: Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))).toString('hex'), phase: 'staged' }
+        if (staged.has(input.id)) assert.deepEqual({ ...staged.get(input.id), phase: 'staged' }, proof)
+        else { staged.set(input.id, proof); inputs.set(input.id, input) }
+        return Response.json({ id: input.id, state: 'pending', admission: staged.get(input.id) })
+      }
+      if (url.pathname === (durableAdmission ? '/v1/jobs/start' : '/v1/jobs') && request.method === 'POST') {
+        const signal = await request.json(), input = durableAdmission ? inputs.get(signal.id) : signal
+        if (durableAdmission) {
+          const proof = staged.get(input.id)
+          assert.equal(signal.payloadSha256, proof.payloadSha256)
+          assert.equal(request.headers.get('X-WORLDIFACT-Owner'), proof.owner)
+          assert.equal(request.headers.get('X-WORLDIFACT-Fingerprint'), proof.fingerprint)
+          assert.ok(signal.deadline > Date.now())
+          proof.phase = 'authorized'
+        }
         posts.set(input.id, (posts.get(input.id) ?? 0) + 1)
         assert.equal(posts.get(input.id), 1, 'A paid request must never be dispatched twice')
         inputs.set(input.id, input)
@@ -107,7 +126,8 @@ test('native receipt fences, late completion, account library and original expor
   }
   await Promise.all([ALICE, BOB].flatMap(account => Array.from({ length: 3 }, async () => {
     const receipt = receipts.get(account)
-    assert.equal((await call(account, '/api/studio/jobs', selected(account), receipt.ticket)).status, 202)
+    const status = (await call(account, '/api/studio/jobs', selected(account), receipt.ticket)).status
+    assert.ok(status === 202 || durableAdmission && status === 503, String(status))
   })))
   const accepted = new Map()
   for (const account of [ALICE, BOB]) {

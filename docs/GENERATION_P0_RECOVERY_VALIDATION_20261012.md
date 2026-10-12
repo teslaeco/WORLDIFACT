@@ -1,7 +1,8 @@
 # P0 recovery validation — 12 October 2026
 
 **NO-GO for production.** Draft [PR #274](https://github.com/teslaeco/WORLDIFACT/pull/274)
-contains verified Worker/library repairs. Oracle durable ingress and the cause of
+contains tested Worker/library repairs and a prospective durable Oracle protocol.
+Oracle production durable ingress and the cause of
 the original missing requests remain unverified. No merge, deployment, VM change,
 paid generation, refund, secret change or customer-file operation was performed.
 
@@ -44,16 +45,34 @@ The branch also retains the earlier fix that finds the exact completed signed
 model independently of its position in a 64-row UUID-sorted library page, and
 the native Chromium fixture that waits for a real terminal test result.
 
+The newly supplied Cloud Shell screenshot matches the exact current server
+SHA-256 `3ca9da9a246c406ced7f1183b2e6e85f95d1ce733f0ef12af652c5aaf5812227`
+and six other reconstructed public runtime files. Its startup SQL fails every
+nonterminal row, including never-started queued jobs. A failing-before test
+executes that exact SQL; the candidate preserves queued rows and never
+re-executes interrupted processing. This is a confirmed deployed-code defect,
+not evidence that it caused all 74 historical failures or an absent UUID.
+
+The exact server creates input files before committing its jobs row. Its
+replacement-only JSON writer has no explicit fsync. A new staged-inbox
+candidate commits the original immutable body before funding, then records
+a once-only authenticated START. Local file/queue preparation is idempotent,
+fsynced, serialized and bounded; provider execution is never retried after an
+ambiguous result. Worker negotiates this only when the separately attested
+Oracle runtime advertises the exact revision; staging failure cannot fall
+back to a paid POST. No installer or production attestation is claimed.
+
 ## Validation performed in this cloud environment
 
 | Check | Result and boundary |
 | --- | --- |
-| `npm run verify` | PASS: lint, TypeScript, 2,283/2,283 Node tests, real local HTTP smoke and full production build; zero failed/skipped tests. Existing lint/chunk warnings remain. |
+| `npm run verify` | PASS after the staged-protocol changes: lint, TypeScript, 2,290/2,290 Node tests, real local HTTP smoke and full production build; zero failed/skipped tests. Existing lint/chunk warnings remain. |
 | Native Chromium | Both inert native transport/storage scenarios pass inside the full suite. No production browser preview or Android device test was performed. |
 | `tools/oracle_maintenance` Python discovery | 107/107 PASS, including the two repaired provenance assertions and three new fixture checks. |
 | `tests/oracle-maintenance.test.mjs` | 18/18 PASS; included in the full Node total. |
 | `tools/model_execution/test_studio_execution.py` | 7/7 PASS: immutable model/mode and guarded Responses payload/usage contracts; mocked API only. |
 | `tools/oracle_diagnostics` Python discovery | 3/3 PASS: read-only SQLite classification and privacy fixtures. |
+| `tools/oracle_admission` Python discovery | 30/30 PASS: actual observed handler/SQLite, process death, busy/full, immutable owner/body/model, four reference byte preservation, bounded local preparation, restart regression, probe privacy and package integrity. Readiness and ledger binding are inert fixtures. |
 | Library browser/transport suite | 29/29 PASS, including original exports, expired tickets, invalid formats and logout while downloading; included in Node total. |
 | `npm run foundations:build` | PASS: pinned Chess/Terra sources assembled with 105 hashed entry/assets. |
 | `npm run deploy:check` | PASS after foundation assembly; Wrangler exited in dry-run mode without publishing. |
@@ -72,7 +91,11 @@ inert signature fixture, not evidence of a real Blender render.
 Existing tests cover 260 library records across five pages with 68 completed
 models, signed off-page lookup, provider timeouts, browser reload/reconnect and
 ten sequential mocked admissions. Worker persistence is demonstrated locally;
-**Oracle SQLite persistence, VM restart, disk-full/busy recovery, paid provider
+The staged-protocol continuation also runs the same native recovery/library test,
+including four restarts, through STAGE/START. Five new Worker tests check ordering,
+twelve independent six-model/mode selections, concurrency, 429, timeout and lost
+ACK without repeat START or changed holds. Local real SQLite busy/full and abrupt
+process death pass. **Live Oracle staged acceptance, VM reboot, paid provider
 acceptance and production account-library recovery are not demonstrated here.**
 
 ## Live observations and audit scope
@@ -95,12 +118,14 @@ acceptance and production account-library recovery are not demonstrated here.**
   secrets; no model/provider request or VM mutation occurs. Public
   `/api/studio/status` also advertises connector READY and all six combinations.
   Neither check proves durable job acceptance or live quality of each model.
-- The CI-pinned connector reference from `teslaeco/Froge-MPC-2-test` commit
-  `d3f61b842dcfeda2ed794210caafc391919a75be` inserts SQLite rows before returning
-  202 and compares duplicate request contents. It also fails nonterminal rows on
-  startup, and file JSON writes use replacement without explicit fsync. These
-  are reference-source observations, not established causes on the deployed VM;
-  its installed bytes have not been authenticated against this snapshot.
+- Reconstructed all 15 files in the existing immutable model runtime manifest
+  from pinned public ancestry, including transport commit
+  `496b8c9f2120346993720357c3f920a4e3e9f2ae`. Seven hashes in the owner's new
+  Cloud Shell screenshot match: server, runner, model selection, construction
+  payload, runtime controller, phase controller and photo input. The screenshot
+  also confirms SQLite quick_check, both active services and 43.58 GiB free.
+  The other installed files and receipt-chain consistency still need checking;
+  matching seven samples does not attest the entire installation.
 - This environment has no connected Cloud Shell/OCI profile or unrestricted SSH
   channel. GitHub denies secret-metadata listing (403). Existing maintenance SSH
   permits only the fixed dispatcher, not arbitrary SQLite/source commands. Its
@@ -114,18 +139,23 @@ acceptance and production account-library recovery are not demonstrated here.**
 
 ## Release scope, rollback and remaining gates
 
-The runtime delta is Worker ACK recovery and account-gallery lookup/downloads.
+The runtime delta is Worker ACK recovery, negotiated STAGE/START and account-gallery
+lookup/downloads. `tools/oracle_admission` contains an uninstalled Oracle candidate
+and an integrity-pinned operator probe; see its README for exact boundaries.
 No changes to Stripe/subscriptions, account permissions, pricing/point rules,
-budget implementation, secrets, storage schema, customer files or Oracle runtime
-are included. Fixtures touch only synthetic/local state. Production integrity
+budget implementation, secrets, production storage, customer files or installed
+Oracle runtime occurred. The candidate proposes a separate private admission
+SQLite database. Fixtures touch only synthetic/local state. Production integrity
 pins and protected `.github/workflows/ci.yml` remain intact.
 
 1. Obtain an existing authorized VM diagnostic channel and correlate one original
    signed missing receipt with Worker dispatch claim, Oracle ingress/committed
    row, provider receipt and saved artifacts. Preserve IDs and unresolved holds.
-2. Authenticate the actual installed Oracle source before a staged-inbox repair.
-   Implement/test durable nonbillable acceptance and once-only start against that
-   source, including crash, VM restart, disk full/busy and tunnel loss. Never
+2. Complete full installed-source/receipt authentication. The staged-inbox repair
+   and local crash/busy/full/tunnel tests now exist. A reviewed installer preserving
+   the genuine native gates, receipt rebinding, idle fence and rollback remains
+   unfinished; current historical grants cannot install these new bytes. Prove
+   acceptance/restart on the actual VM before release. Never
    replay a paid request whose outcome is unknown.
 3. Verify real account-library recovery and original files under the correct
    account without initiating generation. No real account session was supplied
