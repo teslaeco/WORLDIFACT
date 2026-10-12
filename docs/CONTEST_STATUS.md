@@ -1,8 +1,43 @@
+# 12 October 2026 — status recovery correction; missing submission remains open
+
+Current public source is PR #268, main `878dcff08ffa9b303faccae5912d6dfda651591d`.
+The owner's subsequent account request was inspected through the signed-in Shop:
+it ended with `ORACLE_JOB_MISSING`, with customer settlement pending review.
+The preceding screenshots show acceptance unconfirmed and a status rate limit.
+No new generation was started and no financial record was changed in this audit.
+Private account identifiers, prompts and balances are not published here.
+
+Two status defects were reproduced before the correction: simultaneous manual
+and automatic recovery issued two GETs, and a 429 did not preserve the server's
+retry window. Recovery now coalesces overlapping reads for the same account and
+receipt, retains a bounded cooldown, and treats even non-JSON status throttles
+as temporary read failures. The existing rate limiter returns `Retry-After: 60`;
+its limits, admission and financial behavior are unchanged. The Shop displays
+recovery and its next check beside the preview, without replacing the job or
+clearing an active draft. The notice clears on a successful same-job read.
+Unacknowledged submissions use an indeterminate indicator, not a frozen 0%.
+Confirmed later milestones retain their existing evidence requirements.
+
+The exact source-only release scope is pinned to the current main and preserves
+remote variables, secrets, bindings and billing. It never runs the historical
+hold waiver or an Oracle installer. This is a status recovery correction, not a
+claim that the missing Oracle submission was repaired. The original remote
+administration connection is currently offline; the failed job's Oracle logs
+and transport path remain to be inspected using that connection. No paid LIVE
+acceptance result exists for this correction. Local validation: 2,262 of 2,264
+application tests pass; the two existing native Chromium checks are blocked
+because this runtime has no Chrome. All 173 focused recovery tests and 11
+progress/release checks pass. Lint, TypeScript, real HTTP smoke, production
+build, Worker dry-run and diff checks pass. Hosted CI and production publication
+remain pending. The generation incident remains OPEN until Oracle evidence and
+an explicitly authorized successful live request establish acceptance.
+
 # 12 October 2026 — detached Sol/Luna installation verified
 
-Main is still `6f9bcbc333746c42090a8768efd3ebd851ba6222` (PR #267).
-PR #268 remains a draft pending current hosted checks and source-preserving
-publication. Original head `27c45c81eec9cc2275006e5acfa867075f5583bb`
+At the installation checkpoint, main was `6f9bcbc333746c42090a8768efd3ebd851ba6222` (PR #267).
+PR #268 subsequently merged as `878dcff08ffa9b303faccae5912d6dfda651591d`.
+Production run 38227050993 passed with version `860436e0-ee67-4fcd-907c-e8040c4825cc`;
+this source publication did not establish a successful new paid generation. Original head `27c45c81eec9cc2275006e5acfa867075f5583bb`
 passed all seven hosted workflows, including 2,254 application tests.
 
 The restored original SSH connection confirmed active worker/tunnel services,

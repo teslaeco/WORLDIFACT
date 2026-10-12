@@ -14,6 +14,19 @@ export const STUDIO_SUBMIT_TIMEOUT_MS = 180_000
 // complete server-side before this status JSON is returned (25+25+180s plus DO reads).
 export const STUDIO_POLL_TIMEOUT_MS = 270_000
 export const STUDIO_CONNECTION_INTERRUPTED = 'The connection was interrupted while reading this job. Keep this receipt; recovery checks the same job without starting another generation.'
+export class StudioStatusRateLimitError extends Error {
+  readonly retryAt: number
+  constructor(retryAfter: string | null) {
+    super('Status checks are paused by the server. This is not a generation failure. The same request will be checked again automatically.')
+    const seconds = retryAfter?.trim() && /^\d+$/.test(retryAfter.trim()) ? Number(retryAfter) : NaN
+    const delay = Number.isFinite(seconds) ? seconds * 1000 : retryAfter ? Date.parse(retryAfter) - Date.now() : NaN
+    this.retryAt = Date.now() + (Number.isFinite(delay) ? Math.max(60_000, Math.min(300_000, delay)) : 60_000)
+  }
+}
+export function studioReadRetryDelay(error: unknown, failures: number): number {
+  return error instanceof StudioStatusRateLimitError ? Math.max(0, error.retryAt - Date.now())
+    : Math.min(120_000, 5_000 * (2 ** Math.min(Math.max(1, failures), 4)))
+}
 export const STUDIO_RECEIPT_KEY = 'worldifact-studio-current-v1'
 export const STUDIO_RECEIPT_HISTORY_PREFIX = 'worldifact-studio-receipt-v1:'
 export const STUDIO_COST_REVIEW_KEY = 'worldifact-studio-cost-review-v1:'
@@ -125,6 +138,8 @@ export class StudioCoordinator {
   private rejectedJob: StudioJob | null = null
   private submitting = false
   private recovering = false
+  private statusReads = new Map<string, Promise<StudioJob>>()
+  private statusThrottles = new Map<string, StudioStatusRateLimitError>()
   private store: ReceiptStore
   private fetcher: Fetcher
   private reviewOwner: () => string | null
@@ -323,11 +338,33 @@ export class StudioCoordinator {
   }
   async poll(saved = this.saved): Promise<StudioJob> {
     if (!saved) throw new Error('No job receipt is selected.')
+    // A manual recovery click and the page timer must not consume two of the
+    // same receipt's status slots. Never share responses across account scopes.
+    const key = JSON.stringify([this.reviewOwner(), saved.receipt.ticket])
+    const inFlight = this.statusReads.get(key)
+    if (inFlight) return inFlight
+    const throttle = this.statusThrottles.get(key)
+    if (throttle && Date.now() < throttle.retryAt) throw throttle
+    this.statusThrottles.delete(key)
+    const reading = this.readJob(saved).catch(error => {
+      if (error instanceof StudioStatusRateLimitError) this.statusThrottles.set(key, error)
+      throw error
+    }).finally(() => { this.statusReads.delete(key) })
+    this.statusReads.set(key, reading)
+    return reading
+  }
+  private async readJob(saved: SavedStudioJob): Promise<StudioJob> {
     if (this.rejectedJob?.id === saved.receipt.id && !studioPointsPending(this.rejectedJob)) return this.rejectedJob
     const reviewKey = this.reviewKey()
     const response = await this.fetcher(`/api/studio/jobs/${saved.receipt.id}`, {
       headers: { 'X-WORLDIFACT-Job': saved.receipt.ticket }, cache: 'no-store', signal: AbortSignal.timeout(STUDIO_POLL_TIMEOUT_MS),
     })
+    // A status throttle (including a non-JSON proxy reply) says nothing about
+    // generation or settlement. Preserve both and respect its recovery delay.
+    if (response.status === 429) {
+      await response.body?.cancel().catch(() => {})
+      throw new StudioStatusRateLimitError(response.headers.get('Retry-After'))
+    }
     try {
       const job = parseStudioJob(await responseJson(response, saved.receipt.id, saved.fundingSource === PAID_POINTS_FUNDING), saved.receipt.id, savedPoints(saved), saved.fundingSource === PAID_POINTS_FUNDING || !!saved.pointSettlement)
       if (!job.pricing && saved.pricing) job.pricing = saved.pricing

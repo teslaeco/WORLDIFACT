@@ -42,7 +42,10 @@ class StudioVerificationBusyError extends StudioError {}
 class StudioLibraryReceiptExpiredError extends StudioError {
   constructor() { super('This library download receipt expired. Refresh this saved model.', 401) }
 }
-const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
+class StudioRequestRateLimitError extends StudioError {
+  constructor() { super('Please wait before checking or submitting again.', 429) }
+}
+const json = (data: unknown, status = 200, retryAfter?: number) => Response.json(data, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', ...(retryAfter ? { 'Retry-After': String(retryAfter) } : {}) } })
 type StudioDiagnosticReason = NonNullable<StudioJob['failureCode']> |
   'PREFLIGHT_ACCEPTED' | 'EXISTING_ACCOUNT_RESERVATION' | 'STUDIO_ALLOWANCE_UNAVAILABLE' |
   'ACCOUNT_AND_BUDGET_RESERVED' | 'DISPATCH_FENCE_REFUSED' | 'ORACLE_RESPONSE' |
@@ -289,7 +292,7 @@ async function limit(request: Request, env: StudioEnv, bucket: string) {
   if (!env.GENERATION_LIMITER) throw new StudioError('Request limiter is unavailable.', 503)
   try {
     const key = `studio:${bucket}:${request.headers.get('CF-Connecting-IP') || 'unknown-client'}`
-    if (!(await env.GENERATION_LIMITER.limit({ key })).success) throw new StudioError('Please wait before checking or submitting again.', 429)
+    if (!(await env.GENERATION_LIMITER.limit({ key })).success) throw new StudioRequestRateLimitError()
   } catch (e) { if (e instanceof StudioError) throw e; throw new StudioError('Request limiter is unavailable.', 503) }
 }
 function budget(env: StudioEnv) {
@@ -826,7 +829,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
     if (e instanceof StudioError || e instanceof EntitlementError) return json({ error: e.message,
       ...(e instanceof StudioLibraryReceiptExpiredError ? { code: 'STUDIO_LIBRARY_RECEIPT_EXPIRED' } : {}),
       ...(e instanceof StudioError && e.failureCode ? { failureCode: e.failureCode } : {}),
-      ...(e instanceof StudioError && e.pointSettlement ? { pointSettlement: e.pointSettlement, requestId: e.requestId, state: e.pointSettlement.state === 'held' ? 'pending' : 'failed' } : {}) }, e.status)
+      ...(e instanceof StudioError && e.pointSettlement ? { pointSettlement: e.pointSettlement, requestId: e.requestId, state: e.pointSettlement.state === 'held' ? 'pending' : 'failed' } : {}) }, e.status, e instanceof StudioRequestRateLimitError ? 60 : undefined)
     return json({ error: 'The request could not be confirmed. Preserve your inputs and receipt; never automatically resubmit a paid job.' }, 503)
   }
 }
