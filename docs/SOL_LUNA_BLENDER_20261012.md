@@ -1,11 +1,27 @@
 # Sol/Luna detailed model integration — installation checkpoint
 
-Status: **not installed and not LIVE verified**. The Oracle connection initially
-allowed an exact source snapshot. A fresh connection later confirmed the same
-14-file execution predecessor, active worker/tunnel/Ollama services and existing
-user lingering. Cloud Shell then disconnected again, including with `tmux`.
-No production runtime, attestation or ledger was modified. Main remains PR #267.
-Do not merge this checkpoint as a completed fix.
+Status: **Oracle installation verified; Worker publication and LIVE acceptance pending**.
+The original SSH connection was restored on 12 October. It confirmed the exact
+expected predecessor, active worker/tunnel services and no nonterminal jobs.
+The prior `unconfirmed` launcher result was traced to the existing owned parent
+directory's 0755 mode, before any attempt folder or unit existed. Restricting that
+parent to 0700 allowed source `27c45c81eec9cc2275006e5acfa867075f5583bb` to start
+in the VM's existing lingering user manager. A later, separate SSH status read
+confirmed `running` after the launch session exited. That same durable attempt
+then finished successfully: `activation_committed=true`,
+`job_rows_changed=false`, `paid_generation_requested=false` and
+`provider_limits_changed=false`. Do not resubmit it with a different commit.
+At 08:46 UTC a separate SSH inspection verified all six source-bound evidence
+hashes, `studio-execution-v1` for all three models and both modes, and running
+worker/tunnel services. The original job history and latest chessboard are
+unchanged. This uses real CLI/MCP/Podman-Blender with inert provider responses;
+the installed receipt correctly retains `live_provider_verified: false`.
+
+The source continuation handles this legacy parent safely on approved start and
+adds a failing-before/passing-after regression. It never repairs a shared-writable
+root or mutates paths on read-only status. The Worker publication envelope is
+prepared at exact main `6f9bcbc333746c42090a8768efd3ebd851ba6222`; it preserves
+billing/configuration and grants no financial waiver. New hosted CI is required.
 
 The Shop previously sent Sol and Luna to the procedural blueprint endpoint.
 Their OpenAI calls did not make them detailed Blender models. This change adds
@@ -75,16 +91,17 @@ strict result parsing, repeated requests and unsafe paths. The complete local
 construction suite ran 299 tests: 295 passed, three kernel tests are blocked by
 this environment's process namespace and the opt-in native Blender test skipped.
 Hosted Python 3.9/3.12 and the existing native Blender workflow must pass.
-The new actual CLI/Podman gates still require Oracle; no native success is
-inferred from these tests or the separate native-Blender regression workflow.
+The new actual CLI/Podman gates subsequently passed on Oracle as recorded above;
+that result is distinct from these unit tests and the hosted native-Blender job.
 
 `detached_construction.py` submits the pinned installation to the VM's existing
 lingering systemd user manager. It requires the original SSH key and strict host
 checking, can use the already-known public VM address without OCI discovery,
 and changes no SSH credentials, login policy or service permissions. The
 bounded unit has `Restart=no`; its private durable folder is a once-only latch.
-SSH disconnect does not own that service. This behavior is tested with inert
-process boundaries; actual logout survival on Oracle remains unverified.
+SSH disconnect does not own that service. Separate SSH sessions confirmed the
+same running attempt after its launching session exited, then its successful
+completion. A physical phone/browser logout was not separately tested.
 
 From the original Cloud Shell, with both launcher modules from the same reviewed
 commit available, the operator command is:
@@ -106,17 +123,17 @@ uncertain results require inspection, never an automatic repeat with a new ID.
 
 ## Remaining activation work
 
-1. Restore a responsive Oracle connection and re-read source, service, job and
-   receipt identities. A stale Desktop Commander Online label is insufficient.
-2. Verify the new exact-head hosted checks and start the prepared `--update-models`
-   transaction through the detached VM service. The old `--update-execution`
-   mode is only the previous required-tools repair; it does not install these
-   model routes. Recheck the same durable attempt after any connection loss.
-3. Run genuine isolated CLI/MCP/Blender gates for the legacy routes and every
-   new selection. Create source-bound receipts only from those new successful
-   gates. New execution health additionally binds the construction receipt.
-4. Install and verify runtime health, freeze the exact preserving Worker release
-   scope, pass hosted CI and deploy. Existing secrets, runtime variables,
+1. DONE: restore and verify the original Oracle SSH connection. Inspect the
+   existing detached attempt using its original immutable commit.
+2. DONE: the approved `--update-models` transaction finished as the detached VM
+   service. Read its same durable result after any connection loss. The old
+   `--update-execution` mode does not install model routes. The original installer
+   head passed hosted CI; the permission/release continuation still needs its CI.
+3. DONE: genuine isolated CLI/MCP/Blender gates passed for the legacy routes and
+   every new selection. Installed source-bound receipts match all six successful
+   evidence files. New execution health additionally binds the construction receipt.
+4. Runtime activation/health and the exact preserving Worker release scope are
+   verified. Pass current hosted CI and deploy. Existing secrets, runtime variables,
    billing configuration, balances and original assets must remain intact.
 5. Run explicit bounded real Sol/Luna acceptance requests using the remaining
    previously approved test allowance. Verify actual provider model, resulting

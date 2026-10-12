@@ -1,0 +1,12 @@
+{
+  "release": "sol-luna-blender-20261012",
+  "baseCommit": "6f9bcbc333746c42090a8768efd3ebd851ba6222",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "providerCalls": 0,
+  "oracleInstallation": false,
+  "requiredOracleSourceCommit": "27c45c81eec9cc2275006e5acfa867075f5583bb",
+  "imagePoints": 5,
+  "referenceLimit": 4
+}

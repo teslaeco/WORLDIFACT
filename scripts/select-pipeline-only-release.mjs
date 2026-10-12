@@ -1095,7 +1095,55 @@ export const SOL_LUNA_RESULT_PATHS = Object.freeze([
   "tests/sol-luna-result-release.test.mjs"
 ])
 
+export const SOL_LUNA_BLENDER_BASE = "6f9bcbc333746c42090a8768efd3ebd851ba6222"
+export const SOL_LUNA_BLENDER_MARKER = "ops/SOL_LUNA_BLENDER_RELEASE_20261012.json"
+export const SOL_LUNA_BLENDER_CONTENT = "{\n  \"release\": \"sol-luna-blender-20261012\",\n  \"baseCommit\": \"6f9bcbc333746c42090a8768efd3ebd851ba6222\",\n  \"preserveBilling\": true,\n  \"preserveRemoteVars\": true,\n  \"preserveSecrets\": true,\n  \"providerCalls\": 0,\n  \"oracleInstallation\": false,\n  \"requiredOracleSourceCommit\": \"27c45c81eec9cc2275006e5acfa867075f5583bb\",\n  \"imagePoints\": 5,\n  \"referenceLimit\": 4\n}\n"
+export const SOL_LUNA_BLENDER_PATHS = Object.freeze([
+  ".github/workflows/cloudflare.yml",
+  ".github/workflows/model-construction-review.yml",
+  "docs/CONTEST_STATUS.md",
+  "docs/SOL_LUNA_BLENDER_20261012.md",
+  "ops/SOL_LUNA_BLENDER_RELEASE_20261012.json",
+  "scripts/select-failed-hold-release.mjs",
+  "scripts/select-pipeline-only-release.mjs",
+  "server/adminEntitlement.ts",
+  "server/entitlements.ts",
+  "server/studio.ts",
+  "server/studioBudgetReceipt.ts",
+  "src/components/GenerationCostNotice.tsx",
+  "src/lib/studioClient.ts",
+  "src/lib/studioDraft.ts",
+  "src/lib/studioExecution.ts",
+  "src/lib/studioProtocol.ts",
+  "src/pages/ShopPage.tsx",
+  "tests/admin-entitlement.test.ts",
+  "tests/execution-tools-release.test.mjs",
+  "tests/generation-profile-client.test.mjs",
+  "tests/paid-points-admission.test.ts",
+  "tests/paid-points-settlement-api.test.ts",
+  "tests/prompt-model-ui.test.mjs",
+  "tests/shop-draft-lifecycle.test.mjs",
+  "tests/shop-external.test.mjs",
+  "tests/shop-render-helper.mjs",
+  "tests/sol-luna-blender-release.test.mjs",
+  "tests/studio-execution-ledger.test.mjs",
+  "tests/studio-native-fetch-browser.test.mjs",
+  "tools/model_construction/construction_manifest.py",
+  "tools/model_construction/detached_construction.py",
+  "tools/model_construction/install_construction.py",
+  "tools/model_construction/oracle_construction_launch.py",
+  "tools/model_construction/test_construction_launcher.py",
+  "tools/model_construction/test_detached_construction.py",
+  "tools/model_construction/test_model_update.py",
+  "tools/model_execution/model_routes.py",
+  "tools/model_execution/offline_models.py",
+  "tools/model_execution/studio_execution.py",
+  "tools/model_execution/test_model_routes.py",
+  "tools/model_execution/test_studio_execution.py"
+])
+
 const scopes = [
+  { base: SOL_LUNA_BLENDER_BASE, marker: SOL_LUNA_BLENDER_MARKER, content: SOL_LUNA_BLENDER_CONTENT, paths: SOL_LUNA_BLENDER_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: SOL_LUNA_RESULT_BASE, marker: SOL_LUNA_RESULT_MARKER, content: SOL_LUNA_RESULT_CONTENT, paths: SOL_LUNA_RESULT_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: STUDIO_FILE_REFERENCE_BASE, marker: STUDIO_FILE_REFERENCE_MARKER, content: STUDIO_FILE_REFERENCE_CONTENT, paths: STUDIO_FILE_REFERENCE_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
   { base: STUDIO_ADMISSION_BASE, marker: STUDIO_ADMISSION_MARKER, content: STUDIO_ADMISSION_CONTENT, paths: STUDIO_ADMISSION_PATHS, preserveRemoteVars: true, aiShopUi: true, singleParent: true },
@@ -1188,7 +1236,7 @@ function selectReleaseScope(cwd, readGit) {
   if (scope.singleParent && readGit(cwd, ['rev-list', '--parents', '-n', '1', head]).trim() !== `${head} ${parent}`) refuse()
   if (changes.some(change => !['A', 'M'].includes(change.status)) ||
       JSON.stringify(changes.map(change => change.path).sort()) !== JSON.stringify(scope.paths)) refuse()
-  if (scope.marker === SOL_LUNA_RESULT_MARKER || scope.marker === STUDIO_FILE_REFERENCE_MARKER || scope.marker === STUDIO_ADMISSION_MARKER || scope.marker === STUDIO_EXECUTION_MARKER || scope.marker === ARTIFACT_INTEGRITY_MARKER || scope.marker === STUDIO_REFERENCE_MARKER || scope.marker === STUDIO_READBACK_MARKER || scope.marker === LIBRARY_THEME_MARKER || scope.marker === SHOP_LIBRARY_MARKER || scope.marker === SHOP_CONTRAST_MARKER || scope.marker === SHOP_ATTACHMENTS_MARKER || scope.marker === CLEAN_STUDIO_MARKER || scope.marker === IMAGE_RUNTIME_MARKER || scope.marker === IMAGE_PRICE_MARKER || scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
+  if (scope.marker === SOL_LUNA_BLENDER_MARKER || scope.marker === SOL_LUNA_RESULT_MARKER || scope.marker === STUDIO_FILE_REFERENCE_MARKER || scope.marker === STUDIO_ADMISSION_MARKER || scope.marker === STUDIO_EXECUTION_MARKER || scope.marker === ARTIFACT_INTEGRITY_MARKER || scope.marker === STUDIO_REFERENCE_MARKER || scope.marker === STUDIO_READBACK_MARKER || scope.marker === LIBRARY_THEME_MARKER || scope.marker === SHOP_LIBRARY_MARKER || scope.marker === SHOP_CONTRAST_MARKER || scope.marker === SHOP_ATTACHMENTS_MARKER || scope.marker === CLEAN_STUDIO_MARKER || scope.marker === IMAGE_RUNTIME_MARKER || scope.marker === IMAGE_PRICE_MARKER || scope.marker === IMAGE_RELEASE_MARKER || scope.marker === FORFEIT_RELEASE_MARKER || scope.marker === COMPACT_RELEASE_MARKER || scope.marker === ADMIN_RELEASE_MARKER || scope.marker === AI_SHOP_UI_MARKER_PATH || scope.marker === PAID_POINTS_ADMISSION_MARKER_PATH || scope.marker === BOUNDED_SOFTWARE_PREVIEW_MARKER_PATH || scope.marker === OWNER_RESERVE_ADJUSTMENT_MARKER_PATH || scope.marker === ACCOUNT_PURCHASE_EVIDENCE_MARKER_PATH || scope.marker === SUBSCRIPTION_UPGRADE_MARKER_PATH || scope.marker === COMPATIBLE_MCC_MARKER_PATH || scope.marker === MODEL_PREVIEW_MARKER_PATH || scope.marker === FUNDING_MARKER_PATH || scope.marker === READONLY_QUOTE_MARKER_PATH || scope.marker === MCC_ONE_ATTEMPT_MARKER_PATH || scope.marker === ACCOUNT_MODEL_LIBRARY_MARKER_PATH || scope.marker === PROJECT_MCC_ATTEMPT_MARKER_PATH || scope.marker === CABINET_CONTEXT_MARKER_PATH || scope.marker === GENERATION_RECOVERY_MARKER_PATH || scope.marker === ONE_TIME_TEST_MARKER_PATH || scope.marker === TEST_STATUS_REPAIR_MARKER_PATH || scope.marker === SHOP_TEST_FUNDING_MARKER_PATH) {
     const entries = readGit(cwd, ['ls-tree', '-z', head, '--', ...scope.paths]).split('\0')
     if (entries.pop() !== '' || entries.length !== scope.paths.length) refuse()
     const paths = entries.map(entry => {

@@ -66,6 +66,26 @@ class DetachedTests(unittest.TestCase):
         self.assertEqual(self.remote(command=missing)['state'], 'unconfirmed')
         self.assertEqual(list(self.folder.iterdir()), [])
 
+    def test_owner_readable_legacy_root_is_tightened_before_first_dispatch(self):
+        root = self.folder.parent
+        root.mkdir(parents=True, mode=0o755)
+        root.chmod(0o755)
+        self.assertEqual(self.remote(None)['state'], 'unconfirmed')
+        self.assertEqual(root.stat().st_mode & 0o777, 0o755)
+        self.assertEqual(self.remote()['state'], 'started')
+        self.assertEqual(root.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(self.remote()['state'], 'running')
+        self.assertEqual(len([a for a, _ in self.calls if a[0] == 'systemd-run']), 1)
+
+    def test_shared_writable_legacy_root_is_not_repaired_or_dispatched(self):
+        root = self.folder.parent
+        root.mkdir(parents=True, mode=0o777)
+        root.chmod(0o777)
+        self.assertEqual(self.remote()['state'], 'unconfirmed')
+        self.assertEqual(root.stat().st_mode & 0o777, 0o777)
+        self.assertFalse(self.folder.exists())
+        self.assertFalse(self.calls)
+
     def test_status_requires_strict_terminal_json_and_does_not_download_or_write(self):
         self.assertEqual(self.remote(None)['state'], 'unconfirmed')
         self.assertFalse(self.folder.exists())

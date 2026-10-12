@@ -4,7 +4,9 @@ The unit, private log and durable launch latch belong to the VM, not the SSH
 session. Repeated launch calls only inspect the same attempt. An uncertain
 dispatch never retries automatically. No credentials, jobs or runtime files are
 read here; the separately pinned installer retains its full admission/rollback
-transaction. Default is an inert plan. --status is read-only.
+transaction. On approved start, an owner-only-writable legacy parent directory
+is restricted to 0700 before saving the attempt. Shared-writable directories
+remain refused. Default is an inert plan. --status is read-only.
 """
 import base64
 import hashlib
@@ -47,6 +49,21 @@ def private_path(path, directory):
 def create(path,raw):
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
     with os.fdopen(fd,'wb') as stream:stream.write(raw);stream.flush();os.fsync(stream.fileno())
+def prepare_root(path):
+    # Older installers created this parent with the default 0755 mode. Restrict
+    # that owned directory; never accept a shared writer or follow a replacement.
+    fd=os.open(path,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        before=os.fstat(fd)
+        if before.st_uid!=os.getuid() or stat.S_IMODE(before.st_mode)&0o022:
+            raise ValueError('owner-only writer required')
+        if stat.S_IMODE(before.st_mode)&0o077:
+            os.fchmod(fd,0o700);os.fsync(fd)
+        current=path.lstat()
+        if (current.st_dev,current.st_ino)!=(before.st_dev,before.st_ino):
+            raise ValueError('directory changed')
+        private_path(path,True)
+    finally:os.close(fd)
 def status(folder):
     private_path(folder,True)
     log=folder/'result.json'
@@ -76,7 +93,7 @@ try:
         if not 0<len(raw)<=8388608 or hashlib.sha256(raw).hexdigest()!=PROGRAM_SHA256:raise ValueError('invalid program')
         compile(raw,'reviewed-install.py','exec')
         root.mkdir(mode=0o700,parents=True,exist_ok=True)
-        private_path(root,True)
+        prepare_root(root)
         if folder.exists():
             # The folder itself is the durable once-only latch. Even an empty
             # folder left by an interrupted acknowledgement must not relaunch.

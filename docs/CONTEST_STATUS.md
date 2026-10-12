@@ -1,27 +1,47 @@
-# 12 October 2026 — Sol/Luna installer prepared, Oracle connection offline
+# 12 October 2026 — detached Sol/Luna installation verified
 
-The owner asked to replace the Sol/Luna procedural-only Shop path with the
-existing detailed Blender workflow. Immutable per-job model/mode selection,
-account holds, terminal cost receipts, reference inputs and recovery are now
-implemented in a review branch. The exact observed Oracle server/runner have
-a pure source transform and a separate capped ledger for new selections.
-The original Astra path and historical ledgers remain unchanged.
+Main is still `6f9bcbc333746c42090a8768efd3ebd851ba6222` (PR #267).
+PR #268 remains a draft pending current hosted checks and source-preserving
+publication. Original head `27c45c81eec9cc2275006e5acfa867075f5583bb`
+passed all seven hosted workflows, including 2,254 application tests.
 
-Published head `2295850` passed all 2,254 application tests and full hosted
-verification in run `38207825999`, including both native Chromium tests.
-The subsequent installer adds the exact predecessor transaction, all four old
-gates plus six CLI/MCP/Podman model/mode gates, and a VM-owned once-only service
-with private saved results. Seven transaction and five detached-run tests pass.
-The full local construction suite has 295 passes, three process-namespace blocks
-and one opt-in native skip; new exact-head hosted checks are still required.
+The restored original SSH connection confirmed active worker/tunnel services,
+the exact expected server/runner hashes and zero nonterminal jobs. The latest
+Oracle row is the existing chessboard, completed in 98.4 seconds. No subsequent
+Oracle row exists; that does not identify the account-side reason for the
+owner's next failed submission. No retry, balance correction or paid test was
+performed in this continuation.
 
-Fresh SSH confirmed the unchanged 14-file predecessor, active worker/tunnel/
-Ollama services and existing user lingering. Cloud Shell then disconnected
-again despite `tmux`; Desktop Commander now reports Offline. No new Oracle
-source, receipts, services or ledgers were written. The six genuine isolated
-gates, actual detached installation/logout check, production release and real
-Sol/Luna acceptance remain pending. See SOL_LUNA_BLENDER_20261012.md for exact
-scope and continuation requirements. Do not label this checkpoint LIVE.
+The old maintenance parent directory was owned by the worker user but had mode
+0755. The detached launcher refused it before creating an attempt or unit and
+reported only `unconfirmed`. After checking both were absent, that same owned
+directory was restricted to 0700. The unchanged reviewed installer then returned
+`started` and a subsequent independent SSH status returned `running`, after the
+launching SSH process had exited. The same durable attempt subsequently finished
+with `activation_committed=true`, `job_rows_changed=false`,
+`paid_generation_requested=false` and `provider_limits_changed=false`.
+The once-only unit must not be relaunched under a new commit.
+
+The launcher continuation now performs this narrow prerequisite itself on an
+approved start: an owned directory without group/other write access is restricted
+to 0700 using an opened directory descriptor. Shared-writable roots, symlinks,
+replacement races and changed ownership remain rejected. Read-only status never
+changes permissions. The new reproduction failed before the fix; all seven
+launcher tests now pass, including the existing uncertain-dispatch latch tests.
+
+The new Worker release envelope binds the actual current-main parent and exact
+41-file scope, preserves deployed variables/secrets/bindings/billing, and never
+runs the historical hold waiver. Local validation: 2,255/2,257 application tests
+pass; only the two existing native Chromium tests are unavailable in this local
+runtime. Lint, TypeScript, HTTP smoke, production build and Worker dry-run pass.
+New exact-head hosted checks remain required. Oracle's four original plus six
+model/mode CLI/MCP/Podman gates passed. An independent read at 08:46 UTC verified
+all six evidence hashes, the installed `studio-execution-v1` capability for
+`astra/sol/luna` and `standard/fast`, and active worker/tunnel services. Job counts
+remain one cancelled, 73 failed and 90 succeeded; the existing chessboard remains
+the latest job. This is installation and native-pipeline evidence using inert
+provider responses, not a new paid LIVE result. Source publication and bounded
+live acceptance remain pending. See SOL_LUNA_BLENDER_20261012.md.
 
 # 11 October 2026 — real file references in the existing generator
 
