@@ -718,6 +718,21 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
           return json({ job: await accountJob(env, user?.id, auth.id, completed.state as StudioJob['state'], fetcher, oracleFailureCode(completed), completed.timingObservation) }, 202)
         } catch (error) {
           if (error instanceof StudioError) throw error
+          // A lost HTTP POST acknowledgement is NOT proof that Oracle failed
+          // to accept the original paid job. Read only the *same signed ID*;
+          // this must never re-POST, reseed the budget or change customer points.
+          // A missing/unavailable/unverified read retains pending-cost and
+          // leaves ordinary same-receipt recovery in charge.
+          try {
+            const confirmation = await oracle(env, `/v1/jobs/${auth.id}`, fetcher, {}, 2500)
+            if (confirmation.ok) {
+              const state = await limitedJson(confirmation, 16_384)
+              if (state.id === auth.id && ['queued', 'generating', 'retrying', 'building'].includes(String(state.state))) {
+                logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'RECOVERY_ONLY', reason: 'ORACLE_RESPONSE', oracleDispatch: 'RESPONSE', workerStatus: 200 })
+                return json({ job: await accountJob(env, user?.id, auth.id, state.state as StudioJob['state'], fetcher), recoveryOnly: true }, 202)
+              }
+            } else await confirmation.body?.cancel()
+          } catch { /* No duplicate provider call and no guessed zero cost. */ }
           return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending, ...(admittedPointSettlement ? { pointSettlement: admittedPointSettlement } : {}), ...(pricing ? { pricing } : {}) } }, 202)
         }
       })()
