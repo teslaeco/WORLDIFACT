@@ -1,6 +1,12 @@
 # 12 October 2026 — status recovery correction; missing submission remains open
 
-Current public source is PR #268, main `878dcff08ffa9b303faccae5912d6dfda651591d`.
+Current public source is PR #269, main `a39fcdc9653e8ca61c1bda91b42db139437b34d6`.
+Its exact tree is `292c2c881cb5b4d9b6c2eab9d760eae6ca8a0323`. Production run
+38239526320 passed at 11:00 UTC with Cloudflare version
+`7af7b84a-4712-4526-bdae-8605d5b35408`; GET-only checks matched 12 HTML routes and
+436 exact built files. All 2,264 hosted application tests passed. Main Verify
+38239526309 also passed. Secret/payment synchronization and the historical hold
+waiver were skipped; existing runtime variables and financial state were retained.
 The owner's subsequent account request was inspected through the signed-in Shop:
 it ended with `ORACLE_JOB_MISSING`, with customer settlement pending review.
 The preceding screenshots show acceptance unconfirmed and a status rate limit.
@@ -22,15 +28,37 @@ The exact source-only release scope is pinned to the current main and preserves
 remote variables, secrets, bindings and billing. It never runs the historical
 hold waiver or an Oracle installer. This is a status recovery correction, not a
 claim that the missing Oracle submission was repaired. The original remote
-administration connection is currently offline; the failed job's Oracle logs
-and transport path remain to be inspected using that connection. No paid LIVE
-acceptance result exists for this correction. Local validation: 2,262 of 2,264
+administration connection has been restored. The worker and its original tunnel
+are running; authenticated health is ready with Astra/Sol/Luna and both execution
+modes. The failed request has neither an Oracle row nor a job directory. No
+nonterminal jobs exist, and the existing 98.4-second chessboard remains the latest
+Oracle job. Available logs do not establish why that submission never persisted.
+
+After verifying the active tunnel's ownership from its service and startup log,
+an invalid-ID request returned the expected HTTP 400 through both loopback and
+the exact public tunnel. The reviewed handler rejects that ID before job creation;
+the production database hash was unchanged. An isolated invocation of the actual
+installed admission handler accepted all six model/mode combinations into a
+temporary database, with sockets and subprocesses disabled. Neither diagnostic
+started a production job or called a provider.
+
+The follow-up `tests/studio-admission-native.test.mjs` passes all six sequential
+combinations through the real Studio handler and SQLite account/budget objects
+in local Miniflare. Each separately prepared paid-membership receipt produces one
+mock Oracle POST; receipt replay produces none. Four-image payloads retain their
+data and existing left/right-to-side wire normalization. This is isolated native
+runtime evidence, not a successful paid model or a production network test.
+
+No paid LIVE acceptance result exists for this correction. Local validation of
+the deployed tree: 2,262 of 2,264
 application tests pass; the two existing native Chromium checks are blocked
 because this runtime has no Chrome. All 173 focused recovery tests and 11
 progress/release checks pass. Lint, TypeScript, real HTTP smoke, production
 build, Worker dry-run and diff checks pass. Hosted CI and production publication
-remain pending. The generation incident remains OPEN until Oracle evidence and
-an explicitly authorized successful live request establish acceptance.
+subsequently passed as recorded above. The previous test ledger's fixed approval
+expired at 04:00 UTC; its uncertain reservation was not released or retried.
+No new paid attempt or budget reset occurred. The generation incident remains
+OPEN; these checks do not establish a repaired end-to-end paid request.
 
 # 12 October 2026 — detached Sol/Luna installation verified
 
@@ -75,8 +103,9 @@ all six evidence hashes, the installed `studio-execution-v1` capability for
 `astra/sol/luna` and `standard/fast`, and active worker/tunnel services. Job counts
 remain one cancelled, 73 failed and 90 succeeded; the existing chessboard remains
 the latest job. This is installation and native-pipeline evidence using inert
-provider responses, not a new paid LIVE result. Source publication and bounded
-live acceptance remain pending. See SOL_LUNA_BLENDER_20261012.md.
+provider responses, not a new paid LIVE result. Source publication subsequently
+passed in run 38227050993 as recorded above; bounded live acceptance remains
+pending. See SOL_LUNA_BLENDER_20261012.md.
 
 # 11 October 2026 — real file references in the existing generator
 

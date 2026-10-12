@@ -1,6 +1,10 @@
 # Sol/Luna detailed model integration — installation checkpoint
 
-Status: **Oracle installation verified; Worker publication and LIVE acceptance pending**.
+Status: **Oracle installation and Worker publication verified; LIVE acceptance pending**.
+PR #268 merged as `878dcff08ffa9b303faccae5912d6dfda651591d`. Production run
+38227050993 passed at 09:03 UTC with version
+`860436e0-ee67-4fcd-907c-e8040c4825cc`, matching 12 HTML routes and 436 built files.
+The later status correction #269 is also deployed; see CONTEST_STATUS.md.
 The original SSH connection was restored on 12 October. It confirmed the exact
 expected predecessor, active worker/tunnel services and no nonterminal jobs.
 The prior `unconfirmed` launcher result was traced to the existing owned parent
@@ -21,7 +25,9 @@ The source continuation handles this legacy parent safely on approved start and
 adds a failing-before/passing-after regression. It never repairs a shared-writable
 root or mutates paths on read-only status. The Worker publication envelope is
 prepared at exact main `6f9bcbc333746c42090a8768efd3ebd851ba6222`; it preserves
-billing/configuration and grants no financial waiver. New hosted CI is required.
+billing/configuration and grants no financial waiver. Final head
+`f5ebb0a0cade09976edc9612fc90c6f5f702d636` passed all seven hosted workflows,
+including Verify 38225827019 (2,257 tests) and construction review 38225826955.
 
 The Shop previously sent Sol and Luna to the procedural blueprint endpoint.
 Their OpenAI calls did not make them detailed Blender models. This change adds
@@ -128,17 +134,19 @@ uncertain results require inspection, never an automatic repeat with a new ID.
 2. DONE: the approved `--update-models` transaction finished as the detached VM
    service. Read its same durable result after any connection loss. The old
    `--update-execution` mode does not install model routes. The original installer
-   head passed hosted CI; the permission/release continuation still needs its CI.
+   head and permission/release continuation both passed hosted CI.
 3. DONE: genuine isolated CLI/MCP/Blender gates passed for the legacy routes and
    every new selection. Installed source-bound receipts match all six successful
    evidence files. New execution health additionally binds the construction receipt.
-4. Runtime activation/health and the exact preserving Worker release scope are
-   verified. Pass current hosted CI and deploy. Existing secrets, runtime variables,
-   billing configuration, balances and original assets must remain intact.
-5. Run explicit bounded real Sol/Luna acceptance requests using the remaining
-   previously approved test allowance. Verify actual provider model, resulting
-   GLB/Blender files, original-job recovery and account settlement. An uncertain
-   attempt continues to consume its maximum reserved test liability.
+4. DONE: runtime activation/health, hosted CI and preserving Worker publication
+   are verified. Existing secrets, runtime variables, billing configuration,
+   balances and original assets were retained.
+5. Paid live acceptance remains pending. The recovered test ledger's fixed
+   approval expired at 04:00 UTC, so it cannot admit another attempt. Its uncertain
+   reserved attempt was not released or retried. A fresh explicit bounded test
+   authorization is required before new paid acceptance work. Verify actual
+   provider model, resulting GLB/Blender files, original-job recovery and account
+   settlement; installation and mocked-provider checks do not establish these.
 
 Official contracts checked on 12 October:
 https://developers.openai.com/api/docs/models/gpt-6.1-sol
