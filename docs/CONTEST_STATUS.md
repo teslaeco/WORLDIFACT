@@ -12,11 +12,31 @@ theme teaser, the empty attachment counter and the verbose form-reset paragraph;
 reference-format help moved into Settings. Current model selection, cost, active
 progress, successful previews, exports and the account library remain available.
 
-Local validation: all 125 focused Shop/release tests pass. The full run passes
-2,270 of 2,272 tests; its only two failures explicitly require Chromium, absent
-from this local runtime. Lint, TypeScript, real local HTTP smoke, production
-build, Worker dry-run and diff checks pass. Exact-head hosted CI and public
-deployment remain pending for this source revision.
+Hosted verification passed all 2,272 application tests, including both native
+Chromium checks, in Verify run 38246449589. All five PR workflows passed on
+`e0c4fdcd309cf21986917291b1959bf16379e92e`. PR #271 merged as
+`d70adf1c627c9bd5721b6a32e6c020fb3ae59869`, with the exact tested tree
+`c1de2eb4a48df2ff8f1cba8a046832362fd25f46`; main Verify 38246794878 also passed.
+Production run 38246794816 attempt 2 succeeded at 12:11 UTC, publishing version
+`c0dcaca0-491c-430c-a67c-4c6f12ca5c5c`. GET-only verification matched all 12 HTML
+routes and 436 exact built files. Runtime variables, secrets, bindings and billing
+were preserved; the historical hold waiver and secret/payment synchronization
+were skipped. Attempt 1 stopped before deployment because an unchanged native
+Chromium fixture returned RUNNING at its virtual-time deadline. The failed job
+was rerun with all gates intact; no assertion or production guard was bypassed.
+
+The public Shop was reloaded after publication. The successful original model
+preview and export controls returned, the form was empty, Request history & help
+was closed, and the removed teaser/empty-attachment/reset prose was absent.
+Restored-failure/current-failure/pending-concept behavior is covered by the
+component lifecycle tests; the current browser held a successful model, so this
+is not claimed as an independent live failed-job reproduction. No new paid
+request, financial correction or Oracle installation was performed.
+
+Local validation: all 125 focused Shop/release tests pass. The full local run
+passes 2,270 of 2,272 tests; the two native Chromium tests require a browser absent
+from that runtime. Lint, TypeScript, local HTTP, build, Worker dry-run and diff
+checks pass. Hosted results above close that local browser limitation.
 The release envelope is pinned to main `a39fcdc9653e8ca61c1bda91b42db139437b34d6`
 and preserves runtime variables, secrets, bindings and billing. It runs neither
 an Oracle installation nor a historical hold waiver. No new paid generation is
