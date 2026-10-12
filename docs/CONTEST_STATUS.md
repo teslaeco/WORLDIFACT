@@ -1,3 +1,9 @@
+# 12 October 2026 — P0 historic PR audit, lost-ack recovery and native regression tests (VERIFIED / UNKNOWN / BLOCKED)
+
+VERIFIED (SOURCE): Audited PR timeline #1–#274, including account Durable Object, dispatch fence, Worker lifetime, model routing and Oracle fixes. PR #274 now has a bounded same-original-ID Oracle GET fallback after uncertain POST acknowledgement, no duplicate provider POST and no balance/settlement writer changes. Added lost-ACK/missing-job tests, 10 sequential mocked generations, and native Miniflare six model/mode tests ported from draft #270; previous three privacy-safe offline Oracle audit tests passed. Hosted exact-head app CI remains pending on this docs edit.
+
+UNKNOWN/BLOCKED: Cross-tier confirmed durability where Oracle never receives the first POST, provider cost for original missing requests, and production repeated-model E2E. Reference connector source is not verified installed source. Full actionable Codex engineering task: `docs/CODEX_ORACLE_DURABLE_ADMISSION_P0_20261012.md`; no Codex CLI present on the connected Cloud Shell. Until root ingress fix, owner-reviewed GO and new separately authorized paid cap: NO-GO. No production merge/deploy, new paid POST, Stripe, point balance or VM changes.
+
 # 12 October 2026 — Ten sequential mocked generation test and CI boundary repair (VERIFIED / UNKNOWN / BLOCKED)
 
 VERIFIED: Reverted `.github/workflows/ci.yml` to its protected exact SHA after the release-hash guard flagged a modified workflow. New isolated `.github/workflows/p0-oracle-audit-tests.yml` passed hosted offline Python audit checks. Added ten sequential signed generation / same-receipt replay fixture to `tests/studio-api.test.ts`, targeting exactly ten mocked Oracle POSTs and no duplicate dispatch. Await complete exact-head hosted JS CI before marking this newest test passed.
