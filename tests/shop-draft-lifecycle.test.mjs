@@ -60,7 +60,7 @@ function text(node) {
 // Runs the actual checked-in Shop function, its effects, event handlers and real
 // StudioCoordinator. Hook, timer, HTTP and IndexedDB adapters are deterministic.
 // This is a Node lifecycle test, not a DOM/WebGL/physical Android test.
-async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, submittedAt, artifactFailure = false, artifactMalformed = false, archiveSaveFailure = false, withArchivedModel = true, solReady = ready, lunaReady = solReady, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, healthLookup, testPool, initialStore, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery, referenceRenderer, prepareResponse } = {}) {
+async function harness({ ready = false, state = 'succeeded', failureCode, submissionRejection, submissionRejectionStatus = 409, submissionResponse, jobLookup, receiptCreatedAt, submittedAt, artifactFailure = false, artifactMalformed = false, archiveSaveFailure = false, withArchivedModel = true, solReady = ready, lunaReady = solReady, downloadAllowed, reconciliationRequired = false, withExistingJob = true, cloudCurrent = false, characterPrompt = '', detailedReady = false, executionReady = detailedReady, studioStatusLookup, pricingReady = detailedReady, newJobPolicy, existingPricing, cloudLookup, accountLookup, billingLookup, healthLookup, testPool, initialStore, initialAccount = { user: { id: 'owner-a' }, loading: false }, blueprintRecovery, referenceRenderer, prepareResponse } = {}) {
   const selected = { ...(existingPricing ? { pricing: existingPricing } : {}), receipt: makeReceipt(oldId), prompt: 'Original brown chess knight', startedAt: new Date().toISOString() }
   if (receiptCreatedAt) selected.receipt.createdAt = receiptCreatedAt
   if (submittedAt) selected.startedAt = submittedAt
@@ -68,7 +68,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
   if (blueprintRecovery) storeData.set('worldifact:blueprint-recovery:v1', JSON.stringify(blueprintRecovery))
   const storage = { getItem: k => storeData.get(k) ?? null, setItem: (k,v) => { storeData.set(k,v) }, removeItem: k => { storeData.delete(k) } }
   const calls = [], blob = artifactMalformed ? new Blob(['not a GLB']) : modelBlob(), archive = new Map(withArchivedModel ? [[oldId, { id: oldId, prompt: selected.prompt, byteLength: blob.size, savedAt: selected.startedAt, sha256: 'original', review: 'UNREVIEWED' }]] : [])
-  const status = { newJobPolicy, pricingRevision: STUDIO_PRICING_REVISION, tiersReady: pricingReady, detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
+  const status = { ...(executionReady ? { studioExecutionRevision: 'studio-execution-v1', studioExecutionModels: ['astra','sol','luna'], studioExecutionModes: ['standard','fast'] } : {}), newJobPolicy, pricingRevision: STUDIO_PRICING_REVISION, tiersReady: pricingReady, detailedReady, ready, fastReady: true, fastBudgetReady: false, photoReady: true, oracle: 'CONNECTOR_READY', publicPilot: true,
     reason: ready ? 'READY' : 'DISABLED_OR_EXPIRED', allowance: { used: 6, limit: ready ? 7 : 0, remaining: ready ? 1 : 0, enabled: ready, expiresAt: null }, promptMaxLength: 4000, detailedReferenceLimit: 4 }
   const poolStatus = { commitments: [], accountContract: 'approved-test-account-v1', available: true, approvalId: 'api-tests-20261006-044444-usd4', expiresAt: '2026-10-06T12:00:00.000Z', totalCents: 400, committedCents: 0, remainingCents: 400, attempts: { 'detailed-astra': 0, 'blueprint-sol': 0, 'blueprint-luna': 0 }, noRecycling: true }
   const fetcher = async (url, init = {}) => {
@@ -98,6 +98,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     assert.ok(!['/api/studio/reconcile-budget', '/api/billing/recovery'].includes(path), 'Availability must never invoke financial recovery')
     if (path === '/api/billing/status' && billingLookup) return billingLookup(init)
     if (path === '/api/billing/status') return Response.json({ plans: { pro: { checkoutReady: true }, studio: { checkoutReady: true } } })
+    if (path === '/api/studio/status' && studioStatusLookup) return studioStatusLookup(status)
     if (path === '/api/studio/status') return Response.json(status)
     if (path === '/api/studio/current' && cloudLookup) { const response = await cloudLookup(); if (!response.ok) return response; try { const value = await response.clone().json(); return Response.json({ ...value, accountContract: 'approved-test-account-v1', ...(value.current ? { current: { ...value.current, fundingSource: 'ordinary' } } : {}) }) } catch { return response } }
     if (path === '/api/studio/current') return Response.json(cloudCurrent ? { accountContract: 'approved-test-account-v1', current: { fundingSource: 'ordinary', receipt: makeReceipt(oldId), prompt: selected.prompt, startedAt: selected.startedAt, financialState: 'reserved', reservedPoints: 250 } } : { accountContract: 'approved-test-account-v1', current: null })
@@ -194,8 +195,8 @@ test('restored completed knight stays editable and unavailable FAST cannot bypas
     for (const id of ['studio-prompt','studio-mode','studio-purpose','studio-texture','studio-photos']) assert.equal(h.byId(id).props.disabled, false, id)
     const before = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), originalDescription = h.description(), beforeCalls = h.calls.length
     h.byId('studio-prompt').props.onChange({ target: { value: 'Create a blue rook now' } })
-    h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } })
-    h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } })
+    h.byId('studio-mode').props.onChange({ target: { value: 'sol-standard' } })
+    h.byId('studio-mode').props.onChange({ target: { value: 'sol-standard' } })
     await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, 'Create a blue rook now')
     assert.equal(h.byId('studio-mode').props.value, 'standard')
@@ -222,13 +223,14 @@ test('an active job can have a next draft, but cannot be replaced or resubmitted
   } finally { h.close() }
 })
 
-test('explicit FAST after completion sends one Sol blueprint POST and never submits an Oracle Studio job', async () => {
-  const h = await harness({ ready: true })
+test('explicit procedural concept after completion retains its separate Sol blueprint route', async () => {
+  const h = await harness({ ready: true, detailedReady: true })
   try {
     await h.poll()
     const storedBefore = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
     h.byId('studio-prompt').props.onChange({ target: { value: 'A blue rook in FAST' } })
-    h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
+    h.byId('studio-mode').props.onChange({ target: { value: 'sol-standard' } }); await h.settle()
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'procedural-blueprint' } }); await h.settle()
     assert.equal(h.button('Generate GPT-6.1 Sol').props.disabled, false)
     const first = h.form().props.onSubmit({ preventDefault() {} })
     const duplicate = h.form().props.onSubmit({ preventDefault() {} })
@@ -253,8 +255,8 @@ test('new reference selection and draft clearing preserve the displayed old mode
     h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'new-reference.png', type: 'image/jpeg', size: 1024 }], value: 'new-reference.png' } })
     await h.settle()
     assert.ok(h.all().some(n => n.type === 'img' && /Your reference 1/.test(n.props.alt || '')))
-    const fastOption = h.all().find(n => n.type === 'option' && n.props.value === FAST_DRAFT_PROFILE)
-    assert.equal(fastOption.props.disabled, true, 'FAST must not silently discard selected photos')
+    const fastOption = h.all().find(n => n.type === 'option' && n.props.value === 'sol-standard')
+    assert.equal(fastOption.props.disabled, true, 'An unverified model runtime stays unavailable')
     h.button('Clear next-model draft').props.onClick(); await h.settle()
     assert.equal(h.byId('studio-prompt').props.value, '')
     assert.equal(h.description(), before)
@@ -268,7 +270,7 @@ test('completed free SLOW displays its subscription lock and never fetches the d
   try {
     await h.poll()
     assert.equal(h.calls.filter(call => call.path.endsWith('/model')).length, 0)
-    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Your SLOW model is ready'))
+    assert.ok(h.all().some(node => node.type === 'h2' && text(node) === 'Your model is ready'))
     assert.ok(h.all().some(node => node.props.to === '/account/credits' && text(node).includes('View subscription')))
     assert.equal(h.all().some(node => node.type === 'button' && text(node).includes('Download model')), false)
     assert.ok(h.all().some(node => text(node).includes('protected image preview is not available')))
@@ -874,7 +876,7 @@ test('switching models recomputes costs from the same snapshot and distinguishes
     assert.equal(h.quote().quote.state, 'credits')
     h.byId('studio-deliverable').props.onChange({ target: { value: 'detailed-mesh' } }); await h.settle()
     assert.equal(h.quote().quote.state, 'blocked')
-    h.byId('studio-mode').props.onChange({ target: { value: 'luna' } }); await h.settle()
+    h.byId('studio-mode').props.onChange({ target: { value: 'luna-standard' } }); await h.settle()
     assert.equal(h.quote().quote.points, 15)
     assert.equal(h.quote().quote.state, 'credits')
     assert.equal(h.calls.filter(c => c.path === '/api/account/entitlements').length, 1)
@@ -1192,7 +1194,7 @@ test('model, delivery, budget and prompt edits reuse the authenticated GET snaps
   const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
   try {
     const before = h.calls.length
-    for (const [model, points] of [['luna', 15], [FAST_DRAFT_PROFILE, 50], ['standard', 250]]) {
+    for (const [model, points] of [['luna-standard', 15], ['sol-standard', 50], ['standard', 250]]) {
       h.byId('studio-mode').props.onChange({ target: { value: model } }); await h.settle()
       h.byId('studio-prompt').props.onChange({ target: { value: 'Keep my ' + model + ' draft' } }); await h.settle()
       assert.equal(h.quote().quote.points, points)
@@ -1376,9 +1378,9 @@ test('detailed choice cannot bypass account funding refusal or choose a premium 
     assert.equal(h.quote().quote.reason, 'PROVIDER_BUDGET_EXHAUSTED')
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
-    h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } }); await h.settle()
+    h.byId('studio-mode').props.onChange({ target: { value: 'sol-standard' } }); await h.settle()
     assert.equal(h.all().some(n => n.props['data-testid'] === 'choose-detailed-model'), false)
-    assert.equal(h.byId('studio-mode').props.value, FAST_DRAFT_PROFILE)
+    assert.equal(h.byId('studio-mode').props.value, 'sol-standard')
   } finally { h.close() }
 })
 
@@ -1469,36 +1471,36 @@ for (const failure of [{ archiveSaveFailure: true }, { artifactMalformed: true }
 }
 
 
-test('Luna selection requires its own readiness instead of borrowing the Sol flag', async () => {
+test('Luna detailed selection requires verified execution even when blueprint Sol is ready', async () => {
   const h = await harness({ ready: true, solReady: true, lunaReady: false, withExistingJob: false })
   try {
-    assert.equal(elements(h.byId('studio-mode')).find(node => node.type === 'option' && node.props.value === 'luna').props.disabled, true)
-    h.byId('studio-mode').props.onChange({ target: { value: 'luna' } }); await h.settle()
+    assert.equal(elements(h.byId('studio-mode')).find(node => node.type === 'option' && node.props.value === 'luna-standard').props.disabled, true)
+    h.byId('studio-mode').props.onChange({ target: { value: 'luna-standard' } }); await h.settle()
     assert.equal(h.byId('studio-mode').props.value, 'standard')
     assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
   } finally { h.close() }
 })
 
-test('explicit Luna readiness can select its concept route when Sol is not ready', async () => {
-  const h = await harness({ ready: false, solReady: false, lunaReady: true, withExistingJob: false })
+test('verified Luna detailed selection is independent of blueprint readiness', async () => {
+  const h = await harness({ ready: true, detailedReady: true, solReady: false, lunaReady: false, withExistingJob: false })
   try {
-    assert.equal(elements(h.byId('studio-mode')).find(node => node.type === 'option' && node.props.value === 'luna').props.disabled, false)
-    h.byId('studio-mode').props.onChange({ target: { value: 'luna' } }); await h.settle()
-    assert.equal(h.byId('studio-mode').props.value, 'luna')
-    assert.equal(h.byId('studio-deliverable').props.value, 'procedural-blueprint')
+    assert.equal(elements(h.byId('studio-mode')).find(node => node.type === 'option' && node.props.value === 'luna-standard').props.disabled, false)
+    h.byId('studio-mode').props.onChange({ target: { value: 'luna-standard' } }); await h.settle()
+    assert.equal(h.byId('studio-mode').props.value, 'luna-standard')
+    assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
     assert.equal(h.calls.filter(call => call.method !== 'GET').length, 0)
   } finally { h.close() }
 })
 
 
-test('forced Luna submission stops when its own runtime readiness is revoked despite ready Sol', async () => {
+test('forced Luna submission stops when the detailed runtime readiness is revoked', async () => {
   let lunaAllowed = true
-  const h = await harness({ ready: true, withExistingJob: false, healthLookup: () => Response.json({ generationReady: true, model: 'gpt-6.1-sol', qualityModel: 'gpt-6-astra', astraBlueprintReady: true, lunaBlueprintReady: lunaAllowed, draftModels: ['sol', 'luna'] }) })
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, studioStatusLookup: state => Response.json({ ...state, studioExecutionRevision: lunaAllowed ? 'studio-execution-v1' : undefined }) })
   try {
     h.byId('studio-prompt').props.onChange({ target: { value: 'A compact lunar rover' } })
-    h.byId('studio-mode').props.onChange({ target: { value: 'luna' } }); await h.settle()
-    assert.equal(h.byId('studio-mode').props.value, 'luna')
-    assert.match(text(h.all()), /GPT-6 Luna draft generation available/)
+    h.byId('studio-mode').props.onChange({ target: { value: 'luna-standard' } }); await h.settle()
+    assert.equal(h.byId('studio-mode').props.value, 'luna-standard')
+    assert.match(text(h.all()), /GPT-6 Luna\/Blender model generation available/)
     lunaAllowed = false
     h.button('Refresh availability').props.onClick(); await h.settle()
     assert.equal(h.all().find(node => node.props.className === 'native-shop-generate').props.disabled, true)
@@ -1604,17 +1606,17 @@ for (const nextSelection of ['astra-2', 'sol']) test(`account switch clears the 
 })
 
 
-test('SLOW and FAST model options select exact routes and require a separate Generate action', async () => {
+test('model selection keeps the detailed route and requires a separate Generate action', async () => {
   const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
   try {
     assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
     assert.equal(h.byId('studio-mode').props.value, 'standard')
     h.byId('studio-prompt').props.onChange({ target: { value: 'Blue medieval rook' } }); await h.settle()
     const slow = () => h.byId('studio-mode').props.onChange({ target: { value: 'standard' } })
-    const fast = () => h.byId('studio-mode').props.onChange({ target: { value: FAST_DRAFT_PROFILE } })
+    const fast = () => h.byId('studio-mode').props.onChange({ target: { value: 'sol-standard' } })
     fast(); fast(); await h.settle()
-    assert.equal(h.byId('studio-mode').props.value, FAST_DRAFT_PROFILE)
-    assert.equal(h.byId('studio-deliverable').props.value, 'procedural-blueprint')
+    assert.equal(h.byId('studio-mode').props.value, 'sol-standard')
+    assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
     assert.equal(h.quote().quote.points, 50)
     slow(); slow(); await h.settle()
     assert.equal(h.byId('studio-mode').props.value, 'standard')
@@ -2010,14 +2012,15 @@ test('new submission hides the previous 100 percent badge while preserving its o
 })
 
 for (const selectedModel of ['sol', 'luna']) test(`${selectedModel} result cannot expose the previous Astra download controls or completion`, async () => {
-  const h = await harness({ ready: true })
+  const h = await harness({ ready: true, detailedReady: true })
   try {
     await h.poll()
     assert.ok(h.all().some(n => n.type === 'button' && text(n) === 'Download model · GLB'))
     const storedBefore = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
     h.byId('studio-prompt').props.onChange({ target: { value: 'A green chess rook' } })
-    h.byId('studio-mode').props.onChange({ target: { value: selectedModel === 'sol' ? FAST_DRAFT_PROFILE : 'luna' } })
+    h.byId('studio-mode').props.onChange({ target: { value: selectedModel + '-standard' } })
     await h.settle()
+    h.byId('studio-deliverable').props.onChange({ target: { value: 'procedural-blueprint' } }); await h.settle()
     await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
     assert.match(h.fastDescription(), /Compact procedural FAST draft/)
     const oldExports = ['Download model · GLB','OBJ','Download available PBR textures','FBX','Blender']
@@ -2027,5 +2030,30 @@ for (const selectedModel of ['sol', 'luna']) test(`${selectedModel} result canno
     assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), storedBefore)
     assert.equal(h.archive.get(oldId).sha256, 'original')
     assert.equal(h.calls.filter(c => c.path === '/api/blueprint' && c.method === 'POST').length, 1)
+  } finally { h.close() }
+})
+
+for (const model of ['sol', 'luna']) for (const mode of ['standard', 'fast']) test(`${model} ${mode} sends one detailed Blender job with references and immutable recovery terms`, async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false })
+  try {
+    h.byId('studio-mode').props.onChange({ target: { value: model + '-' + mode } }); await h.settle()
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A detailed blue chess rook' } })
+    h.byId('studio-photos').props.onChange({ target: { files: [{ name: 'front.jpg', type: 'image/jpeg', size: 1024 }], value: 'reference' } }); await h.settle()
+    assert.equal(h.byId('studio-deliverable').props.value, 'detailed-mesh')
+    assert.equal(h.byId('studio-photos').props.disabled, false)
+    assert.equal(h.all().some(n => n.props.id === 'studio-budget-tier'), false)
+    assert.equal(h.quote().quote.points, model === 'sol' ? 50 : 15)
+    const first = h.form().props.onSubmit({ preventDefault() {} })
+    await h.form().props.onSubmit({ preventDefault() {} }); await first; await h.settle()
+    const posts = h.calls.filter(c => c.path === '/api/studio/jobs' && c.method === 'POST')
+    assert.equal(posts.length, 1); assert.equal(h.calls.filter(c => c.path === '/api/blueprint').length, 0)
+    const input = JSON.parse(posts[0].body), execution = { revision: 'studio-execution-v1', model, mode }
+    assert.deepEqual(input.studioExecution, execution)
+    assert.equal(input.photos.length, 1); assert.equal(input.photos[0].view, 'front')
+    assert.equal(input.generationProfile, undefined); assert.equal(input.budgetTier, undefined)
+    const recovered = clientModule.readSavedStudioJob({ getItem: key => h.storeData.get(key) ?? null })
+    assert.deepEqual(recovered.studioExecution, execution)
+    const prepared = JSON.parse(h.calls.find(c => c.path === '/api/studio/prepare').body)
+    assert.deepEqual(prepared.studioExecution, execution)
   } finally { h.close() }
 })

@@ -10,7 +10,7 @@ export function canSubmitNewDraft(selectedId: string | undefined, job: Pick<Stud
 /** Only composer fields, never a receipt, price authorization or model result. */
 export type ShopDraftSnapshot = Readonly<{
   prompt: string; purpose: string; textureLimit: number; profile: string;
-  cheapModel: string; budgetTier: string; deliverable: string; creationMode: string;
+  cheapModel: string; executionMode?: string; budgetTier: string; deliverable: string; creationMode: string;
   photos: readonly Readonly<{ name: string; view: string; dataUrl: string; textureMaxSize: number }>[];
   dimensions: Readonly<{ xMm: number; yMm: number; zMm: number }>;
   dimensionsEnabled: boolean;
@@ -20,7 +20,7 @@ export type ShopDraftSnapshot = Readonly<{
  * prompt, reference, mode or dimensions must survive that old response. */
 export function sameShopDraft(a: ShopDraftSnapshot, b: ShopDraftSnapshot): boolean {
   return a.prompt === b.prompt && a.purpose === b.purpose && a.textureLimit === b.textureLimit &&
-    a.profile === b.profile && a.cheapModel === b.cheapModel && a.budgetTier === b.budgetTier &&
+    a.executionMode === b.executionMode && a.profile === b.profile && a.cheapModel === b.cheapModel && a.budgetTier === b.budgetTier &&
     a.deliverable === b.deliverable && a.creationMode === b.creationMode &&
     a.dimensionsEnabled === b.dimensionsEnabled && a.dimensions.xMm === b.dimensions.xMm &&
     a.dimensions.yMm === b.dimensions.yMm && a.dimensions.zMm === b.dimensions.zMm &&

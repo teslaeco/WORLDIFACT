@@ -1,3 +1,5 @@
+import { MODEL_CATALOG } from '../src/lib/modelCatalog.ts'
+import { prepareStudioInput } from '../src/lib/studioProtocol.ts'
 import { detailedAssemblyGLBFixture, detailedHealthFixture, detailedGLBFixture } from './detailed-studio-fixture.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -59,7 +61,7 @@ function fixture() {
       if (submissionRejection) return Response.json(submissionRejection.body, { status: submissionRejection.status })
       return Response.json({ id: JSON.parse(String(init?.body)).id, state: 'building' })
     }
-    if (path.endsWith('/budget')) return budgetLiability === null ? Response.json({}, { status: 404 }) : Response.json({ revision: 'worldifact-terminal-budget-v1', jobId: path.split('/').at(-2), model: 'gpt-6-astra', policyRevision: 'astra-low-reconciled-v2', capMicroUsd: 1750000, maximumLiabilityMicroUsd: budgetLiability, sealed: true, sealId: 'b'.repeat(64) })
+    if (path.endsWith('/budget')) return budgetLiability === null ? Response.json({}, { status: 404 }) : Response.json({ revision: 'worldifact-terminal-budget-v1', jobId: path.split('/').at(-2), model: lastPayload?.studioExecution ? MODEL_CATALOG[lastPayload.studioExecution.model as keyof typeof MODEL_CATALOG].model : 'gpt-6-astra', policyRevision: lastPayload?.studioExecution ? `studio-model-budget-v1:${lastPayload.studioExecution.mode}` : 'astra-low-reconciled-v2', capMicroUsd: lastPayload?.studioExecution ? MODEL_CATALOG[lastPayload.studioExecution.model as keyof typeof MODEL_CATALOG].maxProviderCents * 10000 : 1750000, maximumLiabilityMicroUsd: budgetLiability, sealed: true, sealId: 'b'.repeat(64) })
     if (path.endsWith('/quality')) { qualityReads++; return qualityFailure ? Response.json({}, { status: 503 }) : Response.json(quality) }
     if (/\/model$|\/exports\//.test(path)) {
       artifacts++
@@ -302,4 +304,42 @@ test('a held receipt cannot silently downgrade to legacy funding when membership
   assert.equal((await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)).status, 429)
   assert.equal(f.posts(), 0); assert.deepEqual(await entitlementStatus(f.env, alice), before)
   assert.equal((await entitlementCall<any>(f.env, alice, '/job', { id: receipt.id })).owned, false)
+})
+
+const executionHealth = { studioExecutionRevision: 'studio-execution-v1', studioExecutionModels: ['astra','sol','luna'], studioExecutionModes: ['standard','fast'] }
+for (const model of ['sol', 'luna', 'astra'] as const) for (const mode of ['standard','fast'] as const) test(`paid ${model} ${mode} binds model through preparation, Oracle dispatch, completion and cloud recovery`, async () => {
+  const f = fixture(); await f.subscribe(); f.setHealth(executionHealth)
+  const body: StudioInput = { ...input, studioExecution: { revision: 'studio-execution-v1', model, mode } }
+  const prepared = await f.call('/api/studio/prepare', 'POST', await prepareStudioInput(body))
+  assert.equal(prepared.status, 200)
+  const receipt = await prepared.json() as { id: string; ticket: string }
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
+  assert.equal((await f.call('/api/studio/jobs', 'POST', { ...body, studioExecution: { ...body.studioExecution!, mode: mode === 'fast' ? 'standard' : 'fast' } }, receipt.ticket)).status, 409)
+  assert.equal(f.posts(), 0)
+  const started = await f.call('/api/studio/jobs', 'POST', body, receipt.ticket)
+  assert.equal(started.status, 202, JSON.stringify(await started.clone().json()))
+  assert.deepEqual(f.sent()?.studioExecution, body.studioExecution)
+  assert.equal(f.sent()?.studioPricing, undefined)
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, MODEL_CATALOG[model].creditsPerGeneration)
+  f.liability(1000)
+  const result = await (await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)).json() as { job: StudioJob }
+  assert.equal(result.job.state, 'succeeded')
+  assert.equal(result.job.pointSettlement?.chargedPoints, MODEL_CATALOG[model].creditsPerGeneration)
+  const current = await (await f.call('/api/studio/current')).json() as any
+  assert.deepEqual(current.current.studioExecution, body.studioExecution)
+  assert.equal(current.current.pointSettlement.chargedPoints, MODEL_CATALOG[model].creditsPerGeneration)
+  assert.equal((await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket, 'bob')).status, 401)
+  assert.equal((await f.call(`/api/studio/jobs/${receipt.id}/model`, 'GET', undefined, receipt.ticket)).status, 200)
+  assert.equal(f.posts(), 1)
+})
+
+test('missing execution capability blocks Sol before preparation and again before a prepared submission', async () => {
+  const f = fixture(); await f.subscribe()
+  const body: StudioInput = { ...input, studioExecution: { revision: 'studio-execution-v1', model: 'sol', mode: 'standard' } }
+  assert.equal((await f.call('/api/studio/prepare', 'POST', await prepareStudioInput(body))).status, 503)
+  f.setHealth(executionHealth)
+  const receipt = await (await f.call('/api/studio/prepare', 'POST', await prepareStudioInput(body))).json() as { id: string; ticket: string }
+  f.setHealth({})
+  assert.equal((await f.call('/api/studio/jobs', 'POST', body, receipt.ticket)).status, 503)
+  assert.equal(f.posts(), 0); assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 0)
 })

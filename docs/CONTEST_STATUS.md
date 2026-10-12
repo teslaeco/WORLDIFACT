@@ -1,3 +1,21 @@
+# 12 October 2026 — Sol/Luna detailed execution prepared, installation blocked
+
+The owner asked to replace the Sol/Luna procedural-only Shop path with the
+existing detailed Blender workflow. Immutable per-job model/mode selection,
+account holds, terminal cost receipts, reference inputs and recovery are now
+implemented in a review branch. The exact observed Oracle server/runner have
+a pure source transform and a separate capped ledger for new selections.
+The original Astra path and historical ledgers remain unchanged.
+
+Application checks, HTTP/build/Worker dry-run, cost-ledger tests and execution
+of the actual proposed Gateway handler with inert provider responses pass
+except the two locally unavailable Chromium checks. These are not live Blender
+or paid model evidence. Desktop Commander stopped responding after the source
+snapshot; no new Oracle source, receipts, services or ledgers were written.
+Native gates, a reviewed installation transaction, production release and real
+Sol/Luna acceptance tests remain pending. See SOL_LUNA_BLENDER_20261012.md for
+exact scope and continuation requirements. Do not label this checkpoint LIVE.
+
 # 11 October 2026 — real file references in the existing generator
 
 The owner requested file attachment as a reference for a new model. The composer

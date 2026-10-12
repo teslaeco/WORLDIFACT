@@ -1,3 +1,4 @@
+import { STUDIO_EXECUTION_REVISION } from '../src/lib/studioExecution.ts'
 import { ARTIFACT_PROBE_BYTES, hasStudioArtifactHeader, type StudioArtifactFormat } from '../src/lib/studioArtifact.ts'
 import { inspectGLB } from '../src/lib/glb.ts'
 import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
@@ -137,11 +138,11 @@ function prepareMetadata(input: StudioInput): StudioPrepareMetadata {
 }
 function checkOvernightPreparation(env: StudioEnv, userId: string | undefined, input: StudioPrepareMetadata) {
   if (!userId || !accountPolicy(env) || !overnightTestAuthority(env, userId, Date.now())) throw new StudioError('The account-bound overnight test authority is unavailable or expired.', 403)
-  if (studioNewJobPolicy(env.STUDIO_NEW_JOB_POLICY) !== HISTORICAL_STUDIO_POLICY || input.generationProfile !== undefined || input.budgetTier !== undefined || input.pricingRevision !== undefined || input.acceptedPoints !== undefined)
+  if (studioNewJobPolicy(env.STUDIO_NEW_JOB_POLICY) !== HISTORICAL_STUDIO_POLICY || input.generationProfile !== undefined || input.budgetTier !== undefined || input.pricingRevision !== undefined || input.acceptedPoints !== undefined || input.studioExecution !== undefined)
     throw new StudioError('Overnight detailed tests require the existing 175-cent STANDARD policy, without tier upgrades.', 409)
 }
 function repairedMccInputEligible(input: StudioPrepareMetadata): boolean {
-  return input.worldId === 'enchanted-ai-shop' && input.photoCount === 0 &&
+  return input.studioExecution === undefined && input.worldId === 'enchanted-ai-shop' && input.photoCount === 0 &&
     input.generationProfile === undefined && input.budgetTier === undefined &&
     input.pricingRevision === undefined && input.acceptedPoints === undefined
 }
@@ -402,7 +403,8 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
   const state = await limitedJson(response, 16_384)
   const compatible = state.ready === true && state.provider === 'openai' && state.model === 'gpt-6-astra' && Number.isSafeInteger(state.connectorVersion) && Number(state.connectorVersion) >= 33
   const fastReady = compatible && supportsFastDraft(state)
-  return { ...detailedRuntime(state), ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
+  const executionReady = state.studioExecutionRevision === STUDIO_EXECUTION_REVISION && Array.isArray(state.studioExecutionModels) && ['astra','sol','luna'].every(m => (state.studioExecutionModels as unknown[]).includes(m)) && Array.isArray(state.studioExecutionModes) && ['standard','fast'].every(m => (state.studioExecutionModes as unknown[]).includes(m))
+  return { studioExecutionRevision: executionReady ? STUDIO_EXECUTION_REVISION : undefined, studioExecutionModels: executionReady ? ['astra','sol','luna'] : [], studioExecutionModes: executionReady ? ['standard','fast'] : [], ...detailedRuntime(state), ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
     // Read-only evidence of the exact reviewed no-AI export helper. Unknown or
     // newer revisions require review; this does not invoke or enable exports.
     exportPreparationReady: compatible && state.posthocExportRevision === 2 && state.legacyGlbExportRecoveryRevision === 1,
@@ -424,6 +426,7 @@ async function preflight(request: Request, env: StudioEnv, fetcher: typeof fetch
   if (policy === HISTORICAL_STUDIO_POLICY && input.budgetTier !== undefined)
     throw new StudioError(STUDIO_FAILURE_DETAILS.STUDIO_BUDGET_POLICY_CHANGED, 409, 'STUDIO_BUDGET_POLICY_CHANGED')
   const current = await health(env, fetcher)
+  if (input.studioExecution && (!userId || !accountPolicy(env) || current.studioExecutionRevision !== STUDIO_EXECUTION_REVISION)) throw new StudioError('The worker has not verified the selected model and mode. No points were reserved.', 503)
   if (!current.ready) throw new StudioError('The existing Astra/Blender worker is not ready.', 503)
   if (accountPolicy(env) && !current.costGuardReady) throw new StudioError('The detailed worker did not confirm the current Astra cost guard. No points were reserved.', 503)
   if (accountPolicy(env) && !current.outputPolicyReady) throw new StudioError('The detailed worker requires the reviewed Astra output policy. No points were reserved.', 503)
@@ -502,7 +505,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const authorized = trial || env.PUBLIC_PILOT === 'true' || (secretReady(env) && await ownerAuthorized(request, env.OWNER_ACCESS_TOKEN!))
       const policy = studioNewJobPolicy(env.STUDIO_NEW_JOB_POLICY)
       const reason = !enabled ? env.ENABLE_APPROVED_FAST_TEST === 'true' ? 'APPROVED_TEST_PENDING_ACTIVATION' : 'DISABLED_OR_EXPIRED' : !policy ? 'STUDIO_POLICY_UNAVAILABLE' : !secretReady(env) ? 'RECEIPT_SECRET_MISSING' : !pool ? 'ALLOWANCE_UNAVAILABLE' : (!pool.unlimited && pool.remaining === 0) ? 'ALLOWANCE_EXHAUSTED' : !state?.ready ? 'ORACLE_NOT_READY' : accountPolicy(env) && !state.costGuardReady ? 'ASTRA_COST_GUARD_REQUIRED' : accountPolicy(env) && !state.outputPolicyReady ? 'ASTRA_OUTPUT_POLICY_REQUIRED' : trial && !state.fastBudgetReady ? 'APPROVED_TEST_PENDING_ACTIVATION' : !authorized ? 'OWNER_ACCESS_REQUIRED' : 'READY'
-      return json({ detailedReady: reason === 'READY' && state?.costGuardReady === true && state?.outputPolicyReady === true, detailedReferenceLimit: DETAILED_REFERENCE_LIMIT, costGuardReady: state?.costGuardReady === true, outputPolicyReady: state?.outputPolicyReady === true, accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
+      return json({ studioExecutionRevision: state?.studioExecutionRevision, studioExecutionModels: state?.studioExecutionModels, studioExecutionModes: state?.studioExecutionModes, detailedReady: reason === 'READY' && state?.costGuardReady === true && state?.outputPolicyReady === true, detailedReferenceLimit: DETAILED_REFERENCE_LIMIT, costGuardReady: state?.costGuardReady === true, outputPolicyReady: state?.outputPolicyReady === true, accountRequired: accountPolicy(env), ready: reason === 'READY', publicPilot: env.PUBLIC_PILOT === 'true', reason, oracle: state?.ready ? 'CONNECTOR_READY' : 'NOT_VERIFIED_READY',
         photoReady: state?.photoReady === true, fastReady: state?.fastReady === true, fastBudgetReady: state?.fastBudgetReady === true,
         exportPreparationReady: state?.exportPreparationReady === true,
         newJobPolicy: policy,
@@ -572,6 +575,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         prompt: current.job.prompt,
         startedAt: new Date(current.job.at).toISOString(),
         financialState: current.job.state,
+        ...(current.job.studioExecution ? { studioExecution: current.job.studioExecution } : {}),
         reservedPoints: current.job.held ? current.job.cost : 0,
         ...(current.job.pointSettlement ? { pointSettlement: current.job.pointSettlement } : {}),
         ...(generationTiming ? { generationTiming } : {}),
@@ -651,7 +655,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const submission = (async () => {
         let admittedPointSettlement: PointSettlement | undefined
         if (user) {
-          const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', undefined, auth.hash, studioQualityProfile(input), { paidPointsPolicy: auth.held ? request.headers.get(PAID_POINTS_POLICY_HEADER) : undefined, ...(auth.held ? { requiredFundingMode: PAID_POINTS_FUNDING } : {}), channel: 'studio', prompt: input.prompt, supportIdentity: user, ...(overnightTest ? { overnightTest: true } : { repairedMccInputEligible: repairedMccInputEligible(prepareMetadata(input)), projectBudgetInputEligible: repairedMccInputEligible(prepareMetadata(input)) }), ...(pricing ? { pricing } : {}) })
+          const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.studioExecution ? input.studioExecution.model === 'astra' ? 'slow' : 'fast' : input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', input.studioExecution?.model, auth.hash, studioQualityProfile(input), { paidPointsPolicy: auth.held ? request.headers.get(PAID_POINTS_POLICY_HEADER) : undefined, ...(auth.held ? { requiredFundingMode: PAID_POINTS_FUNDING } : {}), channel: 'studio', ...(input.studioExecution ? { studioExecution: input.studioExecution } : {}), prompt: input.prompt, supportIdentity: user, ...(overnightTest ? { overnightTest: true } : { repairedMccInputEligible: repairedMccInputEligible(prepareMetadata(input)), projectBudgetInputEligible: repairedMccInputEligible(prepareMetadata(input)) }), ...(pricing ? { pricing } : {}) })
           admittedPointSettlement = userReservation.pointSettlement
           if (userReservation.repeated && userReservation.state === 'failed') return json({ job: await accountJob(env, user.id, auth.id, 'failed', fetcher), recoveryOnly: true }, 202)
           if (!userReservation.allowed) {

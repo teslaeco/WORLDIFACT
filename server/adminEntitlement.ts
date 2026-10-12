@@ -1,3 +1,4 @@
+import { isStudioExecution } from '../src/lib/studioExecution.ts'
 import { isStudioPricing } from '../src/lib/studioPricing.ts'
 import { validateTerminalBudgetReceipt } from './studioBudgetReceipt.ts'
 import type { EntitlementStorage } from './entitlements.ts'
@@ -68,7 +69,7 @@ export function adminDispatchAllowed(env: AdminEnv, accountId: string | null, fu
 }
 export function adminJob(value: unknown): boolean {
   if (!record(value) || !validAdminFunding(value.adminFunding)) return false
-  const fields = ['adminFunding','adminTerminalReceipt','fingerprint','channel','model','blueprintProviderModel','prompt','pricing','qualityProfile','profile','at','updatedAt','cost','kind','state','studioDispatch','studioDispatchUntil','blueprintDispatch','blueprintDispatchUntil','failureCode']
+  const fields = ['studioExecution','adminFunding','adminTerminalReceipt','fingerprint','channel','model','blueprintProviderModel','prompt','pricing','qualityProfile','profile','at','updatedAt','cost','kind','state','studioDispatch','studioDispatchUntil','blueprintDispatch','blueprintDispatchUntil','failureCode']
   if (Object.keys(value).some(k => !fields.includes(k)) || typeof value.model !== 'string' || !Object.hasOwn(MODEL_ECONOMICS, value.model) ||
     (value.profile === 'slow') !== (value.model === 'astra') || !['fast','slow'].includes(String(value.profile)) ||
     !value.adminFunding.allocation.models.includes(value.model as GenerationModel) || value.at === undefined ||
@@ -76,11 +77,12 @@ export function adminJob(value: unknown): boolean {
     !positive(value.updatedAt) || value.updatedAt < Number(value.at)) return false
   if (value.pricing !== undefined && (!isStudioPricing(value.pricing) || value.channel !== 'studio' || value.model !== 'astra')) return false
   const cap = isStudioPricing(value.pricing) ? value.pricing.maxProviderCents : MODEL_ECONOMICS[value.model as GenerationModel].maxProviderCents
-  if (value.adminFunding.capCents !== cap || value.channel === 'studio' && value.model !== 'astra') return false
+  if (value.studioExecution !== undefined && (!isStudioExecution(value.studioExecution) || value.studioExecution.model !== value.model || value.channel !== 'studio' || value.pricing !== undefined)) return false
+  if (value.adminFunding.capCents !== cap || value.channel === 'studio' && value.model !== 'astra' && !isStudioExecution(value.studioExecution)) return false
   const dispatch = value.channel === 'studio' ? value.studioDispatch : value.blueprintDispatch
   const deadline = value.channel === 'studio' ? value.studioDispatchUntil : value.blueprintDispatchUntil
   if (!['ready-v1','claimed-v1'].includes(String(dispatch)) || (dispatch === 'ready-v1' ? deadline !== undefined : !positive(deadline) || deadline <= Number(value.at))) return false
-  if (value.adminTerminalReceipt !== undefined && (value.channel !== 'studio' || !validateTerminalBudgetReceipt(value.adminTerminalReceipt, String((value.adminTerminalReceipt as Record<string,unknown>)?.jobId), isStudioPricing(value.pricing) ? value.pricing : null))) return false
+  if (value.adminTerminalReceipt !== undefined && (value.channel !== 'studio' || !validateTerminalBudgetReceipt(value.adminTerminalReceipt, String((value.adminTerminalReceipt as Record<string,unknown>)?.jobId), isStudioPricing(value.pricing) ? value.pricing : null, isStudioExecution(value.studioExecution) ? value.studioExecution : undefined))) return false
   return value.cost === 0 && value.kind === 'credits' && value.billingMode === undefined && value.fundingMode === undefined && value.pointSettlement === undefined &&
     value.providerLiability === undefined && value.overnightTest === undefined && value.studioProviderReservation === undefined && value.blueprintProviderReservation === undefined &&
     value.projectBudget === undefined && value.supportApprovalId === undefined && value.supplementalGrantId === undefined && value.repairedMccClaim === undefined &&

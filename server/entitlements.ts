@@ -1,3 +1,4 @@
+import { isStudioExecution, sameStudioExecution, type StudioExecution } from '../src/lib/studioExecution.ts'
 import { imageStore, type ImageEnv } from './imageGeneration.ts'
 import { PROMOTION_NAMESPACE, promotionRegistry, applyPromotion, promotionApi, type PromotionEnv } from './promotionCodes.ts'
 import { adminAllocation, adminBudget, reserveAdminBudget, adminDispatchAllowed, adminJob, validAdminFunding, type AdminEnv, type AdminAllocation, type AdminFunding } from './adminEntitlement.ts'
@@ -49,11 +50,11 @@ type Subscription = { id: string; until: number; active: boolean; revision: numb
 type StudioProviderReservation = { version: 1; source: 'ordinary'; amountCents: number; state: 'reserved' | 'released' }
 type FailedBlueprintProviderReconciliation = { revision: 'blueprint-failed-output-v1'; evidence: BlueprintTerminalUsage; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number }
 type BlueprintProviderReconciliation = { revision: 'blueprint-bounded-output-v1'; model: GenerationModel; resultSha256: string; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number } | FailedBlueprintProviderReconciliation
-type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalReservedCents: 175 | 200 | 400; retainedCents: number; releasedCents: number; at: number }
+type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalReservedCents: number; retainedCents: number; releasedCents: number; at: number }
 type PaidProviderLiability = { version: 1; source: 'paid-membership'; capCents: number; maximumLiabilityCents: number; state: 'unsubmitted' | 'unresolved' | 'bounded'; evidence?: { kind: 'undispatched'; at: number } | { kind: 'studio-terminal'; receipt: TerminalBudgetReceipt; at: number } | { kind: 'blueprint-output'; resultSha256: string; at: number } | { kind: 'blueprint-failure'; usage: BlueprintTerminalUsage; at: number } }
-type Job = { adminFunding?: AdminFunding; adminTerminalReceipt?: TerminalBudgetReceipt; pointSettlement?: PointSettlement; fundingMode?: typeof PAID_POINTS_FUNDING; providerLiability?: PaidProviderLiability; overnightTest?: OvernightTestClaim; blueprintProviderModel?: string; pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; repairedMccGrantId?: string; repairedMccClaim?: AstraRepairedMccClaim; projectBudget?: AstraProjectBudgetRecord; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
+type Job = { studioExecution?: StudioExecution; adminFunding?: AdminFunding; adminTerminalReceipt?: TerminalBudgetReceipt; pointSettlement?: PointSettlement; fundingMode?: typeof PAID_POINTS_FUNDING; providerLiability?: PaidProviderLiability; overnightTest?: OvernightTestClaim; blueprintProviderModel?: string; pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; repairedMccGrantId?: string; repairedMccClaim?: AstraRepairedMccClaim; projectBudget?: AstraProjectBudgetRecord; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
 export type Reservation = { pointSettlement?: PointSettlement; fundingSource?: typeof PAID_POINTS_FUNDING | typeof OVERNIGHT_TEST_APPROVAL; providerModel?: string; pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
-export type JobAccess = { channel?: 'studio' | 'blueprint'; model?: GenerationModel; pointSettlement?: PointSettlement; fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
+export type JobAccess = { studioExecution?: StudioExecution; channel?: 'studio' | 'blueprint'; model?: GenerationModel; pointSettlement?: PointSettlement; fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
 export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean }
 type OwnedStudioLibraryPage = { models: OwnedStudioLibraryModel[]; nextCursor: string | null; hasMore: boolean }
@@ -64,7 +65,7 @@ export const STUDIO_DISPATCH_WINDOW_MS = 30_000
 export const STUDIO_ORACLE_TIMEOUT_MS = 25_000
 export const BLUEPRINT_DISPATCH_WINDOW_MS = 30_000
 const BLUEPRINT_JOB_WINDOW_MS = 10 * 60_000
-export type CurrentStudioJob = { pointSettlement?: PointSettlement; fundingSource?: 'ordinary' | typeof PAID_POINTS_FUNDING | typeof OVERNIGHT_TEST_APPROVAL | 'unknown'; pricing?: StudioPricing; id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
+export type CurrentStudioJob = { studioExecution?: StudioExecution; pointSettlement?: PointSettlement; fundingSource?: 'ordinary' | typeof PAID_POINTS_FUNDING | typeof OVERNIGHT_TEST_APPROVAL | 'unknown'; pricing?: StudioPricing; id: string; fingerprint: string; prompt: string; at: number; updatedAt: number; state: Job['state']; cost: number; held: boolean; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode }
 export type ClosedMissingStudioJob = { closed: boolean; state: Job['state']; fingerprintMatches: boolean; failureCode?: StudioFailureCode }
 type Grant = { credits: number; revoked: number; subscriptionId?: string }
 type Checkout = { id: string; created: number; plan?: PlanId; url?: string; expiresAt?: number; sessionId?: string }
@@ -126,7 +127,15 @@ function libraryModel(id: string, job: Job & { fingerprint: string }, permission
 function studioDispatchUntil(job: Job): number | undefined {
   return job.studioDispatch === 'claimed-v1' && Number.isSafeInteger(job.studioDispatchUntil) && Number(job.studioDispatchUntil) > job.at && Number(job.studioDispatchUntil) <= job.at + STUDIO_SUBMISSION_GRACE_MS ? job.studioDispatchUntil : undefined
 }
+function validStudioExecution(job: Job): boolean {
+  return isStudioExecution(job.studioExecution) && job.channel === 'studio' && job.model === job.studioExecution.model &&
+    (job.profile === 'slow') === (job.model === 'astra') && job.pricing === undefined
+}
+function validStudioRoute(job: Job): boolean {
+  return job.studioExecution === undefined ? job.profile === 'slow' && (job.model === undefined || job.model === 'astra') : validStudioExecution(job)
+}
 function reservationTerms(job: Job): { points: number; maxProviderCents: number } | null {
+  if (Object.hasOwn(job, 'studioExecution') && !validStudioExecution(job)) return null
   if (!Object.hasOwn(job, 'pricing')) {
     const economics = MODEL_ECONOMICS[job.model ?? (job.profile === 'fast' ? 'sol' : 'astra')]
     return economics ? { points: economics.creditsPerGeneration, maxProviderCents: economics.maxProviderCents } : null
@@ -151,7 +160,7 @@ async function paidMembership(storage: EntitlementStorage, subscription: Subscri
 export function paidPointsJob(value: unknown, id?: string): value is Job & { fundingMode: typeof PAID_POINTS_FUNDING; providerLiability: PaidProviderLiability } {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const job = value as Job, marker = job.providerLiability, terms = reservationTerms(job)
-  const fields = ['pointSettlement', 'fundingMode', 'providerLiability', 'blueprintProviderModel', 'pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile',
+  const fields = ['studioExecution', 'pointSettlement', 'fundingMode', 'providerLiability', 'blueprintProviderModel', 'pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile',
     'failureCode', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'billingMode', 'state', 'studioDispatch', 'studioDispatchUntil', 'blueprintDispatch', 'blueprintDispatchUntil']
   if (job.fundingMode !== PAID_POINTS_FUNDING || Object.keys(job).some(key => !fields.includes(key)) || !terms || job.kind !== 'credits' || job.cost !== terms.points || !isPointSettlement(job.pointSettlement, job.cost) ||
       !(job.state === 'reserved' && job.pointSettlement.state === 'held' || job.state === 'completed' && job.pointSettlement.state === 'charged' || job.state === 'failed' && ['pending-cost', 'released', 'waived', 'forfeited'].includes(job.pointSettlement.state)) ||
@@ -169,7 +178,7 @@ export function paidPointsJob(value: unknown, id?: string): value is Job & { fun
       job.failureCode !== undefined && (job.state !== 'failed' || !STUDIO_FAILURE_CODES.includes(job.failureCode))) return false
   const dispatch = job.channel === 'studio' ? job.studioDispatch : job.blueprintDispatch
   const until = job.channel === 'studio' ? job.studioDispatchUntil : job.blueprintDispatchUntil
-  if (job.channel === 'studio' ? job.profile !== 'slow' || job.billingMode !== 'hold-v1' || job.blueprintDispatch !== undefined :
+  if (job.channel === 'studio' ? !validStudioRoute(job) || job.billingMode !== 'hold-v1' || job.blueprintDispatch !== undefined :
       job.channel !== 'blueprint' || job.billingMode !== 'hold-v1' || job.studioDispatch !== undefined || job.pricing !== undefined || !boundBlueprintProviderModel(job)) return false
   if (!['ready-v1', 'claimed-v1'].includes(String(dispatch)) || (dispatch === 'ready-v1' ? until !== undefined : !Number.isSafeInteger(until) || Number(until) <= job.at || Number(until) > job.at + (job.channel === 'studio' ? STUDIO_SUBMISSION_GRACE_MS : BLUEPRINT_JOB_WINDOW_MS))) return false
   if (['waived', 'forfeited'].includes(String(job.pointSettlement?.state)) && (job.channel !== 'studio' || job.cost !== 250 || marker.capCents !== 175 || marker.state !== 'bounded' || marker.maximumLiabilityCents <= 0 || marker.evidence?.kind !== 'studio-terminal')) return false
@@ -180,7 +189,7 @@ export function paidPointsJob(value: unknown, id?: string): value is Job & { fun
   const proof = marker.evidence
   if (!proof || typeof proof !== 'object' || Array.isArray(proof) || !Number.isSafeInteger(proof.at) || proof.at < job.at || !['completed', 'failed'].includes(job.state)) return false
   if (proof.kind === 'undispatched') return Object.keys(proof).length === 2 && job.state === 'failed' && dispatch === 'ready-v1' && marker.maximumLiabilityCents === 0
-  if (proof.kind === 'studio-terminal') return Object.keys(proof).length === 3 && job.channel === 'studio' && dispatch === 'claimed-v1' && validateTerminalBudgetReceipt(proof.receipt, id ?? proof.receipt?.jobId, job.pricing ?? null) && marker.maximumLiabilityCents === Math.ceil(proof.receipt.maximumLiabilityMicroUsd / 10_000)
+  if (proof.kind === 'studio-terminal') return Object.keys(proof).length === 3 && job.channel === 'studio' && dispatch === 'claimed-v1' && validateTerminalBudgetReceipt(proof.receipt, id ?? proof.receipt?.jobId, job.pricing ?? null, job.studioExecution) && marker.maximumLiabilityCents === Math.ceil(proof.receipt.maximumLiabilityMicroUsd / 10_000)
   if (proof.kind === 'blueprint-output') return Object.keys(proof).length === 3 && job.channel === 'blueprint' && job.state === 'completed' && dispatch === 'claimed-v1' && /^[a-f0-9]{64}$/.test(proof.resultSha256)
   return proof.kind === 'blueprint-failure' && Object.keys(proof).length === 3 && job.channel === 'blueprint' && ['failed', 'completed'].includes(job.state) && validateBlueprintTerminalUsage(proof.usage) && (id === undefined || proof.usage.requestId === id) && dispatch === 'claimed-v1' && proof.usage.fingerprint === job.fingerprint &&
     proof.usage.model === boundBlueprintProviderModel(job) && proof.usage.dispatchDeadline === job.blueprintDispatchUntil && proof.usage.reservedCents === marker.capCents &&
@@ -199,14 +208,13 @@ function terminalOrdinaryAstraReservation(job: Job): boolean {
   if (Object.hasOwn(job, 'overnightTest')) return false
   const terms = reservationTerms(job)
   if (!terms) return false
-  if (!['failed', 'completed'].includes(job.state) || job.channel !== 'studio' || job.profile !== 'slow' ||
-      (job.model !== undefined && job.model !== 'astra') || job.kind !== 'credits' || job.billingMode !== 'hold-v1' || job.cost !== terms.points ||
+  if (!['failed', 'completed'].includes(job.state) || job.channel !== 'studio' || !validStudioRoute(job) || job.kind !== 'credits' || job.billingMode !== 'hold-v1' || job.cost !== terms.points ||
       typeof job.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(job.fingerprint) || !Number.isSafeInteger(job.at) || job.at <= 0 ||
       !Number.isSafeInteger(job.updatedAt) || Number(job.updatedAt) < job.at || Object.hasOwn(job, 'supportApprovalId') || Object.hasOwn(job, 'supplementalGrantId') || Object.hasOwn(job, 'repairedMccGrantId') || Object.hasOwn(job, 'repairedMccClaim') || Object.hasOwn(job, 'projectBudget')) return false
   if (Object.hasOwn(job, 'studioDispatch') && job.studioDispatch !== 'ready-v1' && job.studioDispatch !== 'claimed-v1') return false
   if (job.studioDispatch === 'claimed-v1' ? studioDispatchUntil(job) === undefined : Object.hasOwn(job, 'studioDispatchUntil')) return false
   if (!Object.hasOwn(job, 'studioProviderReservation')) {
-    if (Object.hasOwn(job, 'pricing')) return false
+    if (Object.hasOwn(job, 'pricing') || Object.hasOwn(job, 'studioExecution')) return false
     // The historical hold-v1 Studio writer (8a38d1f) was introduced after the
     // provider ledger (73ff4e7). Its ordinary paid Astra admission atomically
     // debited exactly 175 cents before writing this 250-point held job. Support
@@ -226,7 +234,7 @@ function providerBudgetPending(job: Job): boolean {
 function validProviderReconciliation(value: unknown, id: string, job: Job): value is StudioProviderReconciliation {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const saved = value as StudioProviderReconciliation
-  return Object.keys(saved).length === 5 && validateTerminalBudgetReceipt(saved.receipt, id, job.pricing ?? null) && saved.originalReservedCents === reservationTerms(job)?.maxProviderCents &&
+  return Object.keys(saved).length === 5 && validateTerminalBudgetReceipt(saved.receipt, id, job.pricing ?? null, job.studioExecution) && saved.originalReservedCents === reservationTerms(job)?.maxProviderCents &&
     saved.retainedCents === Math.ceil(saved.receipt.maximumLiabilityMicroUsd / 10_000) && saved.releasedCents === saved.originalReservedCents - saved.retainedCents &&
     Number.isSafeInteger(saved.at) && saved.at > 0
 }
@@ -462,7 +470,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
 // by an immutable authenticated terminal Oracle receipt. Unknown spend is held.
 const PROVIDER_BUDGET = 'provider-budget-cents:v1'
 const FUNDING_SCAN_LIMIT = 256
-const FUNDING_JOB_FIELDS = ['overnightTest', 'pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile', 'failureCode', 'supportApprovalId',
+const FUNDING_JOB_FIELDS = ['studioExecution', 'overnightTest', 'pricing', 'fingerprint', 'prompt', 'channel', 'model', 'qualityProfile', 'failureCode', 'supportApprovalId',
   'supplementalGrantId', 'repairedMccGrantId', 'repairedMccClaim', 'projectBudget', 'profile', 'at', 'updatedAt', 'cost', 'kind', 'billingMode', 'state', 'studioDispatch', 'studioDispatchUntil',
   'studioProviderReservation', 'studioProviderReconciliation', 'blueprintDispatch', 'blueprintDispatchUntil', 'blueprintProviderReservation', 'blueprintProviderReconciliation', 'blueprintProviderModel']
 function fundingJob(value: unknown): value is Job {
@@ -488,7 +496,7 @@ function recordedOrdinaryReservation(job: Job): StudioProviderReservation | null
   if (!terms || job.cost !== terms.points || (model === 'astra') !== (job.profile === 'slow')) return null
   let marker: StudioProviderReservation | undefined, dispatch: Job['studioDispatch'], dispatchValid: boolean
   if (job.channel === 'studio') {
-    if (job.profile !== 'slow' || model !== 'astra' || job.billingMode !== 'hold-v1' || Object.hasOwn(job, 'blueprintProviderReservation') || Object.hasOwn(job, 'blueprintProviderReconciliation') ||
+    if (!validStudioRoute(job) || job.billingMode !== 'hold-v1' || Object.hasOwn(job, 'blueprintProviderReservation') || Object.hasOwn(job, 'blueprintProviderReconciliation') ||
         Object.hasOwn(job, 'blueprintDispatch') || Object.hasOwn(job, 'blueprintDispatchUntil')) return null
     marker = job.studioProviderReservation; dispatch = job.studioDispatch
     dispatchValid = dispatch === 'ready-v1' ? !Object.hasOwn(job, 'studioDispatchUntil') : dispatch === 'claimed-v1' && studioDispatchUntil(job) !== undefined
@@ -1129,7 +1137,7 @@ export class AccountEntitlements {
           job.overnightTest.fingerprint === job.fingerprint && job.overnightTest.workflow === 'detailed-astra' ? OVERNIGHT_TEST_APPROVAL : 'unknown'
         return json({ job: { id: pointer.id, fundingSource, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
           updatedAt: job.updatedAt ?? job.at, state: job.state, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.pointSettlement ? job.pointSettlement.heldPoints > 0 : job.billingMode === 'hold-v1' && job.state === 'reserved', ...(job.pointSettlement ? { pointSettlement: job.pointSettlement } : {}),
-          ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}) } satisfies CurrentStudioJob })
+          ...(job.studioExecution ? { studioExecution: job.studioExecution } : {}), ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}) } satisfies CurrentStudioJob })
       }
       if (path === '/studio-current-clear') {
         if (typeof input.id !== 'string' || !JOB_ID.test(input.id)) return json({ error: 'Invalid job' }, 400)
@@ -1244,6 +1252,9 @@ export class AccountEntitlements {
         const requestedModel = input.model ?? (profile === 'fast' ? 'sol' : 'astra')
         if (!['luna', 'sol', 'astra'].includes(String(requestedModel)) || (profile === 'slow') !== (requestedModel === 'astra')) return json({ error: 'Invalid model for generation route' }, 400)
         const selectedModel = requestedModel as GenerationModel
+        const execution = input.studioExecution
+        if (execution !== undefined && (!isStudioExecution(execution) || execution.model !== selectedModel || channel !== 'studio' || !fingerprint || input.pricing !== undefined || overnightRequest)) return json({ error: 'Invalid Studio execution binding' }, 400)
+        if (channel === 'studio' && selectedModel !== 'astra' && !execution && input.requiredFundingMode !== undefined) return json({ error: 'Detailed model contract required' }, 400)
         const providerModel = input.providerModel
         if (Object.hasOwn(input, 'providerModel') && (channel !== 'blueprint' || !fencedBlueprint || !fingerprint || providerModel !== MODEL_ECONOMICS[selectedModel].model))
           return json({ error: 'Invalid Blueprint provider model binding' }, 400)
@@ -1268,6 +1279,7 @@ export class AccountEntitlements {
             return { allowed: false, repeated: true, state: existing.state, cost: 0, kind: existing.kind, reason: 'JOB_ALREADY_FAILED' }
           if (existing && existing.profile === profile && (existing.model ?? (existing.profile === 'fast' ? 'sol' : 'astra')) !== selectedModel) return { allowed: false, reason: 'JOB_MODEL_MISMATCH' }
           if (existing && (existing.qualityProfile ?? 'standard') !== qualityProfile) return { allowed: false, reason: 'JOB_QUALITY_PROFILE_MISMATCH' }
+          if (existing && !sameStudioExecution(existing.studioExecution, execution as StudioExecution | undefined)) return { allowed: false, repeated: true, reason: 'JOB_MODEL_MISMATCH' }
           if (existing && !samePricing(existing.pricing, pricing)) return { allowed: false, repeated: true, reason: 'JOB_PRICING_MISMATCH' }
           if (existing && (existing.channel ?? 'blueprint') !== channel) return { allowed: false, reason: 'JOB_CHANNEL_MISMATCH' }
           if (existing) return existing.profile !== profile
@@ -1288,7 +1300,7 @@ export class AccountEntitlements {
               return { allowed: false, reason: 'ACCOUNT_ADMISSION_UNAVAILABLE' }
             const capCents = pricing?.maxProviderCents ?? MODEL_ECONOMICS[model].maxProviderCents
             if (!await reserveAdminBudget(storage, approvedAdmin, capCents)) return { allowed: false, reason: 'PROVIDER_BUDGET_EXHAUSTED' }
-            const job: Job = { adminFunding: { allocation: approvedAdmin, capCents }, fingerprint, channel: channel as 'studio' | 'blueprint', model,
+            const job: Job = { ...(execution ? { studioExecution: execution as StudioExecution } : {}), adminFunding: { allocation: approvedAdmin, capCents }, fingerprint, channel: channel as 'studio' | 'blueprint', model,
               ...(typeof providerModel === 'string' ? { blueprintProviderModel: providerModel } : {}), ...(prompt ? { prompt } : {}), ...(pricing ? { pricing } : {}),
               ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: 0, kind: 'credits', state: 'reserved',
               ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : { blueprintDispatch: 'ready-v1' as const }) }
@@ -1402,7 +1414,7 @@ export class AccountEntitlements {
           }
           if (overnightClaim && (!testAuthority || !testWorkflow || !fingerprint || !matchesOvernightTestClaim(overnightClaim, testAuthority, id, fingerprint, testWorkflow, this.now()))) throw new Error('Overnight account admission expired before writes')
           const cloudHold = paid && (channel === 'studio' || pointsMembership)
-          const job: Job = { ...(pointsMembership ? { fundingMode: PAID_POINTS_FUNDING, pointSettlement: { version: 1 as const, state: 'held' as const, heldPoints: cost, chargedPoints: 0 }, providerLiability: { version: 1 as const, source: 'paid-membership' as const, capCents: pricing?.maxProviderCents ?? MODEL_ECONOMICS[model].maxProviderCents, maximumLiabilityCents: 0, state: 'unsubmitted' as const } } : {}), ...(overnightClaim ? { overnightTest: overnightClaim } : {}), ...(typeof providerModel === 'string' ? { blueprintProviderModel: providerModel } : {}), ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(repairedMccClaim ? { repairedMccGrantId: repairedMccClaim.grantId, repairedMccClaim } : {}), ...(projectBudgetRecord ? { projectBudget: projectBudgetRecord } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), ...(blueprintProviderReservation ? { blueprintProviderReservation } : {}), ...(channel === 'blueprint' && fingerprint && fencedBlueprint ? { blueprintDispatch: 'ready-v1' as const } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
+          const job: Job = { ...(execution ? { studioExecution: execution as StudioExecution } : {}), ...(pointsMembership ? { fundingMode: PAID_POINTS_FUNDING, pointSettlement: { version: 1 as const, state: 'held' as const, heldPoints: cost, chargedPoints: 0 }, providerLiability: { version: 1 as const, source: 'paid-membership' as const, capCents: pricing?.maxProviderCents ?? MODEL_ECONOMICS[model].maxProviderCents, maximumLiabilityCents: 0, state: 'unsubmitted' as const } } : {}), ...(overnightClaim ? { overnightTest: overnightClaim } : {}), ...(typeof providerModel === 'string' ? { blueprintProviderModel: providerModel } : {}), ...(pricing ? { pricing } : {}), ...(fingerprint ? { fingerprint } : {}), ...(prompt ? { prompt } : {}), ...(supportApprovalId ? { supportApprovalId } : {}), ...(supplementalGrantId ? { supplementalGrantId } : {}), ...(repairedMccClaim ? { repairedMccGrantId: repairedMccClaim.grantId, repairedMccClaim } : {}), ...(projectBudgetRecord ? { projectBudget: projectBudgetRecord } : {}), ...(studioProviderReservation ? { studioProviderReservation } : {}), ...(blueprintProviderReservation ? { blueprintProviderReservation } : {}), ...(channel === 'blueprint' && fingerprint && fencedBlueprint ? { blueprintDispatch: 'ready-v1' as const } : {}), channel: channel as 'studio' | 'blueprint', ...(model === 'luna' || execution ? { model } : {}), ...(qualityProfile !== 'standard' ? { qualityProfile: qualityProfile as StudioQualityProfile } : {}), profile, at: now, updatedAt: now, cost: paid ? cost : 0, kind: paid ? 'credits' : 'free', ...(cloudHold ? { billingMode: 'hold-v1' as const } : {}), state: 'reserved', ...(channel === 'studio' ? { studioDispatch: 'ready-v1' as const } : {}) }
           if (cloudHold) await changeReservedCredits(storage, cost)
           else if (paid) await storage.put('balance', credits - cost)
           else { free.fast.push({ id, at: now }); await storage.put('usage', free) }
@@ -1459,7 +1471,7 @@ export class AccountEntitlements {
           const job = await storage.get<Job>(`job:${id}`)
           if (!job) return { reconciled: false, reason: 'NOT_OWNED' }
           if (paidPointsJob(job, id)) {
-            if (job.channel !== 'studio' || !['completed', 'failed'].includes(job.state) || !validateTerminalBudgetReceipt(receipt, id, job.pricing ?? null))
+            if (job.channel !== 'studio' || !['completed', 'failed'].includes(job.state) || !validateTerminalBudgetReceipt(receipt, id, job.pricing ?? null, job.studioExecution))
               return { reconciled: false, reason: 'INELIGIBLE_RESERVATION' }
             const proof = job.providerLiability.evidence, retainedCents = Math.ceil(receipt.maximumLiabilityMicroUsd / 10_000)
             if (proof) return proof.kind === 'studio-terminal' && Object.keys(receipt).every(key => receipt[key as keyof TerminalBudgetReceipt] === proof.receipt[key as keyof TerminalBudgetReceipt])
@@ -1476,14 +1488,14 @@ export class AccountEntitlements {
           }
           if (adminJob(job) && job.adminFunding) {
             if (job.channel !== 'studio' || !['completed', 'failed'].includes(job.state) || job.studioDispatch !== 'claimed-v1' ||
-                !validAdminFunding(job.adminFunding) || !validateTerminalBudgetReceipt(receipt, id, job.pricing ?? null) || receipt.capMicroUsd !== job.adminFunding.capCents * 10000)
+                !validAdminFunding(job.adminFunding) || !validateTerminalBudgetReceipt(receipt, id, job.pricing ?? null, job.studioExecution) || receipt.capMicroUsd !== job.adminFunding.capCents * 10000)
               return { reconciled: false, reason: 'INELIGIBLE_RESERVATION' }
             if (job.adminTerminalReceipt && JSON.stringify(job.adminTerminalReceipt) !== JSON.stringify(receipt)) return { reconciled: false, reason: 'RECEIPT_CONFLICT' }
             await storage.put(`job:${id}`, { ...job, adminTerminalReceipt: receipt })
             return { reconciled: true, repeated: !!job.adminTerminalReceipt, retainedCents: Math.ceil(receipt.maximumLiabilityMicroUsd / 10000), releasedCents: 0 }
           }
           if (!terminalOrdinaryAstraReservation(job)) return { reconciled: false, reason: 'INELIGIBLE_RESERVATION' }
-          if (!validateTerminalBudgetReceipt(receipt, id, job.pricing ?? null)) return { reconciled: false, reason: 'RECEIPT_PRICING_MISMATCH' }
+          if (!validateTerminalBudgetReceipt(receipt, id, job.pricing ?? null, job.studioExecution)) return { reconciled: false, reason: 'RECEIPT_PRICING_MISMATCH' }
           if (Object.hasOwn(job, 'studioProviderReconciliation')) {
             const saved = job.studioProviderReconciliation
             if (!validProviderReconciliation(saved, id, job)) return { reconciled: false, reason: 'UNVERIFIED_RECONCILIATION' }
@@ -1491,7 +1503,7 @@ export class AccountEntitlements {
               return { reconciled: false, reason: 'RECEIPT_CONFLICT' }
             return { reconciled: true, repeated: true, releasedCents: saved.releasedCents, retainedCents: saved.retainedCents }
           }
-          const originalReservedCents = receipt.capMicroUsd / 10_000 as 175 | 200 | 400
+          const originalReservedCents = receipt.capMicroUsd / 10_000
           const retainedCents = Math.ceil(receipt.maximumLiabilityMicroUsd / 10_000), releasedCents = originalReservedCents - retainedCents
           const remaining = await storage.get<number>(PROVIDER_BUDGET)
           if (!Number.isSafeInteger(remaining) || !Number.isSafeInteger(Number(remaining) + releasedCents)) throw new Error('Invalid provider reconciliation')
@@ -1514,7 +1526,7 @@ export class AccountEntitlements {
           const subscription = await storage.get<Subscription>('subscription')
           const allowed = job.state === 'completed' && (adminJob(job) || job.profile === 'fast' || active(subscription, now)) && await balance(storage) >= 0 && await storage.get<boolean>('billingHold') !== true
           const dispatchUntil = studioDispatchUntil(job)
-          return json({ owned: true, ...(job.pointSettlement ? { channel: job.channel, model: job.model ?? (job.profile === 'fast' ? 'sol' : 'astra') } : {}), ...(job.fingerprint ? { fingerprint: job.fingerprint } : {}), downloadAllowed: allowed, previewOnly: !adminJob(job) && job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.pointSettlement ? job.pointSettlement.heldPoints > 0 : job.billingMode === 'hold-v1' && job.state === 'reserved', ...(job.pointSettlement ? { pointSettlement: job.pointSettlement } : {}), ...(dispatchUntil ? { studioDispatchUntil: dispatchUntil } : {}), ...(providerBudgetPending(job) || adminJob(job) && job.channel === 'studio' && job.state !== 'reserved' && !job.adminTerminalReceipt ? { providerBudgetPending: true } : {}) })
+          return json({ owned: true, ...(job.studioExecution ? { studioExecution: job.studioExecution } : {}), ...(job.pointSettlement ? { channel: job.channel, model: job.model ?? (job.profile === 'fast' ? 'sol' : 'astra') } : {}), ...(job.fingerprint ? { fingerprint: job.fingerprint } : {}), downloadAllowed: allowed, previewOnly: !adminJob(job) && job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.pointSettlement ? job.pointSettlement.heldPoints > 0 : job.billingMode === 'hold-v1' && job.state === 'reserved', ...(job.pointSettlement ? { pointSettlement: job.pointSettlement } : {}), ...(dispatchUntil ? { studioDispatchUntil: dispatchUntil } : {}), ...(providerBudgetPending(job) || adminJob(job) && job.channel === 'studio' && job.state !== 'reserved' && !job.adminTerminalReceipt ? { providerBudgetPending: true } : {}) })
         }
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
         const next = input.state as 'completed' | 'failed'
@@ -1858,9 +1870,10 @@ export async function entitlementStatus(env: EntitlementEnv, userId: string, ide
     repaired: { available: repaired.available, consumed: repaired.consumed, statusKnown: typeof repaired.available === 'boolean' },
     project: { available: project.available, committed: project.committed, statusKnown: typeof project.available === 'boolean' } })
 }
-export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { requiredFundingMode?: typeof PAID_POINTS_FUNDING; paidPointsPolicy?: string | null; overnightTest?: boolean; providerModel?: string; channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing; blueprintDispatch?: 'fenced-v1'; repairedMccInputEligible?: boolean; projectBudgetInputEligible?: boolean }) {
-  const body = { id: jobId, profile, ...(metadata?.paidPointsPolicy != null ? { paidPointsPolicy: metadata.paidPointsPolicy } : {}), ...(metadata?.requiredFundingMode ? { requiredFundingMode: metadata.requiredFundingMode } : {}), ...(metadata?.providerModel !== undefined ? { providerModel: metadata.providerModel } : {}), ...(metadata?.projectBudgetInputEligible === true ? { projectBudgetInputEligible: true } : {}), ...(metadata?.repairedMccInputEligible === true ? { repairedMccInputEligible: true } : {}), ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.blueprintDispatch ? { blueprintDispatch: metadata.blueprintDispatch } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
+export async function reserveUserGeneration(env: EntitlementEnv, userId: string, jobId: string, profile: GenerationKind, model?: GenerationModel, fingerprint?: string, qualityProfile?: StudioQualityProfile, metadata?: { studioExecution?: StudioExecution; requiredFundingMode?: typeof PAID_POINTS_FUNDING; paidPointsPolicy?: string | null; overnightTest?: boolean; providerModel?: string; channel?: 'studio' | 'blueprint'; prompt?: string; supportIdentity?: AstraSupportIdentity; pricing?: StudioPricing; blueprintDispatch?: 'fenced-v1'; repairedMccInputEligible?: boolean; projectBudgetInputEligible?: boolean }) {
+  const body = { id: jobId, profile, ...(metadata?.studioExecution ? { studioExecution: metadata.studioExecution } : {}), ...(metadata?.paidPointsPolicy != null ? { paidPointsPolicy: metadata.paidPointsPolicy } : {}), ...(metadata?.requiredFundingMode ? { requiredFundingMode: metadata.requiredFundingMode } : {}), ...(metadata?.providerModel !== undefined ? { providerModel: metadata.providerModel } : {}), ...(metadata?.projectBudgetInputEligible === true ? { projectBudgetInputEligible: true } : {}), ...(metadata?.repairedMccInputEligible === true ? { repairedMccInputEligible: true } : {}), ...(model ? { model } : {}), ...(fingerprint ? { fingerprint } : {}), ...(qualityProfile && qualityProfile !== 'standard' ? { qualityProfile } : {}), ...(metadata?.channel ? { channel: metadata.channel } : {}), ...(metadata?.blueprintDispatch ? { blueprintDispatch: metadata.blueprintDispatch } : {}), ...(metadata?.prompt ? { prompt: metadata.prompt } : {}), ...(metadata?.pricing !== undefined ? { pricing: metadata.pricing } : {}) }
   if (metadata?.overnightTest) {
+    if (metadata.studioExecution) throw new EntitlementError('Existing overnight authority does not include detailed model selection.')
     const workflow = overnightWorkflow(metadata.channel, model ?? (profile === 'fast' ? 'sol' : 'astra'))
     if (env.ENFORCE_ACCOUNT_ENTITLEMENTS !== 'true' || !workflow || !fingerprint || metadata.pricing !== undefined || metadata.projectBudgetInputEligible || metadata.repairedMccInputEligible)
       throw new EntitlementError('This request is outside the approved overnight test scope.')
