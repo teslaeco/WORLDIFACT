@@ -263,3 +263,27 @@ test('four-reference MAKE cabinet reaches v33 admission once with the complete b
   assert.equal(posts(f).length, 0)
   assert.equal(f.values.get('reserved-attempts'), 5)
 })
+
+test('ten distinct sequential signed jobs and repeated receipts emit exactly ten mocked Oracle POSTs', async () => {
+  const f = fixture(0)
+  f.env.GENERATION_REQUEST_LIMIT = 'unlimited'
+  f.env.GENERATION_EXPIRES_AT = ''
+  const originalIds = new Set<string>()
+  for (let index = 0; index < 10; index++) {
+    const jobInput: StudioInput = { ...input, prompt: `Synthetic offline generation fixture ${index + 1}` }
+    const prepared = await data(f.call('/api/studio/prepare', 'POST', jobInput))
+    assert.ok(!originalIds.has(prepared.id), 'Each distinct fixture gets its own signed request ID')
+    originalIds.add(prepared.id)
+    const first = await data(f.call('/api/studio/jobs', 'POST', jobInput, prepared.ticket))
+    assert.equal(first.job.id, prepared.id)
+    assert.equal(first.job.state, 'building')
+    const repeated = await f.call('/api/studio/jobs', 'POST', jobInput, prepared.ticket)
+    assert.equal(repeated.status, 202)
+    assert.equal(posts(f).length, index + 1, 'Receipt replay never dispatches another provider POST')
+  }
+  const dispatchedIds = posts(f).map(call => JSON.parse(String(call.init?.body)).id as string)
+  assert.equal(dispatchedIds.length, 10)
+  assert.equal(new Set(dispatchedIds).size, 10)
+  assert.deepEqual(new Set(dispatchedIds), originalIds)
+  assert.equal(f.values.get('reserved-attempts'), 10)
+})
