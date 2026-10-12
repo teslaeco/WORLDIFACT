@@ -230,3 +230,38 @@ test('owned pending-cost review pages remain bounded, complete and read-only aft
   for (const query of ['?pendingAfter=other-account', '?pendingAfter=' + ids[0] + '&pendingAfter=' + ids[1], '?accountId=' + ACCOUNT]) await f.call('/generation-funding' + query, undefined, 400)
   assert.deepEqual(f.values(), before)
 })
+
+test('detailed Sol/Luna bind exact mode, hold existing prices, dispatch once and reconcile only matching evidence', async () => {
+  for (const model of ['sol', 'luna'] as const) for (const mode of ['standard', 'fast'] as const) {
+    const f = fixture(), id = crypto.randomUUID(); await f.seed()
+    const studioExecution = { revision: 'studio-execution-v1', model, mode }
+    const body = { ...request(id, 'studio', model), studioExecution }
+    const reserved = await f.call('/reserve', body)
+    assert.equal(reserved.allowed, true)
+    assert.equal(reserved.cost, MODEL_ECONOMICS[model].creditsPerGeneration)
+    const key = PAID_POINTS_JOB_PREFIX + id
+    assert.deepEqual((f.values().get(key) as any).studioExecution, studioExecution)
+    assert.equal((await f.call('/reserve', { ...body, studioExecution: { ...studioExecution, mode: mode === 'fast' ? 'standard' : 'fast' } }, 429)).allowed, false)
+    assert.equal((await f.call('/studio-dispatch', { id, fingerprint })).dispatch, true)
+    assert.equal((await f.call('/studio-dispatch', { id, fingerprint })).dispatch, false)
+    await f.call('/settle', { id, state: 'completed' })
+    const receipt = { ...proof(id), model: MODEL_ECONOMICS[model].model, policyRevision: `studio-model-budget-v1:${mode}`, capMicroUsd: MODEL_ECONOMICS[model].maxProviderCents * 10000, maximumLiabilityMicroUsd: 1000 }
+    assert.equal((await f.call('/reconcile-studio-provider', { id, receipt: { ...receipt, policyRevision: `studio-model-budget-v1:${mode === 'fast' ? 'standard' : 'fast'}` } })).reconciled, false)
+    assert.equal((await f.call('/reconcile-studio-provider', { id, receipt })).reconciled, true)
+    assert.equal((await f.call('/reconcile-studio-provider', { id, receipt })).repeated, true)
+    const job = f.values().get(key) as any
+    assert.equal(job.pointSettlement.state, 'charged')
+    assert.equal(job.providerLiability.maximumLiabilityCents, 1)
+    assert.equal(f.values().get('balance'), 1500 - MODEL_ECONOMICS[model].creditsPerGeneration)
+    assert.equal(f.values().get(PROVIDER), 0)
+  }
+})
+
+test('detailed model selection rejects unbound, mismatched and client-priced routes before reservations', async () => {
+  const f = fixture(); await f.seed()
+  for (const fields of [{}, { studioExecution: { revision: 'studio-execution-v1', model: 'astra', mode: 'fast' } }, { studioExecution: { revision: 'studio-execution-v1', model: 'sol', mode: 'ultrafast' } }, { studioExecution: { revision: 'studio-execution-v1', model: 'sol', mode: 'standard', maxProviderCents: 999 } }]) {
+    const before = f.values()
+    await f.call('/reserve', { ...request(crypto.randomUUID(), 'studio', 'sol'), ...fields }, 400)
+    assert.deepEqual(f.values(), before)
+  }
+})

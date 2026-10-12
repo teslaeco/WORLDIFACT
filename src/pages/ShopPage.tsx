@@ -1,3 +1,4 @@
+import { STUDIO_EXECUTION_REVISION, type StudioExecution } from '../lib/studioExecution'
 import { validateReferenceSelection } from '../lib/referenceAttachments'
 import { STUDIO_REFERENCE_FILE_ACCEPT, appendReferenceText, referenceFileKind } from '../lib/studioFileReferences'
 import CreationProgress from '../components/CreationProgress'
@@ -30,7 +31,7 @@ import { useGenerationQuote } from '../lib/useGenerationQuote'
 import { inspectGLB } from '../lib/glb'
 import { DEFAULT_DIMENSIONS_MM, type ClientDimensions } from '../lib/shopManufacturing'
 import { type GenerationResult } from '../lib/blueprint'
-import { formatStudioGenerationDuration, JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, generationProfile, studioPointsPending, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
+import { formatStudioGenerationDuration, JOB_DETAILS, PHOTO_VIEWS, STUDIO_POLL_MS, FAST_DRAFT_PROFILE, studioPointsPending, type GenerationProfile, type StudioInput, type StudioPhoto, type StudioJob, type StudioStatus, type TextureLimit } from '../lib/studioProtocol'
 import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../lib/generationAdmission'
 import { BlueprintClient, blueprintRecoveryDetail, type BlueprintRecovery } from '../lib/blueprintClient'
 import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, blueprintDelivery, blueprintReferences, type BlueprintDelivery } from '../lib/blueprintRequest'
@@ -103,6 +104,7 @@ export default function ShopPage() {
   const [purpose, setPurpose] = useState<StudioInput['purpose']>('figurine')
   const [textureLimit, setTextureLimit] = useState<TextureLimit>(4096)
   const [profile, setProfile] = useState<GenerationProfile>('standard')
+  const [executionMode, setExecutionMode] = useState<'standard' | 'fast'>('standard')
   const [cheapModel, setCheapModel] = useState<DraftModel>('sol')
   const [budgetTier, setBudgetTier] = useState<StudioBudgetTier>('standard')
   const [acceptedBudgetRevision, setAcceptedBudgetRevision] = useState<object | null>(null)
@@ -147,19 +149,21 @@ export default function ShopPage() {
   const [solReady, setSolReady] = useState(false)
   const [lunaReady, setLunaReady] = useState(false)
   const [astraReady, setAstraReady] = useState(false)
-  const composer = useMemo<ShopDraftSnapshot>(() => ({ prompt, purpose, textureLimit, profile, cheapModel, budgetTier, deliverable, creationMode, photos, dimensions, dimensionsEnabled }), [prompt, purpose, textureLimit, profile, cheapModel, budgetTier, deliverable, creationMode, photos, dimensions, dimensionsEnabled])
+  const composer = useMemo<ShopDraftSnapshot>(() => ({ prompt, purpose, textureLimit, profile, cheapModel, executionMode, budgetTier, deliverable, creationMode, photos, dimensions, dimensionsEnabled }), [prompt, purpose, textureLimit, profile, cheapModel, executionMode, budgetTier, deliverable, creationMode, photos, dimensions, dimensionsEnabled])
   const latestComposer = useRef(composer)
   useEffect(() => { latestComposer.current = composer }, [composer])
   const fast = profile === FAST_DRAFT_PROFILE
+  const selectedExecution: StudioExecution | undefined = fast || executionMode === 'fast' ? { revision: STUDIO_EXECUTION_REVISION, model: fast ? cheapModel : 'astra', mode: executionMode } : undefined
+  const executionReady = status?.studioExecutionRevision === STUDIO_EXECUTION_REVISION
   const fastAvailable = cheapModel === 'luna' ? lunaReady : solReady
   const previousFinished = canSubmitNewDraft(saved?.receipt.id, job)
   const detailed = blueprintDelivery({ prompt, deliverable }, photos.length) === 'detailed-mesh'
-  const detailedProblem = detailed ? (fast ? 'Select Astra for a detailed model. The selected model will never be upgraded automatically.' : detailedUnavailable(status, photos.length)) : null
+  const detailedProblem = detailed ? (detailedUnavailable(status, photos.length) || (selectedExecution && !executionReady ? 'The selected model runtime is not verified yet.' : null)) : null
   const tiersReady = studioTiersReady(status)
-  const selectedTier = detailed && tiersReady ? budgetTier : undefined
+  const selectedTier = detailed && !selectedExecution && tiersReady ? budgetTier : undefined
   const draftBudgetRevision = useMemo(() => ({ prompt, purpose, textureLimit, photos, profile, deliverable, budgetTier, accountOwner, owner, tiersReady, pricingRevision: status?.pricingRevision }), [prompt, purpose, textureLimit, photos, profile, deliverable, budgetTier, accountOwner, owner, tiersReady, status?.pricingRevision])
   const budgetAccepted = hasStudioBudgetConsent(budgetTier, acceptedBudgetRevision, draftBudgetRevision)
-  const selectedPoints = selectedTier ? STUDIO_PRICING[selectedTier].points : 250
+  const selectedPoints = selectedTier ? STUDIO_PRICING[selectedTier].points : MODEL_CATALOG[fast ? cheapModel : 'astra'].creditsPerGeneration
   const accountQuote = useGenerationQuote(fast ? cheapModel : 'astra', busy, detailed, selectedTier)
   const accountReady = accountQuote.quote.state === 'credits' || accountQuote.quote.state === 'free'
   const fundingBlocked = accountQuote.quote.state === 'blocked' && accountQuote.quote.reason === 'PROVIDER_BUDGET_EXHAUSTED'
@@ -543,11 +547,11 @@ export default function ShopPage() {
     if (detailed) {
       const client = coordinator.current
       if (detailedProblem || !client) { setError(detailedProblem || 'Model recovery storage is unavailable. No generation was started.'); return }
-      if (budgetTier === 'extended' && (!tiersReady || !budgetAccepted)) { setError('Review and explicitly accept 500 points for this draft before generating.'); return }
+      if (!selectedExecution && budgetTier === 'extended' && (!tiersReady || !budgetAccepted)) { setError('Review and explicitly accept 500 points for this draft before generating.'); return }
       if (prompt.trim().length < 3 || prompt.length > Math.min(BLUEPRINT_PROMPT_LIMIT, status?.promptMaxLength ?? 0)) return
       flags.submit = true; setBusy(true); setError(''); setNotice('')
       try {
-        const input: StudioInput = { worldId: 'enchanted-ai-shop', prompt: prompt.trim(), purpose, textureMaxSize: textureLimit, photos: photos.map(photo => ({ ...photo })), ...(selectedTier ? studioBudgetSelection(selectedTier, budgetAccepted) : {}) }
+        const input: StudioInput = { worldId: 'enchanted-ai-shop', prompt: prompt.trim(), purpose, textureMaxSize: textureLimit, photos: photos.map(photo => ({ ...photo })), ...(selectedExecution ? { studioExecution: selectedExecution } : {}), ...(selectedTier ? studioBudgetSelection(selectedTier, budgetAccepted) : {}) }
         const onPrepared = (selected: SavedStudioJob) => {
           if (!mounted.current) return
           submittedComposer.current = { id: selected.receipt.id, draft: composer }
@@ -596,7 +600,7 @@ export default function ShopPage() {
   }
   const addPhotos = async (files: FileList | null) => {
     const flags = operations.current
-    if (!files || flags.photos || flags.submit || imageBusy || (fast && creationMode === 'model')) return
+    if (!files || flags.photos || flags.submit || imageBusy) return
     try { validateReferenceSelection(photos.map(photo => ({ size: referenceSizes.current.get(photo.dataUrl) ?? 0 })), Array.from(files)) }
     catch (e) { setError(e instanceof Error ? e.message : 'Invalid attachments.'); return }
     referenceSizes.current = new Map(photos.map(photo => [photo.dataUrl, referenceSizes.current.get(photo.dataUrl) ?? 0]))
@@ -615,12 +619,12 @@ export default function ShopPage() {
   }
   const clearDraft = () => {
     if (operations.current.submit || operations.current.photos) return
-    resetComposer(); setDeliverable(fast ? 'procedural-blueprint' : 'detailed-mesh'); setError('')
+    resetComposer(); setDeliverable('detailed-mesh'); setError('')
     promptInput.current?.focus()
   }
   const addReferenceFile = async (file?: File) => {
     const flags = operations.current
-    if (!file || flags.photos || flags.submit || imageBusy || creationModeRef.current !== 'model' || fast) return
+    if (!file || flags.photos || flags.submit || imageBusy || creationModeRef.current !== 'model') return
     let kind: ReturnType<typeof referenceFileKind>
     try {
       kind = referenceFileKind(file)
@@ -659,7 +663,7 @@ export default function ShopPage() {
     if (operations.current.submit || operations.current.photos) return
     setPrompt(nextPrompt)
     setPurpose('object')
-    setProfile('standard')
+    setProfile('standard'); setExecutionMode('standard')
     setTextureLimit(4096)
     setError('')
     setNotice('ISS manufacturing-repair instructions loaded internally. Nothing was generated or ordered.')
@@ -696,7 +700,7 @@ export default function ShopPage() {
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
   const canGenerate = creationMode === 'model' && accountReady && !otherSavedPending && !testSavedSlot && !testBlueprintSlot && !cloudRecoveryPending && !checking && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
-    (detailed ? !detailedProblem && (budgetTier === 'standard' || (tiersReady && budgetAccepted)) && prompt.length <= (status?.promptMaxLength ?? 0) : fast ? fastAvailable && !photos.length && purpose !== 'terrain' : astraReady && photos.length <= BLUEPRINT_REFERENCE_LIMIT)
+    (detailed ? !detailedProblem && (!!selectedExecution || budgetTier === 'standard' || (tiersReady && budgetAccepted)) && prompt.length <= (status?.promptMaxLength ?? 0) : fast ? fastAvailable && !photos.length && purpose !== 'terrain' : astraReady && photos.length <= BLUEPRINT_REFERENCE_LIMIT)
   const showingStudioResult = !busy && !fastResult && !demoPrompt && recovery?.state !== 'pending'
   const canExport = showingStudioResult && mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
   const runtimeReady = detailed ? !detailedProblem : fast ? fastAvailable : astraReady
@@ -722,7 +726,7 @@ export default function ShopPage() {
           <LiveSolPreview result={fastResult} prompt={fastPrompt} />
           <small hidden data-testid="fast-result-description">{fastResult.assetSpec?.summary ?? fastResult.blueprint.title}</small>
           {dimensionsEnabled && <p className="shop-preview-dimensions">FAST draft target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
-          <small>This result is a procedural blueprint, not a faithful image-to-mesh reconstruction. Choose Detailed 3D model for the separate Astra/Blender workflow.</small>
+          <small>This result is a procedural blueprint, not a faithful image-to-mesh reconstruction. Choose Detailed 3D model for the Blender workflow.</small>
         </> : demoPrompt ? <>
           <DemoShopPreview prompt={demoPrompt} />
           {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size target: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
@@ -733,7 +737,7 @@ export default function ShopPage() {
           {dimensionsEnabled && <p className="shop-preview-dimensions">Preview size: <b>{dimensions.xMm.toFixed(1)} × {dimensions.yMm.toFixed(1)} × {dimensions.zMm.toFixed(1)} mm</b></p>}
         </> : saved && savedJob?.state === 'succeeded' && savedJob.downloadAllowed !== false ? <CreationProgress active={artifactBusy} label={artifactBusy ? 'Loading your model' : 'Model ready · reload preview'} percent={artifactBusy ? 75 : null} /> : saved ? <div className="native-shop-progress">
           <p className="shop-visually-hidden" style={{ overflowWrap: 'anywhere' }}>Selected saved job: {saved.receipt.id} · Status: {savedStatusLabel}</p>
-          <h2>{savedWaived ? 'Generation failed · customer point charge waived' : studioPointsPending(job) ? job?.pointSettlementUnconfirmed ? 'Generation failed · settlement unconfirmed' : 'Generation failed · points held for cost review' : job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your SLOW model is ready' : savedStatusUnknown ? 'Saved request needs a recovery check' : isAdmissionFailureCode(job?.failureCode) ? 'Generation was not started' : job?.failureCode === 'MISSING_SUBMISSION' ? 'The upload was not confirmed' : job?.state === 'failed' ? 'Saved request did not finish' : job?.state === 'cancelled' ? 'Saved request was cancelled' : busy ? 'Uploading your model request…' : job?.state === 'pending' ? 'Checking whether your request was accepted…' : 'Preparing your model…'}</h2>
+          <h2>{savedWaived ? 'Generation failed · customer point charge waived' : studioPointsPending(job) ? job?.pointSettlementUnconfirmed ? 'Generation failed · settlement unconfirmed' : 'Generation failed · points held for cost review' : job?.reconciliationRequired ? 'Model needs a status review' : job?.state === 'succeeded' ? 'Your model is ready' : savedStatusUnknown ? 'Saved request needs a recovery check' : isAdmissionFailureCode(job?.failureCode) ? 'Generation was not started' : job?.failureCode === 'MISSING_SUBMISSION' ? 'The upload was not confirmed' : job?.state === 'failed' ? 'Saved request did not finish' : job?.state === 'cancelled' ? 'Saved request was cancelled' : busy ? 'Uploading your model request…' : job?.state === 'pending' ? 'Checking whether your request was accepted…' : 'Preparing your model…'}</h2>
           <p>{job?.reconciliationRequired ? job.detail : job?.state === 'succeeded' && job.downloadAllowed === false
             ? 'Model and texture downloads require an active subscription. Your result is preserved; a protected image preview is not available on this worker yet.'
             : terminal(job?.state)
@@ -764,20 +768,20 @@ export default function ShopPage() {
             <div className="shop-prompt-top"><label htmlFor="studio-prompt">What will you create?</label><span aria-hidden="true">✦</span></div>
             <textarea ref={promptInput} id="studio-prompt" value={prompt} aria-describedby="studio-prompt-count" aria-invalid={prompt.length > BLUEPRINT_PROMPT_LIMIT} rows={3} disabled={busy || photoBusy || imageBusy} onChange={e => { setPrompt(e.target.value); setComposerCleared(false) }} placeholder="A floating island. A place to call home. Something only you can imagine…" required />
             <div className="studio-attachment-toolbar">
-              <button type="button" className="studio-attach-plus" disabled={busy || photoBusy || imageBusy || (creationMode === 'model' && fast) || photos.length >= photoLimit} onClick={() => document.getElementById('studio-photos')?.click()} aria-label="Add reference images" title="Add up to 4 images · 40 MB total"><span aria-hidden="true">＋</span></button>
-              <button type="button" className="shop-text-button" hidden={creationMode !== 'model'} disabled={busy || photoBusy || imageBusy || fast} onClick={() => document.getElementById('studio-reference-file')?.click()} title="GLB / OBJ / STL model views or a TXT / MD / CSV / JSON brief">Add reference file</button>
+              <button type="button" className="studio-attach-plus" disabled={busy || photoBusy || imageBusy || photos.length >= photoLimit} onClick={() => document.getElementById('studio-photos')?.click()} aria-label="Add reference images" title="Add up to 4 images · 40 MB total"><span aria-hidden="true">＋</span></button>
+              <button type="button" className="shop-text-button" hidden={creationMode !== 'model'} disabled={busy || photoBusy || imageBusy} onClick={() => document.getElementById('studio-reference-file')?.click()} title="GLB / OBJ / STL model views or a TXT / MD / CSV / JSON brief">Add reference file</button>
             <div className="studio-prompt-model" hidden={creationMode !== 'model'}>          <div className="studio-model-select" role="group" aria-labelledby="studio-mode-label">
             <label id="studio-mode-label" htmlFor="studio-mode">3D model</label>
-            <select id="studio-mode" value={fast && cheapModel === 'luna' ? 'luna' : profile} disabled={busy || photoBusy} onChange={e => {
+            <select id="studio-mode" value={fast ? `${cheapModel}-${executionMode}` : executionMode === 'fast' ? 'astra-fast' : 'standard'} disabled={busy || photoBusy} onChange={e => {
               if (operations.current.submit || operations.current.photos || imageBusy) return
-              const next = e.target.value === 'luna' ? FAST_DRAFT_PROFILE : generationProfile(e.target.value)
-              const nextModel = e.target.value === 'luna' ? 'luna' : 'sol'
-              if (next === FAST_DRAFT_PROFILE && (!(nextModel === 'luna' ? lunaReady : solReady) || photos.length || purpose === 'terrain')) return
-              setCheapModel(nextModel)
-              setProfile(next)
-              if (next === 'standard') { setDeliverable('detailed-mesh'); if (textureLimit === 2048) setTextureLimit(4096) }
-              if (next === FAST_DRAFT_PROFILE) { setDeliverable('procedural-blueprint'); setTextureLimit(2048) }
-            }}><option value="standard">Slow / Quality · GPT-6 Astra</option><option value={FAST_DRAFT_PROFILE} disabled={!solReady || !!photos.length || purpose === 'terrain'}>Fast · GPT-6.1 Sol · draft</option><option value="luna" disabled={!lunaReady || !!photos.length || purpose === 'terrain'}>Fast · GPT-6 Luna · draft</option></select>
+              const choice = e.target.value
+              if (!['standard', 'astra-fast', 'sol-standard', 'sol-fast', 'luna-standard', 'luna-fast'].includes(choice) || choice !== 'standard' && !executionReady) return
+              const model = choice.startsWith('sol-') ? 'sol' : choice.startsWith('luna-') ? 'luna' : 'astra'
+              setExecutionMode(choice.endsWith('-fast') ? 'fast' : 'standard')
+              setCheapModel(model === 'luna' ? 'luna' : 'sol')
+              setProfile(model === 'astra' ? 'standard' : FAST_DRAFT_PROFILE)
+              setDeliverable('detailed-mesh'); setBudgetTier('standard'); setAcceptedBudgetRevision(null)
+            }}><option value="standard">Slow / Quality · GPT-6 Astra</option><option value="astra-fast" disabled={!executionReady}>Fast · GPT-6 Astra</option><option value="sol-standard" disabled={!executionReady}>Slow / Quality · GPT-6.1 Sol</option><option value="sol-fast" disabled={!executionReady}>Fast · GPT-6.1 Sol</option><option value="luna-standard" disabled={!executionReady}>Slow / Quality · GPT-6 Luna</option><option value="luna-fast" disabled={!executionReady}>Fast · GPT-6 Luna</option></select>
           </div>
             </div>
             <div className="studio-prompt-model" ref={setImageModelSlot} hidden={creationMode !== 'image'} />
@@ -785,10 +789,10 @@ export default function ShopPage() {
             <div className="shop-prompt-bottom"><button type="button" className="shop-text-button" data-testid="clear-studio-draft" disabled={busy || photoBusy || imageBusy || (!prompt.length && !photos.length)} onClick={clearDraft}>Clear description</button><span id="studio-prompt-count" role="status">{prompt.length.toLocaleString()} / {BLUEPRINT_PROMPT_LIMIT.toLocaleString()}{prompt.length > BLUEPRINT_PROMPT_LIMIT && ' · Shorten before generating'}</span></div>
           </div>
           <div className="studio-references">
-            <input id="studio-reference-file" type="file" className="native-shop-file" accept={STUDIO_REFERENCE_FILE_ACCEPT} aria-label="Add a model or text file as a generation reference" disabled={busy || photoBusy || imageBusy || fast || creationMode !== 'model'} onChange={e => { void addReferenceFile(e.target.files?.[0]); e.target.value = '' }} />
-            {creationMode === 'model' && <details className="studio-file-help"><summary>Reference file formats</summary><small>GLB / OBJ / STL · up to 20 MB and 300,000 triangles · creates three image references. TXT / MD / CSV / JSON · adds the complete brief to your description within its 4,000-character limit. Choose Astra. Other formats, including PDF, FBX, BLEND and ZIP, need conversion first. Files in the project archive under Settings are stored separately and are not generation inputs.</small></details>}
-            <input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" aria-label="Add reference images · up to 4, 40 MB total" disabled={busy || photoBusy || imageBusy || (creationMode === 'model' && fast) || photos.length >= photoLimit} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} />
-            <small>{photoBusy ? 'Preparing attachments…' : `Up to 4 images · 40 MB total · ${photos.length}/4 attached`}{creationMode === 'model' && fast ? ' · Choose Astra for references' : ''}</small>
+            <input id="studio-reference-file" type="file" className="native-shop-file" accept={STUDIO_REFERENCE_FILE_ACCEPT} aria-label="Add a model or text file as a generation reference" disabled={busy || photoBusy || imageBusy || creationMode !== 'model'} onChange={e => { void addReferenceFile(e.target.files?.[0]); e.target.value = '' }} />
+            {creationMode === 'model' && <details className="studio-file-help"><summary>Reference file formats</summary><small>GLB / OBJ / STL · up to 20 MB and 300,000 triangles · creates three image references. TXT / MD / CSV / JSON · adds the complete brief to your description within its 4,000-character limit. Other formats, including PDF, FBX, BLEND and ZIP, need conversion first. Files in the project archive under Settings are stored separately and are not generation inputs.</small></details>}
+            <input id="studio-photos" type="file" className="native-shop-file" multiple accept="image/jpeg,image/png,image/webp" aria-label="Add reference images · up to 4, 40 MB total" disabled={busy || photoBusy || imageBusy || photos.length >= photoLimit} onChange={e => { void addPhotos(e.target.files); e.target.value = '' }} />
+            <small>{photoBusy ? 'Preparing attachments…' : `Up to 4 images · 40 MB total · ${photos.length}/4 attached`}</small>
           <div className="native-shop-photos">{photos.map((photo, index) => <div key={`${index}-${photo.name}`}><img src={photo.dataUrl} alt={`Your reference ${index + 1}: ${photo.view}`} /><label>Reference {index + 1} view<select disabled={busy || photoBusy || imageBusy} value={photo.view} onChange={e => setPhotos(items => items.map((item, i) => i === index ? { ...item, view: e.target.value as StudioPhoto['view'] } : item))}>{PHOTO_VIEWS.map(view => <option key={view} value={view}>{view.replace('_', ' ')}</option>)}</select></label><button type="button" disabled={busy || photoBusy || imageBusy} onClick={() => setPhotos(items => items.filter((_, i) => i !== index))}>Remove reference {index + 1}</button></div>)}</div>
           </div>
           {composerCleared && <p className="shop-composer-reset" role="status">The description and references are cleared. Previous requests, models and point reviews remain saved. Clearing the form does not release held points.</p>}
@@ -800,23 +804,23 @@ export default function ShopPage() {
             <details className="shop-settings" hidden={creationMode === 'image'}>
               <summary><ShopIcon kind="sliders" />Settings{photos.length > 0 && <span className="shop-reference-count">{photos.length}</span>}</summary>
               <div className="shop-settings-panel">
-          <p className="shop-model-guidance">{detailed ? 'Detailed models use Astra + Blender. Sol and Luna create procedural concepts only.' : 'Sol and Luna are text-only procedural drafts. Astra also supports image references.'} {!solReady && !lunaReady ? 'Sol/Luna generation is awaiting verified worker readiness.' : !solReady ? 'Sol is awaiting verified worker readiness.' : !lunaReady ? 'Luna is awaiting verified worker readiness.' : ''}</p>
+          <p className="shop-model-guidance">{detailed ? 'Astra, Sol and Luna build editable models with Blender and support reference images. Fast uses the selected model’s faster API service within the same cost ceiling, leaving less budget for revisions. Completion time and quality vary.' : 'Procedural concepts contain simple shapes. Choose a detailed model for Blender geometry and reference images.'}</p>
           <div className="shop-internal-only" hidden>
-            <small>Detailed models use the signed Astra/Blender job route. Procedural concepts use the separate blueprint route. Both preserve their own recovery identifiers.</small>
-            <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain" disabled={fast}>Terrain or relief</option><option value="object">Custom object</option></select>
-            <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy || fast} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
+            <small>Detailed models use the signed model/Blender job route. Procedural concepts use the separate blueprint route. Both preserve their own recovery identifiers.</small>
+            <label htmlFor="studio-purpose">Purpose</label><select id="studio-purpose" value={purpose} disabled={busy} onChange={e => setPurpose(e.target.value as StudioInput['purpose'])}><option value="figurine">Figurine or chess piece</option><option value="game">Game asset</option><option value="terrain">Terrain or relief</option><option value="object">Custom object</option></select>
+            <label htmlFor="studio-texture">Requested texture-size ceiling</label><select id="studio-texture" value={textureLimit} disabled={busy || !!photos.length || photoBusy} onChange={e => setTextureLimit(Number(e.target.value) as TextureLimit)}><option value={2048}>Up to 2K</option><option value={4096}>Up to 4K</option><option value={8192} disabled>Up to 8K · coming soon</option></select>
           </div>
           <ProjectAttachmentPicker scope="shop" disabled={busy || photoBusy} />
           <label htmlFor="studio-deliverable">What should be delivered?</label>
           <select ref={deliveryInput} id="studio-deliverable" value={deliverable} disabled={busy || photoBusy} onChange={e => setDeliverable(e.target.value as BlueprintDelivery)}>
             <option value="procedural-blueprint">Procedural concept only — simple shapes, not a faithful reconstruction</option>
-            <option value="detailed-mesh">Detailed 3D model — Astra + Blender</option>
+            <option value="detailed-mesh">Detailed 3D model — selected model + Blender</option>
           </select>
-          {!fast && !detailed && <details className="shop-detailed-choice"><summary>About detailed 3D models</summary>
-            <button type="button" data-testid="choose-detailed-model" disabled={busy || photoBusy} onClick={() => { if (!operations.current.submit && !operations.current.photos) { setDeliverable('detailed-mesh'); deliveryInput.current?.focus() } }}>Use detailed 3D model · Astra + Blender</button>
+          {!detailed && <details className="shop-detailed-choice"><summary>About detailed 3D models</summary>
+            <button type="button" data-testid="choose-detailed-model" disabled={busy || photoBusy} onClick={() => { if (!operations.current.submit && !operations.current.photos) { setDeliverable('detailed-mesh'); deliveryInput.current?.focus() } }}>Use detailed 3D model · selected model + Blender</button>
             <small>Select the model workflow for an editable 3D mesh. This only changes your draft; review the cost and press Generate separately.</small>
           </details>}
-          {detailed && tiersReady && <fieldset disabled={busy || photoBusy} className="studio-budget-options">
+          {detailed && !selectedExecution && tiersReady && <fieldset disabled={busy || photoBusy} className="studio-budget-options">
             <legend>Detailed model budget</legend>
             <label htmlFor="studio-budget-tier">Points for one explicit model attempt</label>
             <select id="studio-budget-tier" value={budgetTier} onChange={e => { setBudgetTier(e.target.value as StudioBudgetTier); setAcceptedBudgetRevision(null) }}>
@@ -834,7 +838,7 @@ export default function ShopPage() {
           {creationMode === 'model' ? <>
             <div className="shop-selected-route shop-visually-hidden"><span>{detailed ? 'Detailed 3D' : 'Procedural concept'} · {MODEL_CATALOG[fast ? cheapModel : 'astra'].label}</span><span>{photos.length ? `${photos.length} reference${photos.length === 1 ? '' : 's'}` : 'Text to 3D'}</span></div>
             <GenerationCostNotice minimal compact model={fast ? cheapModel : 'astra'} busy={busy} detailed={detailed} budgetTier={selectedTier} accountQuote={accountQuote} />
-          {detailed && status?.newJobPolicy === 'legacy-usd175-v1' && !accountQuote.quote.fundingSource && <p>One Astra/Blender model: 250 points on success, with the original USD 1.75 API budget. A failed model can still incur API costs. Existing jobs keep their saved price.</p>}
+          {detailed && !selectedExecution && status?.newJobPolicy === 'legacy-usd175-v1' && !accountQuote.quote.fundingSource && <p>One Astra/Blender model: 250 points on success, with the original USD 1.75 API budget. A failed model can still incur API costs. Existing jobs keep their saved price.</p>}
           {detailed && !tiersReady && budgetTier === 'extended' && <div role="status"><p>The selected 500-point budget is no longer available. No generation started. Choose the standard budget explicitly to continue when it is available.</p><button type="button" disabled={busy || photoBusy} onClick={() => { setBudgetTier('standard'); setAcceptedBudgetRevision(null) }}>Use standard model budget · 250 points</button></div>}
           {detailed && tiersReady && budgetTier === 'extended' && <div className="shop-budget-acceptance">            {budgetTier === 'extended' && <label htmlFor="studio-budget-consent"><input id="studio-budget-consent" type="checkbox" checked={budgetAccepted} onChange={e => setAcceptedBudgetRevision(e.target.checked ? draftBudgetRevision : null)} />I explicitly accept 500 points for one attempt with this description and these reference images.</label>}<small>Changing this draft requires a new acceptance. A higher budget does not guarantee completion or quality.</small></div>}
             {detailedProblem && <p className={checking || accountLoading ? "shop-next-status" : "native-shop-error"} role="status">{detailedAvailabilityMessage} {saved && 'Existing requests keep their own status and price.'}</p>}
@@ -842,7 +846,7 @@ export default function ShopPage() {
           </> : null}
           <ImageGenerator key={user?.id ?? 'guest'} prompt={prompt} references={photos} preparingReferences={photoBusy} stage={imageStage} modelSlot={imageModelSlot} active={creationMode === 'image'} onBusyChange={setImageBusy} onSettled={() => void refresh()} />
 <div className="shop-generate-row">{creationMode === 'model' ? <>
-          <button className="native-shop-generate" aria-label={fundingBlocked ? accountQuote.checking ? 'Checking availability' : 'Check availability · generation funding · no charge' : busy ? 'Creating · checking model request' : undefined} type={fundingBlocked ? 'button' : 'submit'} disabled={fundingBlocked ? !accountQuote.canRefresh || busy || photoBusy || artifactBusy || checking : !canGenerate} onClick={fundingBlocked ? () => { if (accountQuote.canRefresh && !busy && !photoBusy && !artifactBusy && !checking) void refresh() } : undefined}><span className="shop-visually-hidden">{fundingBlocked ? accountQuote.checking ? 'Checking generation funding…' : 'Check generation funding · no charge' : busy ? 'Checking model request…' : detailed ? budgetTier === 'extended' && !tiersReady ? 'Review model budget availability' : `Generate Astra/Blender model · ${selectedPoints} points` : fast ? `Generate ${MODEL_CATALOG[cheapModel].label} draft · ${MODEL_CATALOG[cheapModel].creditsPerGeneration} points or funded free allowance` : 'Generate GPT-6 Astra blueprint · 250 points'}</span><span aria-hidden="true">{fundingBlocked ? accountQuote.checking ? 'Checking…' : 'Check availability' : busy ? 'Creating…' : 'Generate'}</span><span aria-hidden="true"><ShopIcon kind="arrow" /></span></button><details className="shop-generation-help"><summary>Plans, free drafts and limits</summary><small>Free: up to 2 shared Sol/Luna drafts per rolling 24 hours when funded capacity is available. Paid Luna uses 15 points, Sol 50 and Astra blueprints 250. Detailed Astra uses the selected model budget. Astra requires eligible membership and verified runtime activation. There is no free Astra fallback. Manufacturing and delivery are separate.</small></details>
+          <button className="native-shop-generate" aria-label={fundingBlocked ? accountQuote.checking ? 'Checking availability' : 'Check availability · generation funding · no charge' : busy ? 'Creating · checking model request' : undefined} type={fundingBlocked ? 'button' : 'submit'} disabled={fundingBlocked ? !accountQuote.canRefresh || busy || photoBusy || artifactBusy || checking : !canGenerate} onClick={fundingBlocked ? () => { if (accountQuote.canRefresh && !busy && !photoBusy && !artifactBusy && !checking) void refresh() } : undefined}><span className="shop-visually-hidden">{fundingBlocked ? accountQuote.checking ? 'Checking generation funding…' : 'Check generation funding · no charge' : busy ? 'Checking model request…' : detailed ? budgetTier === 'extended' && !tiersReady ? 'Review model budget availability' : `Generate ${fast ? MODEL_CATALOG[cheapModel].label : 'Astra'}/Blender model · ${selectedPoints} points` : fast ? `Generate ${MODEL_CATALOG[cheapModel].label} draft · ${MODEL_CATALOG[cheapModel].creditsPerGeneration} points or funded free allowance` : 'Generate GPT-6 Astra blueprint · 250 points'}</span><span aria-hidden="true">{fundingBlocked ? accountQuote.checking ? 'Checking…' : 'Check availability' : busy ? 'Creating…' : 'Generate'}</span><span aria-hidden="true"><ShopIcon kind="arrow" /></span></button><details className="shop-generation-help"><summary>Plans, free drafts and limits</summary><small>Free: up to 2 shared Sol/Luna models per rolling 24 hours when funded capacity is available. Paid Luna uses 15 points, Sol 50 and Astra 250. Fast uses OpenAI Fast processing within the same per-job cost ceiling; it can leave less budget for revisions. Completion time depends on the model and Blender work. Astra requires eligible membership and verified runtime activation. There is no free Astra fallback. Manufacturing and delivery are separate.</small></details>
 </> : null}</div>          {creationMode === 'model' && recovery && <div role="status"><p>Request {recovery.id} · {recovery.state}. Recovering it does not start another paid generation.</p>{recovery.failureCode && <p>{blueprintAdmissionDetail(recovery.failureCode)}</p>}<button type="button" disabled={busy || artifactBusy} onClick={() => recoverBlueprint()}>Recover same request · no extra charge</button>{recovery.state !== 'pending' && <button type="button" disabled={busy} onClick={newBlueprintAttempt}>{testBlueprintSlot ? 'Close saved request' : 'Start a new paid attempt'}</button>}</div>}
 
 
@@ -866,7 +870,7 @@ export default function ShopPage() {
           {otherRecoveryError && <p role="alert">{otherRecoveryError}</p>}
         </details>}
         {(saved || recovery || otherSavedPending) && <p className="shop-held-link"><a href="/account/generation-funding" target="_blank" rel="noopener noreferrer">Review held points and saved account request IDs</a></p>}
-        <details className="shop-customer-status shop-availability-details"><summary>Service status &amp; recovery</summary><div role="status"><strong>{checking || accountQuote.checking ? 'Checking availability…' : !accountReady ? accountQuote.quote.state === 'signin' ? 'Sign in to generate' : 'Next generation is unavailable for this account' : cloudRecoveryPending ? 'Resolve cloud recovery before generating' : currentRequestMessage ? 'Next generation is waiting for the selected request' : detailed ? activeReady ? 'Astra/Blender model generation available' : 'Astra/Blender awaiting readiness' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} draft generation available` : 'ASTRA blueprint generation available' : 'Generation temporarily unavailable'}</strong><p>{!accountReady ? nextGenerationQuoteMessage(accountQuote.quote) : cloudRecoveryPending ? recoveryError || 'Checking for an existing model before another generation can start.' : currentRequestMessage ? currentRequestMessage : detailed ? detailedAvailabilityMessage || 'Your explicit request starts one signed model job. Recovery and downloads never start another generation.' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} creates a validated specification and a lightweight procedural 3D draft.` : 'ASTRA creates a validated premium specification and a procedural downloadable GAME GLB in one bounded call.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{creationMode === 'model' && !activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || artifactBusy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking || accountQuote.checking} onClick={() => void refresh()}>Refresh availability</button></div></details>
+        <details className="shop-customer-status shop-availability-details"><summary>Service status &amp; recovery</summary><div role="status"><strong>{checking || accountQuote.checking ? 'Checking availability…' : !accountReady ? accountQuote.quote.state === 'signin' ? 'Sign in to generate' : 'Next generation is unavailable for this account' : cloudRecoveryPending ? 'Resolve cloud recovery before generating' : currentRequestMessage ? 'Next generation is waiting for the selected request' : detailed ? activeReady ? `${fast ? MODEL_CATALOG[cheapModel].label : 'Astra'}/Blender model generation available` : `${fast ? MODEL_CATALOG[cheapModel].label : 'Astra'}/Blender awaiting readiness` : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} draft generation available` : 'ASTRA blueprint generation available' : 'Generation temporarily unavailable'}</strong><p>{!accountReady ? nextGenerationQuoteMessage(accountQuote.quote) : cloudRecoveryPending ? recoveryError || 'Checking for an existing model before another generation can start.' : currentRequestMessage ? currentRequestMessage : detailed ? detailedAvailabilityMessage || 'Your explicit request starts one signed model job. Recovery and downloads never start another generation.' : activeReady ? fast ? `${MODEL_CATALOG[cheapModel].label} creates a validated specification and a lightweight procedural 3D draft.` : 'ASTRA creates a validated premium specification and a procedural downloadable GAME GLB in one bounded call.' : 'You can still test the Shop with the local DEMO preview while the selected LIVE path is unavailable.'}</p>{creationMode === 'model' && !activeReady && <button type="button" className="native-shop-demo-button" disabled={busy || artifactBusy || photoBusy || prompt.trim().length < 3} onClick={previewDemo}>Preview DEMO · no API cost</button>}<button type="button" disabled={checking || accountQuote.checking} onClick={() => void refresh()}>Refresh availability</button></div></details>
         <div className="native-shop-connection shop-internal-only" hidden role="status"><strong>{checking ? 'Checking connection…' : status?.ready ? 'Connector ready' : 'Generation not ready'}</strong><p>{status ? REASONS[status.reason] || 'Generation status requires review.' : 'A read-only check is required before a paid request can start.'}</p>{status?.allowance && <p>Approved remaining attempts: <b>{status.allowance.remaining}</b> · already reserved: {status.allowance.used}</p>}</div>
         {status?.reason === 'OWNER_ACCESS_REQUIRED' && <label className="shop-internal-only" hidden>Existing owner access code<input type="password" autoComplete="off" value={owner} onChange={e => setOwner(e.target.value)} placeholder="Not an OpenAI API key" /></label>}
         </details>

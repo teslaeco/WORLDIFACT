@@ -34,6 +34,21 @@ function fixture(overrides: Partial<AdminAllocation> = {}) {
     reserve: (id=crypto.randomUUID(),user=USER,channel:'studio'|'blueprint'='studio',model:'astra'|'sol'|'luna'='astra')=>reserveUserGeneration(env,user,id,model==='astra'?'slow':'fast',model,HASH,'standard',{channel,prompt:'Test object',...(channel==='blueprint'?{blueprintDispatch:'fenced-v1',providerModel:MODEL_ECONOMICS[model].model}:{})}),
     call: <T=any>(path:string,body?:unknown,user=USER)=>entitlementCall<T>(env,user,path,body) }
 }
+test('Sol and Luna detailed jobs keep the existing bounded admin allocation and original model terms', async () => {
+  for (const model of ['sol','luna'] as const) for (const mode of ['standard','fast'] as const) {
+    const f = fixture(), id = crypto.randomUUID(), studioExecution = { revision: 'studio-execution-v1' as const, model, mode }
+    const reserved = await reserveUserGeneration(f.env, USER, id, 'fast', model, HASH, 'standard', { channel:'studio', prompt:'One detailed chess rook', studioExecution })
+    assert.equal(reserved.allowed, true); assert.equal(reserved.cost, 0)
+    assert.equal((await f.call('/studio-dispatch', { id, fingerprint: HASH })).dispatch, true)
+    await f.call('/settle', { id, state:'completed' })
+    const receipt = { revision:'worldifact-terminal-budget-v1', jobId:id, model:MODEL_ECONOMICS[model].model, policyRevision:`studio-model-budget-v1:${mode}`, capMicroUsd:MODEL_ECONOMICS[model].maxProviderCents * 10000, maximumLiabilityMicroUsd:1000, sealed:true, sealId:'b'.repeat(64) }
+    assert.equal((await f.call('/reconcile-studio-provider', { id, receipt })).reconciled, true)
+    assert.equal((await f.call('/job', { id })).downloadAllowed, true)
+    assert.deepEqual((f.data().get(ADMIN_JOB_PREFIX + id) as any).studioExecution, studioExecution)
+    assert.equal((await entitlementStatus(f.env, USER)).admin?.remainingProviderCents, 350 - MODEL_ECONOMICS[model].maxProviderCents)
+    for (const key of ['balance','customer-reserved-credits:v1','provider-budget-cents:v1']) assert.equal(f.data().has(key), false)
+  }
+})
 test('owner uses isolated allocation without customer subscription, points or provider pool mutations',async()=>{
   const f=fixture(),id=crypto.randomUUID(),before=await entitlementStatus(f.env,USER)
   assert.equal(before.subscription.active,false);assert.equal(before.credits,0);assert.equal(before.studioAdmission.allowed,true)

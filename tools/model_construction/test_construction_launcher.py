@@ -79,6 +79,16 @@ class LauncherTests(unittest.TestCase):
             self.assertIn('ALLOW_CANCELLED_CLEANUP=False', program)
             self.assertIn('EXPECTED_CANCELLED_JOB=None', program)
             compile(program, 'pinned-update-wrapper', 'exec')
+    def test_models_mode_is_explicit_and_cannot_be_combined_with_older_updates(self):
+        for invalid in (1, None, 'true'):
+            with self.assertRaises(launcher.LaunchError):
+                launcher.script('inert', approved=True, update_models=invalid)
+        with self.assertRaises(launcher.LaunchError):
+            launcher.script('inert', approved=True, update_models=True, update_execution=True)
+        program = launcher.script('inert', approved=True, update_models=True)
+        self.assertIn('UPDATE_MODELS=True', program)
+        self.assertIn("(['--update-models'] if UPDATE_MODELS else [])", program)
+        compile(program, 'pinned-model-wrapper', 'exec')
     def test_retired_or_conflicting_modes_refuse_before_package_or_connection(self):
         with patch.object(launcher, 'package', side_effect=AssertionError('download')), \
              patch.object(launcher, 'connection', side_effect=AssertionError('remote')):
@@ -103,13 +113,13 @@ class LauncherTests(unittest.TestCase):
              contextlib.redirect_stdout(io.StringIO()):
             with self.assertRaisesRegex(launcher.LaunchError,'pins are unavailable'):
                 launcher.main(['--source-commit',COMMIT,'--approve-service-maintenance'])
-    def test_remote_closure_is_exactly_old_twenty_eight_plus_launcher_and_new_thirteen(self):
+    def test_remote_closure_preserves_old_dependencies_and_all_new_model_gates(self):
         prior = lineage.installer
         import oracle_upgrade_launch
         self.assertEqual(len(oracle_upgrade_launch.FILES),28)
-        self.assertEqual(len(launcher.NEW_FILES),14)
+        self.assertEqual(len(launcher.NEW_FILES),17)
         self.assertEqual(set(launcher.FILES),set(oracle_upgrade_launch.FILES) | {'oracle_upgrade_launch.py'} | set(launcher.NEW_FILES))
-        self.assertEqual(len(launcher.FILES),43)
+        self.assertEqual(len(launcher.FILES),46)
         self.assertNotIn('inspect_candidate_readonly.py',launcher.FILES)
         self.assertNotIn('test_native_pipeline.py',launcher.FILES)
         self.assertGreater(launcher.INSTALL_TIMEOUT,prior.INSTALL_TIMEOUT if hasattr(prior,'INSTALL_TIMEOUT') else 2400)
@@ -212,7 +222,7 @@ class LauncherTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
             for name, raw in payload.items(): (folder / name).write_bytes(base64.b64decode(raw))
-            for flags in ([], ['--update-initial-edit'], ['--update-payload']):
+            for flags in ([], ['--update-initial-edit'], ['--update-payload'], ['--update-models']):
                 result = subprocess.run([sys.executable, '-B', str(folder / 'install_construction.py'), *flags],
                                         cwd=folder, capture_output=True, text=True, timeout=20)
                 self.assertEqual(result.returncode, 0, result.stderr)

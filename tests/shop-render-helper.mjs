@@ -1,3 +1,4 @@
+import * as studioExecution from '../src/lib/studioExecution.ts'
 import * as attachments from '../src/lib/referenceAttachments.ts'
 import * as fileReferences from '../src/lib/studioFileReferences.ts'
 import * as studioPricing from '../src/lib/studioPricing.ts'
@@ -125,7 +126,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
   runInNewContext(code, {
     crypto: globalThis.crypto, Error, ...globals, module, exports: module.exports,
     require(id) {
-      const modules = { '../lib/studioFileReferences': fileReferences, '../lib/referenceAttachments': attachments, '../lib/overnightTestClient': overnightClient, '../lib/shopTestFunding': shopTestFunding, '../lib/studioPricing': studioPricing, '../lib/studioTierSelection': studioTierSelection, '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
+      const modules = { '../lib/studioExecution': studioExecution, '../lib/studioFileReferences': fileReferences, '../lib/referenceAttachments': attachments, '../lib/overnightTestClient': overnightClient, '../lib/shopTestFunding': shopTestFunding, '../lib/studioPricing': studioPricing, '../lib/studioTierSelection': studioTierSelection, '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/generationAdmission': generationAdmission, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
         '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }

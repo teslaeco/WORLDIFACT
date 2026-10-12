@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'tools/model_construction/**'
+      - 'tools/model_execution/**'
       - 'docs/STANDARD_CONSTRUCTION_REPAIR_20261007.md'
       - '.github/workflows/model-construction-review.yml'
 permissions:
@@ -45,6 +46,7 @@ jobs:
         run: |
           python -m py_compile tools/model_construction/*.py
           python -B -m unittest discover -s tools/model_construction -p 'test_*.py' -v
+          python -B -m unittest discover -s tools/model_execution -p 'test_studio_execution.py' -v
   native-blender:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

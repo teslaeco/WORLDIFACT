@@ -1,3 +1,5 @@
+import { MODEL_CATALOG } from './modelCatalog.ts'
+import { studioExecution, type StudioExecution } from './studioExecution.ts'
 // WORLDIFACT adapter to the existing Froge /v1/jobs contract; no new AI provider.
 // Reviewed reference: Froge-MPC-2-test @ d3f61b842dcfeda2ed794210caafc391919a75be.
 import { STUDIO_READBACK_GUIDE } from './studioReadbackGuide.ts'
@@ -44,7 +46,7 @@ export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PRO
 // MCC comparison, instead of the newer typed controller's failed final preflight.
 // It does not claim that photos exist: their full instructions remain conditional
 // below. Select once before dispatch; never switch routes after a paid failure.
-const standardCompletionInstructions = (pricing?: StudioPricing, supervisedStandard = false) => `${supervisedStandard ? 'WORLDIFACT REFERENCE-FIDELITY MODE:' : 'WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:'}
+const standardCompletionInstructions = (pricing?: { maxProviderCents: number }, supervisedStandard = false) => `${supervisedStandard ? 'WORLDIFACT REFERENCE-FIDELITY MODE:' : 'WORLDIFACT STANDARD BUILD AND COMPLETION CONTRACT:'}
 - Use Code Mode exec with the fully qualified tools.mcp__blender__ names below. Await every call and inspect its returned result; a tool error is not a completed step. Stay within the ${pricing ? 'selected' : 'existing'} per-job USD ${((pricing?.maxProviderCents ?? 175) / 100).toFixed(2)} guard and tool/build limits. Do not start another job, change limits or substitute another generator.
 1. Call tools.mcp__blender__get_modeling_contract({}) once. Parse and retain the returned scene schema, geometry guide, reference mapping and current revision. Compare the actual reference images, then construct a complete scene using only supported fields and operations.
 2. Call tools.mcp__blender__build_model({scene_json:JSON.stringify(scene),expected_revision:revision}), using the actual current revision (0 before the first successful build). This API takes scene JSON, not Python. Generate repeated parts compactly in Code Mode rather than hand-writing thousands of vertices. Read the returned revision and report; do not stop merely because a GLB candidate exists.
@@ -108,12 +110,12 @@ export const PHOTO_VIEWS = ['front', 'three_quarter', 'side', 'left', 'right', '
 export type PhotoView = typeof PHOTO_VIEWS[number]
 export type TextureLimit = 2048 | 4096 | 8192
 export type StudioPhoto = { name: string; view: PhotoView; dataUrl: string; subject?: string; textureMaxSize: TextureLimit }
-export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE } & StudioPricingSelection
+export type StudioInput = { worldId: 'enchanted-ai-shop' | 'ai-game-lab'; prompt: string; purpose: 'game' | 'figurine' | 'terrain' | 'object'; textureMaxSize: TextureLimit; photos: StudioPhoto[]; generationProfile?: typeof FAST_DRAFT_PROFILE; studioExecution?: StudioExecution } & StudioPricingSelection
 export const STUDIO_PREPARE_VERSION = 'studio-prepare-v1' as const
 // Allows the bounded full upload and admission checks to finish before an
 // absent submission is atomically fenced against any late paid dispatch.
 export const STUDIO_SUBMISSION_GRACE_MS = 5 * 60_000
-export type StudioPrepareMetadata = Pick<StudioInput, 'worldId' | 'prompt' | 'purpose' | 'textureMaxSize' | 'generationProfile' | 'pricingRevision' | 'budgetTier' | 'acceptedPoints'> & { photoCount: number }
+export type StudioPrepareMetadata = Pick<StudioInput, 'worldId' | 'prompt' | 'purpose' | 'textureMaxSize' | 'generationProfile' | 'pricingRevision' | 'budgetTier' | 'acceptedPoints' | 'studioExecution'> & { photoCount: number }
 export type StudioPrepareManifest = StudioPrepareMetadata & { version: typeof STUDIO_PREPARE_VERSION; inputDigest: string }
 export type StudioReceipt = { id: string; ticket: string; createdAt: string; pricing?: StudioPricing }
 export type StudioGenerationTiming = { source: 'oracle-worker'; durationSeconds: number }
@@ -167,7 +169,7 @@ export const STUDIO_FAILURE_DETAILS: Record<StudioFailureCode, string> = {
   STUDIO_ALLOWANCE_UNAVAILABLE: 'The generation allowance could not be reserved, so no Oracle generation was submitted. Reserved customer points were released; no automatic retry.',
   ORACLE_CANCELLED: 'The worker reported that this job was cancelled. Reserved customer points were released; no automatic retry.',
 }
-export type StudioStatus = { detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; exportPreparationReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; pricingRevision?: string; tiersReady?: boolean; newJobPolicy?: 'legacy-usd175-v1' | 'tiered-v1' | null; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
+export type StudioStatus = { studioExecutionRevision?: string; studioExecutionModels?: string[]; studioExecutionModes?: string[]; detailedReady?: boolean; detailedReferenceLimit?: number; costGuardReady?: boolean; outputPolicyReady?: boolean; exportPreparationReady?: boolean; accountRequired?: boolean; ready: boolean; publicPilot: boolean; reason: string; oracle: string; photoReady: boolean; fastReady?: boolean; fastBudgetReady?: boolean; pricingRevision?: string; tiersReady?: boolean; newJobPolicy?: 'legacy-usd175-v1' | 'tiered-v1' | null; promptMaxLength: number; allowance: { used: number; limit: number | null; remaining: number | null; enabled: boolean; expiresAt: string | null; unlimited?: boolean } | null }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const keys = (value: Record<string, unknown>, names: string[]) => Object.keys(value).every(name => names.includes(name))
 
@@ -200,7 +202,7 @@ export function jpegSize(bytes: Uint8Array): [number, number] {
   throw new Error('Reference JPEG dimensions could not be read.')
 }
 export function validateStudioInput(value: unknown): StudioInput {
-  if (!record(value) || !keys(value, ['worldId', 'prompt', 'purpose', 'textureMaxSize', 'photos', 'generationProfile', 'pricingRevision', 'budgetTier', 'acceptedPoints']) ||
+  if (!record(value) || !keys(value, ['worldId', 'prompt', 'purpose', 'textureMaxSize', 'photos', 'generationProfile', 'pricingRevision', 'budgetTier', 'acceptedPoints', 'studioExecution']) ||
     typeof value.worldId !== 'string' || !['enchanted-ai-shop', 'ai-game-lab'].includes(value.worldId) ||
     typeof value.prompt !== 'string' || value.prompt.trim().length < 3 || value.prompt.length > 4000 ||
     typeof value.purpose !== 'string' || !['game', 'figurine', 'terrain', 'object'].includes(value.purpose) ||
@@ -208,6 +210,8 @@ export function validateStudioInput(value: unknown): StudioInput {
     throw new Error('Enter a 3–4000 character description, a supported purpose and a texture-size limit.')
   const profile = generationProfile(value.generationProfile)
   const pricingSelection = validateStudioPricingSelection(value)
+  const execution = studioExecution(value.studioExecution)
+  if (execution && (profile !== 'standard' || value.budgetTier !== undefined)) throw new Error('Model execution cannot be combined with legacy draft or tier terms.')
   if (profile === FAST_DRAFT_PROFILE && (value.pricingRevision !== undefined || value.budgetTier !== undefined || value.acceptedPoints !== undefined))
     throw new Error('Studio budget tiers apply only to detailed generation.')
   const source = value.photos === undefined ? [] : value.photos
@@ -232,7 +236,7 @@ export function validateStudioInput(value: unknown): StudioInput {
   })
   // Missing/explicit STANDARD must keep old canonical bytes and receipt hashes.
   return { worldId: value.worldId as StudioInput['worldId'], prompt: value.prompt.trim(), purpose: value.purpose as StudioInput['purpose'], textureMaxSize: value.textureMaxSize as TextureLimit, photos,
-    ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}), ...pricingSelection }
+    ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}), ...pricingSelection, ...(execution ? { studioExecution: execution } : {}) }
 }
 export function oracleStudioPayload(id: string, input: StudioInput) {
   const outputRules = modelOutputRules(input.prompt)
@@ -241,6 +245,7 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
     prompt: input.prompt + '\n\nWORLDIFACT FAST DRAFT: one compact editable object, GLB with UV/PBR materials up to 2048px; never upscale. Preserve the requested silhouette. Return a structurally checked UNREVIEWED draft, not visual acceptance. No optional renders or full format export. MAKE is unapproved.\n\n' + outputRules,
   }
   const selection = validateStudioPricingSelection(input)
+  const execution = studioExecution(input.studioExecution)
   const studioPricing = selection.budgetTier === undefined ? undefined : studioPricingFor(selection)
   const requestedModelKind = input.purpose === 'figurine' && EXPLICIT_INDUSTRIAL_CABINET_REQUEST.test(input.prompt) && !EXPLICIT_MINIATURE_OR_CHARACTER_REQUEST.test(input.prompt.replace(NEGATED_MINIATURE_LABELS, ''))
     ? 'object' : input.purpose
@@ -254,8 +259,8 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   const qualityProfile = studioQualityProfile(input)
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
     : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
-  return { id, prompt: input.prompt + instruction, ...(studioPricing ? { studioPricing } : {}),
-    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(studioPricing, !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels + '\n\n' + STUDIO_READBACK_GUIDE,
+  return { id, prompt: input.prompt + instruction, ...(execution ? { studioExecution: execution } : {}), ...(studioPricing ? { studioPricing } : {}),
+    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(execution ? MODEL_CATALOG[execution.model] : studioPricing, !!execution || !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels + '\n\n' + STUDIO_READBACK_GUIDE,
     ...(photos.length ? { photos } : {}) }
 }
 
@@ -283,12 +288,12 @@ export async function prepareStudioInput(input: StudioInput): Promise<StudioPrep
   return { version: STUDIO_PREPARE_VERSION, inputDigest: await inputDigest(canonical), ...metadata, photoCount: photos.length }
 }
 export function validateStudioPrepareManifest(value: unknown): StudioPrepareManifest {
-  if (!record(value) || !keys(value, ['version', 'inputDigest', 'worldId', 'prompt', 'purpose', 'textureMaxSize', 'photoCount', 'generationProfile', 'pricingRevision', 'budgetTier', 'acceptedPoints']) ||
+  if (!record(value) || !keys(value, ['version', 'inputDigest', 'worldId', 'prompt', 'purpose', 'textureMaxSize', 'photoCount', 'generationProfile', 'pricingRevision', 'budgetTier', 'acceptedPoints', 'studioExecution']) ||
       value.version !== STUDIO_PREPARE_VERSION || typeof value.inputDigest !== 'string' || !/^[a-f0-9]{64}$/.test(value.inputDigest) ||
       !Number.isSafeInteger(value.photoCount) || Number(value.photoCount) < 0 || Number(value.photoCount) > 4)
     throw new Error('Invalid lightweight preparation manifest. No generation was submitted.')
   const { photos: _photos, ...metadata } = validateStudioInput({ worldId: value.worldId, prompt: value.prompt, purpose: value.purpose,
-    textureMaxSize: value.textureMaxSize, generationProfile: value.generationProfile, pricingRevision: value.pricingRevision, budgetTier: value.budgetTier, acceptedPoints: value.acceptedPoints, photos: [] })
+    textureMaxSize: value.textureMaxSize, generationProfile: value.generationProfile, pricingRevision: value.pricingRevision, budgetTier: value.budgetTier, acceptedPoints: value.acceptedPoints, studioExecution: value.studioExecution, photos: [] })
   if (metadata.generationProfile === FAST_DRAFT_PROFILE && value.photoCount !== 0) throw new Error('FAST v1 does not support reference photos.')
   return { version: STUDIO_PREPARE_VERSION, inputDigest: value.inputDigest, ...metadata, photoCount: Number(value.photoCount) }
 }
