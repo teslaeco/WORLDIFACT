@@ -54,6 +54,8 @@ export function generationProgressView({ job, artifact, trackedSeconds }: Genera
   const [title, stage] = stages[job.state]
   // State is authoritative on every render. A lower/retrying state is never
   // hidden behind a monotonic maximum or an elapsed-time animation.
-  const percent = job.state === 'pending' ? 0 : job.state === 'queued' ? 25 : 50
+  // An unacknowledged request has no measured generation progress. A static
+  // zero looked like a running, frozen model when submission had not arrived.
+  const percent = job.state === 'pending' ? null : job.state === 'queued' ? 25 : 50
   return { ...base, percent, kind: 'active', title, stage, detail: job.detail }
 }

@@ -36,14 +36,14 @@ test('preview precedes prompt in DOM; models and four-reference input are outsid
 })
 
 
-test('unaccepted model shows zero confirmed stages and elapsed time without inventing completion', async () => {
+test('unaccepted model shows indeterminate acceptance and elapsed time without inventing completion', async () => {
   const { default: Progress } = await loadCreationProgress()
   const html = renderToStaticMarkup(React.createElement(Progress, {
-    active: true, label: 'Confirming your request', percent: 0,
-    stage: 'Awaiting acceptance', elapsed: '1:12',
+    active: true, label: 'Confirming your request', percent: null,
+    stage: 'Awaiting acceptance', elapsed: '1:12', detail: 'Waiting for acceptance · generation has not been confirmed',
   }))
-  assert.match(html, /aria-valuenow="0"/)
-  assert.match(html, /0%/)
+  assert.doesNotMatch(html, /aria-valuenow=|0%/)
+  assert.match(html, /data-indeterminate="true"/)
   assert.match(html, /generation has not been confirmed/)
   assert.match(html, /Elapsed 1:12/)
   assert.match(html, /includes upload and waiting/)

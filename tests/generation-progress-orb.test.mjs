@@ -53,10 +53,9 @@ test('visual-only progress has the same accessible admission distinction as the 
 })
 
 
-test('pending requests remain at zero confirmed milestones even after a long wait', () => {
+test('pending requests remain indeterminate even after a long wait', () => {
   const html = render({ job: job('pending'), trackedSeconds: 86400 })
-  assert.match(html, /aria-valuenow="0"/)
-  assert.match(html, /0 OF 4 CONFIRMED MILESTONES/)
-  assert.match(html, /not processing or time completed/)
+  assert.doesNotMatch(html, /aria-valuenow=|0 OF 4 CONFIRMED MILESTONES/)
+  assert.match(html, /No percentage estimate is available/)
   assert.match(html, /Awaiting acceptance/)
 })

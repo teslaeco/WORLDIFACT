@@ -18,6 +18,44 @@ function resignedReceipt(offset = 1000) {
   return { id, createdAt: new Date(issued).toISOString(), ticket: `${id}.${issued}.${'a'.repeat(64)}.${'c'.repeat(64)}` }
 }
 
+test('overlapping automatic and manual recovery share one read of the same receipt', async () => {
+  const storage = store()
+  storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: receipt.createdAt }))
+  let finish!: (response: Response) => void, reads = 0
+  const client = new StudioCoordinator(storage, (async (_url, init) => {
+    assert.equal(init?.method ?? 'GET', 'GET'); reads++
+    return await new Promise<Response>(resolve => { finish = resolve })
+  }) as typeof fetch)
+  client.restore()
+  const automatic = client.poll(), manual = client.poll()
+  assert.equal(reads, 1)
+  finish(Response.json({ job: { id, state: 'building' } }))
+  assert.deepEqual(await automatic, await manual)
+  assert.equal(client.current?.receipt.ticket, receipt.ticket)
+})
+
+test('a status rate limit preserves the job and blocks early manual checks until Retry-After', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() })
+  const storage = store(), calls: string[] = []
+  storage.setItem(STUDIO_RECEIPT_KEY, JSON.stringify({ receipt, prompt: input.prompt, startedAt: receipt.createdAt }))
+  const before = storage.getItem(STUDIO_RECEIPT_KEY)
+  const client = new StudioCoordinator(storage, (async (_url, init) => {
+    calls.push(init?.method ?? 'GET')
+    return calls.length === 1
+      ? new Response('Temporary status throttle', { status: 429, headers: { 'Retry-After': '90' } })
+      : Response.json({ job: { id, state: 'queued' } })
+  }) as typeof fetch)
+  client.restore()
+  await assert.rejects(client.poll(), /Status checks are paused/)
+  t.mock.timers.tick(89_999)
+  await assert.rejects(client.poll(), /Status checks are paused/)
+  assert.deepEqual(calls, ['GET'])
+  assert.equal(storage.getItem(STUDIO_RECEIPT_KEY), before)
+  t.mock.timers.tick(1)
+  assert.equal((await client.poll()).state, 'queued')
+  assert.deepEqual(calls, ['GET', 'GET'])
+})
+
 test('held-domain receipts preserve their prefix and bind mode, identity and immutable revision history', async () => {
   assert.deepEqual(readReceipt(receipt), receipt)
   assert.deepEqual(readReceipt(heldReceipt), heldReceipt)

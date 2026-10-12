@@ -200,6 +200,18 @@ test('preview and format downloads keep independent bounded slots for each signe
   assert.equal(f.values.get('reserved-attempts'), 5)
 })
 
+test('status throttling returns Retry-After without contacting Oracle or reserving another job', async () => {
+  const f = fixture(), prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  const upstream = f.calls.length
+  f.env.GENERATION_LIMITER = { async limit() { return { success: false } } }
+  const response = await f.call(`/api/studio/jobs/${prepared.id}`, 'GET', undefined, prepared.ticket)
+  assert.equal(response.status, 429)
+  assert.equal(response.headers.get('Retry-After'), '60')
+  assert.equal(f.calls.length, upstream)
+  assert.equal(f.values.get('reserved-attempts'), 5)
+  assert.equal(posts(f).length, 0)
+})
+
 test('invalid photos and unrecognized fields are rejected before contacting paid services', async () => {
   const f = fixture()
   for (const body of [{ ...input, photos: [{ dataUrl: 'https://private.invalid' }] }, { ...input, apiKey: 'not-allowed' }, { ...input, prompt: '' }, { ...input, textureMaxSize: '4096' }]) assert.equal((await f.call('/api/studio/prepare', 'POST', body)).status, 400)

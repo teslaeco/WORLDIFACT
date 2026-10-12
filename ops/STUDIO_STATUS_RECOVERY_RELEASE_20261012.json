@@ -1,0 +1,11 @@
+{
+  "release": "studio-status-recovery-20261012",
+  "baseCommit": "878dcff08ffa9b303faccae5912d6dfda651591d",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "providerCalls": 0,
+  "oracleInstallation": false,
+  "imagePoints": 5,
+  "referenceLimit": 4
+}
