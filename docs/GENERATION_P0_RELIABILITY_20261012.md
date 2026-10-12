@@ -76,3 +76,11 @@ VERIFIED (SOURCE-LEVEL REFERENCE ONLY): Local dated 2026-10-10 connector snapsho
 IMPLEMENTED: Hosted `Verify WORLDIFACT` CI now explicitly runs 3 privacy/offline Python audit tests, in addition to the existing JS/TS checks. No backend Oracle mutation, no customer-asset/balance/Stripe change, no production deploy. These CI checks must pass on the latest PR HEAD.
 
 BLOCKED / NO-GO: A complete P0 fix still requires cross-tier correlation of a known original missing receipt's Worker stage, DO reservation/dispatch claim, Oracle POST ingress and persisted row/provider invoice. Do not add blind retries for uncertain paid POST. Preserve existing financial holds pending evidence.
+
+## 2026-10-12 — Mock-only sequential acceptance suite and CI guard correction
+
+VERIFIED (CODE): Reverted protected `.github/workflows/ci.yml` to the exact main blob `47fa876758aef48ec15b915eb7c4fc72c4293c36` after the protected release-hash assertion blocked the prior CI edit (2,272 of 2,273 JS tests passed before reverting). Added an isolated `.github/workflows/p0-oracle-audit-tests.yml` running privacy-safe offline Python tests without secrets/provider API access. Hosted standalone P0 Oracle Audit workflow concluded SUCCESS before this documentation commit.
+
+IMPLEMENTED (MOCK ONLY): `tests/studio-api.test.ts` now includes a ten-sequential-job test: ten distinct signed receipts, exactly one mocked Oracle POST per new job, recovery-only repeat for each ID and aggregate ten reservations. No real model generation, customer points, paid provider calls, production service modification or deployment. Await exact HEAD main CI confirmation; these fixtures do not establish Oracle VM persistence or reliable live generation.
+
+NO-GO remains for P0 reliability until actual missing signed receipt is correlated across Cloudflare/DO/Oracle, durable ack strategy is validated, and authorized capped real multiple-job acceptance passes. Preserve existing assets, holds, subscriptions and Stripe.
