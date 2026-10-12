@@ -1,9 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { runNativeChromium } from './helpers/nativeChromiumRun.mjs'
 import ts from 'typescript'
 import { buildSync } from 'esbuild'
 import { createHash } from 'node:crypto'
@@ -11,7 +10,7 @@ import { validateStudioInput } from '../src/lib/studioProtocol.ts'
 
 // Standalone native fetch API regression, NOT a site preview or visual test.
 // Only inert data: fixtures are fetched. No Oracle, OpenAI, HTTP or account.
-test('native Chromium reproduces the old invocation error and accepts the repaired Studio lifecycle', { timeout: 45_000 }, () => {
+test('native Chromium reproduces the old invocation error and accepts the repaired Studio lifecycle', { timeout: 45_000 }, async () => {
   const candidates = [process.env.CHROME_BIN, 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'].filter(Boolean)
   const browser = candidates.find(command => spawnSync(command, ['--version'], { encoding: 'utf8', timeout: 3000 }).status === 0)
   assert.ok(browser, 'Chromium/Chrome is required for this browser-specific regression; do not report Node mocks as browser proof.')
@@ -113,16 +112,9 @@ test('native Chromium reproduces the old invocation error and accepts the repair
   } catch (error) { result.textContent = 'FAIL: ' + error.message; }
 })();`
   const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + artifact + '\n' + catalog + '\n' + execution + '\n' + admission + '\n' + pricing + '\n' + pointSettlement + '\n' + readback + '\n' + protocol + '\n' + draft + '\n' + client + '\n' + exercise + '</script>'
-  const profile = mkdtempSync(join(tmpdir(), 'worldifact-native-fetch-'))
-  try {
-    const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking', '--no-first-run', '--no-default-browser-check',
-      '--host-resolver-rules=MAP * ~NOTFOUND', `--user-data-dir=${profile}`, '--dump-dom', '--virtual-time-budget=6000', 'data:text/html;base64,' + Buffer.from(html).toString('base64')],
-      { encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 })
-    assert.equal(run.status, 0, `Browser did not complete: ${run.error?.message || run.stderr.slice(-1500)}`)
-    const actual = run.stdout.match(/<pre id="result">([^<]*)<\/pre>/)?.[1] || 'No browser test result'
-    assert.match(actual, /^PASS:/, actual)
-    console.log(actual)
-  } finally { rmSync(profile, { recursive: true, force: true }) }
+  const actual = await runNativeChromium(browser, html, 'worldifact-native-fetch-')
+  assert.match(actual, /^PASS:/, actual)
+  console.log(actual)
 })
 
 // Separate inert bundle: exercise the actual temporary-panel controller without
@@ -192,14 +184,7 @@ test('native Chromium reads the temporary test allowance with the repaired Overn
   } catch (error) { result.textContent = 'FAIL: ' + error.message; }
 })();`
   const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + client + '\n' + exercise + '</script>'
-  const profile = mkdtempSync(join(tmpdir(), 'worldifact-native-overnight-fetch-'))
-  try {
-    const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking', '--no-first-run', '--no-default-browser-check',
-      '--host-resolver-rules=MAP * ~NOTFOUND', `--user-data-dir=${profile}`, '--dump-dom', '--virtual-time-budget=6000', 'data:text/html;base64,' + Buffer.from(html).toString('base64')],
-      { encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 })
-    assert.equal(run.status, 0, `Browser did not complete: ${run.error?.message || run.stderr.slice(-1500)}`)
-    const actual = run.stdout.match(/<pre id="result">([^<]*)<\/pre>/)?.[1] || 'No browser test result'
-    assert.match(actual, /^PASS:/, actual)
-    console.log(actual)
-  } finally { rmSync(profile, { recursive: true, force: true }) }
+  const actual = await runNativeChromium(browser, html, 'worldifact-native-overnight-fetch-')
+  assert.match(actual, /^PASS:/, actual)
+  console.log(actual)
 })
