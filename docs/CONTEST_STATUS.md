@@ -1,3 +1,9 @@
+# 12 October 2026 — Ten sequential mocked generation test and CI boundary repair (VERIFIED / UNKNOWN / BLOCKED)
+
+VERIFIED: Reverted `.github/workflows/ci.yml` to its protected exact SHA after the release-hash guard flagged a modified workflow. New isolated `.github/workflows/p0-oracle-audit-tests.yml` passed hosted offline Python audit checks. Added ten sequential signed generation / same-receipt replay fixture to `tests/studio-api.test.ts`, targeting exactly ten mocked Oracle POSTs and no duplicate dispatch. Await complete exact-head hosted JS CI before marking this newest test passed.
+
+BLOCKED: Real Oracle durable acceptance / `ORACLE_JOB_MISSING` persistence is not fixed or proven; no paid provider requests, VM mutation, Stripe/points changes, merge or production deployment. Full release remains NO-GO. See `docs/GENERATION_P0_RELIABILITY_20261012.md`.
+
 # 12 October 2026 20:51 CEST — Actual Oracle failure counts and automated tests (VERIFIED / BLOCKED)
 
 VERIFIED: Read-only live Oracle DB audit (owner Cloud Shell) found 167 jobs / 92 succeeded / 74 failed / 1 cancelled; SQLite `quick_check=ok`. All 74 failed `detail` values were plain text: 61 short, 13 medium. Keyword categories (not causal proof): 17 rate/budget, 11 Blender/render, 4 AI provider, 4 timeout, 2 validation, 36 other/unclassified. Time windows: last 24h 3 success / 1 failed; prior 7d (excluding 24h) 6 success / 12 failed; days 7–30 51 success / 37 failed; older/unknown 32 success / 24 failed / 1 cancelled.
