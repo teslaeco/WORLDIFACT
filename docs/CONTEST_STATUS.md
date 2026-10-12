@@ -1,3 +1,11 @@
+# 12 October 2026 20:51 CEST — Actual Oracle failure counts and automated tests (VERIFIED / BLOCKED)
+
+VERIFIED: Read-only live Oracle DB audit (owner Cloud Shell) found 167 jobs / 92 succeeded / 74 failed / 1 cancelled; SQLite `quick_check=ok`. All 74 failed `detail` values were plain text: 61 short, 13 medium. Keyword categories (not causal proof): 17 rate/budget, 11 Blender/render, 4 AI provider, 4 timeout, 2 validation, 36 other/unclassified. Time windows: last 24h 3 success / 1 failed; prior 7d (excluding 24h) 6 success / 12 failed; days 7–30 51 success / 37 failed; older/unknown 32 success / 24 failed / 1 cancelled.
+
+IMPLEMENTED: `.github/workflows/ci.yml` now runs the privacy-safe Python diagnostic regression suite (3 local tests already passed, hosted exact-HEAD check pending) alongside existing tests. No production change or paid call.
+
+BLOCKED: Account requests that never reach Oracle are absent from these counts. Root cause of `ORACLE_JOB_MISSING` and zero-duplicate-paid-dispatch across disconnects not proved. DO NOT merge/deploy as a reliability fix until correlated durable acceptance proof and approved release gate. Details: `docs/GENERATION_P0_RELIABILITY_20261012.md`.
+
 # 12 October 2026 — Safe Oracle failure audit and offline tests (VERIFIED / UNKNOWN / BLOCKED)
 
 VERIFIED: Isolated PR #274 now contains `tools/oracle_diagnostics/failure_audit.py` (SQLite read-only, no user/private row fields in stdout, bilingual fixed-category aggregates) and `test_failure_audit.py`. Synthetic fixture tests run in Cloud Shell: 3 passed, with leaked-content assertions. No paid provider POST or production VM mutation was made.
