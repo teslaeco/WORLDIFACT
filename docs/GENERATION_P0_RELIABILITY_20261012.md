@@ -48,3 +48,11 @@ VERIFIED (USER-OPERATED VM READ): `/home/opc/froge-connector/state/jobs.sqlite` 
 IMPORTANT LIMITATION: These are **historical Oracle rows**, not a controlled sequential reliability test, nor evidence of why any job failed. The specific `ORACLE_JOB_MISSING` issue concerns an account-signed request with no matching Oracle job row: missing rows are **not countable** by an Oracle jobs-table query. No claim that all 74 failures were `ORACLE_JOB_MISSING` is supported. Correlate original account receipt/Worker dispatch evidence with Oracle acceptance, rather than assuming success from aggregate counts.
 
 NEXT READ-ONLY: group historical failures by safe allowlisted error category and recent creation date, without printing any `id`, `prompt`, raw `detail`, tokens, customer data or private asset paths. Collect stronger redacted cross-tier evidence before fixing dispatch persistence or changing spending and settlements. NO-GO unchanged.
+
+## 2026-10-12 20:28 CEST — failed-detail classification probe
+
+VERIFIED (VM, USER-OPERATED, READ-ONLY): A second Python/SQLite probe selected only the `detail` field for all `jobs` rows with `state='failed'`; it counted `74` rows in total, with **all 74 categorized `OTHER_OR_UNCLASSIFIED`** by a fixed allowlist of keywords in select JSON diagnostic keys. `PRAGMA quick_check` returned `ok`. No user prompts, raw details, job identifiers, payments or account values were printed or modified.
+
+INTERPRETATION: The classifier explicitly defaulted to an empty dict on JSON parse errors and only searched keys `error`, `error_code`, `failurecode`, `failure_code`, `message`, `reason`, `code`. Therefore `OTHER_OR_UNCLASSIFIED` does **not** mean missing error text or no failure cause; the `detail` column may contain plain text, different JSON fields or nested formats. A healthy SQLite quick check is not a proof of reliable Oracle admission.
+
+NEXT (READ-ONLY): Summarize `detail` storage formats (null / JSON object / JSON array / plain text, length buckets); run allowlisted error-pattern counts on *plain text and parsed JSON* without showing raw text; count timestamp-binned recent succeeded/failed jobs. If supported, correlate original signed missing-job receipts with protected Worker dispatch traces. DO NOT retry uncertain paid jobs, release points, reset provider budget or merge/deploy as repaired. NO-GO remains.
