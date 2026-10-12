@@ -32,3 +32,11 @@ BLOCKED (VM): A single **read-only** Oracle Cloud Agent health diagnostic was ac
 VERIFIED (CI): PR #274 exact HEAD `4fe2e0fe79b3acc213ca9607c12ab3308a8abe6b` had five successful hosted workflow runs at time of inspection. This applies only to that SHA; any subsequent documentation commit requires fresh exact-HEAD checks.
 
 NO-GO: Production reliability repair is not confirmed. Keep PR #274 unmerged until VM evidence and repeated-generation acceptance gates pass; preserve all assets, holds, and billing configuration.
+
+## 2026-10-12 20:15 CEST — SSH VM read-only evidence (user-operated)
+
+VERIFIED (VM): Authorized SSH from the user's OCI Cloud Shell to `froge-blender` succeeded as `opc`. `froge-worker.service` and `froge-tunnel.service` both returned `ActiveState=active`, `SubState=running`, `NRestarts=0` at inspection time. Root filesystem has 83 GB total, 40 GB used, approximately 44 GB available (48%). A bounded case-insensitive keyword count over 12 hours of the worker's user journal produced no matching lines for the listed exact strings; this does NOT prove absence of failed jobs, and `NRestarts=0` must not be extrapolated to all prior time periods.
+
+VERIFIED (VM): Discovered the live candidate state path `/home/opc/froge-connector/state/jobs.sqlite` among SQLite files in `/home/opc`; unlike archived cleanup files this is under the named active connector directory. Its table schema, current row counts and durable acceptance behavior remain UNKNOWN until a strictly read-only `mode=ro` SQLite check. The screenshot did not include raw job contents or evidence of a successful repeated paid operation.
+
+NEXT: Read metadata and aggregate state counts only (no job IDs/prompts/emails), correlate a previously failed original receipt with redacted Worker/SQLite/Oracle records; do not alter DB, WAL, ledger, VM or subscriptions. NO-GO for production repair until evidence and approved acceptance tests exist.
