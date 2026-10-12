@@ -67,7 +67,7 @@ def reviewed_manifest(value):
     try:
         after = final_manifest()
         return (value == EXPECTED or value == after or value == execution_predecessor() or value == execution_manifest() or value == payload_predecessor()
-                or value == initial_edit_predecessor() or value == response_phase_predecessor())
+                or value == initial_edit_predecessor() or value == response_phase_predecessor() or value == model_manifest())
     except ValueError:
         return False
 
@@ -216,4 +216,39 @@ def execution_changes(original):
     changed = {**original, 'codex_runner.py': require_tools.transform(original['codex_runner.py'])}
     if {n: hashlib.sha256(b).hexdigest() for n, b in changed.items()} != execution_manifest():
         raise ValueError('Execution change differs from frozen release.')
+    return changed
+
+
+# New detailed selections are a distinct install mode. The complete current
+# predecessor is fixed; historical modes, receipts and source pins stay valid.
+MODEL_HELPER = 'studio_execution.py'
+MODEL_RECEIPT = '.worldifact-studio-execution-runtime.json'
+MODEL_AFTER = {**EXECUTION_AFTER,
+    'server.py': '3ca9da9a246c406ced7f1183b2e6e85f95d1ce733f0ef12af652c5aaf5812227',
+    'codex_runner.py': '850f56fa3503fcdd230a41fb9bf0aa898cd1bd3cba817b8c95562fd8ef050d06',
+    MODEL_HELPER: '88defd43f3de9450a193ff5f4811f55b0f8bfd38a26289c4fb6a974f5d4025be',
+}
+
+
+def model_manifest():
+    before, after = execution_manifest(), MODEL_AFTER
+    if (set(after) != health.SOURCES | {MODEL_HELPER}
+            or any(not isinstance(v, str) or re.fullmatch('[a-f0-9]{64}', v) is None for v in after.values())
+            or {n for n in before if before[n] != after[n]} != {'server.py', 'codex_runner.py'}):
+        raise ValueError('Detailed model runtime manifest is not frozen.')
+    return dict(after)
+
+
+def model_changes(original, helper):
+    if {n: hashlib.sha256(b).hexdigest() for n, b in original.items()} != execution_manifest():
+        raise ValueError('Exact installed required-tools runtime is required.')
+    from pathlib import Path
+    import sys
+    folder = Path(__file__).resolve().parent.parent / 'model_execution'
+    if folder.is_dir(): sys.path.append(str(folder))
+    import model_routes
+    compile(helper, MODEL_HELPER, 'exec')
+    changed = {**original, **model_routes.transform({n: original[n] for n in model_routes.EXPECTED}), MODEL_HELPER: helper}
+    if {n: hashlib.sha256(b).hexdigest() for n, b in changed.items()} != model_manifest():
+        raise ValueError('Detailed model change differs from frozen release.')
     return changed

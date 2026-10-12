@@ -1,4 +1,4 @@
-# 12 October 2026 — Sol/Luna detailed execution prepared, installation blocked
+# 12 October 2026 — Sol/Luna installer prepared, Oracle connection offline
 
 The owner asked to replace the Sol/Luna procedural-only Shop path with the
 existing detailed Blender workflow. Immutable per-job model/mode selection,
@@ -7,14 +7,21 @@ implemented in a review branch. The exact observed Oracle server/runner have
 a pure source transform and a separate capped ledger for new selections.
 The original Astra path and historical ledgers remain unchanged.
 
-Application checks, HTTP/build/Worker dry-run, cost-ledger tests and execution
-of the actual proposed Gateway handler with inert provider responses pass
-except the two locally unavailable Chromium checks. These are not live Blender
-or paid model evidence. Desktop Commander stopped responding after the source
-snapshot; no new Oracle source, receipts, services or ledgers were written.
-Native gates, a reviewed installation transaction, production release and real
-Sol/Luna acceptance tests remain pending. See SOL_LUNA_BLENDER_20261012.md for
-exact scope and continuation requirements. Do not label this checkpoint LIVE.
+Published head `2295850` passed all 2,254 application tests and full hosted
+verification in run `38207825999`, including both native Chromium tests.
+The subsequent installer adds the exact predecessor transaction, all four old
+gates plus six CLI/MCP/Podman model/mode gates, and a VM-owned once-only service
+with private saved results. Seven transaction and five detached-run tests pass.
+The full local construction suite has 295 passes, three process-namespace blocks
+and one opt-in native skip; new exact-head hosted checks are still required.
+
+Fresh SSH confirmed the unchanged 14-file predecessor, active worker/tunnel/
+Ollama services and existing user lingering. Cloud Shell then disconnected
+again despite `tmux`; Desktop Commander now reports Offline. No new Oracle
+source, receipts, services or ledgers were written. The six genuine isolated
+gates, actual detached installation/logout check, production release and real
+Sol/Luna acceptance remain pending. See SOL_LUNA_BLENDER_20261012.md for exact
+scope and continuation requirements. Do not label this checkpoint LIVE.
 
 # 11 October 2026 — real file references in the existing generator
 

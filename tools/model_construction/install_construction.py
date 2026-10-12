@@ -51,6 +51,9 @@ NEW_FILES = policy.RUNTIME_HELPERS | {policy.RECEIPT}
 WRITES = manifest.MODIFIED | NEW_FILES | RECEIPTS
 INITIAL_EDIT_WRITES = manifest.INITIAL_EDIT_HELPERS | {policy.RECEIPT}
 EXECUTION_WRITES = frozenset(('codex_runner.py', policy.RECEIPT)) | RECEIPTS
+MODEL_WRITES = frozenset(('server.py', 'codex_runner.py', manifest.MODEL_HELPER, policy.RECEIPT, manifest.MODEL_RECEIPT)) | RECEIPTS
+MODEL_GATE_SHA = '6e5449e4a831d7345cff690034c0b29e0f155ca6'
+MODEL_CASES = tuple((m, mode) for m in ('astra', 'sol', 'luna') for mode in ('standard', 'fast'))
 RESPONSE_PHASE_WRITES = manifest.RESPONSE_PHASE_HELPERS | {policy.RECEIPT}
 EXECUTABLE_FILES = frozenset(('tools/codex/codex', 'tools/codex/codex-code-mode-host',
                               'tools/codex/codex-binary.json', 'tools/codex/code-mode-host.json'))
@@ -262,9 +265,12 @@ def original_sources(source):
     return original
 
 
-def installed_sources(source, *, response_phase=False, execution=False):
+def installed_sources(source, *, response_phase=False, execution=False, models=False):
     original = {name: base.read_regular(source / name) for name in policy.SOURCES}
-    if execution:
+    if models:
+        if {n: digest(b) for n,b in original.items()} != manifest.execution_manifest():
+            raise Refused('model_predecessor_refused')
+    elif execution:
         if {n: digest(b) for n,b in original.items()} != manifest.execution_predecessor():
             raise Refused('execution_predecessor_refused')
     else:
@@ -272,13 +278,14 @@ def installed_sources(source, *, response_phase=False, execution=False):
     return original
 
 
-def installed_predecessor(response_phase=False, execution=False):
+def installed_predecessor(response_phase=False, execution=False, models=False):
+    if models: return manifest.execution_manifest()
     if execution: return manifest.execution_predecessor()
     return manifest.response_phase_predecessor() if response_phase else manifest.initial_edit_predecessor()
 
 
-def validate_installed_receipts(source, original, *, response_phase=False, execution=False):
-    expected = installed_predecessor(response_phase, execution)
+def validate_installed_receipts(source, original, *, response_phase=False, execution=False, models=False):
+    expected = installed_predecessor(response_phase, execution, models)
     if {n: digest(original[n]) for n in policy.SOURCES} != expected:
         raise Refused('installed_construction_source_refused')
     proof = policy._json(base.read_regular(source / policy.RECEIPT, 16384))
@@ -310,21 +317,29 @@ def final_admission(source, allow_cancelled_cleanup=False, expected_cancelled=No
 class GateEvidence:
     generic_receipt: bytes
     gates: frozenset
+    models: tuple = ()
 
 
-def verified_gate_hashes(changed, evidence, *, execution=False):
+def verified_gate_hashes(changed, evidence, *, execution=False, models=False):
     if (not isinstance(evidence, GateEvidence) or evidence.gates != REQUIRED_GATES
             or type(evidence.generic_receipt) is not bytes
             or not 0 < len(evidence.generic_receipt) <= 16384):
         raise Refused('complete_pipeline_evidence_required')
     hashes = {name: digest(raw) for name, raw in changed.items()}
-    if hashes != (manifest.execution_manifest() if execution else manifest.final_manifest()):
+    if hashes != (manifest.model_manifest() if models else manifest.execution_manifest() if execution else manifest.final_manifest()):
         raise Refused('frozen_source_identity_required')
     generic = policy._json(evidence.generic_receipt)
     if (generic.get('sources') != {name: hashes[name] for name in ('codex_runner.py', 'blender_mcp.py')}
             or any(generic.get(key) is not True for key in
                    ('cli_mcp_roundtrip', 'code_mode_roundtrip', 'blender_build_roundtrip'))):
         raise Refused('generic_pipeline_unverified')
+    if models:
+        if type(evidence.models) is not tuple or len(evidence.models) != len(MODEL_CASES):
+            raise Refused('complete_model_pipeline_evidence_required')
+        for (model, mode), raw in zip(MODEL_CASES, evidence.models):
+            validate_model_evidence(raw, model, mode)
+    elif evidence.models:
+        raise Refused('unexpected_model_evidence')
     return hashes
 
 
@@ -343,8 +358,8 @@ def initial_edit_update_receipt(original, changed, evidence, allow_cancelled_cle
     return {policy.RECEIPT: encoded(proof)}
 
 
-def rebound_receipts(original, changed, evidence, allow_cancelled_cleanup, *, execution=False):
-    hashes = verified_gate_hashes(changed, evidence, execution=execution)
+def rebound_receipts(original, changed, evidence, allow_cancelled_cleanup, *, execution=False, models=False):
+    hashes = verified_gate_hashes(changed, evidence, execution=execution, models=models)
     receipts = {policy.GENERIC_RECEIPT: evidence.generic_receipt}
     for name, (_revision, coverage) in policy.CHAIN_LAYOUT.items():
         proof = policy._json(original[name])
@@ -361,7 +376,7 @@ def rebound_receipts(original, changed, evidence, allow_cancelled_cleanup, *, ex
     guard['outputPolicy']['sha256'] = hashes['astra_spend_v2.py']
     receipts[policy.GUARD_RECEIPT] = encoded(guard)
     proof = {'revision': policy.REVISION, 'ancestor_commit': manifest.ANCESTOR_COMMIT,
-             'sha256': hashes, 'receipt_sha256': {name: digest(raw) for name, raw in receipts.items()},
+             'sha256': {name: hashes[name] for name in policy.SOURCES}, 'receipt_sha256': {name: digest(raw) for name, raw in receipts.items()},
              'predecessor_receipt_sha256': digest(original[legacy.policy.RECEIPT]),
              'maintenance_fence': policy.FENCE_REVISION,
              'cancelled_cleanup_interruption_approved': allow_cancelled_cleanup,
@@ -369,8 +384,24 @@ def rebound_receipts(original, changed, evidence, allow_cancelled_cleanup, *, ex
     if execution:
         proof['execution_repair'] = {'revision': 'supervised-required-tools-v1',
             'previous_construction_receipt_sha256': digest(original[policy.RECEIPT])}
+    if models:
+        proof['model_execution_update'] = {'revision': 'studio-execution-v1',
+            'previous_construction_receipt_sha256': digest(original[policy.RECEIPT])}
     receipts[policy.RECEIPT] = encoded(proof)
+    if models:
+        receipts[manifest.MODEL_RECEIPT] = encoded({
+            'revision': 'studio-execution-v1',
+            'sha256': {name: hashes[name] for name in ('server.py', 'codex_runner.py', manifest.MODEL_HELPER)},
+            'construction_receipt_sha256': digest(receipts[policy.RECEIPT]),
+            'models': ['astra', 'sol', 'luna'], 'modes': ['standard', 'fast'],
+            'offline_model_pipeline': True, 'live_provider_verified': False,
+            'evidence_sha256': {model + '-' + mode: digest(raw) for (model, mode), raw in zip(MODEL_CASES, evidence.models)}})
     return receipts
+
+
+def model_file(name):
+    packaged = HERE / name
+    return packaged if packaged.is_file() else HERE.parent / 'model_execution' / name
 
 
 def frozen_dependencies():
@@ -387,7 +418,12 @@ def frozen_dependencies():
             raise Refused('construction_gate_changed')
 
 
-def validate_phased_evidence(raw, *, execution=False):
+def evidence_sources(execution=False, models=False):
+    if models: return {n: manifest.model_manifest()[n] for n in policy.SOURCES}
+    return manifest.execution_manifest() if execution else manifest.final_manifest()
+
+
+def validate_phased_evidence(raw, *, execution=False, models=False):
     """Bind the distinct real Podman witness, never a native/marker-only pass."""
     value = policy._json(raw)
     true_flags = {'isolated_podman_execution_verified', 'provider_fixture',
@@ -399,7 +435,7 @@ def validate_phased_evidence(raw, *, execution=False):
         if not condition:
             raise Refused('phased_pipeline_evidence_unverified')
     require(set(value) == keys and value.get('revision') == policy.REVISION
-            and value.get('source_sha256') == (manifest.execution_manifest() if execution else manifest.final_manifest())
+            and value.get('source_sha256') == evidence_sources(execution, models)
             and all(value.get(key) is True for key in true_flags)
             and all(value.get(key) is False for key in false_flags))
     cases = value.get('cases')
@@ -466,7 +502,7 @@ def validate_phased_evidence(raw, *, execution=False):
     return value
 
 
-def validate_legacy_evidence(raw, *, execution=False):
+def validate_legacy_evidence(raw, *, execution=False, models=False):
     """Require the unchanged CLI gate with immutable synthetic tier terms."""
     value = policy._json(raw)
     true_flags = {'schema_verified', 'actual_images_verified', 'provider_fixture',
@@ -476,7 +512,7 @@ def validate_legacy_evidence(raw, *, execution=False):
     fields = {'execution_id', 'terms', 'immutable_terms_sha256', 'ledger_cap_micro_usd',
               'ledger_policy_revision', 'requests', 'counts', 'scripted_exec_phases',
               'wait_responses', 'original_gate_sha256', 'source_sha256'} | true_flags | false_flags
-    if (set(value) != fields or value.get('source_sha256') != (manifest.execution_manifest() if execution else manifest.final_manifest())
+    if (set(value) != fields or value.get('source_sha256') != evidence_sources(execution, models)
             or not all(value.get(key) is True for key in true_flags)
             or not all(value.get(key) is False for key in false_flags)
             or not isinstance(value.get('execution_id'), str)
@@ -495,6 +531,46 @@ def validate_legacy_evidence(raw, *, execution=False):
     return value
 
 
+def validate_model_evidence(raw, model, mode):
+    value = policy._json(raw)
+    api_model, cap, standard_cost = {'astra': ('gpt-6-astra', 1750000, 6875),
+        'sol': ('gpt-6.1-sol', 350000, 1375), 'luna': ('gpt-6-luna', 100000, 69)}[model]
+    # Rates round each complete request upward. These fixtures use exactly
+    # 100 input and 100 output tokens; Luna Fast rounds 137.6 micro-USD to 138.
+    per_request = standard_cost * (2 if mode == 'fast' else 1)
+    true_flags = {'actual_cli_mcp_blender', 'actual_images_verified', 'provider_fixture', 'cleanup_verified'}
+    false_flags = {'live_provider_verified', 'visual_quality_verified', 'installed_receipt_written', 'native_fallback'}
+    keys = {'selection', 'model', 'service_tier', 'cap_micro_usd', 'requests', 'counts', 'phases', 'waits',
+            'fixture_liability_micro_usd', 'seal', 'execution_id', 'terms_sha256', 'model_sha256',
+            'render_sha256', 'source_sha256', 'original_gate_sha256'} | true_flags | false_flags
+    def require(condition):
+        if not condition: raise Refused('model_pipeline_evidence_unverified')
+    require(set(value) == keys and value.get('source_sha256') == manifest.model_manifest()
+        and value.get('selection') == {'revision': 'studio-execution-v1', 'model': model, 'mode': mode}
+        and value.get('model') == api_model and value.get('service_tier') == ('fast' if mode == 'fast' else 'default')
+        and type(value.get('cap_micro_usd')) is int and value['cap_micro_usd'] == cap
+        and all(value.get(k) is True for k in true_flags) and all(value.get(k) is False for k in false_flags)
+        and all(type(value.get(k)) is int for k in ('requests', 'counts', 'phases', 'waits', 'fixture_liability_micro_usd'))
+        and value['phases'] == 4 and 0 <= value['waits'] <= 24
+        and value['requests'] == value['counts'] == 4 + value['waits']
+        and value['fixture_liability_micro_usd'] == value['requests'] * per_request <= cap
+        and isinstance(value.get('execution_id'), str) and re.fullmatch('[a-f0-9]{32}', value['execution_id'])
+        and all(isinstance(value.get(k), str) and policy.HASH.fullmatch(value[k]) for k in ('terms_sha256', 'model_sha256'))
+        and policy._hashes(value.get('render_sha256'), {'front', 'side', 'back'})
+        and value.get('original_gate_sha256') == '380063680197b1b175f03da6c6698c84dfb3bd9ff839de61bae69e76aa1d5f4d')
+    seal = value.get('seal')
+    require(isinstance(seal, dict) and set(seal) == {'revision', 'jobId', 'model', 'policyRevision', 'capMicroUsd',
+                                                   'maximumLiabilityMicroUsd', 'sealed', 'sealId'}
+        and seal.get('revision') == 'worldifact-terminal-budget-v1' and seal.get('model') == api_model
+        and seal.get('policyRevision') == 'studio-model-budget-v1:' + mode
+        and type(seal.get('capMicroUsd')) is int and seal['capMicroUsd'] == cap
+        and type(seal.get('maximumLiabilityMicroUsd')) is int
+        and seal['maximumLiabilityMicroUsd'] == value['fixture_liability_micro_usd'] and seal.get('sealed') is True
+        and isinstance(seal.get('sealId'), str) and policy.HASH.fullmatch(seal['sealId'])
+        and isinstance(seal.get('jobId'), str) and re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', seal['jobId']))
+    return value
+
+
 class Operations(legacy.Operations):
     def preflight(self):
         manifest.final_manifest()
@@ -504,19 +580,24 @@ class Operations(legacy.Operations):
             raise Refused('unsupported_target')
         if self.source != self.home / 'froge-connector' or time.time() >= cache.legacy.VALID_UNTIL:
             raise Refused('source_or_pricing_review_refused')
+        models = getattr(self, 'update_models', False)
+        if models:
+            manifest.model_manifest()
+            if base.blob_sha(base.read_regular(model_file('offline_models.py'))) != MODEL_GATE_SHA:
+                raise Refused('model_gate_changed')
         execution = getattr(self, 'update_execution', False)
         response_phase = getattr(self, 'update_response_phase', False)
-        update = getattr(self, 'update_initial_edit', False) or response_phase or execution
-        original = installed_sources(self.source, response_phase=response_phase, execution=execution) if update else original_sources(self.source)
+        update = getattr(self, 'update_initial_edit', False) or response_phase or execution or models
+        original = installed_sources(self.source, response_phase=response_phase, execution=execution, models=models) if update else original_sources(self.source)
         self.source_variant = 'PRICING'
-        self.expected_source_sha256 = installed_predecessor(response_phase, execution) if update else dict(manifest.EXPECTED)
+        self.expected_source_sha256 = installed_predecessor(response_phase, execution, models) if update else dict(manifest.EXPECTED)
         if (not legacy.studio_pricing.verified_health(self.source)
                 or not legacy.terminal_budget.verified_health(self.source)
                 or legacy.studio_pricing.maintenance_active(self.source)
                 or legacy.terminal_budget.maintenance_active(self.source)):
             raise Refused('existing_pricing_receipt_refused')
         if update:
-            validate_installed_receipts(self.source, original, response_phase=response_phase, execution=execution)
+            validate_installed_receipts(self.source, original, response_phase=response_phase, execution=execution, models=models)
         else:
             validate_receipts(self.source, original)
         if not legacy.prebuild_policy.verified_health(self.source) or not base.receipt_matches(self.source):
@@ -608,9 +689,9 @@ class Operations(legacy.Operations):
             if marker not in base.read_regular(log, 1048576).decode():
                 raise Refused('construction_pipeline_unverified')
             if name == 'offline_construction.py':
-                validate_phased_evidence(base.read_regular(gate_workspace / 'phased-standard-evidence.json', 65536), execution=getattr(self, 'update_execution', False))
+                validate_phased_evidence(base.read_regular(gate_workspace / 'phased-standard-evidence.json', 65536), execution=getattr(self, 'update_execution', False), models=getattr(self, 'update_models', False))
             elif name == 'offline_legacy_standard.py':
-                validate_legacy_evidence(base.read_regular(gate_workspace / 'legacy-standard-evidence.json', 65536), execution=getattr(self, 'update_execution', False))
+                validate_legacy_evidence(base.read_regular(gate_workspace / 'legacy-standard-evidence.json', 65536), execution=getattr(self, 'update_execution', False), models=getattr(self, 'update_models', False))
             lease.assert_no_work()
             # Some historical verifiers remove their job, leaving empty state.
             # This is wholly synthetic; no live state was ever staged.
@@ -619,13 +700,53 @@ class Operations(legacy.Operations):
                 shutil.rmtree(state)
             if base.read_regular(stage / base.RECEIPT, 16384) != generic_receipt or not base.receipt_matches(stage):
                 raise Refused('runtime_receipt_changed')
-        return GateEvidence(generic_receipt, REQUIRED_GATES)
+        model_evidence = self.verify_models(stage, workspace, lease, env, generic_receipt) if getattr(self, 'update_models', False) else ()
+        return GateEvidence(generic_receipt, REQUIRED_GATES, model_evidence)
+
+    def verify_models(self, stage, workspace, lease, env, generic_receipt):
+        gate = model_file('offline_models.py')
+        evidence = []
+        for model, mode in MODEL_CASES:
+            if base.blob_sha(base.read_regular(gate)) != MODEL_GATE_SHA:
+                raise Refused('model_gate_changed')
+            log = workspace / ('offline-model-' + model + '-' + mode + '.log')
+            print('VERIFY_MODEL ' + model + ' ' + mode, flush=True)
+            with log.open('xb') as output:
+                os.chmod(log, 0o600)
+                process = subprocess.Popen([sys.executable, '-B', str(gate), '--source', str(stage),
+                    '--workspace', str(workspace), '--model', model, '--mode', mode],
+                    cwd=stage, env=env, stdin=subprocess.DEVNULL, stdout=output,
+                    stderr=subprocess.STDOUT, start_new_session=True)
+                try:
+                    if process.wait(timeout=VERIFY_TIMEOUT) != 0:
+                        raise Refused('model_pipeline_unverified')
+                except BaseException:
+                    if process.poll() is None:
+                        os.killpg(process.pid, signal.SIGTERM)
+                        try: process.wait(timeout=15)
+                        except subprocess.TimeoutExpired:
+                            os.killpg(process.pid, signal.SIGKILL); process.wait(timeout=10)
+                    raise
+            if 'WORLDIFACT_MODEL_EXECUTION_OFFLINE_VERIFIED' not in base.read_regular(log, 1048576).decode().splitlines():
+                raise Refused('model_pipeline_unverified')
+            raw = base.read_regular(workspace / ('model-' + model + '-' + mode + '.json'), 65536)
+            validate_model_evidence(raw, model, mode)
+            evidence.append(raw)
+            lease.assert_no_work()
+            if os.path.lexists(stage / 'state') or base.read_regular(stage / base.RECEIPT, 16384) != generic_receipt or not base.receipt_matches(stage):
+                raise Refused('model_stage_cleanup_unverified')
+        return tuple(evidence)
 
     def context_health(self, maintenance=False):
         if policy.verified_health(self.source).get('worldifactStandardConstructionPolicy') != policy.REVISION:
             raise Refused('construction_receipt_unverified')
         health = self.read_health()
         self.pricing_health(health)
+        if getattr(self, 'update_models', False) and not getattr(self, 'checking_predecessor', False):
+            if (health.get('studioExecutionRevision') != 'studio-execution-v1'
+                    or health.get('studioExecutionModels') != ['astra', 'sol', 'luna']
+                    or health.get('studioExecutionModes') != ['standard', 'fast']):
+                raise Refused('model_execution_health_unverified')
         if (health.get('worldifactStandardConstructionPolicy') != policy.REVISION
                 or health.get('worldifactStandardContextPolicy') != legacy.policy.REVISION
                 or health.get('worldifactStandardMaintenance') is not maintenance
@@ -639,16 +760,19 @@ class Operations(legacy.Operations):
             raise Refused('construction_health_unverified')
 
     def previous_health(self):
+        models = getattr(self, 'update_models', False)
         execution = getattr(self, 'update_execution', False)
         response_phase = getattr(self, 'update_response_phase', False)
-        if getattr(self, 'update_initial_edit', False) or response_phase or execution:
-            validate_installed_receipts(self.source, installed_sources(self.source, response_phase=response_phase, execution=execution),
-                                        response_phase=response_phase, execution=execution)
-            return self.context_health()
+        if getattr(self, 'update_initial_edit', False) or response_phase or execution or models:
+            validate_installed_receipts(self.source, installed_sources(self.source, response_phase=response_phase, execution=execution, models=models),
+                                        response_phase=response_phase, execution=execution, models=models)
+            self.checking_predecessor = True
+            try: return self.context_health()
+            finally: self.checking_predecessor = False
         return legacy.Operations.context_health(self, revision=legacy.policy.REVISION)
 
 
-def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False, update_response_phase=False, update_execution=False):
+def install(source, workspace, operations, approved=False, allow_cancelled_cleanup=False, expected_cancelled_job=None, update_payload=False, update_initial_edit=False, update_response_phase=False, update_execution=False, update_models=False):
     if approved is not True:
         raise Refused('maintenance_approval_required')
     if type(allow_cancelled_cleanup) is not bool:
@@ -665,17 +789,21 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
         raise Refused('response_phase_update_mode_invalid')
     if type(update_execution) is not bool:
         raise Refused('execution_update_mode_invalid')
-    if sum((update_payload, update_initial_edit, update_response_phase, update_execution)) > 1:
+    if type(update_models) is not bool:
+        raise Refused('model_update_mode_invalid')
+    if sum((update_payload, update_initial_edit, update_response_phase, update_execution, update_models)) > 1:
         raise Refused('conflicting_update_modes')
     if update_payload:
         raise Refused('payload_update_requires_historical_package')
     manifest.final_manifest()  # Before target reads, directories or service work.
+    if update_models: manifest.model_manifest()
     if update_execution: manifest.execution_manifest()
-    update = update_initial_edit or update_response_phase or update_execution
+    update = update_initial_edit or update_response_phase or update_execution or update_models
     if update:
-        installed_predecessor(update_response_phase, update_execution)
-    absent = frozenset() if update else NEW_FILES
-    writes = EXECUTION_WRITES if update_execution else RESPONSE_PHASE_WRITES if update_response_phase else INITIAL_EDIT_WRITES if update_initial_edit else WRITES
+        installed_predecessor(update_response_phase, update_execution, update_models)
+    absent = frozenset((manifest.MODEL_HELPER, manifest.MODEL_RECEIPT)) if update_models else frozenset() if update else NEW_FILES
+    writes = MODEL_WRITES if update_models else EXECUTION_WRITES if update_execution else RESPONSE_PHASE_WRITES if update_response_phase else INITIAL_EDIT_WRITES if update_initial_edit else WRITES
+    operations.update_models = update_models
     operations.update_execution = update_execution
     operations.update_initial_edit = update_initial_edit
     operations.update_response_phase = update_response_phase
@@ -689,10 +817,12 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
         raise Refused('maintenance_already_present')
     assert_absent(source, absent)
     operations.preflight()
-    original = installed_sources(source, response_phase=update_response_phase, execution=update_execution) if update else original_sources(source)
+    original = installed_sources(source, response_phase=update_response_phase, execution=update_execution, models=update_models) if update else original_sources(source)
     operations.source_variant = 'PRICING'
-    operations.expected_source_sha256 = installed_predecessor(update_response_phase, update_execution) if update else dict(manifest.EXPECTED)
-    if update_execution:
+    operations.expected_source_sha256 = installed_predecessor(update_response_phase, update_execution, update_models) if update else dict(manifest.EXPECTED)
+    if update_models:
+        changed = manifest.model_changes(original, base.read_regular(model_file(manifest.MODEL_HELPER)))
+    elif update_execution:
         changed = manifest.execution_changes(original)
     elif update:
         names = manifest.RESPONSE_PHASE_HELPERS if update_response_phase else manifest.INITIAL_EDIT_HELPERS
@@ -704,7 +834,7 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
     patched = {name: raw for name, raw in changed.items() if original.get(name) != raw}
     original.update({name: base.read_regular(source / name, 16384) for name in RECEIPTS | ({policy.RECEIPT} if update else set())})
     if update:
-        validate_installed_receipts(source, original, response_phase=update_response_phase, execution=update_execution)
+        validate_installed_receipts(source, original, response_phase=update_response_phase, execution=update_execution, models=update_models)
     else:
         validate_receipts(source, original)
     original_inventory = code_inventory(source)
@@ -743,7 +873,10 @@ def install(source, workspace, operations, approved=False, allow_cancelled_clean
             assert_absent(source, absent)
             if any(base.read_regular(stage / name) != raw for name, raw in changed.items()):
                 raise Refused('verification_changed_source')
-            if update_execution:
+            if update_models:
+                receipts = rebound_receipts(original, changed, evidence, allow_cancelled_cleanup, models=True)
+                staged_receipts = receipts
+            elif update_execution:
                 receipts = rebound_receipts(original, changed, evidence, allow_cancelled_cleanup, execution=True)
                 staged_receipts = receipts
             elif update:
@@ -845,6 +978,7 @@ def main(argv=None):
     updates.add_argument('--update-initial-edit', action='store_true')
     updates.add_argument('--update-response-phase', action='store_true')
     updates.add_argument('--update-execution', action='store_true')
+    updates.add_argument('--update-models', action='store_true')
     parser.add_argument('--allow-cancelled-cleanup', action='store_true')
     parser.add_argument('--expected-cancelled-job')
     args = parser.parse_args(argv)
@@ -859,8 +993,8 @@ def main(argv=None):
     if args.update_payload:
         raise Refused('payload_update_requires_historical_package')
     manifest.final_manifest()
-    if args.update_initial_edit or args.update_response_phase or args.update_execution:
-        installed_predecessor(args.update_response_phase, args.update_execution)
+    if args.update_initial_edit or args.update_response_phase or args.update_execution or args.update_models:
+        installed_predecessor(args.update_response_phase, args.update_execution, args.update_models)
     frozen_dependencies()
     def interrupted(*_):
         raise KeyboardInterrupt('Maintenance interrupted; preserve verified source.')
@@ -880,7 +1014,7 @@ def main(argv=None):
         value = install(source, workspace, Operations(source, home), approved=True,
                         allow_cancelled_cleanup=args.allow_cancelled_cleanup,
                         expected_cancelled_job=args.expected_cancelled_job, update_initial_edit=args.update_initial_edit,
-                        update_response_phase=args.update_response_phase, update_execution=args.update_execution)
+                        update_response_phase=args.update_response_phase, update_execution=args.update_execution, update_models=args.update_models)
         print(json.dumps(value, sort_keys=True))
         return value
 
