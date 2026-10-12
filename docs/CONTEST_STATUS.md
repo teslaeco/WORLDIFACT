@@ -1,3 +1,7 @@
+# 12 October 2026 — intermittent generation / account-library incident: targeted visibility fix
+
+On branch `fix/shop-saved-model-visibility-20261012`, the Shop compact gallery is bound to the currently selected **completed** Studio receipt. It uses the existing authenticated direct account model lookup, rather than assuming that a random UUID-keyed 64-row history page contains the latest model. No new provider requests, settlements, point waivers, configuration changes or production deployment were performed in this patch. See `docs/GENERATION_LIBRARY_INCIDENT_20261012.md` for evidence, limitations and the remaining `ORACLE_JOB_MISSING` investigation. CI is pending; do not mark this change deployed or claim the Oracle failure fixed.
+
 # 12 October 2026 — clean Shop reload and terminal request history
 
 The owner reported that an old failed model and a completed concept reappeared
