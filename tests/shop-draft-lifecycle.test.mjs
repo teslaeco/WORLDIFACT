@@ -51,6 +51,18 @@ function elements(tree) {
   }
   walk(tree); return result
 }
+// Approximate visible text for the actual element tree: closed disclosures and
+// hidden content do not appear in the initial customer view.
+function visibleText(node) {
+  if (node == null || typeof node === 'boolean') return ''
+  if (Array.isArray(node)) return node.map(visibleText).join('')
+  if (!React.isValidElement(node)) return String(node)
+  if (node.props.hidden || /shop-visually-hidden|shop-internal-only/.test(node.props.className ?? '')) return ''
+  if (node.type === 'details' && !node.props.open)
+    return React.Children.toArray(node.props.children).filter(child => React.isValidElement(child) && child.type === 'summary').map(visibleText).join('')
+  return visibleText(node.props.children)
+}
+
 function text(node) {
   if (node == null || typeof node === 'boolean') return ''
   if (Array.isArray(node)) return node.map(text).join('')
@@ -175,6 +187,7 @@ async function harness({ ready = false, state = 'succeeded', failureCode, submis
     byId: id => node(n => n.props.id === id),
     button: label => node(n => n.type === 'button' && text(n).includes(label)),
     all: () => elements(tree),
+    visible: () => visibleText(tree),
     async clockTick() { for (const callback of intervals.values()) callback(); await settle() },
     activeIntervals: () => intervals.size,
     description: () => text(node(n => n.props['data-testid'] === 'result-description')),
@@ -1007,16 +1020,16 @@ test('unknown account data and expired authentication fail closed without an end
   } finally { timeout.close() }
 })
 
-test('a saved rejected blueprint displays its reason instead of the example and remains recoverable while funding is blocked', async () => {
+test('a saved rejected blueprint keeps its reason in history and remains recoverable while funding is blocked', async () => {
   const blueprintRecovery = { id: newId, fingerprint: 'b'.repeat(64), model: 'astra', state: 'failed', createdAt: Date.now(), failureCode: 'PROVIDER_BUDGET_EXHAUSTED' }
   for (const withExistingJob of [false, true]) {
     const h = await harness({ ready: true, withExistingJob, blueprintRecovery, accountLookup: () => Response.json(blockedAccount) })
     try {
       if (withExistingJob) {
         await h.poll()
-        assert.match(text(h.all()), /Previous preview preserved/)
+        assert.doesNotMatch(h.visible(), /Previous preview preserved/)
         assert.match(h.description(), /Original brown chess knight/)
-      } else assert.ok(h.all().some(n => n.type === 'h2' && text(n) === 'Generation was not started'))
+      } else assert.doesNotMatch(h.visible(), /Generation was not started/)
       assert.equal(h.all().some(n => n.type === 'img' && n.props.alt === 'Example 3D product preview'), false)
       assert.equal(h.button('Recover same request').props.disabled, false)
       await h.button('Recover same request').props.onClick(); await h.settle()
@@ -2081,5 +2094,73 @@ for (const model of ['sol', 'luna']) for (const mode of ['standard', 'fast']) te
     assert.deepEqual(recovered.studioExecution, execution)
     const prepared = JSON.parse(h.calls.find(c => c.path === '/api/studio/prepare').body)
     assert.deepEqual(prepared.studioExecution, execution)
+  } finally { h.close() }
+})
+
+
+test('a reloaded failed model stays in history while the next draft remains usable', async () => {
+  const h = await harness({ ready: true, detailedReady: true, state: 'failed', failureCode: 'ORACLE_JOB_FAILED' })
+  try {
+    const receipt = h.storeData.get(clientModule.STUDIO_RECEIPT_KEY)
+    await h.poll()
+    const stage = h.all().find(n => String(n.props.className).startsWith('native-shop-preview') && !n.props.hidden)
+    assert.doesNotMatch(text(stage), /failed|did not finish|cancelled|cost review|Recover this job|Result details/i)
+    assert.doesNotMatch(h.visible(), /Previous failed request|Generation failed|Request [a-f0-9-]{36}|references are cleared/)
+    assert.ok(elements(stage).some(n => n.type?.name === 'CreationProgress' && !n.props.active))
+    assert.equal(h.byId('studio-prompt').props.value, '')
+    h.byId('studio-prompt').props.onChange({ target: { value: 'My next original model' } }); await h.settle()
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, false)
+    assert.equal(h.storeData.get(clientModule.STUDIO_RECEIPT_KEY), receipt)
+    assert.match(text(h.all().find(n => n.props.className?.includes('shop-previous-failure'))), /ORACLE_JOB_FAILED|did not finish/)
+    h.button('Recover this job').props.onClick(); await h.settle(); await h.poll()
+    const reopened = h.all().find(n => String(n.props.className).startsWith('native-shop-preview') && !n.props.hidden)
+    assert.match(text(reopened), /did not finish/)
+    assert.equal(h.byId('studio-prompt').props.value, 'My next original model')
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+test('failure of a running restored model is shown now but becomes history on the next visit', async () => {
+  let state = 'building', snapshot
+  const options = { ready: true, detailedReady: true, jobLookup: () => Response.json({ job: { id: oldId, state, ...(state === 'failed' ? { failureCode: 'ORACLE_JOB_FAILED' } : {}) } }) }
+  const h = await harness(options)
+  try {
+    await h.poll()
+    state = 'failed'; await h.poll()
+    assert.match(h.visible(), /Saved request did not finish/)
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+    snapshot = [...h.storeData]
+  } finally { h.close() }
+  const returned = await harness({ ...options, initialStore: snapshot })
+  try {
+    await returned.poll()
+    assert.doesNotMatch(returned.visible(), /Saved request did not finish|Previous failed request/)
+    assert.match(text(returned.all()), /Saved request did not finish/)
+    assert.equal(returned.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { returned.close() }
+})
+
+for (const state of ['completed', 'failed']) test(`restored ${state} concept is retained without placing an old status beside Generate`, async () => {
+  const record = { id: oldId, fingerprint: 'a'.repeat(64), model: 'sol', state, createdAt: Date.now() }
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false, blueprintRecovery: record })
+  try {
+    const stage = h.all().find(n => String(n.props.className).startsWith('native-shop-preview') && !n.props.hidden)
+    assert.doesNotMatch(text(stage), /failed|result can be recovered|Request ID|Generation was not started/i)
+    assert.doesNotMatch(h.visible(), /Request [a-f0-9-]{36}|Recover same request|Start a new paid attempt/)
+    assert.deepEqual(JSON.parse(h.storeData.get('worldifact:blueprint-recovery:v1')), record)
+    assert.ok(h.button('Recover same request'))
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
+  } finally { h.close() }
+})
+
+test('pending concept recovery remains visible and blocks another paid request', async () => {
+  const h = await harness({ ready: true, detailedReady: true, withExistingJob: false,
+    blueprintRecovery: { id: oldId, fingerprint: 'a'.repeat(64), model: 'sol', state: 'pending', createdAt: Date.now() } })
+  try {
+    assert.match(h.visible(), /Recover same request/)
+    h.byId('studio-prompt').props.onChange({ target: { value: 'A second request must remain blocked' } }); await h.settle()
+    assert.equal(h.button('Generate Astra/Blender model').props.disabled, true)
+    await h.form().props.onSubmit({ preventDefault() {} }); await h.settle()
+    assert.equal(h.calls.filter(c => c.method !== 'GET').length, 0)
   } finally { h.close() }
 })
