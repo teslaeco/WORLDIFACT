@@ -287,3 +287,62 @@ test('ten distinct sequential signed jobs and repeated receipts emit exactly ten
   assert.deepEqual(new Set(dispatchedIds), originalIds)
   assert.equal(f.values.get('reserved-attempts'), 10)
 })
+
+test('lost POST acknowledgement checks only the original Oracle ID and recovers an accepted job', async () => {
+  const f = fixture(0)
+  f.env.GENERATION_REQUEST_LIMIT = 'unlimited'
+  f.env.GENERATION_EXPIRES_AT = ''
+  const prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  f.loseResponse()
+  const reads: string[] = []
+  const fetcher: typeof fetch = async (url, init) => {
+    const destination = String(url)
+    if (destination.endsWith(`/v1/jobs/${prepared.id}`) && init?.method !== 'POST') {
+      reads.push(destination)
+      return Response.json({ id: prepared.id, state: 'building' })
+    }
+    return f.fetcher(url, init)
+  }
+  const request = () => new Request(origin + '/api/studio/jobs', {
+    method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': prepared.ticket },
+    body: JSON.stringify(input),
+  })
+  const first = await data(studioApi(request(), f.env, fetcher))
+  assert.equal(first.job.id, prepared.id)
+  assert.equal(first.job.state, 'building')
+  assert.equal(reads.length, 1, 'Only a read-only GET on the original receipt may check lost acknowledgement')
+  assert.equal(posts(f).length, 1, 'No second paid provider POST after ambiguous transport')
+  const second = await studioApi(request(), f.env, fetcher)
+  assert.equal(second.status, 202)
+  assert.equal(posts(f).length, 1, 'Repeated same receipt cannot bypass dispatch fence')
+  assert.equal(f.values.get('reserved-attempts'), 1)
+})
+
+test('missing Oracle job after uncertain submission remains pending, never silently retried', async () => {
+  const f = fixture(0)
+  f.env.GENERATION_REQUEST_LIMIT = 'unlimited'
+  f.env.GENERATION_EXPIRES_AT = ''
+  const prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  f.loseResponse()
+  let notFoundReads = 0
+  const fetcher: typeof fetch = async (url, init) => {
+    if (String(url).endsWith(`/v1/jobs/${prepared.id}`) && init?.method !== 'POST') {
+      notFoundReads++
+      return Response.json({ error: 'Unknown job' }, { status: 404 })
+    }
+    return f.fetcher(url, init)
+  }
+  const request = () => new Request(origin + '/api/studio/jobs', {
+    method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': prepared.ticket },
+    body: JSON.stringify(input),
+  })
+  const first = await data(studioApi(request(), f.env, fetcher))
+  assert.equal(first.job.state, 'pending')
+  assert.equal(notFoundReads, 1)
+  assert.equal(posts(f).length, 1)
+  await studioApi(request(), f.env, fetcher)
+  assert.equal(posts(f).length, 1)
+  assert.equal(f.values.get('reserved-attempts'), 1)
+})
