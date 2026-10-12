@@ -20,3 +20,15 @@
 4. Review precise release scope, preserve Stripe, subscriptions, balances, secrets and provider budgets, then secure GO/NO-GO before production publication.
 
 Status: NO-GO for the complete generation reliability repair until Oracle evidence and integration acceptance exist.
+
+## 2026-10-12 Oracle follow-up (read-only operational evidence)
+
+VERIFIED (LIVE): OCI Cloud Shell CLI, authenticated using its existing delegation-token profile, lists `froge-blender` as RUNNING in eu-amsterdam-1. Its network interface is AVAILABLE. Oracle Cloud Agent reports `Compute Instance Run Command` RUNNING. The published production `/api/studio/status` GET returned `ready: true`, `oracle: CONNECTOR_READY`, Astra/Sol/Luna and standard/fast modes as advertised. These are reachability/capability signals only, not evidence of reliable durable submission.
+
+VERIFIED (SOURCE): Review of `server/studio.ts` on this branch confirms account reservation and global budget reservation, followed by one `markStudioDispatch` claim and one Oracle POST. A failed/uncertain POST transport response can leave an account job in recovery-only state. Do not replay an ambiguously accepted paid POST without provider idempotency and durable-ack evidence.
+
+BLOCKED (VM): A single **read-only** Oracle Cloud Agent health diagnostic was accepted by the OCI command API, but its execution remained `ACCEPTED` / `VISIBLE` with no result during this check. Do not mistake command creation for execution. VM service, SQLite, and provider logs have NOT been read and no VM change, service restart, customer credit mutation, or paid POST was performed. SSH access or a completed agent execution is still needed to gather redacted correlated evidence. Agent queue delay is not proven to cause `ORACLE_JOB_MISSING`.
+
+VERIFIED (CI): PR #274 exact HEAD `4fe2e0fe79b3acc213ca9607c12ab3308a8abe6b` had five successful hosted workflow runs at time of inspection. This applies only to that SHA; any subsequent documentation commit requires fresh exact-HEAD checks.
+
+NO-GO: Production reliability repair is not confirmed. Keep PR #274 unmerged until VM evidence and repeated-generation acceptance gates pass; preserve all assets, holds, and billing configuration.
