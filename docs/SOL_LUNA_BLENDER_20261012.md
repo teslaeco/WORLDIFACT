@@ -47,6 +47,11 @@ combinations. These tests are not native Blender or paid-provider evidence.
 The added admin-allocation regression is checked separately; hosted CI remains
 the authority for the complete current tree.
 
+Initial hosted CI on `f6ff681` passed 2,253/2,254 tests. The remaining native
+Chromium test correctly rejected its outdated explicit fixture bundle, which
+omitted the new execution and model catalogue dependencies. The bundle now
+includes both real modules; a fresh hosted result is required for this fix.
+
 ## Remaining activation work
 
 1. Restore a responsive Oracle connection and re-read source, service, job and

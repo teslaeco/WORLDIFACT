@@ -19,10 +19,11 @@ test('native Chromium reproduces the old invocation error and accepts the repair
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText.replace(/^export /gm, '')
   const artifact = compile('studioArtifact')
+  const catalog = compile('modelCatalog'), execution = compile('studioExecution').replace(/^import .+ from ['"]\.\/modelCatalog\.ts['"];?\s*$/gm, '')
   const admission = compile('generationAdmission'), pricing = compile('studioPricing'), pointSettlement = compile('paidPointsFunding'), readback = compile('studioReadbackGuide')
-  const protocol = compile('studioProtocol').replace(/^import .+ from ['"]\.\/(?:generationAdmission|studioPricing|studioReadbackGuide)\.ts['"];?\s*$/gm, ''), draft = compile('studioDraft')
-  const client = compile('studioClient').replace(/^import .+ from ['"]\.\/(?:studioArtifact|studioProtocol|studioDraft|studioPricing|paidPointsFunding)\.ts['"];?\s*$/gm, '')
-  assert.doesNotMatch(artifact + admission + pricing + pointSettlement + readback + protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
+  const protocol = compile('studioProtocol').replace(/^import .+ from ['"]\.\/(?:generationAdmission|studioPricing|studioReadbackGuide|studioExecution|modelCatalog)\.ts['"];?\s*$/gm, ''), draft = compile('studioDraft')
+  const client = compile('studioClient').replace(/^import .+ from ['"]\.\/(?:studioArtifact|studioProtocol|studioDraft|studioPricing|paidPointsFunding|studioExecution|modelCatalog)\.ts['"];?\s*$/gm, '')
+  assert.doesNotMatch(artifact + catalog + execution + admission + pricing + pointSettlement + readback + protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
   // A top-level inert data: document has no secure-context SubtleCrypto. Keep
   // this receiver/transport test off all network origins and adapt ONLY digest
   // with precomputed real SHA-256 fixtures; manifest security has its own tests.
@@ -111,7 +112,7 @@ test('native Chromium reproduces the old invocation error and accepts the repair
     } finally { globalThis.fetch = nativeFetch; }
   } catch (error) { result.textContent = 'FAIL: ' + error.message; }
 })();`
-  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + artifact + '\n' + admission + '\n' + pricing + '\n' + pointSettlement + '\n' + readback + '\n' + protocol + '\n' + draft + '\n' + client + '\n' + exercise + '</script>'
+  const html = '<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre><script>' + artifact + '\n' + catalog + '\n' + execution + '\n' + admission + '\n' + pricing + '\n' + pointSettlement + '\n' + readback + '\n' + protocol + '\n' + draft + '\n' + client + '\n' + exercise + '</script>'
   const profile = mkdtempSync(join(tmpdir(), 'worldifact-native-fetch-'))
   try {
     const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking', '--no-first-run', '--no-default-browser-check',
