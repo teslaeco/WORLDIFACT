@@ -184,17 +184,18 @@ test('funded MCC request completes only after model validation and replays witho
   } finally { console.info = original }
 })
 
-test('lost provider response remains uncertain and a later durable failure has a safe terminal diagnostic', async () => {
+test('lost provider POST acknowledgement recovers by bounded same-ID GET; later durable failure remains authoritative', async () => {
   const f = fixture(); await f.fund(); f.postError(true)
   const lines: string[] = [], original = console.info
   console.info = (...values: unknown[]) => { lines.push(values.join(' ')) }
   try {
     const receipt = await f.prepare(input)
     const response = await f.call('/api/studio/jobs', 'POST', input, receipt)
-    assert.equal((await response.json() as { job: StudioJob }).job.state, 'pending')
+    assert.equal((await response.json() as { job: StudioJob }).job.state, 'building')
     assert.equal(f.submitted.length, 1)
     assert.equal(lines.some(line => ['FAILED', 'COMPLETED', 'PROVIDER_RESPONSE'].includes(JSON.parse(line).stage)), false)
-    assert.equal(JSON.parse(lines.at(-1)!).reason, 'ORACLE_NO_RESPONSE')
+    assert.equal(lines.some(line => JSON.parse(line).reason === 'ORACLE_NO_RESPONSE'), true)
+    assert.equal(JSON.parse(lines.at(-1)!).reason, 'ORACLE_RESPONSE')
     assert.doesNotMatch(lines.join('\n'), /private upstream|fixture@example|ticket/i)
     f.state('failed'); f.statusFields({ worldifactFailureCode: 'ASTRA_COST_LIMIT' })
     const failed = await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt)
