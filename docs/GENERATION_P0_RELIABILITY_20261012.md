@@ -40,3 +40,11 @@ VERIFIED (VM): Authorized SSH from the user's OCI Cloud Shell to `froge-blender`
 VERIFIED (VM): Discovered the live candidate state path `/home/opc/froge-connector/state/jobs.sqlite` among SQLite files in `/home/opc`; unlike archived cleanup files this is under the named active connector directory. Its table schema, current row counts and durable acceptance behavior remain UNKNOWN until a strictly read-only `mode=ro` SQLite check. The screenshot did not include raw job contents or evidence of a successful repeated paid operation.
 
 NEXT: Read metadata and aggregate state counts only (no job IDs/prompts/emails), correlate a previously failed original receipt with redacted Worker/SQLite/Oracle records; do not alter DB, WAL, ledger, VM or subscriptions. NO-GO for production repair until evidence and approved acceptance tests exist.
+
+## 2026-10-12 20:19 CEST — read-only live SQLite aggregate inventory
+
+VERIFIED (USER-OPERATED VM READ): `/home/opc/froge-connector/state/jobs.sqlite` exists (421,888 bytes); `jobs` is the visible application table with columns `id, prompt, state, detail, created, updated`. No `-wal` file was present in this snapshot. SQLite was opened using `mode=ro` and `PRAGMA query_only=ON`. Aggregate rows at time of inspection: `167` total = `92 succeeded`, `74 failed`, `1 cancelled`. Approximate complete-history rates: succeeded `55.09%`, failed `44.31%`, cancelled `0.60%`. No other status was shown in the group-by output.
+
+IMPORTANT LIMITATION: These are **historical Oracle rows**, not a controlled sequential reliability test, nor evidence of why any job failed. The specific `ORACLE_JOB_MISSING` issue concerns an account-signed request with no matching Oracle job row: missing rows are **not countable** by an Oracle jobs-table query. No claim that all 74 failures were `ORACLE_JOB_MISSING` is supported. Correlate original account receipt/Worker dispatch evidence with Oracle acceptance, rather than assuming success from aggregate counts.
+
+NEXT READ-ONLY: group historical failures by safe allowlisted error category and recent creation date, without printing any `id`, `prompt`, raw `detail`, tokens, customer data or private asset paths. Collect stronger redacted cross-tier evidence before fixing dispatch persistence or changing spending and settlements. NO-GO unchanged.
