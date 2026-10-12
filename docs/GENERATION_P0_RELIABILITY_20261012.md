@@ -1,5 +1,12 @@
 # P0 reliability incident — 2026-10-12 (ongoing, source-only)
 
+Current validation: [P0 recovery evidence and release gates](GENERATION_P0_RECOVERY_VALIDATION_20261012.md).
+Local full verification now passes 2,283/2,283 Node tests, 107/107 maintenance
+Python tests, seven model execution and three diagnostic tests, build, foundation
+assembly and deployment dry-run. Authenticated Oracle health workflow 38307117617
+passed on main. These results do not establish durable production admission;
+incident #272 remains open and production is **NO-GO**.
+
 ## VERIFIED
 - Production main remains `d70adf1c627c9bd5721b6a32e6c020fb3ae59869` at investigation start; #271 is published and prevents old terminal failures from reappearing as the active composer result.
 - Draft #273 provides authenticated lookup of a completed job by its original signed receipt, independent of the UUID-keyed 64-row cursor page. This change was carried onto isolated branch `fix/p0-generation-library-20261012` without touching billing.
@@ -8,7 +15,7 @@
 - Original paid Astra Standard image-to-3D acceptance on October 12 succeeded once at 250 points and yielded verified downloadable model exports (prior #270 evidence). This is one data point, not a reliability guarantee.
 
 ## UNKNOWN / BLOCKED
-- Cause of earlier `ORACLE_JOB_MISSING` is unknown. Remote Desktop Commander reports Online but terminal calls time out, preventing fresh read-only Oracle VM service/SQLite/provider evidence.
+- Cause of earlier `ORACLE_JOB_MISSING` is unknown. This cloud environment has no connected Desktop Commander/OCI session. Existing restricted GitHub maintenance access does not permit arbitrary SQLite or source inspection; historical user-operated evidence is recorded below.
 - Durable Oracle POST acceptance and provider charge/hold reconciliation have not been verified. Code review shows reservation -> dispatch claim -> POST and pending return on no response; do not infer safe retries or zero provider cost from a 404.
 - Source changes have not been deployed. New branch exact-head hosted CI must pass before any merge; source-only browser test improvement does not repair the Oracle missing-job incident.
 - No new paid API requests are authorized and none were performed.
@@ -61,7 +68,7 @@ NEXT (READ-ONLY): Summarize `detail` storage formats (null / JSON object / JSON 
 
 IMPLEMENTED on isolated PR #274 branch: `tools/oracle_diagnostics/failure_audit.py` uses read-only SQLite `mode=ro`, `PRAGMA query_only=ON` and `quick_check` to aggregate known failed-job details across plain-text/JSON formats, including Polish/English keywords, without printing raw `detail`, `prompt`, job IDs or customer information. It counts recent time buckets separately from historical totals. `tools/oracle_diagnostics/test_failure_audit.py` provides offline fixture checks for privacy, normalization, missing DB and aggregates.
 
-VERIFIED (LOCAL CLOUD SHELL): Exact tool and tests were exercised on synthetic SQLite rows; 3/3 tests passed and no private fixture content appeared in report. Production `jobs.sqlite` has **not** yet been processed by this new tool; its categorization remains UNKNOWN. The Cloud Shell copy is at `/home/xodobrox/worldifact_p0_failure_audit.py`; user must explicitly execute read-only SSH access (direct autonomous SSH was not available to this agent) and optionally tee the aggregate output to a local report. No paid API calls, VM deployments or restarts.
+VERIFIED (LOCAL CLOUD SHELL): Exact tool and tests were exercised on synthetic SQLite rows; 3/3 tests passed and no private fixture content appeared in report. At this milestone production execution was pending; the later 20:51 CEST entry below records the user-operated live aggregate result. No paid API calls, VM deployments or restarts.
 
 The reviewed *local source snapshot* at `worldifact-completion-source/oracle_connector/server.py` uses a SQLite insert within a transaction before responding HTTP 202 and repeat-ID lookup before new work, but it is **not authenticated as the deployed VM source**. Therefore do not claim verified production idempotency or durable provider acceptance. Correlated live requests still required; status remains NO-GO.
 
@@ -73,7 +80,7 @@ VERIFIED (TIME WINDOWS): Last 24h: 3 succeeded / 1 failed; previous 7 days exclu
 
 VERIFIED (SOURCE-LEVEL REFERENCE ONLY): Local dated 2026-10-10 connector snapshot at `worldifact-completion-source/oracle_connector/server.py` appears to use SQLite transaction `INSERT INTO jobs` before HTTP 202 and checks existing job ID before new generation. Deployed VM source was not verified identical; do not claim production durable admission guarantee from this snapshot.
 
-IMPLEMENTED: Hosted `Verify WORLDIFACT` CI now explicitly runs 3 privacy/offline Python audit tests, in addition to the existing JS/TS checks. No backend Oracle mutation, no customer-asset/balance/Stripe change, no production deploy. These CI checks must pass on the latest PR HEAD.
+IMPLEMENTED: The separate `P0 Oracle Audit (Offline)` workflow runs three privacy/offline Python audit tests. The initial edit to protected `Verify WORLDIFACT` was reverted as recorded below; its immutable workflow remains unchanged. No backend Oracle mutation, customer-asset/balance/Stripe change or production deployment occurred.
 
 BLOCKED / NO-GO: A complete P0 fix still requires cross-tier correlation of a known original missing receipt's Worker stage, DO reservation/dispatch claim, Oracle POST ingress and persisted row/provider invoice. Do not add blind retries for uncertain paid POST. Preserve existing financial holds pending evidence.
 
@@ -89,7 +96,7 @@ NO-GO remains for P0 reliability until actual missing signed receipt is correlat
 
 Reviewed the repository pull-request timeline #1–#274 (API), tracing #169 (account-signed durable recovery), #186 (late-dispatch fence), #208 (safe admission diagnostics), #231 (paid-points holding), #251 (MCP framing/provider transport), #254 (native image dispatch), #263/#264 (Worker lifetime), #268/#269 (Astra/Sol/Luna routing and recovery), and #270/#273/#274 (native test, library recovery). Source evidence still does NOT prove durable cross-system Oracle ingress after a lost POST.
 
-IMPLEMENTED on this isolated branch: after an unexpected Oracle POST/acceptance acknowledgement error, attempt one bounded 2.5-second **read-only GET for exactly the same signed UUID**, only accepting verified id and a known nonterminal Oracle state. A successful lookup returns the observed state rather than pretending the job was missing. A 404, unavailable response or mismatched/terminal data stays pending with original receipt and existing unresolved funding, with **no second provider POST** and no automatic refund. The existing one-use account dispatch fence remains unchanged. This mitigates lost acknowledgements; it **does not persist a request that was never delivered to Oracle**, so the root P0 is not closed.
+IMPLEMENTED on this isolated branch: after an unexpected Oracle POST/acceptance acknowledgement error, attempt one **read-only GET for exactly the same signed UUID** with a 2.5-second status-request timeout. The continuation also reconciles malformed successful ACK bodies and verified terminal states through the ordinary completion/artifact gates; artifact verification has its existing separate bounds. A 404, unavailable response or mismatched ID stays pending with the original receipt and unresolved funding, with **no second provider POST** and no automatic refund. The existing one-use dispatch fence remains unchanged. This mitigates lost acknowledgements; it **does not persist a request that was never delivered to Oracle**, so the root P0 is not closed.
 
 Added tests for lost acknowledgement with Oracle GET confirmation, absent job remaining pending, one-use recovery, ten sequential mocked jobs with same-receipt replays, and the six-model/mode native Miniflare test from draft PR #270. Updated the existing held-points regression to distinguish transport loss from a verified GET-recovered building job without modifying financial expectations. Exact-head CI must pass.
 

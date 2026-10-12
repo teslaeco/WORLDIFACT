@@ -1,6 +1,34 @@
-# 12 October 2026 — P0 historic PR audit, lost-ack recovery and native regression tests (VERIFIED / UNKNOWN / BLOCKED)
+# 12 October 2026 — P0 cloud repair validation (NO-GO for production)
 
-VERIFIED (SOURCE): Audited PR timeline #1–#274, including account Durable Object, dispatch fence, Worker lifetime, model routing and Oracle fixes. PR #274 now has a bounded same-original-ID Oracle GET fallback after uncertain POST acknowledgement, no duplicate provider POST and no balance/settlement writer changes. Added lost-ACK/missing-job tests, 10 sequential mocked generations, and native Miniflare six model/mode tests ported from draft #270; previous three privacy-safe offline Oracle audit tests passed. Hosted exact-head app CI remains pending on this docs edit.
+VERIFIED: Fixed malformed Oracle acknowledgement reconciliation and verified late
+completion using the original UUID with no second POST; restored original account
+FBX/BLEND/texture ZIP downloads. Corrected the two maintenance test provenance
+errors using independently hash-verified historical fixtures, preserving every
+production security pin and restricted SSH command.
+
+LOCAL RESULTS: `npm run verify` PASS (2,283/2,283 Node tests, zero skipped, lint,
+TypeScript, real local HTTP and build); maintenance Python 107/107; model execution
+7/7; privacy diagnostic 3/3; pinned Chess/Terra assembly and deployment dry-run PASS.
+Actual SQLite-backed Worker restart tests retain once-only dispatch and owned
+original downloads. Oracle/providers are mocked in those tests.
+
+LIVE READ-ONLY: Main-only authenticated Oracle health workflow
+[38307117617](https://github.com/teslaeco/WORLDIFACT/actions/runs/38307117617) passed.
+Public root, Shop, Lab and two health/status endpoints returned HTTP 200 at 20:56
+UTC. Current main's successful publication is run 38246794816 at `d70adf1`; no new
+version was deployed. Direct VM source/SQLite correlation and current Cloudflare
+version UUID remain unavailable from this environment.
+
+BLOCKED: Original missing-receipt/provider correlation, verified Oracle durable
+ingress and restart/disk recovery, real account-library recovery, and a preserving
+production release scope. No paid generation, merge, deployment, customer-balance,
+Stripe, secret, provider-budget or customer-file changes. PR #274 remains draft;
+its latest exact-head hosted checks must pass before release review. See
+[full evidence and rollback gates](GENERATION_P0_RECOVERY_VALIDATION_20261012.md).
+
+# 12 October 2026 — P0 historic PR audit, lost-ack recovery and native regression tests (historical milestone)
+
+VERIFIED (SOURCE): Audited PR timeline #1–#274, including account Durable Object, dispatch fence, Worker lifetime, model routing and Oracle fixes. PR #274 gained a bounded same-original-ID Oracle GET fallback after uncertain POST acknowledgement, no duplicate provider POST and no balance/settlement writer changes. Added lost-ACK/missing-job tests, 10 sequential mocked generations, and native Miniflare six model/mode tests ported from draft #270; previous three privacy-safe offline Oracle audit tests passed. That milestone's exact head `59fd0798ada5bb014fe267d193bea65d1745ec03` subsequently passed seven hosted workflows; new commits need their own checks.
 
 UNKNOWN/BLOCKED: Cross-tier confirmed durability where Oracle never receives the first POST, provider cost for original missing requests, and production repeated-model E2E. Reference connector source is not verified installed source. Full actionable Codex engineering task: `docs/CODEX_ORACLE_DURABLE_ADMISSION_P0_20261012.md`; no Codex CLI present on the connected Cloud Shell. Until root ingress fix, owner-reviewed GO and new separately authorized paid cap: NO-GO. No production merge/deploy, new paid POST, Stripe, point balance or VM changes.
 
