@@ -1,0 +1,21 @@
+name: P0 Oracle Audit (Offline)
+
+on:
+  pull_request:
+    paths:
+      - 'tools/oracle_diagnostics/**'
+      - '.github/workflows/p0-oracle-audit-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-fixtures:
+    name: Privacy-safe SQLite audit fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Run offline read-only audit tests
+        run: python3 -m unittest discover -s tools/oracle_diagnostics -p 'test_*.py' -v
