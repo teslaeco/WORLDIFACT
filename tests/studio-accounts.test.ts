@@ -102,6 +102,28 @@ function fixture() {
     busy: () => { busy = true }, lose: () => { loss = true; status404 = true } }
 }
 
+test('lost acknowledgement recovers terminal completion only after the original owned GLB passes validation', async () => {
+  for (const corrupt of [false, true]) {
+    const f = fixture(); await f.subscribe()
+    const receipt = await f.prepare()
+    f.lose(); f.missing(false)
+    if (corrupt) f.invalid()
+    const response = await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+    assert.equal(response.status, 202)
+    const value = await response.json() as { job: StudioJob }
+    assert.equal(value.job.id, receipt.id)
+    assert.equal(value.job.state, corrupt ? 'failed' : 'succeeded')
+    assert.equal(value.job.failureCode, corrupt ? 'INVALID_MODEL_OUTPUT' : undefined)
+    assert.ok(f.artifacts() > 0, 'Oracle success alone cannot settle a completed model')
+    const settled = await entitlementStatus(f.env, alice)
+    await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
+    await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket)
+    assert.deepEqual(await entitlementStatus(f.env, alice), settled)
+    assert.equal(f.posts(), 1)
+    assert.equal((await f.call(`/api/studio/jobs/${receipt.id}`, 'GET', undefined, receipt.ticket, 'bob')).status, 401)
+  }
+})
+
 test('account-bound prepared receipts cannot be submitted or read by another user', async () => {
   const f = fixture()
   assert.equal((await f.call('/api/studio/prepare', 'POST', input, undefined, null)).status, 401)
@@ -615,6 +637,7 @@ test('unknown Oracle 503 or transport loss remains uncertain and cannot falsely 
   for (const transport of [false, true]) {
     const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
     if (transport) f.lose(); else f.rejectSubmission(503, { error: 'PRIVATE: acceptance unknown' })
+    f.missing() // No verified same-job result is available after the uncertain ACK.
     const response = await f.call('/api/studio/jobs', 'POST', input, receipt.ticket)
     assert.equal(response.status, 202)
     const result = await response.json() as { job: StudioJob }

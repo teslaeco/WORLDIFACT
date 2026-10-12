@@ -346,3 +346,38 @@ test('missing Oracle job after uncertain submission remains pending, never silen
   assert.equal(posts(f).length, 1)
   assert.equal(f.values.get('reserved-attempts'), 1)
 })
+
+test('malformed or interrupted acceptance bodies recover the same Oracle job without another POST', async () => {
+  const acknowledgements = [
+    () => new Response('<html>gateway response</html>', { headers: { 'Content-Type': 'text/html' } }),
+    () => new Response('{"id":', { headers: { 'Content-Type': 'application/json' } }),
+    () => new Response(new ReadableStream({ start(controller) { controller.error(new TypeError('Truncated response')) } }),
+      { headers: { 'Content-Type': 'application/json' } }),
+    () => Response.json({ payload: 'x'.repeat(17_000) }),
+  ]
+  for (const acknowledgement of acknowledgements) {
+    const f = fixture(0), prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+    let submissions = 0, reads = 0
+    const fetcher: typeof fetch = async (url, init) => {
+      if (String(url).endsWith('/v1/jobs') && init?.method === 'POST') {
+        submissions++
+        return acknowledgement()
+      }
+      if (String(url).endsWith(`/v1/jobs/${prepared.id}`)) {
+        reads++
+        assert.equal(init?.method ?? 'GET', 'GET')
+        return Response.json({ id: prepared.id, state: 'building' })
+      }
+      return f.fetcher(url, init)
+    }
+    const request = () => new Request(origin + '/api/studio/jobs', { method: 'POST',
+      headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': prepared.ticket }, body: JSON.stringify(input) })
+    const response = await studioApi(request(), f.env, fetcher)
+    assert.equal(response.status, 202)
+    assert.equal((await data(response)).job.state, 'building')
+    assert.equal(reads, 1)
+    await studioApi(request(), f.env, fetcher)
+    assert.equal(submissions, 1)
+    assert.equal(f.values.get('reserved-attempts'), 1)
+  }
+})
