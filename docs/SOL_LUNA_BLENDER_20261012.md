@@ -1,6 +1,7 @@
 # Sol/Luna detailed model integration — installation checkpoint
 
-Status: **Oracle installation and Worker publication verified; LIVE acceptance pending**.
+Status: **Oracle installation and Worker publication verified; one Astra Standard
+photo request completed; Sol/Luna/Fast LIVE acceptance pending**.
 PR #268 merged as `878dcff08ffa9b303faccae5912d6dfda651591d`. Production run
 38227050993 passed at 09:03 UTC with version
 `860436e0-ee67-4fcd-907c-e8040c4825cc`, matching 12 HTML routes and 436 built files.
@@ -141,10 +142,15 @@ uncertain results require inspection, never an automatic repeat with a new ID.
 4. DONE: runtime activation/health, hosted CI and preserving Worker publication
    are verified. Existing secrets, runtime variables, billing configuration,
    balances and original assets were retained.
-5. Paid live acceptance remains pending. The recovered test ledger's fixed
+5. Sol/Luna/Fast paid live acceptance remains pending. The recovered test ledger's fixed
    approval expired at 04:00 UTC, so it cannot admit another attempt. Its uncertain
-   reserved attempt was not released or retried. A fresh explicit bounded test
-   authorization is required before new paid acceptance work. Verify actual
+   reserved attempt was not released or retried. A subsequent explicit approval
+   authorized exactly one Astra Standard request capped at USD 1.75 / 250 points.
+   That request completed through the public Shop with its original photo,
+   survived page reload and produced verified downloads and an account-library
+   entry; see CONTEST_STATUS.md for the 1m 52s duration and quality limitations.
+   This new one-attempt approval is consumed and does not authorize additional
+   Sol/Luna/Fast requests. Further paid work needs its own bounded approval. Verify actual
    provider model, resulting GLB/Blender files, original-job recovery and account
    settlement; installation and mocked-provider checks do not establish these.
 
