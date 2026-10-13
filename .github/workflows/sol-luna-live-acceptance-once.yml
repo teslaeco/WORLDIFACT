@@ -1,0 +1,38 @@
+name: Live Sol Luna acceptance once
+
+on:
+  push:
+    branches:
+      - fix/p0-generation-library-20261012
+    paths:
+      - 'scripts/sol-luna-live-acceptance-once.mjs'
+      - '.github/workflows/sol-luna-live-acceptance-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Run exactly-once live Sol and Luna Oracle acceptance
+        env:
+          WORLDIFACT_SOL_LUNA_APPROVAL: SOL_LUNA_ONCE_20261013
+          GITHUB_TOKEN: ${{ github.token }}
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: node scripts/sol-luna-live-acceptance-once.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: sol-luna-live-evidence-${{ github.sha }}
+          path: sol-luna-live-evidence/
+          retention-days: 7
+          if-no-files-found: warn
