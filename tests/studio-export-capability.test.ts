@@ -79,3 +79,13 @@ test('observing local export capability never activates a disabled paid-generati
   assert.equal(value.detailedReady, false)
   assert.equal(value.reason, 'DISABLED_OR_EXPIRED')
 })
+
+test('Studio status exposes only the verified durable admission revision from Oracle health', async () => {
+  const execution = { studioExecutionRevision: 'studio-execution-v1', studioExecutionModels: ['astra','sol','luna'], studioExecutionModes: ['standard','fast'] }
+  const verified = await inspect({ ...health, ...execution, studioAdmissionRevision: 'oracle-durable-admission-v1' })
+  assert.equal(verified.studioAdmissionRevision, 'oracle-durable-admission-v1')
+  const absent = await inspect({ ...health, ...execution })
+  assert.equal(absent.studioAdmissionRevision, undefined)
+  const wrong = await inspect({ ...health, ...execution, studioAdmissionRevision: 'unknown-revision' })
+  assert.equal(wrong.studioAdmissionRevision, undefined)
+})
