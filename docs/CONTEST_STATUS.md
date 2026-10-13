@@ -1,33 +1,39 @@
 # WORLDIFACT P0 — 13 October 2026
 
-## Current release verdict: NO-GO — activation implemented, not installed
+## Current release verdict: NO-GO — implementation tested, VM activation pending
 
-PR #274 remains the repair branch. Main was `d70adf1c627c9bd5721b6a32e6c020fb3ae59869` at this checkpoint. No new production activation, merge, deployment or paid generation is claimed.
+PR #274 remains the repair branch. Main remains `d70adf1c627c9bd5721b6a32e6c020fb3ae59869` at this checkpoint. No new production activation, merge, deployment or paid generation is claimed.
 
-## Latest implemented milestone
+## Completed implementation and hosted evidence
 
-The full separate `tools/oracle_admission/activation.py` transaction now exists, with exact predecessor/candidate source authority, unchanged historical native-gate pins, complete receipt rebinding, the original pidfd guardian/idle controls, bounded native subprocess supervision, an actual staged HTTP/SQLite/immutable-term restart gate, authenticated health, pre-activation rollback, and no automatic recovery after an ambiguous activation latch. The earlier `install_admission.py` remains preparation-only; its refusal has not been bypassed.
+Commit `7f357323fafb362bd72cf05799a4bba8f5100d52` implements the full separate `activation.py` transaction: exact predecessor/candidate source authority, unchanged historical native gate pins, complete receipt rebinding, original pidfd guardian/idle controls, bounded native subprocess supervision, staged HTTP/SQLite/immutable-term restart verification, authenticated health, pre-activation rollback and no automatic recovery after an ambiguous activation latch. The earlier `install_admission.py` remains preparation-only; its refusal was not removed.
 
-Ten new local synthetic activation tests pass. They exercise the real file transaction, every approved write with both pre-write failure and lost acknowledgement, bad native/ingress evidence, active/unknown/cancelled job rejection, preservation of customer files/balances, concurrent unknown edits, and post-latch uncertainty. Native gates and service identities are explicit fixtures in those tests. Fresh hosted results are required for this new commit; no actual VM native acceptance is inferred.
+All NINE workflows passed on `7f357323`. [Oracle run 38340496020](https://github.com/teslaeco/WORLDIFACT/actions/runs/38340496020) passed 57 tests on Python 3.9 and 3.12, built a 59-file public-code-only flat installation package, verified its inert default and unchanged native dependency pins. The downloaded package independently matched all 59 SHA-256 entries locally. These results do not prove actual VM native installation.
 
-The candidate server SHA-256 `c3e6b1e2894515ceabb4ec6570b8e68a5398664743212a36ba16a77be8200150` was independently reconstructed in [Oracle run 38339263726](https://github.com/teslaeco/WORLDIFACT/actions/runs/38339263726). That earlier source-identity head passed 46 Oracle tests and all nine workflows. The new release manifest freezes this candidate and the two independently pinned helpers; all original provider/price/model/renderer modules remain byte-identical.
+Ten full-transaction fixture tests cover every approved write with pre-write failure and lost acknowledgement, invalid native/ingress evidence, preservation of models/balances and old prices, active/unknown/cancelled-job rejection, concurrent unknown edits, and ambiguous post-latch state. Native service identities/witnesses are explicit fixtures. The production model/cost modules remain byte-identical.
 
-## Confirmed queue defect and correction
+## New detached launch and admission-fence tests
 
-A failure writing final timing diagnostics could kill the only queue thread and leak an in-memory running identity. The original-worker regression reproduces that defect. The candidate makes non-authoritative timing output best-effort while always cleaning in-memory flags, claims SQLite before advertising RUNNING, handles input-folder faults inside per-job cleanup, and retains the queue loop across transient storage failures. Ten sequential inert jobs, actual SQLite locking and uncertain-commit tests pass in hosted CI. No uncertain provider request is executed again or silently refunded.
+`cloud_shell_activate.py` and `activation_release.json` now bind the 59-file reviewed package to immutable public commits and independent hashes. Default is inert; read-only status never starts a job. Approved launch uses the owner's existing Oracle Cloud Shell identity, SSH key and strict host trust, then an existing lingering VM user manager. A private fsynced attempt directory precedes a `Restart=no` bounded service. Repeating an uncertain or partial launch inspects the original attempt; it never creates a replacement installation. No historical forced-command grant is extended or reused.
 
-This confirmed defect does not identify the cause or historical cost of every missing Oracle UUID. The owner's current screenshot still shows an absent job and retained points. A missing row is not proof of zero API cost, and old held points must not be released without authoritative reconciliation.
+Nine new launcher fixtures and six pending-admission/default-inert tests pass locally, including lost dispatch acknowledgement, repeated start, empty attempt, terminal result validation, private file modes, pending authority, orphaned queue records and unchanged SQLite bytes. Their service control is mocked; actual VM detachment remains unverified. Fresh exact-head hosted CI is required for this new launcher commit. See [Oracle activation runbook](ORACLE_ACTIVATION_RUNBOOK_20261013.md).
 
-## Operational and acceptance boundary
+## Confirmed defect and repaired candidate
 
-Remote Desktop Commander remains OFFLINE in the latest check. The owner has the previously working Node 22 reconnection command. GitHub reads, code publication and hosted tests work. The earlier blocked source-generation command was not executed by an alternate route; the new modules were independently authored and reviewed directly.
+A failure writing final timing diagnostics could kill the only queue thread and leak a running identity. The exact old worker regression reproduces this failure. The candidate makes timing output best-effort while always cleaning flags, claims SQLite before advertising RUNNING, handles folder failures within cleanup, and preserves its loop across transient storage errors. Ten sequential inert jobs, real SQLite locks and uncertain-commit tests passed hosted CI. No uncertain provider attempt is executed again or silently refunded.
 
-The earlier live VM probe verified all 15 old-runtime hashes, receipt references and SQLite integrity and ran 12 disposable inbox tests. It does not attest this new activation. The new source package includes only reviewed public code; never include private upstream connector files, live VM configuration, credentials, customer models or account data in public artifacts.
+The new server SHA-256 is `c3e6b1e2894515ceabb4ec6570b8e68a5398664743212a36ba16a77be8200150`. It includes immutable nonbillable STAGE, once-only authorized START, fsynced local input preparation and queued-job restart recovery. This confirmed defect does not establish the historical cost or cause of every missing Oracle UUID.
 
-The owner authorizes TWO Astra Standard acceptance jobs: at most 250 points each, 500 total, within the previously approved USD 4 combined API ceiling; no automatic retries or paid replacements. Test 2 follows only successful, accounted-for completion of Test 1. Use the approved blue/green and violet/amber references, exactly 8x8 squares. Paid Copilot/Codex coding-agent work is not authorized. No paid acceptance request has been made in this continuation.
+## Actual remaining blockers and cost authorization
 
-Before GO: run the native-gated installer on the actual authorized VM, confirm durable ingress and service recovery, verify two genuine account-bound models, owned library persistence, original downloads and exactly-once settlement, then require exact-head CI and a preserving release envelope. Keep normal generator availability after testing without weakening account/points/budget gates. No Stripe/subscription/role changes, old-hold reset or promise of error-free operation is part of this release.
+Remote Desktop Commander is still OFFLINE at the latest check. The owner has the previously working Node 22 reconnection command. GitHub source publication and hosted tests work. The earlier rejected source-generation script was not executed through another route; new modules were authored independently.
+
+The old live VM probe verified all 15 predecessor hashes, receipt references and SQLite integrity and ran 12 disposable inbox tests. It is not acceptance of the new activation. The latest owner screenshot still reports an absent job and held points; a missing row does not prove zero API cost. Preserve all original receipts, liabilities and historical holds until authoritative reconciliation.
+
+The owner authorizes TWO Astra Standard acceptance models: at most 250 points each, 500 total, within USD 4 combined API cost; no automatic retry or paid replacement. Test 2 follows successful accounted-for completion of Test 1. Use the approved blue/green and violet/amber 8x8 chessboard references. Paid Copilot/Codex coding-agent work is not authorized. No paid acceptance call has been made in this continuation.
+
+Before GO: obtain actual VM access, run the separately approved native-gated activation with current idle/cancellation proof, verify durable admission and health, then test the real Worker/account/library/download flow with both approved models and exactly-once settlement. Only then merge/publish after exact-head CI and a preserving release envelope. Keep ordinary generator access enabled afterward without weakening account, point or provider limits. No Stripe/subscription/role changes, historical hold reset or promise of error-free operation is part of this release.
 
 ## Preserved history
 
-The previous full ledger remains byte-for-byte in [history/CONTEST_STATUS_before_20261013_queue_recovery.md](history/CONTEST_STATUS_before_20261013_queue_recovery.md), original blob `8f4530f137b46f814e3c6dc583617c5dabe5cc9e`. Historical dates/status are not current release approval.
+The earlier full ledger remains byte-for-byte in [history/CONTEST_STATUS_before_20261013_queue_recovery.md](history/CONTEST_STATUS_before_20261013_queue_recovery.md), original blob `8f4530f137b46f814e3c6dc583617c5dabe5cc9e`. Historical statuses are not current release approval.
