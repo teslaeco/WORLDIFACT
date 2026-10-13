@@ -162,8 +162,8 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
     ...accountModels.map(model => ({ key: `account:${owner}:${model.id}`, origin: 'account' as const, model })),
     ...entries.map(model => ({ key: `device:${model.id}`, origin: 'device' as const, model })),
   ].sort((a, b) => {
-    const aTime = Date.parse(a.model.completedAt)
-    const bTime = Date.parse(b.model.completedAt)
+    const aTime = Date.parse(a.origin === 'account' ? a.model.completedAt : a.model.savedAt)
+    const bTime = Date.parse(b.origin === 'account' ? b.model.completedAt : b.model.savedAt)
     const aValid = Number.isFinite(aTime) ? aTime : 0
     const bValid = Number.isFinite(bTime) ? bTime : 0
     return bValid - aValid || a.key.localeCompare(b.key)
