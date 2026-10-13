@@ -1,101 +1,98 @@
-# Durable Oracle admission candidate
+# Durable Oracle admission repair
 
-**NO-GO for production installation.** This is an implemented, offline-tested
-protocol candidate and a read-only operator probe. It is not an installer. Do not
-copy its server output into the live connector or replace any integrity receipt.
-The existing maintenance grant does not authorize or attest these new bytes.
+**Production release: NO-GO until actual VM gates and account acceptance pass.**
+The new native-gated activation transaction is implemented; it has not been
+installed on production. This differs from the earlier preparation-only utility.
 
-The owner's 12 October Cloud Shell screenshot matches the reconstructed current
-`server.py` SHA-256 `3ca9da9a246c406ced7f1183b2e6e85f95d1ce733f0ef12af652c5aaf5812227`
-and six other sampled files. `assemble_observed_runtime.py` reconstructs the full
-15-file public manifest from the existing context-v2 assembler and the immutable
-transport transform at `496b8c9f2120346993720357c3f920a4e3e9f2ae`. Every final hash
-must equal the existing `construction_manifest.model_manifest()`. No old pins
-are changed. The remaining installed files and receipt chain still need a VM check.
+## Entry points and provenance
 
-## Protocol and financial boundary
+- `install_admission.py` is still preparation-only. Its `--activate` refusal is
+  not removed or reused as permission to modify a running server.
+- `activation.py` is the separate full transaction. Its default is inert. The
+  operator must use the source-pinned flat package and explicitly approve service
+  maintenance. Existing historical maintenance grants do not cover this package.
+- `build_activation_package.py` combines unchanged, individually hash-verified
+  historical dependencies with the new public activation modules. It never reads
+  a VM, copies credentials, starts services or invokes a model.
 
-For authenticated fresh Astra/Sol/Luna selections, a separately attested runtime
-can advertise `oracle-durable-admission-v1`. Worker then sends the exact original
-body to `/v1/jobs/stage`, with the account-bound input fingerprint and a hashed
-owner identity. Oracle commits immutable body bytes and their SHA-256 to private
-SQLite with `synchronous=FULL` before ACK. This cannot queue or call a provider.
-Worker verifies the complete ACK before the existing account/global reservations.
+The predecessor is the exact 15-file runtime previously inspected on the VM.
+The candidate server SHA-256 is
+`c3e6b1e2894515ceabb4ec6570b8e68a5398664743212a36ba16a77be8200150`,
+independently reconstructed in GitHub run 38339263726. The existing price,
+provider, renderer and model-selection module bytes are unchanged. Two new
+admission helpers have independent fixed SHA-256 pins. No caller, receipt,
+environment setting or CLI argument may supply alternative source authority.
 
-The existing one-use account dispatch claim authorizes `/v1/jobs/start` over the
-same ID/body hash. Worker makes this call once, then uses same-ID GET recovery on
-ambiguous responses. No fallback to a paid legacy POST follows a staging error.
-Servers without the new capability keep their existing protocol; therefore a
-Worker-only deployment cannot be described as durable-ingress recovery.
+## Admission and queue behavior
 
-Oracle START atomically records authority. A serialized consumer commits each
-attempt count before local preparation, fsyncs input files and their directory,
-and inserts the original jobs row. Up to three local preparation attempts are
-allowed. They cannot invoke a provider. Replays compare the immutable input marker
-and preserve an existing row's state; they never enqueue completed or uncertain
-work again. Corrupt/exhausted input enters `blocked` for review. Only unfunded
-staging expires (35 minutes); input evidence is retained. The inbox has a 16-waiting
-request cap, alongside the original 300-job/free-disk checks.
+STAGE commits the original immutable payload and ownership/fingerprint to private
+FULL-synchronized SQLite before acknowledgement and before Worker point/budget
+reservation. It cannot invoke a provider. START follows the original one-use
+account dispatch authority. Repeated same-ID reads never create a replacement
+paid request. Local input preparation is fsynced, serialized and bounded; an
+uncertain provider attempt is never requeued.
 
-The exact original worker is changed to claim queued work in `BEGIN IMMEDIATE`
-with FULL synchronization and to retain never-started queued work after restart.
-A process lock precedes startup recovery. Interrupted processing remains failed
-and reviewable, without new provider authority or a guessed zero-cost receipt.
-Missing original rows after successful local preparation are uncertain: GET
-remains recoverable and START cannot recreate them. No point, subscription,
-provider-price, customer-artifact or original cost-guard implementation changes.
+The reviewed queue repair preserves never-started queued rows across restart,
+claims rows before adding in-memory running flags, and always removes those flags
+even if timing diagnostics fail. A transient storage error cannot kill the only
+queue thread. An uncertain committed claim remains reviewable rather than being
+executed again. None of this establishes the historical cost of a missing UUID.
 
-## Repeatable offline checks
+## Activation transaction
 
-Use the existing context assembler against its pinned ancestor and public source,
-then run:
+`activation.py` verifies the exact predecessor, original receipts, protected
+native executables, source inventory, service configuration, price expiry, disk
+headroom and operator scope. Active/unknown jobs or unresolved staged admissions
+refuse maintenance. A historical cancellation still requires its explicit exact
+cleanup-consent arguments; no cancellation row or customer file is deleted.
 
-```sh
-python3 -B tools/oracle_admission/assemble_observed_runtime.py \
-  --context .upstream/p0-context-runtime \
-  --transport .upstream/transport-reference/tools/mcp_transport_repair/repair.py \
-  --destination .upstream/new-admission-observed
-ORACLE_ADMISSION_SOURCE=.upstream/new-admission-observed \
-ORACLE_ADMISSION_PHOTO_SOURCE=.upstream/model-completion/oracle_connector \
-python3 -B -m unittest discover -s tools/oracle_admission -v
-node --test tests/oracle-durable*.test.* tests/studio-recovery-native.test.mjs
-```
+A private backup precedes the existing exact-process pidfd/guardian lease. The
+original fence code and security pins are unchanged. Only code and verified
+native tools enter a disposable stage; live jobs, API configuration and budget
+ledgers are never copied into it.
 
-The separate `Oracle durable admission (no paid calls)` workflow reconstructs
-those inputs and runs Python 3.9/3.12. SQLite/HTTP/process tests use real local
-storage with inert readiness and ledger binding. Native workerd tests use actual
-SQLite Durable Objects through restarts, with mocked Oracle/provider responses.
-None writes a valid production attestation or demonstrates live provider quality.
+The stage executes the genuine generic CLI/MCP/Blender gate, original cabinet,
+legacy STANDARD and phased construction gates, then all six Astra/Sol/Luna x
+Standard/Fast native model gates. Provider responses are scripted in these native
+gates; their real render/tool witnesses are not paid quality evidence. Complete
+source-bound reports, not a success marker alone, are required for rebinding.
 
-`cloud_shell_probe.py --commit <exact-reviewed-commit>` downloads only three
-independently SHA-256-pinned public files, discovers the existing `froge-blender`
-instance in `eu-amsterdam-1`, and requires the owner's existing SSH key and host
-trust. It runs 12 disposable SQLite tests on the VM and reads source/receipt/SQLite
-metadata. It never restarts a service, installs code, submits a job, reads a
-credential, edits a production row, or prints customer identifiers/prompts.
-Successful GLB header counts are not full artifact or download verification.
+The additional `offline_admission.py` gate uses the actual staged HTTP handler,
+SQLite inbox and immutable model-term binder over three fresh processes. It
+forbids subprocess/model execution and non-loopback network in those children,
+uses synthetic credentials and state, preserves a queued row through reopen,
+and verifies once-only preparation with an empty provider-spend ledger. This is
+isolated restart evidence, not a production reboot or paid provider call.
 
-## Outstanding activation work
+After all gates, the transaction rebinds receipts and writes only its exact
+approved file set under a maintenance marker. Authenticated health and a final
+idle/source fence precede the activation latch. Failure before that latch rolls
+back only known owned bytes and modes; concurrent unknown edits are preserved.
+An ambiguous/committed activation is never automatically rolled back, restarted
+or retried. Retain all admission journals, customer artifacts and accounting
+state after any future code rollback.
 
-The current installer supports older fixed releases only. A new reviewed
-transaction must preserve its idle fence, pidfd/guardian, exact source inventory,
-backups, four genuine offline CLI/MCP/Blender gates, six model/mode gates,
-receipt-chain rebinding and activation/rollback rules. This PR does not weaken
-those checks or claim that unit tests can replace them. A working installer and
-actual VM staged acceptance/restart proof remain release blockers.
+## Tests and release boundaries
 
-Also required: correlate an original missing signed request across Worker,
-account ledger, Oracle ingress and provider evidence; verify a real authenticated
-account library/download read; capture the production version and approve exact
-preserving release scope. No new paid acceptance test is authorized. Keep any
-ambiguous provider spend/point holds unchanged and incident #272 open.
+`test_worker_recovery.py` reproduces the old queue failure and executes the real
+queue functions with inert rendering and real SQLite, including ten sequential
+requests. `test_activation.py` uses explicit synthetic process/native witnesses
+to exercise the complete real file transaction: every write failure and lost
+acknowledgement, bad evidence/source, concurrent edits, active jobs, pre-latch
+rollback and ambiguous activation. These fixtures do not prove real VM native
+gates. `test_activation_source.py` binds the candidate to the exact original
+runtime reconstructed by CI.
 
-Before activation, rolling back this candidate means removing only its proposed
-code. After any future activation, retain the admissions journal and original
-jobs/artifacts/ledgers; never downgrade to legacy POST for unresolved staged IDs
-or restore an old database snapshot to compensate for a code rollback.
+The Python 3.9/3.12 workflow also constructs the flat source package, checks its
+inert default and original native dependency pins. Do not equate that package
+check with running the real VM installation.
 
-## Staged installer preparation — 13 October 2026
-
-The new `install_admission.py` accepts `--source <exact-pinned-runtime>` and defaults to read-only validation. `--prepare --destination <fresh-isolated-directory>` writes an fsynced private 0700 candidate stage after verifying all 15 current server SHA-256 pins and independently pinned durable helpers. It refuses changed or symlinked source, unknown files, preexisting helpers and existing stage paths. Eight dedicated unit tests pass locally. The stage is **not** a complete production installation and never touches the running VM or creates a paid job. `--activate` deliberately refuses until the separately reviewed production transaction binds real CLI/MCP/Blender and six model/mode gates, full receipt rebinding, process idle fence, rollback and authenticated health. Do not bypass this refusal, repurpose historical grants, or merge PR #274 as a reliability release on these tests alone.
-
+Before merge/deploy: obtain current VM access, run the separately approved native
+transaction, verify actual durable admission and authenticated owned library
+exports, complete the two authorized capped Astra Standard acceptance requests,
+and require green checks on the exact final head and a preserving Worker release.
+No Stripe, subscription, customer balance, provider price or account-role changes
+are part of this repair. Historical uncertain holds remain for evidence-based
+reconciliation. The original read-only `cloud_shell_probe.py` checks the OLD
+runtime; after installation use the new receipt and authenticated health, not
+that old-predecessor probe as an acceptance check.
