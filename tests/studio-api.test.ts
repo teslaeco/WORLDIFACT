@@ -263,3 +263,121 @@ test('four-reference MAKE cabinet reaches v33 admission once with the complete b
   assert.equal(posts(f).length, 0)
   assert.equal(f.values.get('reserved-attempts'), 5)
 })
+
+test('ten distinct sequential signed jobs and repeated receipts emit exactly ten mocked Oracle POSTs', async () => {
+  const f = fixture(0)
+  f.env.GENERATION_REQUEST_LIMIT = 'unlimited'
+  f.env.GENERATION_EXPIRES_AT = ''
+  const originalIds = new Set<string>()
+  for (let index = 0; index < 10; index++) {
+    const jobInput: StudioInput = { ...input, prompt: `Synthetic offline generation fixture ${index + 1}` }
+    const prepared = await data(f.call('/api/studio/prepare', 'POST', jobInput))
+    assert.ok(!originalIds.has(prepared.id), 'Each distinct fixture gets its own signed request ID')
+    originalIds.add(prepared.id)
+    const first = await data(f.call('/api/studio/jobs', 'POST', jobInput, prepared.ticket))
+    assert.equal(first.job.id, prepared.id)
+    assert.equal(first.job.state, 'building')
+    const repeated = await f.call('/api/studio/jobs', 'POST', jobInput, prepared.ticket)
+    assert.equal(repeated.status, 202)
+    assert.equal(posts(f).length, index + 1, 'Receipt replay never dispatches another provider POST')
+  }
+  const dispatchedIds = posts(f).map(call => JSON.parse(String(call.init?.body)).id as string)
+  assert.equal(dispatchedIds.length, 10)
+  assert.equal(new Set(dispatchedIds).size, 10)
+  assert.deepEqual(new Set(dispatchedIds), originalIds)
+  assert.equal(f.values.get('reserved-attempts'), 10)
+})
+
+test('lost POST acknowledgement checks only the original Oracle ID and recovers an accepted job', async () => {
+  const f = fixture(0)
+  f.env.GENERATION_REQUEST_LIMIT = 'unlimited'
+  f.env.GENERATION_EXPIRES_AT = ''
+  const prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  f.loseResponse()
+  const reads: string[] = []
+  const fetcher: typeof fetch = async (url, init) => {
+    const destination = String(url)
+    if (destination.endsWith(`/v1/jobs/${prepared.id}`) && init?.method !== 'POST') {
+      reads.push(destination)
+      return Response.json({ id: prepared.id, state: 'building' })
+    }
+    return f.fetcher(url, init)
+  }
+  const request = () => new Request(origin + '/api/studio/jobs', {
+    method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': prepared.ticket },
+    body: JSON.stringify(input),
+  })
+  const first = await data(studioApi(request(), f.env, fetcher))
+  assert.equal(first.job.id, prepared.id)
+  assert.equal(first.job.state, 'building')
+  assert.equal(reads.length, 1, 'Only a read-only GET on the original receipt may check lost acknowledgement')
+  assert.equal(posts(f).length, 1, 'No second paid provider POST after ambiguous transport')
+  const second = await studioApi(request(), f.env, fetcher)
+  assert.equal(second.status, 202)
+  assert.equal(posts(f).length, 1, 'Repeated same receipt cannot bypass dispatch fence')
+  assert.equal(f.values.get('reserved-attempts'), 1)
+})
+
+test('missing Oracle job after uncertain submission remains pending, never silently retried', async () => {
+  const f = fixture(0)
+  f.env.GENERATION_REQUEST_LIMIT = 'unlimited'
+  f.env.GENERATION_EXPIRES_AT = ''
+  const prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+  f.loseResponse()
+  let notFoundReads = 0
+  const fetcher: typeof fetch = async (url, init) => {
+    if (String(url).endsWith(`/v1/jobs/${prepared.id}`) && init?.method !== 'POST') {
+      notFoundReads++
+      return Response.json({ error: 'Unknown job' }, { status: 404 })
+    }
+    return f.fetcher(url, init)
+  }
+  const request = () => new Request(origin + '/api/studio/jobs', {
+    method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': prepared.ticket },
+    body: JSON.stringify(input),
+  })
+  const first = await data(studioApi(request(), f.env, fetcher))
+  assert.equal(first.job.state, 'pending')
+  assert.equal(notFoundReads, 1)
+  assert.equal(posts(f).length, 1)
+  await studioApi(request(), f.env, fetcher)
+  assert.equal(posts(f).length, 1)
+  assert.equal(f.values.get('reserved-attempts'), 1)
+})
+
+test('malformed or interrupted acceptance bodies recover the same Oracle job without another POST', async () => {
+  const acknowledgements = [
+    () => new Response('<html>gateway response</html>', { headers: { 'Content-Type': 'text/html' } }),
+    () => new Response('{"id":', { headers: { 'Content-Type': 'application/json' } }),
+    () => new Response(new ReadableStream({ start(controller) { controller.error(new TypeError('Truncated response')) } }),
+      { headers: { 'Content-Type': 'application/json' } }),
+    () => Response.json({ payload: 'x'.repeat(17_000) }),
+  ]
+  for (const acknowledgement of acknowledgements) {
+    const f = fixture(0), prepared = await data(f.call('/api/studio/prepare', 'POST', input))
+    let submissions = 0, reads = 0
+    const fetcher: typeof fetch = async (url, init) => {
+      if (String(url).endsWith('/v1/jobs') && init?.method === 'POST') {
+        submissions++
+        return acknowledgement()
+      }
+      if (String(url).endsWith(`/v1/jobs/${prepared.id}`)) {
+        reads++
+        assert.equal(init?.method ?? 'GET', 'GET')
+        return Response.json({ id: prepared.id, state: 'building' })
+      }
+      return f.fetcher(url, init)
+    }
+    const request = () => new Request(origin + '/api/studio/jobs', { method: 'POST',
+      headers: { Origin: origin, 'Content-Type': 'application/json', 'X-WORLDIFACT-Job': prepared.ticket }, body: JSON.stringify(input) })
+    const response = await studioApi(request(), f.env, fetcher)
+    assert.equal(response.status, 202)
+    assert.equal((await data(response)).job.state, 'building')
+    assert.equal(reads, 1)
+    await studioApi(request(), f.env, fetcher)
+    assert.equal(submissions, 1)
+    assert.equal(f.values.get('reserved-attempts'), 1)
+  }
+})

@@ -1,4 +1,5 @@
 import { STUDIO_MODEL_LIMIT, readStudioGenerationTiming, type StudioLibraryModel, type StudioLibraryPage } from './studioProtocol.ts'
+import { validateStudioArtifactHeader, type StudioArtifactFormat } from './studioArtifact.ts'
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
 const cursorPattern = /^[A-Za-z0-9_-]+\.[a-f0-9]{64}$/
@@ -121,12 +122,23 @@ export async function getStudioLibraryModel(accountId: string, id: string, signa
 
 /** Fetch only the explicitly selected GLB. Local records never prove ownership. */
 export async function readStudioLibraryModel(accountId: string, model: StudioLibraryModel, signal: AbortSignal, fetcher: Fetcher = browserFetch, maximum = STUDIO_MODEL_LIMIT): Promise<Blob> {
+  return readLibraryArtifact(accountId, model, 'model', signal, fetcher, Math.min(maximum, STUDIO_MODEL_LIMIT))
+}
+
+/** Read an original stored export with the same account-bound, renewable ticket.
+ * Missing formats remain unavailable; this never generates or converts a file. */
+export async function readStudioLibraryExport(accountId: string, model: StudioLibraryModel, format: Exclude<StudioArtifactFormat, 'model'>, signal: AbortSignal, fetcher: Fetcher = browserFetch): Promise<Blob> {
+  if (!['fbx', 'blend', 'pbr'].includes(format)) throw new Error('Unsupported saved model export format.')
+  return readLibraryArtifact(accountId, model, format, signal, fetcher, 512 * 1024 * 1024)
+}
+
+async function readLibraryArtifact(accountId: string, model: StudioLibraryModel, format: StudioArtifactFormat, signal: AbortSignal, fetcher: Fetcher, maximum: number): Promise<Blob> {
   if (!accountId) throw new Error('Sign in to open an account model.')
   let verified = parseModel(model)
   for (let attempt = 0; attempt < 2; attempt++) {
     signal.throwIfAborted()
     const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(180_000)])
-    const response = await fetcher(`/api/studio/jobs/${verified.id}/model`, {
+    const response = await fetcher(`/api/studio/jobs/${verified.id}/${format === 'model' ? 'model' : `exports/${format}`}`, {
       ...options(requestSignal), headers: { 'X-WORLDIFACT-Job': verified.receipt.ticket },
     })
     if (!response.ok) {
@@ -140,7 +152,8 @@ export async function readStudioLibraryModel(accountId: string, model: StudioLib
       }
       throw new Error('This account model is unavailable.')
     }
-    const blob = new Blob(await bytes(response, Math.min(maximum, STUDIO_MODEL_LIMIT), requestSignal), { type: 'model/gltf-binary' })
+    const blob = new Blob(await bytes(response, maximum, requestSignal), { type: format === 'model' ? 'model/gltf-binary' : format === 'pbr' ? 'application/zip' : 'application/octet-stream' })
+    await validateStudioArtifactHeader(format, blob)
     signal.throwIfAborted()
     return blob
   }

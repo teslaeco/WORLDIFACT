@@ -4,21 +4,21 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import runpy
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 import status
+import reviewed_fixture
 
 
-REPO = Path(__file__).absolute().parents[2]
-HEALTH_SOURCE = REPO / 'tools/model_construction/construction_health.py'
-HEALTH = runpy.run_path(str(HEALTH_SOURCE))
+HEALTH = {}
+exec(compile(reviewed_fixture.read('construction_health.py'), '<reviewed-construction-health>', 'exec'), HEALTH)
 REVIEWED_HELPERS_AFTER = dict(status.HELPERS_AFTER)
+REVIEWED_NEW_PARSER = status.NEW_PARSER
 OLD = b'# synthetic previous parser\n'
-NEW = (REPO / 'tools/model_construction/construction_payload.py').read_bytes()
+NEW = reviewed_fixture.read('construction_payload.py')
 
 
 def sha(raw):
@@ -48,7 +48,7 @@ class StatusTests(unittest.TestCase):
         self.lock.parent.mkdir()
         self.lock.write_bytes(b'')
         before = {name: sha(OLD if name == 'construction_payload.py' else ('# old ' + name + '\n').encode()) for name in status.HELPERS_BEFORE}
-        after = {name: sha((HEALTH_SOURCE.parent / name).read_bytes()) for name in status.HELPERS_AFTER}
+        after = {name: sha(reviewed_fixture.read(name)) for name in status.HELPERS_AFTER}
         for name, value in [('OLD_PARSER', sha(OLD)), ('NEW_PARSER', sha(NEW)),
                             ('HELPERS_BEFORE', before), ('HELPERS_AFTER', after)]:
             pin = patch.object(status, name, value)
@@ -57,19 +57,19 @@ class StatusTests(unittest.TestCase):
         self.install()
         self.attempt('20261008T085127Z', result())
 
-    def test_pure_helper_pin_and_new_parser_match_unchanged_reviewed_bytes(self):
-        self.assertEqual(sha(HEALTH_SOURCE.read_bytes()), status.HEALTH_HASH)
-        self.assertEqual(sha(NEW), status.NEW_PARSER)
-        self.assertEqual(REVIEWED_HELPERS_AFTER, {name: sha((HEALTH_SOURCE.parent / name).read_bytes())
+    def test_pure_helper_pin_and_new_parser_match_immutable_reviewed_bytes(self):
+        self.assertEqual(sha(reviewed_fixture.read('construction_health.py')), status.HEALTH_HASH)
+        self.assertEqual(sha(NEW), REVIEWED_NEW_PARSER)
+        self.assertEqual(REVIEWED_HELPERS_AFTER, {name: sha(reviewed_fixture.read(name))
                                                    for name in REVIEWED_HELPERS_AFTER})
 
     def install(self, updated=False):
         for name in HEALTH['SOURCES'] | {'astra_spend.py', 'fast_preview.py'}:
             raw = ('# Synthetic attested source: ' + name + '\n').encode()
             if name == 'construction_health.py':
-                raw = HEALTH_SOURCE.read_bytes()
+                raw = reviewed_fixture.read('construction_health.py')
             elif name in status.HELPERS_BEFORE:
-                raw = (HEALTH_SOURCE.parent / name).read_bytes() if updated else (OLD if name == 'construction_payload.py' else ('# old ' + name + '\n').encode())
+                raw = reviewed_fixture.read(name) if updated else (OLD if name == 'construction_payload.py' else ('# old ' + name + '\n').encode())
             (self.source / name).write_bytes(raw)
         hashes = {name: sha((self.source / name).read_bytes()) for name in HEALTH['SOURCES']}
         fenced = {'maintenance_fence': HEALTH['FENCE_REVISION'],
@@ -156,7 +156,7 @@ class StatusTests(unittest.TestCase):
         receipt.write_text(json.dumps(value))
         self.assertEqual(status.classify(self.probe()), 'inconclusive')
         self.install()
-        (self.source / 'phased_controller.py').write_bytes((HEALTH_SOURCE.parent / 'phased_controller.py').read_bytes())
+        (self.source / 'phased_controller.py').write_bytes(reviewed_fixture.read('phased_controller.py'))
         self.assertEqual(status.classify(self.probe()), 'inconclusive')
 
     def test_initial_edit_marker_must_be_complete_and_strict(self):

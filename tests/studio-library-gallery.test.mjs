@@ -60,7 +60,7 @@ async function harness({ locals = [], owner = 'owner-a', loading = false, reques
     calls.push({ path, method: init.method || 'GET', headers: new Headers(init.headers), signal: init.signal, owner, init })
     assert.equal(init.method, 'GET', 'Gallery cannot invoke generation, recovery, settlement or financial POSTs')
     assert.equal(init.credentials, 'same-origin'); assert.equal(init.cache, 'no-store'); assert.equal(init.redirect, 'error')
-    assert.match(path, /^\/api\/studio\/(?:library(?:\?cursor=[A-Za-z0-9_.%-]+|\/[a-f0-9-]{36})?|jobs\/[a-f0-9-]{36}\/model)$/)
+    assert.match(path, /^\/api\/studio\/(?:library(?:\?cursor=[A-Za-z0-9_.%-]+|\/[a-f0-9-]{36})?|jobs\/[a-f0-9-]{36}\/(?:model|exports\/(?:fbx|blend|pbr)))$/)
     if (io) return io(path, init, owner)
     if (path === '/api/studio/library') return page([model()])
     if (path === `/api/studio/library/${id}`) return Response.json({ accountId: 'owner-a', model: model() })
@@ -75,6 +75,7 @@ async function harness({ locals = [], owner = 'owner-a', loading = false, reques
       listStudioLibrary: (accountId, next, signal) => library.listStudioLibrary(accountId, next, signal, fetcher),
       getStudioLibraryModel: (accountId, key, signal) => library.getStudioLibraryModel(accountId, key, signal, fetcher),
       readStudioLibraryModel: (accountId, entry, signal) => library.readStudioLibraryModel(accountId, entry, signal, fetcher),
+      readStudioLibraryExport: (accountId, entry, format, signal) => library.readStudioLibraryExport(accountId, entry, format, signal, fetcher),
     }, '../lib/glb': glb, '../lib/studioView': view, '../lib/studioProtocol': protocol,
   }
   const globals = { Blob, Error, AbortController, AbortSignal, console,
@@ -501,6 +502,83 @@ test('opened preview receives focus, keeps original download access and closes w
     assert.notEqual(h.preview().props.url, firstUrl)
     assert.equal(h.focusEvents.at(-1).action, 'scroll')
     assert.ok(h.calls.every(call => call.method === 'GET'))
+  } finally { h.close() }
+})
+
+test('a fresh account library downloads the original FBX, BLEND and texture ZIP without any generation call', async () => {
+  const exports = {
+    fbx: await readFile(new URL('../public/world-assets/giant-building/terrace-tower-e7e96cc3.fbx', import.meta.url)),
+    blend: new TextEncoder().encode('BLENDER-v405INERT_PROJECT'),
+    pbr: await readFile(new URL('../public/world-assets/giant-building/terrace-tower-e7e96cc3.textures.zip', import.meta.url)),
+  }
+  const h = await harness({ io: path => {
+    if (path === '/api/studio/library') return page([model()])
+    if (path === `/api/studio/library/${id}`) return Response.json({ accountId: 'owner-a', model: model() })
+    if (path.endsWith('/model')) return new Response(fixtureGLB())
+    const format = path.split('/').at(-1)
+    assert.ok(exports[format], path)
+    return new Response(exports[format])
+  } })
+  try {
+    await h.click('Preview 3D', h.articles()[0])
+    const preview = h.preview().props.url
+    for (const [format, label, suffix] of [['fbx', 'Download FBX', 'model.fbx'], ['blend', 'Download BLEND', 'model.blend'], ['pbr', 'Download texture ZIP', 'textures.zip']]) {
+      await h.click(label)
+      const saved = h.downloads.at(-1)
+      assert.equal(saved.name, `WORLDIFACT-${id}-${suffix}`)
+      assert.deepEqual(new Uint8Array(await h.urls.get(saved.url).arrayBuffer()), new Uint8Array(exports[format]))
+      assert.equal(h.preview().props.url, preview)
+      const request = h.calls.find(call => call.path === `/api/studio/jobs/${id}/exports/${format}`)
+      assert.ok(request)
+    }
+    assert.equal(h.downloads.length, 3)
+    assert.ok(h.calls.every(call => call.method === 'GET'))
+    assert.equal(h.localState.get('worldifact-studio-current-v1'), h.failedReceipt)
+    assert.equal(h.storage.stores.get('models').size, 0)
+  } finally { h.close() }
+})
+
+test('library export receipt refresh is same-account and same-format, while missing or corrupt exports never download', async () => {
+  const signal = new AbortController().signal
+  for (const format of ['fbx', 'blend', 'pbr']) {
+    const paths = []
+    let reads = 0
+    const original = format === 'blend' ? new TextEncoder().encode('BLENDER-v405INERT_PROJECT')
+      : await readFile(new URL('../public/world-assets/giant-building/terrace-tower-e7e96cc3.' + (format === 'fbx' ? 'fbx' : 'textures.zip'), import.meta.url))
+    const blob = await library.readStudioLibraryExport('owner-a', model(), format, signal, async (path, init) => {
+      assert.equal(init.method, 'GET')
+      paths.push(path)
+      if (path.includes('/library/')) return Response.json({ accountId: 'owner-a', model: model() })
+      reads++
+      return reads === 1 ? Response.json({ code: 'STUDIO_LIBRARY_RECEIPT_EXPIRED' }, { status: 401 }) : new Response(original)
+    })
+    assert.deepEqual(new Uint8Array(await blob.arrayBuffer()), new Uint8Array(original))
+    assert.deepEqual(paths, [`/api/studio/jobs/${id}/exports/${format}`, `/api/studio/library/${id}`, `/api/studio/jobs/${id}/exports/${format}`])
+    await assert.rejects(library.readStudioLibraryExport('owner-a', model(), format, signal, async () => new Response('<html>upstream error</html>')), /format/)
+    await assert.rejects(library.readStudioLibraryExport('owner-a', model(), format, signal, async () => Response.json({ error: 'Original export unavailable' }, { status: 404 })), /unavailable/)
+  }
+  await assert.rejects(library.readStudioLibraryExport('owner-a', model(), '../secret', signal, async () => { throw new Error('Must not fetch') }), /Unsupported/)
+})
+
+test('account change during an original export download prevents saving into the next session', async () => {
+  const pending = deferred()
+  const h = await harness({ io: path => {
+    if (path === '/api/studio/library') return page([model()])
+    if (path === `/api/studio/library/${id}`) return Response.json({ accountId: 'owner-a', model: model() })
+    if (path.endsWith('/exports/blend')) return pending.promise
+    return new Response(fixtureGLB())
+  } })
+  try {
+    await h.click('Preview 3D', h.articles()[0])
+    await h.click('Download BLEND')
+    const request = h.calls.find(call => call.path.endsWith('/exports/blend'))
+    assert.ok(request)
+    await h.account(null)
+    assert.equal(request.signal.aborted, true)
+    pending.resolve(new Response('BLENDER-v405INERT_PROJECT'))
+    await h.settle()
+    assert.equal(h.downloads.length, 0)
+    assert.equal(h.preview(), undefined)
   } finally { h.close() }
 })
 

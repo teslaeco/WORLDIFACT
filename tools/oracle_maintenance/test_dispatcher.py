@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 
 import dispatcher
 import status
+import reviewed_fixture
 from test_status import result
 
 
@@ -24,13 +25,10 @@ class DispatcherTests(unittest.TestCase):
                                read_status=Mock(side_effect=snapshots),
                                classify=lambda value: value['fixture_state'], SUCCESS=status.SUCCESS)
 
-    def test_reviewed_launcher_pin_matches_unchanged_repository_bytes(self):
-        path = Path(__file__).absolute().parents[2] / 'tools/model_construction/oracle_construction_launch.py'
-        if dispatcher.LAUNCHER_HASH.startswith('PENDING_'):
-            with self.assertRaisesRegex(ValueError, 'unfrozen_release'):
-                dispatcher.verified_package(status, Path('/must-not-read'))
-        else:
-            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), dispatcher.LAUNCHER_HASH)
+    def test_reviewed_launcher_pin_matches_immutable_approved_commit(self):
+        self.assertEqual(dispatcher.SOURCE_COMMIT, reviewed_fixture.SOURCE_COMMIT)
+        raw = reviewed_fixture.read('oracle_construction_launch.py')
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), dispatcher.LAUNCHER_HASH)
 
     def test_only_exact_original_commands_are_accepted(self):
         for command in ('apply-b6dce84d', None, '', 'status ', ' status', 'status\n', 'status\r\n', 'STATUS',

@@ -23,6 +23,7 @@ const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
 const STUDIO_JOB_WATCHDOG_MS = 35 * 60_000
 const RECEIPT = new RegExp(`^(${UUID})\\.([0-9]{13})\\.([a-f0-9]{64})\\.([a-f0-9]{64})$`)
 const LIBRARY_TOKEN_TTL_MS = 15 * 60_000
+const ORACLE_ADMISSION_REVISION = 'oracle-durable-admission-v1'
 const EXPORTS: Record<string, { name: string; type: string; limit: number }> = {
   pbr: { name: 'textures-pbr.zip', type: 'application/zip', limit: 512 * 1024 * 1024 },
   fbx: { name: 'model.fbx', type: 'application/octet-stream', limit: 512 * 1024 * 1024 },
@@ -314,7 +315,26 @@ async function oracle(env: StudioEnv, path: string, fetcher: typeof fetch, init:
   const origin = oracleOrigin(env.ORACLE_ENDPOINT)
   if (!origin || !env.ORACLE_API_TOKEN) throw new StudioError('The existing Oracle connection is not configured.', 503)
   return fetcher(origin + path, { ...init, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs ?? (path.endsWith('/budget') ? 5000 : path.includes('/model') || path.includes('/exports/') ? 180_000 : STUDIO_ORACLE_TIMEOUT_MS)),
-    headers: { Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: path.includes('/model') ? 'model/gltf-binary' : path.includes('/exports/') ? 'application/octet-stream, application/zip' : 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) } })
+    headers: { ...Object.fromEntries(new Headers(init.headers)), Authorization: `Bearer ${env.ORACLE_API_TOKEN}`, Accept: path.includes('/model') ? 'model/gltf-binary' : path.includes('/exports/') ? 'application/octet-stream, application/zip' : 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) } })
+}
+async function stageOracleRequest(env: StudioEnv, fetcher: typeof fetch, id: string, fingerprint: string, userId: string, payload: string) {
+  const owner = await boundDigest('WORLDIFACT-ORACLE-OWNER-v1', userId)
+  const payloadSha256 = hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload)))
+  const headers = { 'X-WORLDIFACT-Owner': owner, 'X-WORLDIFACT-Fingerprint': fingerprint }
+  try {
+    const response = await oracle(env, '/v1/jobs/stage', fetcher, { method: 'POST', body: payload, headers })
+    if (!response.ok) { await response.body?.cancel(); throw new Error('Unconfirmed durable stage') }
+    const value = await limitedJson(response, 2048)
+    const proof = value.admission as Record<string, unknown> | undefined
+    if (value.id !== id || value.state !== 'pending' || !proof || proof.revision !== ORACLE_ADMISSION_REVISION ||
+        proof.id !== id || proof.owner !== owner || proof.fingerprint !== fingerprint || proof.payloadSha256 !== payloadSha256 || proof.phase !== 'staged')
+      throw new Error('Unconfirmed durable stage')
+    return { payloadSha256, headers }
+  } catch {
+    // Staging has no authority to execute. Never fall back to the paid legacy
+    // endpoint, reserve points or replace the ID after an uncertain stage ACK.
+    throw new StudioError('The worker did not confirm durable receipt of this request. No points were reserved. Keep the original request for recovery.', 503)
+  }
 }
 function qualityGenerationTiming(quality: Record<string, unknown>): StudioGenerationTiming | undefined {
   if (quality.revision !== 6 || typeof quality.state !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(quality.state) ||
@@ -391,8 +411,8 @@ async function completedOracleStatus(env: StudioEnv, id: string, value: Record<s
   const failureCode: StudioJob['failureCode'] = value.worldifactFailureCode === 'MODEL_BUDGET_EXCEEDED' ? 'MODEL_BUDGET_EXCEEDED' : usage.error_code === 'WORLDIFACT_ASTRA_COST_GUARD' ? 'ASTRA_COST_LIMIT' : 'ORACLE_JOB_INCOMPLETE'
   return { ...value, state: 'failed', worldifactFailureCode: failureCode, timingObservation }
 }
-async function oracleJobStatus(env: StudioEnv, id: string, fetcher: typeof fetch, requireId: boolean) {
-  const response = await oracle(env, `/v1/jobs/${id}`, fetcher)
+async function oracleJobStatus(env: StudioEnv, id: string, fetcher: typeof fetch, requireId: boolean, timeoutMs?: number) {
+  const response = await oracle(env, `/v1/jobs/${id}`, fetcher, {}, timeoutMs)
   if (response.status === 404) { await response.body?.cancel(); return null }
   if (!response.ok) { await response.body?.cancel(); throw new StudioError('Status temporarily unavailable. Keep the same job.', response.status === 429 ? 429 : 502) }
   const value = await limitedJson(response, 16_384)
@@ -407,7 +427,7 @@ async function health(env: StudioEnv, fetcher: typeof fetch) {
   const compatible = state.ready === true && state.provider === 'openai' && state.model === 'gpt-6-astra' && Number.isSafeInteger(state.connectorVersion) && Number(state.connectorVersion) >= 33
   const fastReady = compatible && supportsFastDraft(state)
   const executionReady = state.studioExecutionRevision === STUDIO_EXECUTION_REVISION && Array.isArray(state.studioExecutionModels) && ['astra','sol','luna'].every(m => (state.studioExecutionModels as unknown[]).includes(m)) && Array.isArray(state.studioExecutionModes) && ['standard','fast'].every(m => (state.studioExecutionModes as unknown[]).includes(m))
-  return { studioExecutionRevision: executionReady ? STUDIO_EXECUTION_REVISION : undefined, studioExecutionModels: executionReady ? ['astra','sol','luna'] : [], studioExecutionModes: executionReady ? ['standard','fast'] : [], ...detailedRuntime(state), ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
+  return { studioAdmissionRevision: executionReady && state.studioAdmissionRevision === ORACLE_ADMISSION_REVISION ? ORACLE_ADMISSION_REVISION : undefined, studioExecutionRevision: executionReady ? STUDIO_EXECUTION_REVISION : undefined, studioExecutionModels: executionReady ? ['astra','sol','luna'] : [], studioExecutionModes: executionReady ? ['standard','fast'] : [], ...detailedRuntime(state), ready: compatible, photoReady: compatible && state.photoInput === true, fastReady,
     // Read-only evidence of the exact reviewed no-AI export helper. Unknown or
     // newer revisions require review; this does not invoke or enable exports.
     exportPreparationReady: compatible && state.posthocExportRevision === 2 && state.legacyGlbExportRecoveryRevision === 1,
@@ -638,10 +658,10 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       // Previously admitted work retains its exact signed input and price even
       // after a quote expires or the worker enters maintenance. Recovery must
       // never create a new provider request or reserve customer points again.
-      if (user && pricing) {
+      if (user && (pricing || input.studioExecution)) {
         const existing = await userJobAccess(env, user.id, auth.id)
         if (existing.owned) {
-          if (existing.fingerprint !== auth.hash || existing.pricing?.revision !== pricing.revision || existing.pricing.tier !== pricing.tier || existing.pricing.points !== pricing.points || existing.pricing.maxProviderCents !== pricing.maxProviderCents)
+          if (existing.fingerprint !== auth.hash || (pricing && (existing.pricing?.revision !== pricing.revision || existing.pricing.tier !== pricing.tier || existing.pricing.points !== pricing.points || existing.pricing.maxProviderCents !== pricing.maxProviderCents)))
             throw new StudioError('This job belongs to a different input or price. Recover its original receipt.', 409)
           return json({ job: await accountJob(env, user.id, auth.id, existing.state === 'failed' ? 'failed' : existing.state === 'completed' ? 'succeeded' : 'pending', fetcher), recoveryOnly: true }, 202)
         }
@@ -656,6 +676,11 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       // a lifetime promise exists. This is still bounded by Workers' 30s window;
       // it is not a durable queue, an acceptance guarantee or permission to retry.
       const submission = (async () => {
+        // This capability is advertised only by the separately attested Oracle
+        // release. Once negotiated, failure can never select the legacy POST.
+        // The immutable body reaches SQLite before any financial mutation.
+        const staged = user && input.studioExecution && checked.studioAdmissionRevision === ORACLE_ADMISSION_REVISION
+          ? await stageOracleRequest(env, fetcher, auth.id, auth.hash, user.id, payload) : undefined
         let admittedPointSettlement: PointSettlement | undefined
         if (user) {
           const userReservation = await reserveUserGeneration(env, user.id, auth.id, input.studioExecution ? input.studioExecution.model === 'astra' ? 'slow' : 'fast' : input.generationProfile === FAST_DRAFT_PROFILE ? 'fast' : 'slow', input.studioExecution?.model, auth.hash, studioQualityProfile(input), { paidPointsPolicy: auth.held ? request.headers.get(PAID_POINTS_POLICY_HEADER) : undefined, ...(auth.held ? { requiredFundingMode: PAID_POINTS_FUNDING } : {}), channel: 'studio', ...(input.studioExecution ? { studioExecution: input.studioExecution } : {}), prompt: input.prompt, supportIdentity: user, ...(overnightTest ? { overnightTest: true } : { repairedMccInputEligible: repairedMccInputEligible(prepareMetadata(input)), projectBudgetInputEligible: repairedMccInputEligible(prepareMetadata(input)) }), ...(pricing ? { pricing } : {}) })
@@ -686,6 +711,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         }
         logStudioDiagnostic({ requestId: auth.id, stage: 'ADMITTED', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'NOT_ATTEMPTED', workerStatus: null })
         try {
+          let dispatchBody = payload
           // A poll may have closed the account reservation while the global
           // budget call was pending. Claim exactly once before any Oracle POST.
           if (user) {
@@ -695,11 +721,12 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
               logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'RECOVERY_ONLY', reason: 'DISPATCH_FENCE_REFUSED', oracleDispatch: 'CLAIM_REFUSED', workerStatus: null })
               return json({ job: await accountJob(env, user.id, auth.id, 'pending', fetcher), recoveryOnly: true }, 202)
             }
+            if (staged) dispatchBody = JSON.stringify({ id: auth.id, payloadSha256: staged.payloadSha256, deadline: claim.deadline })
           }
           logStudioDiagnostic({ requestId: auth.id, stage: 'SENT_TO_PROVIDER', admission: 'ADMITTED', reason: 'ACCOUNT_AND_BUDGET_RESERVED', oracleDispatch: 'CLAIMED', workerStatus: null })
           let response: Response
           try {
-            response = await oracle(env, '/v1/jobs', fetcher, { method: 'POST', body: payload })
+            response = await oracle(env, staged ? '/v1/jobs/start' : '/v1/jobs', fetcher, { method: 'POST', body: dispatchBody, ...(staged ? { headers: staged.headers } : {}) })
           } catch (error) {
             logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'ADMITTED', reason: 'ORACLE_NO_RESPONSE', oracleDispatch: 'NO_RESPONSE', workerStatus: null })
             throw error
@@ -712,12 +739,35 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
             throw new StudioError(settlement?.pointSettlement?.state === 'pending-cost' ? POINT_COST_PENDING_DETAIL : STUDIO_FAILURE_DETAILS[failureCode], response.status, failureCode, settlement?.pointSettlement, auth.id)
           }
           if (!response.ok) { await response.body?.cancel(); throw new Error('Unconfirmed acceptance') }
-          const value = await limitedJson(response, 16_384)
+          let value: Record<string, unknown>
+          try { value = await limitedJson(response, 16_384) }
+          catch {
+            // An invalid/truncated upstream ACK says nothing about whether
+            // Oracle committed the job. It is not an invalid customer request.
+            await response.body?.cancel().catch(() => {})
+            throw new Error('Unconfirmed acceptance')
+          }
           if (value.id !== auth.id || !Object.hasOwn(JOB_DETAILS, String(value.state))) throw new Error('Unconfirmed acceptance')
           const completed = await completedOracleStatus(env, auth.id, value, fetcher)
           return json({ job: await accountJob(env, user?.id, auth.id, completed.state as StudioJob['state'], fetcher, oracleFailureCode(completed), completed.timingObservation) }, 202)
         } catch (error) {
           if (error instanceof StudioError) throw error
+          // A lost HTTP POST acknowledgement is NOT proof that Oracle failed
+          // to accept the original paid job. Read only the *same signed ID*;
+          // this must never re-POST, reseed the budget or change customer points.
+          // A missing/unavailable/unverified read retains pending-cost and
+          // leaves ordinary same-receipt recovery in charge.
+          try {
+            const observed = await oracleJobStatus(env, auth.id, fetcher, true, 2500)
+            if (observed) {
+              // Use the ordinary recovery gates for late terminal outcomes:
+              // incomplete drafts and invalid GLBs never become successes.
+              const job = await accountJob(env, user?.id, auth.id, observed.state as StudioJob['state'], fetcher,
+                oracleFailureCode(observed), observed.timingObservation)
+              logStudioDiagnostic({ requestId: auth.id, stage: 'ORACLE_DISPATCH', admission: 'RECOVERY_ONLY', reason: 'ORACLE_RESPONSE', oracleDispatch: 'RESPONSE', workerStatus: 200 })
+              return json({ job, recoveryOnly: true }, 202)
+            }
+          } catch { /* No duplicate provider call and no guessed zero cost. */ }
           return json({ job: { id: auth.id, state: 'pending', detail: JOB_DETAILS.pending, ...(admittedPointSettlement ? { pointSettlement: admittedPointSettlement } : {}), ...(pricing ? { pricing } : {}) } }, 202)
         }
       })()

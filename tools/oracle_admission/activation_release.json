@@ -1,0 +1,302 @@
+{
+  "files": {
+    "activation.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/activation.py",
+      "sha256": "5d2d25014a3def3981d5b7287b40a1abf49c057e4be7baa91f88429566206fe5"
+    },
+    "activation_evidence.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/activation_evidence.py",
+      "sha256": "f7170c20cd786aba8d1414f83b9059a7d7e1175fad2cc179d4bc83f42c66d1ab"
+    },
+    "activation_lease.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/activation_lease.py",
+      "sha256": "0257159d097676167b2dd7d286c91042cb918298b7d3cd3cfb7c29c989ab3b17"
+    },
+    "activation_manifest.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/activation_manifest.py",
+      "sha256": "2e86669e2cbe1ca2cba7e4dc5e507a85346995ca86480b4d22044384cee977fa"
+    },
+    "activation_ops.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/activation_ops.py",
+      "sha256": "8ad0a085fbc43792f8696abc05268a99cdc22ce0d56d014e93c356d09196464a"
+    },
+    "activation_receipts.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/activation_receipts.py",
+      "sha256": "d4396011c06aa6575ec0541442eab78f31e822aeded88fa9426f840a77857477"
+    },
+    "apply.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/fast_preview/apply.py",
+      "sha256": "89b28067ad1b5ba298f22f4fc42f8ddd66b293ec087931bd20b4c0fc63eaac2a"
+    },
+    "astra_spend.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/profit_guard/astra_spend.py",
+      "sha256": "59ba7e0191c56182b5f38e60d5bf178c2a12704830646b4f8c652713676738ba"
+    },
+    "astra_spend_v2.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/profit_guard/astra_spend_v2.py",
+      "sha256": "80cb48b2717c238986b7f1ac085fc8ac387be82aa54fa509582b71752e7136e7"
+    },
+    "completion.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/fast_preview/completion.py",
+      "sha256": "b07c36df110af8800fd956068fd861fb0bfdfe39206117d9a427d30c4cc8bf1d"
+    },
+    "completion_policy.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_completion/completion_policy.py",
+      "sha256": "664e9f3b2326116fe9aeeb78e7a84aac254ca8a3054cdccdfb5224e112890110"
+    },
+    "construction_fence.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/construction_fence.py",
+      "sha256": "9a433b1618e00219729bccd59393d599012644756e58111662dd0d113748df51"
+    },
+    "construction_health.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/construction_health.py",
+      "sha256": "f63c2731c501fa73037ea0205e8bbd73e8cc58f93ab6601d51ba7bd271ae56cf"
+    },
+    "construction_manifest.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/construction_manifest.py",
+      "sha256": "5645641e09a699705405edae71c43807bdcb2f74376aebccc18cb08f5fa46190"
+    },
+    "construction_payload.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/construction_payload.py",
+      "sha256": "dc65d54672b657e260a1a4a24da6657e95581de479b55e6e8c9b26f93a49e2bb"
+    },
+    "construction_policy.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/construction_policy.py",
+      "sha256": "0d9e36b5034cf9d055aedda85d9bc052745adbfd07a8061d6c46137ca57a29fa"
+    },
+    "construction_spend_patch.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/construction_spend_patch.py",
+      "sha256": "8b2ea41e0a9359ce32f59019fdde3fdab2c11da1e00e8769507730af92a3928a"
+    },
+    "context_policy.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_context_upgrade/context_policy.py",
+      "sha256": "cb87fd0d342ef94a6c5f0f306ea3891669aaf70feed9830f7058de6087a4cd59"
+    },
+    "durable_admission.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/durable_admission.py",
+      "sha256": "99a775230a01d5d4ec8c3fd98f161c14a56bc5147b84e973f07226c5b909bf21"
+    },
+    "durable_inbox.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/durable_inbox.py",
+      "sha256": "b2c378c139b8278ce16ec602079136b8ce133fb7e8ba93fc892533c0cee0a6ce"
+    },
+    "fast_preview.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/fast_preview/fast_preview.py",
+      "sha256": "fd3552893a2a080f764f1420498f20f307d8a511dbbca5661025d6df7f4e2449"
+    },
+    "gateway_patch.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/gateway_patch.py",
+      "sha256": "d99acd963228db302f31d21db1331b976622e81cecfa6d5fc233d8f082fbb015"
+    },
+    "install.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/profit_guard/install.py",
+      "sha256": "f4adadeef1f6f6b32a1d0421fe92f74004640855e789430ae6af0df11f3c5868"
+    },
+    "install_admission.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/install_admission.py",
+      "sha256": "47c977757b82b2846269976f69b06daec4788797f957f32bfd5c344bb3cc346d"
+    },
+    "install_cache_accounting.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/profit_guard/install_cache_accounting.py",
+      "sha256": "1c90d1f19b247e516eeacb5c387d0353e87666fe2e98ce785a8f64a0f71b4933"
+    },
+    "install_completion.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_completion/install_completion.py",
+      "sha256": "3e6ee371cdea06036aeaa9920491771e94dcc26050b30ae186acafe780b65cfc"
+    },
+    "install_construction.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/install_construction.py",
+      "sha256": "953fbc2182488a91915ac331e18a330d8993759c665d9a55af3d9e653a4408c6"
+    },
+    "install_prebuild.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_prebuild/install_prebuild.py",
+      "sha256": "6d68413cb476ecb3ccae0fb89b3a8523d3f9d05427ea2f222af503ada6362c4a"
+    },
+    "install_request_timeout900.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/profit_guard/install_request_timeout900.py",
+      "sha256": "1b4e37f677882e4af06d4d352f70f92c39a3571191563e83fd6083ced72e27bb"
+    },
+    "install_tuning.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/profit_guard/install_tuning.py",
+      "sha256": "6f4ab26ec548cddb8f153c7a1c3dcca166160954f856c99f929fbbd6712467d4"
+    },
+    "install_upgrade.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_context_upgrade/install_upgrade.py",
+      "sha256": "342d38d7c8083b10c88bc47335597cbf5a4e83d084925ccc51d3c5ad35d74a08"
+    },
+    "install_v33.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/fast_preview/install_v33.py",
+      "sha256": "6d05ed75d40ea17f8352f42331399d6bb84aca45bc8eac242bc91536f7ca2341"
+    },
+    "installed_v33.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/fast_preview/installed_v33.py",
+      "sha256": "9ae9465d89f6a2ab6c8ef52e3b217bb5ceaed7c2a239e4ff6efcf162e120c842"
+    },
+    "journal_socket.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_context/journal_socket.py",
+      "sha256": "427f365b40264a71d1cdd208e94156617d3524518fc9f621485f4a91419fa54e"
+    },
+    "model_routes.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_execution/model_routes.py",
+      "sha256": "b49ae9351c1c5d18eb04e3842488b83394fc0b0888318e391a48ccf627dd3c44"
+    },
+    "offline_admission.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/offline_admission.py",
+      "sha256": "6374fd756dd5c909d3792a7fb16ac285bf0e29a8f63676fe4e23f9eee9a8baa5"
+    },
+    "offline_cabinet.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_prebuild/offline_cabinet.py",
+      "sha256": "346efb9c0065f6860407910b8407fde1a2daacb6d010ad5304122b70fa204c6a"
+    },
+    "offline_construction.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/offline_construction.py",
+      "sha256": "9dc239627ddfe5578720fecf59c45513d49610a5ad27556e54d80eac649c164f"
+    },
+    "offline_legacy_standard.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/offline_legacy_standard.py",
+      "sha256": "6ecf8ae1516cfc5c82e8ff7286fc4ac2e1a1cac5239b9bc885cf579e127f27d7"
+    },
+    "offline_models.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_execution/offline_models.py",
+      "sha256": "b226229972864c8f100712ad4a264bb5dee42cb0093f82bc74b2abe57641263f"
+    },
+    "offline_standard.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_context_upgrade/offline_standard.py",
+      "sha256": "380063680197b1b175f03da6c6698c84dfb3bd9ff839de61bae69e76aa1d5f4d"
+    },
+    "oracle_upgrade_launch.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_context_upgrade/oracle_upgrade_launch.py",
+      "sha256": "8f6dfbf8dcf6ea1cd34a0280693c3a3fe6b579bcbe6ff765c82ffc2c64a493c5"
+    },
+    "patch_server.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/patch_server.py",
+      "sha256": "7ac19a06b5c9bf04deb0a26b3e69848240371cf839ad418eec97230b1922209f"
+    },
+    "phased_controller.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/phased_controller.py",
+      "sha256": "1825f3cbff6e229799d22001481d8075a8e8b5c567e60b3736a9208126c99d6b"
+    },
+    "prebuild_patch.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_prebuild/prebuild_patch.py",
+      "sha256": "5e6bfc295c521e92903598d48b752d61baea55eabbd799b7afff2ca28b029b1e"
+    },
+    "prebuild_policy.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_prebuild/prebuild_policy.py",
+      "sha256": "b157f93ab4c68402f921576b897ea05f2b68454092167731c74fd9ee45b87033"
+    },
+    "read_only_probe.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/read_only_probe.py",
+      "sha256": "0331beb93ad58cdd9cbeedee35bef89bacbef2dd002339bdbf3b114f7e4acf1e"
+    },
+    "require_tools.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_execution/require_tools.py",
+      "sha256": "878445cdfeba05c1d313d0fb1c0be99c4b39ed91c915ded428c9cc8507088374"
+    },
+    "reviewed_direct_export.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_completion/reviewed_direct_export.py",
+      "sha256": "2aa2a0e9897e453e33c9a7994082ef822c024e2a39924c24ddea8d9aef70706b"
+    },
+    "runtime_controller.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/runtime_controller.py",
+      "sha256": "9188b29c60ac26ab9f63781660db548b1757ee430fc4b33a43930f6868168b0d"
+    },
+    "runtime_patch.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_construction/runtime_patch.py",
+      "sha256": "1b13fbb0cc51922dfd378379fea79053430c974f2ab00e1a986f82a41273c3ac"
+    },
+    "source_patch.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_completion/source_patch.py",
+      "sha256": "5589f74199c3743ac2927534817b4bca3d0b32f9d854403dbe034ebe521b2a7d"
+    },
+    "studio_execution.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_execution/studio_execution.py",
+      "sha256": "88defd43f3de9450a193ff5f4811f55b0f8bfd38a26289c4fb6a974f5d4025be"
+    },
+    "studio_pricing.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_budget_tiers/studio_pricing.py",
+      "sha256": "ad765f9193e973146a8fd9e0761d13006ba939db7926275f628ad21c83350584"
+    },
+    "terminal_budget.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_budget_tiers/terminal_budget.py",
+      "sha256": "3e8a1654aede456eeeb673bb67f508a56996602239c56127123ba7e71a5a39f0"
+    },
+    "upgrade_fence.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_context_upgrade/upgrade_fence.py",
+      "sha256": "92be20ea6e2ccba81a6f6ab015c0a30c4f32ba1adf07aae647f6d72bfd1eeed9"
+    },
+    "upgrade_patch.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/model_context_upgrade/upgrade_patch.py",
+      "sha256": "5175ad26b924b14f823ffcb87dbbd06e668e86394db50e79c259a60d2906077c"
+    },
+    "verification_scope.py": {
+      "commit": "2380a7e2dad05a40b3753faf06c2635ed444be51",
+      "path": "tools/model_context/verification_scope.py",
+      "sha256": "48d1b1846945c9879648a99264d54b32915cc3f460afbef312167c7d3169f00d"
+    },
+    "worker_recovery.py": {
+      "commit": "7f357323fafb362bd72cf05799a4bba8f5100d52",
+      "path": "tools/oracle_admission/worker_recovery.py",
+      "sha256": "dc254bf4b5b66561e0018b5c7f573c23e8e4964fec74204fbd3f1e87b501670a"
+    }
+  },
+  "revision": "oracle-admission-activation-package-v1",
+  "runtime_server_sha256": "c3e6b1e2894515ceabb4ec6570b8e68a5398664743212a36ba16a77be8200150",
+  "source_commit": "7f357323fafb362bd72cf05799a4bba8f5100d52"
+}
