@@ -1,39 +1,31 @@
 # WORLDIFACT P0 — 13 October 2026
 
-## Current release verdict: NO-GO — implementation tested, VM activation pending
+## Latest verdict: Oracle activation VERIFIED; full Worker release NO-GO
 
-PR #274 remains the repair branch. Main remains `d70adf1c627c9bd5721b6a32e6c020fb3ae59869` at this checkpoint. No new production activation, merge, deployment or paid generation is claimed.
+At 05:14:49 UTC, authenticated read-only SSH independently verified that the owner-started production Oracle installation finished. `INSTALL_STATUS.json` reports `WORLDIFACT_DURABLE_ADMISSION_VERIFIED`, `activation_committed=true`, no job-row change, no provider-limit change and no paid generation request. `froge-worker.service` is ACTIVE/RUNNING. No second installation or manual restart was performed.
 
-## Completed implementation and hosted evidence
+The installed runtime is the fixed package from `7f357323fafb362bd72cf05799a4bba8f5100d52`. Its 17 installed source hashes and complete receipt chain passed `activation_receipts.validate_installed`. Authenticated Oracle health reports `ready=true`, `studioAdmissionRevision=oracle-durable-admission-v1`, `studioExecutionRevision=studio-execution-v1`, `codexReady=true`, and both maintenance flags false. The installed server SHA-256 is `c3e6b1e2894515ceabb4ec6570b8e68a5398664743212a36ba16a77be8200150`.
 
-Commit `7f357323fafb362bd72cf05799a4bba8f5100d52` implements the full separate `activation.py` transaction: exact predecessor/candidate source authority, unchanged historical native gate pins, complete receipt rebinding, original pidfd guardian/idle controls, bounded native subprocess supervision, staged HTTP/SQLite/immutable-term restart verification, authenticated health, pre-activation rollback and no automatic recovery after an ambiguous activation latch. The earlier `install_admission.py` remains preparation-only; its refusal was not removed.
+## Incident: existing model previews unavailable during maintenance
 
-All NINE workflows passed on `7f357323`. [Oracle run 38340496020](https://github.com/teslaeco/WORLDIFACT/actions/runs/38340496020) passed 57 tests on Python 3.9 and 3.12, built a 59-file public-code-only flat installation package, verified its inert default and unchanged native dependency pins. The downloaded package independently matched all 59 SHA-256 entries locally. These results do not prove actual VM native installation.
+The installation started at 05:00:22 UTC. Its native verification lease intentionally stopped the single `froge-worker.service`, which also serves existing model downloads. `froge-tunnel.service` remained active, but generation and account-model downloads were unavailable during that window. The static public gallery does not depend on this worker. This downtime should have been communicated before maintenance.
 
-Ten full-transaction fixture tests cover every approved write with pre-write failure and lost acknowledgement, invalid native/ingress evidence, preservation of models/balances and old prices, active/unknown/cancelled-job rejection, concurrent unknown edits, and ambiguous post-latch state. Native service identities/witnesses are explicit fixtures. The production model/cost modules remain byte-identical.
+Real native generic CLI/MCP/Podman-Blender, cabinet, legacy STANDARD, phased STANDARD, six model/mode gates and staged ingress verification completed before activation. These are genuine local pipeline executions with scripted provider responses, not paid API model-generation evidence.
 
-## New detached launch and admission-fence tests
+Live artifact inventory preserved 92 succeeded / 75 failed / 1 cancelled records. All 92 succeeded jobs have their original GLB with valid v2 header and declared byte length; 0 missing or invalid headers. After restoration, two existing original models were downloaded through the authenticated Oracle HTTP endpoint: HTTP 200, `model/gltf-binary`, 1,672,056 and 1,735,360 bytes, both SHA-256-identical to the original disk artifacts. This verifies worker downloads, not the customer's authenticated browser/library end-to-end flow or full geometry quality.
 
-`cloud_shell_activate.py` and `activation_release.json` now bind the 59-file reviewed package to immutable public commits and independent hashes. Default is inert; read-only status never starts a job. Approved launch uses the owner's existing Oracle Cloud Shell identity, SSH key and strict host trust, then an existing lingering VM user manager. A private fsynced attempt directory precedes a `Restart=no` bounded service. Repeating an uncertain or partial launch inspects the original attempt; it never creates a replacement installation. No historical forced-command grant is extended or reused.
+The public Worker `/api/studio/status` returned HTTP 200, `ready=true`, `reason=READY`, and `studioExecutionRevision=studio-execution-v1`. It does NOT expose the new admission revision because the production Worker still uses the old main code. PR #274 has not been merged; main remains `d70adf1c627c9bd5721b6a32e6c020fb3ae59869` at this checkpoint.
 
-Nine new launcher fixtures and six pending-admission/default-inert tests pass locally, including lost dispatch acknowledgement, repeated start, empty attempt, terminal result validation, private file modes, pending authority, orphaned queue records and unchanged SQLite bytes. Their service control is mocked; actual VM detachment remains unverified. Fresh exact-head hosted CI is required for this new launcher commit. See [Oracle activation runbook](ORACLE_ACTIVATION_RUNBOOK_20261013.md).
+## Corrected launcher reporting defect
 
-## Confirmed defect and repaired candidate
+The installed launcher's line-by-line JSON reader cannot parse the real activation program's indented multiline JSON. Consequently, its separate `result.json` reports `launcher_unconfirmed` despite the verified native installation result. This defect was reproduced locally by executing the original runner body against an inert child emitting the actual pretty-JSON format.
 
-A failure writing final timing diagnostics could kill the only queue thread and leak a running identity. The exact old worker regression reproduces this failure. The candidate makes timing output best-effort while always cleaning flags, claims SQLite before advertising RUNNING, handles folder failures within cleanup, and preserves its loop across transient storage errors. Ten sequential inert jobs, real SQLite locks and uncertain-commit tests passed hosted CI. No uncertain provider attempt is executed again or silently refunded.
+`cloud_shell_activate.py` now accepts one bounded, complete terminal JSON document, rejects contradictory/truncated/nonterminal output and refuses success after a nonzero child exit. Eight new tests execute the actual runner body with an inert child as well as malformed result cases; all eight and the nine existing launcher tests pass locally. Fresh exact-head hosted checks are required. This parser-only change does not alter the reviewed runtime package, release lock, services, installation latch, native gates or spending policy. Existing production logs/results are preserved; do NOT rerun an installation to replace the old reporting record.
 
-The new server SHA-256 is `c3e6b1e2894515ceabb4ec6570b8e68a5398664743212a36ba16a77be8200150`. It includes immutable nonbillable STAGE, once-only authorized START, fsynced local input preparation and queued-job restart recovery. This confirmed defect does not establish the historical cost or cause of every missing Oracle UUID.
+## Remaining acceptance and release conditions
 
-## Actual remaining blockers and cost authorization
+The two owner-approved paid Astra Standard reference chessboards remain unsubmitted by this continuation: at most 250 points each, 500 points and USD 4 combined; no automatic retries or replacement jobs. Test 2 follows successful accounted-for completion of Test 1. Paid Copilot/Codex coding-agent tasks remain outside scope.
 
-Remote Desktop Commander is still OFFLINE at the latest check. The owner has the previously working Node 22 reconnection command. GitHub source publication and hosted tests work. The earlier rejected source-generation script was not executed through another route; new modules were authored independently.
+Before full GO, verify the candidate Worker/account/library/download path and exactly-once point settlement with both approved reference models, obtain green CI for the exact final head, then merge/publish through an exact preserving release envelope. Existing native success and authenticated Oracle downloads do not substitute for this account-bound acceptance. Keep normal generation access enabled, preserve account authorization, point/pricing/provider limits, all customer artifacts and historical held points. No Stripe, subscription, role or balance modification is included.
 
-The old live VM probe verified all 15 predecessor hashes, receipt references and SQLite integrity and ran 12 disposable inbox tests. It is not acceptance of the new activation. The latest owner screenshot still reports an absent job and held points; a missing row does not prove zero API cost. Preserve all original receipts, liabilities and historical holds until authoritative reconciliation.
-
-The owner authorizes TWO Astra Standard acceptance models: at most 250 points each, 500 total, within USD 4 combined API cost; no automatic retry or paid replacement. Test 2 follows successful accounted-for completion of Test 1. Use the approved blue/green and violet/amber 8x8 chessboard references. Paid Copilot/Codex coding-agent work is not authorized. No paid acceptance call has been made in this continuation.
-
-Before GO: obtain actual VM access, run the separately approved native-gated activation with current idle/cancellation proof, verify durable admission and health, then test the real Worker/account/library/download flow with both approved models and exactly-once settlement. Only then merge/publish after exact-head CI and a preserving release envelope. Keep ordinary generator access enabled afterward without weakening account, point or provider limits. No Stripe/subscription/role changes, historical hold reset or promise of error-free operation is part of this release.
-
-## Preserved history
-
-The earlier full ledger remains byte-for-byte in [history/CONTEST_STATUS_before_20261013_queue_recovery.md](history/CONTEST_STATUS_before_20261013_queue_recovery.md), original blob `8f4530f137b46f814e3c6dc583617c5dabe5cc9e`. Historical statuses are not current release approval.
+Earlier evidence is preserved in `docs/history/CONTEST_STATUS_before_20261013_live_activation.md` and its referenced history. See also `docs/ORACLE_ACTIVATION_RUNBOOK_20261013.md`. Its pre-installation status is historical; do not use it to trigger another attempt.

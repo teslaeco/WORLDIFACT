@@ -59,6 +59,34 @@ def safe_result(value):
     return value
 
 
+def parse_installer_result(raw, returncode):
+    """Read a single terminal result, including the installer's pretty JSON.
+
+    A nonzero child exit cannot establish success. Partial, duplicate or
+    nonterminal records stay uncertain; they never authorize a retry.
+    """
+    need(isinstance(raw, bytes) and 0 < len(raw) <= 65536
+         and type(returncode) is int, 'INVALID_RESULT')
+    text = raw.decode('utf-8', errors='strict')
+    decoder = json.JSONDecoder()
+    candidates = []
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        if line.startswith('{'):
+            try:
+                value, end = decoder.raw_decode(text, offset)
+            except (ValueError, TypeError):
+                value = None
+            if isinstance(value, dict) and value.get('phase') in (SUCCESS, FAILURE):
+                candidates.append((safe_result(value), end))
+        offset += len(line)
+    need(len(candidates) == 1, 'INVALID_RESULT')
+    value, end = candidates[0]
+    need(not text[end:].strip(), 'INVALID_RESULT')
+    need(value['phase'] != SUCCESS or returncode == 0, 'INVALID_RESULT')
+    return value
+
+
 def download(commit, path):
     need(re.fullmatch('[a-f0-9]{40}', commit) and re.fullmatch(r'tools/[a-z_]+/[a-z_0-9]+\.(py|json)', path), 'INVALID_PUBLIC_PATH')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -124,13 +152,7 @@ try:
         process=subprocess.run(args,cwd=code,env=env,stdin=subprocess.DEVNULL,stdout=log,stderr=subprocess.STDOUT)
     with (folder/'installer.log').open('rb') as log:
         log.seek(0,2);size=log.tell();log.seek(max(0,size-65536));tail=log.read()
-    candidates=[]
-    for line in tail.decode(errors='replace').splitlines():
-        try:
-            value=json.loads(line)
-            if isinstance(value,dict) and value.get('phase') in (SUCCESS,FAILURE):candidates.append(safe_result(value))
-        except (ValueError,KeyError,TypeError):pass
-    if len(candidates)==1:result=candidates[0]
+    result=parse_installer_result(tail,process.returncode)
 except (Exception,KeyboardInterrupt):
     pass
 # This result is deliberately UNKNOWN on timeout: a lost process result cannot
@@ -216,7 +238,8 @@ def common():
     return ('import re\nclass Refused(ValueError): pass\n' + inspect.getsource(need)
             + '\nREVISION=' + repr(REVISION) + '\nRELEASE=' + repr(RELEASE)
             + '\nSUCCESS=' + repr(SUCCESS) + '\nFAILURE=' + repr(FAILURE)
-            + '\n' + inspect.getsource(safe_result) + '\n')
+            + '\n' + inspect.getsource(safe_result)
+            + '\n' + inspect.getsource(parse_installer_result) + '\n')
 
 
 def remote_program(values=None):
