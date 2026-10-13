@@ -94,3 +94,8 @@ Before activation, rolling back this candidate means removing only its proposed
 code. After any future activation, retain the admissions journal and original
 jobs/artifacts/ledgers; never downgrade to legacy POST for unresolved staged IDs
 or restore an old database snapshot to compensate for a code rollback.
+
+## Staged installer preparation — 13 October 2026
+
+The new `install_admission.py` accepts `--source <exact-pinned-runtime>` and defaults to read-only validation. `--prepare --destination <fresh-isolated-directory>` writes an fsynced private 0700 candidate stage after verifying all 15 current server SHA-256 pins and independently pinned durable helpers. It refuses changed or symlinked source, unknown files, preexisting helpers and existing stage paths. Eight dedicated unit tests pass locally. The stage is **not** a complete production installation and never touches the running VM or creates a paid job. `--activate` deliberately refuses until the separately reviewed production transaction binds real CLI/MCP/Blender and six model/mode gates, full receipt rebinding, process idle fence, rollback and authenticated health. Do not bypass this refusal, repurpose historical grants, or merge PR #274 as a reliability release on these tests alone.
+
