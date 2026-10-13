@@ -162,12 +162,15 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
     ...accountModels.map(model => ({ key: `account:${owner}:${model.id}`, origin: 'account' as const, model })),
     ...entries.map(model => ({ key: `device:${model.id}`, origin: 'device' as const, model })),
   ].sort((a, b) => {
+    // A direct account-model link takes precedence over timeline ordering.
+    const requested = Number(b.origin === 'account' && b.model.id === requestedModelId) - Number(a.origin === 'account' && a.model.id === requestedModelId)
+    if (requested) return requested
     const aTime = Date.parse(a.origin === 'account' ? a.model.completedAt : a.model.savedAt)
     const bTime = Date.parse(b.origin === 'account' ? b.model.completedAt : b.model.savedAt)
     const aValid = Number.isFinite(aTime) ? aTime : 0
     const bValid = Number.isFinite(bTime) ? bTime : 0
     return bValid - aValid || a.key.localeCompare(b.key)
-  }), [owner, accountModels, entries])
+  }), [owner, accountModels, entries, requestedModelId])
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     const items = needle ? rows.filter(item => item.model.prompt.toLowerCase().includes(needle)) : rows
