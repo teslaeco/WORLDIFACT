@@ -8,6 +8,8 @@ import ast
 import hashlib
 from pathlib import Path
 
+import worker_recovery
+
 BEFORE = '3ca9da9a246c406ced7f1183b2e6e85f95d1ce733f0ef12af652c5aaf5812227'
 HELPERS = ('durable_inbox.py', 'durable_admission.py')
 
@@ -53,6 +55,7 @@ def transform(original, helpers):
             "            db.execute('PRAGMA synchronous=FULL')\n            db.execute('BEGIN IMMEDIATE')\n            row = db.execute(\"SELECT * FROM jobs WHERE state='queued' ORDER BY created,id LIMIT 1\").fetchone()\n")
     replace("        with database() as db:\n            if not (context_policy.maintenance_active(ROOT) or studio_pricing.maintenance_active(ROOT)):\n                db.execute(\"UPDATE jobs SET state='failed',detail='Serwer uruchomil sie ponownie. Wyslij opis jeszcze raz.' WHERE state NOT IN ('succeeded','failed','cancelled')\")\n",
             "        runtime_lock_fd = durable_admission.process_lock(STATE)\n        with database() as db:\n            if not (context_policy.maintenance_active(ROOT) or studio_pricing.maintenance_active(ROOT)):\n                durable_admission.recover_after_restart(db)\n")
+    text = worker_recovery.transform(text)
     ast.parse(text)
     return text.encode()
 

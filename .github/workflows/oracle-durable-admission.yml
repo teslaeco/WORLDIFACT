@@ -44,8 +44,24 @@ jobs:
         run: |
           python -B tools/model_construction/assemble_test_runtime.py --ancestor .upstream/admission-ancestor --source .upstream/model-completion/oracle_connector --destination .upstream/admission-context
           python -B tools/oracle_admission/assemble_observed_runtime.py --context .upstream/admission-context --transport .upstream/admission-transport/tools/mcp_transport_repair/repair.py --destination .upstream/admission-observed
-      - name: Exercise real SQLite, abrupt process death and the original HTTP handler
+      - name: Exercise real SQLite, original queue loop, and original HTTP handler
         env:
           ORACLE_ADMISSION_SOURCE: .upstream/admission-observed
           ORACLE_ADMISSION_PHOTO_SOURCE: .upstream/model-completion/oracle_connector
         run: python -B -m unittest discover -s tools/oracle_admission -v
+      - name: Package public tracked source for offline review
+        if: ${{ always() && matrix.python == '3.12' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/public-repair-source"
+          git archive --format=tar.gz -o "$RUNNER_TEMP/public-repair-source/worldifact-source.tar.gz" HEAD
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/public-repair-source/tested-source.txt"
+          sha256sum "$RUNNER_TEMP/public-repair-source/worldifact-source.tar.gz" > "$RUNNER_TEMP/public-repair-source/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() && matrix.python == '3.12' }}
+        with:
+          name: worldifact-public-source-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/public-repair-source/
+          retention-days: 1
+          if-no-files-found: error
+# Archive includes only tracked files in the public WORLDIFACT repository.
+# Never archive private upstream inputs, installed VM files, configuration or keys.
