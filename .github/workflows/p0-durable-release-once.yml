@@ -1,0 +1,116 @@
+name: Deploy P0 durable release once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/P0_DURABLE_RELEASE_20261013.json'
+      - '.github/workflows/p0-durable-release-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+    environment:
+      name: production
+      url: ${{ steps.verify.outputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify exact owner-approved release envelope
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "59c99e6514e0e9b57dc24359e6fb98dfa1bfb198"
+          mapfile -t changed < <(git diff --name-only HEAD^ HEAD | sort)
+          test "${#changed[@]}" -eq 2
+          test "${changed[0]}" = ".github/workflows/p0-durable-release-once.yml"
+          test "${changed[1]}" = "ops/P0_DURABLE_RELEASE_20261013.json"
+          node --input-type=module <<'JS'
+          import { readFile } from 'node:fs/promises'
+          const m = JSON.parse(await readFile('ops/P0_DURABLE_RELEASE_20261013.json','utf8'))
+          const expected = {
+            revision:'p0-durable-release-20261013-v1',
+            baseCommit:'59c99e6514e0e9b57dc24359e6fb98dfa1bfb198',
+            authorization:'owner-approved-merge-and-production-deploy',
+            liveAcceptanceRun:38398271159,
+            preserveRemoteVars:true,
+            preserveSecrets:true,
+            preserveBilling:true,
+            paidGenerationDuringDeploy:false,
+          }
+          if (JSON.stringify(m) !== JSON.stringify(expected)) throw new Error('RELEASE_ENVELOPE_CHANGED')
+          JS
+      - name: Check Cloudflare credential shape
+        run: node scripts/release-check.ts credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - name: Build preserving deployment config
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile, writeFile } from 'node:fs/promises'
+          import { buildAiShopUiConfig } from './scripts/build-compatible-mcc-config.mjs'
+          const base = JSON.parse(await readFile('wrangler.jsonc','utf8'))
+          const config = buildAiShopUiConfig(base, { aiShopUi:true, preserveBilling:true, preserveRemoteVars:true, preserveSecrets:true })
+          await writeFile('.p0-durable.wrangler.json', JSON.stringify(config,null,2)+'\n', {mode:0o600})
+          JS
+      - name: Dry-run exact release
+        run: npx wrangler deploy --dry-run --config .p0-durable.wrangler.json --outdir .wrangler/preview
+      - name: Verify pinned public gallery before deploy
+        run: node scripts/prepare-public-gallery.mjs --verify-dist
+      - name: Deploy preserving all remote variables and secrets
+        run: |
+          set -euo pipefail
+          if WRANGLER_LOG=none WRANGLER_WRITE_LOGS=false WRANGLER_SEND_METRICS=false WRANGLER_SEND_ERROR_REPORTS=false \
+            npx wrangler deploy --config .p0-durable.wrangler.json --keep-vars > /dev/null 2>&1; then
+            echo "Deployment command completed; strict read-only verification follows."
+          else
+            echo "::error::Deployment failed; potentially private Wrangler output suppressed."
+            exit 1
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-p0-durable.ndjson
+      - name: Verify published bytes, health and Studio routing
+        id: verify
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          import { appendFile, readFile } from 'node:fs/promises'
+          import { readDeployment } from './scripts/release-check.ts'
+          import { checkCompatibleMccRelease } from './scripts/check-compatible-mcc-release.mjs'
+          import { verifyPublicGalleryAssets } from './scripts/prepare-public-gallery.mjs'
+          const deployment = readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH,'utf8'))
+          await verifyPublicGalleryAssets()
+          const release = await checkCompatibleMccRelease(deployment)
+          const response = await fetch(release.origin + '/api/studio/status', {redirect:'error',headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(20000)})
+          assert.equal(response.status,200)
+          const status = await response.json()
+          assert.equal(status.ready,true)
+          assert.equal(status.studioExecutionRevision,'studio-execution-v1')
+          assert.equal(status.studioAdmissionRevision,'oracle-durable-admission-v1')
+          assert.deepEqual([...status.studioExecutionModels].sort(),['astra','luna','sol'])
+          assert.deepEqual([...status.studioExecutionModes].sort(),['fast','standard'])
+          if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, 'url='+release.origin+'\n')
+          console.log(JSON.stringify({versionId:release.versionId,origin:release.origin,htmlRoutes:release.htmlRoutes,verifiedAssets:release.verifiedAssets,studioAdmissionRevision:status.studioAdmissionRevision,studioExecutionModels:status.studioExecutionModels,studioExecutionModes:status.studioExecutionModes}))
+          JS
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-p0-durable.ndjson

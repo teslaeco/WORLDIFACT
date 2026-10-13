@@ -1,0 +1,10 @@
+{
+  "revision": "p0-durable-release-20261013-v1",
+  "baseCommit": "59c99e6514e0e9b57dc24359e6fb98dfa1bfb198",
+  "authorization": "owner-approved-merge-and-production-deploy",
+  "liveAcceptanceRun": 38398271159,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "preserveBilling": true,
+  "paidGenerationDuringDeploy": false
+}
