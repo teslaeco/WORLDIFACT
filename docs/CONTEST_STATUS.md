@@ -1,3 +1,13 @@
+# 13 October 2026 — LIVE SOL + LUNA ACCEPTANCE PASSED
+
+VERIFIED on production Oracle through the repository's one-use protected acceptance workflow:
+- GPT-6.1 Sol Standard job `5f017611-1d33-4e9a-8b3d-02f4c6d47001` reached `succeeded`; downloaded GLB is 741,528 bytes, SHA-256 `52131c1ce7e28a667dd61725ffe62f126b9541d8035fd7cfe595a8b0ba09632f`.
+- GPT-6 Luna Standard job `5f017611-1d33-4e9a-8b3d-02f4c6d47002` reached `succeeded`; downloaded GLB is 1,057,172 bytes, SHA-256 `7e76ff62316b53108672ecab3199d9c8963f8f98874ab6a3826d96f38c2ed8f8`.
+- The live test used durable STAGE + exactly-once START, no automatic retries, and a permanent Git approval tag. Maximum combined provider ceiling was USD 0.45 (Sol <= 0.35, Luna <= 0.10); this is a guard ceiling, not a claimed invoice.
+- GitHub Actions run: https://github.com/teslaeco/WORLDIFACT/actions/runs/38398271159 — SUCCESS. Artifact `sol-luna-live-evidence-3bf3e0406bae5addccfa5f8a97d7367bb2c542c4` contains both GLBs and the report.
+
+RELEASE GATE: Oracle durable runtime already verified installed and running. Proceed to final exact-head CI, then merge PR #274 and publish through the existing preserving release workflow only if all required checks remain green. Do not rerun these paid jobs; their fixed IDs and approval tag are consumed.
+
 # WORLDIFACT P0 — 13 October 2026
 
 ## Latest verdict: Oracle activation VERIFIED; full Worker release NO-GO
