@@ -1,0 +1,9 @@
+{
+  "revision": "studio-admission-status-hotfix-20261014-v1",
+  "baseCommit": "80135a0968cdc8d45a4c78dde598b56f328e1e60",
+  "purpose": "expose verified oracle durable admission revision in public studio status",
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "preserveBilling": true,
+  "paidGenerationDuringDeploy": false
+}
