@@ -1,3 +1,9 @@
+# 13 October 2026 — Oracle staged installer implemented (production activation BLOCKED)
+
+VERIFIED: Added independently SHA-256-pinned preparatory installer `tools/oracle_admission/install_admission.py` plus eight fail-closed unit tests. Source preparation verifies all 15 currently installed Oracle helper hashes and isolated fsynced staging; there is no VM service activation and `--activate` explicitly refuses. Previous real VM read-only probe showed full 15-file/receipt-chain consistency and 12/12 synthetic SQLite tests, **not** installed durable admission. Latest code is on PR #274 and requires fresh exact-head hosted CI.
+
+BLOCKED: Finish native CLI/MCP/Blender staged acceptance for all Astra/Sol/Luna Standard/Fast selections; preserve original installation fencing, pin new receipt rebinding and rollback, execute authenticated VM stage/START and restart tests, verify real owned library exports. No live paid generation, merge or production deployment. Owner's separate paid authorization remains *one* Astra Standard job maximum 4 USD / 500 points, no retry, not yet consumed.
+
 # 12 October 2026 — P0 cloud repair validation (NO-GO for production)
 
 VERIFIED: Fixed malformed Oracle acknowledgement reconciliation and verified late
