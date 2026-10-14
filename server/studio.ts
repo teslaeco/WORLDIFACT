@@ -108,7 +108,8 @@ async function publicLibraryModel(env: StudioEnv, userId: string, model: OwnedSt
   return { id: model.id, prompt: model.prompt, createdAt: new Date(model.at).toISOString(), completedAt: new Date(model.completedAt).toISOString(),
     receipt: await receipt(env, model.id, model.fingerprint, userId, undefined, true), review: 'UNREVIEWED', downloadAllowed: model.downloadAllowed,
     ...(model.studioExecution ? { studioExecution: model.studioExecution } : {}),
-    ...(model.providerEvidence ? { providerEvidence: model.providerEvidence } : {}) }
+    ...(model.providerEvidence ? { providerEvidence: model.providerEvidence } : {}),
+    ...(model.completion === 'INCOMPLETE' && model.failureCode ? { completion: 'INCOMPLETE' as const, incompleteReason: model.failureCode } : {}) }
 }
 async function libraryReadLimit(env: StudioEnv, userId: string) {
   if (!env.ACCOUNT_LIMITER) throw new StudioError('The account library read limiter is unavailable.', 503)
@@ -582,6 +583,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const page = await userStudioLibrary(env, user.id, after)
       return json({ accountId: user.id, models: await Promise.all(page.models.map(model => publicLibraryModel(env, user.id, model))),
         ...(page.recentModels ? { recentModels: await Promise.all(page.recentModels.map(model => publicLibraryModel(env, user.id, model))) } : {}),
+        ...(page.incompleteModels ? { incompleteModels: await Promise.all(page.incompleteModels.map(model => publicLibraryModel(env, user.id, model))) } : {}),
         nextCursor: page.hasMore && page.nextCursor ? await libraryCursor(env, user.id, page.nextCursor) : null, hasMore: page.hasMore } satisfies StudioLibraryPage)
     }
     if (url.pathname === '/api/studio/reconcile-budget' && request.method === 'POST') {
