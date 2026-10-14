@@ -5,6 +5,7 @@ import { STUDIO_PROVIDER_EVIDENCE_REVISION } from '../src/lib/studioProviderEvid
 import { STUDIO_INCOMPLETE_REVISION, isStudioIncompleteReason, type StudioIncompleteRecord } from '../src/lib/studioIncomplete.ts'
 import { ARTIFACT_PROBE_BYTES, hasStudioArtifactHeader, type StudioArtifactFormat } from '../src/lib/studioArtifact.ts'
 import { inspectGLB } from '../src/lib/glb.ts'
+import { inspectRetainedStudioGLB } from '../src/lib/studioGlbIntegrity.ts'
 import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
@@ -539,7 +540,7 @@ async function modelOrExport(env: StudioEnv, id: string, format: string, fetcher
 async function retainedDraftResponse(env: StudioEnv, id: string, sha256: string, fetcher: typeof fetch): Promise<Response> {
   const response = await modelOrExport(env, id, 'model', fetcher)
   const buffer = await response.arrayBuffer()
-  const inspection = inspectGLB(buffer)
+  const inspection = inspectRetainedStudioGLB(buffer)
   if (inspection.meshCount < 1 || inspection.renderedTriangles < 1 || inspection.triangles < 1)
     throw new StudioError('The retained draft has no renderable 3D geometry.', 409)
   const digest = hex(await crypto.subtle.digest('SHA-256', buffer))
@@ -587,7 +588,7 @@ async function retainIncompleteDraft(env: StudioEnv, uid: string, id: string, fe
   try {
     const artifact = await modelOrExport(env, id, 'model', fetcher)
     buffer = await artifact.arrayBuffer()
-    const inspection = inspectGLB(buffer)
+    const inspection = inspectRetainedStudioGLB(buffer)
     if (inspection.triangles < 1 || inspection.renderedTriangles < 1 || inspection.meshCount < 1)
       return { retained: false, reason: 'NO_RENDERABLE_CANDIDATE' }
   } catch { return { retained: false, reason: 'NO_VALID_RETAINED_GLB' } }
