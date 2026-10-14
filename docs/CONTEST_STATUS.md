@@ -1,3 +1,20 @@
+# 14 October 2026 — INCOMPLETE GLB RETENTION P0 + REAL LUNA GEOMETRY AUDIT (PR #284, NOT DEPLOYED)
+
+**IMPLEMENTED ON REVIEW BRANCH ONLY**: https://github.com/teslaeco/WORLDIFACT/pull/284. No merge or production release authorization granted. The original provider budget and customer-point limits are unchanged. Signed same-job opt-in draft recovery requires account ownership, failed terminal job and real Oracle draft status, checks embedded GLB geometry and original SHA-256, and records a separate INCOMPLETE/UNREVIEWED index. Completed model validation remains separate. Existing Oracle-confirmed provider labels require persisted verified evidence; UI selection alone remains Selected, and legacy stays unknown. No paid retry is initiated. Draft recovery was hardened to avoid any budget reconciliation, point/hold mutation or fresh `/budget` call; signed existing proof is read-only. Browser now names unfinished downloads clearly and displays the original job ID. Added independent unit/API/owner/hash-mutation regression tests and zero-cost offline GLB benchmark CLI.
+
+**TESTED (partial only as of this checkpoint)**: Review-branch CI identified and fixed a TypeScript fixture key error, stale UI test harness imports, and a missing `await` that would have bypassed HTTP error normalization when the retained GLB hash changes. The full current exact-head `npm run verify`, browser/E2E, Cloudflare dry-run and real Oracle readback have not all been confirmed green at the moment this status is written. Do not declare this ready for merge before exact-head CI is green.
+
+**MEASURED REAL QUALITY EVIDENCE**: Four independently SHA-256-verified Luna Standard GLBs were recovered from existing GitHub Actions https://github.com/teslaeco/WORLDIFACT/actions/runs/38554127828 (artifact 11889760747) without new generation. Their actual indexed triangle counts are 36, 36, 36, and 128. All have PBR materials and UVs, none contains skins or animations. This demonstrates the low-poly geometry bottleneck; visual fidelity and same-prompt model comparisons are NOT verified. Methodology, per-file metrics, gating recommendations and unapproved 9-job intermodel budget ceiling are in [STUDIO_3D_QUALITY_BENCHMARK_20261014.md](STUDIO_3D_QUALITY_BENCHMARK_20261014.md).
+
+**BLOCKED / NO-GO**:
+- This change records account-bound hash and metadata only. The actual GLB still lives on Oracle: there is no independent object-storage backup binding in the current `wrangler.jsonc`. Metadata durability does not guarantee the worker keeps its original bytes. A post-expiration worker retention test or verified independent blob store is required for durable-file DONE.
+- No owner-authenticated REAL budget-exceeded Oracle job with retained GLB has yet passed the exact new code path, browser reload/download, or Android/mobile acceptance. Inert provider fixtures are not that evidence.
+- No current owner hold audit or approved accounting change has been performed. Incomplete salvage must not move settlement entries.
+- No measured Astra-vs-Sol-vs-Luna comparison for identical character/robot prompts was run. No third-party Tripo/Meshy baseline was obtained. API-cost tests and release/merge require explicit user authorization.
+- PR #284 stays open. Current production remains the previously verified PR #283 model-label release; this draft recovery is NOT DEPLOYED.
+
+---
+
 # 14 October 2026 — ACTUAL MODEL PROVENANCE LABELS LIVE
 
 VERIFIED LIVE: PR #283 merged as `a7a3ea61160604921181b8dd59b3d341dc721437`. One-use preserving release commit `3bbad1ec7a7086c7af6ad7ce8ff74df730578e09` published through GitHub Actions https://github.com/teslaeco/WORLDIFACT/actions/runs/38596101280, status SUCCESS after full `npm run verify`, foundations, Wrangler dry-run and real `--keep-vars` deploy. Production Cloudflare version `99598f30-edd2-46ba-bb3c-5c787cdf0116`, public Studio smoke `ready=true`, models `astra,sol,luna`, durable admission revision correct, no global generation quota.
