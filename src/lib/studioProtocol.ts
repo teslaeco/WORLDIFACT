@@ -40,7 +40,11 @@ export const REFERENCE_FIDELITY_INSTRUCTIONS = `WORLDIFACT REFERENCE-FIDELITY MO
 
 export const INDUSTRIAL_ELECTRICAL_PROFILE = 'industrial-electrical-cabinet-v1' as const
 export const REFERENCE_CHARACTER_PROFILE = 'reference-character-v1' as const
-export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE | typeof REFERENCE_CHARACTER_PROFILE
+/** These profiles apply only to NEW jobs and never relabel legacy models. */
+export const TEXT_CHARACTER_DETAIL_PROFILE = 'text-character-detail-v2' as const
+export const ROBOT_DETAIL_PROFILE = 'articulated-robot-detail-v2' as const
+export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE |
+  typeof REFERENCE_CHARACTER_PROFILE | typeof TEXT_CHARACTER_DETAIL_PROFILE | typeof ROBOT_DETAIL_PROFILE
 
 // Both headers are existing STANDARD profile aliases on the installed worker.
 // The legacy alias keeps the original supervised CLI, which completed the live
@@ -80,11 +84,32 @@ export const REFERENCE_CHARACTER_INSTRUCTIONS = `WORLDIFACT REFERENCE CHARACTER 
 - For figurine intent, preserve important garment/hair detail while avoiding accidental zero-thickness sheets; this is still a generated concept and is NOT manufacturing-approved.
 - Review front, side and back before export. If face, hands, clothing layers or silhouette collapse, repair them before returning the GLB.`
 
+/** Only supported Blender/MCP operations. Geometry must be present in the FIRST build:
+ * no invisible subdivision, flat photographic cutouts or implied rigging. */
+export const TEXT_CHARACTER_DETAIL_INSTRUCTIONS = `WORLDIFACT CHARACTER MESH V2 — GEOMETRY FIRST:
+- This is a volumetric 360-degree character, not a generic box/mannequin or a textured plane. Build a recognizable head, neck, torso, arms, hands, separate legs, feet and defining silhouette in the FIRST build_model call.
+- Decompose the scene into anatomy, face, hair, outer clothing and accessories as independently inspectable real 3D forms, honoring the current Blender contract's supported operations and size limits.
+- Use curved, tapering sections/lofts/extrusions where supported; avoid stacking straight boxes in place of cheeks, limbs, joints, hair and fabric. Reserve the final affordable tokens for the required inspection and finish_model call.
+- Textures and PBR may enrich actual surfaces but do not substitute for physical facial/garment geometry. Do not claim detailed eyes, fingers, UVs, rig, animation or retopology unless actually present.
+- Inspect front, side and back, and a close face view when available. If anatomy or usable geometry is missing, report the specific deficits and use accepted=false. Never pad triangle counts or start a second paid job.`
+
+export const ROBOT_DETAIL_INSTRUCTIONS = `WORLDIFACT ARTICULATED ROBOT V2 — REAL ASSEMBLY:
+- Build the complete robot's recognizable head, armored torso, pelvis, two arms, two legs and feet in the FIRST build_model call. Separate shoulder, elbow, hip, knee and ankle elements; preserve symmetry only where justified by the brief.
+- Construct visible multilayer armor plates, bevels, recessed joints, cylinders/pistons, cable routes and material boundaries as actual 3D geometry, not stickers on a rectangular humanoid proxy.
+- Prefer reusable repeated mechanical pieces and compact parameterized geometry over token-expensive individual vertices. Use only the verified Blender modeling contract and existing bounded job budget.
+- Inspect front, side, back and three-quarter views. Check that mechanical linkages do not float or fuse incorrectly. Reject hollow placeholders or inflated triangle counts as success.
+- PBR, rigging, animation, game optimization and manufacturing readiness must be reported only when generated and verified. Otherwise say explicitly that they are absent or unreviewed.`
+
 const ELECTRICAL_CABINET_REQUEST = /(electrical\s+(?:control\s+)?cabinet|switchgear|motor\s+control\s+cent(?:er|re)|\bmcc\b|distribution\s+panel|control\s+panel|din\s*rail|terminal\s+block|breaker|contactor|relay|rozdzieln|szaf.{0,24}(?:elektr|sterown)|bezpiecznik|stycznik|przeka[źz]nik|listw.{0,20}zacisk|okablowan)/iu
 // Match words, not "man" inside "many", "command" or "manufacturing".
 // Unicode boundaries retain Polish inflections without treating accented
 // letters as separators (JavaScript's ASCII-oriented \b would do that).
 const CHARACTER_REQUEST = /(?:^|[^\p{L}\p{N}_])(?:adult\s+(?:woman|man|female|male)|characters?|heroines?|figurines?|persons?|humans?|women|woman|girls?|men|man|posta[cć]\p{L}*|kobiet\p{L}*|m[eę][żz]czyzn\p{L}*|figur[kc]\p{L}*)(?=$|[^\p{L}\p{N}_])/iu
+// Text-only character/robot requests previously fell through to the generic
+// one-triangle quality gate. Match explicit subjects only; words embedded in
+// 'command', 'manufacturing', 'many', etc. must never trigger the new profiles.
+const ROBOT_BODY_REQUEST = /(?:^|[^\\p{L}\\p{N}_])(?:humanoid\\s+robots?|(?:battle|combat|warrior|armored|armoured|futuristic|mecha)\\s+robots?|robots?\\s+(?:humanoid|battle|combat|warrior|armored|armoured|mecha)|mechas?|androids?|robot\\s+bojow\\p{L}*|roboty\\s+bojow\\p{L}*|robot\\s+humanoidaln\\p{L}*)(?=$|[^\\p{L}\\p{N}_])/iu
+const TEXT_CHARACTER_BODY_REQUEST = /(?:^|[^\\p{L}\\p{N}_])(?:characters?|persons?|humans?|woman|women|men|man|girls?|boys?|knights?|warriors?|dancers?|elves?|orcs?|cyborgs?|hero(?:es|ines)?|adult\\s+(?:female|male)|posta[cć]\\p{L}*|kobiet\\p{L}*|m[eę][żz]czyzn\\p{L}*|rycerz\\p{L}*|wojownik\\p{L}*|tancerk\\p{L}*)(?=$|[^\\p{L}\\p{N}_])/iu
 // Resolve only an explicit cabinet description against the Shop's figurine
 // default. These narrower hints do not select a quality profile or infer scale.
 const EXPLICIT_INDUSTRIAL_CABINET_REQUEST = /^(?:(?:create|build|make|model|generate|reconstruct)\s+)?(?:(?:a|an|the|this|realistic|detailed|photorealistic|full[- ]size|full[- ]scale)\s+)*(?:(?:industrial|electrical|mcc|switchgear|motor\s+control\s+cent(?:er|re))\s+)+(?:control\s+)?cabinet\b|^(?:(?:stw[oó]rz|zbuduj|wygeneruj|odtw[oó]rz|wymodeluj|model)\s+)?(?:(?:realistyczn[ąay]|szczeg[oó][łl]ow[ąay]|przemys[łl]ow[ąay]|tę|tą)\s+)*szaf(?:a|ę|ą|y|ie)\s+(?:elektryczn|sterownicz|rozdzielcz)\p{L}*/iu
@@ -96,6 +121,9 @@ const NEGATED_MINIATURE_LABELS = /\bnot\s+(?:a\s+)?(?:figurine|miniature)(?:\s+(
 export function studioQualityProfile(input: Pick<StudioInput, 'prompt' | 'photos' | 'purpose'>): StudioQualityProfile {
   if (input.photos.length > 0 && ELECTRICAL_CABINET_REQUEST.test(input.prompt)) return INDUSTRIAL_ELECTRICAL_PROFILE
   if (input.photos.length > 0 && ['figurine','game'].includes(input.purpose) && CHARACTER_REQUEST.test(input.prompt)) return REFERENCE_CHARACTER_PROFILE
+  if (ROBOT_BODY_REQUEST.test(input.prompt) && ['figurine', 'game', 'object'].includes(input.purpose)) return ROBOT_DETAIL_PROFILE
+  if (input.photos.length === 0 && ['figurine', 'game'].includes(input.purpose) &&
+      TEXT_CHARACTER_BODY_REQUEST.test(input.prompt)) return TEXT_CHARACTER_DETAIL_PROFILE
   return 'standard'
 }
 
@@ -269,7 +297,9 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
     ? '\n\nOriginal reference view labels (in input order): ' + input.photos.map((photo, index) => `Reference ${index + 1}: ${photo.view}`).join('; ') + '. Side views still describe the same subject.' : ''
   const qualityProfile = studioQualityProfile(input)
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
-    : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
+    : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS
+    : qualityProfile === TEXT_CHARACTER_DETAIL_PROFILE ? TEXT_CHARACTER_DETAIL_INSTRUCTIONS
+    : qualityProfile === ROBOT_DETAIL_PROFILE ? ROBOT_DETAIL_INSTRUCTIONS : ''
   return { id, prompt: input.prompt + instruction, ...(execution ? { studioExecution: execution } : {}), ...(studioPricing ? { studioPricing } : {}),
     agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(execution ? MODEL_CATALOG[execution.model] : studioPricing, !!execution || !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels + (execution && execution.model !== 'astra' ? '\n\n' + BUDGET_FIRST_STUDIO_GUIDE : '') + '\n\n' + STUDIO_READBACK_GUIDE,
     ...(photos.length ? { photos } : {}) }
