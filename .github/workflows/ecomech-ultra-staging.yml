@@ -37,7 +37,7 @@ jobs:
       - name: Download verified native Blender artifact of the original Astra source
         shell: bash
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p .ecomech-ultra-input
@@ -54,8 +54,8 @@ jobs:
       - name: Deploy only new ULTRA STAGING Worker (never WORLDIFACT / MPC2)
         run: npx wrangler deploy --config wrangler.ecomech-ultra-staging.jsonc
         env:
-          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Public smoke: mobile GLB + HTTP partial byte download from real large GLB
         shell: bash
         run: |
