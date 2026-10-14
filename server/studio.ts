@@ -918,7 +918,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         await limit(request, env, `artifact:${auth.id}:${match[2].replace('exports/', '')}`)
         if (model.completion === 'INCOMPLETE') {
           if (match[2] !== 'draft' || !model.modelSha256) throw new StudioError('Only the unreviewed GLB draft is available for this incomplete model.', 409)
-          return retainedDraftResponse(env, auth.id, model.modelSha256, fetcher)
+          return await retainedDraftResponse(env, auth.id, model.modelSha256, fetcher)
         }
         if (match[2] === 'draft') throw new StudioError('This model is already a completed result, not a retained draft.', 409)
         return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
@@ -935,7 +935,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (!model || model.completion !== 'INCOMPLETE' || !model.downloadAllowed ||
             model.fingerprint !== auth.hash || !model.modelSha256)
           throw new StudioError('The unfinished GLB is no longer available in this account.', 403)
-        return retainedDraftResponse(env, auth.id, model.modelSha256, fetcher)
+        return await retainedDraftResponse(env, auth.id, model.modelSha256, fetcher)
       }
       if (match[2]) {
         // Legacy/operator mode has no account ledger and keeps its historical
