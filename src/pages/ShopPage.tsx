@@ -16,6 +16,8 @@ import DemoShopPreview from '../components/DemoShopPreview'
 import ShopManufacturingOptions from '../components/ShopManufacturingOptions'
 import ProjectAttachmentPicker from '../components/ProjectAttachmentPicker'
 import StudioGallery from '../components/StudioGallery'
+import { retainStudioIncompleteModel } from '../lib/studioLibrary'
+import { isStudioIncompleteReason } from '../lib/studioIncomplete'
 import PublicModelGallery from '../components/PublicModelGallery'
 import GenerationCostNotice, { nextGenerationQuoteMessage } from '../components/GenerationCostNotice'
 import LiveSolPreview from '../components/LiveSolPreview'
@@ -135,6 +137,8 @@ export default function ShopPage() {
   const [statusRecovery, setStatusRecovery] = useState<{ id: string; retryAt: number; message: string } | null>(null)
   const [notice, setNotice] = useState('')
   const [artifactBusy, setArtifactBusy] = useState(false)
+  const [draftRecoveryBusy, setDraftRecoveryBusy] = useState(false)
+  const [draftRecoveryMessage, setDraftRecoveryMessage] = useState('')
   const [preview, setPreview] = useState<Preview | null>(null)
   const [archive, setArchive] = useState<StudioArchiveEntry[]>([])
   const [search, setSearch] = useState('')
@@ -407,6 +411,33 @@ export default function ShopPage() {
     return () => { discovery.invalidate(); controller.abort(); if (cloudDiscovery.current === discovery) cloudDiscovery.current = null }
   }, [accountLoading, accountOwner, testSavedSlot, testBlueprintSlot])
 
+  /** Reuses the original failed receipt; never submits a new paid Studio job. */
+  const recoverIncompleteDraft = async () => {
+    const original = saved
+    if (!original || !accountOwner || !job || job.id !== original.receipt.id ||
+        job.state !== 'failed' || !isStudioIncompleteReason(job.failureCode) ||
+        draftRecoveryBusy || testSavedSlot) return
+    const ownerAtStart = accountOwner
+    setDraftRecoveryBusy(true)
+    setDraftRecoveryMessage('Checking whether Oracle preserved an actual unfinished GLB. No generation or additional points.')
+    try {
+      const found = await retainStudioIncompleteModel(original.receipt.id, original.receipt.ticket, AbortSignal.timeout(210_000))
+      if (!mounted.current || accountOwner !== ownerAtStart) return
+      if (!found.retained) {
+        setDraftRecoveryMessage('No valid unfinished GLB was available from this original job. Nothing was generated, charged or invented.')
+      } else {
+        setDraftRecoveryMessage(found.canOpen === false
+          ? 'Oracle retained your incomplete GLB on this account. Its download requires eligible account access; no extra points were charged.'
+          : 'INCOMPLETE · UNREVIEWED GLB saved in My models. Only a separately approved new generation can request more budget; no automatic continuation or points charge.')
+        window.dispatchEvent(new Event(STUDIO_ARCHIVE_EVENT))
+        setForegroundJobId(original.receipt.id)
+        setRetry(n => n + 1)
+      }
+    } catch (err) {
+      if (mounted.current && accountOwner === ownerAtStart)
+        setDraftRecoveryMessage(err instanceof Error ? err.message : 'Unfinished model recovery is unavailable. No generation was started.')
+    } finally { if (mounted.current) setDraftRecoveryBusy(false) }
+  }
   const loadResult = async (selected: SavedStudioJob, known?: StudioJob) => {
     const flags = operations.current, client = coordinator.current, scope = testSavedSlot ? testCurrent : null
     if (!client || flags.artifact || flags.submit || (testSavedSlot && !scope?.active())) return
