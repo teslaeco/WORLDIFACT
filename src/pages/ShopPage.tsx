@@ -426,9 +426,12 @@ export default function ShopPage() {
       if (!found.retained) {
         setDraftRecoveryMessage('No valid unfinished GLB was available from this original job. Nothing was generated, charged or invented.')
       } else {
+        const storageStatus = found.backedUp === true
+          ? 'Private GLB backup verified with SHA-256. Downloads check the original bytes again.'
+          : 'Oracle-only GLB: no independent backup is verified. Availability depends on Oracle retaining the file.'
         setDraftRecoveryMessage(found.canOpen === false
-          ? 'Oracle retained your incomplete GLB on this account. Its download requires eligible account access; no extra points were charged.'
-          : 'INCOMPLETE · UNREVIEWED GLB saved in My models. Only a separately approved new generation can request more budget; no automatic continuation or points charge.')
+          ? `INCOMPLETE · UNREVIEWED saved on your account. ${storageStatus} Download requires eligible account access. No extra points charged.`
+          : `INCOMPLETE · UNREVIEWED available in My models. ${storageStatus} A separate approved attempt may be required for completion. No automatic generation or extra points.`)
         window.dispatchEvent(new Event(STUDIO_ARCHIVE_EVENT))
         setForegroundJobId(original.receipt.id)
         setRetry(n => n + 1)
