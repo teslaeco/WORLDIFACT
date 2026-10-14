@@ -30,7 +30,7 @@ function store() {
   return { values, storage, writes }
 }
 
-async function fixture(config: { noModel?: boolean; mismatchProvider?: boolean; noDraft?: boolean } = {}) {
+async function fixture(config: { noModel?: boolean; mismatchProvider?: boolean; noDraft?: boolean; withBackup?: boolean; failBackup?: boolean } = {}) {
   const alice = store(), bob = store()
   const now = Date.now()
   alice.values.set('job:' + ID, {
@@ -43,10 +43,30 @@ async function fixture(config: { noModel?: boolean; mismatchProvider?: boolean; 
   alice.values.set('subscription', { id: 'sub_test', active: true, until: now + 86400000 })
   bob.values.set('balance', 1000)
   const requests: string[] = [], providerCalls: string[] = []
+  const oracleState = { modelAvailable: true }
+  const backupRows = new Map<string, { data: Uint8Array; metadata: Record<string, string> }>()
+  const backupOps = { reads: 0, writes: 0 }
   const env: StudioEnv = { OWNER_ACCESS_TOKEN: secret, ORACLE_ENDPOINT: 'https://incomplete.trycloudflare.com',
     ORACLE_API_TOKEN: 'fixture-token', ENFORCE_ACCOUNT_ENTITLEMENTS: 'true',
     ACCOUNT_LIMITER: { async limit() { return { success: true } } },
     GENERATION_LIMITER: { async limit() { return { success: true } } } }
+  if (config.withBackup) {
+    env.ENABLE_INCOMPLETE_R2_BACKUP = 'true'
+    env.INCOMPLETE_GLB_BACKUP = {
+      async get(key) {
+        backupOps.reads++
+        const value = backupRows.get(key)
+        return value ? { size: value.data.byteLength, customMetadata: { ...value.metadata },
+          async arrayBuffer() { return value.data.slice().buffer } } : null
+      },
+      async put(key, bytes, options) {
+        backupOps.writes++
+        if (config.failBackup) throw new Error('Inert R2 unavailable')
+        backupRows.set(key, { data: new Uint8Array(bytes.slice(0)), metadata: { ...options.customMetadata } })
+        return { size: bytes.byteLength }
+      },
+    }
+  }
   const objects = new Map<string, AccountEntitlements>()
   env.ACCOUNT_ENTITLEMENTS = {
     idFromName: name => name,
@@ -82,7 +102,7 @@ async function fixture(config: { noModel?: boolean; mismatchProvider?: boolean; 
         agentUsage: { model: config.mismatchProvider ? 'gpt-6-luna' : 'gpt-6.1-sol', completed: false,
           error_code: 'MODEL_BUDGET_EXCEEDED' } })
     if (uri.pathname === '/v1/jobs/' + ID + '/model')
-      return config.noModel ? Response.json({ error: 'No model' }, { status: 404 }) :
+      return config.noModel || !oracleState.modelAvailable ? Response.json({ error: 'No model' }, { status: 404 }) :
         new Response(glb, { headers: { 'Content-Type': 'model/gltf-binary',
           'Content-Length': String(glb.byteLength) } })
     if (uri.pathname === '/v1/jobs/' + ID + '/budget')
@@ -97,7 +117,7 @@ async function fixture(config: { noModel?: boolean; mismatchProvider?: boolean; 
     studioApi(new Request(ORIGIN + path, { method: options.method || 'GET',
       headers: { Origin: ORIGIN, Cookie: '__Host-worldifact-access=' + (options.who === 'bob' ? 'bob-token' : 'alice-token'),
         ...(options.ticket ? { 'X-WORLDIFACT-Job': options.ticket } : {}) } }), env, fetcher)
-  return { call, ticket, alice, bob, providerCalls, requests, glb }
+  return { call, ticket, alice, bob, providerCalls, requests, glb, oracleState, backupRows, backupOps }
 }
 
 test('budget-exhausted Oracle candidate is genuinely recoverable as owner-only INCOMPLETE GLB, not a successful model', async () => {
@@ -154,6 +174,57 @@ test('retained draft refuses a changed Oracle GLB after recovery without touchin
   assert.equal(f.alice.values.get('customer-reserved-credits:v1'), 50)
   assert.deepEqual(f.alice.values.get('job:' + ID), oldJob)
   assert.equal(f.providerCalls.some(path => path.endsWith('/budget')), false)
+})
+
+
+test('private R2-backed original INCOMPLETE GLB downloads intact after Oracle removes the artifact', async () => {
+  const f = await fixture({ withBackup: true })
+  const original = structuredClone(f.alice.values.get('job:' + ID))
+  const response = await f.call('/api/studio/jobs/' + ID + '/retain-draft', { method: 'POST', ticket: f.ticket })
+  assert.equal(response.status, 200)
+  const saved = await response.json() as any
+  assert.equal(saved.retained, true)
+  assert.equal(saved.backedUp, true)
+  assert.equal(saved.verifiedProvider, false)
+  assert.equal(f.backupOps.writes, 1)
+  const library = await (await f.call('/api/studio/library')).json() as any
+  assert.equal(library.incompleteModels[0].backupVerified, 'r2-sha256-readback-v1')
+  assert.equal(library.incompleteModels[0].providerEvidence, undefined)
+  const modelCallsBefore = f.providerCalls.filter(path => path.endsWith('/model')).length
+  f.oracleState.modelAvailable = false
+  const draft = await f.call('/api/studio/jobs/' + ID + '/draft', { ticket: library.incompleteModels[0].receipt.ticket })
+  assert.equal(draft.status, 200, await draft.clone().text())
+  assert.equal(draft.headers.get('X-WORLDIFACT-Artifact-Source'), 'R2-VERIFIED')
+  assert.equal(draft.headers.get('X-WORLDIFACT-Provenance'), 'GENERATED-INCOMPLETE-UNREVIEWED')
+  assert.deepEqual(Buffer.from(await draft.arrayBuffer()), Buffer.from(f.glb))
+  assert.equal(f.providerCalls.filter(path => path.endsWith('/model')).length, modelCallsBefore,
+    'Original GLB must be readable from verified R2 without touching absent Oracle file')
+  const foreign = await f.call('/api/studio/jobs/' + ID + '/draft', {
+    ticket: library.incompleteModels[0].receipt.ticket, who: 'bob',
+  })
+  assert.equal(foreign.ok, false)
+  assert.deepEqual(f.alice.values.get('job:' + ID), original)
+  assert.equal(f.alice.values.get('customer-reserved-credits:v1'), 50)
+  assert.equal(f.alice.values.get('balance'), 1000)
+  assert.equal(f.providerCalls.some(path => path.endsWith('/budget')), false)
+})
+
+test('unavailable private R2 backup never pretends durability or changes the failed job settlement', async () => {
+  const f = await fixture({ withBackup: true, failBackup: true })
+  const original = structuredClone(f.alice.values.get('job:' + ID))
+  const response = await f.call('/api/studio/jobs/' + ID + '/retain-draft', { method: 'POST', ticket: f.ticket })
+  assert.equal(response.status, 200)
+  const saved = await response.json() as any
+  assert.equal(saved.retained, true)
+  assert.equal(saved.backedUp, false)
+  assert.equal(f.backupOps.writes, 1)
+  const library = await (await f.call('/api/studio/library')).json() as any
+  assert.equal(library.incompleteModels[0].backupVerified, undefined)
+  const draft = await f.call('/api/studio/jobs/' + ID + '/draft', { ticket: library.incompleteModels[0].receipt.ticket })
+  assert.equal(draft.status, 200)
+  assert.equal(draft.headers.get('X-WORLDIFACT-Artifact-Source'), 'ORACLE-VERIFIED')
+  assert.deepEqual(f.alice.values.get('job:' + ID), original)
+  assert.equal(f.alice.values.get('customer-reserved-credits:v1'), 50)
 })
 
 test('wrong account, missing GLB, fake provider and missing unfinished draft cannot be saved', async () => {
