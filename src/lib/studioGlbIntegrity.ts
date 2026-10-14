@@ -32,6 +32,7 @@ export function inspectRetainedStudioGLB(buffer: ArrayBuffer): GLBInspection {
       !Array.isArray(doc.meshes) || !Array.isArray(doc.nodes))
     throw new Error('The retained GLB does not contain a complete embedded mesh buffer.')
 
+  const declaredBufferLength = (doc.buffers as Record<string, unknown>[])[0].byteLength as number
   const views = doc.bufferViews
   const accessors = doc.accessors
   const meshes = doc.meshes
@@ -50,7 +51,7 @@ export function inspectRetainedStudioGLB(buffer: ArrayBuffer): GLBInspection {
     const stride = view.byteStride ?? packed
     if (view.buffer !== 0 || !uint(viewOffset) || !uint(view.byteLength) ||
         !uint(entryOffset) || !uint(stride) || stride < packed ||
-        viewOffset + view.byteLength > doc.buffers[0].byteLength ||
+        viewOffset + view.byteLength > declaredBufferLength ||
         entryOffset + (accessor.count - 1) * stride + packed > view.byteLength)
       throw new Error('Geometry accessor exceeds the retained GLB binary buffer.')
     return { start: binaryStart + viewOffset + entryOffset, stride, count: accessor.count, componentType: accessor.componentType }
