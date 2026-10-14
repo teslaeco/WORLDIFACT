@@ -270,7 +270,9 @@ async function accountJob(env: StudioEnv, userId: string | undefined, id: string
     ? timingObservation ? timingObservation.value : await oracleGenerationTiming(env, id, fetcher) : undefined
   return { id, state, detail, ...(access?.pointSettlement ? { pointSettlement: access.pointSettlement } : {}), ...(failureCode ? { failureCode } : {}), downloadAllowed: access!.downloadAllowed,
     ...(generationTiming ? { generationTiming } : {}),
-    previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed, ...(access?.pricing ? { pricing: access.pricing } : {}) }
+    previewOnly: access!.previewOnly, previewAvailable: access!.downloadAllowed,
+    ...(access?.incompleteAvailable ? { incompleteAvailable: true as const, incompleteDownloadAllowed: access.incompleteDownloadAllowed } : {}),
+    ...(access?.pricing ? { pricing: access.pricing } : {}) }
 }
 async function limitedJson(response: Request | Response, limit: number) {
   if (!response.headers.get('content-type')?.toLowerCase().startsWith('application/json')) throw new StudioError('Expected application/json.', 415)
