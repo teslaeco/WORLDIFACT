@@ -107,7 +107,8 @@ async function verifyLibraryCursor(env: StudioEnv, userId: string, token: string
 async function publicLibraryModel(env: StudioEnv, userId: string, model: OwnedStudioLibraryModel): Promise<StudioLibraryModel> {
   return { id: model.id, prompt: model.prompt, createdAt: new Date(model.at).toISOString(), completedAt: new Date(model.completedAt).toISOString(),
     receipt: await receipt(env, model.id, model.fingerprint, userId, undefined, true), review: 'UNREVIEWED', downloadAllowed: model.downloadAllowed,
-    ...(model.studioExecution ? { studioExecution: model.studioExecution } : {}) }
+    ...(model.studioExecution ? { studioExecution: model.studioExecution } : {}),
+    ...(model.providerEvidence ? { providerEvidence: model.providerEvidence } : {}) }
 }
 async function libraryReadLimit(env: StudioEnv, userId: string) {
   if (!env.ACCOUNT_LIMITER) throw new StudioError('The account library read limiter is unavailable.', 503)
