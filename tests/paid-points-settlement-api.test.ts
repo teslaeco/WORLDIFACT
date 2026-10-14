@@ -8,7 +8,7 @@ import { demoBlueprint, assetSpecForBlueprint } from '../src/lib/blueprint.ts'
 import { createHash } from 'node:crypto'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
 import { GenerationBudget, type BudgetStorage } from '../server/budget.ts'
-import { AccountEntitlements, entitlementCall, entitlementStatus, type EntitlementStorage } from '../server/entitlements.ts'
+import { AccountEntitlements, entitlementCall, entitlementStatus, pendingUserStudioProvider, type EntitlementStorage } from '../server/entitlements.ts'
 import { type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
 
 const origin = 'https://worldifact.test'
@@ -19,6 +19,14 @@ function storage(): EntitlementStorage {
   const store: EntitlementStorage = {
     async get<T>(key: string) { return structuredClone(values.get(key)) as T | undefined },
     async put(key, value) { values.set(key, structuredClone(value)) },
+    async list<T>(options: { prefix: string; startAfter?: string; limit: number }) {
+      const entries = [...values.entries()]
+        .filter(([key]) => key.startsWith(options.prefix) && (!options.startAfter || key > options.startAfter))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(0, options.limit)
+        .map(([key, value]) => [key, structuredClone(value) as T] as const)
+      return new Map(entries)
+    },
     transaction<T>(callback: (value: EntitlementStorage) => Promise<T>) { const next = queue.then(() => callback(store)); queue = next.catch(() => {}); return next },
   }
   return store
@@ -143,6 +151,32 @@ test('first authenticated zero-cost recovery releases points immediately, while 
       assert.equal(again.state, 'failed'); assert.deepEqual(again.pointSettlement, released); assert.equal(f.artifacts(), 0)
     }
   }
+})
+
+test('new Studio preparation reconciles terminal zero-liability holds before checking the next generation', async () => {
+  const f = fixture(); await f.subscribe()
+  const first = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, first.ticket)
+  f.fail()
+  // First recovery sees no terminal budget receipt, so the failed request keeps
+  // its conservative pending-cost hold.
+  const failed = (await (await f.call(`/api/studio/jobs/${first.id}`, 'GET', undefined, first.ticket)).json() as any).job
+  assert.deepEqual(failed.pointSettlement, held())
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+  const pending = await pendingUserStudioProvider(f.env, alice)
+  assert.deepEqual(pending.ids, [first.id])
+  // Oracle later exposes immutable terminal evidence proving zero provider
+  // liability. Preparing the next job reconciles that old hold without another
+  // generation POST and without changing the account's purchased balance.
+  f.liability(0)
+  const beforePosts = f.posts()
+  const second = await f.prepare()
+  assert.match(second.id, /^[a-f0-9-]{36}$/)
+  assert.equal(f.posts(), beforePosts)
+  const status = await entitlementStatus(f.env, alice)
+  assert.equal(status.credits, 4500)
+  assert.equal(status.reservedCredits, 0)
+  assert.equal(status.availableCredits, 4500)
 })
 
 test('late success requires owned model validation and charges a pending hold only once', async () => {

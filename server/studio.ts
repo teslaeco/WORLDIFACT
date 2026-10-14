@@ -370,6 +370,28 @@ async function reconcileProviderReservation(env: StudioEnv, userId: string, id: 
     return false
   }
 }
+
+async function reconcilePendingBeforeNewGeneration(env: StudioEnv, userId: string, fetcher: typeof fetch) {
+  let cursor: string | null = null, pages = 0, checked = 0, reconciled = 0
+  // Bound cleanup work per new request. Each page is account-owned history only;
+  // receipt reads cannot start or retry generation and uncertain evidence keeps its hold.
+  while (pages < 2) {
+    let page
+    try { page = await pendingUserStudioProvider(env, userId, cursor) }
+    catch { break }
+    const results = await Promise.all([
+      ...page.ids.map(id => reconcileProviderReservation(env, userId, id, fetcher)),
+      ...page.blueprintIds.map(id => reconcileUserBlueprintProvider(env, userId, id)
+        .then(value => value.reconciled === true).catch(() => false)),
+    ])
+    checked += results.length
+    reconciled += results.filter(Boolean).length
+    pages++
+    if (!page.hasMore || !page.nextCursor) break
+    cursor = page.nextCursor
+  }
+  return { checked, reconciled }
+}
 function oracleFailureCode(value: Record<string, unknown>): StudioJob['failureCode'] {
   if (value.state === 'cancelled') return 'ORACLE_CANCELLED'
   if (value.state !== 'failed') return undefined
@@ -616,6 +638,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
     if (url.pathname === '/api/studio/prepare' && request.method === 'POST') {
       await limit(request, env, 'prepare')
       const user = await accountIdentity(request, env, fetcher)
+      if (user && !overnightTest) await reconcilePendingBeforeNewGeneration(env, user.id, fetcher)
       const raw = await limitedJson(request, STUDIO_BODY_LIMIT)
       const value = overnightTest ? readTestInputEnvelope(raw, request.headers) : raw
       if (!value) throw new StudioError('Refresh the test page to verify its account contract. No job was prepared.', 409, 'ACCOUNT_ADMISSION_UNAVAILABLE')
