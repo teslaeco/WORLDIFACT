@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readReferenceImage,buildEcomechAstraPayload,approvedMarker,JOB_ID,REFERENCE_URL } from '../scripts/ecomech-v4-astra-image-once.mjs'
+import { readReferenceImage,prepareReferenceJpeg,buildEcomechAstraPayload,approvedMarker,JOB_ID,REFERENCE_URL } from '../scripts/ecomech-v4-astra-image-once.mjs'
 test('V4 refuses text-only or random bytes, never launches provider task',()=>{
  assert.throws(()=>buildEcomechAstraPayload(new Uint8Array(8)),/ACTUAL_REFERENCE_IMAGE_REQUIRED/)
- assert.throws(()=>buildEcomechAstraPayload(new Uint8Array(50000)),/REFERENCE_PNG_INVALID/)
+ assert.throws(()=>buildEcomechAstraPayload(new Uint8Array(50000)),/REFERENCE_JPEG_INVALID/)
  assert.equal(JOB_ID,'d3fc6e0f-6258-4a2d-9935-ae31b0048e61')
  assert.match(REFERENCE_URL,/^https:\/\/cdn\.shopify\.com\//)
 })
