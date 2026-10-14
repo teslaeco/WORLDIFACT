@@ -131,7 +131,9 @@ function libraryModel(id: string, job: Job & { fingerprint: string }, permission
  * settlement are saved before this optional hint. No index error may turn a
  * valid GLB into a failed or multiply billed generation. */
 async function rememberRecentCompletedStudio(storage: EntitlementStorage, id: string, job: Job, now: number) {
-  if (!completedLibraryJob(job, now)) return
+  // Historical jobs must keep byte-for-byte identical ledger writes.
+  // Only new explicit Astra/Sol/Luna selections opt into the discovery hint.
+  if (!completedLibraryJob(job, now) || !isStudioExecution(job.studioExecution)) return
   try {
     const prior = await storage.get<unknown>(STUDIO_RECENT_KEY)
     const next = upsertRecentStudioIndex(prior, id, job.updatedAt ?? job.at)
