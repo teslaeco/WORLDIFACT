@@ -5,6 +5,7 @@
  */
 import { mkdir, readFile, copyFile, writeFile } from 'node:fs/promises'
 import { build } from 'esbuild'
+import { fileURLToPath } from 'node:url'
 import { validateCandidateGLB } from './ecomech-astra-once.mjs'
 
 const root='.ecomech-astra-preview'
@@ -25,7 +26,7 @@ const publicReport={jobId:report.jobId,completion:report.completion,provenance:r
   makeManufacturingReady:false,clientPointCharge:0,gameModelValidated:false,
   originalGLB:info}
 await writeFile(root+'/report.json',JSON.stringify(publicReport,null,2)+'\n')
-await build({entryPoints:['src/ecomechAstraViewer.ts'],bundle:true,minify:true,
+await build({entryPoints:[fileURLToPath(new URL('../src/ecomechAstraViewer.ts',import.meta.url))],bundle:true,minify:true,
   outfile:root+'/viewer.js',format:'iife',platform:'browser',target:'es2022',legalComments:'none'})
 const html=String.raw`<!doctype html>
 <html lang="en">
