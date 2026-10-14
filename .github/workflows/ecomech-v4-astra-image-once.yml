@@ -1,0 +1,61 @@
+name: ECOMECH V4 real Astra WITH reference image (one-shot USD 1.75)
+on:
+  push:
+    branches: ['feat/ecomech-v4-image-grounded-20261015']
+    paths: ['ops/ECOMECH_V4_REFERENCE_APPROVED_SINGLE_TEST.json']
+permissions:
+  contents: write
+concurrency:
+  group: ecomech-v4-astra-unique-paid-job
+  cancel-in-progress: false
+jobs:
+  real-image-job:
+    if: github.ref == 'refs/heads/feat/ecomech-v4-image-grounded-20261015' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Validate one-file-only signed V4 activation scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -m -r HEAD | wc -l)" -eq 1
+          git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/ECOMECH_V4_REFERENCE_APPROVED_SINGLE_TEST.json'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Full repository lint, types, unit, integration and browser/build gates before paid submission
+        run: npm run verify
+      - name: Install bounded real-image to JPEG transcoder
+        run: python3 -m pip install --break-system-packages 'Pillow==11.3.0'
+      - name: Verify reference image, selected Astra, and fixed one-job liability BEFORE paid provider call
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/ecomech-v4-reference.test.mjs
+          node scripts/ecomech-v4-astra-image-once.mjs probe
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - name: Single permanent Git tag claim and exactly ONE image-grounded Astra Oracle job
+        run: node scripts/ecomech-v4-astra-image-once.mjs run
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          WORLDIFACT_ECOMECH_APPROVAL: ECOMECH_V4_REFERENCE_SINGLE_TEST_20261015
+      - name: Preserve ORIGINAL image, native Oracle GLB and provider receipt, even if incomplete
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ECOMECH-V4-ASTRA-WITH-ACTUAL-REFERENCE-${{ github.sha }}
+          path: ecomech-v4-image-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
+          compression-level: 0
