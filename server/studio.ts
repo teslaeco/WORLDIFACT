@@ -593,23 +593,15 @@ async function retainIncompleteDraft(env: StudioEnv, uid: string, id: string, fe
       return { retained: false, reason: 'NO_RENDERABLE_CANDIDATE' }
   } catch { return { retained: false, reason: 'NO_VALID_RETAINED_GLB' } }
   const modelSha256 = hex(await crypto.subtle.digest('SHA-256', buffer))
-  let providerEvidence: StudioIncompleteRecord['providerEvidence']
-  // A receipt is an upper-liability proof, NOT an invoice or a visual-quality
-  // certificate. Only the bound actual provider model can be "Oracle-confirmed".
-  try {
-    const response = await oracle(env, `/v1/jobs/${id}/budget`, fetcher)
-    if (response.ok) {
-      const receipt = await limitedJson(response, 4096)
-      if (!validateTerminalBudgetReceipt(receipt, id, access.pricing ?? null, access.studioExecution))
-        return { retained: false, reason: 'PROVIDER_RECEIPT_MISMATCH' }
-      if (receipt.maximumLiabilityMicroUsd > 0 && usage.model === expectedModel) {
-        const result = await reconcileUserStudioProvider(env, uid, id, receipt)
-        if (result.reconciled === true)
-          providerEvidence = { revision: STUDIO_PROVIDER_EVIDENCE_REVISION,
-            model: expectedModel, mode: access.studioExecution.mode, source: 'oracle-terminal-budget' }
-      }
-    } else await response.body?.cancel()
-  } catch { /* Provider still unverified; keep selected model only. */ }
+  // Recovery is deliberately READ-ONLY with respect to provider liability and
+  // customer points. Do not reconcile a budget or close a hold to save a draft.
+  // Oracle-confirmed provenance is allowed only from a sealed receipt that was
+  // independently persisted on the original account job before this recovery.
+  const providerEvidence: StudioIncompleteRecord['providerEvidence'] =
+    access.incompleteVerifiedProvider && usage.model === expectedModel
+      ? { revision: STUDIO_PROVIDER_EVIDENCE_REVISION,
+          model: expectedModel, mode: access.studioExecution.mode, source: 'oracle-terminal-budget' }
+      : undefined
   const candidate: StudioIncompleteRecord = { revision: STUDIO_INCOMPLETE_REVISION, id,
     modelSha256, at: Date.now(), failureCode: access.failureCode, studioExecution: access.studioExecution,
     ...(providerEvidence ? { providerEvidence } : {}) }
