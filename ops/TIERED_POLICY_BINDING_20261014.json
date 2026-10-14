@@ -1,0 +1,8 @@
+{
+  "revision": "tiered-policy-binding-20261014-v1",
+  "baseCommit": "6bbe2132c885f95bf24e922e3fdf2f07422e9392",
+  "binding": "STUDIO_NEW_JOB_POLICY",
+  "value": "tiered-v1",
+  "method": "single Cloudflare Worker binding update",
+  "paidGeneration": false
+}
