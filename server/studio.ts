@@ -2,6 +2,8 @@ import { STUDIO_EXECUTION_REVISION } from '../src/lib/studioExecution.ts'
 import { ARTIFACT_PROBE_BYTES, hasStudioArtifactHeader, type StudioArtifactFormat } from '../src/lib/studioArtifact.ts'
 import { inspectGLB } from '../src/lib/glb.ts'
 import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
+import { hasRealDetailedMeshEvidence, inspectStudioMeshEvidence } from '../src/lib/studioMeshEvidence.ts'
+import { TEXT_CHARACTER_DETAIL_PROFILE, ROBOT_DETAIL_PROFILE } from '../src/lib/studioProtocol.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
@@ -18,7 +20,7 @@ import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioN
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
 import { inputDigest, oracleStudioPayload, validateOracleStudioPayload, readStudioGenerationTiming, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata, type StudioLibraryModel, type StudioLibraryPage, type StudioGenerationTiming } from '../src/lib/studioProtocol.ts'
 
-export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; STUDIO_NEW_JOB_POLICY?: string; GENERATION_BUDGET?: BudgetNamespace }
+export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; STUDIO_NEW_JOB_POLICY?: string; ENABLE_STUDIO_STRICT_QUALITY_V2?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
 const STUDIO_JOB_WATCHDOG_MS = 35 * 60_000
 const RECEIPT = new RegExp(`^(${UUID})\\.([0-9]{13})\\.([a-f0-9]{64})\\.([a-f0-9]{64})$`)
@@ -201,7 +203,16 @@ async function validateCompletedModel(env: StudioEnv, userId: string, id: string
     catch (e) { if (e instanceof InvalidStudioModelError) return 'invalid'; throw e }
     const bytes = await response.arrayBuffer() // Interrupted reads are uncertain, not an automatic refund.
     try {
-      return passesStudioStructuralQuality(inspectGLB(bytes), qualityProfile) ? 'valid' : 'invalid'
+      const summary = inspectGLB(bytes)
+      const isV2Detail = qualityProfile === TEXT_CHARACTER_DETAIL_PROFILE || qualityProfile === ROBOT_DETAIL_PROFILE
+      // IMPORTANT: strict rejection could otherwise strand a real, paid GLB
+      // until original-byte salvage of quality-failed jobs is released.
+      // Keep the existing basic validity contract unless the independently
+      // approved durable quality-recovery release explicitly enables this gate.
+      const strictV2 = isV2Detail && env.ENABLE_STUDIO_STRICT_QUALITY_V2 === 'true'
+      if (!passesStudioStructuralQuality(summary, isV2Detail && !strictV2 ? 'standard' : qualityProfile)) return 'invalid'
+      if (strictV2) return hasRealDetailedMeshEvidence(inspectStudioMeshEvidence(bytes)) ? 'valid' : 'invalid'
+      return 'valid'
     } catch { return 'invalid' }
   })()
   outputChecks.set(key, check)

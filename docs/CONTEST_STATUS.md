@@ -1,3 +1,21 @@
+# 14 October 2026 — CHARACTER / ROBOT V2 REVIEW CI GREEN (NOT DEPLOYED)
+
+**VERIFIED TESTED**: draft PR #285 exact executable commit `1ea2623cc45f7adaa7518d6b4a9b6d09591073a7` passed all **2,315 / 2,315** tests, lint, TypeScript, HTTP smoke, production build, foundations, Wrangler dry-run and read-only hosted Studio check in https://github.com/teslaeco/WORLDIFACT/actions/runs/38616577942. Native Chromium tests passed with actual browser and inert fixtures after bounding DevTools readiness checks; no browser assertion was skipped. All six auxiliary Oracle/FAST/source-review workflows passed at the same revision. The status-document-only commit following this milestone must be checked separately; do not conflate source-tested commit and subsequent docs-only HEAD.
+
+**NO-GO for production claim**: full P0 original GLB retention PR #284 and read-only quality-failure salvage still require verification; strict V2 output rejection stays disabled unless `ENABLE_STUDIO_STRICT_QUALITY_V2` is deliberately configured (it is not part of the Worker config). Live Oracle character/robot artistic improvement, external organic 3D reconstruction, public signed-in Android/desktop acceptance and new customer prices have **NOT** been verified. No customer points, holds, provider limits, subscription or model API routing were changed; no new paid generations or production deploy occurred.
+
+---
+
+# 14 October 2026 — CHARACTER / ROBOT GEOMETRY V2, DRAFT PR #285
+
+**IMPLEMENTED ON ISOLATED REVIEW BRANCH ONLY:** https://github.com/teslaeco/WORLDIFACT/pull/285 and [CHARACTER_ENGINE_V2_20261014.md](CHARACTER_ENGINE_V2_20261014.md). Original `main` and production remain unchanged. New jobs explicitly describing text-only humanoid/fantasy characters or articulated combat robots receive first-build geometry instructions bound to the original selected Astra, Sol or Luna. The preview reports GLB-declared triangles, instanced triangles, source meshes and material slots with explicit visual-review disclaimers. New detailed geometry acceptance profiles exist, supported by a BIN-backed vertex/triangle sample validator and regression tests. No image-to-3D API, third-party provider, rigging or animations were activated.
+
+**SAFETY:** Strict V2 geometry acceptance is controlled by `ENABLE_STUDIO_STRICT_QUALITY_V2`; it is **NOT enabled** in production or repository Worker config. Without original-byte recovery of a quality-failed 3D file, enabling the stricter gate could hide an authentic model. Retain existing successful file semantics until PR #284 and the quality-failure retention extension are verified. The existing provider model IDs, rates, point ceilings, reservations, holds and financial history are unchanged. New external Character Engine/provider requires an explicitly approved privacy/cost/billing integration and cannot be represented as live now.
+
+**VERIFICATION STATUS:** full exact-head CI and real-user Android/Desktop and Oracle production acceptance are outstanding at this writing. Synthetic GLB fixtures validate only structural and backed-buffer behavior, not visual quality. Do not merge, deploy or claim superior-to-Tripo quality from the code alone. No paid API generation was initiated on this branch.
+
+---
+
 # 14 October 2026 — ACTUAL MODEL PROVENANCE LABELS LIVE
 
 VERIFIED LIVE: PR #283 merged as `a7a3ea61160604921181b8dd59b3d341dc721437`. One-use preserving release commit `3bbad1ec7a7086c7af6ad7ce8ff74df730578e09` published through GitHub Actions https://github.com/teslaeco/WORLDIFACT/actions/runs/38596101280, status SUCCESS after full `npm run verify`, foundations, Wrangler dry-run and real `--keep-vars` deploy. Production Cloudflare version `99598f30-edd2-46ba-bb3c-5c787cdf0116`, public Studio smoke `ready=true`, models `astra,sol,luna`, durable admission revision correct, no global generation quota.

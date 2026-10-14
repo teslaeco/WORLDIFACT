@@ -213,7 +213,7 @@ export function paidPointsJob(value: unknown, id?: string): value is Job & { fun
   const model = job.model ?? (job.profile === 'fast' ? 'sol' : 'astra')
   if (typeof model !== 'string' || !Object.hasOwn(MODEL_ECONOMICS, model) || (model === 'astra') !== (job.profile === 'slow') ||
       job.prompt !== undefined && (typeof job.prompt !== 'string' || job.prompt.length < 3 || job.prompt.length > 4000) ||
-      job.qualityProfile !== undefined && !['standard', 'industrial-electrical-cabinet-v1', 'reference-character-v1'].includes(job.qualityProfile) ||
+      job.qualityProfile !== undefined && !['standard', 'industrial-electrical-cabinet-v1', 'reference-character-v1', 'text-character-detail-v2', 'articulated-robot-detail-v2'].includes(job.qualityProfile) ||
       job.failureCode !== undefined && (job.state !== 'failed' || !STUDIO_FAILURE_CODES.includes(job.failureCode))) return false
   const dispatch = job.channel === 'studio' ? job.studioDispatch : job.blueprintDispatch
   const until = job.channel === 'studio' ? job.studioDispatchUntil : job.blueprintDispatchUntil
@@ -1331,7 +1331,7 @@ export class AccountEntitlements {
         const prompt = input.prompt === undefined ? undefined : String(input.prompt)
         if (prompt !== undefined && (prompt.length < 3 || prompt.length > 4000)) return json({ error: 'Invalid generation prompt' }, 400)
         const qualityProfile = input.qualityProfile === undefined ? 'standard' : String(input.qualityProfile)
-        if (!['standard','industrial-electrical-cabinet-v1','reference-character-v1'].includes(qualityProfile)) return json({ error: 'Invalid generation quality profile' }, 400)
+        if (!['standard','industrial-electrical-cabinet-v1','reference-character-v1','text-character-detail-v2','articulated-robot-detail-v2'].includes(qualityProfile)) return json({ error: 'Invalid generation quality profile' }, 400)
         const id = input.id, profile = input.profile as GenerationKind
         const requestedModel = input.model ?? (profile === 'fast' ? 'sol' : 'astra')
         if (!['luna', 'sol', 'astra'].includes(String(requestedModel)) || (profile === 'slow') !== (requestedModel === 'astra')) return json({ error: 'Invalid model for generation route' }, 400)
