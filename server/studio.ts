@@ -115,7 +115,8 @@ async function publicLibraryModel(env: StudioEnv, userId: string, model: OwnedSt
     receipt: await receipt(env, model.id, model.fingerprint, userId, undefined, true), review: 'UNREVIEWED', downloadAllowed: model.downloadAllowed,
     ...(model.studioExecution ? { studioExecution: model.studioExecution } : {}),
     ...(model.providerEvidence ? { providerEvidence: model.providerEvidence } : {}),
-    ...(model.completion === 'INCOMPLETE' && model.failureCode ? { completion: 'INCOMPLETE' as const, incompleteReason: model.failureCode } : {}) }
+    ...(model.completion === 'INCOMPLETE' && model.failureCode ? { completion: 'INCOMPLETE' as const, incompleteReason: model.failureCode,
+      ...(model.backupVerified ? { backupVerified: model.backupVerified } : {}) } : {}) }
 }
 async function libraryReadLimit(env: StudioEnv, userId: string) {
   if (!env.ACCOUNT_LIMITER) throw new StudioError('The account library read limiter is unavailable.', 503)
