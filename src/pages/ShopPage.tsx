@@ -803,7 +803,9 @@ export default function ShopPage() {
               setStudioModel(model)
               setExecutionMode('standard')
               setCheapModel(model === 'luna' ? 'luna' : 'sol')
-              setProfile('standard')
+              // Keep the historical account-ledger route category for Sol/Luna.
+              // Provider speed is independently fixed by studioExecution.mode=standard.
+              setProfile(model === 'astra' ? 'standard' : FAST_DRAFT_PROFILE)
               setDeliverable('detailed-mesh'); setBudgetTier('standard'); setAcceptedBudgetRevision(null)
             }}><option value="astra" disabled={!executionReady}>Slow / Quality · GPT-6 Astra</option><option value="sol" disabled={!executionReady}>Slow / Quality · GPT-6.1 Sol</option><option value="luna" disabled={!executionReady}>Slow / Quality · GPT-6 Luna</option></select>
           </div>
