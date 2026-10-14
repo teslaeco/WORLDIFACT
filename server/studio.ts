@@ -6,6 +6,7 @@ import { STUDIO_INCOMPLETE_REVISION, isStudioIncompleteReason, type StudioIncomp
 import { ARTIFACT_PROBE_BYTES, hasStudioArtifactHeader, type StudioArtifactFormat } from '../src/lib/studioArtifact.ts'
 import { inspectGLB } from '../src/lib/glb.ts'
 import { inspectRetainedStudioGLB } from '../src/lib/studioGlbIntegrity.ts'
+import { incompleteBackupEnabled, preserveRetainedIncompleteBackup, readRetainedIncompleteBackup, type IncompleteGlbR2Env } from './studioIncompleteR2.ts'
 import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
@@ -23,7 +24,7 @@ import { HISTORICAL_STUDIO_POLICY, studioNewJobPolicy } from '../src/lib/studioN
 import { budgetSettings, APPROVED_FAST_TEST, type BudgetEnv, type BudgetNamespace } from './budget.ts'
 import { inputDigest, oracleStudioPayload, validateOracleStudioPayload, readStudioGenerationTiming, studioQualityProfile, validateStudioInput, validateStudioPrepareManifest, supportsFastDraft, FAST_DRAFT_PROFILE, STUDIO_BODY_LIMIT, STUDIO_MODEL_LIMIT, STUDIO_SUBMISSION_GRACE_MS, JOB_DETAILS, STUDIO_FAILURE_CODES, STUDIO_FAILURE_DETAILS, type StudioInput, type StudioJob, type StudioQualityProfile, type StudioPrepareMetadata, type StudioLibraryModel, type StudioLibraryPage, type StudioGenerationTiming } from '../src/lib/studioProtocol.ts'
 
-export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; STUDIO_NEW_JOB_POLICY?: string; GENERATION_BUDGET?: BudgetNamespace }
+export interface StudioEnv extends PlatformEnv, BudgetEnv, AccountEnv, EntitlementEnv, IncompleteGlbR2Env { PUBLIC_PILOT?: string; ENABLE_STUDIO_JOBS?: string; STUDIO_NEW_JOB_POLICY?: string; GENERATION_BUDGET?: BudgetNamespace }
 const UUID = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
 const STUDIO_JOB_WATCHDOG_MS = 35 * 60_000
 const RECEIPT = new RegExp(`^(${UUID})\\.([0-9]{13})\\.([a-f0-9]{64})\\.([a-f0-9]{64})$`)
@@ -537,19 +538,32 @@ async function modelOrExport(env: StudioEnv, id: string, format: string, fetcher
 /** A draft GLB must be bound to the original failure and its original bytes.
  * Revalidation also detects missing/changed worker artifacts after reload.
  * No continuation, provider call, manufacture/quality approval or debit. */
-async function retainedDraftResponse(env: StudioEnv, id: string, sha256: string, fetcher: typeof fetch): Promise<Response> {
-  const response = await modelOrExport(env, id, 'model', fetcher)
-  const buffer = await response.arrayBuffer()
-  const inspection = inspectRetainedStudioGLB(buffer)
-  if (inspection.meshCount < 1 || inspection.renderedTriangles < 1 || inspection.triangles < 1)
-    throw new StudioError('The retained draft has no renderable 3D geometry.', 409)
+async function retainedDraftResponse(env: StudioEnv, owner: string, id: string, sha256: string, fetcher: typeof fetch): Promise<Response> {
+  let buffer: ArrayBuffer | null = null
+  let source: 'R2-VERIFIED' | 'ORACLE-VERIFIED' = 'ORACLE-VERIFIED'
+  // Owner, original job ID and canonical failed-account record are checked
+  // before reaching this helper. R2 objects are never addressed from a URL.
+  try {
+    buffer = await readRetainedIncompleteBackup(env, owner, id, sha256)
+    if (buffer) source = 'R2-VERIFIED'
+  } catch { /* A missing, corrupt or unavailable R2 copy must never be served. */ }
+  if (!buffer) {
+    const response = await modelOrExport(env, id, 'model', fetcher)
+    buffer = await response.arrayBuffer()
+  }
+  try {
+    const inspection = inspectRetainedStudioGLB(buffer)
+    if (!inspection.meshCount || !inspection.renderedTriangles || !inspection.triangles)
+      throw new Error('Missing renderable geometry.')
+  } catch { throw new StudioError('The retained GLB does not contain valid original 3D geometry.', 409) }
   const digest = hex(await crypto.subtle.digest('SHA-256', buffer))
-  if (digest !== sha256) throw new StudioError('The saved draft GLB changed on the worker. The original candidate cannot be verified.', 409)
+  if (digest !== sha256) throw new StudioError('The saved draft GLB changed after retention. The original candidate cannot be verified.', 409)
   return new Response(buffer, { headers: { 'Content-Type': 'model/gltf-binary',
     'Content-Length': String(buffer.byteLength),
     'Content-Disposition': `attachment; filename="WORLDIFACT-${id}-INCOMPLETE.glb"`,
     'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
-    'X-WORLDIFACT-Provenance': 'GENERATED-INCOMPLETE-UNREVIEWED' } })
+    'X-WORLDIFACT-Provenance': 'GENERATED-INCOMPLETE-UNREVIEWED',
+    'X-WORLDIFACT-Artifact-Source': source } })
 }
 
 /** Opt-in read of the SAME original failed job. Oracle may retain an incomplete
@@ -562,7 +576,9 @@ async function retainIncompleteDraft(env: StudioEnv, uid: string, id: string, fe
     throw new StudioError('This account has no eligible unfinished Studio request. No new generation started.', 409)
   if (access.incompleteAvailable) {
     const { model } = await userStudioLibraryModel(env, uid, id)
-    if (model?.completion === 'INCOMPLETE') return { retained: true, repeated: true, canOpen: model.downloadAllowed }
+    if (model?.completion === 'INCOMPLETE' && (model.backupVerified || !incompleteBackupEnabled(env)))
+      return { retained: true, repeated: true, canOpen: model.downloadAllowed,
+        backedUp: !!model.backupVerified, verifiedProvider: !!model.providerEvidence }
   }
   const statusResponse = await oracle(env, `/v1/jobs/${id}`, fetcher)
   if (!statusResponse.ok) { await statusResponse.body?.cancel(); return { retained: false, reason: 'RETAINED_JOB_UNAVAILABLE' } }
@@ -593,6 +609,11 @@ async function retainIncompleteDraft(env: StudioEnv, uid: string, id: string, fe
       return { retained: false, reason: 'NO_RENDERABLE_CANDIDATE' }
   } catch { return { retained: false, reason: 'NO_VALID_RETAINED_GLB' } }
   const modelSha256 = hex(await crypto.subtle.digest('SHA-256', buffer))
+  // A private bucket may add durable bytes, but is explicitly disabled unless
+  // provisioned and approved. Failure remains Oracle-only, never a fake backup.
+  let backedUp = false
+  try { backedUp = await preserveRetainedIncompleteBackup(env, uid, id, modelSha256, buffer) }
+  catch { /* Valid Oracle-only draft remains recoverable while its bytes exist. */ }
   // Recovery is deliberately READ-ONLY with respect to provider liability and
   // customer points. Do not reconcile a budget or close a hold to save a draft.
   // Oracle-confirmed provenance is allowed only from a sealed receipt that was
@@ -604,14 +625,16 @@ async function retainIncompleteDraft(env: StudioEnv, uid: string, id: string, fe
       : undefined
   const candidate: StudioIncompleteRecord = { revision: STUDIO_INCOMPLETE_REVISION, id,
     modelSha256, at: Date.now(), failureCode: access.failureCode, studioExecution: access.studioExecution,
-    ...(providerEvidence ? { providerEvidence } : {}) }
+    ...(providerEvidence ? { providerEvidence } : {}),
+    ...(backedUp ? { backupVerified: 'r2-sha256-readback-v1' as const } : {}) }
   const result = await recordUserStudioIncomplete(env, uid, candidate)
   if (!result.recorded) return { retained: false, reason: 'ACCOUNT_CANDIDATE_UNAVAILABLE' }
   const { model } = await userStudioLibraryModel(env, uid, id)
   if (!model || model.completion !== 'INCOMPLETE' || model.modelSha256 !== modelSha256)
     return { retained: false, reason: 'ACCOUNT_CANDIDATE_NOT_CONFIRMED' }
   return { retained: true, repeated: result.repeated === true, canOpen: model.downloadAllowed,
-    verifiedProvider: !!model.providerEvidence, incomplete: true, additionalPointsRequired: 'UNKNOWN' }
+    verifiedProvider: !!model.providerEvidence, backedUp: !!model.backupVerified,
+    incomplete: true, additionalPointsRequired: 'UNKNOWN' }
 }
 
 export interface StudioExecutionContext { waitUntil(promise: Promise<unknown>): void }
@@ -918,7 +941,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         await limit(request, env, `artifact:${auth.id}:${match[2].replace('exports/', '')}`)
         if (model.completion === 'INCOMPLETE') {
           if (match[2] !== 'draft' || !model.modelSha256) throw new StudioError('Only the unreviewed GLB draft is available for this incomplete model.', 409)
-          return await retainedDraftResponse(env, auth.id, model.modelSha256, fetcher)
+          return await retainedDraftResponse(env, user!.id, auth.id, model.modelSha256, fetcher)
         }
         if (match[2] === 'draft') throw new StudioError('This model is already a completed result, not a retained draft.', 409)
         return await modelOrExport(env, auth.id, match[2].replace('exports/', ''), fetcher)
@@ -935,7 +958,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
         if (!model || model.completion !== 'INCOMPLETE' || !model.downloadAllowed ||
             model.fingerprint !== auth.hash || !model.modelSha256)
           throw new StudioError('The unfinished GLB is no longer available in this account.', 403)
-        return await retainedDraftResponse(env, auth.id, model.modelSha256, fetcher)
+        return await retainedDraftResponse(env, user!.id, auth.id, model.modelSha256, fetcher)
       }
       if (match[2]) {
         // Legacy/operator mode has no account ledger and keeps its historical
