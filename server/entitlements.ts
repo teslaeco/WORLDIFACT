@@ -1,4 +1,5 @@
 import { isStudioExecution, sameStudioExecution, type StudioExecution } from '../src/lib/studioExecution.ts'
+import { STUDIO_RECENT_KEY, STUDIO_RECENT_READ_LIMIT, readRecentStudioIndex, upsertRecentStudioIndex } from '../src/lib/studioRecentIndex.ts'
 import { imageStore, type ImageEnv } from './imageGeneration.ts'
 import { PROMOTION_NAMESPACE, promotionRegistry, applyPromotion, promotionApi, type PromotionEnv } from './promotionCodes.ts'
 import { adminAllocation, adminBudget, reserveAdminBudget, adminDispatchAllowed, adminJob, validAdminFunding, type AdminEnv, type AdminAllocation, type AdminFunding } from './adminEntitlement.ts'
@@ -124,6 +125,18 @@ function libraryModel(id: string, job: Job & { fingerprint: string }, permission
   return { id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
     completedAt: job.updatedAt ?? job.at, downloadAllowed: permissions.clear && (adminJob(job) || job.profile === 'fast' || permissions.subscribed),
     ...(isStudioExecution(job.studioExecution) ? { studioExecution: job.studioExecution } : {}) }
+}
+
+/** Best-effort discovery index only. Canonical completed job and account
+ * settlement are saved before this optional hint. No index error may turn a
+ * valid GLB into a failed or multiply billed generation. */
+async function rememberRecentCompletedStudio(storage: EntitlementStorage, id: string, job: Job, now: number) {
+  if (!completedLibraryJob(job, now)) return
+  try {
+    const prior = await storage.get<unknown>(STUDIO_RECENT_KEY)
+    const next = upsertRecentStudioIndex(prior, id, job.updatedAt ?? job.at)
+    if (next) await storage.put(STUDIO_RECENT_KEY, next)
+  } catch { /* Canonical completed row remains the authority; history scan is fallback. */ }
 }
 function studioDispatchUntil(job: Job): number | undefined {
   return job.studioDispatch === 'claimed-v1' && Number.isSafeInteger(job.studioDispatchUntil) && Number(job.studioDispatchUntil) > job.at && Number(job.studioDispatchUntil) <= job.at + STUDIO_SUBMISSION_GRACE_MS ? job.studioDispatchUntil : undefined
@@ -392,7 +405,9 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
     if (job.state !== 'reserved') return { settled: true, repeated: true }
     const dispatch = job.channel === 'studio' ? job.studioDispatch : job.blueprintDispatch
     if (next === 'completed' && dispatch !== 'claimed-v1') return { settled: false }
-    await storage.put(`job:${id}`, { ...job, state: next, updatedAt: now, ...(failureCode && next === 'failed' ? { failureCode } : {}) })
+    const terminal = { ...job, state: next, updatedAt: now, ...(failureCode && next === 'failed' ? { failureCode } : {}) }
+    await storage.put(`job:${id}`, terminal)
+    if (next === 'completed') await rememberRecentCompletedStudio(storage, id, terminal, now)
     return { settled: true, repeated: false }
   }
   if (Object.hasOwn(job, 'fundingMode') && !paidPointsJob(job, id)) throw new Error('Unknown settlement funding mode')
@@ -412,6 +427,7 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
       ...(next === 'failed' && failureCode ? { failureCode } : {}) }
     if (next === 'completed') delete terminal.failureCode
     await storage.put(`job:${id}`, terminal)
+    if (next === 'completed') await rememberRecentCompletedStudio(storage, id, terminal, now)
     return { settled: true, repeated: false, pointSettlement }
   }
   if (job.state !== 'reserved') return { settled: true, repeated: true }
@@ -459,7 +475,11 @@ async function settleReservedJob(storage: EntitlementStorage, id: string, job: J
     free[job.profile] = free[job.profile].filter(item => item.id !== id)
     await storage.put('usage', free)
   }
-  await storage.put(`job:${id}`, { ...job, ...(providerReservation ? { studioProviderReservation: providerReservation } : {}), ...(blueprintReservation ? { blueprintProviderReservation: blueprintReservation } : {}), state: next, updatedAt: now, ...(next === 'failed' && failureCode ? { failureCode } : {}) })
+  const terminal = { ...job, ...(providerReservation ? { studioProviderReservation: providerReservation } : {}),
+    ...(blueprintReservation ? { blueprintProviderReservation: blueprintReservation } : {}),
+    state: next, updatedAt: now, ...(next === 'failed' && failureCode ? { failureCode } : {}) }
+  await storage.put(`job:${id}`, terminal)
+  if (next === 'completed') await rememberRecentCompletedStudio(storage, id, terminal, now)
   return { settled: true, repeated: false }
 }
 
@@ -971,8 +991,20 @@ export class AccountEntitlements {
         // from later UUID ranges. Preserve the original signed page cursor and
         // never start a job, settle points or request Oracle data during listing.
         let recentModels: OwnedStudioLibraryModel[] | undefined
-        if (!after && hasMore && cursor) {
+        if (!after) {
           const recent = new Map(models.map(model => [model.id, model]))
+          // A new successful account job is immediately discoverable even when
+          // its random UUID falls beyond every bounded legacy scan. Each entry
+          // is re-read from the authenticated owner namespace and validated.
+          try {
+            const index = readRecentStudioIndex(await storage.get<unknown>(STUDIO_RECENT_KEY))
+            for (const hint of index?.entries.slice(0, STUDIO_RECENT_READ_LIMIT) ?? []) {
+              const candidate = await storage.get<unknown>(`job:${hint.id}`)
+              if (completedLibraryJob(candidate, now) && (candidate.updatedAt ?? candidate.at) === hint.completedAt)
+                recent.set(hint.id, libraryModel(hint.id, candidate, permissions))
+            }
+          } catch { /* Invalid or unavailable index falls back to signed history. */ }
+          if (hasMore && cursor) {
           let scanCursor = cursor
           for (let scan = 0; scan < 2; scan++) {
             const following = await storage.list<unknown>({ prefix: 'job:', startAfter: scanCursor, limit: STUDIO_LIBRARY_SCAN_LIMIT })
@@ -987,7 +1019,9 @@ export class AccountEntitlements {
             if (!finalKey || following.size < STUDIO_LIBRARY_SCAN_LIMIT) break
             scanCursor = finalKey
           }
-          recentModels = [...recent.values()].sort((a, b) => b.completedAt - a.completedAt || b.id.localeCompare(a.id)).slice(0, 6)
+          }
+          if (hasMore || recent.size > models.length)
+            recentModels = [...recent.values()].sort((a, b) => b.completedAt - a.completedAt || b.id.localeCompare(a.id)).slice(0, 6)
         }
         return json({ models, nextCursor: hasMore ? cursor : null, hasMore,
           ...(recentModels ? { recentModels } : {}) } satisfies OwnedStudioLibraryPage)
