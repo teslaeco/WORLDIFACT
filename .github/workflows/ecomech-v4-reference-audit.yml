@@ -21,9 +21,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Install deterministic JPEG reference preparation
+        run: python3 -m pip install --break-system-packages 'Pillow==11.3.0'
       - name: Test fail-closed reference image validation without Oracle or paid call
         run: node --test tests/ecomech-v4-reference.test.mjs
       - name: Verify reference image is reachable and actual image is bound to Astra payload
-        run: node --input-type=module -e "import{readReferenceImage,buildEcomechAstraPayload}from './scripts/ecomech-v4-astra-image-once.mjs';const ref=await readReferenceImage();const p=buildEcomechAstraPayload(ref.bytes);if(p.photos?.length!==1||p.studioExecution?.model!=='astra'||!p.photos[0].dataUrl?.startsWith('data:image/png;base64,'))throw Error('MISSING_REAL_IMAGE');console.log('REFERENCE_IMAGE_VERIFIED',ref.sha256,ref.bytes.length,'model',p.studioExecution.model,'photos',p.photos.length)"
+        run: node --input-type=module -e "import{readReferenceImage,prepareReferenceJpeg,buildEcomechAstraPayload}from './scripts/ecomech-v4-astra-image-once.mjs';const ref=await readReferenceImage();const jpeg=prepareReferenceJpeg(ref.bytes);const p=buildEcomechAstraPayload(jpeg);if(p.photos?.length!==1||p.studioExecution?.model!=='astra'||!p.photos[0].dataUrl?.startsWith('data:image/jpeg;base64,'))throw Error('MISSING_REAL_IMAGE');console.log('REFERENCE_IMAGE_VERIFIED',ref.sha256,ref.bytes.length,'model',p.studioExecution.model,'photos',p.photos.length)"
       - name: No paid generation has been authorized in this workflow
         run: echo "Reference-only source audit, no Oracle POST, no store/subscription mutation"
