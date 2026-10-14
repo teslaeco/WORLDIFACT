@@ -27,7 +27,7 @@ const publicReport={jobId:report.jobId,completion:report.completion,provenance:r
 await writeFile(root+'/report.json',JSON.stringify(publicReport,null,2)+'\n')
 await build({entryPoints:['src/ecomechAstraViewer.ts'],bundle:true,minify:true,
   outfile:root+'/viewer.js',format:'iife',platform:'browser',target:'es2022',legalComments:'none'})
-const html=String.raw\`<!doctype html>
+const html=String.raw`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -82,6 +82,6 @@ footer{font-size:12px;color:#8cadb7;margin:24px 0}
 <footer>Test build, isolated from WORLDIFACT customer accounts. Original API job ID: 6fa9be43-f371-4bcd-8fe7-7a3ea9967855. AI model confirmation is shown only when the original Oracle budget receipt verifies it. Reference artwork was not uploaded in this text-only test.</footer>
 </main>
 <script src="./viewer.js" defer></script>
-</body></html>\`
+</body></html>`
 await writeFile(root+'/index.html',html)
 console.log('STATIC_STAGING_PACKAGED',JSON.stringify({bytes:info.bytes,sha256:info.sha256,triangles:info.triangles,source:report.provenance}))
