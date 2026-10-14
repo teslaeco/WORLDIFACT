@@ -310,7 +310,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         <strong>{currentSelection.row.model.prompt}</strong>
         {currentSelection.row.origin === 'account' ? <small>{generatedWith(currentSelection.row.model)}</small> : <small>{deviceModelProvenance(currentSelection.row.model)}</small>}
         {currentSelection.row.origin === 'account' && currentSelection.row.model.completion === 'INCOMPLETE' &&
-          <small role="status">INCOMPLETE · UNREVIEWED. Geometry is a retained unfinished GLB, not a final model. More points may be required for a separately approved new attempt.</small>}
+          <small role="status">INCOMPLETE · UNREVIEWED. Geometry is a retained unfinished GLB, not a final model. More points may be required for a separately approved new attempt. {currentSelection.row.model.backupVerified ? 'Private R2 SHA-256 readback verified at retention.' : 'Oracle-only storage; independent backup not verified.'}</small>}
         <small>Recorded worker generation time: {formatStudioGenerationDuration(currentSelection.row.origin === 'account' ? currentSelection.row.model.generationTiming : undefined)} · Excludes upload and queue time.</small>
         <small>{(currentSelection.byteLength / 1048576).toFixed(1)} MB · GLB · UNREVIEWED · {currentSelection.row.origin === 'account' ? 'Account model' : 'Device copy'}</small>
       </div>
@@ -345,7 +345,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         <small>{item.origin === 'account' ? item.model.completion === 'INCOMPLETE' ? 'Account GLB candidate · INCOMPLETE · UNREVIEWED' : 'Account model · Studio · UNREVIEWED' : item.model.source === 'blueprint' ? `Device copy · Procedural blueprint · ${item.model.generation.model} · UNREVIEWED` : 'Device copy · Studio · UNREVIEWED'}</small>
         {item.origin === 'account' ? <>
           <small>{generatedWith(item.model)}</small>
-          {item.model.completion === 'INCOMPLETE' && <small role="status">INCOMPLETE · UNREVIEWED · Budget stopped before final review. This is a retained GLB candidate, not a finished model. A new generation with a separately approved higher budget may be needed; no automatic continuation or extra points have been charged.</small>}
+          {item.model.completion === 'INCOMPLETE' && <small role="status">INCOMPLETE · UNREVIEWED · Budget stopped before final review. This is a retained GLB candidate, not a finished model. {item.model.backupVerified ? 'Private R2 copy verified at original SHA-256; every download revalidates bytes.' : 'Oracle-only GLB; independent backup is not verified, and future availability depends on Oracle.'} No automatic continuation or extra points have been charged.</small>}
         </> : <small>{deviceModelProvenance(item.model)}</small>}
         <details className="shop-gallery-details" open={!compact}><summary>File details</summary>
         {item.origin === 'account' ? <>
