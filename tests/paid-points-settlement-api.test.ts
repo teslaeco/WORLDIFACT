@@ -145,6 +145,30 @@ test('first authenticated zero-cost recovery releases points immediately, while 
   }
 })
 
+test('new Studio preparation reconciles terminal zero-liability holds before checking the next generation', async () => {
+  const f = fixture(); await f.subscribe()
+  const first = await f.prepare()
+  await f.call('/api/studio/jobs', 'POST', input, first.ticket)
+  f.fail()
+  // First recovery sees no terminal budget receipt, so the failed request keeps
+  // its conservative pending-cost hold.
+  const failed = (await (await f.call(`/api/studio/jobs/${first.id}`, 'GET', undefined, first.ticket)).json() as any).job
+  assert.deepEqual(failed.pointSettlement, held())
+  assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+  // Oracle later exposes immutable terminal evidence proving zero provider
+  // liability. Preparing the next job reconciles that old hold without another
+  // generation POST and without changing the account's purchased balance.
+  f.liability(0)
+  const beforePosts = f.posts()
+  const second = await f.prepare()
+  assert.match(second.id, /^[a-f0-9-]{36}$/)
+  assert.equal(f.posts(), beforePosts)
+  const status = await entitlementStatus(f.env, alice)
+  assert.equal(status.credits, 4500)
+  assert.equal(status.reservedCredits, 0)
+  assert.equal(status.availableCredits, 4500)
+})
+
 test('late success requires owned model validation and charges a pending hold only once', async () => {
   const f = fixture(); await f.subscribe(); const receipt = await f.prepare()
   await f.call('/api/studio/jobs', 'POST', input, receipt.ticket); f.fail()
