@@ -59,7 +59,7 @@ type Job = { studioExecution?: StudioExecution; adminFunding?: AdminFunding; adm
 export type Reservation = { pointSettlement?: PointSettlement; fundingSource?: typeof PAID_POINTS_FUNDING | typeof OVERNIGHT_TEST_APPROVAL; providerModel?: string; pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
 export type JobAccess = { studioExecution?: StudioExecution; channel?: 'studio' | 'blueprint'; model?: GenerationModel; pointSettlement?: PointSettlement; fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true; incompleteAvailable?: true; incompleteDownloadAllowed?: boolean; incompleteVerifiedProvider?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
-export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean; studioExecution?: StudioExecution; providerEvidence?: StudioProviderEvidence; completion?: 'INCOMPLETE'; failureCode?: StudioIncompleteReason; modelSha256?: string }
+export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean; studioExecution?: StudioExecution; providerEvidence?: StudioProviderEvidence; completion?: 'INCOMPLETE'; failureCode?: StudioIncompleteReason; modelSha256?: string; backupVerified?: StudioIncompleteRecord['backupVerified'] }
 type OwnedStudioLibraryPage = { models: OwnedStudioLibraryModel[]; nextCursor: string | null; hasMore: boolean; recentModels?: OwnedStudioLibraryModel[]; incompleteModels?: OwnedStudioLibraryModel[] }
 export const STUDIO_LIBRARY_SCAN_LIMIT = 64
 export type StudioProviderReconciliationResult = { pointSettlement?: PointSettlement; reconciled: boolean; repeated?: boolean; releasedCents?: number; retainedCents?: number; reason?: string }
@@ -183,7 +183,8 @@ async function incompleteLibraryModel(storage: EntitlementStorage, id: string, v
   return { id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered incomplete Studio model',
     at: job.at, completedAt: saved.at, downloadAllowed: permissions.clear && (adminJob(job) || permissions.subscribed),
     completion: 'INCOMPLETE', failureCode: saved.failureCode, modelSha256: saved.modelSha256,
-    studioExecution: saved.studioExecution, ...(providerEvidence ? { providerEvidence } : {}) }
+    studioExecution: saved.studioExecution, ...(providerEvidence ? { providerEvidence } : {}),
+    ...(saved.backupVerified ? { backupVerified: saved.backupVerified } : {}) }
 }
 /** Best-effort discovery index only. Canonical completed job and account
  * settlement are saved before this optional hint. No index error may turn a
@@ -1046,9 +1047,16 @@ export class AccountEntitlements {
               proof.maximumLiabilityMicroUsd <= 0 || item.providerEvidence.model !== proof.model ||
               item.providerEvidence.mode !== job.studioExecution!.mode)) return { recorded: false }
           const existing = readStudioIncompleteRecord(await tx.get<unknown>(STUDIO_INCOMPLETE_PREFIX + item.id))
-          if (existing) return { recorded: existing.modelSha256 === item.modelSha256 &&
-            sameStudioExecution(existing.studioExecution, item.studioExecution) &&
-            existing.failureCode === item.failureCode, repeated: true }
+          if (existing) {
+            const matches = existing.modelSha256 === item.modelSha256 &&
+              sameStudioExecution(existing.studioExecution, item.studioExecution) &&
+              existing.failureCode === item.failureCode
+            // A second explicit, verified backup may strengthen existing metadata,
+            // without replacing the original job, hash or financial settlement.
+            if (matches && item.backupVerified && !existing.backupVerified)
+              await tx.put(STUDIO_INCOMPLETE_PREFIX + item.id, { ...existing, backupVerified: item.backupVerified })
+            return { recorded: matches, repeated: true }
+          }
           const index = addStudioIncompleteIndex(await tx.get<unknown>(STUDIO_INCOMPLETE_INDEX_KEY), item.id)
           if (!index) return { recorded: false }
           await tx.put(STUDIO_INCOMPLETE_PREFIX + item.id, item)
