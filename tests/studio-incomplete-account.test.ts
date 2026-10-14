@@ -23,7 +23,7 @@ function account(owner: string, initial?: Map<string, unknown>) {
   const storage:EntitlementStorage = {
     async get<T>(key:string){return structuredClone(values.get(key)) as T|undefined},
     async put(key,value){values.set(key,structuredClone(value))},
-    async list<T>({prefix,startAfter,limit}) {
+    async list<T>({prefix,startAfter,limit}:{prefix:string;startAfter?:string;limit:number}) {
       return new Map([...values].filter(([k]) => k.startsWith(prefix)&&(!startAfter||k>startAfter))
         .sort(([a],[b]) => a.localeCompare(b)).slice(0,limit).map(([k,v]) => [k,structuredClone(v) as T]))
     },
