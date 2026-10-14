@@ -4,6 +4,7 @@ import { ORACLE_WORLD_IDS, platformApi } from "./platform.ts";
 import type { PlatformEnv } from "./platform.ts";
 import { oracleJobApi } from "./oracle-jobs.ts";
 import { studioApi } from "./studio.ts";
+import type { IncompleteGlbR2Env } from './studioIncompleteR2.ts';
 import { ownerUnusedPointsApi } from './ownerUnusedPoints.ts';
 import { avatarApi, type AvatarContext } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
@@ -32,7 +33,7 @@ import { budgetSettings } from "./budget.ts";
 import { blueprintModel, blueprintReservationMicroUsd, MODEL_CATALOG, type BlueprintModel } from "../src/lib/modelCatalog.ts";
 import type { BudgetEnv, BudgetNamespace } from "./budget.ts";
 export { GenerationBudget } from "./budget.ts";
-export interface Env extends ImageEnv, BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv {
+export interface Env extends ImageEnv, BudgetEnv, PlatformEnv, AccountEnv, EntitlementEnv, BillingEnv, PayPalEnv, IncompleteGlbR2Env {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   OPENAI_FAST_MODEL?: string;

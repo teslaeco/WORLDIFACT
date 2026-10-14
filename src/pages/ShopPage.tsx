@@ -16,6 +16,8 @@ import DemoShopPreview from '../components/DemoShopPreview'
 import ShopManufacturingOptions from '../components/ShopManufacturingOptions'
 import ProjectAttachmentPicker from '../components/ProjectAttachmentPicker'
 import StudioGallery from '../components/StudioGallery'
+import { retainStudioIncompleteModel } from '../lib/studioLibrary'
+import { isStudioIncompleteReason } from '../lib/studioIncomplete'
 import PublicModelGallery from '../components/PublicModelGallery'
 import GenerationCostNotice, { nextGenerationQuoteMessage } from '../components/GenerationCostNotice'
 import LiveSolPreview from '../components/LiveSolPreview'
@@ -23,7 +25,7 @@ import { PORTALS } from '../config/portals'
 import { REFERENCE_LINKS } from '../config/references'
 import { StudioCoordinator, StudioStatusRateLimitError, studioReadRetryDelay, checkStudio, type SavedStudioJob } from '../lib/studioClient'
 import { prepareStudioPhoto } from '../lib/studioPhotos'
-import { listStudioModels, readStudioModel, saveStudioModel, type StudioArchiveEntry } from '../lib/studioArchive'
+import { STUDIO_ARCHIVE_EVENT, listStudioModels, readStudioModel, saveStudioModel, type StudioArchiveEntry } from '../lib/studioArchive'
 import { mayExportCurrentJob, type StudioPreviewIdentity } from '../lib/studioView'
 import { canSubmitNewDraft, sameShopDraft, type ShopDraftSnapshot } from '../lib/studioDraft'
 import { useAccount } from '../lib/account'
@@ -135,6 +137,8 @@ export default function ShopPage() {
   const [statusRecovery, setStatusRecovery] = useState<{ id: string; retryAt: number; message: string } | null>(null)
   const [notice, setNotice] = useState('')
   const [artifactBusy, setArtifactBusy] = useState(false)
+  const [draftRecoveryBusy, setDraftRecoveryBusy] = useState(false)
+  const [draftRecoveryMessage, setDraftRecoveryMessage] = useState('')
   const [preview, setPreview] = useState<Preview | null>(null)
   const [archive, setArchive] = useState<StudioArchiveEntry[]>([])
   const [search, setSearch] = useState('')
@@ -407,6 +411,36 @@ export default function ShopPage() {
     return () => { discovery.invalidate(); controller.abort(); if (cloudDiscovery.current === discovery) cloudDiscovery.current = null }
   }, [accountLoading, accountOwner, testSavedSlot, testBlueprintSlot])
 
+  /** Reuses the original failed receipt; never submits a new paid Studio job. */
+  const recoverIncompleteDraft = async () => {
+    const original = saved
+    if (!original || !accountOwner || !job || job.id !== original.receipt.id ||
+        job.state !== 'failed' || !isStudioIncompleteReason(job.failureCode) ||
+        draftRecoveryBusy || testSavedSlot) return
+    const ownerAtStart = accountOwner
+    setDraftRecoveryBusy(true)
+    setDraftRecoveryMessage('Checking whether Oracle preserved an actual unfinished GLB. No generation or additional points.')
+    try {
+      const found = await retainStudioIncompleteModel(original.receipt.id, original.receipt.ticket, AbortSignal.timeout(210_000))
+      if (!mounted.current || accountOwner !== ownerAtStart) return
+      if (!found.retained) {
+        setDraftRecoveryMessage('No valid unfinished GLB was available from this original job. Nothing was generated, charged or invented.')
+      } else {
+        const storageStatus = found.backedUp === true
+          ? 'Private GLB backup verified with SHA-256. Downloads check the original bytes again.'
+          : 'Oracle-only GLB: no independent backup is verified. Availability depends on Oracle retaining the file.'
+        setDraftRecoveryMessage(found.canOpen === false
+          ? `INCOMPLETE · UNREVIEWED saved on your account. ${storageStatus} Download requires eligible account access. No extra points charged.`
+          : `INCOMPLETE · UNREVIEWED available in My models. ${storageStatus} A separate approved attempt may be required for completion. No automatic generation or extra points.`)
+        window.dispatchEvent(new Event(STUDIO_ARCHIVE_EVENT))
+        setForegroundJobId(original.receipt.id)
+        setRetry(n => n + 1)
+      }
+    } catch (err) {
+      if (mounted.current && accountOwner === ownerAtStart)
+        setDraftRecoveryMessage(err instanceof Error ? err.message : 'Unfinished model recovery is unavailable. No generation was started.')
+    } finally { if (mounted.current) setDraftRecoveryBusy(false) }
+  }
   const loadResult = async (selected: SavedStudioJob, known?: StudioJob) => {
     const flags = operations.current, client = coordinator.current, scope = testSavedSlot ? testCurrent : null
     if (!client || flags.artifact || flags.submit || (testSavedSlot && !scope?.active())) return
@@ -729,6 +763,14 @@ export default function ShopPage() {
             : busy ? 'Your description and photos are being uploaded. This receipt identifies your request; it does not yet confirm that generation has started.'
             : job?.state === 'pending' ? JOB_DETAILS.pending : 'The generator accepted this job. Return to this browser to recover the same job; no second generation is needed.'}</p>
           {job?.state === 'succeeded' && job.downloadAllowed === false && <Link to="/account/credits">View subscription & credits</Link>}
+          {job?.state === 'failed' && isStudioIncompleteReason(job.failureCode) && !testSavedSlot && <div className="studio-incomplete-recovery">
+            <p><strong>Unfinished 3D may be recoverable.</strong> If Oracle retained real geometry, recover the original GLB into My models as INCOMPLETE · UNREVIEWED. This does not restart AI, spend more points, or quote a continuation price.</p>
+            <button type="button" disabled={busy || artifactBusy || draftRecoveryBusy} onClick={() => void recoverIncompleteDraft()}>
+              {draftRecoveryBusy ? 'Checking original GLB…' : job.incompleteAvailable ? 'Verify retained incomplete GLB' : 'Recover unfinished GLB — no AI generation'}
+            </button>
+            {draftRecoveryMessage && <p role="status">{draftRecoveryMessage}</p>}
+            {job.incompleteAvailable && <Link to="/account/models">View unfinished GLB in My models</Link>}
+          </div>}
           {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={() => void dismissFinishedJob()}>Start a new model</button>}
         </div> : null
   const studioResultControls = <>
@@ -900,7 +942,7 @@ export default function ShopPage() {
 
     </section>
     <details className="studio-library-disclosure"><summary>Explore creations</summary><PublicModelGallery /></details>
-    <details className="studio-library-disclosure"><summary>My models</summary><StudioGallery compact requestedModelId={saved && job?.state === 'succeeded' && job.id === saved.receipt.id ? saved.receipt.id : ''} /></details>
+    <details className="studio-library-disclosure"><summary>My models</summary><StudioGallery compact requestedModelId={saved && job && (job.state === 'succeeded' || job.incompleteAvailable) && job.id === saved.receipt.id ? saved.receipt.id : ''} /></details>
     <details className="shop-manufacturing-disclosure"><summary><span>Bring it into the real world</span><span>Manufacturing options +</span></summary><p className="shop-beta-note"><strong>Experimental beta.</strong> Manufacturing and delivery require a separate production review and price approval.</p><ShopManufacturingOptions dimensions={dimensions} dimensionsEnabled={dimensionsEnabled} hasGeneratedModel={!!preview && preview.origin === 'job'} onDimensionsChange={setDimensions} onDimensionsEnabledChange={setDimensionsEnabled} onPrepareIssDraft={prepareIssDraft} /></details>
     <section className="shop-internal-only" hidden aria-labelledby="studio-archive-title"><h2 id="studio-archive-title">Your models · device archive</h2><p>Completed originals are saved on this device, not automatically published to a store. Clearing browser storage removes this archive; keep explicit file backups.</p><label>Find a saved model<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions" /></label><div className="native-shop-archive">{archive.filter(item => item.prompt.toLowerCase().includes(search.toLowerCase())).map(item => <article key={item.id}><strong>{item.prompt}</strong><small>{(item.byteLength / 1048576).toFixed(1)} MB · UNREVIEWED</small><button type="button" disabled={busy || (!!saved && !terminal(job?.state)) || artifactBusy} onClick={() => void openArchived(item)}>Open saved model</button></article>)}</div>{archive.length === 0 && <p>No models saved on this device yet. Existing private Froge archives have not been copied or deleted.</p>}</section>
     <footer className="shop-customer-footer"><Link to="/world" className="shop-wordmark"><ShopIcon kind="brand" /><span>WORLDIFACT</span></Link><span>YOURS TO IMAGINE.</span><span>AI SHOP · BETA</span><a className="shop-internal-only" hidden href={REFERENCE_LINKS.modelGenerator} target="_blank" rel="noopener noreferrer">Original Froge Studio</a></footer>

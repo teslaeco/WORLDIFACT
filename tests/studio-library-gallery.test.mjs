@@ -8,6 +8,7 @@ import ts from 'typescript'
 import React from 'react'
 import * as archive from '../src/lib/studioArchive.ts'
 import * as library from '../src/lib/studioLibrary.ts'
+import * as studioExecution from '../src/lib/studioExecution.ts'
 import * as glb from '../src/lib/glb.ts'
 import * as view from '../src/lib/studioView.ts'
 import * as protocol from '../src/lib/studioProtocol.ts'
@@ -77,6 +78,7 @@ async function harness({ locals = [], owner = 'owner-a', loading = false, reques
       readStudioLibraryModel: (accountId, entry, signal) => library.readStudioLibraryModel(accountId, entry, signal, fetcher),
       readStudioLibraryExport: (accountId, entry, format, signal) => library.readStudioLibraryExport(accountId, entry, format, signal, fetcher),
     }, '../lib/glb': glb, '../lib/studioView': view, '../lib/studioProtocol': protocol,
+    '../lib/studioExecution': studioExecution,
   }
   const globals = { Blob, Error, AbortController, AbortSignal, console,
     window: Object.assign(globalThis.window, { setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length } }),
@@ -138,7 +140,7 @@ test('account gallery names the actual stored Studio provider and mode without g
   } })
   try {
     const visible = h.text()
-    assert.match(visible, /Selected: GPT-6\.1 Sol · Slow \/ Quality · Oracle receipt not verified/)
+    assert.match(visible, /Selected: GPT-6\.1 Sol · Standard · Oracle receipt not verified/)
     assert.match(visible, /Legacy model · original AI provider not recorded/)
     assert.equal(artifacts(h).length, 0)
   } finally { h.close() }
@@ -153,7 +155,7 @@ test('gallery separates Oracle-confirmed provider from selected model and reject
     path === `/api/studio/library/${id}` ? Response.json({ accountId: 'owner-a', model: verified }) :
     new Response(fixtureGLB()) })
   try {
-    assert.match(h.text(), /Oracle-confirmed: GPT-6\.1 Sol · Slow \/ Quality/)
+    assert.match(h.text(), /Oracle-confirmed: GPT-6\.1 Sol · Standard/)
     assert.doesNotMatch(h.text(), /Selected: GPT-6\.1 Sol/)
   } finally { h.close() }
   const bad = { ...verified, providerEvidence: { ...providerEvidence, model: 'gpt-6-luna' } }
@@ -178,7 +180,7 @@ test('first library page surfaces a newly completed account model beyond the ini
   try {
     assert.equal(h.articles().length, 1)
     assert.match(h.text(), /Newest Luna model saved on account/)
-    assert.match(h.text(), /Selected: GPT-6 Luna · Slow \/ Quality · Oracle receipt not verified/)
+    assert.match(h.text(), /Selected: GPT-6 Luna · Standard · Oracle receipt not verified/)
     assert.equal(artifacts(h).length, 0, 'Listing metadata must not download GLB or start generation')
   } finally { h.close() }
 })

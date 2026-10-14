@@ -1,5 +1,6 @@
 import { isStudioExecution, sameStudioExecution, type StudioExecution } from '../src/lib/studioExecution.ts'
 import { STUDIO_PROVIDER_EVIDENCE_REVISION, type StudioProviderEvidence } from '../src/lib/studioProviderEvidence.ts'
+import { STUDIO_INCOMPLETE_INDEX_KEY, STUDIO_INCOMPLETE_PREFIX, readStudioIncompleteRecord, readStudioIncompleteIndex, addStudioIncompleteIndex, isStudioIncompleteReason, type StudioIncompleteRecord, type StudioIncompleteReason } from '../src/lib/studioIncomplete.ts'
 import { STUDIO_RECENT_KEY, STUDIO_RECENT_READ_LIMIT, readRecentStudioIndex, upsertRecentStudioIndex } from '../src/lib/studioRecentIndex.ts'
 import { imageStore, type ImageEnv } from './imageGeneration.ts'
 import { PROMOTION_NAMESPACE, promotionRegistry, applyPromotion, promotionApi, type PromotionEnv } from './promotionCodes.ts'
@@ -56,10 +57,10 @@ type StudioProviderReconciliation = { receipt: TerminalBudgetReceipt; originalRe
 type PaidProviderLiability = { version: 1; source: 'paid-membership'; capCents: number; maximumLiabilityCents: number; state: 'unsubmitted' | 'unresolved' | 'bounded'; evidence?: { kind: 'undispatched'; at: number } | { kind: 'studio-terminal'; receipt: TerminalBudgetReceipt; at: number } | { kind: 'blueprint-output'; resultSha256: string; at: number } | { kind: 'blueprint-failure'; usage: BlueprintTerminalUsage; at: number } }
 type Job = { studioExecution?: StudioExecution; adminFunding?: AdminFunding; adminTerminalReceipt?: TerminalBudgetReceipt; pointSettlement?: PointSettlement; fundingMode?: typeof PAID_POINTS_FUNDING; providerLiability?: PaidProviderLiability; overnightTest?: OvernightTestClaim; blueprintProviderModel?: string; pricing?: StudioPricing; fingerprint?: string; prompt?: string; channel?: 'studio' | 'blueprint'; model?: GenerationModel; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; supportApprovalId?: string; supplementalGrantId?: string; repairedMccGrantId?: string; repairedMccClaim?: AstraRepairedMccClaim; projectBudget?: AstraProjectBudgetRecord; profile: GenerationKind; at: number; updatedAt?: number; cost: number; kind: 'free' | 'credits'; billingMode?: 'hold-v1'; state: 'reserved' | 'completed' | 'failed'; studioDispatch?: 'ready-v1' | 'claimed-v1'; studioDispatchUntil?: number; studioProviderReservation?: StudioProviderReservation; studioProviderReconciliation?: StudioProviderReconciliation; blueprintDispatch?: 'ready-v1' | 'claimed-v1'; blueprintDispatchUntil?: number; blueprintProviderReservation?: StudioProviderReservation; blueprintProviderReconciliation?: BlueprintProviderReconciliation }
 export type Reservation = { pointSettlement?: PointSettlement; fundingSource?: typeof PAID_POINTS_FUNDING | typeof OVERNIGHT_TEST_APPROVAL; providerModel?: string; pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
-export type JobAccess = { studioExecution?: StudioExecution; channel?: 'studio' | 'blueprint'; model?: GenerationModel; pointSettlement?: PointSettlement; fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
+export type JobAccess = { studioExecution?: StudioExecution; channel?: 'studio' | 'blueprint'; model?: GenerationModel; pointSettlement?: PointSettlement; fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true; incompleteAvailable?: true; incompleteDownloadAllowed?: boolean; incompleteVerifiedProvider?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
-export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean; studioExecution?: StudioExecution; providerEvidence?: StudioProviderEvidence }
-type OwnedStudioLibraryPage = { models: OwnedStudioLibraryModel[]; nextCursor: string | null; hasMore: boolean; recentModels?: OwnedStudioLibraryModel[] }
+export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean; studioExecution?: StudioExecution; providerEvidence?: StudioProviderEvidence; completion?: 'INCOMPLETE'; failureCode?: StudioIncompleteReason; modelSha256?: string; backupVerified?: StudioIncompleteRecord['backupVerified'] }
+type OwnedStudioLibraryPage = { models: OwnedStudioLibraryModel[]; nextCursor: string | null; hasMore: boolean; recentModels?: OwnedStudioLibraryModel[]; incompleteModels?: OwnedStudioLibraryModel[] }
 export const STUDIO_LIBRARY_SCAN_LIMIT = 64
 export type StudioProviderReconciliationResult = { pointSettlement?: PointSettlement; reconciled: boolean; repeated?: boolean; releasedCents?: number; retainedCents?: number; reason?: string }
 type StudioDispatchClaim = { dispatch: false } | { dispatch: true; deadline: number }
@@ -150,6 +151,41 @@ function libraryModel(id: string, job: Job & { fingerprint: string }, permission
     ...(providerEvidence ? { providerEvidence } : {}) }
 }
 
+/** An unfinished GLB is never a completed job and never finalizes a point
+ * debit. Only the owner-scoped original FAILED record and immutable SHA match
+ * can expose a draft. Provider confirmation additionally requires the exact
+ * stored sealed Oracle terminal receipt for the selected execution. */
+function incompleteProviderProof(job: Job, id: string): TerminalBudgetReceipt | undefined {
+  if (paidPointsJob(job, id) && job.providerLiability.state === 'bounded' &&
+      job.providerLiability.evidence?.kind === 'studio-terminal') return job.providerLiability.evidence.receipt
+  if (adminJob(job)) return job.adminTerminalReceipt
+  if (job.studioProviderReconciliation && validProviderReconciliation(job.studioProviderReconciliation, id, job))
+    return job.studioProviderReconciliation.receipt
+  return undefined
+}
+async function incompleteLibraryModel(storage: EntitlementStorage, id: string, value: unknown,
+  permissions: { subscribed: boolean; clear: boolean }, now: number): Promise<OwnedStudioLibraryModel | null> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const job = value as Job
+  if (job.channel !== 'studio' || job.state !== 'failed' || !isStudioIncompleteReason(job.failureCode) ||
+      !validStudioExecution(job) || typeof job.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(job.fingerprint) ||
+      !validInteger(job.at) || job.at <= 0 || job.at > now) return null
+  const saved = readStudioIncompleteRecord(await storage.get<unknown>(STUDIO_INCOMPLETE_PREFIX + id))
+  if (!saved || saved.id !== id || saved.failureCode !== job.failureCode ||
+      !sameStudioExecution(saved.studioExecution, job.studioExecution) ||
+      saved.at < job.at || saved.at > now) return null
+  let providerEvidence: StudioProviderEvidence | undefined
+  const budget = incompleteProviderProof(job, id)
+  if (saved.providerEvidence && budget && validateTerminalBudgetReceipt(budget, id, job.pricing ?? null, job.studioExecution) &&
+      budget.maximumLiabilityMicroUsd > 0 && saved.providerEvidence.model === budget.model &&
+      saved.providerEvidence.mode === job.studioExecution!.mode)
+    providerEvidence = saved.providerEvidence
+  return { id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered incomplete Studio model',
+    at: job.at, completedAt: saved.at, downloadAllowed: permissions.clear && (adminJob(job) || permissions.subscribed),
+    completion: 'INCOMPLETE', failureCode: saved.failureCode, modelSha256: saved.modelSha256,
+    studioExecution: saved.studioExecution, ...(providerEvidence ? { providerEvidence } : {}),
+    ...(saved.backupVerified ? { backupVerified: saved.backupVerified } : {}) }
+}
 /** Best-effort discovery index only. Canonical completed job and account
  * settlement are saved before this optional hint. No index error may turn a
  * valid GLB into a failed or multiply billed generation. */
@@ -984,6 +1020,50 @@ export class AccountEntitlements {
           costEvidence: job.adminTerminalReceipt ? 'authenticated-oracle-liability-bound' : 'reserved-ceiling',
         })), truncated: rows.size === 100 })
       }
+      if (path === '/studio-incomplete-record') {
+        if (request.method !== 'POST' || new URL(request.url).search) return json({ recorded: false }, 405)
+        const prefix = this.supportEnv.ACCOUNT_LEDGER_MODE === 'sandbox' ? 'account:sandbox:v1' : 'account:v1'
+        const bound = pointsProtocol && verifiedAccount && ACCOUNT_ID.test(verifiedAccount) &&
+          this.supportEnv.ACCOUNT_ENTITLEMENTS && this.durableObjectId !== null &&
+          this.durableObjectId === String(this.supportEnv.ACCOUNT_ENTITLEMENTS.idFromName(`${prefix}:${verifiedAccount.toLowerCase()}`))
+        if (!bound) return json({ recorded: false }, 403)
+        const body = await request.text()
+        if (body.length > 1600) return json({ recorded: false }, 400)
+        let candidate: StudioIncompleteRecord | null
+        try { candidate = readStudioIncompleteRecord(JSON.parse(body)) }
+        catch { candidate = null }
+        if (!candidate) return json({ recorded: false }, 400)
+        const item = candidate
+        return json(await storage.transaction(async tx => {
+          const value = await tx.get<unknown>(`job:${item.id}`)
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return { recorded: false }
+          const job = value as Job
+          if (job.state !== 'failed' || job.channel !== 'studio' || job.failureCode !== item.failureCode ||
+              !validStudioExecution(job) || !sameStudioExecution(job.studioExecution, item.studioExecution) ||
+              !Number.isSafeInteger(job.updatedAt) || item.at < job.at || item.at > this.now() + 30_000)
+            return { recorded: false }
+          const proof = incompleteProviderProof(job, item.id)
+          if (item.providerEvidence && (!proof || !validateTerminalBudgetReceipt(proof, item.id, job.pricing ?? null, job.studioExecution) ||
+              proof.maximumLiabilityMicroUsd <= 0 || item.providerEvidence.model !== proof.model ||
+              item.providerEvidence.mode !== job.studioExecution!.mode)) return { recorded: false }
+          const existing = readStudioIncompleteRecord(await tx.get<unknown>(STUDIO_INCOMPLETE_PREFIX + item.id))
+          if (existing) {
+            const matches = existing.modelSha256 === item.modelSha256 &&
+              sameStudioExecution(existing.studioExecution, item.studioExecution) &&
+              existing.failureCode === item.failureCode
+            // A second explicit, verified backup may strengthen existing metadata,
+            // without replacing the original job, hash or financial settlement.
+            if (matches && item.backupVerified && !existing.backupVerified)
+              await tx.put(STUDIO_INCOMPLETE_PREFIX + item.id, { ...existing, backupVerified: item.backupVerified })
+            return { recorded: matches, repeated: true }
+          }
+          const index = addStudioIncompleteIndex(await tx.get<unknown>(STUDIO_INCOMPLETE_INDEX_KEY), item.id)
+          if (!index) return { recorded: false }
+          await tx.put(STUDIO_INCOMPLETE_PREFIX + item.id, item)
+          await tx.put(STUDIO_INCOMPLETE_INDEX_KEY, index)
+          return { recorded: true, repeated: false }
+        }))
+      }
       if (path === '/studio-library' || path.startsWith('/studio-library/')) {
         if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
         const params = new URL(request.url).searchParams
@@ -991,7 +1071,9 @@ export class AccountEntitlements {
           const id = path.slice('/studio-library/'.length)
           if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id) || params.size) return json({ error: 'Invalid library model.' }, 400)
           const job = await storage.get<unknown>(`job:${id}`)
-          return json({ model: completedLibraryJob(job, now) ? libraryModel(id, job, await libraryPermissions(storage, now)) : null })
+          const permissions = await libraryPermissions(storage, now)
+          return json({ model: completedLibraryJob(job, now) ? libraryModel(id, job, permissions) :
+            await incompleteLibraryModel(storage, id, job, permissions, now) })
         }
         if ([...params.keys()].some(key => key !== 'after') || params.getAll('after').length > 1 ||
             params.has('after') && !libraryCursorKey(params.get('after'))) return json({ error: 'Invalid library cursor.' }, 400)
@@ -1048,8 +1130,20 @@ export class AccountEntitlements {
           if (hasMore || recent.size > models.length)
             recentModels = [...recent.values()].sort((a, b) => b.completedAt - a.completedAt || b.id.localeCompare(a.id)).slice(0, 6)
         }
+        const incompleteModels: OwnedStudioLibraryModel[] = []
+        if (!after) {
+          try {
+            const hint = readStudioIncompleteIndex(await storage.get<unknown>(STUDIO_INCOMPLETE_INDEX_KEY))
+            for (const id of hint?.ids ?? []) {
+              const row = await storage.get<unknown>(`job:${id}`)
+              const model = await incompleteLibraryModel(storage, id, row, permissions, now)
+              if (model) incompleteModels.push(model)
+            }
+          } catch { /* An unavailable index cannot block completed GLBs or account listing. */ }
+        }
         return json({ models, nextCursor: hasMore ? cursor : null, hasMore,
-          ...(recentModels ? { recentModels } : {}) } satisfies OwnedStudioLibraryPage)
+          ...(recentModels ? { recentModels } : {}),
+          ...(incompleteModels.length ? { incompleteModels } : {}) } satisfies OwnedStudioLibraryPage)
       }
       if (path === '/generation-funding') {
         if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
@@ -1608,9 +1702,16 @@ export class AccountEntitlements {
           const job = await storage.get<Job>(`job:${id}`)
           if (!job) return json({ owned: false, downloadAllowed: false, previewOnly: false })
           const subscription = await storage.get<Subscription>('subscription')
-          const allowed = job.state === 'completed' && (adminJob(job) || job.profile === 'fast' || active(subscription, now)) && await balance(storage) >= 0 && await storage.get<boolean>('billingHold') !== true
+          const balanceClear = await balance(storage) >= 0 && await storage.get<boolean>('billingHold') !== true
+          const allowed = job.state === 'completed' && (adminJob(job) || job.profile === 'fast' || active(subscription, now)) && balanceClear
+          const incomplete = job.state === 'failed' && isStudioIncompleteReason(job.failureCode)
+            ? await incompleteLibraryModel(storage, id, job, { subscribed: active(subscription, now), clear: balanceClear }, now) : null
+          const proof = incomplete && isStudioExecution(job.studioExecution) ? incompleteProviderProof(job, id) : undefined
+          const providerProofVerified = proof && isStudioExecution(job.studioExecution) &&
+            validateTerminalBudgetReceipt(proof, id, job.pricing ?? null, job.studioExecution) &&
+            proof.maximumLiabilityMicroUsd > 0
           const dispatchUntil = studioDispatchUntil(job)
-          return json({ owned: true, ...(job.studioExecution ? { studioExecution: job.studioExecution } : {}), ...(job.pointSettlement ? { channel: job.channel, model: job.model ?? (job.profile === 'fast' ? 'sol' : 'astra') } : {}), ...(job.fingerprint ? { fingerprint: job.fingerprint } : {}), downloadAllowed: allowed, previewOnly: !adminJob(job) && job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.pointSettlement ? job.pointSettlement.heldPoints > 0 : job.billingMode === 'hold-v1' && job.state === 'reserved', ...(job.pointSettlement ? { pointSettlement: job.pointSettlement } : {}), ...(dispatchUntil ? { studioDispatchUntil: dispatchUntil } : {}), ...(providerBudgetPending(job) || adminJob(job) && job.channel === 'studio' && job.state !== 'reserved' && !job.adminTerminalReceipt ? { providerBudgetPending: true } : {}) })
+          return json({ owned: true, ...(job.studioExecution ? { studioExecution: job.studioExecution } : {}), ...(job.pointSettlement ? { channel: job.channel, model: job.model ?? (job.profile === 'fast' ? 'sol' : 'astra') } : {}), ...(job.fingerprint ? { fingerprint: job.fingerprint } : {}), downloadAllowed: allowed, ...(incomplete ? { incompleteAvailable: true, incompleteDownloadAllowed: incomplete.downloadAllowed } : {}), ...(providerProofVerified ? { incompleteVerifiedProvider: true } : {}), previewOnly: !adminJob(job) && job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.pointSettlement ? job.pointSettlement.heldPoints > 0 : job.billingMode === 'hold-v1' && job.state === 'reserved', ...(job.pointSettlement ? { pointSettlement: job.pointSettlement } : {}), ...(dispatchUntil ? { studioDispatchUntil: dispatchUntil } : {}), ...(providerBudgetPending(job) || adminJob(job) && job.channel === 'studio' && job.state !== 'reserved' && !job.adminTerminalReceipt ? { providerBudgetPending: true } : {}) })
         }
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
         const next = input.state as 'completed' | 'failed'
@@ -2044,6 +2145,10 @@ export async function reconcileUserStudioProvider(env: EntitlementEnv, userId: s
   return entitlementCall<StudioProviderReconciliationResult>(env, userId, '/reconcile-studio-provider', { id: jobId, receipt })
 }
 export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<JobAccess>(env, userId, '/job', { id: jobId })
+export async function recordUserStudioIncomplete(env: EntitlementEnv, userId: string, candidate: StudioIncompleteRecord) {
+  if (!readStudioIncompleteRecord(candidate)) throw new EntitlementError('Invalid incomplete model evidence.')
+  return entitlementCall<{ recorded: boolean; repeated?: boolean }>(env, userId, '/studio-incomplete-record', candidate)
+}
 export const userStudioLibrary = (env: EntitlementEnv, userId: string, after: string | null) => entitlementCall<OwnedStudioLibraryPage>(env, userId, `/studio-library${after ? `?after=${encodeURIComponent(after)}` : ''}`)
 export const userStudioLibraryModel = (env: EntitlementEnv, userId: string, id: string) => entitlementCall<{ model: OwnedStudioLibraryModel | null }>(env, userId, `/studio-library/${id}`)
 export const currentUserStudioJob = (env: EntitlementEnv, userId: string, id?: string) => entitlementCall<{ job: CurrentStudioJob | null }>(env, userId, '/studio-current', id ? { id } : {})

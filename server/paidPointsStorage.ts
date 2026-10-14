@@ -11,7 +11,7 @@ const CURRENT = 'current-studio-job:v1'
 const PAID_CURRENT = 'current-studio-job:points-v2'
 const GENERATION_PATHS = new Set(['/admin-history', '/status', '/reserve', '/reserve-overnight-test', '/settle', '/job', '/blueprint-status', '/blueprint-complete',
   '/blueprint-dispatch', '/studio-dispatch', '/studio-current', '/studio-current-clear', '/studio-close-missing', '/studio-library',
-  '/studio-provider-pending', '/provider-reconciliation-pending', '/reconcile-studio-provider', '/reconcile-blueprint-provider', '/generation-funding', '/failed-hold-waiver', '/held-points-forfeit'])
+  '/studio-incomplete-record', '/studio-provider-pending', '/provider-reconciliation-pending', '/reconcile-studio-provider', '/reconcile-blueprint-provider', '/generation-funding', '/failed-hold-waiver', '/held-points-forfeit'])
 export function generationPath(path: string) {
   const pathname = path.split('?')[0]
   return GENERATION_PATHS.has(pathname) || pathname.startsWith('/studio-library/')
