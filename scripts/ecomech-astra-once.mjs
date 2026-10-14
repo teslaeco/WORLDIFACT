@@ -138,6 +138,18 @@ export async function probe(env,fetcher=fetch){
   return {runtime, originalJobId:JOB_ID,existingJob:present,capUsd:MAX_USD,
     paidGenerationRequested:false,promptReference:'TEXT_DESCRIPTION_ONLY_NO_IMAGE_ATTACHMENT'}
 }
+export function buildEcomechAstraPayload() {
+  const input=validateStudioInput({worldId:'enchanted-ai-shop',purpose:'figurine',textureMaxSize:4096,
+    photos:[],prompt:PROMPT,studioExecution:EXEC})
+  const payload=oracleStudioPayload(JOB_ID,input)
+  if(!('agentInstructions' in payload)||payload.studioExecution?.model!=='astra')
+    throw Error('ASTRA_EXECUTION_NOT_BOUND')
+  // Extend actual Blender/MCP tool contract, not the model/provider/budget.
+  payload.agentInstructions+=String.fromCharCode(10,10)+
+    'ECOMECH QA: Build a COMPLETE first-pass volumetric half-armored/half-exposed robot, physical green chili in a raised hand. Distinct mechanical engine components and PBR if supported. Keep original OpenAI cost guard, inspect actual renders and record unresolved missing details if aborted. Never claim printable geometry.'
+  validateOracleStudioPayload(payload,5000)
+  return payload
+}
 export async function execute(env,fetcher=fetch,wait=delay){
   const marker=JSON.parse(await readFile('ops/ECOMECH_ASTRA_APPROVED_SINGLE_TEST.json','utf8'))
   approvedMarker(marker)
@@ -145,14 +157,7 @@ export async function execute(env,fetcher=fetch,wait=delay){
     throw Error('TEST_NOT_ARMED')
   const before=await probe(env,fetcher)
   if(before.existingJob)throw Error('ORIGINAL_JOB_ALREADY_EXISTS_NO_SECOND_SUBMISSION')
-  const input=validateStudioInput({worldId:'enchanted-ai-shop',purpose:'figurine',textureMaxSize:4096,
-    photos:[],prompt:PROMPT,studioExecution:EXEC})
-  const payload=oracleStudioPayload(JOB_ID,input)
-  if(!('agentInstructions' in payload)||payload.studioExecution?.model!=='astra')throw Error('ASTRA_EXECUTION_NOT_BOUND')
-  // Refinement of existing Blender/MCP instructions only; no extra requests,
-  // new tools or fictional geometry services are introduced.
-  payload.agentInstructions+='\\n\\nECOMECH QA: Build a COMPLETE first-pass volumetric half-armored/half-exposed robot, physical green chili in a raised hand. Distinct mechanical engine components and PBR if supported. Keep original OpenAI cost guard, inspect actual renders and record unresolved missing details if aborted. Never claim printable geometry.'
-  validateOracleStudioPayload(payload,5000)
+  const payload=buildEcomechAstraPayload()
   await claimOnce(env,fetcher)
   await mkdir(EVIDENCE_DIR,{recursive:true})
   const call=oracle(env,fetcher)
