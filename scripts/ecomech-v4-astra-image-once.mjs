@@ -9,6 +9,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createHash } from 'node:crypto'
+import { spawnSync } from 'node:child_process'
 import { checkAstraRuntime } from './check-astra-runtime.mjs'
 import { oracleOrigin } from '../server/platform.ts'
 import { MODEL_CATALOG } from '../src/lib/modelCatalog.ts'
@@ -153,14 +154,30 @@ export async function readReferenceImage(fetcher=fetch) {
      ![137,80,78,71,13,10,26,10].every((x,i)=>bytes[i]===x))throw Error('REFERENCE_PNG_INVALID')
   return {bytes,sha256:sha(bytes)}
 }
+export function prepareReferenceJpeg(originalPNG) {
+  if(!(originalPNG instanceof Uint8Array)||originalPNG.length<40_000 ||
+    ![137,80,78,71,13,10,26,10].every((x,i)=>originalPNG[i]===x))
+    throw Error('REFERENCE_PNG_INVALID')
+  // Resample only for the documented Oracle JPEG transport limit. Keep
+  // original PNG bytes and SHA separate for audit. No CGI/service calls.
+  const code = "import sys,io;from PIL import Image;im=Image.open(io.BytesIO(sys.stdin.buffer.read())).convert('RGB');im.thumbnail((1280,1280));out=io.BytesIO();im.save(out,format='JPEG',quality=86,optimize=True);sys.stdout.buffer.write(out.getvalue())"
+  const p=spawnSync('python3',['-c',code],{input:Buffer.from(originalPNG),
+    maxBuffer:3*1024*1024,timeout:20000})
+  if(p.status!==0)throw Error('REFERENCE_JPEG_PREPARATION_FAILED')
+  const jpeg=new Uint8Array(p.stdout)
+  if(jpeg.length<20000||jpeg.length>2*1024*1024||jpeg[0]!==255||jpeg[1]!==216||
+     jpeg[jpeg.length-2]!==255||jpeg[jpeg.length-1]!==217)
+    throw Error('REFERENCE_JPEG_INVALID_OR_TOO_LARGE')
+  return jpeg
+}
 export function buildEcomechAstraPayload(imageBytes) {
   if(!(imageBytes instanceof Uint8Array)||imageBytes.length<40000||imageBytes.length>12*1024*1024)
     throw Error('ACTUAL_REFERENCE_IMAGE_REQUIRED')
-  if(![137,80,78,71,13,10,26,10].every((x,i)=>imageBytes[i]===x))
-    throw Error('REFERENCE_PNG_INVALID')
+  if(imageBytes[0]!==255||imageBytes[1]!==216||imageBytes[imageBytes.length-2]!==255||imageBytes[imageBytes.length-1]!==217)
+    throw Error('REFERENCE_JPEG_INVALID')
   const input=validateStudioInput({worldId:'enchanted-ai-shop',purpose:'figurine',textureMaxSize:4096,
-    photos:[{name:'ECOMECH-reference-front.png',view:'front',
-      dataUrl:'data:image/png;base64,'+Buffer.from(imageBytes).toString('base64'),textureMaxSize:4096}],
+    photos:[{name:'ECOMECH-reference-front.jpg',view:'front',
+      dataUrl:'data:image/jpeg;base64,'+Buffer.from(imageBytes).toString('base64'),textureMaxSize:4096}],
     prompt:PROMPT,studioExecution:EXEC})
   const payload=oracleStudioPayload(JOB_ID,input)
   if(!('agentInstructions' in payload)||payload.studioExecution?.model!=='astra'||
@@ -181,7 +198,9 @@ export async function execute(env,fetcher=fetch,wait=delay){
   const reference=await readReferenceImage(fetcher)
   await mkdir(EVIDENCE_DIR,{recursive:true})
   await writeFile(EVIDENCE_DIR+'/input-reference.png',reference.bytes)
-  const payload=buildEcomechAstraPayload(reference.bytes)
+  const preparedJpeg=prepareReferenceJpeg(reference.bytes)
+  await writeFile(EVIDENCE_DIR+'/reference-transport.jpg',preparedJpeg)
+  const payload=buildEcomechAstraPayload(preparedJpeg)
   await claimOnce(env,fetcher)
   const call=oracle(env,fetcher)
   const submission=await call('/v1/jobs',{method:'POST',body:payload})
