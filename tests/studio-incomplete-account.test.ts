@@ -88,6 +88,27 @@ test('forged owner, model, fake receipt, altered hash, and completed-but-not-fai
     assert.equal(f.values.has('studio-incomplete-v1:'+ID),false,kind)
   }
 })
+test('existing incomplete entry can upgrade only its separate backup evidence, not its original ledger', async () => {
+  const f = account(OWNER)
+  const before = structuredClone(f.values.get('job:' + ID))
+  const saved = await f.call('studio-incomplete-record', f.candidate)
+  assert.equal((await saved.json() as any).recorded, true)
+  const verified = await f.call('studio-incomplete-record', {
+    ...f.candidate, backupVerified: 'r2-sha256-readback-v1', at: NOW,
+  })
+  assert.deepEqual(await verified.json(), { recorded: true, repeated: true })
+  const list = await (await f.call('studio-library')).json() as any
+  assert.equal(list.incompleteModels[0].backupVerified, 'r2-sha256-readback-v1')
+  assert.deepEqual(f.values.get('job:' + ID), before)
+  assert.equal(f.values.get('balance'), 2000)
+  assert.equal(f.values.get('customer-reserved-credits:v1'), 50)
+  const another = await f.call('studio-incomplete-record', {
+    ...f.candidate, modelSha256: 'b'.repeat(64), backupVerified: 'r2-sha256-readback-v1',
+  })
+  assert.deepEqual(await another.json(), { recorded: false, repeated: true })
+  assert.equal((f.values.get('studio-incomplete-v1:' + ID) as any).modelSha256, 'c'.repeat(64))
+})
+
 test('different account cannot claim an original account draft or read its stored entry',async()=>{
   const first=account(OWNER),other=account(OTHER)
   assert.equal((await(await first.call('studio-incomplete-record',first.candidate)).json() as any).recorded,true)
