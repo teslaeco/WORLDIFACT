@@ -18,9 +18,14 @@ const emptyCloud = (owner = ''): CloudState => ({ owner, models: [], cursor: nul
 
 function generatedWith(model: StudioLibraryModel): string {
   const execution = model.studioExecution
-  if (!execution) return 'Model not recorded (legacy)'
+  if (!execution) return 'Legacy model · original AI provider not recorded'
   const provider = { astra: 'GPT-6 Astra', sol: 'GPT-6.1 Sol', luna: 'GPT-6 Luna' }[execution.model]
-  return `Generated with ${provider} · ${execution.mode === 'fast' ? 'Fast' : 'Slow / Quality'}`
+  const mode = execution.mode === 'fast' ? 'Fast' : 'Slow / Quality'
+  // The user's dropdown does not certify which model OpenAI returned.
+  // Only a matching server-validated Oracle terminal receipt can do that.
+  return model.providerEvidence
+    ? `Oracle-confirmed: ${provider} · ${mode}`
+    : `Selected: ${provider} · ${mode} · Oracle receipt not verified`
 }
 
 function downloadBlob(blob: Blob, name: string) {
