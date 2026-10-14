@@ -87,10 +87,13 @@ export async function listStudioLibrary(accountId: string, cursor: string | null
   if (!accountId || !object(value) || value.accountId !== accountId) throw new StudioLibraryAccountError('Your signed-in account changed. Refresh your account before opening its models.')
   if (!object(value) || !Array.isArray(value.models) || value.models.length > 64 || typeof value.hasMore !== 'boolean' ||
     !(value.nextCursor === null || (typeof value.nextCursor === 'string' && value.nextCursor.length <= 12000 && cursorPattern.test(value.nextCursor))) ||
-    value.hasMore !== (value.nextCursor !== null) || (cursor !== null && value.nextCursor === cursor)) {
+    value.hasMore !== (value.nextCursor !== null) || (cursor !== null && value.nextCursor === cursor) ||
+    (value.recentModels !== undefined && (cursor !== null || !Array.isArray(value.recentModels) || value.recentModels.length > 6))) {
     throw new Error('The account gallery page could not be verified. Refresh the gallery to try again.')
   }
-  return { accountId, models: value.models.map(parseModel), nextCursor: value.nextCursor, hasMore: value.hasMore }
+  return { accountId, models: value.models.map(parseModel),
+    ...(Array.isArray(value.recentModels) ? { recentModels: value.recentModels.map(parseModel) } : {}),
+    nextCursor: value.nextCursor, hasMore: value.hasMore }
 }
 
 /** The URL identifies a model; only the authenticated server establishes ownership. */
