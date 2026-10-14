@@ -1,6 +1,7 @@
 import { STUDIO_MODEL_LIMIT, readStudioGenerationTiming, type StudioLibraryModel, type StudioLibraryPage } from './studioProtocol.ts'
 import { validateStudioArtifactHeader, type StudioArtifactFormat } from './studioArtifact.ts'
 import { isStudioExecution } from './studioExecution.ts'
+import { isStudioProviderEvidence } from './studioProviderEvidence.ts'
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
 const cursorPattern = /^[A-Za-z0-9_-]+\.[a-f0-9]{64}$/
@@ -31,9 +32,13 @@ function parseModel(value: unknown): StudioLibraryModel {
     throw new Error('The account model record could not be verified. Refresh the gallery to try again.')
   }
   if (value.studioExecution !== undefined && !isStudioExecution(value.studioExecution)) throw new Error('Invalid model provenance. Refresh the library.')
+  if (value.providerEvidence !== undefined && !isStudioProviderEvidence(value.providerEvidence, value.studioExecution))
+    throw new Error('Oracle provider evidence does not match this model. Refresh the library.')
   const generationTiming = readStudioGenerationTiming(value.generationTiming)
   return { id: value.id, prompt: value.prompt, createdAt: value.createdAt, completedAt: value.completedAt,
-    ...(isStudioExecution(value.studioExecution) ? { studioExecution: value.studioExecution } : {}), ...(generationTiming ? { generationTiming } : {}),
+    ...(isStudioExecution(value.studioExecution) ? { studioExecution: value.studioExecution } : {}),
+    ...(isStudioProviderEvidence(value.providerEvidence, value.studioExecution) ? { providerEvidence: value.providerEvidence } : {}),
+    ...(generationTiming ? { generationTiming } : {}),
     review: 'UNREVIEWED', downloadAllowed: value.downloadAllowed,
     receipt: { id: value.id, ticket: value.receipt.ticket, createdAt: value.receipt.createdAt } }
 }
