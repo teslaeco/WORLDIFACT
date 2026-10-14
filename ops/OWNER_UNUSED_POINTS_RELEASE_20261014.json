@@ -1,0 +1,9 @@
+{
+  "revision": "owner-zero-liability-reconciliation-release-v1",
+  "baseCommit": "104edf6d50813b475c262edc6cbc29ea42cfdaaa",
+  "scope": "Temporarily deploy fixed-owner HMAC-only zero-provider-liability point reconciliation",
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "preserveBilling": true,
+  "paidGenerationDuringDeploy": false
+}
