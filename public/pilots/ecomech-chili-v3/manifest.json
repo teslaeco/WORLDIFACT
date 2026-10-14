@@ -19,7 +19,7 @@
     "rigged": false,
     "animated": false,
     "textureMaps": false,
-    "originalBinaryInRepository": false
+    "originalBinaryInRepository": true
   },
   "make": {
     "status": "CANDIDATE_UNREVIEWED",
@@ -43,7 +43,11 @@
     "supplierApproved": false,
     "orderPlaced": false,
     "printSampleMade": false,
-    "fullColorPackage": false
+    "fullColorPackage": false,
+    "archiveInRepository": true,
+    "archiveFile": "WORLDIFACT_EcoMech_Chili_V3_MAKE_180mm_QA.zip",
+    "archiveSha256": "6db9611f63b15aa526726ee4994d6d424e9a943546f57ad9d7ee7bb6e977b59f",
+    "archiveBytes": 1523836
   },
   "b2b": {
     "candidateSuppliers": [
@@ -73,7 +77,10 @@
   "deployment": {
     "publicModelUrl": null,
     "productionPublished": false,
-    "privatePreviewPackageOnly": true
+    "privatePreviewPackageOnly": false,
+    "previewAssetCommitted": true,
+    "previewPath": "/pilots/ecomech-chili-v3/",
+    "hostedPreviewVerified": false
   },
   "billing": {
     "paidProviderCalls": 0,
