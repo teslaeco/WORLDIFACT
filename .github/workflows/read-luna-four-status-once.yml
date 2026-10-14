@@ -1,0 +1,41 @@
+name: Read Luna four-job status once
+
+on:
+  push:
+    branches: ['ops/read-luna-four-status-20261014']
+    paths: ['.github/workflows/read-luna-four-status-once.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read exact four job states only
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          const ids=[
+            '5f017611-1d33-4e9a-8b3d-02f4c6d47101',
+            '5f017611-1d33-4e9a-8b3d-02f4c6d47102',
+            '5f017611-1d33-4e9a-8b3d-02f4c6d47103',
+            '5f017611-1d33-4e9a-8b3d-02f4c6d47104',
+          ]
+          const base=new URL(process.env.ORACLE_ENDPOINT).origin
+          const rows=[]
+          for(const id of ids){
+            const r=await fetch(base+'/v1/jobs/'+id,{headers:{Authorization:'Bearer '+process.env.ORACLE_API_TOKEN,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(15000)})
+            if(r.status===404){rows.push({id,state:'not-created'});await r.body?.cancel();continue}
+            if(r.status!==200){rows.push({id,state:'http-'+r.status});await r.body?.cancel();continue}
+            const d=await r.json();rows.push({id,state:d.state,model:d.model,modelStatus:d.modelStatus})
+          }
+          console.log(JSON.stringify(rows))
+          JS
