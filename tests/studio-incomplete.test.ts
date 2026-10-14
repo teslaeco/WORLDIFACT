@@ -24,8 +24,8 @@ test('an unfinished GLB record is distinct from success, holds exact real model 
     { ...candidate, injected: 'fake success' },
     null, {}, [],
   ]) assert.equal(readStudioIncompleteRecord(bad), null)
-  assert.deepEqual(readStudioIncompleteRecord({ ...candidate, providerEvidence: undefined }),
-    { ...candidate, providerEvidence: undefined })
+  const { providerEvidence: _ignored, ...withoutProof } = candidate
+  assert.deepEqual(readStudioIncompleteRecord(withoutProof), withoutProof)
 })
 
 test('incomplete index is bounded, rejects forgery and remains idempotent by original job id', () => {
