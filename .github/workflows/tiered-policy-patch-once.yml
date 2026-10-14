@@ -1,0 +1,108 @@
+name: Patch tiered policy binding once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/TIERED_POLICY_PATCH_20261014.json'
+      - '.github/workflows/tiered-policy-patch-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    environment:
+      name: production
+      url: ${{ steps.verify.outputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify exact one-binding patch envelope
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "b61da0a5ea193ba6c775fbb3e3f9d80ce98cbace"
+          mapfile -t changed < <(git diff --name-only HEAD^ HEAD | sort)
+          test "${#changed[@]}" -eq 2
+          test "${changed[0]}" = ".github/workflows/tiered-policy-patch-once.yml"
+          test "${changed[1]}" = "ops/TIERED_POLICY_PATCH_20261014.json"
+      - run: npm ci
+      - name: Recheck tier and rollback contracts
+        run: node --experimental-strip-types --test tests/studio-priced-submission.test.ts tests/studio-rollback-policy.test.ts tests/studio-tier-selection.test.mjs
+      - name: Patch exactly one existing plain-text binding; inherit all others
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID
+          const token=process.env.CLOUDFLARE_API_TOKEN
+          assert.match(account||'',/^[a-f0-9]{32}$/i)
+          assert.ok((token||'').length>=20)
+          const endpoint=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/worldifact/settings`
+          const headers={Authorization:'Bearer '+token,Accept:'application/json'}
+          const before=await fetch(endpoint,{headers,redirect:'error',signal:AbortSignal.timeout(20000)})
+          assert.equal(before.status,200)
+          const body=await before.json()
+          assert.equal(body.success,true)
+          assert.ok(Array.isArray(body.result?.bindings))
+          const current=body.result.bindings
+          assert.ok(current.length>=5 && current.length<=100)
+          const names=current.map(x=>x?.name)
+          assert.equal(new Set(names).size,names.length)
+          for(const required of ['GENERATION_BUDGET','ACCOUNT_ENTITLEMENTS','ORACLE_API_TOKEN','STUDIO_NEW_JOB_POLICY']) assert.ok(names.includes(required))
+          const policy=current.find(x=>x?.name==='STUDIO_NEW_JOB_POLICY')
+          assert.equal(policy?.type,'plain_text')
+          assert.equal(policy?.text,'legacy-usd175-v1')
+          const bindings=current.map(binding=>binding.name==='STUDIO_NEW_JOB_POLICY'
+            ? {name:'STUDIO_NEW_JOB_POLICY',type:'plain_text',text:'tiered-v1'}
+            : {name:binding.name,type:'inherit'})
+          const form=new FormData()
+          form.append('settings',JSON.stringify({bindings,annotations:{'workers/message':'Activate verified tiered Studio pricing policy'}}))
+          const patched=await fetch(endpoint,{method:'PATCH',headers:{Authorization:'Bearer '+token,Accept:'application/json'},body:form,redirect:'error',signal:AbortSignal.timeout(30000)})
+          const result=await patched.json()
+          if(patched.status!==200 || result.success!==true) throw new Error('CLOUDFLARE_POLICY_PATCH_FAILED')
+          const afterBindings=result.result?.bindings
+          assert.ok(Array.isArray(afterBindings))
+          const changed=afterBindings.find(x=>x?.name==='STUDIO_NEW_JOB_POLICY')
+          assert.equal(changed?.type,'plain_text')
+          assert.equal(changed?.text,'tiered-v1')
+          console.log('PASS: one reviewed binding changed; all other binding names inherited from the prior Worker version.')
+          JS
+      - name: Verify tiered policy live
+        id: verify
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          import { appendFile } from 'node:fs/promises'
+          const origin='https://worldifact.xodobrox.workers.dev'
+          let s
+          for(let n=0;n<10;n++){
+            const r=await fetch(origin+'/api/studio/status',{redirect:'error',headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(20000)})
+            assert.equal(r.status,200)
+            s=await r.json()
+            if(s.newJobPolicy==='tiered-v1' && s.tiersReady===true) break
+            await new Promise(resolve=>setTimeout(resolve,3000))
+          }
+          assert.equal(s.ready,true)
+          assert.equal(s.detailedReady,true)
+          assert.equal(s.newJobPolicy,'tiered-v1')
+          assert.equal(s.tiersReady,true)
+          assert.equal(s.pricingRevision,'studio-pricing-v1')
+          assert.equal(s.studioAdmissionRevision,'oracle-durable-admission-v1')
+          if(process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT,'url='+origin+'\n')
+          console.log(JSON.stringify({ready:s.ready,newJobPolicy:s.newJobPolicy,tiersReady:s.tiersReady,pricingRevision:s.pricingRevision}))
+          JS

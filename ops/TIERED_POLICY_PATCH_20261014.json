@@ -1,0 +1,9 @@
+{
+  "revision": "tiered-policy-binding-patch-20261014-v1",
+  "baseCommit": "b61da0a5ea193ba6c775fbb3e3f9d80ce98cbace",
+  "endpoint": "PATCH /workers/scripts/worldifact/settings",
+  "preserveStrategy": "inherit every existing binding by name; replace only STUDIO_NEW_JOB_POLICY",
+  "expectedBefore": "legacy-usd175-v1",
+  "expectedAfter": "tiered-v1",
+  "paidGeneration": false
+}
