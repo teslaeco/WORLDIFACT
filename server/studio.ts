@@ -2,6 +2,8 @@ import { STUDIO_EXECUTION_REVISION } from '../src/lib/studioExecution.ts'
 import { ARTIFACT_PROBE_BYTES, hasStudioArtifactHeader, type StudioArtifactFormat } from '../src/lib/studioArtifact.ts'
 import { inspectGLB } from '../src/lib/glb.ts'
 import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
+import { hasRealDetailedMeshEvidence, inspectStudioMeshEvidence } from '../src/lib/studioMeshEvidence.ts'
+import { TEXT_CHARACTER_DETAIL_PROFILE, ROBOT_DETAIL_PROFILE } from '../src/lib/studioProtocol.ts'
 import { detailedRuntime, DETAILED_REFERENCE_LIMIT } from '../src/lib/detailedStudio.ts'
 import { oracleOrigin, ownerAuthorized, type PlatformEnv } from './platform.ts'
 import { getVerifiedAccount, type AccountEnv } from './accounts.ts'
@@ -201,7 +203,14 @@ async function validateCompletedModel(env: StudioEnv, userId: string, id: string
     catch (e) { if (e instanceof InvalidStudioModelError) return 'invalid'; throw e }
     const bytes = await response.arrayBuffer() // Interrupted reads are uncertain, not an automatic refund.
     try {
-      return passesStudioStructuralQuality(inspectGLB(bytes), qualityProfile) ? 'valid' : 'invalid'
+      const summary = inspectGLB(bytes)
+      if (!passesStudioStructuralQuality(summary, qualityProfile)) return 'invalid'
+      // New V2 character/robot jobs require actual backed geometry, not
+      // synthetic triangle declarations in GLB metadata. Other settled
+      // profile contracts remain byte-for-byte unchanged.
+      if (qualityProfile === TEXT_CHARACTER_DETAIL_PROFILE || qualityProfile === ROBOT_DETAIL_PROFILE)
+        return hasRealDetailedMeshEvidence(inspectStudioMeshEvidence(bytes)) ? 'valid' : 'invalid'
+      return 'valid'
     } catch { return 'invalid' }
   })()
   outputChecks.set(key, check)
