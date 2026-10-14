@@ -58,7 +58,7 @@ export function inspectRetainedStudioGLB(buffer: ArrayBuffer): GLBInspection {
 
   let validPrimitive = false
   const inspectPrimitive = (primitive: unknown) => {
-    if (!record(primitive) || !record(primitive.attributes) || primitive.extensions?.['KHR_draco_mesh_compression'] ||
+    if (!record(primitive) || !record(primitive.attributes) || (record(primitive.extensions) && primitive.extensions.KHR_draco_mesh_compression !== undefined) ||
         (primitive.mode !== undefined && ![4, 5, 6].includes(primitive.mode as number))) return
     const position = bounds(primitive.attributes.POSITION, 12, 5126, 'VEC3')
     let spans = 0
