@@ -1,17 +1,16 @@
 import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 
-const APPROVAL='worldifact-slow-repeatability-prod-20261014-v1'
+const APPROVAL='worldifact-slow-repeatability-prod-tiered-20261014-v2'
 const OWNER=createHash('sha256').update(APPROVAL+':owner').digest('hex')
 const FINGERPRINT=createHash('sha256').update(APPROVAL+':fingerprint').digest('hex')
 const JOBS=Object.freeze([
-  {name:'astra-1',model:'astra',provider:'gpt-6-astra',jobId:'7a140001-2b11-4d33-8c44-000000000001',ceilingUsd:1.75,prompt:'Create one compact premium 3D calibration pedestal with a dark stone base, one bronze ring, one glowing green crystal core and four symmetric support brackets. Clean PBR materials, no text, no environment, game-ready GLB.'},
-  {name:'sol-1',model:'sol',provider:'gpt-6.1-sol',jobId:'7a140001-2b11-4d33-8c44-000000000002',ceilingUsd:0.35,prompt:'Create one compact premium 3D calibration pedestal with a dark stone base, one bronze ring, one glowing blue crystal core and four symmetric support brackets. Clean PBR materials, no text, no environment, game-ready GLB.'},
-  {name:'luna-1',model:'luna',provider:'gpt-6-luna',jobId:'7a140001-2b11-4d33-8c44-000000000003',ceilingUsd:0.10,prompt:'Create one compact premium 3D calibration pedestal with a dark stone base, one bronze ring, one glowing purple crystal core and four symmetric support brackets. Clean PBR materials, no text, no environment, game-ready GLB.'},
-  {name:'astra-2',model:'astra',provider:'gpt-6-astra',jobId:'7a140001-2b11-4d33-8c44-000000000004',ceilingUsd:1.75,prompt:'Create one second compact premium 3D calibration pedestal with a dark stone base, two bronze rings, one glowing amber crystal core and four symmetric support brackets. Clean PBR materials, no text, no environment, game-ready GLB.'},
+  {name:'astra-tiered',model:'astra',provider:'gpt-6-astra',jobId:'7a140002-2b11-4d33-8c44-000000000101',ceilingUsd:2.00,pricing:{revision:'studio-pricing-v1',tier:'standard',points:250,maxProviderCents:200},prompt:'Create one very simple complete 3D calibration pedestal: a low dark stone square base, one bronze ring, one glowing green crystal cube, and four short symmetric supports. Clean PBR materials, no text, no environment, game-ready GLB. Keep the build compact and finish after required inspection.'},
+  {name:'sol-standard',model:'sol',provider:'gpt-6.1-sol',jobId:'7a140002-2b11-4d33-8c44-000000000102',ceilingUsd:0.35,prompt:'Create one very simple complete 3D calibration pedestal: a low dark stone square base, one bronze ring, one glowing blue crystal cube, and four short symmetric supports. Clean PBR materials, no text, no environment, game-ready GLB. Keep the build compact and finish after required inspection.'},
+  {name:'luna-standard',model:'luna',provider:'gpt-6-luna',jobId:'7a140002-2b11-4d33-8c44-000000000103',ceilingUsd:0.10,prompt:'Create one very simple complete 3D calibration pedestal: a low dark stone square base, one bronze ring, one glowing purple crystal cube, and four short symmetric supports. Clean PBR materials, no text, no environment, game-ready GLB. Keep the build compact and finish after required inspection.'},
 ])
 const TOTAL=JOBS.reduce((n,j)=>n+j.ceilingUsd,0)
-if (Math.abs(TOTAL-3.95)>1e-9) throw new Error('COST_ENVELOPE_CHANGED')
+if (Math.abs(TOTAL-2.45)>1e-9) throw new Error('COST_ENVELOPE_CHANGED')
 const sleep=ms=>new Promise(r=>setTimeout(r,ms))
 const hash=b=>createHash('sha256').update(b).digest('hex')
 const terminal=new Set(['succeeded','failed','cancelled'])
@@ -30,7 +29,7 @@ async function runOne(base,token,spec,out){
   const pre=await call(base,token,'/v1/jobs/'+spec.jobId)
   if(pre.status!==404){await pre.body?.cancel();throw new Error(spec.name.toUpperCase()+'_JOB_ALREADY_EXISTS_NO_RETRY')}
   await pre.body?.cancel()
-  const payload={id:spec.jobId,prompt:spec.prompt,agentInstructions:agentInstructions(spec.provider),studioExecution:{revision:'studio-execution-v1',model:spec.model,mode:'standard'}}
+  const payload={id:spec.jobId,prompt:spec.prompt,agentInstructions:agentInstructions(spec.provider),...(spec.pricing?{studioPricing:spec.pricing}:{studioExecution:{revision:'studio-execution-v1',model:spec.model,mode:'standard'}})}
   const staged=await call(base,token,'/v1/jobs/stage',{method:'POST',body:JSON.stringify(payload)})
   if(staged.status!==202){const s=staged.status;await staged.body?.cancel();throw new Error(spec.name.toUpperCase()+'_STAGE_'+s)}
   const stage=await j(staged,32768),receipt=stage.admission
@@ -57,7 +56,7 @@ async function runOne(base,token,spec,out){
   console.log(JSON.stringify(value));return value
 }
 const env=process.env
-if(env.WORLDIFACT_SLOW_REPEATABILITY_APPROVAL!=='SLOW_REPEATABILITY_ONCE_20261014'||env.GITHUB_RUN_ATTEMPT!=='1')throw new Error('APPROVAL_MISSING')
+if(env.WORLDIFACT_SLOW_REPEATABILITY_APPROVAL!=='SLOW_REPEATABILITY_TIERED_ONCE_20261014'||env.GITHUB_RUN_ATTEMPT!=='1')throw new Error('APPROVAL_MISSING')
 if(!env.ORACLE_ENDPOINT||!env.ORACLE_API_TOKEN)throw new Error('ORACLE_CONFIG_MISSING')
 const base=origin(env.ORACLE_ENDPOINT),out='slow-repeatability-evidence'
 await mkdir(out,{recursive:true})
