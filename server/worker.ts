@@ -4,6 +4,7 @@ import { ORACLE_WORLD_IDS, platformApi } from "./platform.ts";
 import type { PlatformEnv } from "./platform.ts";
 import { oracleJobApi } from "./oracle-jobs.ts";
 import { studioApi } from "./studio.ts";
+import { ownerUnusedPointsApi } from './ownerUnusedPoints.ts';
 import { avatarApi, type AvatarContext } from "./avatar.ts";
 import { projectFileApi } from "./project-files.ts";
 import { accountApi, getVerifiedAccount, type AccountEnv, type AccountUser } from './accounts.ts';
@@ -90,6 +91,10 @@ export async function handle(request: Request, env: Env = {}, fetcher: typeof fe
     if (env.ENFORCE_ACCOUNT_ENTITLEMENTS !== 'true') return json({ error: 'Account-bound overnight testing is unavailable.', noCharge: true }, 503);
     url = new URL(target, url.origin); request = new Request(url, request); overnightTest = true;
   }
+  // Short-lived owner-maintenance proof. Any unauthenticated request fails
+  // before reading another account, provider receipt or changing points.
+  const ownerMaintenance = await ownerUnusedPointsApi(request, env, fetcher);
+  if (ownerMaintenance) return ownerMaintenance;
   const images = await imageApi(request, env, fetcher);
   if (images) return images;
   const privateWorld = await privateWorldApi(request, env, fetcher);
