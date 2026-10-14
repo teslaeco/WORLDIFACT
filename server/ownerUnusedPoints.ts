@@ -103,9 +103,10 @@ async function discover(uid: string, env: RecoveryEnv, fetcher: typeof fetch): P
           if (seen.has(id)) throw new Error('DUPLICATED_JOB')
           seen.add(id)
           const access = await userJobAccess(env, uid, id)
+          const points = access?.cost
           if (!access?.owned || access.state !== 'failed' || access.pointSettlement?.state !== 'pending-cost' ||
               !Number.isSafeInteger(access.pointSettlement.heldPoints) || access.pointSettlement.heldPoints <= 0 ||
-              !Number.isSafeInteger(access.cost) || access.cost <= 0 || access.cost !== access.pointSettlement.heldPoints)
+              typeof points !== 'number' || !Number.isSafeInteger(points) || points <= 0 || points !== access.pointSettlement.heldPoints)
             return { kind: 'ignored' as const }
           const response = await fetcher(endpoint + '/v1/jobs/' + id + '/budget', {
             method: 'GET', redirect: 'error', headers: { Authorization: 'Bearer ' + env.ORACLE_API_TOKEN, Accept: 'application/json' },
@@ -114,7 +115,7 @@ async function discover(uid: string, env: RecoveryEnv, fetcher: typeof fetch): P
           const receipt = await safeJson(response, id)
           if (!receipt) return { kind: 'unresolved' as const }
           if (receipt.maximumLiabilityMicroUsd > 0) return { kind: 'positive' as const }
-          return { kind: 'eligible' as const, receipt, id, points: access.cost }
+          return { kind: 'eligible' as const, receipt, id, points }
         } catch { return { kind: 'unresolved' as const } }
       }))
       for (const result of results) {
