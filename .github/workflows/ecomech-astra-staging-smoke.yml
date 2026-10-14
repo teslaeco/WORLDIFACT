@@ -1,0 +1,31 @@
+name: ECOMECH public Astra staging GET-only smoke
+on:
+  push:
+    branches: ['test/ecomech-astra-one-shot-20261014']
+    paths: ['.github/workflows/ecomech-astra-staging-smoke.yml', 'ops/VERIFY_ECOMECH_ASSETS_20261014.json']
+permissions:
+  contents: read
+jobs:
+  public-readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Check only new public static preview (no keys and no AI generation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin='https://worldifact-ecomech-astra-preview-20261014.xodobrox.workers.dev'
+          for path in '/' '/index.html' '/viewer.js' '/report.json' '/robot.glb'; do
+            echo "CHECK $path"
+            for attempt in 1 2 3 4 5; do
+              code="$(curl --location --silent --show-error --max-time 15 --output /dev/null --write-out '%{http_code}' "$origin$path" || true)"
+              echo "  attempt $attempt HTTP $code"
+              if [ "$code" = '200' ]; then break; fi
+              sleep 4
+            done
+          done
+          echo 'READBACK_METRICS_START'
+          curl --fail --location --silent --show-error --max-time 20 "$origin/report.json" -o /tmp/ecomech-public-report.json
+          curl --fail --location --silent --show-error --max-time 60 "$origin/robot.glb" -o /tmp/ecomech-public-model.glb
+          node --input-type=module -e "import{readFileSync}from'node:fs';import{createHash}from'node:crypto';const report=JSON.parse(readFileSync('/tmp/ecomech-public-report.json'));const bytes=readFileSync('/tmp/ecomech-public-model.glb');const sha=createHash('sha256').update(bytes).digest('hex');if(sha!==report.originalGLB?.sha256)process.exit(1);console.log(JSON.stringify({HTTP:'VERIFIED',sha256:sha,bytes:bytes.length,provenance:report.provenance,triangles:report.originalGLB.triangles}))"
+          echo "PREVIEW_URL=$origin/index.html"

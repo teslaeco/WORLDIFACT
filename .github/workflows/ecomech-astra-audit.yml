@@ -1,0 +1,37 @@
+name: ECOMECH Astra runtime audit (GET only)
+on:
+  push:
+    branches: ['test/ecomech-astra-one-shot-20261014']
+    paths:
+      - 'scripts/ecomech-astra-once.mjs'
+      - 'tests/ecomech-astra-once.test.mjs'
+      - '.github/workflows/ecomech-astra-audit.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ecomech-astra-readonly-audit
+  cancel-in-progress: true
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify marker, GLB parsing and immutable price cap without a provider request
+        run: node --test tests/ecomech-astra-once.test.mjs
+      - name: Verify actual Oracle Astra model / connector / USD 1.75 guard with GET only
+        run: node scripts/ecomech-astra-once.mjs probe
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - name: This workflow cannot submit paid jobs
+        run: echo 'GET-only runtime audit finished. No job submitted, no customer points touched.'

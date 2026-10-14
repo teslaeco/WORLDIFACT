@@ -1,0 +1,92 @@
+name: Archive exact original Astra GLB from staging (GET only)
+on:
+  push:
+    branches: ['test/ecomech-astra-one-shot-20261014']
+    paths: ['ops/ARCHIVE_ECOMECH_REAL_ASTRA_20261014.json']
+permissions:
+  contents: write
+concurrency:
+  group: ecomech-original-glb-immutable-archive
+  cancel-in-progress: false
+jobs:
+  archive:
+    if: github.ref == 'refs/heads/test/ecomech-astra-one-shot-20261014' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Require exact single marker modification
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -m -r HEAD)"
+          test "$changed" = 'ops/ARCHIVE_ECOMECH_REAL_ASTRA_20261014.json'
+      - name: GET original public model, validate original job ID and SHA before writing any Git blob
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile, mkdir } from 'node:fs/promises'
+          import { createHash } from 'node:crypto'
+          import { inspectGlb } from './scripts/lib/glb-inspect.mjs'
+          const marker = JSON.parse(await readFile('ops/ARCHIVE_ECOMECH_REAL_ASTRA_20261014.json','utf8'))
+          const expected = '7e7f3aea755dfdd0ad957124d7e1dc33004905e0052fdab3d60b587f34cdc7b4'
+          const id = '6fa9be43-f371-4bcd-8fe7-7a3ea9967855'
+          if (marker.revision !== 'ecomech-astra-original-archive-v1' ||
+              marker.sha256 !== expected || marker.jobId !== id ||
+              marker.expectedBytes !== 2455792 || marker.archiveOnly !== true ||
+              Object.keys(marker).sort().join(',') !== 'archiveOnly,expectedBytes,jobId,revision,sha256')
+            throw Error('ORIGINAL_ARCHIVE_MARKER_INVALID')
+          const origin = 'https://worldifact-ecomech-astra-preview-20261014.xodobrox.workers.dev'
+          const opts = { redirect:'error', signal:AbortSignal.timeout(60000) }
+          const [source,receipt] = await Promise.all([
+            fetch(origin+'/robot.glb',opts), fetch(origin+'/report.json',opts)
+          ])
+          if (!source.ok || !receipt.ok || !receipt.headers.get('content-type')?.includes('application/json'))
+            throw Error('ORIGINAL_ASSET_UNAVAILABLE')
+          const report=await receipt.json()
+          if (report.jobId!==id || report.provenance!=='ORACLE_CONFIRMED' ||
+              report.modelOriginalSha256!==expected || report.providerSelected!=='gpt-6-astra' ||
+              report.originalGLB?.sha256!==expected || report.originalGLB?.bytes!==2455792)
+            throw Error('ORIGINAL_PROVENANCE_MISMATCH')
+          const declared=Number(source.headers.get('content-length')||0)
+          if (declared!==2455792) throw Error('SOURCE_LENGTH_MISMATCH')
+          const bytes=Buffer.from(await source.arrayBuffer())
+          const sha=createHash('sha256').update(bytes).digest('hex')
+          if(bytes.length!==2455792 || sha!==expected)throw Error('ORIGINAL_GLB_BYTES_CHANGED')
+          const geometry=inspectGlb(bytes)
+          if(geometry.meshCount!==70 || geometry.binaryChunkCount!==1 ||
+             geometry.materialCount!==8 || geometry.sha256!==expected)
+            throw Error('ORIGINAL_GEOMETRY_CHANGED')
+          const folder='public/pilots/ecomech-astra-original-20261014'
+          await mkdir(folder,{recursive:true})
+          await writeFile(folder+'/robot.glb',bytes)
+          await writeFile(folder+'/manifest.json',JSON.stringify({
+            revision:'ecomech-original-gpt6-astra-v1',
+            source:'verified-oracle-gpt-6-astra-via-static-staging',
+            originalJobId:id,
+            providerSelected:'gpt-6-astra',
+            providerReceipt:'ORACLE_CONFIRMED',
+            makeApproved:false,
+            artisticQuality:'UNREVIEWED',
+            originalSha256:sha,
+            bytes:bytes.length,
+            meshCount:geometry.meshCount,
+            triangles:40024,
+            note:'Real original GLB only. Prompt-based generation, no reference image. Not a commercial or manufacturing file.'
+          },null,2)+'\n')
+          console.log(JSON.stringify({archived:true,originalJob:id,sha256:sha,bytes:bytes.length,meshes:geometry.meshCount,PRODUCTION_DEPLOY:false}))
+          NODE
+      - name: Commit binary and provenance only to the isolated test branch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- public/pilots/ecomech-astra-original-20261014/robot.glb public/pilots/ecomech-astra-original-20261014/manifest.json
+          git diff --cached --quiet && { echo 'Binary archive already exists'; exit 1; }
+          git commit -m 'archive: preserve SHA-verified original Oracle Astra robot GLB (no API calls)'
+          git push origin HEAD:refs/heads/test/ecomech-astra-one-shot-20261014
