@@ -138,7 +138,9 @@ async function discoveryDigest(rows: Eligible[]) {
 }
 /** Never call generation endpoints. The only write is existing atomic,
  * account-bound reconciliation of an authenticated ZERO-liability receipt. */
-export async function ownerUnusedPointsApi(request: Request, env: RecoveryEnv, fetcher: typeof fetch = fetch): Promise<Response | null> {
+/** The optional hash argument exists only for deterministic native fixture tests;
+ * the production Worker always calls the default pinned owner commitment. */
+export async function ownerUnusedPointsApi(request: Request, env: RecoveryEnv, fetcher: typeof fetch = fetch, fixtureOwnerHash: string = OWNER_HASH): Promise<Response | null> {
   if (new URL(request.url).pathname !== OWNER_UNUSED_POINTS_PATH) return null
   if (request.method !== 'POST' || new URL(request.url).search || request.headers.get('Origin') !== new URL(request.url).origin ||
       request.headers.get('Sec-Fetch-Site') === 'cross-site') return reply({ error: 'MAINTENANCE_UNAVAILABLE' }, 403)
@@ -147,7 +149,7 @@ export async function ownerUnusedPointsApi(request: Request, env: RecoveryEnv, f
   let parsed
   try { parsed = await limitedBody(request) }
   catch { return reply({ error: 'INVALID_REQUEST' }, 400) }
-  if (await digest(parsed.value.uid) !== OWNER_HASH || Math.abs(Date.now() - parsed.value.at) > 90_000 ||
+  if (await digest(parsed.value.uid) !== fixtureOwnerHash || Math.abs(Date.now() - parsed.value.at) > 90_000 ||
       !(await authorized(request, env, parsed.text))) return reply({ error: 'NOT_AUTHORIZED' }, 403)
   try {
     if (!(await env.ACCOUNT_LIMITER.limit({ key: 'owner-unused-points-20261014:' + OWNER_HASH })).success)
