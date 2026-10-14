@@ -1,0 +1,33 @@
+name: ECOMECH ULTRA staging HTTP diagnostics (read-only)
+on:
+  push:
+    branches: ['feat/ecomech-ultra-public-staging-20261014']
+    paths: ['ops/ECOMECH_ULTRA_HTTP_PROBE_20261015.json']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Inspect public staging HTML, LOD, manifest and Range without credentials
+        shell: bash
+        run: |
+          set -uo pipefail
+          origin="https://worldifact-ecomech-ultra-staging-20261014.xodobrox.workers.dev"
+          echo "Read-only inspection; no OpenAI, Oracle, Cloudflare deployment or account mutation."
+          for attempt in 1 2 3 4 5 6; do
+            echo "PROBE_ATTEMPT $attempt"
+            for path in / /index.html /viewer.js /report.json /robot.glb /downloads.json /chunks/glb-000.part /downloads/glb; do
+              headers="$(mktemp)"
+              code="$(curl -sS -o /dev/null -D "$headers" -w '%{http_code}' --max-time 18 -r 0-32 "$origin$path" || true)"
+              status="$(grep -im1 '^HTTP/' "$headers" | tr -d '\r' || true)"
+              echo "PROBE $path HTTP=$code STATUS=$status"
+              rm -f "$headers"
+            done
+            if curl -sS --max-time 20 --fail "$origin/report.json" | grep -q 'ecomech-ultra-real-binary-staging-v1'; then
+              echo 'REAL_STAGING_REPORT_READABLE'
+              break
+            fi
+            sleep 5
+          done
