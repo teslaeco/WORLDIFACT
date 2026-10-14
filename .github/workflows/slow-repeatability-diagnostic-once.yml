@@ -37,6 +37,7 @@ jobs:
           const safeJob={status:job.status,id:j.id,state:j.state,detail:j.detail,failureCode:j.failureCode,provider:j.provider,model:j.model,studioExecution:j.studioExecution,generationTiming:j.generationTiming}
           const b=budget.body||{}, q=quality.body||{}
           const safeBudget={status:budget.status,revision:b.revision,model:b.model,policyRevision:b.policyRevision,capMicroUsd:b.capMicroUsd,maximumLiabilityMicroUsd:b.maximumLiabilityMicroUsd,sealed:b.sealed}
-          const safeQuality={status:quality.status,state:q.state,hasModel:q.hasModel,modelStatus:q.modelStatus,automaticQualityAccepted:q.automaticQualityAccepted,agentFinished:q.agent?.finished,agentErrorCode:q.agentUsage?.error_code}
+          const g=q.agentUsage?.cost_guard||{}
+          const safeQuality={status:quality.status,state:q.state,hasModel:q.hasModel,modelStatus:q.modelStatus,automaticQualityAccepted:q.automaticQualityAccepted,agentFinished:q.agent?.finished,agentErrorCode:q.agentUsage?.error_code,costGuard:{reason:g.reason,stage:g.stage,remainingMicroUsd:g.remaining_micro_usd,requiredMinimumMicroUsd:g.required_minimum_micro_usd,requestedOutput:g.requested_output,minimumOutput:g.minimum_output}}
           console.log(JSON.stringify({health:safeHealth,job:safeJob,budget:safeBudget,quality:safeQuality},null,2))
           JS
