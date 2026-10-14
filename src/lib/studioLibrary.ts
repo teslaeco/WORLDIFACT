@@ -2,6 +2,7 @@ import { STUDIO_MODEL_LIMIT, readStudioGenerationTiming, type StudioLibraryModel
 import { validateStudioArtifactHeader, type StudioArtifactFormat } from './studioArtifact.ts'
 import { isStudioExecution } from './studioExecution.ts'
 import { isStudioProviderEvidence } from './studioProviderEvidence.ts'
+import { isStudioIncompleteReason, STUDIO_INCOMPLETE_CAPACITY } from './studioIncomplete.ts'
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
 const cursorPattern = /^[A-Za-z0-9_-]+\.[a-f0-9]{64}$/
@@ -34,10 +35,17 @@ function parseModel(value: unknown): StudioLibraryModel {
   if (value.studioExecution !== undefined && !isStudioExecution(value.studioExecution)) throw new Error('Invalid model provenance. Refresh the library.')
   if (value.providerEvidence !== undefined && !isStudioProviderEvidence(value.providerEvidence, value.studioExecution))
     throw new Error('Oracle provider evidence does not match this model. Refresh the library.')
+  if (value.completion !== undefined &&
+      (value.completion !== 'INCOMPLETE' || !isStudioIncompleteReason(value.incompleteReason) || !isStudioExecution(value.studioExecution)))
+    throw new Error('This unfinished model record is invalid. Refresh the library.')
+  if (value.completion === undefined && value.incompleteReason !== undefined)
+    throw new Error('The model completion state could not be verified.')
   const generationTiming = readStudioGenerationTiming(value.generationTiming)
   return { id: value.id, prompt: value.prompt, createdAt: value.createdAt, completedAt: value.completedAt,
     ...(isStudioExecution(value.studioExecution) ? { studioExecution: value.studioExecution } : {}),
     ...(isStudioProviderEvidence(value.providerEvidence, value.studioExecution) ? { providerEvidence: value.providerEvidence } : {}),
+    ...(value.completion === 'INCOMPLETE' && isStudioIncompleteReason(value.incompleteReason)
+      ? { completion: 'INCOMPLETE' as const, incompleteReason: value.incompleteReason } : {}),
     ...(generationTiming ? { generationTiming } : {}),
     review: 'UNREVIEWED', downloadAllowed: value.downloadAllowed,
     receipt: { id: value.id, ticket: value.receipt.ticket, createdAt: value.receipt.createdAt } }
@@ -93,11 +101,13 @@ export async function listStudioLibrary(accountId: string, cursor: string | null
   if (!object(value) || !Array.isArray(value.models) || value.models.length > 64 || typeof value.hasMore !== 'boolean' ||
     !(value.nextCursor === null || (typeof value.nextCursor === 'string' && value.nextCursor.length <= 12000 && cursorPattern.test(value.nextCursor))) ||
     value.hasMore !== (value.nextCursor !== null) || (cursor !== null && value.nextCursor === cursor) ||
-    (value.recentModels !== undefined && (cursor !== null || !Array.isArray(value.recentModels) || value.recentModels.length > 6))) {
+    (value.recentModels !== undefined && (cursor !== null || !Array.isArray(value.recentModels) || value.recentModels.length > 6)) ||
+    (value.incompleteModels !== undefined && (cursor !== null || !Array.isArray(value.incompleteModels) || value.incompleteModels.length > STUDIO_INCOMPLETE_CAPACITY))) {
     throw new Error('The account gallery page could not be verified. Refresh the gallery to try again.')
   }
   return { accountId, models: value.models.map(parseModel),
     ...(Array.isArray(value.recentModels) ? { recentModels: value.recentModels.map(parseModel) } : {}),
+    ...(Array.isArray(value.incompleteModels) ? { incompleteModels: value.incompleteModels.map(parseModel) } : {}),
     nextCursor: value.nextCursor, hasMore: value.hasMore }
 }
 
@@ -139,6 +149,7 @@ export async function readStudioLibraryModel(accountId: string, model: StudioLib
 /** Read an original stored export with the same account-bound, renewable ticket.
  * Missing formats remain unavailable; this never generates or converts a file. */
 export async function readStudioLibraryExport(accountId: string, model: StudioLibraryModel, format: Exclude<StudioArtifactFormat, 'model'>, signal: AbortSignal, fetcher: Fetcher = browserFetch): Promise<Blob> {
+  if (model.completion === 'INCOMPLETE') throw new Error('Unfinished 3D drafts have GLB preview/download only, not final exports.')
   if (!['fbx', 'blend', 'pbr'].includes(format)) throw new Error('Unsupported saved model export format.')
   return readLibraryArtifact(accountId, model, format, signal, fetcher, 512 * 1024 * 1024)
 }
@@ -149,7 +160,7 @@ async function readLibraryArtifact(accountId: string, model: StudioLibraryModel,
   for (let attempt = 0; attempt < 2; attempt++) {
     signal.throwIfAborted()
     const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(180_000)])
-    const response = await fetcher(`/api/studio/jobs/${verified.id}/${format === 'model' ? 'model' : `exports/${format}`}`, {
+    const response = await fetcher(`/api/studio/jobs/${verified.id}/${format === 'model' ? verified.completion === 'INCOMPLETE' ? 'draft' : 'model' : `exports/${format}`}`, {
       ...options(requestSignal), headers: { 'X-WORLDIFACT-Job': verified.receipt.ticket },
     })
     if (!response.ok) {
