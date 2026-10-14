@@ -2,7 +2,7 @@ import { STUDIO_MODEL_LIMIT, readStudioGenerationTiming, type StudioLibraryModel
 import { validateStudioArtifactHeader, type StudioArtifactFormat } from './studioArtifact.ts'
 import { isStudioExecution } from './studioExecution.ts'
 import { isStudioProviderEvidence } from './studioProviderEvidence.ts'
-import { isStudioIncompleteReason, STUDIO_INCOMPLETE_CAPACITY } from './studioIncomplete.ts'
+import { isStudioIncompleteReason, STUDIO_INCOMPLETE_CAPACITY, STUDIO_INCOMPLETE_BACKUP_PROOF } from './studioIncomplete.ts'
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
 const cursorPattern = /^[A-Za-z0-9_-]+\.[a-f0-9]{64}$/
@@ -40,12 +40,17 @@ function parseModel(value: unknown): StudioLibraryModel {
     throw new Error('This unfinished model record is invalid. Refresh the library.')
   if (value.completion === undefined && value.incompleteReason !== undefined)
     throw new Error('The model completion state could not be verified.')
+  if (value.backupVerified !== undefined &&
+      (value.completion !== 'INCOMPLETE' || value.backupVerified !== STUDIO_INCOMPLETE_BACKUP_PROOF))
+    throw new Error('Unverified or inconsistent private GLB backup metadata.')
   const generationTiming = readStudioGenerationTiming(value.generationTiming)
   return { id: value.id, prompt: value.prompt, createdAt: value.createdAt, completedAt: value.completedAt,
     ...(isStudioExecution(value.studioExecution) ? { studioExecution: value.studioExecution } : {}),
     ...(isStudioProviderEvidence(value.providerEvidence, value.studioExecution) ? { providerEvidence: value.providerEvidence } : {}),
     ...(value.completion === 'INCOMPLETE' && isStudioIncompleteReason(value.incompleteReason)
       ? { completion: 'INCOMPLETE' as const, incompleteReason: value.incompleteReason } : {}),
+    ...(value.completion === 'INCOMPLETE' && value.backupVerified === STUDIO_INCOMPLETE_BACKUP_PROOF
+      ? { backupVerified: STUDIO_INCOMPLETE_BACKUP_PROOF } : {}),
     ...(generationTiming ? { generationTiming } : {}),
     review: 'UNREVIEWED', downloadAllowed: value.downloadAllowed,
     receipt: { id: value.id, ticket: value.receipt.ticket, createdAt: value.receipt.createdAt } }
@@ -143,7 +148,7 @@ export async function getStudioLibraryModel(accountId: string, id: string, signa
 
 /** Reads an existing signed receipt only; never starts or retries paid AI. */
 export async function retainStudioIncompleteModel(id: string, ticket: string, signal: AbortSignal,
-  fetcher: Fetcher = browserFetch): Promise<{ retained: boolean; canOpen?: boolean; verifiedProvider?: boolean; reason?: string }> {
+  fetcher: Fetcher = browserFetch): Promise<{ retained: boolean; canOpen?: boolean; backedUp?: boolean; verifiedProvider?: boolean; reason?: string }> {
   if (!isStudioLibraryId(id) || typeof ticket !== 'string' || ticket.length > 400 ||
       !ticket.includes(id + '.') || !/^(?:held\.)?[a-f0-9.-]{100,400}$/.test(ticket))
     throw new Error('Recover only the original signed job receipt.')
@@ -156,10 +161,12 @@ export async function retainStudioIncompleteModel(id: string, ticket: string, si
   if (!object(value) || typeof value.retained !== 'boolean' ||
       (value.reason !== undefined && typeof value.reason !== 'string') ||
       (value.canOpen !== undefined && typeof value.canOpen !== 'boolean') ||
+      (value.backedUp !== undefined && typeof value.backedUp !== 'boolean') ||
       (value.verifiedProvider !== undefined && typeof value.verifiedProvider !== 'boolean'))
     throw new Error('The retained draft recovery result could not be verified.')
   return { retained: value.retained,
     ...(typeof value.canOpen === 'boolean' ? { canOpen: value.canOpen } : {}),
+    ...(typeof value.backedUp === 'boolean' ? { backedUp: value.backedUp } : {}),
     ...(typeof value.verifiedProvider === 'boolean' ? { verifiedProvider: value.verifiedProvider } : {}),
     ...(typeof value.reason === 'string' ? { reason: value.reason } : {}) }
 }
