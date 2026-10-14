@@ -30,6 +30,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Full repository lint, types, unit, integration and browser/build gates before paid submission
+        run: npm run verify
       - name: Install bounded real-image to JPEG transcoder
         run: python3 -m pip install --break-system-packages 'Pillow==11.3.0'
       - name: Verify reference image, selected Astra, and fixed one-job liability BEFORE paid provider call
