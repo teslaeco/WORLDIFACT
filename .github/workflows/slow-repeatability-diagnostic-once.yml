@@ -1,0 +1,37 @@
+name: Diagnose failed Slow acceptance once
+
+on:
+  push:
+    branches: ['ops/slow-repeatability-prod-20261014']
+    paths:
+      - '.github/workflows/slow-repeatability-diagnostic-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read failed Astra job and Oracle health
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          const origin=new URL(process.env.ORACLE_ENDPOINT).origin
+          const headers={Authorization:'Bearer '+process.env.ORACLE_API_TOKEN,Accept:'application/json','Cache-Control':'no-cache'}
+          const read=async path=>{const r=await fetch(origin+path,{redirect:'error',signal:AbortSignal.timeout(20000),headers}); const text=await r.text(); let body=null; try{body=JSON.parse(text)}catch{}; return {status:r.status,body}}
+          const job=await read('/v1/jobs/7a140001-2b11-4d33-8c44-000000000001')
+          const health=await read('/v1/health')
+          const h=health.body||{}
+          const safeHealth={status:health.status,ready:h.ready,provider:h.provider,model:h.model,connectorVersion:h.connectorVersion,studioAdmissionRevision:h.studioAdmissionRevision,studioExecutionRevision:h.studioExecutionRevision,studioExecutionModels:h.studioExecutionModels,studioExecutionModes:h.studioExecutionModes,codexReady:h.codexReady,blenderReady:h.blenderReady}
+          const j=job.body||{}
+          const safeJob={status:job.status,id:j.id,state:j.state,detail:j.detail,failureCode:j.failureCode,provider:j.provider,model:j.model,studioExecution:j.studioExecution,generationTiming:j.generationTiming}
+          console.log(JSON.stringify({health:safeHealth,job:safeJob},null,2))
+          JS
