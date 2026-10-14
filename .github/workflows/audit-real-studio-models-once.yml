@@ -1,0 +1,79 @@
+name: Audit actual Oracle model routing (read-only)
+
+on:
+  push:
+    branches:
+      - audit/real-provider-routing-20261014
+    paths:
+      - '.github/workflows/audit-real-studio-models-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Read existing immutable job receipts, no paid calls
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          const origin=new URL(process.env.ORACLE_ENDPOINT)
+          assert.equal(origin.protocol,'https:')
+          assert.match(origin.hostname,/^[a-z0-9-]+\.trycloudflare\.com$/)
+          assert.ok(process.env.ORACLE_API_TOKEN?.length>10)
+          const evidence=[
+            { label:'Sol 6.1 (known actual paid run)',id:'5f017611-1d33-4e9a-8b3d-02f4c6d47001', model:'gpt-6.1-sol', cap:350000 },
+            { label:'Luna (known actual paid run)',id:'5f017611-1d33-4e9a-8b3d-02f4c6d47002', model:'gpt-6-luna', cap:100000 },
+            { label:'Luna (fourth sequential run)',id:'5f017611-1d33-4e9a-8b3d-02f4c6d47104', model:'gpt-6-luna', cap:100000 },
+          ]
+          async function get(path){
+            const r=await fetch(origin.origin+path,{method:'GET',headers:{Authorization:'Bearer '+process.env.ORACLE_API_TOKEN,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(18000)})
+            if(r.status!==200){await r.body?.cancel();return {http:r.status}}
+            const bytes=new Uint8Array(await r.arrayBuffer())
+            assert.ok(bytes.length<=262144,'Worker response too large')
+            assert.ok(r.headers.get('content-type')?.includes('application/json'),'Worker response content-type mismatch')
+            return {http:r.status,value:JSON.parse(new TextDecoder().decode(bytes))}
+          }
+          let failures=0
+          for(const job of evidence){
+            const [state,budget,quality]=await Promise.all([
+              get('/v1/jobs/'+job.id),
+              get('/v1/jobs/'+job.id+'/budget'),
+              get('/v1/jobs/'+job.id+'/quality'),
+            ])
+            const b=budget.value||{},s=state.value||{},q=quality.value||{}
+            const ok=state.http===200&&s.id===job.id&&s.state==='succeeded' &&
+              budget.http===200&&b.revision==='worldifact-terminal-budget-v1' &&
+              b.model===job.model&&b.jobId===job.id&&b.sealed===true&&
+              b.capMicroUsd===job.cap&&b.policyRevision==='studio-model-budget-v1:standard' &&
+              Number.isSafeInteger(b.maximumLiabilityMicroUsd)&&
+              b.maximumLiabilityMicroUsd>0&&b.maximumLiabilityMicroUsd<=job.cap &&
+              /^[a-f0-9]{64}$/.test(b.sealId||'')
+            const result={label:job.label,
+              statusHttp:state.http,state:s.state||null,
+              reportedProviderModel:typeof s.model==='string'?s.model:null,
+              sealedModel:typeof b.model==='string'?b.model:null,
+              sealMatchesRequested:ok,
+              actualProviderUsageBoundedMicroUsd:Number.isSafeInteger(b.maximumLiabilityMicroUsd)?b.maximumLiabilityMicroUsd:null,
+              qualityHttp:quality.http,qualityState:q.state||null,
+              recordedAgentModel:typeof q.agentUsage?.model==='string'?q.agentUsage.model:null,
+              executedProviderModel:typeof q.agent?.model==='string'?q.agent.model:null,
+            }
+            console.log(JSON.stringify(result))
+            if(!ok)failures++
+          }
+          if(failures)throw new Error('EXISTING_PROVIDER_AUDIT_INCOMPLETE_'+failures)
+          console.log('PASS: existing Sol and Luna jobs have distinct authenticated Oracle model-specific terminal receipts. No paid generation or account changes.')
+          JS
