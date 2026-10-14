@@ -80,3 +80,49 @@ jobs:
           curl -sSI "$origin/downloads/obj" | grep -qi '200'
           curl -sSI "$origin/downloads/blend" | grep -qi '200'
           echo "VERIFIED_ULTRA_STAGING_URL=$origin/"
+
+      - name: Make Android LOD directly downloadable for visual QA
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ECOMECH-ULTRA-MOBILE-LOD
+          path: .ecomech-ultra-input/ECOMECH_ASTRA_BLENDER_MOBILE_LOD.glb
+          retention-days: 7
+          if-no-files-found: ignore
+          include-hidden-files: true
+          compression-level: 0
+      - name: Preserve actual 265MB high-res GLB separately for independently verified QA
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ECOMECH-ULTRA-ORIGINAL-GLB
+          path: .ecomech-ultra-input/ECOMECH_ASTRA_BLENDER_ULTRA_GAME.glb
+          retention-days: 7
+          if-no-files-found: ignore
+          include-hidden-files: true
+          compression-level: 0
+      - name: Preserve original FBX and native editable BLEND separately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ECOMECH-ULTRA-FBX-BLEND
+          path: |
+            .ecomech-ultra-input/ECOMECH_ASTRA_BLENDER_ULTRA.fbx
+            .ecomech-ultra-input/ECOMECH_ASTRA_BLENDER_ULTRA_EDITABLE.blend
+          retention-days: 7
+          if-no-files-found: ignore
+          include-hidden-files: true
+          compression-level: 0
+      - name: Preserve full OBJ/MTL files separately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ECOMECH-ULTRA-OBJ-MTL
+          path: |
+            .ecomech-ultra-input/ECOMECH_ASTRA_BLENDER_ULTRA.obj
+            .ecomech-ultra-input/ECOMECH_ASTRA_BLENDER_ULTRA.mtl
+          retention-days: 7
+          if-no-files-found: ignore
+          include-hidden-files: true
+          compression-level: 0
+
