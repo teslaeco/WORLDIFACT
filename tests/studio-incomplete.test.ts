@@ -22,10 +22,14 @@ test('an unfinished GLB record is distinct from success, holds exact real model 
     { ...candidate, providerEvidence: { ...evidence, source: 'frontend' } },
     { ...candidate, id: 'other-account' },
     { ...candidate, injected: 'fake success' },
+    { ...candidate, backupVerified: 'r2-write-pending' },
+    { ...candidate, backupVerified: 'oracle-only' },
     null, {}, [],
   ]) assert.equal(readStudioIncompleteRecord(bad), null)
   const { providerEvidence: _ignored, ...withoutProof } = candidate
   assert.deepEqual(readStudioIncompleteRecord(withoutProof), withoutProof)
+  const backedUp = { ...candidate, backupVerified: 'r2-sha256-readback-v1' }
+  assert.deepEqual(readStudioIncompleteRecord(backedUp), backedUp)
 })
 
 test('incomplete index is bounded, rejects forgery and remains idempotent by original job id', () => {
