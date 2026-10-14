@@ -29,9 +29,14 @@ jobs:
           const read=async path=>{const r=await fetch(origin+path,{redirect:'error',signal:AbortSignal.timeout(20000),headers}); const text=await r.text(); let body=null; try{body=JSON.parse(text)}catch{}; return {status:r.status,body}}
           const job=await read('/v1/jobs/7a140001-2b11-4d33-8c44-000000000001')
           const health=await read('/v1/health')
+          const budget=await read('/v1/jobs/7a140001-2b11-4d33-8c44-000000000001/budget')
+          const quality=await read('/v1/jobs/7a140001-2b11-4d33-8c44-000000000001/quality')
           const h=health.body||{}
           const safeHealth={status:health.status,ready:h.ready,provider:h.provider,model:h.model,connectorVersion:h.connectorVersion,studioAdmissionRevision:h.studioAdmissionRevision,studioExecutionRevision:h.studioExecutionRevision,studioExecutionModels:h.studioExecutionModels,studioExecutionModes:h.studioExecutionModes,codexReady:h.codexReady,blenderReady:h.blenderReady}
           const j=job.body||{}
           const safeJob={status:job.status,id:j.id,state:j.state,detail:j.detail,failureCode:j.failureCode,provider:j.provider,model:j.model,studioExecution:j.studioExecution,generationTiming:j.generationTiming}
-          console.log(JSON.stringify({health:safeHealth,job:safeJob},null,2))
+          const b=budget.body||{}, q=quality.body||{}
+          const safeBudget={status:budget.status,revision:b.revision,model:b.model,policyRevision:b.policyRevision,capMicroUsd:b.capMicroUsd,maximumLiabilityMicroUsd:b.maximumLiabilityMicroUsd,sealed:b.sealed}
+          const safeQuality={status:quality.status,state:q.state,hasModel:q.hasModel,modelStatus:q.modelStatus,automaticQualityAccepted:q.automaticQualityAccepted,agentFinished:q.agent?.finished,agentErrorCode:q.agentUsage?.error_code}
+          console.log(JSON.stringify({health:safeHealth,job:safeJob,budget:safeBudget,quality:safeQuality},null,2))
           JS
