@@ -1,4 +1,4 @@
-import { MODEL_CATALOG } from './modelCatalog.ts'
+import { MODEL_CATALOG, type GenerationModel } from './modelCatalog.ts'
 import { studioExecution, type StudioExecution } from './studioExecution.ts'
 // WORLDIFACT adapter to the existing Froge /v1/jobs contract; no new AI provider.
 // Reviewed reference: Froge-MPC-2-test @ d3f61b842dcfeda2ed794210caafc391919a75be.
@@ -133,11 +133,11 @@ export function formatStudioGenerationDuration(timing?: StudioGenerationTiming):
   const seconds = Math.round(valid.durationSeconds)
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 }
-export type StudioLibraryModel = { id: string; prompt: string; createdAt: string; completedAt: string; receipt: StudioReceipt; review: 'UNREVIEWED'; downloadAllowed: boolean; generationTiming?: StudioGenerationTiming }
+export type StudioLibraryModel = { id: string; prompt: string; createdAt: string; completedAt: string; model: GenerationModel; mode: 'standard' | 'fast'; receipt: StudioReceipt; review: 'UNREVIEWED'; downloadAllowed: boolean; generationTiming?: StudioGenerationTiming }
 export type StudioLibraryPage = { accountId: string; models: StudioLibraryModel[]; nextCursor: string | null; hasMore: boolean }
 export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'MODEL_BUDGET_EXCEEDED', 'STUDIO_BUDGET_POLICY_CHANGED', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
 export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]
-export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean; pricing?: StudioPricing; generationTiming?: StudioGenerationTiming; pointSettlement?: import('./paidPointsFunding.ts').PointSettlement; pointSettlementUnconfirmed?: true }
+export type StudioJob = { id: string; state: 'pending' | 'queued' | 'generating' | 'retrying' | 'building' | 'succeeded' | 'failed' | 'cancelled'; detail: string; model?: GenerationModel; mode?: 'standard' | 'fast'; failureCode?: StudioFailureCode; downloadAllowed?: boolean; previewOnly?: boolean; previewAvailable?: boolean; reconciliationRequired?: boolean; pricing?: StudioPricing; generationTiming?: StudioGenerationTiming; pointSettlement?: import('./paidPointsFunding.ts').PointSettlement; pointSettlementUnconfirmed?: true }
 export function studioPointsPending(job: Pick<StudioJob, 'state' | 'pointSettlement' | 'pointSettlementUnconfirmed'> | null | undefined): boolean {
   return !!job && ['failed', 'cancelled'].includes(job.state) && (job.pointSettlementUnconfirmed === true || ['held', 'pending-cost'].includes(job.pointSettlement?.state ?? ''))
 }
