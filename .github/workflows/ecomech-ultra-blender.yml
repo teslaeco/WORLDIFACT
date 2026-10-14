@@ -9,7 +9,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: ecomech-native-ultra-\${{ github.ref }}
+  group: ecomech-native-ultra-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   native-ultra:
@@ -22,7 +22,7 @@ jobs:
       - name: Retrieve EXACT already-completed Oracle-confirmed Astra source, NO new AI requests
         shell: bash
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p .original
@@ -65,7 +65,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ecomech-astra-plus-blender-real-ultra-\${{ github.sha }}
+          name: ecomech-astra-plus-blender-real-ultra-${{ github.sha }}
           path: .ecomech-ultra-artifacts/
           retention-days: 7
           if-no-files-found: ignore
