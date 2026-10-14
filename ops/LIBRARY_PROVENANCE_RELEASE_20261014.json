@@ -1,0 +1,9 @@
+{
+  "revision": "gallery-provenance-20261014-v1",
+  "baseCommit": "b58d8998d7b0475ceddfed3c6b52026f0f7414e5",
+  "change": "display verified model/mode and newest-first account gallery",
+  "preserveBilling": true,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "paidGenerationDuringDeploy": false
+}

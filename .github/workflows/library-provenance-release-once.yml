@@ -1,0 +1,105 @@
+name: Deploy Studio gallery provenance once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/LIBRARY_PROVENANCE_RELEASE_20261014.json'
+      - '.github/workflows/library-provenance-release-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: production
+      url: ${{ steps.verify.outputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify exact owner-approved release envelope
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "b58d8998d7b0475ceddfed3c6b52026f0f7414e5"
+          mapfile -t changed < <(git diff --name-only HEAD^ HEAD | sort)
+          test "${#changed[@]}" -eq 2
+          test "${changed[0]}" = ".github/workflows/library-provenance-release-once.yml"
+          test "${changed[1]}" = "ops/LIBRARY_PROVENANCE_RELEASE_20261014.json"
+      - name: Verify immutable release marker
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile } from 'node:fs/promises'
+          const marker=JSON.parse(await readFile('ops/LIBRARY_PROVENANCE_RELEASE_20261014.json','utf8'))
+          const expected={"revision":"gallery-provenance-20261014-v1","baseCommit":"b58d8998d7b0475ceddfed3c6b52026f0f7414e5","change":"display verified model/mode and newest-first account gallery","preserveBilling":true,"preserveRemoteVars":true,"preserveSecrets":true,"paidGenerationDuringDeploy":false}
+          if (JSON.stringify(marker)!==JSON.stringify(expected)) throw new Error('Release marker does not match reviewed envelope')
+          JS
+      - name: Check Cloudflare credential shape
+        run: node scripts/release-check.ts credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - name: Build preserving config
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile, writeFile } from 'node:fs/promises'
+          import { buildAiShopUiConfig } from './scripts/build-compatible-mcc-config.mjs'
+          const base=JSON.parse(await readFile('wrangler.jsonc','utf8'))
+          const config=buildAiShopUiConfig(base,{aiShopUi:true,preserveBilling:true,preserveRemoteVars:true,preserveSecrets:true})
+          await writeFile('.gallery.wrangler.json',JSON.stringify(config,null,2)+'\n',{mode:0o600})
+          JS
+      - name: Dry-run
+        run: npx wrangler deploy --dry-run --config .gallery.wrangler.json --outdir .wrangler/preview
+      - name: Deploy preserving remote variables and secrets
+        run: |
+          set -euo pipefail
+          if WRANGLER_LOG=none WRANGLER_WRITE_LOGS=false WRANGLER_SEND_METRICS=false WRANGLER_SEND_ERROR_REPORTS=false \
+            npx wrangler deploy --config .gallery.wrangler.json --keep-vars > /dev/null 2>&1; then
+            echo "Deployment completed; strict read-only verification follows."
+          else
+            echo "::error::Deployment failed; private Wrangler output suppressed."
+            exit 1
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-gallery.ndjson
+      - name: Verify public Studio readiness
+        id: verify
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          import { appendFile, readFile } from 'node:fs/promises'
+          import { readDeployment } from './scripts/release-check.ts'
+          import { checkCompatibleMccRelease } from './scripts/check-compatible-mcc-release.mjs'
+          const deployment=readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH,'utf8'))
+          const release=await checkCompatibleMccRelease(deployment)
+          const r=await fetch(release.origin+'/api/studio/status',{headers:{'Cache-Control':'no-cache'},redirect:'error',signal:AbortSignal.timeout(20000)})
+          assert.equal(r.status,200)
+          const s=await r.json()
+          assert.equal(s.ready,true)
+          assert.equal(s.studioAdmissionRevision,'oracle-durable-admission-v1')
+          assert.equal(s.studioExecutionRevision,'studio-execution-v1')
+          assert.deepEqual([...s.studioExecutionModels].sort(),['astra','luna','sol'])
+          assert.deepEqual([...s.studioExecutionModes].sort(),['fast','standard'])
+          assert.equal(s.allowance?.unlimited,true)
+          if(process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT,'url='+release.origin+'\n')
+          console.log(JSON.stringify({origin:release.origin,versionId:release.versionId,ready:s.ready,admission:s.studioAdmissionRevision,models:s.studioExecutionModels,modes:s.studioExecutionModes,allowance:s.allowance}))
+          JS
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-gallery.ndjson
