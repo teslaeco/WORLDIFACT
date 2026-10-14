@@ -168,7 +168,13 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
   const rows = useMemo<Row[]>(() => [
     ...accountModels.map(model => ({ key: `account:${owner}:${model.id}`, origin: 'account' as const, model })),
     ...entries.map(model => ({ key: `device:${model.id}`, origin: 'device' as const, model })),
-  ], [owner, accountModels, entries])
+  ].sort((a, b) => {
+    const pinned = Number(b.origin === 'account' && b.model.id === requestedModelId) - Number(a.origin === 'account' && a.model.id === requestedModelId)
+    if (pinned) return pinned
+    const aTime = Date.parse(a.origin === 'account' ? a.model.completedAt : a.model.savedAt)
+    const bTime = Date.parse(b.origin === 'account' ? b.model.completedAt : b.model.savedAt)
+    return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0) || a.key.localeCompare(b.key)
+  }), [owner, accountModels, entries, requestedModelId])
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     const items = needle ? rows.filter(item => item.model.prompt.toLowerCase().includes(needle)) : rows
