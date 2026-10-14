@@ -68,3 +68,7 @@ As of the 2026-10-01 pricing update, Standard R2 lists USD 0.015/GB-month, USD 4
 - [ ] Obtain explicit merge and release authorization.
 
 **GO/NO-GO: NO-GO** until all blockers above are closed. All inert tests are **not** a proof that a real failed Oracle job currently holds a GLB.
+
+
+Updated source QA evidence: PR #284 code commit `5a184219f021b3af606dd6645b6ff994cda54efe` passed https://github.com/teslaeco/WORLDIFACT/actions/runs/38614866761 (2,334/2,334 tests, foundations, HTTP, build, Worker dry-run). No R2 bucket was provisioned and no live R2 GLB persisted. The current docs-only follow-up commit needs fresh exact-head CI. Original Oracle-only release and financial data remain unchanged.
+
