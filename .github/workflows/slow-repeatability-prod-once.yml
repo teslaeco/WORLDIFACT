@@ -1,0 +1,38 @@
+name: Production Slow repeatability once
+
+on:
+  push:
+    branches: ['ops/slow-repeatability-prod-20261014']
+    paths:
+      - 'scripts/slow-repeatability-prod-once.mjs'
+      - '.github/workflows/slow-repeatability-prod-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  acceptance:
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Run exactly-once production Slow repeatability acceptance
+        env:
+          WORLDIFACT_SLOW_REPEATABILITY_APPROVAL: SLOW_REPEATABILITY_ONCE_20261014
+          GITHUB_TOKEN: ${{ github.token }}
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: node scripts/slow-repeatability-prod-once.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: slow-repeatability-evidence-${{ github.sha }}
+          path: slow-repeatability-evidence/
+          retention-days: 7
+          if-no-files-found: warn
