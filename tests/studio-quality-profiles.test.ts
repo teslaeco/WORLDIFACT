@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { inspectGLB } from '../src/lib/glb.ts'
 import { passesStudioStructuralQuality } from '../src/lib/studioQuality.ts'
-import { INDUSTRIAL_ELECTRICAL_PROFILE, REFERENCE_CHARACTER_PROFILE, oracleStudioPayload, studioQualityProfile, type StudioInput } from '../src/lib/studioProtocol.ts'
+import { INDUSTRIAL_ELECTRICAL_PROFILE, REFERENCE_CHARACTER_PROFILE, TEXT_CHARACTER_DETAIL_PROFILE, oracleStudioPayload, studioQualityProfile, type StudioInput } from '../src/lib/studioProtocol.ts'
 import { detailedAssemblyGLBFixture, detailedGLBFixture } from './detailed-studio-fixture.ts'
 
 const photo = (view:'front'|'left'|'right'|'back') => ({ name:view+'.jpg', view, dataUrl:'data:image/jpeg;base64,AA==', textureMaxSize:4096 as const })
@@ -60,7 +60,7 @@ test('whole character words and Polish inflections preserve reference quality ga
   for (const prompt of ['A woman, wearing a dress', 'Two men in spacesuits', 'A girl with a helmet',
     'A human character', 'Model postaci kobiety', 'Figurka mężczyzny', 'Odtwórz tę postać', 'Model figurki']) {
     assert.equal(studioQualityProfile({prompt,purpose:'figurine',photos:[photo('front')]}),REFERENCE_CHARACTER_PROFILE,prompt)
-    assert.equal(studioQualityProfile({prompt,purpose:'figurine',photos:[]}),'standard',prompt)
+    assert.equal(studioQualityProfile({prompt,purpose:'figurine',photos:[]}),TEXT_CHARACTER_DETAIL_PROFILE,prompt)
   }
 })
 
