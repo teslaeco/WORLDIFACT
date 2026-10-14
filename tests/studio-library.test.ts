@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { AccountEntitlements, STUDIO_LIBRARY_SCAN_LIMIT, type EntitlementStorage } from '../server/entitlements.ts'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
 import type { StudioLibraryModel, StudioLibraryPage } from '../src/lib/studioProtocol.ts'
+import { STUDIO_RECENT_KEY, upsertRecentStudioIndex } from '../src/lib/studioRecentIndex.ts'
 import { detailedGLBFixture } from './detailed-studio-fixture.ts'
 
 const origin = 'https://worldifact.test'
@@ -181,6 +182,29 @@ test('recently completed owned models are visible on the first page even when th
   assert.ok(initial.recentModels!.length <= 6)
   assert.ok(f.lists.every(item => item.limit === STUDIO_LIBRARY_SCAN_LIMIT))
   assert.equal(f.external.length, 0, 'No Oracle model or provider request during latest-record discovery')
+  f.assertReadOnly()
+})
+
+test('fresh saved model remains discoverable beyond every bounded UUID scan via authenticated recent index', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  const f = fixture(), values = f.rows.get(alice)!, latest = idFor(400)
+  for (let i = 1; i <= 400; i++) values.set(`job:${idFor(i)}`,
+    completed({ state: i === 400 ? 'completed' : 'failed', updatedAt: NOW - 30_000,
+      ...(i === 400 ? { model: 'luna', profile: 'fast', cost: 15,
+        studioExecution: { revision: 'studio-execution-v1', model: 'luna', mode: 'standard' } } : {}) }))
+  values.set(STUDIO_RECENT_KEY, upsertRecentStudioIndex(undefined, latest, NOW - 30_000))
+  const page = await f.page()
+  assert.deepEqual(page.models, [], 'normal immutable pagination remains unchanged')
+  assert.equal(page.recentModels?.[0]?.id, latest)
+  assert.equal(page.recentModels?.[0]?.studioExecution?.model, 'luna')
+  assert.ok(f.reads.includes(STUDIO_RECENT_KEY))
+  assert.ok(f.reads.includes(`job:${latest}`))
+  const old = f.rows.get(bob)!
+  old.set(STUDIO_RECENT_KEY, upsertRecentStudioIndex(undefined, latest, NOW - 30_000))
+  const bobPage = await f.call('/api/studio/library', { user: 'bob' })
+  assert.equal((await bobPage.json() as StudioLibraryPage).recentModels?.length ?? 0, 0,
+    'a hint cannot manufacture account ownership')
+  assert.equal(f.external.length, 0)
   f.assertReadOnly()
 })
 
