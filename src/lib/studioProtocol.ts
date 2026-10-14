@@ -105,7 +105,7 @@ const ELECTRICAL_CABINET_REQUEST = /(electrical\s+(?:control\s+)?cabinet|switchg
 // letters as separators (JavaScript's ASCII-oriented \b would do that).
 // Robot is the top-level subject; mentioning MCC/contactor hardware as its
 // internal anatomy MUST NOT route it to a cabinet reconstruction profile.
-const EXPLICIT_HUMANOID_ROBOT = /(?:^|[^\p{L}\p{N}_])(?:robots?|roboty|robota|mechas?|androids?|humanoid(?:s)?|cyborgs?|exosuits?|egzoszkielet\p{L}*)(?=$|[^\p{L}\p{N}_])/iu
+const EXPLICIT_HUMANOID_ROBOT = /(?:^|[^\p{L}\p{N}_])(?:robots?|roboty|robota|mech(?:a|s|as)?|androids?|humanoid(?:s)?|cyborgs?|exosuits?|egzoszkielet\p{L}*)(?=$|[^\p{L}\p{N}_])/iu
 const ROBOT_BODY_EVIDENCE = /(?:full[- ]body|humanoid|android|guardian|warrior|battle|armou?r|helmet|head|torso|shoulder|legs?|knees?|hands?|fingers?|holding|chili|exposed mechanics|mechanical body|posta[cć]|humanoidaln\p{L}*|pancerz|przegub|trzyma|papryczk)/iu
 const CHARACTER_REQUEST = /(?:^|[^\p{L}\p{N}_])(?:adult\s+(?:woman|man|female|male)|characters?|heroines?|figurines?|persons?|humans?|women|woman|girls?|men|man|posta[cć]\p{L}*|kobiet\p{L}*|m[eę][żz]czyzn\p{L}*|figur[kc]\p{L}*)(?=$|[^\p{L}\p{N}_])/iu
 // Resolve only an explicit cabinet description against the Shop's figurine
