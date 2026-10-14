@@ -798,7 +798,7 @@ export default function ShopPage() {
               setCheapModel(model === 'luna' ? 'luna' : 'sol')
               setProfile(model === 'astra' ? 'standard' : FAST_DRAFT_PROFILE)
               setDeliverable('detailed-mesh'); setBudgetTier('standard'); setAcceptedBudgetRevision(null)
-            }}><option value="standard">Slow / Quality · GPT-6 Astra</option><option value="astra-fast" hidden disabled>Fast · GPT-6 Astra</option><option value="sol-standard" disabled={!executionReady}>Slow / Quality · GPT-6.1 Sol</option><option value="sol-fast" hidden disabled>Fast · GPT-6.1 Sol</option><option value="luna-standard" disabled={!executionReady}>Slow / Quality · GPT-6 Luna</option><option value="luna-fast" hidden disabled>Fast · GPT-6 Luna</option></select>
+            }}><option value="standard">Slow / Quality · GPT-6 Astra</option><option value="astra-fast" disabled>Fast · GPT-6 Astra</option><option value="sol-standard" disabled={!executionReady}>Slow / Quality · GPT-6.1 Sol</option><option value="sol-fast" disabled>Fast · GPT-6.1 Sol</option><option value="luna-standard" disabled={!executionReady}>Slow / Quality · GPT-6 Luna</option><option value="luna-fast" disabled>Fast · GPT-6 Luna</option></select>
           </div>
             </div>
             <div className="studio-prompt-model" ref={setImageModelSlot} hidden={creationMode !== 'image'} />
