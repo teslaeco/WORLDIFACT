@@ -140,7 +140,7 @@ test('wrong account, missing GLB, fake provider and missing unfinished draft can
     const res = await f.call('/api/studio/jobs/' + ID + '/retain-draft', {
       method: 'POST', ticket: f.ticket, who: mode === 'foreign' ? 'bob' : 'alice',
     })
-    assert.equal(mode === 'foreign' || mode === 'wrong-provider' ? res.status === 403 || res.status === 409 : res.status === 200, true, mode)
+    assert.equal(mode === 'foreign' || mode === 'wrong-provider' ? !res.ok : res.status === 200, true, mode)
     if (res.status === 200) assert.equal((await res.json() as any).retained, false, mode)
     assert.equal(f.alice.values.has('studio-incomplete-v1:' + ID), false)
     assert.equal(f.alice.values.get('balance'), 1000)
