@@ -89,7 +89,9 @@ export function parseStudioJob(value: unknown, id: string, expectedPoints?: numb
     ...(reconciliationRequired ? { reconciliationRequired: true } : {}),
     ...(typeof value.job.downloadAllowed === 'boolean' ? { downloadAllowed: value.job.downloadAllowed } : {}),
     ...(typeof value.job.previewOnly === 'boolean' ? { previewOnly: value.job.previewOnly } : {}),
-    ...(typeof value.job.previewAvailable === 'boolean' ? { previewAvailable: value.job.previewAvailable } : {}) }
+    ...(typeof value.job.previewAvailable === 'boolean' ? { previewAvailable: value.job.previewAvailable } : {}),
+    ...(state === 'failed' && value.job.incompleteAvailable === true ? { incompleteAvailable: true as const,
+      incompleteDownloadAllowed: value.job.incompleteDownloadAllowed === true } : {}) }
 }
 class StudioResponseError extends Error {
   status: number
