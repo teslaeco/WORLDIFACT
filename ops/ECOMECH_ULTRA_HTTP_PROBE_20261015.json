@@ -1,0 +1,7 @@
+{
+  "purpose": "read-only edge 404 diagnosis, no deploy",
+  "sourceRun": 38644423079,
+  "revision": "2026-10-15",
+  "maxApiCostUsd": 0,
+  "sourceGLB": "7e7f3aea755dfdd0ad957124d7e1dc33004905e0052fdab3d60b587f34cdc7b4"
+}
