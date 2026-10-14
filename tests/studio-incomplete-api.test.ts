@@ -135,6 +135,27 @@ test('budget-exhausted Oracle candidate is genuinely recoverable as owner-only I
     'Draft recovery must not trigger financial/provider-liability reconciliation')
 })
 
+test('retained draft refuses a changed Oracle GLB after recovery without touching owner points', async () => {
+  const f = await fixture()
+  const oldJob = structuredClone(f.alice.values.get('job:' + ID))
+  const saved = await f.call('/api/studio/jobs/' + ID + '/retain-draft', { method: 'POST', ticket: f.ticket })
+  assert.equal(saved.status, 200)
+  assert.equal((await saved.json() as any).retained, true)
+  const list = await (await f.call('/api/studio/library')).json() as any
+  const libraryTicket = list.incompleteModels[0].receipt.ticket as string
+
+  // Simulate provider artifact mutation: valid GLB container but different
+  // bytes from those bound to the original account record.
+  f.glb[f.glb.byteLength - 1] ^= 1
+  const changed = await f.call('/api/studio/jobs/' + ID + '/draft', { ticket: libraryTicket })
+  assert.equal(changed.status, 409)
+  assert.match((await changed.json() as { error: string }).error, /saved draft GLB changed/)
+  assert.equal(f.alice.values.get('balance'), 1000)
+  assert.equal(f.alice.values.get('customer-reserved-credits:v1'), 50)
+  assert.deepEqual(f.alice.values.get('job:' + ID), oldJob)
+  assert.equal(f.providerCalls.some(path => path.endsWith('/budget')), false)
+})
+
 test('wrong account, missing GLB, fake provider and missing unfinished draft cannot be saved', async () => {
   for (const mode of ['foreign', 'missing', 'wrong-provider', 'reviewed'] as const) {
     const f = await fixture({ noModel: mode === 'missing', mismatchProvider: mode === 'wrong-provider',
