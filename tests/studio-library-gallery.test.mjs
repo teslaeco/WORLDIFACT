@@ -138,10 +138,31 @@ test('account gallery names the actual stored Studio provider and mode without g
   } })
   try {
     const visible = h.text()
-    assert.match(visible, /Generated with GPT-6\.1 Sol · Slow \/ Quality/)
-    assert.match(visible, /Model not recorded \(legacy\)/)
+    assert.match(visible, /Selected: GPT-6\.1 Sol · Slow \/ Quality · Oracle receipt not verified/)
+    assert.match(visible, /Legacy model · original AI provider not recorded/)
     assert.equal(artifacts(h).length, 0)
   } finally { h.close() }
+})
+
+test('gallery separates Oracle-confirmed provider from selected model and rejects mismatched evidence', async () => {
+  const execution = { revision: 'studio-execution-v1', model: 'sol', mode: 'standard' }
+  const providerEvidence = { revision: 'studio-provider-evidence-v1', model: 'gpt-6.1-sol',
+    mode: 'standard', source: 'oracle-terminal-budget' }
+  const verified = { ...model(id, 'Provider attested model'), studioExecution: execution, providerEvidence }
+  const h = await harness({ io: path => path === '/api/studio/library' ? page([verified]) :
+    path === `/api/studio/library/${id}` ? Response.json({ accountId: 'owner-a', model: verified }) :
+    new Response(fixtureGLB()) })
+  try {
+    assert.match(h.text(), /Oracle-confirmed: GPT-6\.1 Sol · Slow \/ Quality/)
+    assert.doesNotMatch(h.text(), /Selected: GPT-6\.1 Sol/)
+  } finally { h.close() }
+  const bad = { ...verified, providerEvidence: { ...providerEvidence, model: 'gpt-6-luna' } }
+  const wrong = await harness({ io: path => path === '/api/studio/library' ? page([bad]) :
+    new Response(fixtureGLB()) })
+  try {
+    assert.match(wrong.text(), /Oracle provider evidence does not match this model/)
+    assert.equal(wrong.articles().length, 0)
+  } finally { wrong.close() }
 })
 
 test('first library page surfaces a newly completed account model beyond the initial UUID page', async () => {
@@ -157,7 +178,7 @@ test('first library page surfaces a newly completed account model beyond the ini
   try {
     assert.equal(h.articles().length, 1)
     assert.match(h.text(), /Newest Luna model saved on account/)
-    assert.match(h.text(), /Generated with GPT-6 Luna · Slow \/ Quality/)
+    assert.match(h.text(), /Selected: GPT-6 Luna · Slow \/ Quality · Oracle receipt not verified/)
     assert.equal(artifacts(h).length, 0, 'Listing metadata must not download GLB or start generation')
   } finally { h.close() }
 })
