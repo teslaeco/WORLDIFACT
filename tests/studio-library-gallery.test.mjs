@@ -8,6 +8,7 @@ import ts from 'typescript'
 import React from 'react'
 import * as archive from '../src/lib/studioArchive.ts'
 import * as library from '../src/lib/studioLibrary.ts'
+import * as studioExecution from '../src/lib/studioExecution.ts'
 import * as glb from '../src/lib/glb.ts'
 import * as view from '../src/lib/studioView.ts'
 import * as protocol from '../src/lib/studioProtocol.ts'
@@ -77,6 +78,7 @@ async function harness({ locals = [], owner = 'owner-a', loading = false, reques
       readStudioLibraryModel: (accountId, entry, signal) => library.readStudioLibraryModel(accountId, entry, signal, fetcher),
       readStudioLibraryExport: (accountId, entry, format, signal) => library.readStudioLibraryExport(accountId, entry, format, signal, fetcher),
     }, '../lib/glb': glb, '../lib/studioView': view, '../lib/studioProtocol': protocol,
+    '../lib/studioExecution': studioExecution,
   }
   const globals = { Blob, Error, AbortController, AbortSignal, console,
     window: Object.assign(globalThis.window, { setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length } }),
