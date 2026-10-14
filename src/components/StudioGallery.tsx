@@ -16,6 +16,13 @@ type CloudState = { owner: string; models: StudioLibraryModel[]; cursor: string 
 type CloudScope = { owner: string; controller: AbortController; page: AbortController | null; version: number; models: StudioLibraryModel[]; cursor: string | null; loading: boolean }
 const emptyCloud = (owner = ''): CloudState => ({ owner, models: [], cursor: null, loading: false, error: '' })
 
+function generatedWith(model: StudioLibraryModel): string {
+  const execution = model.studioExecution
+  if (!execution) return 'Model not recorded (legacy)'
+  const provider = { astra: 'GPT-6 Astra', sol: 'GPT-6.1 Sol', luna: 'GPT-6 Luna' }[execution.model]
+  return `Generated with ${provider} · ${execution.mode === 'fast' ? 'Fast' : 'Slow / Quality'}`
+}
+
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -161,7 +168,13 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
   const rows = useMemo<Row[]>(() => [
     ...accountModels.map(model => ({ key: `account:${owner}:${model.id}`, origin: 'account' as const, model })),
     ...entries.map(model => ({ key: `device:${model.id}`, origin: 'device' as const, model })),
-  ], [owner, accountModels, entries])
+  ].sort((a, b) => {
+    const pinned = Number(b.origin === 'account' && b.model.id === requestedModelId) - Number(a.origin === 'account' && a.model.id === requestedModelId)
+    if (pinned) return pinned
+    const aTime = Date.parse(a.origin === 'account' ? a.model.completedAt : a.model.savedAt)
+    const bTime = Date.parse(b.origin === 'account' ? b.model.completedAt : b.model.savedAt)
+    return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0) || a.key.localeCompare(b.key)
+  }), [owner, accountModels, entries, requestedModelId])
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     const items = needle ? rows.filter(item => item.model.prompt.toLowerCase().includes(needle)) : rows
@@ -280,6 +293,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
     {currentSelection && <div className="studio-gallery-preview" ref={previewRegion} tabIndex={-1} role="region" aria-label="Selected model preview">
       <div className="studio-gallery-preview-copy">
         <strong>{currentSelection.row.model.prompt}</strong>
+        {currentSelection.row.origin === 'account' && <small>{generatedWith(currentSelection.row.model)}</small>}
         <small>Recorded worker generation time: {formatStudioGenerationDuration(currentSelection.row.origin === 'account' ? currentSelection.row.model.generationTiming : undefined)} · Excludes upload and queue time.</small>
         <small>{(currentSelection.byteLength / 1048576).toFixed(1)} MB · GLB · UNREVIEWED · {currentSelection.row.origin === 'account' ? 'Account model' : 'Device copy'}</small>
       </div>
@@ -312,6 +326,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         <StudioModelThumbnail key={item.key} owner={owner} source={item} accountSignal={scope.current?.owner === owner ? scope.current.controller.signal : undefined} onAccountError={invalidateAccount} />
         <strong>{item.model.prompt}</strong>
         <small>{item.origin === 'account' ? 'Account model · Studio · UNREVIEWED' : item.model.source === 'blueprint' ? `Device copy · Procedural blueprint · ${item.model.generation.model} · UNREVIEWED` : 'Device copy · Studio · UNREVIEWED'}</small>
+        {item.origin === 'account' && <small>{generatedWith(item.model)}</small>}
         <details className="shop-gallery-details" open={!compact}><summary>File details</summary>
         {item.origin === 'account' ? <>
           {item.model.id === requestedModelId && <small>Requested model</small>}

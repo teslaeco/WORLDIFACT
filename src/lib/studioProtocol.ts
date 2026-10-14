@@ -133,7 +133,7 @@ export function formatStudioGenerationDuration(timing?: StudioGenerationTiming):
   const seconds = Math.round(valid.durationSeconds)
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 }
-export type StudioLibraryModel = { id: string; prompt: string; createdAt: string; completedAt: string; receipt: StudioReceipt; review: 'UNREVIEWED'; downloadAllowed: boolean; generationTiming?: StudioGenerationTiming }
+export type StudioLibraryModel = { id: string; prompt: string; createdAt: string; completedAt: string; receipt: StudioReceipt; review: 'UNREVIEWED'; downloadAllowed: boolean; studioExecution?: StudioExecution; generationTiming?: StudioGenerationTiming }
 export type StudioLibraryPage = { accountId: string; models: StudioLibraryModel[]; nextCursor: string | null; hasMore: boolean }
 export const STUDIO_FAILURE_CODES = ['ASTRA_COST_LIMIT', 'MODEL_BUDGET_EXCEEDED', 'STUDIO_BUDGET_POLICY_CHANGED', 'INVALID_MODEL_OUTPUT', 'STUDIO_TIMEOUT', 'ORACLE_JOB_FAILED', 'ORACLE_JOB_INCOMPLETE', 'ORACLE_JOB_MISSING', 'MISSING_SUBMISSION', 'ORACLE_SUBMISSION_REJECTED', 'ORACLE_BUSY', 'RATE_LIMITED', 'STORAGE_FULL', 'JOB_CAPACITY', 'STUDIO_ALLOWANCE_UNAVAILABLE', 'ORACLE_CANCELLED', ...ADMISSION_FAILURE_CODES] as const
 export type StudioFailureCode = typeof STUDIO_FAILURE_CODES[number]

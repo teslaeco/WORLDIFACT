@@ -56,7 +56,7 @@ type Job = { studioExecution?: StudioExecution; adminFunding?: AdminFunding; adm
 export type Reservation = { pointSettlement?: PointSettlement; fundingSource?: typeof PAID_POINTS_FUNDING | typeof OVERNIGHT_TEST_APPROVAL; providerModel?: string; pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
 export type JobAccess = { studioExecution?: StudioExecution; channel?: 'studio' | 'blueprint'; model?: GenerationModel; pointSettlement?: PointSettlement; fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
-export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean }
+export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean; studioExecution?: StudioExecution }
 type OwnedStudioLibraryPage = { models: OwnedStudioLibraryModel[]; nextCursor: string | null; hasMore: boolean }
 export const STUDIO_LIBRARY_SCAN_LIMIT = 64
 export type StudioProviderReconciliationResult = { pointSettlement?: PointSettlement; reconciled: boolean; repeated?: boolean; releasedCents?: number; retainedCents?: number; reason?: string }
@@ -122,7 +122,8 @@ async function libraryPermissions(storage: EntitlementStorage, now: number) {
 }
 function libraryModel(id: string, job: Job & { fingerprint: string }, permissions: { subscribed: boolean; clear: boolean }): OwnedStudioLibraryModel {
   return { id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
-    completedAt: job.updatedAt ?? job.at, downloadAllowed: permissions.clear && (adminJob(job) || job.profile === 'fast' || permissions.subscribed) }
+    completedAt: job.updatedAt ?? job.at, downloadAllowed: permissions.clear && (adminJob(job) || job.profile === 'fast' || permissions.subscribed),
+    ...(isStudioExecution(job.studioExecution) ? { studioExecution: job.studioExecution } : {}) }
 }
 function studioDispatchUntil(job: Job): number | undefined {
   return job.studioDispatch === 'claimed-v1' && Number.isSafeInteger(job.studioDispatchUntil) && Number(job.studioDispatchUntil) > job.at && Number(job.studioDispatchUntil) <= job.at + STUDIO_SUBMISSION_GRACE_MS ? job.studioDispatchUntil : undefined

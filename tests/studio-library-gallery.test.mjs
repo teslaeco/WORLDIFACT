@@ -129,6 +129,21 @@ test('fresh browser lists completed account models independently of an old faile
   } finally { h.close() }
 })
 
+test('account gallery names the actual stored Studio provider and mode without guessing legacy provenance', async () => {
+  const execution = { revision: 'studio-execution-v1', model: 'sol', mode: 'standard' }
+  const h = await harness({ io: path => {
+    if (path === '/api/studio/library') return page([{ ...model(id, 'Sol test model'), studioExecution: execution }, model(otherId, 'Legacy model')])
+    if (path === `/api/studio/library/${id}`) return Response.json({ accountId: 'owner-a', model: { ...model(id, 'Sol test model'), studioExecution: execution } })
+    return new Response(fixtureGLB())
+  } })
+  try {
+    const visible = h.text()
+    assert.match(visible, /Generated with GPT-6\.1 Sol · Slow \/ Quality/)
+    assert.match(visible, /Model not recorded \(legacy\)/)
+    assert.equal(artifacts(h).length, 0)
+  } finally { h.close() }
+})
+
 test('all older local MCC and SOL records survive account listing, same-ID conflicts and cloud failure', async () => {
   let fail = false
   const originals = [local(id, 'Untrusted device copy with cloud ID'), local(otherId), local('blueprint:local-sol', 'Older SOL', 'blueprint')]
