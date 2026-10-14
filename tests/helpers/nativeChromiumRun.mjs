@@ -33,9 +33,29 @@ export async function runNativeChromium(browser, html, prefix) {
       if (!port) await wait(50)
     }
     if (!port) throw new Error(`Native Chromium debugging endpoint never opened: ${unexpected || stderr}`)
-    const response = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(3000) })
-    if (!response.ok) throw new Error(`Chromium target lookup failed: HTTP ${response.status}`)
-    const target = (await response.json()).find(item => item.type === 'page' && item.webSocketDebuggerUrl)
+    // Chromium can publish DevToolsActivePort before its HTTP debugger becomes
+    // responsive under hosted CI load. Retry ONLY this local read-only target
+    // lookup, not any user request or test assertion. No external network.
+    const lookupDeadline = Date.now() + 15_000
+    let targets = null, lastLookupError = ''
+    while (Date.now() < lookupDeadline && !targets) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(5000) })
+        if (!response.ok) {
+          lastLookupError = `HTTP ${response.status}`
+          await response.body?.cancel()
+        } else {
+          const parsed = await response.json()
+          if (!Array.isArray(parsed)) throw new Error('Invalid native browser targets')
+          targets = parsed
+        }
+      } catch (error) {
+        lastLookupError = error instanceof Error ? error.message : String(error)
+      }
+      if (!targets) await wait(250)
+    }
+    if (!targets) throw new Error(`Native Chromium target lookup unavailable: ${lastLookupError}`)
+    const target = targets.find(item => item.type === 'page' && item.webSocketDebuggerUrl)
     if (!target) throw new Error('Chromium did not expose a page target')
     socket = new WebSocket(target.webSocketDebuggerUrl)
     await Promise.race([
