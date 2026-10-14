@@ -1019,6 +1019,43 @@ export class AccountEntitlements {
           costEvidence: job.adminTerminalReceipt ? 'authenticated-oracle-liability-bound' : 'reserved-ceiling',
         })), truncated: rows.size === 100 })
       }
+      if (path === '/studio-incomplete-record') {
+        if (request.method !== 'POST' || new URL(request.url).search) return json({ recorded: false }, 405)
+        const prefix = this.supportEnv.ACCOUNT_LEDGER_MODE === 'sandbox' ? 'account:sandbox:v1' : 'account:v1'
+        const bound = pointsProtocol && verifiedAccount && ACCOUNT_ID.test(verifiedAccount) &&
+          this.supportEnv.ACCOUNT_ENTITLEMENTS && this.durableObjectId !== null &&
+          this.durableObjectId === String(this.supportEnv.ACCOUNT_ENTITLEMENTS.idFromName(`${prefix}:${verifiedAccount.toLowerCase()}`))
+        if (!bound) return json({ recorded: false }, 403)
+        const body = await request.text()
+        if (body.length > 1600) return json({ recorded: false }, 400)
+        let candidate: StudioIncompleteRecord | null
+        try { candidate = readStudioIncompleteRecord(JSON.parse(body)) }
+        catch { candidate = null }
+        if (!candidate) return json({ recorded: false }, 400)
+        const item = candidate
+        return json(await storage.transaction(async tx => {
+          const value = await tx.get<unknown>(`job:${item.id}`)
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return { recorded: false }
+          const job = value as Job
+          if (job.state !== 'failed' || job.channel !== 'studio' || job.failureCode !== item.failureCode ||
+              !validStudioExecution(job) || !sameStudioExecution(job.studioExecution, item.studioExecution) ||
+              !Number.isSafeInteger(job.updatedAt) || item.at < job.at || item.at > this.now() + 30_000)
+            return { recorded: false }
+          const proof = incompleteProviderProof(job, item.id)
+          if (item.providerEvidence && (!proof || !validateTerminalBudgetReceipt(proof, item.id, job.pricing ?? null, job.studioExecution) ||
+              proof.maximumLiabilityMicroUsd <= 0 || item.providerEvidence.model !== proof.model ||
+              item.providerEvidence.mode !== job.studioExecution!.mode)) return { recorded: false }
+          const existing = readStudioIncompleteRecord(await tx.get<unknown>(STUDIO_INCOMPLETE_PREFIX + item.id))
+          if (existing) return { recorded: existing.modelSha256 === item.modelSha256 &&
+            sameStudioExecution(existing.studioExecution, item.studioExecution) &&
+            existing.failureCode === item.failureCode, repeated: true }
+          const index = addStudioIncompleteIndex(await tx.get<unknown>(STUDIO_INCOMPLETE_INDEX_KEY), item.id)
+          if (!index) return { recorded: false }
+          await tx.put(STUDIO_INCOMPLETE_PREFIX + item.id, item)
+          await tx.put(STUDIO_INCOMPLETE_INDEX_KEY, index)
+          return { recorded: true, repeated: false }
+        }))
+      }
       if (path === '/studio-library' || path.startsWith('/studio-library/')) {
         if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
         const params = new URL(request.url).searchParams
