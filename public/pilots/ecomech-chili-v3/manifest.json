@@ -1,0 +1,82 @@
+{
+  "revision": "worldifact-pilot-3d-v1",
+  "id": "ecomech-chili-v3",
+  "title": "ECOMECH CHILI V3",
+  "status": "DEMO_UNREVIEWED",
+  "source": "OFFLINE_PROCEDURAL",
+  "aiDirector": "NONE",
+  "geometryEngine": "Python trimesh",
+  "modelProviderConfirmed": false,
+  "reference": "User-supplied green/blue robot concept with exposed MCC/electric-motor mechanics and green chili; image is 2D only",
+  "game": {
+    "format": "glb",
+    "file": "WORLDIFACT_EcoMech_Chili_V3_GAME.glb",
+    "sha256": "6b5edf630855668afb6e7cb93093d5770b0252c36b2ab2c0d08d47ba2018b471",
+    "bytes": 1343672,
+    "meshCount": 959,
+    "triangles": 64376,
+    "pbrMaterials": 14,
+    "rigged": false,
+    "animated": false,
+    "textureMaps": false,
+    "originalBinaryInRepository": false
+  },
+  "make": {
+    "status": "CANDIDATE_UNREVIEWED",
+    "format": "stl",
+    "file": "WORLDIFACT_EcoMech_Chili_V3_MAKE_SLA_FINE_CANDIDATE_180mm.stl",
+    "sha256": "5750b7055279fd35aec6d75bc113bdfcadf7759c7093fb71c813ebd13dce8ce1",
+    "bytes": 9827184,
+    "heightMm": 180,
+    "extentsMm": [
+      118.48,
+      78.23,
+      180
+    ],
+    "triangles": 196542,
+    "watertight": true,
+    "volumeSolid": true,
+    "connectedComponents": 1,
+    "process": "voxel union + morphological thickening",
+    "wallThicknessChecked": false,
+    "supportChecked": false,
+    "supplierApproved": false,
+    "orderPlaced": false,
+    "printSampleMade": false,
+    "fullColorPackage": false
+  },
+  "b2b": {
+    "candidateSuppliers": [
+      "Sculpteo",
+      "JLC3DP"
+    ],
+    "quoteVerified": false,
+    "apiProductionIntegrationVerified": false,
+    "directOrderEnabled": false,
+    "supplierRequirements": {
+      "slaWallMmAround200": 2,
+      "wjpWallMmAround200": 3,
+      "jlcMaxUploadMb": 100,
+      "jlcFullColorFormats": [
+        "3MF",
+        "OBJ+MTL+PNG",
+        "PLY"
+      ],
+      "jlcResinMonoFormats": [
+        "STL",
+        "STP",
+        "STEP",
+        "OBJ"
+      ]
+    }
+  },
+  "deployment": {
+    "publicModelUrl": null,
+    "productionPublished": false,
+    "privatePreviewPackageOnly": true
+  },
+  "billing": {
+    "paidProviderCalls": 0,
+    "customerPointsCharged": 0
+  }
+}
