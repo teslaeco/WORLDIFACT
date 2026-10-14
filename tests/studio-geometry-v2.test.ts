@@ -89,7 +89,7 @@ test('a minimal texture-heavy GLB can no longer qualify for a real detailed char
   const minimum=inspectGLB(detailedGLBFixture().buffer)
   assert.equal(passesStudioStructuralQuality(minimum,TEXT_CHARACTER_DETAIL_PROFILE),false)
   assert.equal(passesStudioStructuralQuality(minimum,ROBOT_DETAIL_PROFILE),false)
-  assert.throws(()=>inspectStudioMeshEvidence(detailedGLBFixture().buffer),/GLB geometry|backed|BIN/)
+  assert.equal(hasRealDetailedMeshEvidence(inspectStudioMeshEvidence(detailedGLBFixture().buffer)),false)
   // Historical metadata-only fixture passes the legacy count gate, but fails
   // the new embedded-geometry evidence gate. Do not claim it is real geometry.
   const fake=detailedAssemblyGLBFixture(12,2400,4).buffer
