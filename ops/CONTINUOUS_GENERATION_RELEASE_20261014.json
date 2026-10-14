@@ -1,0 +1,9 @@
+{
+  "revision": "continuous-generation-release-20261014-v1",
+  "baseCommit": "9dbb81836537fff45b1c2c1584bbbea9275a0705",
+  "purpose": "deploy continuous Studio reconciliation before >3 live acceptance",
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "preserveBilling": true,
+  "paidGenerationDuringDeploy": false
+}
