@@ -131,6 +131,8 @@ test('budget-exhausted Oracle candidate is genuinely recoverable as owner-only I
   assert.equal((await (await f.call('/api/studio/library')).json() as any).incompleteModels.length, 1)
   assert.ok(f.providerCalls.every(path => /^\/v1\/jobs\/[a-f0-9-]+(?:\/quality|\/budget|\/model)?$/.test(path)))
   assert.equal(f.alice.values.get('balance'), 1000)
+  assert.equal(f.providerCalls.some(path => path.endsWith('/budget')), false,
+    'Draft recovery must not trigger financial/provider-liability reconciliation')
 })
 
 test('wrong account, missing GLB, fake provider and missing unfinished draft cannot be saved', async () => {
