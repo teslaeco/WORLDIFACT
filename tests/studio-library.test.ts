@@ -92,6 +92,22 @@ function fixture() {
   }
 }
 
+test('owned completed Studio models retain verified Astra/Sol/Luna provenance without fabricating legacy model metadata', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  const f = fixture()
+  const execution = { revision: 'studio-execution-v1', model: 'sol', mode: 'standard' }
+  f.rows.get(alice)!.set(`job:${idFor(1)}`, completed({ model: 'sol', profile: 'fast', cost: 50, studioExecution: execution }))
+  f.rows.get(alice)!.set(`job:${idFor(2)}`, completed())
+  const page = await f.page()
+  const modern = page.models.find(model => model.id === idFor(1))
+  const legacy = page.models.find(model => model.id === idFor(2))
+  assert.deepEqual(modern?.studioExecution, execution)
+  assert.equal(legacy?.studioExecution, undefined)
+  assert.deepEqual((await f.model(idFor(1))).studioExecution, execution)
+  assert.equal(f.external.length, 0)
+  f.assertReadOnly()
+})
+
 test('account library is authenticated, same-origin, GET-only, and never accepts an account selector', async t => {
   t.mock.method(Date, 'now', () => NOW)
   const f = fixture()
