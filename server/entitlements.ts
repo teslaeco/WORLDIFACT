@@ -1063,7 +1063,9 @@ export class AccountEntitlements {
           const id = path.slice('/studio-library/'.length)
           if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id) || params.size) return json({ error: 'Invalid library model.' }, 400)
           const job = await storage.get<unknown>(`job:${id}`)
-          return json({ model: completedLibraryJob(job, now) ? libraryModel(id, job, await libraryPermissions(storage, now)) : null })
+          const permissions = await libraryPermissions(storage, now)
+          return json({ model: completedLibraryJob(job, now) ? libraryModel(id, job, permissions) :
+            await incompleteLibraryModel(storage, id, job, permissions, now) })
         }
         if ([...params.keys()].some(key => key !== 'after') || params.getAll('after').length > 1 ||
             params.has('after') && !libraryCursorKey(params.get('after'))) return json({ error: 'Invalid library cursor.' }, 400)
@@ -1120,8 +1122,20 @@ export class AccountEntitlements {
           if (hasMore || recent.size > models.length)
             recentModels = [...recent.values()].sort((a, b) => b.completedAt - a.completedAt || b.id.localeCompare(a.id)).slice(0, 6)
         }
+        const incompleteModels: OwnedStudioLibraryModel[] = []
+        if (!after) {
+          try {
+            const hint = readStudioIncompleteIndex(await storage.get<unknown>(STUDIO_INCOMPLETE_INDEX_KEY))
+            for (const id of hint?.ids ?? []) {
+              const row = await storage.get<unknown>(`job:${id}`)
+              const model = await incompleteLibraryModel(storage, id, row, permissions, now)
+              if (model) incompleteModels.push(model)
+            }
+          } catch { /* An unavailable index cannot block completed GLBs or account listing. */ }
+        }
         return json({ models, nextCursor: hasMore ? cursor : null, hasMore,
-          ...(recentModels ? { recentModels } : {}) } satisfies OwnedStudioLibraryPage)
+          ...(recentModels ? { recentModels } : {}),
+          ...(incompleteModels.length ? { incompleteModels } : {}) } satisfies OwnedStudioLibraryPage)
       }
       if (path === '/generation-funding') {
         if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
