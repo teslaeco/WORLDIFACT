@@ -160,6 +160,30 @@ test('current completed model is discovered from all 58 account rows after the l
   f.assertReadOnly()
 })
 
+test('recently completed owned models are visible on the first page even when their UUIDs fall after the first 64 rows', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  const f = fixture(), values = f.rows.get(alice)!, latest = idFor(130)
+  for (let i = 1; i <= 130; i++) {
+    values.set(`job:${idFor(i)}`, completed({
+      state: i >= 125 ? 'completed' : 'failed',
+      updatedAt: NOW - (140 - i) * 100,
+      prompt: i === 130 ? 'Most recent Sol 3D asset' : 'Older model',
+      ...(i === 130 ? { model: 'sol', profile: 'fast', cost: 50,
+        studioExecution: { revision: 'studio-execution-v1', model: 'sol', mode: 'standard' } } : {}),
+    }))
+  }
+  const initial = await f.page()
+  assert.equal(initial.models.length, 0, 'UUID first page must not pretend to contain a later result')
+  assert.equal(initial.hasMore, true)
+  assert.equal(initial.recentModels?.[0]?.id, latest)
+  assert.equal(initial.recentModels?.[0]?.prompt, 'Most recent Sol 3D asset')
+  assert.equal(initial.recentModels?.[0]?.studioExecution?.model, 'sol')
+  assert.ok(initial.recentModels!.length <= 6)
+  assert.ok(f.lists.every(item => item.limit === STUDIO_LIBRARY_SCAN_LIMIT))
+  assert.equal(f.external.length, 0, 'No Oracle model or provider request during latest-record discovery')
+  f.assertReadOnly()
+})
+
 test('only well-formed completed Studio records with an existing fingerprint enter the library', async t => {
   t.mock.method(Date, 'now', () => NOW)
   const f = fixture(), values = f.rows.get(alice)!
