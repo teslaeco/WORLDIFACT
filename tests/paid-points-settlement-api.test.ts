@@ -8,7 +8,7 @@ import { demoBlueprint, assetSpecForBlueprint } from '../src/lib/blueprint.ts'
 import { createHash } from 'node:crypto'
 import { studioApi, type StudioEnv } from '../server/studio.ts'
 import { GenerationBudget, type BudgetStorage } from '../server/budget.ts'
-import { AccountEntitlements, entitlementCall, entitlementStatus, type EntitlementStorage } from '../server/entitlements.ts'
+import { AccountEntitlements, entitlementCall, entitlementStatus, pendingUserStudioProvider, type EntitlementStorage } from '../server/entitlements.ts'
 import { type StudioInput, type StudioJob } from '../src/lib/studioProtocol.ts'
 
 const origin = 'https://worldifact.test'
@@ -155,6 +155,8 @@ test('new Studio preparation reconciles terminal zero-liability holds before che
   const failed = (await (await f.call(`/api/studio/jobs/${first.id}`, 'GET', undefined, first.ticket)).json() as any).job
   assert.deepEqual(failed.pointSettlement, held())
   assert.equal((await entitlementStatus(f.env, alice)).reservedCredits, 250)
+  const pending = await pendingUserStudioProvider(f.env, alice)
+  assert.deepEqual(pending.ids, [first.id])
   // Oracle later exposes immutable terminal evidence proving zero provider
   // liability. Preparing the next job reconciles that old hold without another
   // generation POST and without changing the account's purchased balance.
