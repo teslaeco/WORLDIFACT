@@ -44,3 +44,5 @@ jobs:
           const safePublicStatus={status:publicStatusResponse.status,ready:publicStatus.ready,detailedReady:publicStatus.detailedReady,newJobPolicy:publicStatus.newJobPolicy,tiersReady:publicStatus.tiersReady,pricingRevision:publicStatus.pricingRevision,studioAdmissionRevision:publicStatus.studioAdmissionRevision,studioExecutionRevision:publicStatus.studioExecutionRevision,studioExecutionModels:publicStatus.studioExecutionModels,studioExecutionModes:publicStatus.studioExecutionModes}
           console.log(JSON.stringify({health:safeHealth,publicStatus:safePublicStatus,job:safeJob,budget:safeBudget,quality:safeQuality},null,2))
           JS
+
+# read-only rerun after tiered Cloudflare binding update
