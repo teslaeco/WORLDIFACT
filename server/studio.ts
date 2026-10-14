@@ -580,6 +580,7 @@ export async function studioApi(request: Request, env: StudioEnv, fetcher: typeo
       const after = url.searchParams.has('cursor') ? await verifyLibraryCursor(env, user.id, url.searchParams.get('cursor')!) : null
       const page = await userStudioLibrary(env, user.id, after)
       return json({ accountId: user.id, models: await Promise.all(page.models.map(model => publicLibraryModel(env, user.id, model))),
+        ...(page.recentModels ? { recentModels: await Promise.all(page.recentModels.map(model => publicLibraryModel(env, user.id, model))) } : {}),
         nextCursor: page.hasMore && page.nextCursor ? await libraryCursor(env, user.id, page.nextCursor) : null, hasMore: page.hasMore } satisfies StudioLibraryPage)
     }
     if (url.pathname === '/api/studio/reconcile-budget' && request.method === 'POST') {
