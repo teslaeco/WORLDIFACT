@@ -5,6 +5,7 @@ import { isStudioProviderEvidence, type StudioProviderEvidence } from './studioP
  * The canonical account job remains FAILED with its original point settlement.
  * A candidate is not a reviewed model, manufactured asset or a paid continuation. */
 export const STUDIO_INCOMPLETE_REVISION = 'studio-incomplete-candidate-v1' as const
+export const STUDIO_INCOMPLETE_BACKUP_PROOF = 'r2-sha256-readback-v1' as const
 export const STUDIO_INCOMPLETE_PREFIX = 'studio-incomplete-v1:' as const
 export const STUDIO_INCOMPLETE_INDEX_KEY = 'studio-incomplete-index-v1' as const
 export const STUDIO_INCOMPLETE_CAPACITY = 24
@@ -18,6 +19,8 @@ export type StudioIncompleteRecord = {
   failureCode: StudioIncompleteReason
   studioExecution: StudioExecution
   providerEvidence?: StudioProviderEvidence
+  /** Verified at write/readback, not a promise that future storage never fails. */
+  backupVerified?: typeof STUDIO_INCOMPLETE_BACKUP_PROOF
 }
 export type StudioIncompleteIndex = { revision: 'studio-incomplete-index-v1'; ids: string[] }
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/
@@ -27,19 +30,22 @@ export const isStudioIncompleteReason = (value: unknown): value is StudioIncompl
   typeof value === 'string' && (STUDIO_INCOMPLETE_REASONS as readonly string[]).includes(value)
 
 export function readStudioIncompleteRecord(value: unknown): StudioIncompleteRecord | null {
-  if (!obj(value) || Object.keys(value).sort().join(',') !==
-    (value.providerEvidence === undefined ? 'at,failureCode,id,modelSha256,revision,studioExecution' :
-      'at,failureCode,id,modelSha256,providerEvidence,revision,studioExecution') ||
+  const keys = ['at', 'failureCode', 'id', 'modelSha256', 'revision', 'studioExecution',
+    ...(obj(value) && value.providerEvidence !== undefined ? ['providerEvidence'] : []),
+    ...(obj(value) && value.backupVerified !== undefined ? ['backupVerified'] : [])]
+  if (!obj(value) || Object.keys(value).sort().join(',') !== keys.sort().join(',') ||
     value.revision !== STUDIO_INCOMPLETE_REVISION || typeof value.id !== 'string' || !UUID.test(value.id) ||
     typeof value.modelSha256 !== 'string' || !HASH.test(value.modelSha256) ||
     !Number.isSafeInteger(value.at) || Number(value.at) <= 0 ||
     !isStudioIncompleteReason(value.failureCode) || !isStudioExecution(value.studioExecution) ||
-    (value.providerEvidence !== undefined && !isStudioProviderEvidence(value.providerEvidence, value.studioExecution)))
+    (value.providerEvidence !== undefined && !isStudioProviderEvidence(value.providerEvidence, value.studioExecution)) ||
+    (value.backupVerified !== undefined && value.backupVerified !== STUDIO_INCOMPLETE_BACKUP_PROOF))
     return null
   return {
     revision: STUDIO_INCOMPLETE_REVISION, id: value.id, modelSha256: value.modelSha256,
     at: Number(value.at), failureCode: value.failureCode, studioExecution: value.studioExecution,
     ...(value.providerEvidence !== undefined ? { providerEvidence: value.providerEvidence } : {}),
+    ...(value.backupVerified === STUDIO_INCOMPLETE_BACKUP_PROOF ? { backupVerified: STUDIO_INCOMPLETE_BACKUP_PROOF } : {}),
   }
 }
 export function readStudioIncompleteIndex(value: unknown): StudioIncompleteIndex | null {
