@@ -5,5 +5,6 @@
   "maxAdditionalApiUsd": 0,
   "target": "ISOLATED_STAGING_ONLY",
   "acceptedOutput": "UNREVIEWED_ORIGINAL_ASTRA_PLUS_BLENDER",
-  "releaseProduction": false
+  "releaseProduction": false,
+  "stagingWorkflowValidation": "yaml-colon-fixed-20261014T2150"
 }
