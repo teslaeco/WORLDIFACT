@@ -1,0 +1,20 @@
+name: ECOMECH ULTRA acceptance — HTTPS full GLB SHA256 (read-only)
+on:
+  push:
+    branches: ['feat/ecomech-ultra-public-staging-20261014']
+    paths: ['ops/ECOMECH_ULTRA_PUBLIC_FULL_SMOKE_20261015.json']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Full original 265MB SHA, HTTP Range 206 and formats, no API generation
+        run: node scripts/ecomech-ultra-public-smoke.mjs
