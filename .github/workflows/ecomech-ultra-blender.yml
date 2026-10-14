@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           mkdir -p .ecomech-ultra-artifacts
           /tmp/blender-4.3.0-linux-x64/blender \
-            --background --factory-startup -t 4 \
+            --background --factory-startup --python-exit-code 3 -t 4 \
             --python tools/ecomech/generate_blender_ultra.py \
             -- .original/original.glb .ecomech-ultra-artifacts
       - name: Count actual backed geometry and validate GLB, FBX, OBJ and BLEND formats
