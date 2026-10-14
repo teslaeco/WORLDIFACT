@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "worldifact-ecomech-astra-preview-20261014",
+  "compatibility_date": "2026-10-14",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./.ecomech-astra-preview",
+    "not_found_handling": "none"
+  }
+}
