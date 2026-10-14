@@ -1694,9 +1694,12 @@ export class AccountEntitlements {
           const job = await storage.get<Job>(`job:${id}`)
           if (!job) return json({ owned: false, downloadAllowed: false, previewOnly: false })
           const subscription = await storage.get<Subscription>('subscription')
-          const allowed = job.state === 'completed' && (adminJob(job) || job.profile === 'fast' || active(subscription, now)) && await balance(storage) >= 0 && await storage.get<boolean>('billingHold') !== true
+          const balanceClear = await balance(storage) >= 0 && await storage.get<boolean>('billingHold') !== true
+          const allowed = job.state === 'completed' && (adminJob(job) || job.profile === 'fast' || active(subscription, now)) && balanceClear
+          const incomplete = job.state === 'failed' && isStudioIncompleteReason(job.failureCode)
+            ? await incompleteLibraryModel(storage, id, job, { subscribed: active(subscription, now), clear: balanceClear }, now) : null
           const dispatchUntil = studioDispatchUntil(job)
-          return json({ owned: true, ...(job.studioExecution ? { studioExecution: job.studioExecution } : {}), ...(job.pointSettlement ? { channel: job.channel, model: job.model ?? (job.profile === 'fast' ? 'sol' : 'astra') } : {}), ...(job.fingerprint ? { fingerprint: job.fingerprint } : {}), downloadAllowed: allowed, previewOnly: !adminJob(job) && job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.pointSettlement ? job.pointSettlement.heldPoints > 0 : job.billingMode === 'hold-v1' && job.state === 'reserved', ...(job.pointSettlement ? { pointSettlement: job.pointSettlement } : {}), ...(dispatchUntil ? { studioDispatchUntil: dispatchUntil } : {}), ...(providerBudgetPending(job) || adminJob(job) && job.channel === 'studio' && job.state !== 'reserved' && !job.adminTerminalReceipt ? { providerBudgetPending: true } : {}) })
+          return json({ owned: true, ...(job.studioExecution ? { studioExecution: job.studioExecution } : {}), ...(job.pointSettlement ? { channel: job.channel, model: job.model ?? (job.profile === 'fast' ? 'sol' : 'astra') } : {}), ...(job.fingerprint ? { fingerprint: job.fingerprint } : {}), downloadAllowed: allowed, ...(incomplete ? { incompleteAvailable: true, incompleteDownloadAllowed: incomplete.downloadAllowed } : {}), previewOnly: !adminJob(job) && job.profile === 'slow' && !active(subscription, now), profile: job.profile, ...(job.qualityProfile ? { qualityProfile: job.qualityProfile } : {}), ...(job.failureCode ? { failureCode: job.failureCode } : {}), state: job.state, at: job.at, updatedAt: job.updatedAt ?? job.at, cost: job.cost, ...(job.pricing ? { pricing: job.pricing } : {}), held: job.pointSettlement ? job.pointSettlement.heldPoints > 0 : job.billingMode === 'hold-v1' && job.state === 'reserved', ...(job.pointSettlement ? { pointSettlement: job.pointSettlement } : {}), ...(dispatchUntil ? { studioDispatchUntil: dispatchUntil } : {}), ...(providerBudgetPending(job) || adminJob(job) && job.channel === 'studio' && job.state !== 'reserved' && !job.adminTerminalReceipt ? { providerBudgetPending: true } : {}) })
         }
         if (!['completed', 'failed'].includes(String(input.state))) return json({ error: 'Invalid settlement' }, 400)
         const next = input.state as 'completed' | 'failed'
@@ -2130,6 +2133,10 @@ export async function reconcileUserStudioProvider(env: EntitlementEnv, userId: s
   return entitlementCall<StudioProviderReconciliationResult>(env, userId, '/reconcile-studio-provider', { id: jobId, receipt })
 }
 export const userJobAccess = (env: EntitlementEnv, userId: string, jobId: string) => entitlementCall<JobAccess>(env, userId, '/job', { id: jobId })
+export async function recordUserStudioIncomplete(env: EntitlementEnv, userId: string, candidate: StudioIncompleteRecord) {
+  if (!readStudioIncompleteRecord(candidate)) throw new EntitlementError('Invalid incomplete model evidence.')
+  return entitlementCall<{ recorded: boolean; repeated?: boolean }>(env, userId, '/studio-incomplete-record', candidate)
+}
 export const userStudioLibrary = (env: EntitlementEnv, userId: string, after: string | null) => entitlementCall<OwnedStudioLibraryPage>(env, userId, `/studio-library${after ? `?after=${encodeURIComponent(after)}` : ''}`)
 export const userStudioLibraryModel = (env: EntitlementEnv, userId: string, id: string) => entitlementCall<{ model: OwnedStudioLibraryModel | null }>(env, userId, `/studio-library/${id}`)
 export const currentUserStudioJob = (env: EntitlementEnv, userId: string, id?: string) => entitlementCall<{ job: CurrentStudioJob | null }>(env, userId, '/studio-current', id ? { id } : {})
