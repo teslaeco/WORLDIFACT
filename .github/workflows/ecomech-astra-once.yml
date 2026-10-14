@@ -1,0 +1,55 @@
+name: ECOMECH real Astra 3D one-shot (maximum USD 1.75)
+on:
+  push:
+    branches: ['test/ecomech-astra-one-shot-20261014']
+    paths: ['ops/ECOMECH_ASTRA_APPROVED_SINGLE_TEST.json']
+permissions:
+  contents: write
+concurrency:
+  group: ecomech-astra-paid-20261014-permanent
+  cancel-in-progress: false
+jobs:
+  one-original-job:
+    if: github.ref == 'refs/heads/test/ecomech-astra-one-shot-20261014' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+    timeout-minutes: 42
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require exact approved marker to be introduced in this commit
+        run: |
+          set -euo pipefail
+          git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/ECOMECH_ASTRA_APPROVED_SINGLE_TEST.json'
+          test "$(git diff-tree --no-commit-id --name-only -m -r HEAD | wc -l)" -eq 1
+      - run: npm ci
+      - name: Verify application, mock guards, bundle and basic HTTP before any provider spend
+        run: npm run verify
+      - name: Confirm GET-only runtime cap, original job identity and owner scope
+        run: node scripts/ecomech-astra-once.mjs probe
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - name: Spend guard — exactly ONE bound gpt-6-astra Standard job
+        run: node scripts/ecomech-astra-once.mjs run
+        env:
+          WORLDIFACT_ECOMECH_APPROVAL: ECOMECH_ASTRA_SINGLE_TEST_20261014
+          GITHUB_TOKEN: ${{ github.token }}
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - name: Preserve original GLB, receipt and report as private test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ecomech-real-astra-original-evidence-${{ github.sha }}
+          path: ecomech-astra-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
+          compression-level: 0
