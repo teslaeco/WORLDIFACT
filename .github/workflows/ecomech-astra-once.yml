@@ -44,6 +44,32 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
           ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+      - name: Build self-contained same-origin mobile viewer only from the original Oracle GLB
+        if: success()
+        run: node scripts/build-ecomech-astra-preview.mjs
+      - name: Validate completely isolated static Cloudflare staging deployment
+        if: success()
+        run: npx wrangler deploy --config wrangler.ecomech-astra-preview.jsonc --dry-run --outdir .wrangler/ecomech-preview
+      - name: Deploy STAGING-only Worker, not WORLDIFACT production
+        if: success()
+        run: npx wrangler deploy --config wrangler.ecomech-astra-preview.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: HTTP smoke actual public staging preview and original GLB integrity
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin='https://worldifact-ecomech-astra-preview-20261014.xodobrox.workers.dev'
+          curl --fail --silent --show-error --retry 2 --max-time 30 "$origin/" -o /tmp/ecomech-stage.html
+          grep -q 'ECOMECH' /tmp/ecomech-stage.html
+          curl --fail --silent --show-error --retry 2 --max-time 30 "$origin/viewer.js" -o /tmp/ecomech-stage.js
+          test -s /tmp/ecomech-stage.js
+          curl --fail --silent --show-error --retry 2 --max-time 30 "$origin/report.json" -o /tmp/ecomech-stage.json
+          curl --fail --silent --show-error --retry 2 --max-time 120 "$origin/robot.glb" -o /tmp/ecomech-stage.glb
+          node --input-type=module -e "import{readFileSync}from'node:fs';import{createHash}from'node:crypto';const report=JSON.parse(readFileSync('/tmp/ecomech-stage.json'));const data=readFileSync('/tmp/ecomech-stage.glb');if(createHash('sha256').update(data).digest('hex')!==report.originalGLB.sha256)process.exit(1);console.log('STAGING_VERIFIED:original-GLB-SHA256',data.length)"
+          echo "STAGING_URL=$origin/"
       - name: Preserve original GLB, receipt and report as private test evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
