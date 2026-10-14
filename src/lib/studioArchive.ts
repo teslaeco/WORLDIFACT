@@ -1,13 +1,14 @@
 import type { SavedStudioJob } from './studioClient.ts'
 import { archiveWriteDecision } from './studioView.ts'
 import { FAST_DRAFT_PROFILE } from './studioProtocol.ts'
+import { isStudioExecution, type StudioExecution } from './studioExecution.ts'
 import { validateGenerationResult, type GenerationResult } from './blueprint.ts'
 
 type ArchiveMetadata = { id: string; prompt: string; savedAt: string; byteLength: number; sha256: string; review: 'UNREVIEWED' }
 // Missing source is a historical Studio entry. A blueprint identity is local
 // provenance, never a signed Studio receipt or evidence of account ownership.
 export type StudioArchiveEntry = ArchiveMetadata & (
-  { source?: 'studio'; generationProfile?: typeof FAST_DRAFT_PROFILE; generation?: never } |
+  { source?: 'studio'; generationProfile?: typeof FAST_DRAFT_PROFILE; studioExecution?: StudioExecution; generation?: never } |
   { source: 'blueprint'; generation: GenerationResult; generationProfile?: never }
 )
 export const STUDIO_ARCHIVE_EVENT = 'worldifact:studio-archive-changed'
@@ -85,7 +86,8 @@ async function writeModel(entry: StudioArchiveEntry, blob: Blob, signal?: AbortS
 export async function saveStudioModel(saved: SavedStudioJob, blob: Blob): Promise<StudioArchiveEntry> {
   const entry: StudioArchiveEntry = { source: 'studio', id: saved.receipt.id, prompt: saved.prompt, savedAt: new Date().toISOString(), byteLength: blob.size,
     sha256: await sha256(await blob.arrayBuffer()), review: 'UNREVIEWED',
-    ...(saved.generationProfile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}) }
+    ...(saved.generationProfile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}),
+    ...(isStudioExecution(saved.studioExecution) ? { studioExecution: saved.studioExecution } : {}) }
   return writeModel(entry, blob)
 }
 /** Archive exactly the exported LIVE specification-derived GLB, locally only. */
