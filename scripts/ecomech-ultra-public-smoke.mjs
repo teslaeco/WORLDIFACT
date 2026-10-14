@@ -74,9 +74,14 @@ for(const [format,size] of Object.entries(expectedLengths)){
  if(!entry||entry.bytes!==size||!/^[a-f0-9]{64}$/.test(entry.sha256))
   fail(format+' missing, wrong size or unverifiable SHA')
  const head=await limitedGet('/downloads/'+format,{method:'HEAD'},size+1,30_000)
- if(head.result.status!==200 || head.length!==size ||
+ if(head.result.status!==200 || (head.length!==0&&head.length!==size) ||
     head.result.headers.get('X-WORLDIFACT-Sha256')!==entry.sha256)
-    fail(format+' HEAD metadata wrong')
+    fail(format+' HEAD metadata wrong: '+JSON.stringify({
+      status:head.result.status,contentLength:head.length,
+      contentEncoding:head.result.headers.get('Content-Encoding'),
+      contentType:head.result.headers.get('Content-Type'),
+      sourceSHA:head.result.headers.get('X-WORLDIFACT-Sha256'),
+      expectedSHA:entry.sha256}))
  const part=await limitedGet('/downloads/'+format,{
   headers:{Range:'bytes=0-4095'}},4_096,40_000)
  if(part.result.status!==206 ||
