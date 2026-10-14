@@ -1,0 +1,10 @@
+{
+  "revision": "ecomech-ultra-verified-v1",
+  "originalJobId": "6fa9be43-f371-4bcd-8fe7-7a3ea9967855",
+  "blenderRunId": 38643352138,
+  "maxAdditionalApiUsd": 0,
+  "target": "ISOLATED_STAGING_ONLY",
+  "acceptedOutput": "UNREVIEWED_ORIGINAL_ASTRA_PLUS_BLENDER",
+  "releaseProduction": false,
+  "stagingWorkflowValidation": "yaml-colon-fixed-20261014T2150"
+}

@@ -1,0 +1,8 @@
+{
+  "approved": "READ_ONLY_FULL_STAGING_SHA_20261015",
+  "sourceRun": 38643352138,
+  "originalJobId": "6fa9be43-f371-4bcd-8fe7-7a3ea9967855",
+  "maximumProviderApiUsd": 0,
+  "productionDeployment": false,
+  "attempt": "range-content-length-optional-head-v3"
+}

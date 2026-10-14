@@ -56,13 +56,16 @@ async function init(){
     const response=await fetch('./report.json',{cache:'no-store'})
     if(response.ok){
       const report=await response.json()
-      sourceText.textContent=report.provenance==='ORACLE_CONFIRMED'?
-        'Oracle-confirmed GPT-6 Astra · Original GLB · UNREVIEWED':
-        'Selected GPT-6 Astra · Oracle receipt not verified · UNREVIEWED'
+      sourceText.textContent=report.geometryProcess==='WORLDIFACT_NATIVE_BLENDER_MECHANICAL_PASS'?
+        'Oracle-confirmed GPT-6 Astra BASE + WORLDIFACT Blender mechanical high-poly detail · UNREVIEWED':
+        report.provenance==='ORACLE_CONFIRMED'?
+          'Oracle-confirmed GPT-6 Astra · Original GLB · UNREVIEWED':
+          'Selected GPT-6 Astra · Oracle receipt not verified · UNREVIEWED'
       const g=report.originalGLB
-      if(g) stats.textContent=[g.triangles.toLocaleString()+' triangles',g.meshes.toLocaleString()+' mesh definitions',
-        g.materials+' materials',(g.bytes/1048576).toFixed(2)+' MiB',
-        report.completion].join(' · ')
+      if(g) stats.textContent=[g.triangles.toLocaleString()+' ULTRA triangles',
+        report.gameMobileLOD ? report.gameMobileLOD.triangles.toLocaleString()+' mobile preview triangles' : null,
+        g.meshes.toLocaleString()+' mesh definitions',g.materials+' PBR material slots',
+        (g.bytes/1e6).toFixed(1)+' MB ULTRA download',report.completion].filter(Boolean).join(' · ')
     }
   }catch{sourceText.textContent='Original job metadata unavailable. Provider not verified.'}
   loader.load('./robot.glb',gltf=>{

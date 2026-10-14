@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "worldifact-ecomech-ultra-staging-20261014",
+  "main": "server/ecomechUltraDownloads.ts",
+  "compatibility_date": "2026-10-14",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./.ecomech-ultra-public",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": [
+      "/downloads/*"
+    ]
+  }
+}
