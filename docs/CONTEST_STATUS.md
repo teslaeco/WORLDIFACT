@@ -1,3 +1,18 @@
+# 14 October 2026 — STUDIO ACCOUNT LIBRARY FOLLOW-UP (MERGED; RELEASE PENDING)
+
+VERIFIED:
+- PR #278 merged: completed owned Studio models now preserve validated `studioExecution` (Astra, Sol or Luna; Standard/Fast). Account gallery shows this provenance, and labels older rows as unknown instead of inventing their model.
+- PR #279 merged: Sol and Luna Standard use budget-first completion guidance to prioritize a valid first GLB, required review and `finish_model` before discretionary detail revisions. The original prompts, execution model, strict per-job spend ceilings and no-retry policy remain unchanged. This is not evidence that every complex prompt can finish within USD 0.35 / USD 0.10.
+- PR #280 merged: an authenticated library first-page GET can surface completed owned assets beyond the first UUID-range page with bounded additional lookups. This improves discovery but does not constitute a full history migration.
+- Cloudflare release `5c22ca73a206af8ba1f856dafbf563ee55bf5015` passed `npm run verify`, dry-run, actual preserving `wrangler deploy --keep-vars`, and read-only live Studio API inspection. Proof: https://github.com/teslaeco/WORLDIFACT/actions/runs/38571282122; deployed version `6efec27e-b66f-4475-bccd-b60220fea682`.
+- PR #281 merged as `3ab71d14aea922e0c19ad8afe4cb2588015486f3`: bounded account-owned latest-model index for **newly completed explicit-model jobs only**. A library hint never proves success or ownership: the owned canonical completed row must be re-read and validated. Historical settlement write bytes remain unchanged; test first caught and corrected a forbidden legacy write. Exact PR CI passed after correction.
+
+UNKNOWN / PENDING:
+- Deployment of #281 is still pending at the time this milestone is recorded; do not claim it is on Cloudflare until the exact release job and public smoke test pass.
+- No new signed-in customer-session E2E was performed for the owner's account: actual held-point balance and successful library visibility after reload remain to be checked. Do not release unknown provider liabilities.
+- The specific Sol job shown with `MODEL_BUDGET_EXCEEDED` needs its exact signed job ID and terminal budget receipt to determine charge liability. Source semantics establish a failed next guarded request reservation, not guaranteed zero spend, model complexity or automatic refund.
+- No additional paid generation was started in this library follow-up; earlier four sequential Luna Standard jobs already passed in production (link below).
+
 # 14 October 2026 — CONTINUOUS STUDIO GENERATION P0 VERIFIED
 
 VERIFIED:
