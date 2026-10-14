@@ -37,6 +37,14 @@ const entries={
  obj:['ECOMECH_ASTRA_BLENDER_ULTRA.obj','text/plain'],
  blend:['ECOMECH_ASTRA_BLENDER_ULTRA_EDITABLE.blend','application/octet-stream']
 }
+// Native OBJ material definitions are separate from bitmap texture images.
+// Publish genuine MTL when Blender wrote it; do not invent texture maps.
+const mtlName='ECOMECH_ASTRA_BLENDER_ULTRA.mtl'
+try {
+ const mtl=await readFile(join(input,mtlName))
+ expected[mtlName]={bytes:mtl.length,sha256:digest(mtl)}
+ entries.mtl=[mtlName,'text/plain']
+} catch { /* Some Blender exporters inline material definitions. No fake MTL. */ }
 const listing={}
 const CHUNK=18*1024*1024
 for(const [key,[filename,mime]] of Object.entries(entries)){
