@@ -1,3 +1,19 @@
+# 14 October 2026 — ASTRA/SOL/LUNA ACTUAL PROVIDER AUDIT AND ACCOUNT GLB LABELS
+
+VERIFIED (production, read-only):
+- Existing Oracle Sol job `5f017611-1d33-4e9a-8b3d-02f4c6d47001` reports `state=succeeded`, sealed terminal budget model `gpt-6.1-sol`, `agentUsage.model=gpt-6.1-sol`, bounded usage 274670 micro-USD.
+- Existing Oracle Luna jobs `5f017611-1d33-4e9a-8b3d-02f4c6d47002` and `5f017611-1d33-4e9a-8b3d-02f4c6d47104` report `state=succeeded`, sealed model and agent-usage model `gpt-6-luna`, bounded usage 13748 and 16857 micro-USD respectively.
+- Two earlier explicit Astra smoke jobs (`38c71530-2bc8-42ca-823c-e91be4f01b7a`, `ac718eb5-2c54-47b1-ae67-722ad296ff10`) both report `agentUsage.model=gpt-6-astra` and sealed Astra budget receipts, but ended `failed`. They verify actual Astra provider execution, NOT successful 3D output.
+- Exact source audit: `tools/model_execution/model_routes.py` makes immutable `studioExecution` select the Codex CLI model, changes model-checking to `outer.model`, and calls `studio_execution.protect`/ `settle_completed`. The selected-model cost ledger accepts an OpenAI completed response only if `response.model` exactly matches the bound `gpt-6-astra`, `gpt-6.1-sol`, or `gpt-6-luna` and matching tier/usage. The three outputs still use shared Blender scene tools; visual similarity alone is not a model substitution.
+- Audited production read-only runs: https://github.com/teslaeco/WORLDIFACT/actions/runs/38593691413 and https://github.com/teslaeco/WORLDIFACT/actions/runs/38594392649. No new generation or paid API calls.
+- PR #283 merged as `a7a3ea61160604921181b8dd59b3d341dc721437`. Account library no longer calls the selected `studioExecution` itself "Generated with". It now displays `Oracle-confirmed: MODEL · MODE` only when a previously persisted authenticated owned job has a matching sealed terminal provider receipt and positive provider liability. Otherwise it displays `Selected: MODEL · MODE · Oracle receipt not verified`. Legacy rows without immutable selection remain unknown. No fabricating provider identity, no billing write, no extra generation. Four exact-head PR workflows passed.
+
+UNKNOWN / PENDING:
+- PR #283 production publishing and a signed-in browser review are pending; do not call the new labels live before the preserving release job succeeds.
+- A sealed Oracle receipt is a server-side attestation of model-bound provider usage, not an OpenAI-signed certificate of visual quality, manufacturing readiness, GLB semantic correctness or a separate measured bill.
+- Older completed jobs may lack model-selection or receipt metadata and must not be assigned a convenient provider label without original evidence.
+- Current owner held points and recent complex Sol/Luna failures are separate billing/quality matters; this audit is intentionally read-only.
+
 # 14 October 2026 — LIVE: DURABLE LATEST STUDIO LIBRARY RELEASE VERIFIED
 
 VERIFIED:
