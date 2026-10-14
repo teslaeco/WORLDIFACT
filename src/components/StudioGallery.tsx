@@ -92,7 +92,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
       const result = await listStudioLibrary(active.owner, replace ? null : active.cursor, AbortSignal.any([active.controller.signal, page.signal]))
       if (!valid()) return
       const models = new Map((replace ? [] : active.models).map(model => [model.id, model]))
-      for (const model of result.models) {
+      for (const model of [...result.models, ...(replace ? result.recentModels ?? [] : [])]) {
         const timing = model.generationTiming ?? active.models.find(entry => entry.id === model.id)?.generationTiming
         models.set(model.id, timing ? { ...model, generationTiming: timing } : model)
       }
