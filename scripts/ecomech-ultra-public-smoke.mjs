@@ -79,17 +79,21 @@ for(const [format,size] of Object.entries(expectedLengths)){
     fail(format+' HEAD metadata wrong')
  const part=await limitedGet('/downloads/'+format,{
   headers:{Range:'bytes=0-4095'}},4_096,40_000)
- if(part.result.status!==206 || part.length!==4096 ||
+ if(part.result.status!==206 ||
      part.result.headers.get('Content-Range')!=='bytes 0-4095/'+size)
-    fail(format+' RANGE 206 missing')
+    fail(format+' RANGE 206 missing: '+JSON.stringify({
+      status:part.result.status,contentLength:part.length,
+      contentRange:part.result.headers.get('Content-Range'),
+      transferEncoding:part.result.headers.get('Transfer-Encoding')}))
  const bytes=await bytesOf(part.result,4096)
  if(bytes.size!==4096||!magic[format](bytes.prefix))
     fail(format+' file magic mismatch')
  checks.push({format,head:200,range:206,bytes:size,sha256:entry.sha256})
 }
 const original=await limitedGet('/downloads/glb',{},expectedLengths.glb+1,240_000)
-if(original.result.status!==200||original.length!==expectedLengths.glb)
- fail('full original GLB unavailable')
+if(original.result.status!==200 ||
+   original.length!==0 && original.length!==expectedLengths.glb)
+ fail('full original GLB unavailable: HTTP '+original.result.status+' / declared '+original.length)
 const actual=await bytesOf(original.result,expectedLengths.glb+1)
 if(actual.size!==expectedLengths.glb||actual.sha256!==manifest.downloads.glb.sha256)
  fail('full 265MB SHA-256 mismatch')
