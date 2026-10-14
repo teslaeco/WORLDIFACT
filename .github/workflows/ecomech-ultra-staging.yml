@@ -47,6 +47,11 @@ jobs:
             --dir .ecomech-ultra-input
           test -s .ecomech-ultra-input/MANIFEST_ULTRA.json
           test -s .ecomech-ultra-input/INTEGRITY_REPORT.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Re-check real 2-3 million glTF triangles and original exporter file headers before release
+        run: python tools/ecomech/verify_ultra.py .ecomech-ultra-input
       - name: Split binary exports into SHA-bound static chunks and bundle mobile viewer
         run: node scripts/prepare-ecomech-ultra-staging.mjs
       - name: Dry-run exact isolated Cloudflare ULTRA Worker
