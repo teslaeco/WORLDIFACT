@@ -21,7 +21,7 @@ function generatedWith(model: StudioLibraryModel): string {
   const execution = model.studioExecution
   if (!execution) return 'Legacy model · original AI provider not recorded'
   const provider = { astra: 'GPT-6 Astra', sol: 'GPT-6.1 Sol', luna: 'GPT-6 Luna' }[execution.model]
-  const mode = execution.mode === 'fast' ? 'Fast' : 'Slow / Quality'
+  const mode = execution.mode === 'fast' ? 'Fast' : 'Standard'
   // The user's dropdown does not certify which model OpenAI returned.
   // Only a matching server-validated Oracle terminal receipt can do that.
   return model.providerEvidence
@@ -33,7 +33,7 @@ function deviceModelProvenance(model: StudioArchiveEntry): string {
   if (model.source === 'blueprint') return 'Procedural GLB — not a verified Studio provider'
   if (!isStudioExecution(model.studioExecution)) return 'Legacy device copy · original AI not recorded'
   const provider = { astra: 'GPT-6 Astra', sol: 'GPT-6.1 Sol', luna: 'GPT-6 Luna' }[model.studioExecution.model]
-  return `Selected: ${provider} · ${model.studioExecution.mode === 'fast' ? 'Fast' : 'Slow / Quality'} · device copy not Oracle-verified`
+  return `Selected: ${provider} · ${model.studioExecution.mode === 'fast' ? 'Fast' : 'Standard'} · device copy not Oracle-verified`
 }
 
 function downloadBlob(blob: Blob, name: string) {
@@ -268,7 +268,9 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         inspectGLB(data)
       }
       if (download) downloadBlob(blob, format === 'model'
-        ? previewFileName({ id: item.model.id, origin: 'archive', label: item.model.prompt })
+        ? selectedItem.origin === 'account' && selectedItem.model.completion === 'INCOMPLETE'
+          ? `WORLDIFACT-${selectedItem.model.id}-INCOMPLETE.glb`
+          : previewFileName({ id: item.model.id, origin: 'archive', label: item.model.prompt })
         : `WORLDIFACT-${item.model.id}-${format === 'pbr' ? 'textures.zip' : `model.${format}`}`)
       else {
         if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
@@ -348,6 +350,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         <details className="shop-gallery-details" open={!compact}><summary>File details</summary>
         {item.origin === 'account' ? <>
           {item.model.id === requestedModelId && <small>Requested model</small>}
+          <small>Original job ID: {item.model.id}</small>
           <small>{item.model.completion === 'INCOMPLETE' ? 'Draft retained' : 'Completed'}: {new Date(item.model.completedAt).toLocaleString()} · GLB fetched when opened</small>
           <small>Recorded worker generation time: {formatStudioGenerationDuration(item.model.generationTiming)}{!item.model.generationTiming && ' · Open this model to check its recorded duration.'}</small>
           {!item.model.downloadAllowed && <small>This model is preserved on your account. Eligible account access is required to open its cloud file.</small>}
@@ -358,7 +361,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         </>}</details>
         <div className="studio-gallery-actions">
           <button type="button" disabled={!!busyId} onClick={event => void open(item, false, event.currentTarget)}>{busyId === item.key ? 'Opening…' : 'Preview 3D'}</button>
-          <button type="button" disabled={!!busyId} onClick={() => void open(item, true)}>Download GLB</button>
+          <button type="button" disabled={!!busyId} onClick={() => void open(item, true)}>{item.origin === 'account' && item.model.completion === 'INCOMPLETE' ? 'Download incomplete GLB' : 'Download GLB'}</button>
         </div>
       </article>)}
     </div>
