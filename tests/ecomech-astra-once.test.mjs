@@ -1,7 +1,24 @@
+test('exact generated Astra/Blender request is bounded and never relabels the source image or cost',()=>{
+  const payload=buildEcomechAstraPayload()
+  assert.equal(payload.id,JOB_ID)
+  assert.deepEqual(payload.studioExecution,{revision:'studio-execution-v1',model:'astra',mode:'standard'})
+  assert.equal('photos' in payload,false,'A reference image not sent cannot be claimed image-guided')
+  assert.equal('studioPricing' in payload,false)
+  assert.match(payload.prompt,/CHILI PEPPER/)
+  assert.match(payload.prompt,/FIRST scene build/)
+  assert.match(payload.agentInstructions,/ECOMECH QA/)
+  assert.match(payload.agentInstructions,/tools\.mcp__blender__build_model/)
+  assert.match(payload.agentInstructions,/tools\.mcp__blender__finish_model/)
+  assert.match(payload.agentInstructions,/USD 1\.75 guard/)
+  assert.match(payload.agentInstructions,/Do not start another job/)
+  assert.ok(payload.agentInstructions.length<=12000)
+  assert.ok(payload.prompt.length<=5000)
+})
+
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { detailedGLBFixture } from './detailed-studio-fixture.ts'
-import { approvedMarker, validateCandidateGLB, probe, MAX_USD, JOB_ID, CLAIM_TAG } from '../scripts/ecomech-astra-once.mjs'
+import { approvedMarker, validateCandidateGLB, probe, buildEcomechAstraPayload, MAX_USD, JOB_ID, CLAIM_TAG } from '../scripts/ecomech-astra-once.mjs'
 const marker={approval:'ECOMECH_ASTRA_SINGLE_TEST_20261014',maxProviderUsd:1.75,mode:'astra-standard',
   originalJobId:JOB_ID,paidAttempts:1,validUntil:'2026-10-16T23:59:59Z'}
 test('no editable cost ceiling, duplicate ID, expired or unknown marker can start a paid job',()=>{
