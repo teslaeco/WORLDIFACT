@@ -1,0 +1,326 @@
+{
+  "version": "ecomech-reference-target-v1",
+  "sourceKind": "USER_UPLOADED_REFERENCE",
+  "sourceImageOriginalSha256": "be79f5e1b543c0b3663319b11356ab5c436b56e5589d545527cf397084ff8f42",
+  "sourceWidth": 1122,
+  "sourceHeight": 1402,
+  "targetSubject": "original articulated electro-mechanical guardian holding a green chili",
+  "validation": "HUMAN_ESTIMATED_FROM_USER_REFERENCE_NOT_AI_MEASURED",
+  "camera": {
+    "type": "three-quarter",
+    "up": "Y",
+    "framing": "full-body",
+    "view": "slightly-low-angle",
+    "perspective": "moderate"
+  },
+  "composition": {
+    "verticalAxis": "image",
+    "armoredSide": "VIEWER_LEFT",
+    "exposedMechanicsSide": "VIEWER_RIGHT",
+    "raisedArm": "VIEWER_LEFT",
+    "objectInRaisedHand": "GREEN_CHILI_3D",
+    "noReferenceBackAvailable": true
+  },
+  "landmarks": {
+    "topHelmet": [
+      0.5,
+      0.013
+    ],
+    "chin": [
+      0.49,
+      0.136
+    ],
+    "leftShoulder": [
+      0.317,
+      0.156
+    ],
+    "rightShoulder": [
+      0.622,
+      0.161
+    ],
+    "leftElbow": [
+      0.199,
+      0.339
+    ],
+    "rightElbow": [
+      0.699,
+      0.368
+    ],
+    "leftWrist": [
+      0.208,
+      0.26
+    ],
+    "rightWrist": [
+      0.752,
+      0.485
+    ],
+    "reactor": [
+      0.494,
+      0.244
+    ],
+    "leftHip": [
+      0.34,
+      0.479
+    ],
+    "rightHip": [
+      0.607,
+      0.486
+    ],
+    "leftKnee": [
+      0.306,
+      0.719
+    ],
+    "rightKnee": [
+      0.671,
+      0.719
+    ],
+    "leftAnkle": [
+      0.277,
+      0.891
+    ],
+    "rightAnkle": [
+      0.69,
+      0.899
+    ],
+    "leftToe": [
+      0.24,
+      0.944
+    ],
+    "rightToe": [
+      0.702,
+      0.947
+    ],
+    "greenChiliTip": [
+      0.279,
+      0.285
+    ],
+    "greenChiliTop": [
+      0.198,
+      0.035
+    ],
+    "helmetEyes": [
+      0.494,
+      0.072
+    ]
+  },
+  "outline": [
+    [
+      0.487,
+      0.008
+    ],
+    [
+      0.536,
+      0.016
+    ],
+    [
+      0.578,
+      0.069
+    ],
+    [
+      0.55,
+      0.139
+    ],
+    [
+      0.635,
+      0.142
+    ],
+    [
+      0.685,
+      0.229
+    ],
+    [
+      0.748,
+      0.309
+    ],
+    [
+      0.777,
+      0.475
+    ],
+    [
+      0.745,
+      0.534
+    ],
+    [
+      0.72,
+      0.546
+    ],
+    [
+      0.726,
+      0.65
+    ],
+    [
+      0.745,
+      0.748
+    ],
+    [
+      0.733,
+      0.867
+    ],
+    [
+      0.79,
+      0.942
+    ],
+    [
+      0.704,
+      0.961
+    ],
+    [
+      0.622,
+      0.951
+    ],
+    [
+      0.632,
+      0.827
+    ],
+    [
+      0.614,
+      0.746
+    ],
+    [
+      0.572,
+      0.628
+    ],
+    [
+      0.514,
+      0.559
+    ],
+    [
+      0.468,
+      0.549
+    ],
+    [
+      0.424,
+      0.638
+    ],
+    [
+      0.403,
+      0.728
+    ],
+    [
+      0.389,
+      0.845
+    ],
+    [
+      0.372,
+      0.943
+    ],
+    [
+      0.248,
+      0.956
+    ],
+    [
+      0.191,
+      0.932
+    ],
+    [
+      0.235,
+      0.846
+    ],
+    [
+      0.229,
+      0.727
+    ],
+    [
+      0.243,
+      0.598
+    ],
+    [
+      0.282,
+      0.489
+    ],
+    [
+      0.178,
+      0.437
+    ],
+    [
+      0.142,
+      0.337
+    ],
+    [
+      0.169,
+      0.253
+    ],
+    [
+      0.197,
+      0.242
+    ],
+    [
+      0.175,
+      0.176
+    ],
+    [
+      0.217,
+      0.107
+    ],
+    [
+      0.297,
+      0.137
+    ],
+    [
+      0.358,
+      0.132
+    ],
+    [
+      0.424,
+      0.106
+    ],
+    [
+      0.432,
+      0.026
+    ]
+  ],
+  "regionMaterials": [
+    {
+      "part": "ARMOR_CHEST_LEFT",
+      "color": "#168b4c",
+      "material": "painted-emerald-metal"
+    },
+    {
+      "part": "ARMOR_SHOULDER_LEFT",
+      "color": "#164c91",
+      "material": "cobalt-ceramic-metal"
+    },
+    {
+      "part": "ARMOR_LEG_LEFT",
+      "color": "#178348",
+      "material": "enameled-green-metal"
+    },
+    {
+      "part": "MECH_TORSO_RIGHT",
+      "color": "#18272d",
+      "material": "dark-machined-steel"
+    },
+    {
+      "part": "MECH_COILS_RIGHT",
+      "color": "#aa643c",
+      "material": "enameled-copper"
+    },
+    {
+      "part": "EYES_AND_LED",
+      "color": "#30f5d5",
+      "material": "cyan-emissive"
+    },
+    {
+      "part": "CHILI",
+      "color": "#17a81d",
+      "material": "green-organic"
+    }
+  ],
+  "acceptance": [
+    "volumetric helmet with non-generic faceplate and cyan eyes",
+    "asymmetrical clean overlapping protective armor only on viewer left",
+    "exposed real-looking MCC/contactors, copper coil motors and pistons on viewer right",
+    "correct full-body anatomical robot proportions; raised arm holds a long green tapered chili",
+    "distinct independent real mesh objects for panels, gears, motor housings, coils and wiring",
+    "separate tested 360-degree back; never claim the unseen reference proves its appearance",
+    "credible physically authored PBR material/texture slots with correct provenance",
+    "2D front-view render must be compared to this user reference, not only the polygon count"
+  ],
+  "constraints": {
+    "maxOpenAIAdditionalUsd": 20,
+    "paidExternalServices": false,
+    "clientPointsTouched": false,
+    "storeGo": false,
+    "printReady": false
+  }
+}

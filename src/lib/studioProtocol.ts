@@ -40,7 +40,10 @@ export const REFERENCE_FIDELITY_INSTRUCTIONS = `WORLDIFACT REFERENCE-FIDELITY MO
 
 export const INDUSTRIAL_ELECTRICAL_PROFILE = 'industrial-electrical-cabinet-v1' as const
 export const REFERENCE_CHARACTER_PROFILE = 'reference-character-v1' as const
-export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE | typeof REFERENCE_CHARACTER_PROFILE
+/** Reference-driven articulated robot, not the cabinet it happens to contain. */
+export const REFERENCE_ROBOT_PROFILE = 'reference-robot-fidelity-v1' as const
+export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE |
+  typeof REFERENCE_CHARACTER_PROFILE | typeof REFERENCE_ROBOT_PROFILE
 
 // Both headers are existing STANDARD profile aliases on the installed worker.
 // The legacy alias keeps the original supervised CLI, which completed the live
@@ -80,10 +83,30 @@ export const REFERENCE_CHARACTER_INSTRUCTIONS = `WORLDIFACT REFERENCE CHARACTER 
 - For figurine intent, preserve important garment/hair detail while avoiding accidental zero-thickness sheets; this is still a generated concept and is NOT manufacturing-approved.
 - Review front, side and back before export. If face, hands, clothing layers or silhouette collapse, repair them before returning the GLB.`
 
+/**
+ * GPT-6 Astra / Blender image-conditioned industrial humanoid contract.
+ * The uploaded pixels MUST be used; every first-pass body part and panel
+ * must be a genuine 3D mesh, never a screen-plane or texture-card illusion.
+ * Final status is still UNREVIEWED pending a measurable silhouette comparison.
+ */
+export const REFERENCE_ROBOT_INSTRUCTIONS = `WORLDIFACT REFERENCE-DRIVEN ROBOT RECONSTRUCTION (V1):
+- THIS REQUEST CONTAINS REAL JPEG REFERENCE PIXELS. Examine the attached front/three-quarter image before any Blender build. A text-only robot is not image reconstruction. Do not replace the subject or hallucinate nonexistent reference views.
+- RECONSTRUCT THE OVERALL SILHOUETTE FIRST. Preserve the reference head-to-height ratio, broad layered shoulders, tapering armored torso, anatomically placed hips, separate full-length legs, large formed feet and bent raised hand. Match camera framing before fine-detail work. Do not start with a generic sphere-headed, box-torso mannequin.
+- Model intentionally ASYMMETRIC SURFACES: viewer-left finished emerald/cobalt beveled overlapping armor versus viewer-right visibly open motor-control machinery. Do not accidentally cover the electric stators, copper coils, bearings, pistons, MCC components, cooling vents and routed bundles with a flat cut-out plane.
+- If the image depicts a raised hand holding a green chili, create actual volumetric tapered fruit, stem, curved silhouette, fingers wrapping around the fruit. Faceplate and eyes must be original and match cyan/green LED regions shown in the reference.
+- FIRST build_model call must already contain faithful sculpted body massing, helmet, torso, hips, both articulated legs and full hands. Allocate available Blender primitives to shaped elliptical lofts, beveled shells and physically separate panels before repeating thousands of tiny screws/wires.
+- Reserve your existing budget for front, three-quarter, side and rear actual Blender render inspections. Compare the real render with the front reference; if body proportions, armor/mechanics split or pepper location are visibly wrong, state concrete issues rather than claiming a photoreal match.
+- UV/PBR/base-color, metal/roughness/emission must be physically authored where supported; green/blue LEDs are not proof of real lighting bake. Never claim licensed external scans, rigs, animations, millions of actual polygons or manufacturing readiness unless those outputs are independently verified.
+- A single image does not prove the unseen back. Keep selected Astra/Sol/Luna execution, original customer points, provider monetary ceiling and explicit completion outcome unchanged; no automatic paid retries.`
+
 const ELECTRICAL_CABINET_REQUEST = /(electrical\s+(?:control\s+)?cabinet|switchgear|motor\s+control\s+cent(?:er|re)|\bmcc\b|distribution\s+panel|control\s+panel|din\s*rail|terminal\s+block|breaker|contactor|relay|rozdzieln|szaf.{0,24}(?:elektr|sterown)|bezpiecznik|stycznik|przeka[źz]nik|listw.{0,20}zacisk|okablowan)/iu
 // Match words, not "man" inside "many", "command" or "manufacturing".
 // Unicode boundaries retain Polish inflections without treating accented
 // letters as separators (JavaScript's ASCII-oriented \b would do that).
+// Robot is the top-level subject; mentioning MCC/contactor hardware as its
+// internal anatomy MUST NOT route it to a cabinet reconstruction profile.
+const EXPLICIT_HUMANOID_ROBOT = /(?:^|[^\p{L}\p{N}_])(?:robots?|roboty|robota|mech(?:a|s|as)?|androids?|humanoid(?:s)?|cyborgs?|exosuits?|egzoszkielet\p{L}*)(?=$|[^\p{L}\p{N}_])/iu
+const ROBOT_BODY_EVIDENCE = /(?:full[- ]body|humanoid|android|guardian|warrior|battle|armou?r|helmet|head|torso|shoulder|legs?|knees?|hands?|fingers?|holding|chili|exposed mechanics|mechanical body|posta[cć]|humanoidaln\p{L}*|pancerz|przegub|trzyma|papryczk)/iu
 const CHARACTER_REQUEST = /(?:^|[^\p{L}\p{N}_])(?:adult\s+(?:woman|man|female|male)|characters?|heroines?|figurines?|persons?|humans?|women|woman|girls?|men|man|posta[cć]\p{L}*|kobiet\p{L}*|m[eę][żz]czyzn\p{L}*|figur[kc]\p{L}*)(?=$|[^\p{L}\p{N}_])/iu
 // Resolve only an explicit cabinet description against the Shop's figurine
 // default. These narrower hints do not select a quality profile or infer scale.
@@ -94,6 +117,9 @@ const EXPLICIT_MINIATURE_OR_CHARACTER_REQUEST = /\b(?:miniatures?|mini|figurines
 const NEGATED_MINIATURE_LABELS = /\bnot\s+(?:a\s+)?(?:figurine|miniature)(?:\s+(?:or|nor)\s+(?:a\s+)?(?:figurine|miniature))?\b|\bnie\s+(?:figurka|miniatura)(?:\s+ani\s+(?:figurka|miniatura))?\b/giu
 
 export function studioQualityProfile(input: Pick<StudioInput, 'prompt' | 'photos' | 'purpose'>): StudioQualityProfile {
+  if (input.photos.length > 0 && ['figurine','game','object'].includes(input.purpose) &&
+      EXPLICIT_HUMANOID_ROBOT.test(input.prompt) && ROBOT_BODY_EVIDENCE.test(input.prompt))
+    return REFERENCE_ROBOT_PROFILE
   if (input.photos.length > 0 && ELECTRICAL_CABINET_REQUEST.test(input.prompt)) return INDUSTRIAL_ELECTRICAL_PROFILE
   if (input.photos.length > 0 && ['figurine','game'].includes(input.purpose) && CHARACTER_REQUEST.test(input.prompt)) return REFERENCE_CHARACTER_PROFILE
   return 'standard'
@@ -269,7 +295,8 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
     ? '\n\nOriginal reference view labels (in input order): ' + input.photos.map((photo, index) => `Reference ${index + 1}: ${photo.view}`).join('; ') + '. Side views still describe the same subject.' : ''
   const qualityProfile = studioQualityProfile(input)
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
-    : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
+    : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS
+    : qualityProfile === REFERENCE_ROBOT_PROFILE ? REFERENCE_ROBOT_INSTRUCTIONS : ''
   return { id, prompt: input.prompt + instruction, ...(execution ? { studioExecution: execution } : {}), ...(studioPricing ? { studioPricing } : {}),
     agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(execution ? MODEL_CATALOG[execution.model] : studioPricing, !!execution || !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels + (execution && execution.model !== 'astra' ? '\n\n' + BUDGET_FIRST_STUDIO_GUIDE : '') + '\n\n' + STUDIO_READBACK_GUIDE,
     ...(photos.length ? { photos } : {}) }
