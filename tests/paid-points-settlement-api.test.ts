@@ -19,6 +19,14 @@ function storage(): EntitlementStorage {
   const store: EntitlementStorage = {
     async get<T>(key: string) { return structuredClone(values.get(key)) as T | undefined },
     async put(key, value) { values.set(key, structuredClone(value)) },
+    async list<T>(options: { prefix: string; startAfter?: string; limit: number }) {
+      const entries = [...values.entries()]
+        .filter(([key]) => key.startsWith(options.prefix) && (!options.startAfter || key > options.startAfter))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(0, options.limit)
+        .map(([key, value]) => [key, structuredClone(value) as T] as const)
+      return new Map(entries)
+    },
     transaction<T>(callback: (value: EntitlementStorage) => Promise<T>) { const next = queue.then(() => callback(store)); queue = next.catch(() => {}); return next },
   }
   return store
