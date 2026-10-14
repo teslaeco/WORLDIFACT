@@ -1,4 +1,5 @@
 import { isStudioExecution, sameStudioExecution, type StudioExecution } from '../src/lib/studioExecution.ts'
+import { STUDIO_PROVIDER_EVIDENCE_REVISION, type StudioProviderEvidence } from '../src/lib/studioProviderEvidence.ts'
 import { STUDIO_RECENT_KEY, STUDIO_RECENT_READ_LIMIT, readRecentStudioIndex, upsertRecentStudioIndex } from '../src/lib/studioRecentIndex.ts'
 import { imageStore, type ImageEnv } from './imageGeneration.ts'
 import { PROMOTION_NAMESPACE, promotionRegistry, applyPromotion, promotionApi, type PromotionEnv } from './promotionCodes.ts'
@@ -57,7 +58,7 @@ type Job = { studioExecution?: StudioExecution; adminFunding?: AdminFunding; adm
 export type Reservation = { pointSettlement?: PointSettlement; fundingSource?: typeof PAID_POINTS_FUNDING | typeof OVERNIGHT_TEST_APPROVAL; providerModel?: string; pricing?: StudioPricing; allowed: boolean; repeated?: boolean; cost?: number; kind?: 'free' | 'credits'; reason?: string; state?: Job['state']; held?: boolean; supportEligible?: boolean; supplementalEligible?: boolean; repairedMccEligible?: boolean; projectBudgetEligible?: boolean }
 export type JobAccess = { studioExecution?: StudioExecution; channel?: 'studio' | 'blueprint'; model?: GenerationModel; pointSettlement?: PointSettlement; fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
-export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean; studioExecution?: StudioExecution }
+export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean; studioExecution?: StudioExecution; providerEvidence?: StudioProviderEvidence }
 type OwnedStudioLibraryPage = { models: OwnedStudioLibraryModel[]; nextCursor: string | null; hasMore: boolean; recentModels?: OwnedStudioLibraryModel[] }
 export const STUDIO_LIBRARY_SCAN_LIMIT = 64
 export type StudioProviderReconciliationResult = { pointSettlement?: PointSettlement; reconciled: boolean; repeated?: boolean; releasedCents?: number; retainedCents?: number; reason?: string }
@@ -121,10 +122,32 @@ async function libraryPermissions(storage: EntitlementStorage, now: number) {
   ])
   return { subscribed: active(subscription, now), clear: credits >= 0 && billingHold !== true }
 }
+/** Only a previously stored, authenticated Oracle terminal receipt matching
+ * this owned completed job may upgrade 'selected model' to 'Oracle-confirmed'.
+ * Do not infer provider identity from plan, pricing, model dropdown or UUID. */
+function verifiedLibraryProvider(id: string, job: Job): StudioProviderEvidence | undefined {
+  const execution = job.studioExecution
+  if (!isStudioExecution(execution) || job.state !== 'completed' || !validStudioExecution(job)) return
+  let proof: TerminalBudgetReceipt | undefined
+  if (paidPointsJob(job, id)) {
+    const evidence = job.providerLiability.evidence
+    if (job.providerLiability.state === 'bounded' && evidence?.kind === 'studio-terminal')
+      proof = evidence.receipt
+  } else if (adminJob(job) && job.adminTerminalReceipt) {
+    proof = job.adminTerminalReceipt
+  } else if (job.studioProviderReconciliation && validProviderReconciliation(job.studioProviderReconciliation, id, job)) {
+    proof = job.studioProviderReconciliation.receipt
+  }
+  if (!proof || !validateTerminalBudgetReceipt(proof, id, null, execution) || proof.maximumLiabilityMicroUsd <= 0)
+    return
+  return { revision: STUDIO_PROVIDER_EVIDENCE_REVISION, model: proof.model, mode: execution.mode, source: 'oracle-terminal-budget' }
+}
 function libraryModel(id: string, job: Job & { fingerprint: string }, permissions: { subscribed: boolean; clear: boolean }): OwnedStudioLibraryModel {
+  const providerEvidence = verifiedLibraryProvider(id, job)
   return { id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered cloud model', at: job.at,
     completedAt: job.updatedAt ?? job.at, downloadAllowed: permissions.clear && (adminJob(job) || job.profile === 'fast' || permissions.subscribed),
-    ...(isStudioExecution(job.studioExecution) ? { studioExecution: job.studioExecution } : {}) }
+    ...(isStudioExecution(job.studioExecution) ? { studioExecution: job.studioExecution } : {}),
+    ...(providerEvidence ? { providerEvidence } : {}) }
 }
 
 /** Best-effort discovery index only. Canonical completed job and account
