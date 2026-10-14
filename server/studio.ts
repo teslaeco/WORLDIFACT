@@ -531,6 +531,94 @@ async function modelOrExport(env: StudioEnv, id: string, format: string, fetcher
   })
   return new Response(stream, { headers: { 'Content-Type': profile.type, 'Content-Length': String(size), 'Content-Disposition': `attachment; filename="WORLDIFACT-${id}-${profile.name}"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-WORLDIFACT-Provenance': 'GENERATED-UNREVIEWED' } })
 }
+/** A draft GLB must be bound to the original failure and its original bytes.
+ * Revalidation also detects missing/changed worker artifacts after reload.
+ * No continuation, provider call, manufacture/quality approval or debit. */
+async function retainedDraftResponse(env: StudioEnv, id: string, sha256: string, fetcher: typeof fetch): Promise<Response> {
+  const response = await modelOrExport(env, id, 'model', fetcher)
+  const buffer = await response.arrayBuffer()
+  const inspection = inspectGLB(buffer)
+  if (inspection.meshCount < 1 || inspection.renderedTriangles < 1 || inspection.triangles < 1)
+    throw new StudioError('The retained draft has no renderable 3D geometry.', 409)
+  const digest = hex(await crypto.subtle.digest('SHA-256', buffer))
+  if (digest !== sha256) throw new StudioError('The saved draft GLB changed on the worker. The original candidate cannot be verified.', 409)
+  return new Response(buffer, { headers: { 'Content-Type': 'model/gltf-binary',
+    'Content-Length': String(buffer.byteLength),
+    'Content-Disposition': `attachment; filename="WORLDIFACT-${id}-INCOMPLETE.glb"`,
+    'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
+    'X-WORLDIFACT-Provenance': 'GENERATED-INCOMPLETE-UNREVIEWED' } })
+}
+
+/** Opt-in read of the SAME original failed job. Oracle may retain an incomplete
+ * candidate under succeeded+draft. A real self-contained GLB and owned terminal
+ * failure are required before recording account library metadata. */
+async function retainIncompleteDraft(env: StudioEnv, uid: string, id: string, fetcher: typeof fetch) {
+  const access = await userJobAccess(env, uid, id)
+  if (!access.owned || access.state !== 'failed' || !isStudioIncompleteReason(access.failureCode) ||
+      !isStudioExecution(access.studioExecution))
+    throw new StudioError('This account has no eligible unfinished Studio request. No new generation started.', 409)
+  if (access.incompleteAvailable) {
+    const { model } = await userStudioLibraryModel(env, uid, id)
+    if (model?.completion === 'INCOMPLETE') return { retained: true, repeated: true, canOpen: model.downloadAllowed }
+  }
+  const statusResponse = await oracle(env, `/v1/jobs/${id}`, fetcher)
+  if (!statusResponse.ok) { await statusResponse.body?.cancel(); return { retained: false, reason: 'RETAINED_JOB_UNAVAILABLE' } }
+  const status = await limitedJson(statusResponse, 16_384)
+  if (status.id !== id || status.state !== 'succeeded' || status.modelStatus !== 'draft')
+    return { retained: false, reason: 'NO_RETAINED_DRAFT' }
+  const qualityResponse = await oracle(env, `/v1/jobs/${id}/quality`, fetcher)
+  if (!qualityResponse.ok) { await qualityResponse.body?.cancel(); return { retained: false, reason: 'DRAFT_REVIEW_UNAVAILABLE' } }
+  const quality = await limitedJson(qualityResponse, 262_144)
+  if (quality.revision !== 6 || quality.state !== 'succeeded' ||
+      quality.hasModel !== true || quality.modelStatus !== 'draft' ||
+      quality.automaticQualityAccepted !== false)
+    return { retained: false, reason: 'DRAFT_NOT_VERIFIED' }
+  const agent = quality.agent && typeof quality.agent === 'object' && !Array.isArray(quality.agent) ?
+    quality.agent as Record<string, unknown> : {}
+  if (agent.finished === true) return { retained: false, reason: 'NOT_AN_INCOMPLETE_MODEL' }
+  const usage = quality.agentUsage && typeof quality.agentUsage === 'object' && !Array.isArray(quality.agentUsage) ?
+    quality.agentUsage as Record<string, unknown> : {}
+  const expectedModel = MODEL_CATALOG[access.studioExecution.model].model
+  if (typeof usage.model === 'string' && usage.model !== expectedModel)
+    throw new StudioError('The Oracle model does not match the model selected for this job. No model was saved.', 409)
+  let buffer: ArrayBuffer
+  try {
+    const artifact = await modelOrExport(env, id, 'model', fetcher)
+    buffer = await artifact.arrayBuffer()
+    const inspection = inspectGLB(buffer)
+    if (inspection.triangles < 1 || inspection.renderedTriangles < 1 || inspection.meshCount < 1)
+      return { retained: false, reason: 'NO_RENDERABLE_CANDIDATE' }
+  } catch { return { retained: false, reason: 'NO_VALID_RETAINED_GLB' } }
+  const modelSha256 = hex(await crypto.subtle.digest('SHA-256', buffer))
+  let providerEvidence: StudioIncompleteRecord['providerEvidence']
+  // A receipt is an upper-liability proof, NOT an invoice or a visual-quality
+  // certificate. Only the bound actual provider model can be "Oracle-confirmed".
+  try {
+    const response = await oracle(env, `/v1/jobs/${id}/budget`, fetcher)
+    if (response.ok) {
+      const receipt = await limitedJson(response, 4096)
+      if (!validateTerminalBudgetReceipt(receipt, id, access.pricing ?? null, access.studioExecution))
+        return { retained: false, reason: 'PROVIDER_RECEIPT_MISMATCH' }
+      if (receipt.maximumLiabilityMicroUsd > 0 && usage.model === expectedModel) {
+        const result = await reconcileUserStudioProvider(env, uid, id, receipt)
+        if (result.reconciled === true)
+          providerEvidence = { revision: STUDIO_PROVIDER_EVIDENCE_REVISION,
+            model: expectedModel, mode: access.studioExecution.mode, source: 'oracle-terminal-budget' }
+      }
+    } else await response.body?.cancel()
+  } catch { /* Provider still unverified; keep selected model only. */ }
+  const candidate: StudioIncompleteRecord = { revision: STUDIO_INCOMPLETE_REVISION, id,
+    modelSha256, at: Date.now(), failureCode: access.failureCode, studioExecution: access.studioExecution,
+    ...(providerEvidence ? { providerEvidence } : {}) }
+  const result = await recordUserStudioIncomplete(env, uid, candidate)
+  if (!result.recorded) return { retained: false, reason: 'ACCOUNT_CANDIDATE_UNAVAILABLE' }
+  const { model } = await userStudioLibraryModel(env, uid, id)
+  if (!model || model.completion !== 'INCOMPLETE' || model.modelSha256 !== modelSha256)
+    return { retained: false, reason: 'ACCOUNT_CANDIDATE_NOT_CONFIRMED' }
+  return { retained: true, repeated: result.repeated === true, canOpen: model.downloadAllowed,
+    verifiedProvider: !!model.providerEvidence, incomplete: true, additionalPointsRequired: 'UNKNOWN' }
+}
+
 export interface StudioExecutionContext { waitUntil(promise: Promise<unknown>): void }
 export async function studioApi(request: Request, env: StudioEnv, fetcher: typeof fetch = fetch, overnightTest = false, context?: StudioExecutionContext): Promise<Response> {
   const url = new URL(request.url)
