@@ -29,6 +29,8 @@ jobs:
           const read=async path=>{const r=await fetch(origin+path,{redirect:'error',signal:AbortSignal.timeout(20000),headers}); const text=await r.text(); let body=null; try{body=JSON.parse(text)}catch{}; return {status:r.status,body}}
           const job=await read('/v1/jobs/7a140001-2b11-4d33-8c44-000000000001')
           const health=await read('/v1/health')
+          const publicStatusResponse=await fetch('https://worldifact.xodobrox.workers.dev/api/studio/status',{redirect:'error',signal:AbortSignal.timeout(20000),headers:{'Cache-Control':'no-cache'}})
+          const publicStatus=publicStatusResponse.status===200?await publicStatusResponse.json():{}
           const budget=await read('/v1/jobs/7a140001-2b11-4d33-8c44-000000000001/budget')
           const quality=await read('/v1/jobs/7a140001-2b11-4d33-8c44-000000000001/quality')
           const h=health.body||{}
@@ -39,5 +41,6 @@ jobs:
           const safeBudget={status:budget.status,revision:b.revision,model:b.model,policyRevision:b.policyRevision,capMicroUsd:b.capMicroUsd,maximumLiabilityMicroUsd:b.maximumLiabilityMicroUsd,sealed:b.sealed}
           const g=q.agentUsage?.cost_guard||{}
           const safeQuality={status:quality.status,state:q.state,hasModel:q.hasModel,modelStatus:q.modelStatus,automaticQualityAccepted:q.automaticQualityAccepted,agentFinished:q.agent?.finished,agentErrorCode:q.agentUsage?.error_code,costGuard:{reason:g.reason,stage:g.stage,remainingMicroUsd:g.remaining_micro_usd,requiredMinimumMicroUsd:g.required_minimum_micro_usd,requestedOutput:g.requested_output,minimumOutput:g.minimum_output}}
-          console.log(JSON.stringify({health:safeHealth,job:safeJob,budget:safeBudget,quality:safeQuality},null,2))
+          const safePublicStatus={status:publicStatusResponse.status,ready:publicStatus.ready,detailedReady:publicStatus.detailedReady,newJobPolicy:publicStatus.newJobPolicy,tiersReady:publicStatus.tiersReady,pricingRevision:publicStatus.pricingRevision,studioAdmissionRevision:publicStatus.studioAdmissionRevision,studioExecutionRevision:publicStatus.studioExecutionRevision,studioExecutionModels:publicStatus.studioExecutionModels,studioExecutionModes:publicStatus.studioExecutionModes}
+          console.log(JSON.stringify({health:safeHealth,publicStatus:safePublicStatus,job:safeJob,budget:safeBudget,quality:safeQuality},null,2))
           JS
