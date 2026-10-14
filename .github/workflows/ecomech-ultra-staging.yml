@@ -61,7 +61,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Public smoke: mobile GLB + HTTP partial byte download from real large GLB
+      - name: "Public smoke: mobile GLB + HTTP partial byte download from real large GLB"
         shell: bash
         run: |
           set -euo pipefail
