@@ -144,6 +144,24 @@ test('account gallery names the actual stored Studio provider and mode without g
   } finally { h.close() }
 })
 
+test('first library page surfaces a newly completed account model beyond the initial UUID page', async () => {
+  const recent = { ...model(thirdId, 'Newest Luna model saved on account'),
+    studioExecution: { revision: 'studio-execution-v1', model: 'luna', mode: 'standard' } }
+  const h = await harness({ io: path => {
+    if (path === '/api/studio/library') return Response.json({
+      accountId: 'owner-a', models: [], recentModels: [recent], nextCursor: pageCursor, hasMore: true,
+    })
+    if (path === `/api/studio/library/${thirdId}`) return Response.json({ accountId: 'owner-a', model: recent })
+    return new Response(fixtureGLB())
+  } })
+  try {
+    assert.equal(h.articles().length, 1)
+    assert.match(h.text(), /Newest Luna model saved on account/)
+    assert.match(h.text(), /Generated with GPT-6 Luna · Slow \/ Quality/)
+    assert.equal(artifacts(h).length, 0, 'Listing metadata must not download GLB or start generation')
+  } finally { h.close() }
+})
+
 test('all older local MCC and SOL records survive account listing, same-ID conflicts and cloud failure', async () => {
   let fail = false
   const originals = [local(id, 'Untrusted device copy with cloud ID'), local(otherId), local('blueprint:local-sol', 'Older SOL', 'blueprint')]
