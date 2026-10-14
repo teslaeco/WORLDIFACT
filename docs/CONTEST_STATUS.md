@@ -1,3 +1,19 @@
+# 14 October 2026 — LIVE: DURABLE LATEST STUDIO LIBRARY RELEASE VERIFIED
+
+VERIFIED:
+- PR #281 merged as `3ab71d14aea922e0c19ad8afe4cb2588015486f3` after full exact-head CI passed. Its first revision failed an intentional historical-ledger byte-compatibility regression; the final version writes the optional recent index **only** for newly completed jobs with a validated explicit `studioExecution` model/mode. Original legacy settlement rows are untouched.
+- The index stores a bounded set of opaque job IDs and completion times in the authenticated per-user Durable Object. Every list lookup re-reads the real account-owned terminal job; an index entry alone never creates a model, proves ownership, refunds points, starts generation or grants a download.
+- Regression tests cover 400 historical UUID rows, unrelated-account indexing, malformed duplicate/unsorted hints, original signed cursor pagination and preserving historical settlement bytes. This is a metadata discovery index, not a replacement for original GLB storage or independent certification of visual quality.
+- Release commit `a57519f964185b40d17568d52631d565fdf62524` deployed via one-use preserving workflow https://github.com/teslaeco/WORLDIFACT/actions/runs/38577101255 with `npm run verify`, foundations, Wrangler dry-run, actual `--keep-vars` production deployment and public Studio smoke **PASS**. Cloudflare version: `06c9fdac-9c2d-4f6c-bb1a-b5c84bb6c993`.
+- Public Studio status reports `ready=true`, `studioAdmissionRevision=oracle-durable-admission-v1`, Astra/Sol/Luna execution routing, Standard/Fast advertised by Oracle, and `allowance.unlimited=true`. No paid provider generation, subscription edits, Stripe writes or blind customer-point releases occurred during this release.
+
+UNKNOWN / NOT CLAIMED:
+- A fresh browser-signed-in acceptance for the owner's specific model library and the exact Sol budget-exceeded job has not been performed. App-account ownership and financial evidence must be verified with authenticated original job IDs and terminal budget receipts.
+- The historical held-point total is not automatically refunded. Unknown/positive API liabilities are preserved and require approved cost settlement.
+- A complex model can still exceed immutable per-job Sol/Luna provider spending ceilings. New budget-first instructions reduce unnecessary discretionary iterations but cannot guarantee every requested high-detail result.
+- Older historical completed models remain available through signed library pagination; the index accelerates discovery of newly completed explicit-model jobs rather than migrating every older account record.
+- One historical legacy Cloudflare release selector still reports a separate guarded failure. Its security condition has not been bypassed: the purpose-built exact-commit preserving release completed successfully as above.
+
 # 14 October 2026 — STUDIO ACCOUNT LIBRARY FOLLOW-UP (MERGED; RELEASE PENDING)
 
 VERIFIED:
