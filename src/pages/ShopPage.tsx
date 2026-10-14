@@ -25,7 +25,7 @@ import { PORTALS } from '../config/portals'
 import { REFERENCE_LINKS } from '../config/references'
 import { StudioCoordinator, StudioStatusRateLimitError, studioReadRetryDelay, checkStudio, type SavedStudioJob } from '../lib/studioClient'
 import { prepareStudioPhoto } from '../lib/studioPhotos'
-import { listStudioModels, readStudioModel, saveStudioModel, type StudioArchiveEntry } from '../lib/studioArchive'
+import { STUDIO_ARCHIVE_EVENT, listStudioModels, readStudioModel, saveStudioModel, type StudioArchiveEntry } from '../lib/studioArchive'
 import { mayExportCurrentJob, type StudioPreviewIdentity } from '../lib/studioView'
 import { canSubmitNewDraft, sameShopDraft, type ShopDraftSnapshot } from '../lib/studioDraft'
 import { useAccount } from '../lib/account'
@@ -760,6 +760,14 @@ export default function ShopPage() {
             : busy ? 'Your description and photos are being uploaded. This receipt identifies your request; it does not yet confirm that generation has started.'
             : job?.state === 'pending' ? JOB_DETAILS.pending : 'The generator accepted this job. Return to this browser to recover the same job; no second generation is needed.'}</p>
           {job?.state === 'succeeded' && job.downloadAllowed === false && <Link to="/account/credits">View subscription & credits</Link>}
+          {job?.state === 'failed' && isStudioIncompleteReason(job.failureCode) && !testSavedSlot && <div className="studio-incomplete-recovery">
+            <p><strong>Unfinished 3D may be recoverable.</strong> If Oracle retained real geometry, recover the original GLB into My models as INCOMPLETE · UNREVIEWED. This does not restart AI, spend more points, or quote a continuation price.</p>
+            <button type="button" disabled={busy || artifactBusy || draftRecoveryBusy} onClick={() => void recoverIncompleteDraft()}>
+              {draftRecoveryBusy ? 'Checking original GLB…' : job.incompleteAvailable ? 'Verify retained incomplete GLB' : 'Recover unfinished GLB — no AI generation'}
+            </button>
+            {draftRecoveryMessage && <p role="status">{draftRecoveryMessage}</p>}
+            {job.incompleteAvailable && <Link to="/account/models">View unfinished GLB in My models</Link>}
+          </div>}
           {terminal(job?.state) && job?.state !== 'succeeded' && <button type="button" onClick={() => void dismissFinishedJob()}>Start a new model</button>}
         </div> : null
   const studioResultControls = <>
@@ -931,7 +939,7 @@ export default function ShopPage() {
 
     </section>
     <details className="studio-library-disclosure"><summary>Explore creations</summary><PublicModelGallery /></details>
-    <details className="studio-library-disclosure"><summary>My models</summary><StudioGallery compact requestedModelId={saved && job?.state === 'succeeded' && job.id === saved.receipt.id ? saved.receipt.id : ''} /></details>
+    <details className="studio-library-disclosure"><summary>My models</summary><StudioGallery compact requestedModelId={saved && job && (job.state === 'succeeded' || job.incompleteAvailable) && job.id === saved.receipt.id ? saved.receipt.id : ''} /></details>
     <details className="shop-manufacturing-disclosure"><summary><span>Bring it into the real world</span><span>Manufacturing options +</span></summary><p className="shop-beta-note"><strong>Experimental beta.</strong> Manufacturing and delivery require a separate production review and price approval.</p><ShopManufacturingOptions dimensions={dimensions} dimensionsEnabled={dimensionsEnabled} hasGeneratedModel={!!preview && preview.origin === 'job'} onDimensionsChange={setDimensions} onDimensionsEnabledChange={setDimensionsEnabled} onPrepareIssDraft={prepareIssDraft} /></details>
     <section className="shop-internal-only" hidden aria-labelledby="studio-archive-title"><h2 id="studio-archive-title">Your models · device archive</h2><p>Completed originals are saved on this device, not automatically published to a store. Clearing browser storage removes this archive; keep explicit file backups.</p><label>Find a saved model<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions" /></label><div className="native-shop-archive">{archive.filter(item => item.prompt.toLowerCase().includes(search.toLowerCase())).map(item => <article key={item.id}><strong>{item.prompt}</strong><small>{(item.byteLength / 1048576).toFixed(1)} MB · UNREVIEWED</small><button type="button" disabled={busy || (!!saved && !terminal(job?.state)) || artifactBusy} onClick={() => void openArchived(item)}>Open saved model</button></article>)}</div>{archive.length === 0 && <p>No models saved on this device yet. Existing private Froge archives have not been copied or deleted.</p>}</section>
     <footer className="shop-customer-footer"><Link to="/world" className="shop-wordmark"><ShopIcon kind="brand" /><span>WORLDIFACT</span></Link><span>YOURS TO IMAGINE.</span><span>AI SHOP · BETA</span><a className="shop-internal-only" hidden href={REFERENCE_LINKS.modelGenerator} target="_blank" rel="noopener noreferrer">Original Froge Studio</a></footer>
