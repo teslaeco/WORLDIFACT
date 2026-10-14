@@ -1,6 +1,6 @@
 # WORLDIFACT Ultra: honest native Blender refinement of confirmed Astra job.
 # Every new mesh belongs to this deterministic Blender detail pass; no extra OpenAI calls.
-import bpy,math,random,sys,hashlib,json
+import bpy,math,random,sys,hashlib,json,os
 from pathlib import Path
 from mathutils import Vector
 random.seed(68145)
@@ -232,8 +232,10 @@ scene.display.shading.color_type='MATERIAL'
 try:scene.display.shading.studio_light='paint.sl'
 except Exception:pass
 scene.render.filepath=str(out/'ECOMECH_ACTUAL_ULTRA_GEOMETRY.png')
-try:bpy.ops.render.render(write_still=True)
-except Exception as error:print('Render unavailable:',str(error)[:120],flush=True)
+if os.getenv('ECOMECH_HEADLESS_RENDER')=='true':
+ try:bpy.ops.render.render(write_still=True)
+ except Exception as error:print('Render unavailable:',str(error)[:120],flush=True)
+else:print('QA_RENDER_DEFERRED_NO_EGL; original GLB and editable exports take priority.',flush=True)
 blend=out/'ECOMECH_ASTRA_BLENDER_ULTRA_EDITABLE.blend'
 bpy.ops.wm.save_as_mainfile(filepath=str(blend),compress=False)
 glb=out/'ECOMECH_ASTRA_BLENDER_ULTRA_GAME.glb'
