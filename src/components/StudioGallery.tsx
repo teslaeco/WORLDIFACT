@@ -6,7 +6,7 @@ import { useAccount } from '../lib/account'
 import { listStudioModels, readStudioModel, STUDIO_ARCHIVE_EVENT, STUDIO_ARCHIVE_SIGNAL_KEY, type StudioArchiveEntry } from '../lib/studioArchive'
 import { getStudioLibraryModel, isStudioLibraryTemporaryError, isStudioLibraryId, listStudioLibrary, readStudioLibraryModel, readStudioLibraryExport, StudioLibraryAccountError } from '../lib/studioLibrary'
 import { formatStudioGenerationDuration, type StudioLibraryModel } from '../lib/studioProtocol'
-import { inspectGLB } from '../lib/glb'
+import { inspectGLB, type GLBInspection } from '../lib/glb'
 import { previewFileName } from '../lib/studioView'
 import './StudioGallery.css'
 
@@ -54,7 +54,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
   const [target, setTarget] = useState<{ owner: string; id: string; model?: StudioLibraryModel; error?: string } | null>(null)
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState(false)
-  const [selected, setSelected] = useState<{ owner: string; row: Row; url: string; byteLength: number } | null>(null)
+  const [selected, setSelected] = useState<{ owner: string; row: Row; url: string; byteLength: number; geometry?: GLBInspection } | null>(null)
   const [activity, setActivity] = useState({ owner: '', busyId: '', error: '' })
   const [localError, setLocalError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -254,10 +254,11 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
           : await readStudioLibraryExport(activeOwner, selectedItem.model, format, active.controller.signal)
         : await readStudioModel(selectedItem.model.id)
       if (!valid()) return
+      let geometry: GLBInspection | undefined
       if (format === 'model') {
         const data = await blob.arrayBuffer()
         if (!valid()) return
-        inspectGLB(data)
+        geometry = inspectGLB(data)
       }
       if (download) downloadBlob(blob, format === 'model'
         ? previewFileName({ id: item.model.id, origin: 'archive', label: item.model.prompt })
@@ -266,7 +267,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
         const url = URL.createObjectURL(blob)
         previewUrl.current = url
-        setSelected({ owner: activeOwner, row: selectedItem, url, byteLength: blob.size })
+        setSelected({ owner: activeOwner, row: selectedItem, url, byteLength: blob.size, ...(geometry ? { geometry } : {}) })
       }
     } catch (e) {
       if (valid()) {
@@ -301,6 +302,7 @@ export default function StudioGallery({ compact = false, requestedModelId = '' }
         {currentSelection.row.origin === 'account' && <small>{generatedWith(currentSelection.row.model)}</small>}
         <small>Recorded worker generation time: {formatStudioGenerationDuration(currentSelection.row.origin === 'account' ? currentSelection.row.model.generationTiming : undefined)} · Excludes upload and queue time.</small>
         <small>{(currentSelection.byteLength / 1048576).toFixed(1)} MB · GLB · UNREVIEWED · {currentSelection.row.origin === 'account' ? 'Account model' : 'Device copy'}</small>
+        {currentSelection.geometry && <small role="status">GLB geometry report: {currentSelection.geometry.triangles.toLocaleString()} source triangles · {currentSelection.geometry.renderedTriangles.toLocaleString()} instantiated triangles · {currentSelection.geometry.meshCount} mesh definitions · {currentSelection.geometry.materialCount} material slots. Counts are not a visual, topology, rigging or authenticity certification.</small>}
       </div>
       <div className="studio-gallery-actions">
         <button type="button" disabled={!!busyId} onClick={() => void open(currentSelection.row, true)}>Download original GLB</button>
