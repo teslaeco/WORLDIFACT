@@ -238,6 +238,16 @@ export function validateStudioInput(value: unknown): StudioInput {
   return { worldId: value.worldId as StudioInput['worldId'], prompt: value.prompt.trim(), purpose: value.purpose as StudioInput['purpose'], textureMaxSize: value.textureMaxSize as TextureLimit, photos,
     ...(profile === FAST_DRAFT_PROFILE ? { generationProfile: FAST_DRAFT_PROFILE } : {}), ...pricingSelection, ...(execution ? { studioExecution: execution } : {}) }
 }
+// Sol/Luna have much smaller immutable monetary caps than Astra. Prioritize
+// a complete first GLB and accurate UNREVIEWED status, not speculative
+// revisions after the last affordable provider request.
+const BUDGET_FIRST_STUDIO_GUIDE = `WORLDIFACT FIXED-BUDGET COMPLETION:
+- Keep the selected model, Standard service tier, immutable monetary ceiling and original customer brief unchanged.
+- Plan a compact but complete first scene before spending on optional decorations. Include the defining silhouette and required major parts in the FIRST build_model call; use structured repetition for small parts rather than thousands of token-heavy explicit vertices.
+- Perform the required render inspections and structural checks, then call finish_model. Do not spend remaining provider budget on discretionary extra versions or cosmetic revisions before the first valid GLB can be finished.
+- If all requested fine details cannot be finished under the cap, report exactly which details remain incomplete and set accepted=false. Preserve an authentic current model if available; never mislabel an unfinished draft as reviewed or invent missing geometry.
+- Never start a replacement generation, override the spend guard, or automatically retry provider requests after budget refusal.`
+
 export function oracleStudioPayload(id: string, input: StudioInput) {
   const outputRules = modelOutputRules(input.prompt)
   if (input.generationProfile === FAST_DRAFT_PROFILE) return {
@@ -260,7 +270,7 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
     : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
   return { id, prompt: input.prompt + instruction, ...(execution ? { studioExecution: execution } : {}), ...(studioPricing ? { studioPricing } : {}),
-    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(execution ? MODEL_CATALOG[execution.model] : studioPricing, !!execution || !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels + '\n\n' + STUDIO_READBACK_GUIDE,
+    agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(execution ? MODEL_CATALOG[execution.model] : studioPricing, !!execution || !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels + (execution && execution.model !== 'astra' ? '\n\n' + BUDGET_FIRST_STUDIO_GUIDE : '') + '\n\n' + STUDIO_READBACK_GUIDE,
     ...(photos.length ? { photos } : {}) }
 }
 
