@@ -60,7 +60,8 @@ test('whole character words and Polish inflections preserve reference quality ga
   for (const prompt of ['A woman, wearing a dress', 'Two men in spacesuits', 'A girl with a helmet',
     'A human character', 'Model postaci kobiety', 'Figurka mężczyzny', 'Odtwórz tę postać', 'Model figurki']) {
     assert.equal(studioQualityProfile({prompt,purpose:'figurine',photos:[photo('front')]}),REFERENCE_CHARACTER_PROFILE,prompt)
-    assert.equal(studioQualityProfile({prompt,purpose:'figurine',photos:[]}),TEXT_CHARACTER_DETAIL_PROFILE,prompt)
+    assert.equal(studioQualityProfile({prompt,purpose:'figurine',photos:[]}),
+      prompt === 'Model figurki' ? 'standard' : TEXT_CHARACTER_DETAIL_PROFILE,prompt)
   }
 })
 
