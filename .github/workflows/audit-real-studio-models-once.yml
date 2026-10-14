@@ -34,6 +34,8 @@ jobs:
           assert.match(origin.hostname,/^[a-z0-9-]+\.trycloudflare\.com$/)
           assert.ok(process.env.ORACLE_API_TOKEN?.length>10)
           const evidence=[
+            { label:'Astra (older explicitly approved smoke)',id:'38c71530-2bc8-42ca-823c-e91be4f01b7a', model:'gpt-6-astra', cap:1750000,required:false },
+            { label:'Astra (historical failed sample)',id:'ac718eb5-2c54-47b1-ae67-722ad296ff10', model:'gpt-6-astra', cap:1750000,required:false },
             { label:'Sol 6.1 (known actual paid run)',id:'5f017611-1d33-4e9a-8b3d-02f4c6d47001', model:'gpt-6.1-sol', cap:350000 },
             { label:'Luna (known actual paid run)',id:'5f017611-1d33-4e9a-8b3d-02f4c6d47002', model:'gpt-6-luna', cap:100000 },
             { label:'Luna (fourth sequential run)',id:'5f017611-1d33-4e9a-8b3d-02f4c6d47104', model:'gpt-6-luna', cap:100000 },
@@ -57,7 +59,9 @@ jobs:
             const ok=state.http===200&&s.id===job.id&&s.state==='succeeded' &&
               budget.http===200&&b.revision==='worldifact-terminal-budget-v1' &&
               b.model===job.model&&b.jobId===job.id&&b.sealed===true&&
-              b.capMicroUsd===job.cap&&b.policyRevision==='studio-model-budget-v1:standard' &&
+              b.capMicroUsd===job.cap&&(
+                b.policyRevision==='studio-model-budget-v1:standard' ||
+                job.model==='gpt-6-astra'&&b.policyRevision==='astra-low-reconciled-v2') &&
               Number.isSafeInteger(b.maximumLiabilityMicroUsd)&&
               b.maximumLiabilityMicroUsd>0&&b.maximumLiabilityMicroUsd<=job.cap &&
               /^[a-f0-9]{64}$/.test(b.sealId||'')
@@ -72,8 +76,8 @@ jobs:
               executedProviderModel:typeof q.agent?.model==='string'?q.agent.model:null,
             }
             console.log(JSON.stringify(result))
-            if(!ok)failures++
+            if(!ok&&job.required!==false)failures++
           }
           if(failures)throw new Error('EXISTING_PROVIDER_AUDIT_INCOMPLETE_'+failures)
-          console.log('PASS: existing Sol and Luna jobs have distinct authenticated Oracle model-specific terminal receipts. No paid generation or account changes.')
+          console.log('PASS: existing Sol and Luna jobs have distinct authenticated Oracle model-specific terminal receipts. Historical Astra status is reported separately without new generation.')
           JS
