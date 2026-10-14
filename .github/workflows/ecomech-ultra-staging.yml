@@ -1,0 +1,77 @@
+name: ECOMECH ULTRA — publish verified large GLB staging only
+on:
+  push:
+    branches: ['feat/ecomech-ultra-public-staging-20261014']
+    paths: ['ops/ECOMECH_ULTRA_STAGE_ONCE.json']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ecomech-ultra-staging-release-20261014
+  cancel-in-progress: false
+jobs:
+  stage:
+    if: github.ref == 'refs/heads/feat/ecomech-ultra-public-staging-20261014' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Require exactly one staging marker to be added in this push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx 'ops/ECOMECH_ULTRA_STAGE_ONCE.json'
+          test "$(git diff-tree --no-commit-id --name-only -m -r HEAD | wc -l)" -eq 1
+          node -e "const a=require('./ops/ECOMECH_ULTRA_STAGE_ONCE.json');if(a.revision!=='ecomech-ultra-verified-v1'||a.originalJobId!=='6fa9be43-f371-4bcd-8fe7-7a3ea9967855'||a.blenderRunId!==38643352138||a.maxAdditionalApiUsd!==0||a.target!=='ISOLATED_STAGING_ONLY')process.exit(1)"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Full app tests and TypeScript, including streaming endpoint
+        run: npm run verify
+      - name: Download verified native Blender artifact of the original Astra source
+        shell: bash
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ecomech-ultra-input
+          gh run download 38643352138 \
+            --repo teslaeco/WORLDIFACT \
+            --name ecomech-astra-plus-blender-real-ultra-b7e3c33311651e538a5cf3d53bb6d6c5dc5d8b76 \
+            --dir .ecomech-ultra-input
+          test -s .ecomech-ultra-input/MANIFEST_ULTRA.json
+          test -s .ecomech-ultra-input/INTEGRITY_REPORT.json
+      - name: Split binary exports into SHA-bound static chunks and bundle mobile viewer
+        run: node scripts/prepare-ecomech-ultra-staging.mjs
+      - name: Dry-run exact isolated Cloudflare ULTRA Worker
+        run: npx wrangler deploy --config wrangler.ecomech-ultra-staging.jsonc --dry-run --outdir .wrangler/ecomech-ultra-dry
+      - name: Deploy only new ULTRA STAGING Worker (never WORLDIFACT / MPC2)
+        run: npx wrangler deploy --config wrangler.ecomech-ultra-staging.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Public smoke: mobile GLB + HTTP partial byte download from real large GLB
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin=https://worldifact-ecomech-ultra-staging-20261014.xodobrox.workers.dev
+          for path in / /viewer.js /report.json /robot.glb /downloads.json; do
+            curl --fail --silent --show-error --retry 3 --retry-delay 3 --max-time 80 "$origin$path" -o /tmp/ultra-stage-probe
+            test -s /tmp/ultra-stage-probe
+          done
+          curl --fail --silent --show-error --retry 3 --retry-delay 3 \
+            --range 0-4095 --max-time 120 -D /tmp/ultra-range-headers \
+            "$origin/downloads/glb" -o /tmp/ultra-range-part
+          test "$(wc -c < /tmp/ultra-range-part)" -eq 4096
+          grep -qi '206' /tmp/ultra-range-headers
+          node --input-type=module -e "import{readFileSync}from'node:fs';const b=readFileSync('/tmp/ultra-range-part');if(b.subarray(0,4).toString()!=='glTF')process.exit(1);console.log('ULTRA_ORIGINAL_BINARY_RANGE_206_OK')"
+          curl -sSI "$origin/downloads/fbx" | grep -qi '200'
+          curl -sSI "$origin/downloads/obj" | grep -qi '200'
+          curl -sSI "$origin/downloads/blend" | grep -qi '200'
+          echo "VERIFIED_ULTRA_STAGING_URL=$origin/"
