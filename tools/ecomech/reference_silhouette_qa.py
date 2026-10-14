@@ -129,9 +129,10 @@ if __name__ == '__main__':
     parser.add_argument('--target', required=True)
     parser.add_argument('--output', required=True)
     parser.add_argument('--expect-no-go', action='store_true')
+    parser.add_argument('--report-only', action='store_true', help='Do not claim quality PASS; preserve numeric baseline for human QA')
     argv = parser.parse_args()
     result = run(argv.glb, argv.target, argv.output)
     if argv.expect_no_go and result['passGate']:
         raise SystemExit('Unexpected automatic approval; rerun visual review')
-    if not argv.expect_no_go and not result['passGate']:
+    if not argv.expect_no_go and not argv.report_only and not result['passGate']:
         raise SystemExit('Reference silhouette gate did not pass')
