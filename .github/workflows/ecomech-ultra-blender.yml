@@ -1,0 +1,72 @@
+name: ECOMECH original Astra GLB — native Blender ULTRA detail evidence
+on:
+  pull_request:
+    paths:
+      - 'tools/ecomech/**'
+      - '.github/workflows/ecomech-ultra-blender.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ecomech-native-ultra-\${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-ultra:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Retrieve EXACT already-completed Oracle-confirmed Astra source, NO new AI requests
+        shell: bash
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .original
+          gh run download 38638422388 \
+            --repo teslaeco/WORLDIFACT \
+            --name ecomech-real-astra-original-evidence-7797880f6410bdb19636e242af22b0041b79b28c \
+            --dir .original
+          printf '%s  %s\n' \
+            '7e7f3aea755dfdd0ad957124d7e1dc33004905e0052fdab3d60b587f34cdc7b4' \
+            '.original/original.glb' | sha256sum --check
+          test -s .original/report.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Verify Python script syntax without Blender
+        run: python -m py_compile tools/ecomech/*.py
+      - name: Install checksum-pinned Blender 4.3 native binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 2 \
+            https://download.blender.org/release/Blender4.3/blender-4.3.0-linux-x64.tar.xz \
+            -o /tmp/blender-4.3.0-linux-x64.tar.xz
+          curl --fail --location --retry 2 \
+            https://download.blender.org/release/Blender4.3/blender-4.3.0.sha256 \
+            -o /tmp/blender-4.3.0.sha256
+          (cd /tmp && sha256sum --check --ignore-missing blender-4.3.0.sha256 && tar -xf blender-4.3.0-linux-x64.tar.xz)
+      - name: Native Blender builds real high-resolution mechanical geometry from original GPT-6 Astra GLB
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ecomech-ultra-artifacts
+          /tmp/blender-4.3.0-linux-x64/blender \
+            --background --factory-startup -t 4 \
+            --python tools/ecomech/generate_blender_ultra.py \
+            -- .original/original.glb .ecomech-ultra-artifacts
+      - name: Count actual backed geometry and validate GLB, FBX, OBJ and BLEND formats
+        run: python tools/ecomech/verify_ultra.py .ecomech-ultra-artifacts
+      - name: Upload unchanged source-bound GAME output and validation report (internal pilot only)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ecomech-astra-plus-blender-real-ultra-\${{ github.sha }}
+          path: .ecomech-ultra-artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
+          compression-level: 0
