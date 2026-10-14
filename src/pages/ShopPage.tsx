@@ -739,6 +739,8 @@ export default function ShopPage() {
         <details className="studio-result-details" hidden={!saved || !showingStudioResult}><summary>Result details</summary>
         {saved && terminal(savedJob?.state) && <p className="shop-recorded-generation-time">Recorded worker generation time: <strong>{formatStudioGenerationDuration(savedJob?.generationTiming)}</strong> · Excludes upload and queue time.</p>}
         {saved && <p>{(job?.pricing ?? saved.pricing) ? `Original job: ${(job?.pricing ?? saved.pricing)!.points} points · ${(job?.pricing ?? saved.pricing)!.tier} model budget. Recovery does not change this price.` : 'Original job price is retained by the server; this recovery view does not apply the next draft’s price.'}</p>}
+        {saved?.studioExecution && <p>Generated with <strong>{MODEL_CATALOG[saved.studioExecution.model].label}</strong> · {saved.studioExecution.mode === 'standard' ? 'Slow / Quality' : 'Fast'}.</p>}
+        {saved && !saved.studioExecution && <p>Generation model was not recorded by this legacy receipt.</p>}
         {studioBudgetFailureAdvice(job, tiersReady) && <p>{studioBudgetFailureAdvice(job, tiersReady)}</p>}
         </details>
         {saved && statusRecovery?.id === saved.receipt.id && <p role="status" data-testid="studio-status-recovery">{statusRecovery.message} Next check in {Math.max(0, Math.ceil((statusRecovery.retryAt - Date.now()) / 1000))} s. Recovering this request does not start another generation.</p>}
