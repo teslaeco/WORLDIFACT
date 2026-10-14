@@ -24,6 +24,28 @@ test('new readback appendix preserves the historically accepted MCC request and 
   assert.equal('generationProfile' in payload, false)
 })
 
+test('Sol and Luna Standard prioritize first complete GLB before optional iterations without changing the customer brief or Astra contract', () => {
+  for (const model of ['sol', 'luna', 'astra'] as const) {
+    const input = validateStudioInput({
+      ...base, prompt: 'Create a complex steampunk workstation with glass, copper pipes, gears and glowing crystals.',
+      studioExecution: { revision: 'studio-execution-v1', model, mode: 'standard' },
+    })
+    const before = JSON.stringify(input)
+    const payload = oracleStudioPayload(id, input)
+    assert.equal(JSON.stringify(input), before)
+    assert.equal(payload.prompt.slice(0, input.prompt.length), input.prompt)
+    assert.deepEqual(payload.studioExecution, input.studioExecution)
+    assert.ok('agentInstructions' in payload)
+    assert.equal(payload.agentInstructions.includes('WORLDIFACT FIXED-BUDGET COMPLETION:'), model !== 'astra')
+    if (model !== 'astra') {
+      assert.match(payload.agentInstructions, /FIRST build_model/)
+      assert.match(payload.agentInstructions, /set accepted=false/)
+      assert.match(payload.agentInstructions, /Never start a replacement generation/)
+    }
+    assert.ok(payload.agentInstructions.endsWith(STUDIO_READBACK_GUIDE))
+  }
+})
+
 test('ordinary legacy STANDARD selects the existing supervised profile before dispatch, with all completion obligations', async () => {
   for (const purpose of ['object', 'game', 'terrain', 'figurine']) {
     const input = validateStudioInput({ ...base, purpose })
