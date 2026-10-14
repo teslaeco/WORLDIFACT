@@ -1,0 +1,9 @@
+{
+  "revision": "studio-stability-20261014-v1",
+  "baseCommit": "c6ac206590ed8918db7742fc5692fd9d5be3570b",
+  "scope": "Sol Luna budget-first completion and newest owned account models",
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "preserveBilling": true,
+  "paidGenerationDuringDeploy": false
+}
