@@ -34,6 +34,7 @@ test('Sol and Luna Standard prioritize first complete GLB before optional iterat
     const payload = oracleStudioPayload(id, input)
     assert.equal(JSON.stringify(input), before)
     assert.equal(payload.prompt.slice(0, input.prompt.length), input.prompt)
+    if (!('studioExecution' in payload)) throw new Error('Expected Standard Studio execution')
     assert.deepEqual(payload.studioExecution, input.studioExecution)
     assert.ok('agentInstructions' in payload)
     assert.equal(payload.agentInstructions.includes('WORLDIFACT FIXED-BUDGET COMPLETION:'), model !== 'astra')
