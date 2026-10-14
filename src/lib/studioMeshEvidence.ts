@@ -45,7 +45,7 @@ export function inspectStudioMeshEvidence(buffer: ArrayBuffer): StudioMeshEviden
       throw new Error('Unsupported, sparse or missing GLB geometry accessor.')
     const bv = views[a.bufferView]
     const width = a.componentType === 5121 ? 1 : a.componentType === 5123 ? 2 : 4
-    const packed = width * (format === 'VEC3' ? 3 : 1)
+    const packed = width * (format === 'VEC3' ? 3 : format === 'VEC2' ? 2 : 1)
     const start = bv.byteOffset ?? 0, skip = a.byteOffset ?? 0, stride = bv.byteStride ?? packed
     if (bv.buffer !== 0 || !num(start) || !num(skip) || !num(stride) ||
         !num(bv.byteLength) || stride < packed || stride % width !== 0 ||
