@@ -1,3 +1,16 @@
+# 14 October 2026 — ACTUAL MODEL PROVENANCE LABELS LIVE
+
+VERIFIED LIVE: PR #283 merged as `a7a3ea61160604921181b8dd59b3d341dc721437`. One-use preserving release commit `3bbad1ec7a7086c7af6ad7ce8ff74df730578e09` published through GitHub Actions https://github.com/teslaeco/WORLDIFACT/actions/runs/38596101280, status SUCCESS after full `npm run verify`, foundations, Wrangler dry-run and real `--keep-vars` deploy. Production Cloudflare version `99598f30-edd2-46ba-bb3c-5c787cdf0116`, public Studio smoke `ready=true`, models `astra,sol,luna`, durable admission revision correct, no global generation quota.
+
+Account library now distinguishes `Selected MODEL · MODE · Oracle receipt not verified` from `Oracle-confirmed MODEL · MODE`. The confirmed label is derived only from existing owned and completed job metadata after a matching, sealed, positive-usage provider liability receipt has been authenticated, persisted and validated against the immutable selected model/mode. It never derives verification from user interface selection, preview quality or a customer-supplied response. Other accounts cannot forge provider identity by changing returned metadata; client rejects mismatched evidence. Older legacy rows without immutable evidence stay unknown. No new paid generation, manual credit balance adjustment, refunds, cap changes or model rerouting occurred in the audit and publication.
+
+Production Oracle actual provider evidence: https://github.com/teslaeco/WORLDIFACT/actions/runs/38594392649 documents:
+- Sol succeeded `5f017611-1d33-4e9a-8b3d-02f4c6d47001`, `agentUsage.model=gpt-6.1-sol`, sealed receipt model `gpt-6.1-sol`;
+- Luna succeeded `5f017611-1d33-4e9a-8b3d-02f4c6d47002` and fourth sequential `5f017611-1d33-4e9a-8b3d-02f4c6d47104`, `agentUsage.model=gpt-6-luna` with matching sealed receipts;
+- Astra historical `38c71530-2bc8-42ca-823c-e91be4f01b7a`, `ac718eb5-2c54-47b1-ae67-722ad296ff10` had `agentUsage.model=gpt-6-astra` and sealed Astra receipts but both FAILED. This verifies that the Astra provider was actually called for these jobs, not that those particular GLBs succeeded.
+
+Limits: Oracle receipts are worker-bound execution attestations, not independently signed OpenAI visual quality certifications. Visual similarity is expected from the shared Blender geometry tools. User-specific session verification of selected older GLBs still needs authenticated account evidence.
+
 # 14 October 2026 — ASTRA/SOL/LUNA ACTUAL PROVIDER AUDIT AND ACCOUNT GLB LABELS
 
 VERIFIED (production, read-only):
