@@ -57,7 +57,7 @@ export type Reservation = { pointSettlement?: PointSettlement; fundingSource?: t
 export type JobAccess = { studioExecution?: StudioExecution; channel?: 'studio' | 'blueprint'; model?: GenerationModel; pointSettlement?: PointSettlement; fingerprint?: string; pricing?: StudioPricing; owned: boolean; downloadAllowed: boolean; previewOnly: boolean; profile?: GenerationKind; qualityProfile?: StudioQualityProfile; failureCode?: StudioFailureCode; state?: Job['state']; at?: number; updatedAt?: number; cost?: number; held?: boolean; studioDispatchUntil?: number; providerBudgetPending?: true }
 export type StudioProviderReconciliationPage = { ids: string[]; blueprintIds: string[]; nextCursor: string | null; hasMore: boolean }
 export type OwnedStudioLibraryModel = { id: string; fingerprint: string; prompt: string; at: number; completedAt: number; downloadAllowed: boolean; studioExecution?: StudioExecution }
-type OwnedStudioLibraryPage = { models: OwnedStudioLibraryModel[]; nextCursor: string | null; hasMore: boolean }
+type OwnedStudioLibraryPage = { models: OwnedStudioLibraryModel[]; nextCursor: string | null; hasMore: boolean; recentModels?: OwnedStudioLibraryModel[] }
 export const STUDIO_LIBRARY_SCAN_LIMIT = 64
 export type StudioProviderReconciliationResult = { pointSettlement?: PointSettlement; reconciled: boolean; repeated?: boolean; releasedCents?: number; retainedCents?: number; reason?: string }
 type StudioDispatchClaim = { dispatch: false } | { dispatch: true; deadline: number }
@@ -966,7 +966,31 @@ export class AccountEntitlements {
         }
         models.sort((a, b) => b.completedAt - a.completedAt || b.id.localeCompare(a.id))
         const hasMore = entries.size === STUDIO_LIBRARY_SCAN_LIMIT
-        return json({ models, nextCursor: hasMore ? cursor : null, hasMore } satisfies OwnedStudioLibraryPage)
+        // UUID pagination is not chronological. On the first page, inspect at
+        // most two further account-owned pages to surface recent completed models
+        // from later UUID ranges. Preserve the original signed page cursor and
+        // never start a job, settle points or request Oracle data during listing.
+        let recentModels: OwnedStudioLibraryModel[] | undefined
+        if (!after && hasMore && cursor) {
+          const recent = new Map(models.map(model => [model.id, model]))
+          let scanCursor = cursor
+          for (let scan = 0; scan < 2; scan++) {
+            const following = await storage.list<unknown>({ prefix: 'job:', startAfter: scanCursor, limit: STUDIO_LIBRARY_SCAN_LIMIT })
+            let finalKey: string | null = null
+            for (const [key, value] of following) {
+              if (!libraryCursorKey(key) || key <= scanCursor || finalKey && key <= finalKey)
+                throw new Error('Invalid account history order')
+              finalKey = key
+              if (/^job:[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(key) && completedLibraryJob(value, now))
+                recent.set(key.slice(4), libraryModel(key.slice(4), value, permissions))
+            }
+            if (!finalKey || following.size < STUDIO_LIBRARY_SCAN_LIMIT) break
+            scanCursor = finalKey
+          }
+          recentModels = [...recent.values()].sort((a, b) => b.completedAt - a.completedAt || b.id.localeCompare(a.id)).slice(0, 6)
+        }
+        return json({ models, nextCursor: hasMore ? cursor : null, hasMore,
+          ...(recentModels ? { recentModels } : {}) } satisfies OwnedStudioLibraryPage)
       }
       if (path === '/generation-funding') {
         if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405)
