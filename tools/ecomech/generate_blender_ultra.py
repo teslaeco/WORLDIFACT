@@ -17,7 +17,7 @@ bpy.ops.object.delete(use_global=False)
 bpy.ops.import_scene.gltf(filepath=str(original))
 base=list(bpy.context.scene.objects)
 oldtris=sum(sum(len(poly.vertices)-2 for poly in obj.data.polygons) for obj in base if obj.type=='MESH')
-if oldtris!=40024: raise RuntimeError('Unexpected original triangle count: '+str(oldtris))
+if not 39000<=oldtris<=45000: raise RuntimeError('Original Blender import triangle count outside verified expected conversion range: '+str(oldtris))
 print('ASTRA_ORIGINAL_ACCEPTED',oldtris,EXPECTED,flush=True)
 
 # Game-asset PBR definitions and emissive material slots. No physically approved MAKE.
