@@ -1,3 +1,16 @@
+# 14 October 2026 — CONTINUOUS STUDIO GENERATION P0 VERIFIED
+
+VERIFIED:
+- PR #277 merged as `9dbb81836537fff45b1c2c1584bbbea9275a0705` and deployed through the one-use preserving release `45dca2987c2dd2aecad0a85b1bb5c3d959eaeebc`; the deployment used `--keep-vars`, preserving remote variables, secrets and billing configuration.
+- Paid-account Studio preparation now performs a bounded, receipt-only reconciliation of existing terminal provider liabilities before checking the next generation. Only immutable Oracle terminal evidence can release a hold; unknown/uncertain spend remains held. No generation is retried by reconciliation.
+- Exact-head CI for the fix passed: full `npm run verify`, Oracle durable admission checks, FAST safety checks, foundations, deploy dry-run and hosted read-only Studio inspection.
+- Production continuity acceptance run https://github.com/teslaeco/WORLDIFACT/actions/runs/38554127828 executed four sequential GPT-6 Luna Standard Oracle jobs with fixed IDs and zero automatic retries. All four reached `succeeded`, and all four GLBs were downloaded and validated as GLB v2 containers.
+- GLB bytes/SHA-256: #1 663,340 / `e0d36b1b95bf586ca0abb2daadeebe04f3d90921bfc9f5c4c8ad97981c7f3645`; #2 672,824 / `0e5769369a5dcfabaf63b61ee0cd9fc78acc1a036d067cd59d1c239fe1b5a910`; #3 305,932 / `41066f12bd589374b1792c885f1fdcd939e66705202a2ee31977498b44a99607`; #4 709,972 / `79801914b1842b42ea1fa78e0f5baa5625a819cbe75535f389b81bea019ed544`.
+- The four-job acceptance used a maximum combined provider guard of USD 0.40. This is a ceiling, not a claimed invoice.
+- Public Studio readiness after deployment reports durable admission, Astra/Sol/Luna execution support and an unlimited generation allowance; generation remains point- and provider-budget-gated per request rather than capped to three attempts.
+
+REMAINING PRODUCT QA: account-library presentation still needs explicit model/mode labels (Astra/Sol/Luna + Standard/Fast) and a fresh signed-in browser acceptance for automatic library appearance after successful generation. Do not infer these UI items from the Oracle continuity acceptance alone.
+
 # 13 October 2026 — LIVE SOL + LUNA ACCEPTANCE PASSED
 
 VERIFIED on production Oracle through the repository's one-use protected acceptance workflow:
