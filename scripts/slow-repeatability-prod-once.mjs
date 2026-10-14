@@ -1,16 +1,15 @@
 import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 
-const APPROVAL='worldifact-slow-repeatability-prod-tiered-20261014-v2'
+const APPROVAL='worldifact-slow-repeatability-shop-path-20261014-v3'
 const OWNER=createHash('sha256').update(APPROVAL+':owner').digest('hex')
 const FINGERPRINT=createHash('sha256').update(APPROVAL+':fingerprint').digest('hex')
 const JOBS=Object.freeze([
-  {name:'astra-tiered',model:'astra',provider:'gpt-6-astra',jobId:'7a140002-2b11-4d33-8c44-000000000101',ceilingUsd:2.00,pricing:{revision:'studio-pricing-v1',tier:'standard',points:250,maxProviderCents:200},prompt:'Create one very simple complete 3D calibration pedestal: a low dark stone square base, one bronze ring, one glowing green crystal cube, and four short symmetric supports. Clean PBR materials, no text, no environment, game-ready GLB. Keep the build compact and finish after required inspection.'},
-  {name:'sol-standard',model:'sol',provider:'gpt-6.1-sol',jobId:'7a140002-2b11-4d33-8c44-000000000102',ceilingUsd:0.35,prompt:'Create one very simple complete 3D calibration pedestal: a low dark stone square base, one bronze ring, one glowing blue crystal cube, and four short symmetric supports. Clean PBR materials, no text, no environment, game-ready GLB. Keep the build compact and finish after required inspection.'},
-  {name:'luna-standard',model:'luna',provider:'gpt-6-luna',jobId:'7a140002-2b11-4d33-8c44-000000000103',ceilingUsd:0.10,prompt:'Create one very simple complete 3D calibration pedestal: a low dark stone square base, one bronze ring, one glowing purple crystal cube, and four short symmetric supports. Clean PBR materials, no text, no environment, game-ready GLB. Keep the build compact and finish after required inspection.'},
+  {name:'astra-tiered-shop-path',transport:'legacy-priced',model:'astra',provider:'gpt-6-astra',jobId:'7a140003-2b11-4d33-8c44-000000000201',ceilingUsd:2.00,pricing:{revision:'studio-pricing-v1',tier:'standard',points:250,maxProviderCents:200},prompt:'Create one very simple complete 3D calibration pedestal: a low dark stone square base, one bronze ring, one glowing green crystal cube, and four short symmetric supports. Clean PBR materials, no text, no environment, game-ready GLB. Keep the build compact and finish after required inspection.'},
+  {name:'sol-standard-after-astra',transport:'durable-execution',model:'sol',provider:'gpt-6.1-sol',jobId:'7a140003-2b11-4d33-8c44-000000000202',ceilingUsd:0.35,prompt:'Create one very simple complete 3D calibration pedestal: a low dark stone square base, one bronze ring, one glowing blue crystal cube, and four short symmetric supports. Clean PBR materials, no text, no environment, game-ready GLB. Keep the build compact and finish after required inspection.'},
 ])
 const TOTAL=JOBS.reduce((n,j)=>n+j.ceilingUsd,0)
-if (Math.abs(TOTAL-2.45)>1e-9) throw new Error('COST_ENVELOPE_CHANGED')
+if (Math.abs(TOTAL-2.35)>1e-9) throw new Error('COST_ENVELOPE_CHANGED')
 const sleep=ms=>new Promise(r=>setTimeout(r,ms))
 const hash=b=>createHash('sha256').update(b).digest('hex')
 const terminal=new Set(['succeeded','failed','cancelled'])
@@ -29,19 +28,29 @@ async function runOne(base,token,spec,out){
   const pre=await call(base,token,'/v1/jobs/'+spec.jobId)
   if(pre.status!==404){await pre.body?.cancel();throw new Error(spec.name.toUpperCase()+'_JOB_ALREADY_EXISTS_NO_RETRY')}
   await pre.body?.cancel()
-  const payload={id:spec.jobId,prompt:spec.prompt,agentInstructions:agentInstructions(spec.provider),...(spec.pricing?{studioPricing:spec.pricing}:{studioExecution:{revision:'studio-execution-v1',model:spec.model,mode:'standard'}})}
-  const staged=await call(base,token,'/v1/jobs/stage',{method:'POST',body:JSON.stringify(payload)})
-  if(staged.status!==202){const s=staged.status;await staged.body?.cancel();throw new Error(spec.name.toUpperCase()+'_STAGE_'+s)}
-  const stage=await j(staged,32768),receipt=stage.admission
-  if(!receipt||receipt.id!==spec.jobId||!/^[a-f0-9]{64}$/.test(receipt.payloadSha256||''))throw new Error(spec.name.toUpperCase()+'_STAGE_RECEIPT_INVALID')
-  const started=await call(base,token,'/v1/jobs/start',{method:'POST',body:JSON.stringify({id:spec.jobId,payloadSha256:receipt.payloadSha256,deadline:Date.now()+120000})})
-  if(started.status!==202){const s=started.status;await started.body?.cancel();throw new Error(spec.name.toUpperCase()+'_START_'+s)}
-  await started.body?.cancel()
+  const payload={id:spec.jobId,prompt:spec.prompt,agentInstructions:agentInstructions(spec.provider),
+    ...(spec.transport==='legacy-priced'
+      ? {studioPricing:spec.pricing}
+      : {studioExecution:{revision:'studio-execution-v1',model:spec.model,mode:'standard'}})}
+  if(spec.transport==='legacy-priced'){
+    const submitted=await call(base,token,'/v1/jobs',{method:'POST',body:JSON.stringify(payload)})
+    if(![200,201,202].includes(submitted.status)){const status=submitted.status;let code='';try{code=String((await submitted.json()).error||'')}catch{};throw new Error(spec.name.toUpperCase()+'_SUBMIT_'+status+(code?'_'+code.slice(0,60):''))}
+    const accepted=await j(submitted,32768)
+    if(accepted.id!==spec.jobId || typeof accepted.state!=='string') throw new Error(spec.name.toUpperCase()+'_ACK_INVALID')
+  } else {
+    const staged=await call(base,token,'/v1/jobs/stage',{method:'POST',body:JSON.stringify(payload)})
+    if(staged.status!==202){const status=staged.status;let code='';try{code=String((await staged.json()).code||'')}catch{};throw new Error(spec.name.toUpperCase()+'_STAGE_'+status+(code?'_'+code:''))}
+    const stage=await j(staged,32768),receipt=stage.admission
+    if(!receipt||receipt.id!==spec.jobId||!/^[a-f0-9]{64}$/.test(receipt.payloadSha256||''))throw new Error(spec.name.toUpperCase()+'_STAGE_RECEIPT_INVALID')
+    const started=await call(base,token,'/v1/jobs/start',{method:'POST',body:JSON.stringify({id:spec.jobId,payloadSha256:receipt.payloadSha256,deadline:Date.now()+120000})})
+    if(started.status!==202){const status=started.status;await started.body?.cancel();throw new Error(spec.name.toUpperCase()+'_START_'+status)}
+    await started.body?.cancel()
+  }
   let job
   for(let n=0;n<120;n++){
     await sleep(n?10000:2500)
     const r=await call(base,token,'/v1/jobs/'+spec.jobId,{},30000)
-    if(r.status!==200){const s=r.status;await r.body?.cancel();throw new Error(spec.name.toUpperCase()+'_READ_'+s)}
+    if(r.status!==200){const status=r.status;await r.body?.cancel();throw new Error(spec.name.toUpperCase()+'_READ_'+status)}
     job=await j(r,32768)
     if(job.id!==spec.jobId||typeof job.state!=='string')throw new Error(spec.name.toUpperCase()+'_IDENTITY')
     if(terminal.has(job.state))break
@@ -52,11 +61,11 @@ async function runOne(base,token,spec,out){
   const glb=await bounded(model)
   if(glb.length<20||glb.subarray(0,4).toString('ascii')!=='glTF'||glb.readUInt32LE(4)!==2||glb.readUInt32LE(8)!==glb.length)throw new Error(spec.name.toUpperCase()+'_INVALID_GLB')
   await writeFile(out+'/'+spec.name+'.glb',glb)
-  const value={status:'PASSED',name:spec.name,jobId:spec.jobId,model:spec.provider,mode:'standard',maximumProviderUsd:spec.ceilingUsd,bytes:glb.length,sha256:hash(glb),state:job.state}
+  const value={status:'PASSED',name:spec.name,jobId:spec.jobId,model:spec.provider,mode:'standard',transport:spec.transport,maximumProviderUsd:spec.ceilingUsd,bytes:glb.length,sha256:hash(glb),state:job.state}
   console.log(JSON.stringify(value));return value
 }
 const env=process.env
-if(env.WORLDIFACT_SLOW_REPEATABILITY_APPROVAL!=='SLOW_REPEATABILITY_TIERED_ONCE_20261014'||env.GITHUB_RUN_ATTEMPT!=='1')throw new Error('APPROVAL_MISSING')
+if(env.WORLDIFACT_SLOW_REPEATABILITY_APPROVAL!=='SLOW_REPEATABILITY_SHOP_PATH_ONCE_20261014'||env.GITHUB_RUN_ATTEMPT!=='1')throw new Error('APPROVAL_MISSING')
 if(!env.ORACLE_ENDPOINT||!env.ORACLE_API_TOKEN)throw new Error('ORACLE_CONFIG_MISSING')
 const base=origin(env.ORACLE_ENDPOINT),out='slow-repeatability-evidence'
 await mkdir(out,{recursive:true})
