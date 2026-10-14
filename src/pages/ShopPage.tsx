@@ -36,7 +36,6 @@ import { blueprintAdmissionDetail, isAdmissionFailureCode } from '../lib/generat
 import { BlueprintClient, blueprintRecoveryDetail, type BlueprintRecovery } from '../lib/blueprintClient'
 import { BLUEPRINT_PROMPT_LIMIT, BLUEPRINT_REFERENCE_LIMIT, blueprintDelivery, blueprintReferences, type BlueprintDelivery } from '../lib/blueprintRequest'
 import { OvernightTestClient, type OvernightPanelRow, type OvernightPanelSlot } from '../lib/overnightTestClient'
-import { PAID_POINTS_FUNDING } from '../lib/paidPointsFunding'
 import { assertOrdinaryRequestsSettled, shopCloudRecoveryFetch, shopTestSelectionKey, testSlot } from '../lib/shopTestFunding'
 import './ShopPage.css'
 import './CreationStudio.css'
@@ -161,8 +160,8 @@ export default function ShopPage() {
   useEffect(() => { latestComposer.current = composer }, [composer])
   const fast = profile === FAST_DRAFT_PROFILE
   const detailed = blueprintDelivery({ prompt, deliverable }, photos.length) === 'detailed-mesh'
-  // FAST is temporarily removed from the Shop selector. Detailed generation
-  // always binds the visible model explicitly and uses Standard/Slow provider service.
+  // Fast is temporarily disabled in AI Shop. Every detailed request explicitly
+  // binds the visible model and uses Standard/Slow provider service.
   const selectedExecution: StudioExecution | undefined = detailed ? { revision: STUDIO_EXECUTION_REVISION, model: studioModel, mode: 'standard' } : undefined
   const executionReady = status?.studioExecutionRevision === STUDIO_EXECUTION_REVISION
   const fastAvailable = cheapModel === 'luna' ? lunaReady : solReady
@@ -185,9 +184,7 @@ export default function ShopPage() {
   const receiptDate = saved && Number.isFinite(Date.parse(saved.receipt.createdAt)) ? new Date(saved.receipt.createdAt) : null
   const detailedAvailabilityMessage = detailedProblem ? `Next generation: ${detailedProblem}` : null
   const cloudRecoveryPending = cloudChecking || accountLoading || recoveryAccountMismatch || (!!accountOwner && !saved && discoveredOwner !== accountOwner)
-  const historicalRecoveryDoesNotBlock = !!saved && saved.fundingSource !== PAID_POINTS_FUNDING && accountQuote.quote.fundingSource === PAID_POINTS_FUNDING
-  const previousReadyForNew = previousFinished || historicalRecoveryDoesNotBlock
-  const currentRequestMessage = busy ? 'Wait for the submitted request to be confirmed before generating again.' : !previousReadyForNew && saved ? `Recover selected job ${saved.receipt.id} before starting another generation.` : recovery?.state === 'pending' ? `Recover blueprint request ${recovery.id} before starting another generation.` : null
+  const currentRequestMessage = busy ? 'Wait for the submitted request to be confirmed before generating again.' : !previousFinished && saved ? `Recover selected job ${saved.receipt.id} before starting another generation.` : recovery?.state === 'pending' ? `Recover blueprint request ${recovery.id} before starting another generation.` : null
   const photoLimit = DETAILED_REFERENCE_LIMIT
   const updateCredits = () => { if (typeof window.dispatchEvent === 'function') window.dispatchEvent(new Event('worldifact:balance-changed')) }
 
@@ -554,7 +551,7 @@ export default function ShopPage() {
     // Output modes must never fall through to a different paid workflow.
     if (creationModeRef.current !== 'model') return
     const flags = operations.current, directClient = blueprintClient.current
-    if (cloudRecoveryPending || flags.status || flags.submit || flags.photos || flags.artifact || !previousReadyForNew || !directClient) return
+    if (cloudRecoveryPending || flags.status || flags.submit || flags.photos || flags.artifact || !previousFinished || !directClient) return
     if (testSavedSlot || testBlueprintSlot) { setError('Recover and close the selected saved request before starting a new ordinary account generation.'); return }
     if (otherSavedPending) { setOtherRecoveryError('Check the other saved requests before starting another generation. No new request was started.'); return }
     if (!accountReady) { setError(nextGenerationQuoteMessage(accountQuote.quote)); return }
@@ -715,7 +712,7 @@ export default function ShopPage() {
     catch (e) { if (mounted.current && token === epoch.current) setError(e instanceof Error ? e.message : 'Archived model could not be opened.') }
     finally { flags.artifact = false; if (mounted.current && token === epoch.current) setArtifactBusy(false) }
   }
-  const canGenerate = creationMode === 'model' && accountReady && !otherSavedPending && !testSavedSlot && !testBlueprintSlot && !cloudRecoveryPending && !checking && !busy && !photoBusy && !artifactBusy && previousReadyForNew && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
+  const canGenerate = creationMode === 'model' && accountReady && !otherSavedPending && !testSavedSlot && !testBlueprintSlot && !cloudRecoveryPending && !checking && !busy && !photoBusy && !artifactBusy && previousFinished && prompt.trim().length >= 3 && prompt.length <= BLUEPRINT_PROMPT_LIMIT && recovery?.state !== 'pending' &&
     (detailed ? !detailedProblem && (!!selectedExecution || budgetTier === 'standard' || (tiersReady && budgetAccepted)) && prompt.length <= (status?.promptMaxLength ?? 0) : fast ? fastAvailable && !photos.length && purpose !== 'terrain' : astraReady && photos.length <= BLUEPRINT_REFERENCE_LIMIT)
   const showingStudioResult = !busy && !fastResult && !demoPrompt && recovery?.state !== 'pending'
   const canExport = showingStudioResult && mayExportCurrentJob(saved?.receipt.id, job?.state, preview) && job?.downloadAllowed !== false
