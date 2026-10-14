@@ -9,7 +9,7 @@ The original **GAME** artifact has 959 independent editable named meshes, 64,376
 
 The separate fine **MAKE** candidate has 196,542 surface triangles, one watertight, consistently wound volume, bounds **118.48 × 78.23 × 180.00 mm**, 9,827,184 bytes, SHA-256 `5750b7055279fd35aec6d75bc113bdfcadf7759c7093fb71c813ebd13dce8ce1`. It was derived using solid voxel union and thickening, so some fine geometry is deliberately simplified; it is a **monochrome SLA printing study only**. Neither wall-thickness coverage, support removal, shell drainage, surface finish nor physical fit has been confirmed by a supplier. Never market it as print-ready.
 
-**Truthful provenance**: the geometry was created offline with Python trimesh in the operator's isolated validation environment, **not** GPT-6 Astra, Sol, Luna, Tripo or Meshy. No AI API call, no customer points, no supplier order, no payment. The original binary files and self-contained interactive HTML/QA reports have been delivered to the owner as a separate portable preproduction package; they are not yet hosted within the deployed WORLDIFACT production CDN or committed as binary to this GitHub branch. **Do not construct public download URLs from these filenames until object storage/asset hosting is actually implemented and verified.** This registry is deliberately *metadata only*, not a false "model already in library" record.
+**Truthful provenance**: the geometry was created offline with Python trimesh in the operator's isolated validation environment, **not** GPT-6 Astra, Sol, Luna, Tripo or Meshy. No AI API call, no customer points, no supplier order, no payment. The original GAME GLB bytes and fine monochrome MAKE STL plus QA ZIP **are now committed as real binary Git blobs on this isolated review branch**, with SHA-256 and source data verified in CI. A separate self-contained local HTML/QA package was also delivered to the owner. The lightweight same-origin review viewer lives at `public/pilots/ecomech-chili-v3/index.html`, reading `./WORLDIFACT_EcoMech_Chili_V3_GAME.glb` and linking to `./WORLDIFACT_EcoMech_Chili_V3_MAKE_180mm_QA.zip`. **The branch viewer is not deployed to WORLDIFACT production**. A GitHub file download link is not a customer-account library record, supplier approval or hosted Cloudflare model URL.
 
 ## Recovered actual B2B correspondence
 
@@ -31,7 +31,8 @@ Current official JLC3DP material guidance (checked 14 Oct 2026):
 - [ ] Owner confirms the actual 3D shape is sufficiently close to the concept image (current reconstruction is still visibly less detailed).
 - [ ] Production supplier checks local wall thickness, small protrusions, support strategy, surfaces, printing technology and realistic cost; an approved paid physical sample is inspected.
 - [ ] Full-colour texture output (OBJ+MTL+PNG or 3MF), material approvals and split geometry/colour acceptance if needed.
-- [ ] Durable authenticated object store, library save/reload with verified original binaries, actual file-download link and account ownership testing.
+- [x] Original GLB and fine MAKE STL+QA archive actually committed on the review branch, with immutable source hashes and test coverage. This is Git source archival, **not** private customer-account storage.
+- [ ] Durable authenticated object store, library save/reload with original binaries, account ownership, signed delivery URLs and account switch tests for production.
 - [ ] Real B2B quote, ordering, taxes/DPD-DAP/DDP shipping, refunds and webhook confirmation only after separately approved backend integration.
 - [ ] The strict quality and failed-generation retention work from PR #284/#285 must be reconciled and green before a storefront release.
 
