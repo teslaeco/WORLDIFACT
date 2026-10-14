@@ -151,6 +151,40 @@ function libraryModel(id: string, job: Job & { fingerprint: string }, permission
     ...(providerEvidence ? { providerEvidence } : {}) }
 }
 
+/** An unfinished GLB is never a completed job and never finalizes a point
+ * debit. Only the owner-scoped original FAILED record and immutable SHA match
+ * can expose a draft. Provider confirmation additionally requires the exact
+ * stored sealed Oracle terminal receipt for the selected execution. */
+function incompleteProviderProof(job: Job, id: string): TerminalBudgetReceipt | undefined {
+  if (paidPointsJob(job, id) && job.providerLiability.state === 'bounded' &&
+      job.providerLiability.evidence?.kind === 'studio-terminal') return job.providerLiability.evidence.receipt
+  if (adminJob(job)) return job.adminTerminalReceipt
+  if (job.studioProviderReconciliation && validProviderReconciliation(job.studioProviderReconciliation, id, job))
+    return job.studioProviderReconciliation.receipt
+  return undefined
+}
+async function incompleteLibraryModel(storage: EntitlementStorage, id: string, value: unknown,
+  permissions: { subscribed: boolean; clear: boolean }, now: number): Promise<OwnedStudioLibraryModel | null> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const job = value as Job
+  if (job.channel !== 'studio' || job.state !== 'failed' || !isStudioIncompleteReason(job.failureCode) ||
+      !validStudioExecution(job) || typeof job.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(job.fingerprint) ||
+      !validInteger(job.at) || job.at <= 0 || job.at > now) return null
+  const saved = readStudioIncompleteRecord(await storage.get<unknown>(STUDIO_INCOMPLETE_PREFIX + id))
+  if (!saved || saved.id !== id || saved.failureCode !== job.failureCode ||
+      !sameStudioExecution(saved.studioExecution, job.studioExecution) ||
+      saved.at < job.at || saved.at > now) return null
+  let providerEvidence: StudioProviderEvidence | undefined
+  const budget = incompleteProviderProof(job, id)
+  if (saved.providerEvidence && budget && validateTerminalBudgetReceipt(budget, id, job.pricing ?? null, job.studioExecution) &&
+      budget.maximumLiabilityMicroUsd > 0 && saved.providerEvidence.model === budget.model &&
+      saved.providerEvidence.mode === job.studioExecution!.mode)
+    providerEvidence = saved.providerEvidence
+  return { id, fingerprint: job.fingerprint, prompt: job.prompt ?? 'Recovered incomplete Studio model',
+    at: job.at, completedAt: saved.at, downloadAllowed: permissions.clear && (adminJob(job) || permissions.subscribed),
+    completion: 'INCOMPLETE', failureCode: saved.failureCode, modelSha256: saved.modelSha256,
+    studioExecution: saved.studioExecution, ...(providerEvidence ? { providerEvidence } : {}) }
+}
 /** Best-effort discovery index only. Canonical completed job and account
  * settlement are saved before this optional hint. No index error may turn a
  * valid GLB into a failed or multiply billed generation. */
