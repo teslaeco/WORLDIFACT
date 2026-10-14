@@ -109,6 +109,35 @@ test('owned completed Studio models retain verified Astra/Sol/Luna provenance wi
   f.assertReadOnly()
 })
 
+test('account library confirms model only from matching sealed Oracle budget evidence', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  const f = fixture()
+  const selected = { revision: 'studio-execution-v1', model: 'sol', mode: 'standard' }
+  const receipt = { revision: 'worldifact-terminal-budget-v1', jobId: idFor(1),
+    model: 'gpt-6.1-sol', policyRevision: 'studio-model-budget-v1:standard',
+    capMicroUsd: 350000, maximumLiabilityMicroUsd: 123456, sealed: true, sealId: 'b'.repeat(64) }
+  const matchedReconciliation = { receipt, originalReservedCents: 35, retainedCents: 13, releasedCents: 22, at: NOW-5_000 }
+  const sol = { model: 'sol', profile: 'fast', cost: 50, studioExecution: selected }
+  f.rows.get(alice)!.set(`job:${idFor(1)}`, completed({ ...sol, studioProviderReconciliation: matchedReconciliation }))
+  f.rows.get(alice)!.set(`job:${idFor(2)}`, completed(sol))
+  f.rows.get(alice)!.set(`job:${idFor(3)}`, completed({ ...sol,
+    studioProviderReconciliation: { ...matchedReconciliation, receipt: { ...receipt, jobId: idFor(3), model: 'gpt-6-luna' } } }))
+  const page = await f.page()
+  const verified = page.models.find(model => model.id === idFor(1))
+  const selectedOnly = page.models.find(model => model.id === idFor(2))
+  const mismatched = page.models.find(model => model.id === idFor(3))
+  assert.deepEqual(verified?.providerEvidence, {
+    revision: 'studio-provider-evidence-v1', model: 'gpt-6.1-sol',
+    mode: 'standard', source: 'oracle-terminal-budget',
+  })
+  assert.equal(selectedOnly?.studioExecution?.model, 'sol')
+  assert.equal(selectedOnly?.providerEvidence, undefined)
+  assert.equal(mismatched?.providerEvidence, undefined)
+  assert.deepEqual((await f.model(idFor(1))).providerEvidence, verified?.providerEvidence)
+  assert.equal(f.external.length, 0, 'Library reading must not call Oracle or OpenAI')
+  f.assertReadOnly()
+})
+
 test('account library is authenticated, same-origin, GET-only, and never accepts an account selector', async t => {
   t.mock.method(Date, 'now', () => NOW)
   const f = fixture()
