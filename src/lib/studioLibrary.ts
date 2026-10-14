@@ -30,8 +30,10 @@ function parseModel(value: unknown): StudioLibraryModel {
     !new RegExp(`^library\\.${value.id}\\.[0-9]{13}\\.[a-f0-9]{64}\\.[a-f0-9]{64}$`).test(value.receipt.ticket)) {
     throw new Error('The account model record could not be verified. Refresh the gallery to try again.')
   }
+  if (value.studioExecution !== undefined && !isStudioExecution(value.studioExecution)) throw new Error('Invalid model provenance. Refresh the library.')
   const generationTiming = readStudioGenerationTiming(value.generationTiming)
-  return { id: value.id, prompt: value.prompt, createdAt: value.createdAt, completedAt: value.completedAt, ...(generationTiming ? { generationTiming } : {}),
+  return { id: value.id, prompt: value.prompt, createdAt: value.createdAt, completedAt: value.completedAt,
+    ...(isStudioExecution(value.studioExecution) ? { studioExecution: value.studioExecution } : {}), ...(generationTiming ? { generationTiming } : {}),
     review: 'UNREVIEWED', downloadAllowed: value.downloadAllowed,
     receipt: { id: value.id, ticket: value.receipt.ticket, createdAt: value.receipt.createdAt } }
 }
