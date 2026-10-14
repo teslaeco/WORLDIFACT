@@ -16,7 +16,7 @@ function store() {
   const values = new Map<string, unknown>(), writes: string[] = []
   let queue: Promise<unknown> = Promise.resolve()
   const storage: EntitlementStorage = {
-    async get<T>(key) { return structuredClone(values.get(key)) as T | undefined },
+    async get<T>(key: string) { return structuredClone(values.get(key)) as T | undefined },
     async put(key, value) { writes.push(key); values.set(key, structuredClone(value)) },
     async list<T>(options: { prefix: string; startAfter?: string; limit: number }) {
       return new Map([...values].filter(([key]) => key.startsWith(options.prefix) &&
