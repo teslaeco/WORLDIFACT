@@ -1,46 +1,67 @@
-import { REFERENCE_LINKS } from '../config/references'
+import { Link } from 'react-router-dom'
 import './BrandShowcase.css'
 
-const brands = [
-  { id: 'openai', name: 'OpenAI', category: 'Intelligence', description: 'Explore the possibilities of AI.', action: 'Discover OpenAI', href: 'https://openai.com/', logo: '/brands/openai.svg' },
-  { id: 'product-hunt', name: 'Product Hunt', category: 'Community', description: 'Follow the WORLDIFAKT launch.', action: 'Join the conversation', href: 'https://www.producthunt.com/products/worldifact', logo: '/brands/product-hunt-white.png' },
-  { id: 'shopify', name: 'Shopify', category: 'Commerce', description: 'Explore a platform for your next store.', action: 'Explore Shopify', href: 'https://www.shopify.com/', logo: '/brands/shopify.svg' },
-  { id: 'ebay', name: 'eBay', category: 'Marketplace', description: 'Discover a world of possibilities.', action: 'Explore eBay', href: 'https://www.ebay.com/', logo: '/brands/ebay.svg' },
-  { id: 'blender', name: 'Blender', category: '3D creation', description: 'Give your imagination a new dimension.', action: 'Discover Blender', href: 'https://www.blender.org/', logo: '/brands/blender-white.png' },
-  { id: 'forge', name: 'FORGE MCP', category: 'Our studio', description: 'Step into the original creation studio.', action: 'Open the studio', href: REFERENCE_LINKS.modelGenerator, logo: '/world-assets/polyhedron-led-poster.svg' },
+const destinations = [
+  { name: 'Chess Cube 512 AI', label: '512 squares · 8 × 8 × 8', route: '/chess', icon: '♜', color: '#70a8ff' },
+  { name: 'Terra — Fix ISS', label: 'Earth observation · ISS simulation', route: '/iss', icon: '◉', color: '#5ee8c3' },
+  { name: '8 Planets in 8 Days', label: 'Explore eight worlds', route: '/planets', icon: '✦', color: '#cf91ff' },
+  { name: 'Enchanted AI Shop', label: 'Create objects and 3D assets', route: '/shop', icon: '◇', color: '#ffca7a' },
+  { name: 'AI Game Lab', label: 'Build characters and worlds', route: '/lab', icon: '⬡', color: '#63f2d3' },
+  { name: 'My Worlds', label: 'Open your saved worlds', route: '/account/worlds', icon: '◎', color: '#ff82cf' },
+] as const
+
+const resources = [
+  { name: 'OpenAI', url: 'https://openai.com/' },
+  { name: 'Product Hunt', url: 'https://www.producthunt.com/products/worldifact' },
+  { name: 'Blender', url: 'https://www.blender.org/' },
+  { name: 'Unreal Engine', url: 'https://www.unrealengine.com/' },
+  { name: 'Unity', url: 'https://unity.com/' },
+  { name: 'Shopify', url: 'https://www.shopify.com/' },
+  { name: 'eBay', url: 'https://www.ebay.com/' },
+  { name: 'WebMCP', url: 'https://github.com/webmachinelearning/webmcp' },
+  { name: 'GPT-6 Astra Challenge', url: 'https://www.producthunt.com/contests/gpt-6-astra-challenge' },
+  { name: 'NASA', url: 'https://www.nasa.gov/' },
+  { name: 'ESA', url: 'https://www.esa.int/' },
+  { name: 'JAXA', url: 'https://global.jaxa.jp/' },
+  { name: 'CNSA', url: 'https://www.cnsa.gov.cn/' },
+  { name: 'ISRO', url: 'https://www.isro.gov.in/' },
+  { name: 'FORGE MCP', url: '/lab' },
 ] as const
 
 export default function BrandShowcase() {
-  return <section className="brand-showcase" aria-labelledby="brand-showcase-title">
+  return <section className="brand-showcase portal-showcase" aria-labelledby="portal-showcase-title">
     <div className="brand-showcase-heading">
-      <div>
-        <span className="brand-showcase-eyebrow">TECHNOLOGY, TOOLS & COMMUNITY</span>
-        <h2 id="brand-showcase-title">Big ideas. <span>Wider horizons.</span></h2>
-      </div>
-      <p>Discover AI, 3D creation and the platforms<br className="brand-showcase-break" /> where ideas find their next chapter.</p>
+      <div><span className="brand-showcase-eyebrow">SIX WORLDS · ONE UNIVERSE</span>
+        <h2 id="portal-showcase-title">Choose your <span>next world.</span></h2></div>
+      <p>Play, explore and create. Select a portal to enter.</p>
     </div>
-    <ul className="brand-showcase-grid">
-      {brands.map((brand, index) => <li key={brand.id}>
-        <a className={`brand-banner brand-banner--${brand.id}`} href={brand.href} target="_blank" rel="noopener noreferrer">
-          <div className="brand-banner-top"><span>{brand.category}</span><span className="brand-banner-index" aria-hidden="true">0{index + 1}</span></div>
-          <div className="brand-banner-logo" translate="no">
-            <img src={brand.logo} alt={brand.id === 'forge' ? '' : brand.name} width={180} height={52} loading="lazy" decoding="async" />
-            {brand.id === 'forge' && <span>FORGE <b>MCP</b></span>}
-          </div>
-          <p>{brand.description}</p>
-          <div className="brand-banner-action"><span>{brand.action}</span><span className="brand-banner-arrow" aria-hidden="true">↗</span></div>
-          <span className="brand-banner-sr"> (opens in a new tab)</span>
-        </a>
-      </li>)}
-    </ul>
+    <nav className="neon-portals" aria-label="Six WORLDIFACT portals">
+      {destinations.map((item, index) => <Link key={item.route} to={item.route} className="neon-portal"
+        style={{ '--portal-glow': item.color } as React.CSSProperties}>
+        <span className="neon-portal-number">0{index + 1}</span>
+        <span className="neon-portal-symbol" aria-hidden="true">{item.icon}</span>
+        <strong>{item.name}</strong><small>{item.label}</small>
+        <span className="neon-portal-enter">Enter portal ↗</span>
+      </Link>)}
+    </nav>
+    <div className="resource-heading"><span className="brand-showcase-eyebrow">TECHNOLOGY · COMMUNITY · SPACE RESEARCH</span><small>Explore independent resources · No partnership or endorsement implied</small></div>
+    <div className="resource-marquee" aria-label="External technology and research resources" role="region" tabIndex={0}>
+      <div className="resource-marquee-track">
+        {[0, 1].map(copy => <div className="resource-marquee-group" key={copy} aria-hidden={copy === 1 ? true : undefined}>
+          {resources.map(resource => <a key={resource.name} href={resource.url}
+            tabIndex={copy === 1 ? -1 : undefined}
+            target={resource.url.startsWith('/') ? undefined : '_blank'}
+            rel={resource.url.startsWith('/') ? undefined : 'noopener noreferrer'}>{resource.name}<span aria-hidden="true"> ↗</span></a>)}
+        </div>)}
+      </div>
+    </div>
     <section className="iss-petition" aria-labelledby="iss-petition-title">
-      <div>
-        <span className="brand-showcase-eyebrow">OUR PRESERVATION CAMPAIGN</span>
+      <div><span className="brand-showcase-eyebrow">OUR PRESERVATION CAMPAIGN</span>
         <h2 id="iss-petition-title">Repair the ISS. Don’t destroy it.</h2>
-        <p>Help us call for the study of repair and preservation of the International Space Station as humanity’s heritage. We would be grateful for your signature and for sharing the petition. Thank you for supporting this idea.</p>
+        <p>Help us call for the study of repair and preservation of the International Space Station as humanity’s heritage. We would be grateful for your signature and for sharing the petition.</p>
         <small>A citizen-led proposal, not a claim of technical feasibility or space-agency endorsement.</small>
       </div>
-      <a className="iss-petition-sign" href="https://c.org/QkbzHd5kWN" target="_blank" rel="noopener noreferrer">Sign the petition <span aria-hidden="true">↗</span><span className="brand-banner-sr"> (opens in a new tab)</span></a>
+      <a className="iss-petition-sign" href="https://c.org/QkbzHd5kWN" target="_blank" rel="noopener noreferrer">Sign the petition ↗</a>
     </section>
   </section>
 }
