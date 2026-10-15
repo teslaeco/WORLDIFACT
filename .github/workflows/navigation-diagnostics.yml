@@ -1,0 +1,41 @@
+name: Navigation verification diagnostics
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: navigation-diagnostics-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  diagnose:
+    if: github.head_ref == 'fix/direct-chess-clean-landing-20261015'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit
+      - name: Run unchanged verification and report bounded diagnostics with the original exit code
+        run: |
+          node --input-type=module <<'JS'
+          import { spawnSync } from 'node:child_process'
+          const result = spawnSync('npm', ['run', 'verify'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 720000 })
+          const lines = (result.stdout + '\n' + result.stderr).replace(/\u001b\[[0-9;]*m/g, '').split('\n')
+          const wanted = new Set()
+          for (let i = 0; i < lines.length; i++) {
+            if (/✖|not ok|AssertionError|error TS|error\[|^\s*(?:fail|failureType|error:)|^ℹ (?:tests|pass|fail)|^>/i.test(lines[i])) {
+              for (let j = Math.max(0, i - 2); j < Math.min(lines.length, i + 24); j++) wanted.add(j)
+            }
+          }
+          for (let i = Math.max(0, lines.length - 100); i < lines.length; i++) wanted.add(i)
+          console.log([...wanted].sort((a, b) => a - b).slice(-700).map(i => `${i + 1}: ${lines[i].slice(0, 700)}`).join('\n'))
+          if (result.error) console.error(result.error.message)
+          console.log('ORIGINAL_VERIFY_EXIT_CODE=' + result.status)
+          process.exit(result.status ?? 1)
+          JS
