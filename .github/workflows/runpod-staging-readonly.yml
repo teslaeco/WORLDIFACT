@@ -1,0 +1,65 @@
+name: RunPod staging — read-only account connection check
+
+# Deliberately manual. GitHub shows manual dispatch only once this workflow
+# exists on the default branch. No PR, push or schedule can access this secret.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worldifact-runpod-staging-readonly
+  cancel-in-progress: false
+
+jobs:
+  verify-api-connection:
+    name: RunPod GET-only staging check (no GPU)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    environment: runpod-staging
+    steps:
+      - name: Verify readonly REST v2 access without exposing account data
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.error, urllib.request
+          key = os.environ.get("RUNPOD_API_KEY", "")
+          if not key or key.isspace():
+              raise SystemExit("BLOCKED: RUNPOD_API_KEY missing from runpod-staging environment.")
+          # NEVER log the key, HTTP body, endpoint IDs, user identity or spending.
+          uri = "https://api.runpod.io/v2/endpoints"
+          class NoRedirects(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs):
+                  raise RuntimeError("Refusing provider HTTP redirect.")
+          opener = urllib.request.build_opener(NoRedirects)
+          request = urllib.request.Request(
+              uri,
+              headers={
+                  "Authorization": "Bearer " + key,
+                  "Accept": "application/json",
+                  "User-Agent": "WORLDIFACT-ReadOnly-Health/1.0",
+              },
+              method="GET",
+          )
+          try:
+              with opener.open(request, timeout=15) as response:
+                  if response.status != 200:
+                      raise RuntimeError("Unexpected HTTP status.")
+                  raw = response.read(131073)
+                  if len(raw) > 131072:
+                      raise RuntimeError("Oversized provider response.")
+                  data = json.loads(raw)
+                  if not isinstance(data, (dict, list)):
+                      raise RuntimeError("Unexpected response shape.")
+          except urllib.error.HTTPError as e:
+              raise SystemExit("BLOCKED: RunPod API returned HTTP %s (check key scope)." % e.code)
+          except Exception as e:
+              # Do not print exceptions; they may embed URLs or headers.
+              raise SystemExit("BLOCKED: safe connection verification failed (%s)." % type(e).__name__)
+          print("VERIFIED: RunPod authenticated GET-only access (REST v2).")
+          print("NO GPU CREATED. NO API JOB SUBMITTED. NO STORAGE PURCHASE.")
+          PY
