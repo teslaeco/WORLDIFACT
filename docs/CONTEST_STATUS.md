@@ -5,7 +5,7 @@ The owner supplied an actual Android screenshot of two adjacent header controls:
 
 Native browser `beforeunload` now asks for browser-provided confirmation when a real local/computer/online game or finished/paused match is open, including refresh, tab close and address-bar navigation. It does not warn for the attract-mode demo or once the user has deliberately returned to the in-page menu. Browser vendors choose the message and may decline to show it in some mobile circumstances (app kill, no user activation). This is not automatic saving or a guarantee of a displayed warning.
 
-This WORLDIFACT candidate pins Chess exact source `bd5b5684270c6bb5f097aa534fde46f7b5809f61` without changing backend, account, payments, secrets, game geometry or existing premium theme.
+This WORLDIFACT candidate pins Chess exact source `00cd4f05f79ea60119be121d7f492076caecdafd` without changing backend, account, payments, secrets, game geometry or existing premium theme.
 
 ## Verification and release gates
 - PENDING: Chess original build/tests and actual production-build Chromium desktop/mobile verification of one visible exit, native unload prompt on refresh, Cancel preserving the game, Confirm disarming the warning.
