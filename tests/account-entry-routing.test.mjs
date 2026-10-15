@@ -15,7 +15,7 @@ function render(element) {
   })
 }
 
-test('the public root opens login first and the explicit world route still opens the portals', async () => {
+test('the public root opens login first and the explicit world route still opens all six portal links', async () => {
   const vite = await createServer({ server: { middlewareMode: true, watch: null, hmr: false, ws: false }, appType: 'custom', logLevel: 'error' })
   try {
     const { default: App } = await vite.ssrLoadModule('/src/App.tsx')
@@ -29,7 +29,11 @@ test('the public root opens login first and the explicit world route still opens
     assert.match(entry, /href="\/world"/)
     const world = await render(page('/world'))
     assert.match(world, /Riverlight meadow/)
-    assert.match(world, /Five portals/)
+    assert.match(world, /Six portals/)
+    const navigation = world.split('<nav class="portal-nav"')[1]?.split('</nav>')[0]
+    assert.ok(navigation, 'the shared world still exposes direct portal navigation')
+    const routes = [...navigation.matchAll(/href="([^"]+)"/g)].map(match => match[1])
+    assert.deepEqual(routes, ['/chess', '/iss', '/planets', '/shop', '/lab', '/account/worlds'], 'all six destinations appear exactly once, including My Worlds')
   } finally { await vite.close() }
 })
 
