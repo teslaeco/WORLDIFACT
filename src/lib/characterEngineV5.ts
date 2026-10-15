@@ -30,6 +30,8 @@ export function creativeIntent(input: {prompt: string; purpose?: string; worldId
     return 'world'
   if (robotWords.test(text) && (hasPhoto || /(?:^|[^\p{L}])(?:robot|mech|android|cyborg|ecomech|robota)(?=$|[^\p{L}])/iu.test(text)))
     return 'reference-robot'
+  // Typography and printed glyphs are not anatomical people.
+  if (/(?:characters?|letters?)\s+(?:printed|etched|written|as\s+symbols|in\s+a\s+font)/iu.test(text) && !robotWords.test(text)) return 'other-asset'
   if (personWords.test(text)) return 'reference-person'
   return 'other-asset'
 }
