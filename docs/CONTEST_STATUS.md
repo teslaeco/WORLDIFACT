@@ -1,3 +1,27 @@
+# 15 October 2026 — Chess navigation guard: review candidate, not published
+
+## Requested change and scope
+The owner supplied an actual Android screenshot of two adjacent header controls: Exit to menu and Menu. Cube Chess [PR #146](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/146) hides the second Menu button during an active game and removes the footer duplicate. It retains the existing in-document confirmation: Cancel keeps the game; Confirm ends the match without a page reload and preserves existing saves.
+
+Native browser `beforeunload` now asks for browser-provided confirmation when a real local/computer/online game or finished/paused match is open, including refresh, tab close and address-bar navigation. It does not warn for the attract-mode demo or once the user has deliberately returned to the in-page menu. Browser vendors choose the message and may decline to show it in some mobile circumstances (app kill, no user activation). This is not automatic saving or a guarantee of a displayed warning.
+
+This WORLDIFACT candidate pins Chess exact source `8f519bc37dd850dc886cbbaab02e0bcc0320f07e` without changing backend, account, payments, secrets, game geometry or existing premium theme.
+
+## Browser-discovered regression and correction
+
+[Chess browser run #38718051008](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38718051008) exposed a real CSS bug: the `Menu` element was disabled and marked `hidden`, but its hide selector contained a literal backslash-n escape that stopped CSS from applying. The new Chess revision fixes the selector using a real line break and explicit premium HUD specificity; no game or auth logic was disabled. The full browser matrix must now be rerun. The two unchanged project suites run on separate GitHub runners (desktop and mobile) instead of one sequential runner, keeping all existing tests, zero retries and 15-minute per-job limits.
+
+## Verification and release gates
+- PENDING: Chess original build/tests and actual production-build Chromium desktop/mobile verification of one visible exit, native unload prompt on refresh, Cancel preserving the game, Confirm disarming the warning.
+- PENDING: full WORLDIFACT verify, pinned Chess foundation, Wrangler dry-run, hosted Studio read-only inspection.
+- NO-GO publication until green tests, review and authorized preserving deployment. No paid generation or backend changes.
+- Signed-in physical Android and Safari behavior remain UNKNOWN. User screenshot establishes the previously duplicated controls, not the success of this patch.
+
+## Previous production milestone (unchanged)
+Previous exact PUBLIC_RELEASE_VERIFIED premium HUD: [run #38714113516](https://github.com/teslaeco/WORLDIFACT/actions/runs/38714113516), Cloudflare version `dbd875c7-26d5-42c5-b6d9-bbe3f48708e8`. Its entire historical status follows below.
+
+---
+
 # 15 October 2026 — Premium compact Cube Chess HUD: VERIFIED LIVE
 
 ## VERIFIED implementation and tests
