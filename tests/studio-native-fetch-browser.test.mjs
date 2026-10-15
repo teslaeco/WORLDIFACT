@@ -18,11 +18,12 @@ test('native Chromium reproduces the old invocation error and accepts the repair
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   }).outputText.replace(/^export /gm, '')
   const artifact = compile('studioArtifact')
+  const character = compile('characterEngineV5').replace(/^import .+ from ['"]\.\/modelCatalog\.ts['"];?\s*$/gm, '')
   const catalog = compile('modelCatalog'), execution = compile('studioExecution').replace(/^import .+ from ['"]\.\/modelCatalog\.ts['"];?\s*$/gm, '')
   const admission = compile('generationAdmission'), pricing = compile('studioPricing'), pointSettlement = compile('paidPointsFunding'), readback = compile('studioReadbackGuide')
-  const protocol = compile('studioProtocol').replace(/^import .+ from ['"]\.\/(?:generationAdmission|studioPricing|studioReadbackGuide|studioExecution|modelCatalog)\.ts['"];?\s*$/gm, ''), draft = compile('studioDraft')
+  const protocol = compile('studioProtocol').replace(/^import .+ from ['"]\.\/(?:generationAdmission|studioPricing|studioReadbackGuide|studioExecution|modelCatalog|characterEngineV5)\.ts['"];?\s*$/gm, ''), draft = compile('studioDraft')
   const client = compile('studioClient').replace(/^import .+ from ['"]\.\/(?:studioArtifact|studioProtocol|studioDraft|studioPricing|paidPointsFunding|studioExecution|modelCatalog)\.ts['"];?\s*$/gm, '')
-  assert.doesNotMatch(artifact + catalog + execution + admission + pricing + pointSettlement + readback + protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
+  assert.doesNotMatch(artifact + catalog + execution + admission + pricing + pointSettlement + readback + character + protocol + draft + client, /^import /m, 'Unexpected new dependency: update the explicit fixture bundle.')
   // A top-level inert data: document has no secure-context SubtleCrypto. Keep
   // this receiver/transport test off all network origins and adapt ONLY digest
   // with precomputed real SHA-256 fixtures; manifest security has its own tests.

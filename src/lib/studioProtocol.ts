@@ -1,4 +1,5 @@
 import { MODEL_CATALOG } from './modelCatalog.ts'
+import { creativeIntent, REFERENCE_ROBOT_V5_INSTRUCTIONS } from './characterEngineV5.ts'
 import { studioExecution, type StudioExecution } from './studioExecution.ts'
 import type { StudioProviderEvidence } from './studioProviderEvidence.ts'
 // WORLDIFACT adapter to the existing Froge /v1/jobs contract; no new AI provider.
@@ -40,7 +41,8 @@ export const REFERENCE_FIDELITY_INSTRUCTIONS = `WORLDIFACT REFERENCE-FIDELITY MO
 
 export const INDUSTRIAL_ELECTRICAL_PROFILE = 'industrial-electrical-cabinet-v1' as const
 export const REFERENCE_CHARACTER_PROFILE = 'reference-character-v1' as const
-export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE | typeof REFERENCE_CHARACTER_PROFILE
+export const REFERENCE_ROBOT_V5_PROFILE = 'reference-humanoid-robot-v5' as const
+export type StudioQualityProfile = 'standard' | typeof INDUSTRIAL_ELECTRICAL_PROFILE | typeof REFERENCE_CHARACTER_PROFILE | typeof REFERENCE_ROBOT_V5_PROFILE
 
 // Both headers are existing STANDARD profile aliases on the installed worker.
 // The legacy alias keeps the original supervised CLI, which completed the live
@@ -94,6 +96,9 @@ const EXPLICIT_MINIATURE_OR_CHARACTER_REQUEST = /\b(?:miniatures?|mini|figurines
 const NEGATED_MINIATURE_LABELS = /\bnot\s+(?:a\s+)?(?:figurine|miniature)(?:\s+(?:or|nor)\s+(?:a\s+)?(?:figurine|miniature))?\b|\bnie\s+(?:figurka|miniatura)(?:\s+ani\s+(?:figurka|miniatura))?\b/giu
 
 export function studioQualityProfile(input: Pick<StudioInput, 'prompt' | 'photos' | 'purpose'>): StudioQualityProfile {
+  // Explicit photoreferenced humanoid robots take precedence over incidental
+  // MCC/contactor/motor keywords. Legacy actual cabinets remain unaffected.
+  if (input.photos.length > 0 && ['figurine','game','object'].includes(input.purpose) && creativeIntent(input) === 'reference-robot') return REFERENCE_ROBOT_V5_PROFILE
   if (input.photos.length > 0 && ELECTRICAL_CABINET_REQUEST.test(input.prompt)) return INDUSTRIAL_ELECTRICAL_PROFILE
   if (input.photos.length > 0 && ['figurine','game'].includes(input.purpose) && CHARACTER_REQUEST.test(input.prompt)) return REFERENCE_CHARACTER_PROFILE
   return 'standard'
@@ -269,7 +274,8 @@ export function oracleStudioPayload(id: string, input: StudioInput) {
     ? '\n\nOriginal reference view labels (in input order): ' + input.photos.map((photo, index) => `Reference ${index + 1}: ${photo.view}`).join('; ') + '. Side views still describe the same subject.' : ''
   const qualityProfile = studioQualityProfile(input)
   const qualityInstructions = qualityProfile === INDUSTRIAL_ELECTRICAL_PROFILE ? INDUSTRIAL_ELECTRICAL_INSTRUCTIONS
-    : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS : ''
+    : qualityProfile === REFERENCE_CHARACTER_PROFILE ? REFERENCE_CHARACTER_INSTRUCTIONS
+    : qualityProfile === REFERENCE_ROBOT_V5_PROFILE ? REFERENCE_ROBOT_V5_INSTRUCTIONS : ''
   return { id, prompt: input.prompt + instruction, ...(execution ? { studioExecution: execution } : {}), ...(studioPricing ? { studioPricing } : {}),
     agentInstructions: outputRules + '\n\n' + standardCompletionInstructions(execution ? MODEL_CATALOG[execution.model] : studioPricing, !!execution || !studioPricing && qualityProfile === 'standard') + (input.photos.length ? '\n\n' + REFERENCE_FIDELITY_INSTRUCTIONS : '') + (qualityInstructions ? '\n\n' + qualityInstructions : '') + viewLabels + (execution && execution.model !== 'astra' ? '\n\n' + BUDGET_FIRST_STUDIO_GUIDE : '') + '\n\n' + STUDIO_READBACK_GUIDE,
     ...(photos.length ? { photos } : {}) }

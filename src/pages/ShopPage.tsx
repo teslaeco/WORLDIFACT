@@ -11,6 +11,7 @@ import { detailedUnavailable, DETAILED_REFERENCE_LIMIT } from '../lib/detailedSt
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { MODEL_CATALOG, type DraftModel, type GenerationModel } from '../lib/modelCatalog'
+import { characterRouteAdvice } from '../lib/characterEngineV5'
 import OracleModelPreview from '../components/OracleModelPreview'
 import DemoShopPreview from '../components/DemoShopPreview'
 import ShopManufacturingOptions from '../components/ShopManufacturingOptions'
@@ -157,6 +158,7 @@ export default function ShopPage() {
   const composer = useMemo<ShopDraftSnapshot>(() => ({ prompt, purpose, textureLimit, profile, cheapModel, executionMode, budgetTier, deliverable, creationMode, photos, dimensions, dimensionsEnabled }), [prompt, purpose, textureLimit, profile, cheapModel, executionMode, budgetTier, deliverable, creationMode, photos, dimensions, dimensionsEnabled])
   const latestComposer = useRef(composer)
   useEffect(() => { latestComposer.current = composer }, [composer])
+  const modelAdvice = useMemo(() => characterRouteAdvice({prompt,purpose,photos,worldId:'enchanted-ai-shop'}),[prompt,purpose,photos])
   const fast = profile === FAST_DRAFT_PROFILE
   const selectedExecution: StudioExecution | undefined = fast || executionMode === 'fast' ? { revision: STUDIO_EXECUTION_REVISION, model: fast ? cheapModel : 'astra', mode: executionMode } : undefined
   const executionReady = status?.studioExecutionRevision === STUDIO_EXECUTION_REVISION
@@ -801,6 +803,19 @@ export default function ShopPage() {
             }}><option value="standard">Slow / Quality · GPT-6 Astra</option><option value="astra-fast" disabled>Fast · GPT-6 Astra</option><option value="sol-standard" disabled={!executionReady}>Slow / Quality · GPT-6.1 Sol</option><option value="sol-fast" disabled>Fast · GPT-6.1 Sol</option><option value="luna-standard" disabled={!executionReady}>Slow / Quality · GPT-6 Luna</option><option value="luna-fast" disabled>Fast · GPT-6 Luna</option></select>
           </div>
             </div>
+            {creationMode === 'model' && prompt.trim().length >= 3 && <div className="shop-model-guidance" data-testid="character-v5-route" role="note">
+              <strong>V5 suggested workflow: {MODEL_CATALOG[modelAdvice.recommendedModel].label}</strong>
+              <p>{modelAdvice.rationale} One model: {modelAdvice.estimatedPointCeiling} points, provider ceiling USD {modelAdvice.maxProviderLiabilityUsdPerJob.toFixed(2)} (maximum liability, not an invoice). No model switch or generation occurs automatically.</p>
+              {(selectedExecution?.model ?? 'astra') !== modelAdvice.recommendedModel && <button type="button" data-testid="choose-character-v5-model" disabled={busy || photoBusy || imageBusy || (modelAdvice.recommendedModel === 'sol' && !executionReady)} onClick={() => {
+                if (operations.current.submit || operations.current.photos || imageBusy) return
+                const sol = modelAdvice.recommendedModel === 'sol'
+                setProfile(sol ? FAST_DRAFT_PROFILE : 'standard')
+                setCheapModel('sol'); setExecutionMode('standard')
+                setDeliverable('detailed-mesh'); setBudgetTier('standard'); setAcceptedBudgetRevision(null)
+                setNotice('Model suggestion applied to the editable draft only. Review the provider and actual generation price before pressing Generate.')
+              }}>Use suggested model for this draft · no charge</button>}
+              <small>Source image quality and final GLB likeness are not automatically certified. Confirm the result against the original photo.</small>
+            </div>}
             <div className="studio-prompt-model" ref={setImageModelSlot} hidden={creationMode !== 'image'} />
             </div>
             <div className="shop-prompt-bottom"><button type="button" className="shop-text-button" data-testid="clear-studio-draft" disabled={busy || photoBusy || imageBusy || (!prompt.length && !photos.length)} onClick={clearDraft}>Clear description</button><span id="studio-prompt-count" role="status">{prompt.length.toLocaleString()} / {BLUEPRINT_PROMPT_LIMIT.toLocaleString()}{prompt.length > BLUEPRINT_PROMPT_LIMIT && ' · Shorten before generating'}</span></div>

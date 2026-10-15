@@ -1,5 +1,5 @@
 import type { GLBInspection } from './glb.ts'
-import { INDUSTRIAL_ELECTRICAL_PROFILE, REFERENCE_CHARACTER_PROFILE, type StudioQualityProfile } from './studioProtocol.ts'
+import { INDUSTRIAL_ELECTRICAL_PROFILE, REFERENCE_CHARACTER_PROFILE, REFERENCE_ROBOT_V5_PROFILE, type StudioQualityProfile } from './studioProtocol.ts'
 
 /** Structural acceptance only. This deliberately does not claim visual likeness,
  * electrical correctness, rig quality or manufacturing readiness. */
@@ -15,7 +15,7 @@ export function passesStudioStructuralQuality(model: GLBInspection, qualityProfi
       model.materialCount >= 3 &&
       model.nodeCount >= 8
   }
-  if (qualityProfile === REFERENCE_CHARACTER_PROFILE) {
+  if (qualityProfile === REFERENCE_CHARACTER_PROFILE || qualityProfile === REFERENCE_ROBOT_V5_PROFILE) {
     // Reject cutouts / extremely sparse proxy people. Human visual QA remains required.
     return model.renderedTriangles >= 25_000 &&
       model.meshCount >= 5 &&
