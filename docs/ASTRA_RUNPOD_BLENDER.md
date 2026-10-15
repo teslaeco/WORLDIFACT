@@ -1,3 +1,14 @@
+## Mandatory on-demand-only GPU policy (owner confirmation, 2026-10-16)
+
+RunPod is **NOT** a permanently running Pod or 24/7 Active worker. When a licensed, image-digest-pinned endpoint is later provisioned, configure queue-based **Serverless Flex**, **Active workers = 0**, **Max workers = 1**, **GPUs per worker = 1**, **handler concurrency = 1**, **Idle timeout = 5 seconds**, **Automatic upgrade = false**. Match the exact checklist at `deploy/runpod/profile.example.json`; enforce it in CI with `tests/runpod-on-demand-profile.test.mjs`.
+
+Only a newly admitted, authenticated, funded 3D generation job may cause backend POST `/run`. Viewing WORLDIFACT, reopening a model, browsing a gallery, polling GET `/status`, previewing existing 3D assets, deploying code or running a health check must not start a GPU. No periodic warmup jobs or keepalive ping. If RunPod management GET reports Active workers > 0 **for the WORLDIFACT endpoint**, STOP before approval and correct the provider settings. Do not create a paid endpoint, launch Pods, buy persistent network volumes or flip `ENABLE_RUNPOD_PIPELINE` as part of this offline test.
+
+Flex worker is billed while starting, computing, and waiting during idle timeout; external persistent storage may be charged independently even when worker count is zero. Existing Oracle CPU services remain separate and unchanged. Actual provider settings and billed invoice are **UNVERIFIED** until a scoped live account check. Official documentation: https://docs.runpod.io/serverless/workers/overview and https://docs.runpod.io/serverless/endpoints/endpoint-configurations .
+
+
+---
+
 # Astra -> RunPod Flex -> Blender: integration preparation
 
 **2026-10-15. IMPLEMENTED adapters / offline tests. NOT DEPLOYED.**
