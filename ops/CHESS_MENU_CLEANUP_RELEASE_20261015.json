@@ -1,6 +1,6 @@
 {
-  "revision": "chess-cleanup-20261015-v1",
-  "baseCommit": "4560ff82050a79cedda91975a5b1e0c030541286",
+  "revision": "chess-cleanup-20261015-v2",
+  "baseCommit": "90497715c8a7fb3df2d62029c294f0ebd8b12e92",
   "reviewedHead": "a4d4fa23168c534b406eb7d24351c46208cea07a",
   "pullRequest": 296,
   "chessPullRequest": 144,

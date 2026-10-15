@@ -11,6 +11,9 @@
 - Within the game, Exit to menu confirms destructive exit and preserves saved games, identity and preferences; Cancel keeps the current match; return to menu does not reload. Polish/English About now describes 8×8×8 / 512 squares and upcoming tested updates.
 - No provider generation, billing modification, Oracle operation or secret sync was performed as part of these source merges.
 
+## Safe publication retry — guard correction
+Initial [run #38702593694](https://github.com/teslaeco/WORLDIFACT/actions/runs/38702593694) stopped at the exact-file-scope assertion before credential setup or deployment: the expected path array was not lexicographically sorted like the Git diff. No public files, secrets or billing were changed by that failed-closed run. This retry sorts the same exact path allowlist and pins the new one-use commit parent. It does not remove or weaken the exact-parent or exact-file guard.
+
 ## Production deployment gate
 **PENDING / not yet LIVE in this milestone:** a new one-use workflow `.github/workflows/chess-cleanup-release-once.yml` is armed by `ops/CHESS_MENU_CLEANUP_RELEASE_20261015.json`. The exact-parent guard requires base 4560ff82050a79cedda91975a5b1e0c030541286, owner-reviewed PR source SHA, exact release-only file changes and the Chess foundation pin. The workflow reruns original verify/foundations and Wrangler dry-run, deploys only with the existing reviewed preserving configuration and `--keep-vars`, suppresses potentially private Wrangler CLI output and performs exact deployed-asset SHA/MIME checks plus public Studio health checks. A successful GitHub Cloudflare receipt and byte-level verification must be recorded before marking this release LIVE.
 
