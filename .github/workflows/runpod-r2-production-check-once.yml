@@ -1,0 +1,69 @@
+name: WORLDIFACT one-time Production secrets connectivity proof (no GPU)
+on:
+  push:
+    branches: ['main']
+    paths: ['ops/runpod-r2-production-preflight-once.json']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-runpod-r2-prod-once
+  cancel-in-progress: false
+jobs:
+  runpod-auth:
+    if: github.repository == 'teslaeco/WORLDIFACT'
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - name: Require marker-only main commit with exact authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = 'ops/runpod-r2-production-preflight-once.json'
+          node - <<'NODE'
+          const f=require('node:fs')
+          const actual=JSON.parse(f.readFileSync('ops/runpod-r2-production-preflight-once.json','utf8'))
+          const expected={revision:'worldifact-runpod-r2-production-preflight-v1',runpodOperations:['GET /v2/serverless','GET /v2/network-volumes','GET /v2/pods'],r2OnlyObjectPrefix:'ops/preflight/',paidGpuAuthorized:false,productionDeploymentAuthorized:false}
+          if(JSON.stringify(actual)!==JSON.stringify(expected))process.exit(2)
+          NODE
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24'}
+      - run: node --test tests/runpod-readonly-preflight.test.mjs
+      - name: RunPod REST v2 GET-only account check
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: node scripts/runpod-readonly-preflight.mjs
+  r2-storage:
+    if: github.repository == 'teslaeco/WORLDIFACT'
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - name: Require marker-only main commit with exact authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = 'ops/runpod-r2-production-preflight-once.json'
+          node - <<'NODE'
+          const f=require('node:fs')
+          const actual=JSON.parse(f.readFileSync('ops/runpod-r2-production-preflight-once.json','utf8'))
+          const expected={revision:'worldifact-runpod-r2-production-preflight-v1',runpodOperations:['GET /v2/serverless','GET /v2/network-volumes','GET /v2/pods'],r2OnlyObjectPrefix:'ops/preflight/',paidGpuAuthorized:false,productionDeploymentAuthorized:false}
+          if(JSON.stringify(actual)!==JSON.stringify(expected))process.exit(2)
+          NODE
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - run: python -m unittest discover -s tests -p test_r2_connection_preflight.py -v
+      - run: python -m pip install --disable-pip-version-check --no-input boto3==1.43.66
+      - name: One ephemeral private object, atomic CAS, read and cleanup
+        env:
+          ARTIFACT_ACCESS_KEY_ID: ${{ secrets.ARTIFACT_ACCESS_KEY_ID }}
+          ARTIFACT_SECRET_ACCESS_KEY: ${{ secrets.ARTIFACT_SECRET_ACCESS_KEY }}
+          ARTIFACT_S3_ENDPOINT: ${{ vars.ARTIFACT_S3_ENDPOINT }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+          ARTIFACT_REGION: ${{ vars.ARTIFACT_REGION }}
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: python scripts/r2-connection-preflight.py
