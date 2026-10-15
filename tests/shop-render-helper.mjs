@@ -26,6 +26,7 @@ import * as blueprint from '../src/lib/blueprint.ts'
 import * as generationQuote from '../src/lib/generationQuote.ts'
 import * as paidPointsFunding from '../src/lib/paidPointsFunding.ts'
 import * as modelCatalog from '../src/lib/modelCatalog.ts'
+import * as characterEngineV5 from '../src/lib/characterEngineV5.ts'
 import * as blueprintRequest from '../src/lib/blueprintRequest.ts'
 import * as blueprintClient from '../src/lib/blueprintClient.ts'
 import * as generationAccount from '../src/lib/generationAccount.ts'
@@ -129,7 +130,7 @@ export async function loadShopComponent({ react = React, adapters = {}, globals 
       const modules = { '../lib/studioExecution': studioExecution, '../lib/studioFileReferences': fileReferences, '../lib/referenceAttachments': attachments, '../lib/overnightTestClient': overnightClient, '../lib/shopTestFunding': shopTestFunding, '../lib/studioPricing': studioPricing, '../lib/studioTierSelection': studioTierSelection, '../lib/detailedStudio': detailedStudio, '../config/portals': portals, '../config/references': references,
         '../lib/studioProtocol': protocol, '../lib/generationAdmission': generationAdmission, '../lib/studioClient': client, '../lib/studioPhotos': photos, '../lib/studioArchive': archive,
         '../lib/studioView': view, '../lib/studioDraft': draft, '../lib/glb': glb, '../lib/shopManufacturing': shopManufacturing,
-        '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }
+        '../lib/blueprint': blueprint, '../lib/modelCatalog': modelCatalog, '../lib/characterEngineV5': characterEngineV5, '../lib/blueprintRequest': blueprintRequest, '../lib/blueprintClient': blueprintClient }
       if (id === '../lib/account') return account
       if (id === '../lib/modelReferencePhotos' && adapters[id]) return adapters[id]
       if (id === '../lib/useGenerationQuote') return quoteHook
