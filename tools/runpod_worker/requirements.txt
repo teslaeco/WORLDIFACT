@@ -1,0 +1,7 @@
+# Worker SDK/storage. PyTorch/CUDA/TRELLIS2/Blender belong to a separately
+# reviewed digest-pinned GPU base image; do not install/download them per job.
+runpod==1.12.0
+boto3==1.43.18
+numpy==2.3.5
+trimesh==4.11.1
+Pillow==12.3.0
