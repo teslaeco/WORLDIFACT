@@ -34,7 +34,7 @@ jobs:
           import { execFileSync } from 'node:child_process'
           import { readFile } from 'node:fs/promises'
           const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim()
-          const base = '8b14fdc9ae708fb5a03bfb2a51a1ad3ce6bd760d'
+          const base = '09f1f3fa2768e8c96981f34e50b6e436e9c36d44'
           const head = git('rev-parse', 'HEAD')
           assert.equal(process.env.GITHUB_SHA, head)
           assert.deepEqual(git('rev-list', '--parents', '-n', '1', 'HEAD').split(' '), [head, base])
@@ -42,11 +42,11 @@ jobs:
           assert.equal(event.before, base)
           assert.equal(event.after, head)
           assert.equal(event.ref, 'refs/heads/main')
-          const paths = ['.github/workflows/premium-chess-hud-release-once.yml', 'docs/CONTEST_STATUS.md', 'docs/CONTEST_STATUS.before-premium-hud-release-20261015.md', 'ops/PREMIUM_CHESS_HUD_RELEASE_20261015.json'].sort()
+          const paths = ['.github/workflows/premium-chess-hud-release-once.yml', 'docs/CONTEST_STATUS.md', 'ops/PREMIUM_CHESS_HUD_RELEASE_20261015.json'].sort()
           assert.deepEqual(git('diff', '--name-only', base, head).split('\n').sort(), paths)
           for (const path of paths) assert.ok(git('ls-tree', head, '--', path).startsWith('100644 blob '))
           const marker = JSON.parse(await readFile('ops/PREMIUM_CHESS_HUD_RELEASE_20261015.json', 'utf8'))
-          assert.deepEqual(marker, { revision: 'premium-chess-hud-20261015-v1', baseCommit: base, reviewedHead: 'caef6adb3c09fe3e7ea5c22f0852ed1ef970fae5', pullRequest: 300, chessPullRequest: 145, chessPin: 'ebed7d71cff931c50b9d88734279098fbe82baca', preserveRemoteVars: true, preserveSecrets: true, preserveBilling: true, paidGenerationDuringDeploy: false })
+          assert.deepEqual(marker, { revision: 'premium-chess-hud-20261015-v2', baseCommit: base, reviewedHead: 'caef6adb3c09fe3e7ea5c22f0852ed1ef970fae5', pullRequest: 300, chessPullRequest: 145, chessPin: 'ebed7d71cff931c50b9d88734279098fbe82baca', preserveRemoteVars: true, preserveSecrets: true, preserveBilling: true, paidGenerationDuringDeploy: false })
           console.log('PASS: exact merged PR #300 and pinned Chess #145; only the release envelope and status documentation changed.')
           JS
       - name: Check deployment credential shape without printing secrets
