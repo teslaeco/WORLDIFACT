@@ -158,3 +158,31 @@
   .brand-showcase .iss-petition-sign { width: 100%; }
   .brand-showcase .brand-banner { padding: 10px 11px; }
 }
+
+
+/* Six-portal landing hub and compact continuously moving resource strip. */
+.portal-showcase { margin-bottom: 24px; }
+.neon-portals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; margin-bottom:30px; }
+.neon-portal { --portal-glow:#64e8d2; position:relative; min-height:170px; display:flex; flex-direction:column; align-items:flex-start; gap:9px; overflow:hidden; isolation:isolate; padding:19px; color:#f1faff!important; text-decoration:none; border:1px solid color-mix(in srgb,var(--portal-glow),transparent 50%); border-radius:17px; background:linear-gradient(140deg,#10253a,#08101f 72%); box-shadow:inset 0 0 22px color-mix(in srgb,var(--portal-glow),transparent 93%); transition:transform .25s,border-color .25s,box-shadow .25s; }
+.neon-portal::before { content:""; position:absolute; inset:-60%; z-index:-1; background:conic-gradient(from 0deg,transparent 0 60%,var(--portal-glow) 74%,transparent 87%); opacity:.16; animation:portal-neon-spin 12s linear infinite; }
+.neon-portal::after { content:""; position:absolute; inset:2px; z-index:-1; border-radius:15px; background:linear-gradient(145deg,#102337ee,#08111fee); }
+.neon-portal-number { position:absolute; right:17px; top:15px; color:var(--portal-glow); font-size:11px; letter-spacing:.16em; }
+.neon-portal-symbol { font-size:34px; line-height:1; color:var(--portal-glow); text-shadow:0 0 16px var(--portal-glow); }
+.neon-portal strong { font-size:clamp(15px,1.8vw,21px); line-height:1.2; }
+.neon-portal small { color:#b6cddd; font-size:12px; line-height:1.4; }
+.neon-portal-enter { margin-top:auto; color:var(--portal-glow); font-size:12px; font-weight:700; }
+.neon-portal:hover,.neon-portal:focus-visible { transform:translateY(-4px); border-color:var(--portal-glow); box-shadow:0 0 22px color-mix(in srgb,var(--portal-glow),transparent 70%); }
+.neon-portal:focus-visible,.resource-marquee a:focus-visible { outline:2px solid #fff; outline-offset:3px; }
+.resource-heading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:7px; align-items:center; margin:0 0 10px; }
+.resource-heading small { color:#9cb9c9; font-size:10px; }
+.resource-marquee { overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; border:1px solid #68dfd04a; border-radius:12px; background:#091626; }
+.resource-marquee-track { display:flex; width:max-content; animation:resource-drift 52s linear infinite; }
+.resource-marquee-group { display:flex; flex:none; align-items:center; gap:9px; padding:8px 5px; }
+.resource-marquee-group a { white-space:nowrap; padding:9px 15px; border:1px solid #83b6cb38; border-radius:8px; background:#13273a; color:#d8f7f3!important; text-decoration:none; font-size:12px; font-weight:650; }
+.resource-marquee-group a:hover { border-color:#68e7ce; color:#fff!important; }
+.resource-marquee:hover .resource-marquee-track,.resource-marquee:focus-within .resource-marquee-track { animation-play-state:paused; }
+@keyframes portal-neon-spin { to { transform:rotate(360deg); } }
+@keyframes resource-drift { to { transform:translateX(-50%); } }
+@media(max-width:650px) { .neon-portals { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .neon-portal { min-height:170px; padding:14px; } .neon-portal:last-child { grid-column:1/-1; min-height:135px; } .neon-portal strong { font-size:16px; } .resource-marquee-group a { padding:8px 12px; } }
+@media(max-width:350px) { .neon-portals { grid-template-columns:1fr; } .neon-portal:last-child { grid-column:auto; } }
+@media(prefers-reduced-motion:reduce) { .neon-portal::before,.resource-marquee-track { animation:none; } .neon-portal { transition:none; } .neon-portal:hover { transform:none; } .resource-marquee-group:nth-child(2) { display:none; } }
