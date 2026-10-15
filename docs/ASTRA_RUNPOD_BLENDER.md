@@ -182,3 +182,43 @@ Read-only success is NOT paid GPU setup or LIVE model generation. A GPU
 container image, license review, private storage, measured availability
 and price, actual end-to-end ECOMECH reconstruction, cost reconciliation
 and final Android/MAKE gates remain NOT VERIFIED. No GPU or disk was purchased.
+
+## Account access proof: GET-only auth denied — 2026-10-15
+
+**VERIFIED:** Independent read-only PR #306 had green workflow security and full
+project CI before limited merge. The one-time GitHub Actions job on trusted
+main used the existing masked RUNPOD_API_KEY secret from Production and called
+the official RunPod management GET v1 /endpoints exactly once. RunPod returned
+HTTP 403. Evidence:
+https://github.com/teslaeco/WORLDIFACT/actions/runs/38801996493
+
+This is an authorization denial, not a successful connection or GPU probe.
+The key was never sent to the model, posted in chat or written to a log or
+artifact. No GPU, disk, inference, customer billing or production deployment
+was created. Security cleanup: the one-use workflow was removed from main
+at commit 2e41b15a11f6f023f1189892033f3923929af511. Another existing
+publish workflow saw the main push but explicitly aborted with
+PIPELINE_RELEASE_SCOPE_NOT_VERIFIED before using credentials or deploying:
+https://github.com/teslaeco/WORLDIFACT/actions/runs/38801996415
+
+**VERIFIED:** RunPod REST management v1 is deprecated and retires 2026-11-15.
+The documented successor is https://api.runpod.io/v2. Consequently, the
+optional feature-branch read-only staging script now uses GET
+/v2/serverless, /v2/network-volumes and /v2/pods, with strict wrapped
+response and pagination checks. The separate RunPod *execution*
+host remains https://api.runpod.ai/v2. Do not conflate the two.
+Sources:
+https://docs.runpod.io/api-reference-v2/migrate-from-v1
+https://docs.runpod.io/api-reference-v2/serverless/list-serverless-endpoints
+
+**BLOCKED:** Exact reason for the RunPod key's HTTP 403 cannot be inferred
+without account-side checks. Owner needs to verify the key is enabled,
+belongs to the intended account, and has sufficient read scopes. Prefer a
+separate restricted/read-only staging key over broad write access. The
+GitHub connector cannot administer repository environments/secrets and the
+installed RunPod Official plugin exposes no account-management actions in
+this chat. Do not attempt to extract Production secrets or rotate keys.
+
+**NO-GO:** Do not automatically buy GPU/storage or merge the new generator.
+The licensed TRELLIS.2 image, real on-demand serverless GPU, durable private
+storage, actual cost, original GLB quality and MAKE approvals are unverified.
