@@ -12,6 +12,7 @@ export default function PortalPage() {
   const { portalId } = useParams()
   const { pathname } = useLocation()
   const [loadedFrame, setLoadedFrame] = useState('')
+  const [planetsAcknowledged, setPlanetsAcknowledged] = useState(false)
   const [planetsAccepted, setPlanetsAccepted] = useState(false)
   const legacy = portalId ? getPortalById(portalId) : undefined
   if (legacy) return <Navigate to={legacy.route} replace />
@@ -56,7 +57,12 @@ export default function PortalPage() {
       <strong>EARTH OBSERVATION</strong> · Check each image’s source and acquisition date. The ISS repair game is a separate simulation.
     </p>}
 
-    {planets ? <PlanetsWorld /> : <div className="foundation-frame-shell world-primary-frame">
+    {planets && !planetsAcknowledged ? <section className="foundation-note" role="alert" aria-label="Experimental game warning">
+      <h2>Experimental — Under Development</h2>
+      <p>8 Planets in 8 Days is an experimental game under active development. Gameplay, controls and saved progress may change or contain errors.</p>
+      <button type="button" className="button-link" onClick={() => setPlanetsAcknowledged(true)}>Continue to experimental game</button>
+      <Link to="/world">Return to WORLDIFACT</Link>
+    </section> : planets ? <PlanetsWorld /> : <div className="foundation-frame-shell world-primary-frame">
       {loadedFrame !== app.frame && <p className="foundation-loading" role="status">Opening {app.title}…</p>}
       <iframe key={app.frame} src={app.frame} title={app.title} className="foundation-frame"
         allow="fullscreen; clipboard-write" allowFullScreen
