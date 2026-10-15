@@ -4,7 +4,7 @@ import { Writable } from 'node:stream'
 import { createElement } from 'react'
 import { renderToPipeableStream } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { createServer } from 'vite'
+import { createServer } from './route-test-server.mjs'
 
 function render(element) {
   return new Promise((resolve, reject) => {
@@ -15,7 +15,7 @@ function render(element) {
   })
 }
 
-test('the public root opens login first and the explicit world route still opens all six portal links', async () => {
+test('the public root opens login first and the shared world exposes exactly one six-portal navigation', async () => {
   const vite = await createServer({ server: { middlewareMode: true, watch: null, hmr: false, ws: false }, appType: 'custom', logLevel: 'error' })
   try {
     const { default: App } = await vite.ssrLoadModule('/src/App.tsx')
@@ -29,11 +29,26 @@ test('the public root opens login first and the explicit world route still opens
     assert.match(entry, /href="\/world"/)
     const world = await render(page('/world'))
     assert.match(world, /Riverlight meadow/)
-    assert.match(world, /Six portals/)
-    const navigation = world.split('<nav class="portal-nav"')[1]?.split('</nav>')[0]
+    assert.equal(world.split('<nav class="neon-portals"').length - 1, 1, 'one accessible LED navigation, not two grids')
+    assert.doesNotMatch(world, /class="portal-nav"|class="accessibility-panel"|product-hunt-panel|cards\.producthunt\.com|api\.producthunt\.com/)
+    assert.match(world, /class="resource-marquee"/)
+    assert.match(world, /Repair the ISS/)
+    const navigation = world.split('<nav class="neon-portals"')[1]?.split('</nav>')[0]
     assert.ok(navigation, 'the shared world still exposes direct portal navigation')
     const routes = [...navigation.matchAll(/href="([^"]+)"/g)].map(match => match[1])
     assert.deepEqual(routes, ['/chess', '/iss', '/planets', '/shop', '/lab', '/account/worlds'], 'all six destinations appear exactly once, including My Worlds')
+    assert.equal(entry.split('<nav class="neon-portals"').length - 1, 1, 'the account landing keeps one LED navigation too')
+  } finally { await vite.close() }
+})
+
+test('the chess route enters the full-screen game without a launcher, generator or nested frame', async () => {
+  const vite = await createServer({ server: { middlewareMode: true, watch: null, hmr: false, ws: false }, appType: 'custom', logLevel: 'error' })
+  try {
+    const { default: App } = await vite.ssrLoadModule('/src/App.tsx')
+    const { AccountProvider } = await vite.ssrLoadModule('/src/lib/account.tsx')
+    const html = await render(createElement(MemoryRouter, { initialEntries: ['/chess'] }, createElement(AccountProvider, null, createElement(App))))
+    assert.match(html, /role="status">Opening Cube Chess 512 AI/)
+    assert.doesNotMatch(html, /<iframe|Chess Cube launcher|chess-instant-preview|Launch Chess|Open original public build|Create inside this world|portal-generator-drawer|Portal prompt/)
   } finally { await vite.close() }
 })
 

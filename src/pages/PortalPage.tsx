@@ -3,13 +3,12 @@ import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import PlanetsWorld from '../components/PlanetsWorld'
 import PortalAstraGenerator from '../components/PortalAstraGenerator'
 import ShopPage from './ShopPage'
+import ChessPage from './ChessPage'
 import '../components/WorldTabs.css'
 import { PORTALS, getPortalById } from '../config/portals'
 import { foundationForPath } from '../config/foundations'
-import { useAccount } from '../lib/account'
 
 export default function PortalPage() {
-  const { user } = useAccount()
   const { portalId } = useParams()
   const { pathname } = useLocation()
   const [loadedFrame, setLoadedFrame] = useState('')
@@ -18,6 +17,8 @@ export default function PortalPage() {
   if (pathname === '/chess/shop') return <Navigate to="/shop" replace />
   const app = foundationForPath(pathname)
   if (!app) return <Navigate to="/world" replace />
+  // No launcher, board illustration or generator between the portal and game.
+  if (app.route === '/chess') return <ChessPage />
 
   if (app.route === '/shop') return <>
     <ShopPage />
@@ -28,7 +29,7 @@ export default function PortalPage() {
   </>
 
   const planets = app.route === '/planets'
-  const worldId = app.id as 'chess-cube-512-ai' | 'terra-fix-iss' | '8-planets-in-8-days'
+  const worldId = app.id as 'terra-fix-iss' | '8-planets-in-8-days'
   return <main className="portal-page foundation-page">
     <header className="portal-header">
       <Link to="/world" className="brand">WORLDIFAKT<span>← Back to the meadow</span></Link>
@@ -43,11 +44,6 @@ export default function PortalPage() {
       <a href={app.original} target="_blank" rel="noopener noreferrer" className="button-link">Open original ↗</a>
     </div>
     <nav className="foundation-actions" aria-label="Application tools">
-      {app.route === '/chess' && <>
-        <Link to="/chess" aria-current="page">Play chess</Link>
-        <Link to="/chess/shop">Shop boards and pieces</Link>
-        <Link to="/make">Check production requirements</Link>
-      </>}
       {app.route === '/iss' && <Link to="/terra">Open Earth observation →</Link>}
       {app.route === '/terra' && <Link to="/iss">← Return to the ISS station</Link>}
     </nav>
@@ -56,29 +52,7 @@ export default function PortalPage() {
       <strong>EARTH OBSERVATION</strong> · Check each image’s source and acquisition date. The ISS repair game is a separate simulation.
     </p>}
 
-    {planets ? <PlanetsWorld /> : app.route === '/chess' ? <section className="foundation-frame-shell world-primary-frame chess-launch" aria-label="Chess Cube launcher">
-      <div>
-        <span className="eyebrow">CHESS CUBE 512 AI</span>
-        <h2>Play Chess Cube 512 AI</h2>
-        <svg className="chess-instant-preview" viewBox="0 0 560 410" role="img" aria-label="Chess Cube preview: eight boards, eight rows and eight columns, 512 squares">
-          <title>Chess Cube 512 — board preview</title>
-          <defs><linearGradient id="chess-preview-glow" x2="1" y2="1"><stop stopColor="#72ead7"/><stop offset="1" stopColor="#8c9dff"/></linearGradient></defs>
-          {Array.from({ length: 8 }, (_, layer) => <g key={layer} transform={`translate(110 ${356 - layer * 39}) matrix(1 .32 1 -.32 0 0)`}>
-            <rect x="-2" y="-2" width="164" height="164" fill="#0c182a" stroke="url(#chess-preview-glow)" strokeWidth="2"/>
-            {Array.from({ length: 64 }, (_, square) => <rect key={square} x={(square % 8) * 20} y={Math.floor(square / 8) * 20} width="19" height="19" fill={(square % 8 + Math.floor(square / 8)) % 2 ? '#20354b' : '#d0e8e5'} />)}
-          </g>)}
-          <path d="M110 83V356M430 83V356M270 32V305" stroke="url(#chess-preview-glow)" strokeWidth="2" opacity=".65"/>
-          <text x="280" y="401" textAnchor="middle" fill="#c5e6ec" fontSize="13">8 × 8 × 8 · BOARD PREVIEW</text>
-        </svg>
-        <p>Step into eight levels of chess. Open the full-screen game with your shared WORLDIFACT identity, or explore as a guest.</p>
-        <div className="foundation-actions">
-          <a className="button-link" href={user ? '/apps/chess/index.html' : `${app.frame}?guest=1`}>Launch Chess Cube 512 AI →</a>
-          {!user && <Link to="/login">Sign in with your Chess Cube account</Link>}
-          <a href={app.original} target="_blank" rel="noopener noreferrer">Open original public build ↗</a>
-        </div>
-        <small>{user ? 'Your shared identity is used in this WORLDIFACT copy. The original external website manages its own browser session.' : 'Guest play is available without an account.'}</small>
-      </div>
-    </section> : <div className="foundation-frame-shell world-primary-frame">
+    {planets ? <PlanetsWorld /> : <div className="foundation-frame-shell world-primary-frame">
       {loadedFrame !== app.frame && <p className="foundation-loading" role="status">Opening {app.title}…</p>}
       <iframe key={app.frame} src={app.frame} title={app.title} className="foundation-frame"
         allow="fullscreen; clipboard-write" allowFullScreen

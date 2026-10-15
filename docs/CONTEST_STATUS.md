@@ -1,41 +1,33 @@
-# 15 October 2026 — Six-portal landing LIVE: merge and preserving release verified
+# 15 October 2026 — Screenshot cleanup: implemented; desktop repeat blocks publication
 
-## Current verified milestone
+## Implemented changes
 
-[PR #294](https://github.com/teslaeco/WORLDIFACT/pull/294) was merged with the owner's authorization as `a83a85d4c830147bb5861120ed3dafcd7d63a86d`. Its tree is identical to the reviewed head `d974cfa47751252cc0c5c3fc51219334163945fe`. All five exact-head PR workflows succeeded. [Verify #1258](https://github.com/teslaeco/WORLDIFACT/actions/runs/38687579077) passed the full verify command, foundations, Wrangler dry-run and hosted Studio read-only inspection. [Merge/release authorization and scope](https://github.com/teslaeco/WORLDIFACT/pull/294#issuecomment-6185439110).
+[WORLDIFACT PR #296](https://github.com/teslaeco/WORLDIFACT/pull/296) removes the duplicate plain six-card grid and the entire large Product Hunt section, badges and comment iframe. One LED navigation, the compact resource strip, its small Product Hunt link and the ISS petition remain.
 
-**VERIFIED LIVE:** release commit `c82c6abe246996630b1d751a40dcf769181089f5` was published by [Publish six portals preserving production](https://github.com/teslaeco/WORLDIFACT/actions/runs/38689313662), job `116271405543`, with conclusion **SUCCESS**. The public verification report was emitted at `2026-10-15T05:57:29Z`. Actual Cloudflare version: `630e387c-15d8-42b6-848d-bacf32e2b697`. Public origin: https://worldifact.xodobrox.workers.dev.
+`/chess` directly enters the actual same-origin `/apps/chess/index.html` game welcome. The disposable route is replaced without a launch click, board preview, blueprint generator or nested mobile WebGL frame. Existing account/guest choices and shared-identity guards remain. Entry navigation is separate from the game's in-document return to menu.
 
-The release's original `npm run verify` passed: **2311 tests, 2311 passed, zero failed, skipped or cancelled**, plus lint, TypeScript, HTTP smoke and build. Foundations and the preserving Wrangler dry-run passed. [Verify WORLDIFACT on the release commit](https://github.com/teslaeco/WORLDIFACT/actions/runs/38689313583) also completed successfully, including the hosted Studio read-only inspection. Passing lint does not mean zero warnings or a clean dependency-security audit.
+[Cube Chess PR #144](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/144), pinned at `8fe8bcd27f7e718a59d94e09db9e71f42c3347e1`, implements confirmed Exit to menu. Cancel retains the current match. Confirmation closes it and temporary panels, preserving saved games, identity and preferences without replacing the document/renderer. Session guards invalidate late AI/autosave work. The guest-readiness observer disconnects before writing observed attributes. About is new English/Polish chess-first copy: eight 8×8 boards, 512 squares, Terraforming Planet's work and upcoming updates; it does not claim an app-store launch.
 
-The actual post-deployment `PUBLIC_RELEASE_VERIFIED` report confirms:
-- 12 standard HTML routes and **437 built assets** verified against the release output.
-- An additional public `GET /account/worlds` returned **200**, with HTML equal to the built application entry.
-- Six-portal and scrolling-resource JS/CSS markers are present in the verified public asset set.
-- Studio reports `ready=true`, the existing durable admission/execution revisions, `astra`, `sol`, `luna`, Standard/Fast, and the existing unlimited-allowance flag. These are capability/readiness checks, not new successful provider generations.
-- `paidGenerationDuringDeploy=false`; `browserVisualAcceptance=NOT_PERFORMED`.
+## VERIFIED exact-source integration
 
-## Preserved production settings and workflow distinction
+All five WORLDIFACT workflows passed on application candidate `abe4e372856ffb836129a2e6760ac836c2495efe`. [Verify run 38697982288](https://github.com/teslaeco/WORLDIFACT/actions/runs/38697982288), job `116299007411`, completed SUCCESS: original full verify, final pinned chess foundation assembly, Worker deployment dry-run and GET-only hosted Studio inspection. Four safety workflows also passed. This documentation-only follow-up does not change that application source or pin; its own CI status must not be inferred from the parent.
 
-The one-use `six-portals-release-once.yml` envelope permitted only the exact merged parent, its own marker/workflow, and the pre-publication status update. It ran the original full verification before using the existing reviewed preserving-config builder and `wrangler deploy --keep-vars`. No secret synchronization, billing mutation, paid generation, Oracle restart or unrelated PR was included.
+Chess's original test/build [run 38697852036](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38697852036) succeeded on the pinned commit. PR build success is not publication.
 
-The separate historical [Cloudflare workflow run 38689313636](https://github.com/teslaeco/WORLDIFACT/actions/runs/38689313636) remains **FAILED** at `Verify one-time pipeline release scope before credential setup`. Its credential setup, secret synchronization and publication steps were skipped. That old scope guard was not disabled or rewritten. This is a separate failed-closed workflow, not the outcome of the successful production release above. Do not claim that every repository workflow is green.
+The route fixture's prior Vite temporary-config EPERM was resolved by importing the real checked-in configuration with `configFile:false`. React, auth, private-world, other-portal and no-network assertions remain. The temporary diagnostic workflow was removed. Protected original CI and deployment guards were not changed.
 
-The release workflow syntax was checked locally before publication: YAML parsing, every shell block with `bash -n`, and all three embedded JavaScript blocks with `node --check`. Workflow blob: `bbad1067704e9d4eab057075fc725503856284eb`. Actual publication evidence is the completed release job, not those syntax checks. This documentation-only follow-up changes no application source, release marker or deployment configuration.
+## Final browser result: 5/6 PASS; release BLOCKED
 
-## VERIFIED changes and CI diagnosis
+[Browser run 38697852085](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38697852085), job `116298579090`, finished FAILED at `2026-10-15T07:23:39Z`, with 5 tests passed and 1 failed, on exact Chess head `8fe8bcd27f7e718a59d94e09db9e71f42c3347e1`.
 
-- The account landing contains six neon portal links: `/chess`, `/iss`, `/planets`, `/shop`, `/lab`, and `/account/worlds`. The shared-world page also exposes My Worlds as its sixth direct navigation destination.
-- The compact resource strip includes NASA, ESA and JAXA with an explicit no-partnership/no-endorsement notice. The ISS preservation petition is retained.
-- CI run [38686038820](https://github.com/teslaeco/WORLDIFACT/actions/runs/38686038820) identified four syntax errors introduced by unescaped slashes in two route regex literals. Those literals were replaced with exact route extraction and equality assertions.
-- The revised account-entry test preserves the existing header-branding, guest-entry, gated-provider, OAuth-error and untrusted-redirect assertions. It additionally verifies all six routes exactly once and in order on both landing navigations.
-- The later routing failure was a stale `Five portals` expectation in `tests/account-entry-routing.test.mjs`. The test now checks `Six portals` and the six actual route destinations, not merely a replacement heading. Existing private-world, model-library and zero-network-request routing checks remain intact.
-- Diagnostic run [38687138379](https://github.com/teslaeco/WORLDIFACT/actions/runs/38687138379) reported 2309/2311 passing tests. Its two failures were the stale heading and the intentionally detected temporary CI diagnostic wrapper. The original `.github/workflows/ci.yml` was restored byte-for-byte to blob `47fa876758aef48ec15b915eb7c4fc72c4293c36`; the protected-workflow test and its expected hash were not changed. Final Verify #1258 and the actual production release subsequently passed.
+VERIFIED in mobile Chromium emulation: cancel preserves the match; confirm returns to menu; previously saved games remain; no document navigation occurs; three start/exit cycles complete. Both desktop and mobile passed English/Polish About and direct guest entry.
 
-## Explicit limits
+BLOCKED: desktop's repeat sequence passed the initial cancel/confirm/save/no-reload assertions, but the subsequent `start-game` click exceeded its 30-second action deadline at `e2e/menu-return.spec.js:61`. Playwright was waiting for the button to be visible, enabled and stable. Extending the whole sequence to 180 seconds did not resolve that action failure. The cause is NOT established; do not attribute it solely to CI slowness or call the interaction stable. Next diagnosis must inspect the repeated menu's state, layout stability and rendering lifecycle, not simply increase timeouts again. The snapshot and failure are in the linked job log.
 
-UNKNOWN: physical Android visual/animation acceptance and a signed-in My Worlds browser walkthrough. The 3D meadow still has five physical gateways; the sixth addition in this PR is page navigation. The owner authorized this source release after green CI; HTTP and source-asset checks do not certify visual quality, model-generation reliability or new 3D reconstruction capability. No failed test, authentication control or provider-budget guard was disabled.
+The suite used the real production game and software WebGL, zero retries, all original assertions/repetitions, and blocked non-local provider requests. Emulated Chromium is not physical Android/iOS acceptance, real account sign-in or live multiplayer verification.
 
-## Preserved prior operational history
+## GO / NO-GO
 
-All preceding status records, including actual-model-provenance releases and their limits, are preserved byte-for-byte in [the prior status snapshot](CONTEST_STATUS.before-294-19dfe39.md), original blob `c77f694ecadfd8dce4492b59848e8eb5931b2c70`. The snapshot stays in this directory so its relative links retain their original base. Historical VERIFIED claims retain their original dates and are not a fresh production audit.
+NO-GO for publishing this combined update until the desktop repeat issue is resolved, the full browser suite succeeds, and the owner authorizes merge/publication. Both PRs remain drafts. No merge, production deployment, paid generation, billing mutation or secret synchronization occurred.
+
+Production remains release `c82c6abe246996630b1d751a40dcf769181089f5`, Cloudflare version `630e387c-15d8-42b6-848d-bacf32e2b697`. Complete previous status remains byte-for-byte in [the pre-cleanup snapshot](CONTEST_STATUS.before-ui-cleanup-20261015.md), original blob `1a50b6a47d107fd9fef81625ae7a8d4b1704f7d9`. These cleanup changes are NOT LIVE.
