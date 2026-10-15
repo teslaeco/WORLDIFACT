@@ -37,7 +37,7 @@ jobs:
           assert 'https://rest.runpod.io/v1/' in s
           assert "method='GET'" in s
           assert "RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}" in s
-          assert 'ghp_' not in s and 'sk-proj-' not in s
+          assert ('ghp' + '_') not in s and ('sk-' + 'proj-') not in s
           assert 'runpod.serverless' not in s
           print('PASS: read-only workflow contract; no credential accessed')
           PY
