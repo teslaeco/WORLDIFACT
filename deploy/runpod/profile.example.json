@@ -1,0 +1,18 @@
+{
+  "revision": "worldifact-runpod-flex-profile-v1",
+  "status": "NOT_PROVISIONED",
+  "endpointType": "queue-based",
+  "activeWorkers": 0,
+  "maxWorkers": 1,
+  "gpusPerWorker": 1,
+  "idleTimeoutSeconds": 5,
+  "executionTimeoutSeconds": 120,
+  "jobTtlSeconds": 600,
+  "handlerConcurrency": 1,
+  "selectedGpu": null,
+  "verifiedRateMicroUsdPerSecond": null,
+  "imageDigest": null,
+  "automaticUpgrade": false,
+  "nativeRuntimeVerified": false,
+  "notes": "Operator configuration checklist, not a request to create resources. No paid endpoint is created by this file. Tune execution/TTL only after an approved measured benchmark. Storage and cold starts are billable separately."
+}

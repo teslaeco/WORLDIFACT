@@ -1,0 +1,55 @@
+name: WORLDIFACT RunPod staging preflight (GET-only, one-time activation)
+
+on:
+  push:
+    branches: ['feat/astra-runpod-blender-pipeline-20261015']
+    paths:
+      - 'ops/runpod-staging-connection-once.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worldifact-runpod-staging-readonly-once
+  cancel-in-progress: false
+
+jobs:
+  read-only-connection:
+    environment: runpod-staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Fail closed unless exact approved marker-only commit and pinned verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | wc -l)" -eq 1
+          git diff-tree --no-commit-id --name-only -r HEAD | grep -qx 'ops/runpod-staging-connection-once.json'
+          test "$(git hash-object scripts/runpod-readonly-preflight.mjs)" = 'cb257d6f356168a255fc93a8db774c7f7cc6cb18'
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const actual = JSON.parse(fs.readFileSync('ops/runpod-staging-connection-once.json', 'utf8'))
+          const expected = {
+            revision: 'worldifact-runpod-staging-readonly-v1',
+            environment: 'runpod-staging',
+            allowedOperations: ['GET /v2/serverless', 'GET /v2/network-volumes', 'GET /v2/pods'],
+            paidGpuAuthorized: false,
+            resourceCreationAuthorized: false,
+            productionChangeAuthorized: false
+          }
+          if (JSON.stringify(actual) !== JSON.stringify(expected)) process.exit(2)
+          NODE
+      - name: Run official REST GET checks with staging-only secret
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/runpod-readonly-preflight.mjs

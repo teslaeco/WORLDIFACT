@@ -1,0 +1,8 @@
+# Worker SDK/storage. PyTorch/CUDA/TRELLIS2/Blender belong to a separately
+# reviewed digest-pinned GPU base image; do not install/download them per job.
+runpod==1.12.0
+# RunPod 1.12 requires boto3 >=1.43.66; keep a tested exact version.
+boto3==1.43.66
+numpy==2.3.5
+trimesh==4.11.1
+Pillow==12.3.0

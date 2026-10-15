@@ -1,0 +1,17 @@
+# SERVER ONLY — keep keys in the existing secret manager, never VITE_*.
+ENABLE_RUNPOD_PIPELINE=false
+RUNPOD_API_KEY=
+RUNPOD_ENDPOINT_ID=
+# Reuse the existing server-side OpenAI credential. Do not put it on the GPU.
+OPENAI_API_KEY=
+
+# GPU worker only. No OpenAI key is required by this worker.
+ENABLE_RUNPOD_WORKER=false
+ARTIFACT_S3_ENDPOINT=
+ARTIFACT_REGION=auto
+ARTIFACT_BUCKET=
+ARTIFACT_ACCESS_KEY_ID=
+ARTIFACT_SECRET_ACCESS_KEY=
+TRELLIS_CODE_DIR=/opt/TRELLIS.2
+TRELLIS_BUNDLE_DIR=/models/trellis2
+BLENDER_BIN=/opt/blender/blender

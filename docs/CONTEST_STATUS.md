@@ -1,3 +1,96 @@
+## 2026-10-16 — RunPod on-demand-only policy enforced in offline CI
+
+**RECOMMENDATION / IMPLEMENTED TEST / NOT DEPLOYED.** Owner requires RunPod GPU only when WORLDIFACT actively generates a model, and automatic scale-down afterward. Added an executable profile regression test on draft PR #305 for queue-based Serverless Flex: Active=0, Max=1, 1 GPU, 1 handler, 5-second idle timeout, no automatic upgrade, no provisioned endpoint/image/rate. Workflow now runs test. No paid GPU/image/resource creation. Actual deployed provider policy remains UNKNOWN until live readback. No browsing, gallery or GET status may trigger new GPU work.
+
+---
+
+## 2026-10-15 — RunPod actual account GET denied 403; safe v2 migration
+
+**VERIFIED / BLOCKED / NOT DEPLOYED**. The one-time read-only RunPod GitHub
+probe was reviewed under PR #306, merged with its own green CI, and triggered
+from trusted main. Its actual GET to RunPod management REST returned
+**HTTP 403**: https://github.com/teslaeco/WORLDIFACT/actions/runs/38801996493.
+The secret was available to the runner (masked) but no resource access was
+granted. This did NOT launch a GPU, purchase storage, send a paid generation,
+expose the key, or modify customer data. The main-branch one-time workflow
+was removed immediately afterward at
+2e41b15a11f6f023f1189892033f3923929af511.
+An unrelated release workflow was invoked by the main push but stopped before
+credential setup/deploy at
+https://github.com/teslaeco/WORLDIFACT/actions/runs/38801996415.
+
+**VERIFIED in docs**: Official management API moves from REST v1 to v2 on
+https://api.runpod.io/v2 and retires v1 on 2026-11-15. In draft PR #305 the
+staging verification scripts and tests were updated for official paginated
+v2 JSON response types, with GET-only, zero-secret-logging checks. This code
+has not yet obtained a successful authenticated staging response.
+Documentation: https://docs.runpod.io/api-reference-v2/migrate-from-v1
+
+**BLOCKED**: Owner's RunPod key must be enabled and have adequate read
+permissions for endpoints, volumes and Pods. Existing GitHub and installed
+RunPod plugins do not expose account secret/permission administration here.
+No unauthorized workaround, payment operation, credential rotation, paid
+worker start, or endpoint creation was attempted.
+
+**NO-GO**: Native TRELLIS2 image and end-to-end ECOMECH PBR GLB remain
+unverified, as do private storage, actual rate/cost, side/back shape fidelity
+and supplier MAKE checks. Draft PR #305 is intentionally not merged.
+
+---
+
+## Staging GET-only RunPod connection gate — 2026-10-15
+
+**IMPLEMENTED / TESTS PENDING / ACCOUNT ACCESS BLOCKED / NOT DEPLOYED.**
+The user confirmed installation of RunPod Official plugin and showed a
+RUNPOD_API_KEY secret under GitHub Production. This is evidence of secret
+presence only, NOT successful authentication or a deployed GPU endpoint.
+
+PR #305 now contains a strict read-only API preflight and tests, plus a one-use
+GitHub Actions staging environment workflow. The latter is not armed: a separate
+runpod-staging environment with its own read-only API key and required reviewer
+must be configured before its marker-only run. Do not expose the many unrelated
+Production secrets to draft branch workflows. The existing staging manual
+workflow was corrected to the official RunPod REST v1 hostname.
+
+User reference uploaded in this conversation matches the previously approved
+decoded original 1122x1402 RGB pixels (SHA-256:
+3d601608694b61932ccf11a4e0eff979f49e0c08c2a20e161c117f8e10126508).
+The raw PNG copy has its own SHA; do not mistake a different lossless encoding
+for a new reference. No original reference bytes were committed publicly.
+
+**Cost impact:** zero paid RunPod/OpenAI calls, zero provisioning, zero persistent
+volume purchase, no merge, no production change. Initial planned operating
+settings remain workersMin=0, workersMax=1, one GPU, Flex scale-to-zero.
+A live TRELLIS2 + Blender ECOMECH test and MAKE approval remain BLOCKED.
+
+---
+
+## 2026-10-15 — RunPod staging credentials step prepared (no real API connection)
+
+**IMPLEMENTED / NOT ACTIVATED:** Draft [PR #305](https://github.com/teslaeco/WORLDIFACT/pull/305) now includes a manual-only, read-only RunPod REST v2 connection check (`.github/workflows/runpod-staging-readonly.yml`) protected by the `runpod-staging` GitHub environment. It is intentionally not runnable from an unmerged PR; a reviewed merge is required for GitHub workflow_dispatch availability. The owner must create a least-privilege RunPod API key via the official credentials console and save it as the `RUNPOD_API_KEY` GitHub environment secret. The ChatGPT GitHub connector does not create/read secret values. The test uses a single authenticated GET to list Serverless endpoints; no private body/token is logged, no GPU/endpoints/storage/images are created or bought, no jobs are dispatched. Full instructions in `docs/RUNPOD_CREDENTIAL_SETUP_20261015.md`. RunPod provider auth, RunPod GPU, production Cloudflare runtime secrets and original ECOMECH geometry all remain **UNVERIFIED/BLOCKED** until separately tested.
+
+---
+
+# 15 October 2026 — Astra + RunPod Flex GPU + Blender preparation (draft PR #305)
+
+**IMPLEMENTED / OFFLINE TESTED / NOT DEPLOYED.** [PR #305](https://github.com/teslaeco/WORLDIFACT/pull/305) prepares the owner's requested architecture without creating a paid endpoint, altering the current Oracle generator, customer prices/points, secrets or six experiences. Source baseline is main `e3dc3b644ba97e6d7bf6b8b9ba998499067290ae`.
+
+## Implemented scope
+- Server-only Astra Responses/strict-JSON plan adapter, exact PNG hash and a mandatory existing-budget permit. No model-generated code execution or hidden retry.
+- Asynchronous RunPod `/run` + GET-only status, immutable tenant/job/input identity, transactional submission claims, conservative per-tenant daily exposure admission and runtime/TTL limits. Uncertain submissions require reconciliation, not another billing-capable POST.
+- Native Linux TRELLIS.2 worker with an audited local model bundle, private conditional object storage and durable duplicate-delivery handling across scale-to-zero. Preserve original shape AND spatial PBR checkpoint before GLB baking, then original GLB before Blender.
+- Fixed Blender stage with separate GAME GLB, editable BLEND and eight actual renders: PBR/clay, front/three-quarter/side/back. Source geometry is not voxel-repaired or distorted to conceal missing likeness. Output is `REVIEW_REQUIRED`, not print/supplier approval.
+- Preparation recipe and operator profile: Active workers 0, Max workers 1, GPUs per worker 1, concurrency 1, idle timeout 5 seconds. No permanent VM/Windows or public Hugging Face demo. Cold starts and storage are separate costs; runtime math is not a guaranteed invoice cap.
+
+## Evidence and limits
+Local strict TypeScript checks and **13 Node + 15 Python tests passed**. [Dedicated pipeline workflow #38783630158](https://github.com/teslaeco/WORLDIFACT/actions/runs/38783630158) passed the provider/transaction contracts, worker/storage tests and real Blender export/render stage on an explicitly identified **box fixture**, not ECOMECH. The initial dependency-install failure in #38783384979 was corrected by pinning boto3 1.43.66 to satisfy RunPod SDK 1.12.0; no tests were bypassed. Full repository verify/deployment dry-run status is recorded in the current PR checks and must be read for the exact head before any merge.
+
+This PR adds **no public POST route or production UI switch**. Existing authenticated account/budget admission, storage ingestion and preview authorization must be wired before activation. Native CUDA/TRELLIS inference, audited GPU base-image build, real S3 conditional-write semantics, RunPod endpoint deployment, real API cost/latency, original-reference fidelity, Android preview and supplier-specific MAKE remain **UNVERIFIED**. No new robot was generated by this preparation task. No live OpenAI call, paid GPU rental, competitor geometry API, merge, production deployment or supplier order was performed.
+
+Implementation and activation runbook: [ASTRA_RUNPOD_BLENDER.md](ASTRA_RUNPOD_BLENDER.md). GPU and server flags remain disabled by default; private originals and partial checkpoints remain separate from public files. Historical main status is preserved below unchanged.
+
+---
+
 # 15 October 2026 — My World / AI Shop / AI Game Lab separation (branch only)
 
 Status: **IN PROGRESS / NOT DEPLOYED**. No merge, paid generation, export build, secret, billing adjustment, or production deployment performed. Changes on [feature/my-world-game-lab-separation](https://github.com/teslaeco/WORLDIFACT/tree/feature/my-world-game-lab-separation).

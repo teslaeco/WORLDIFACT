@@ -1,0 +1,33 @@
+{
+  "nowMs": 1800000000000,
+  "job": {
+    "revision": "astra-runpod-blender-v1",
+    "jobId": "11111111-1111-4111-8111-111111111111",
+    "scope": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "reference": {
+      "key": "jobs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/11111111-1111-4111-8111-111111111111/reference.png",
+      "sha256": "d16a39e3e3c242f401298499698b9f43a027b65c534fcc496c0bc29600d2b999"
+    },
+    "mask": {
+      "key": "jobs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/11111111-1111-4111-8111-111111111111/mask.png",
+      "sha256": "294aced4b87fe339bd6de61b6ac357be081ce4d34818f74c72892de7ce23db3e"
+    },
+    "planner": {
+      "model": "gpt-6-astra",
+      "responseId": "resp_fixture_NOT_LIVE",
+      "referenceSha256": "d16a39e3e3c242f401298499698b9f43a027b65c534fcc496c0bc29600d2b999"
+    },
+    "plan": {
+      "subject": "robot",
+      "description": "Fixture robot, not a generated result",
+      "preserve": ["helmet", "green armor"],
+      "unseenSurfaces": "Inferred; not confirmed by the source",
+      "makeStatus": "NOT_VALIDATED"
+    },
+    "settings": {"seed": 15, "resolution": 1024, "textureSize": 4096, "targetFaces": 250000},
+    "budget": {"maxGpuMicroUsd": 1000000, "rateMicroUsdPerSecond": 1000, "executionSeconds": 120, "coldStartAllowanceSeconds": 60, "idleSeconds": 5, "expiresAt": 1800000600000}
+  },
+  "fingerprint": "b92cb0b102f4b088824f4a15934b538ac5ea65f3218406b2b987a202df7a6c8e",
+  "referenceBase64": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAa0lEQVR4nO3PoRGAMAAEwUCFKMqgGMpAUSIFYGIyZ3b1i78xAErbzOh4rtU//t7znpntq3+sJqAmoCagJqAmoCagJqAmoCagJqAmoCagJqAmoCagJqAmoCagJqAmoCagJqAmoCagJqAmAGh9EwwDbPcR6QcAAAAASUVORK5CYII=",
+  "maskBase64": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAAM0lEQVR4nO3OIRIAMAgEMcr//wy2CkFFTdadIEOE/nfuUYubfP0AAAAAAAAAAAAAAACaag83AWxviZqXAAAAAElFTkSuQmCC"
+}
