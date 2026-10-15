@@ -54,9 +54,9 @@ test('Game Lab primary generation action falls back to labelled no-cost DEMO ins
   assert.doesNotMatch(source, /disabled=\{busy \|\| !health\.generationReady\}/)
 })
 
-test('world portal generators remain expanded while the secondary Shop drawer starts collapsed', async () => {
+test('world portal generators remain expanded while AI Shop no longer embeds world generation', async () => {
   const source = await readFile(new URL('../src/pages/PortalPage.tsx', import.meta.url), 'utf8')
-  assert.match(source, /<details className="portal-generator-drawer portal-page shop-world-disclosure">/)
+  assert.doesNotMatch(source, /<details className="portal-generator-drawer portal-page shop-world-disclosure">/)
   assert.match(source, /<details open className="portal-generator-drawer">/)
 })
 
