@@ -1,3 +1,9 @@
+## 2026-10-15 — RunPod staging credentials step prepared (no real API connection)
+
+**IMPLEMENTED / NOT ACTIVATED:** Draft [PR #305](https://github.com/teslaeco/WORLDIFACT/pull/305) now includes a manual-only, read-only RunPod REST v2 connection check (`.github/workflows/runpod-staging-readonly.yml`) protected by the `runpod-staging` GitHub environment. It is intentionally not runnable from an unmerged PR; a reviewed merge is required for GitHub workflow_dispatch availability. The owner must create a least-privilege RunPod API key via the official credentials console and save it as the `RUNPOD_API_KEY` GitHub environment secret. The ChatGPT GitHub connector does not create/read secret values. The test uses a single authenticated GET to list Serverless endpoints; no private body/token is logged, no GPU/endpoints/storage/images are created or bought, no jobs are dispatched. Full instructions in `docs/RUNPOD_CREDENTIAL_SETUP_20261015.md`. RunPod provider auth, RunPod GPU, production Cloudflare runtime secrets and original ECOMECH geometry all remain **UNVERIFIED/BLOCKED** until separately tested.
+
+---
+
 # 15 October 2026 — Astra + RunPod Flex GPU + Blender preparation (draft PR #305)
 
 **IMPLEMENTED / OFFLINE TESTED / NOT DEPLOYED.** [PR #305](https://github.com/teslaeco/WORLDIFACT/pull/305) prepares the owner's requested architecture without creating a paid endpoint, altering the current Oracle generator, customer prices/points, secrets or six experiences. Source baseline is main `e3dc3b644ba97e6d7bf6b8b9ba998499067290ae`.
