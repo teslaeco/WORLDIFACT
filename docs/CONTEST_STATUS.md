@@ -1,3 +1,15 @@
+# 15 October 2026 — NATIVE V4 ORIGINALS SAFELY PERSISTED IN GITHUB DRAFT (NO DEPLOY)
+
+VERIFIED: After successful [native Blender V4 output run 38686151848](https://github.com/teslaeco/WORLDIFACT/actions/runs/38686151848) and green [full repository verification 38686157205](https://github.com/teslaeco/WORLDIFACT/actions/runs/38686157205), the read-only artifact retrieval and commit workflow [38687007606](https://github.com/teslaeco/WORLDIFACT/actions/runs/38687007606) succeeded. Original 8,964,884-byte GLB and 4,916,202-byte editable BLEND with individually verified SHA-256 are committed under `public/pilots/ecomech-v4-review/` at draft-only Git commit `2d3448ee1e37e9632fe2e6603d2bd4dcaad8cb80`. Direct Git tree lists both physical blobs, not merely links to expiring Actions artifacts. No production deploy, merging, new API calls, credits, customer data, or invoices changed. **Visual NO-GO remains** (draft IoU 48.40%, insufficient photo realism). See `docs/ECOMECH_V4_NATIVE_REAL_QA_20261015.md`.
+
+---
+
+# 15 October 2026 — ECOMECH V4 NATIVE BLENDER GEOMETRY, GREEN CI, VISUAL QUALITY NO-GO
+
+**IMPLEMENTED / TESTED, NOT DEPLOYED:** Draft PR [#295](https://github.com/teslaeco/WORLDIFACT/pull/295) builds real reference-guided, Blender-authored V4 GLB and editable BLEND from the pinned original user photo (NOT a successful image-to-3D Astra V4). Native build [#38686151848](https://github.com/teslaeco/WORLDIFACT/actions/runs/38686151848) SUCCESS; full exact tested-source CI [#38686157205](https://github.com/teslaeco/WORLDIFACT/actions/runs/38686157205) SUCCESS. Original GLB: 8,964,884 bytes, SHA-256 `629cca8ce22e7463a4af981d7004f7703124efc6090460b3da42f6660767ea27`; BLEND: 4,916,202 bytes, SHA-256 `1e4845b679c9546a0716acff2b8a3e519acf2d0b313fba0d18d56fdf9307b24a`. Real 597 meshes, 391,248 triangle faces, 10 PBR materials, 8 embedded PNG images, 4 real camera renders. No rig/animation or V4 FBX/OBJ, no mobile HTTPS staging yet. **VISUAL NO-GO**: draft same-image silhouette IoU worsened from V2 0.50226 to V4 0.48396, and human inspection confirms substantial aesthetic mismatch. This is structural evidence, NOT photo-quality proof. No new paid provider generation; no merging/production release. Complete truthful report: `docs/ECOMECH_V4_NATIVE_REAL_QA_20261015.md`.
+
+---
+
 # 15 October 2026 — ECOMECH image-conditioned route + reference-shaped Blender v2 (DRAFT PR #290)
 
 **IMPLEMENTED ON REVIEW BRANCH — NOT MERGED OR PRODUCTION-DEPLOYED:** [PR #290](https://github.com/teslaeco/WORLDIFACT/pull/290). Fixed the subject-routing error: explicit photo-attached humanoid robot/motorized exosuit now selects `reference-robot-fidelity-v1` *before* industrial-MCC cabinet handling. The real JPEG reference bytes are required in the canonical model request; text-only work cannot claim image-conditioned reconstruction. All existing Astra/Sol/Luna execution modes, customer point holds and provider per-job caps remain unchanged. Legacy completed models are not relabeled.

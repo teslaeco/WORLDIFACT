@@ -1,0 +1,30 @@
+{
+  "revision": "worldifact-ecomech-v4-photo-anchored-offline-native-sculpt-v1",
+  "oracleOriginalSha256": "7e7f3aea755dfdd0ad957124d7e1dc33004905e0052fdab3d60b587f34cdc7b4",
+  "userReferenceSourceSha256": "9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053",
+  "originalOracleJob": "6fa9be43-f371-4bcd-8fe7-7a3ea9967855",
+  "execution": "BLENDER_HAND_SCULPTED_MESH_GUIDED_BY_HUMAN_ANNOTATED_EXACT_V4_PHOTO",
+  "astrARebilled": false,
+  "paidExternalCalls": 0,
+  "imagePixelInputToAstraInOriginalJob": false,
+  "referenceImagePackedInEditableBlend": true,
+  "referencePixelsAutomaticallyReconstructed": false,
+  "sourceAstraMeshesArchivedUnchangedInBlend": true,
+  "modelQuality": "UNREVIEWED",
+  "humanSimilarity": "NOT_MEASURED",
+  "makeApproved": false,
+  "pbrTextureMapProvenance": "SYNTHETIC_BLENDER_NOT_PHOTO_CAPTURE",
+  "v4PackedPbrTextureMaps": 12,
+  "v4UvMeshObjects": 597,
+  "v4RemovedV2Shapes": 389,
+  "files": {
+    "ECOMECH_V4_REFERENCE_RECONSTRUCTED_GAME.glb": {
+      "bytes": 8964884,
+      "sha256": "629cca8ce22e7463a4af981d7004f7703124efc6090460b3da42f6660767ea27"
+    },
+    "ECOMECH_V4_EDITABLE_REAL_MESH.blend": {
+      "bytes": 4916202,
+      "sha256": "1e4845b679c9546a0716acff2b8a3e519acf2d0b313fba0d18d56fdf9307b24a"
+    }
+  }
+}

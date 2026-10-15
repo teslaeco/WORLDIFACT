@@ -1,0 +1,91 @@
+name: ECOMECH V4 archive verified GLB & BLEND on draft branch (no provider calls)
+on:
+  push:
+    branches: ['feat/ecomech-v4-real-sculpt-20261015']
+    paths: ['ops/ECOMECH_V4_ARCHIVE_REVIEW_ONCE.json']
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: ecomech-v4-archive-original-once
+  cancel-in-progress: false
+jobs:
+  archive-existing-artifact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+          fetch-depth: 2
+      - name: Guard marker-only one-file activation; no generation requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -m -r HEAD | wc -l)" -eq 1
+          git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx ops/ECOMECH_V4_ARCHIVE_REVIEW_ONCE.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          marker=json.loads(Path('ops/ECOMECH_V4_ARCHIVE_REVIEW_ONCE.json').read_text())
+          assert marker == {
+            'revision':'ecomech-v4-archive-existing-assets-v1',
+            'sourceWorkflowRunId':38686151848,
+            'sourceCommit':'c4b85f1557df058b6bac37c6f04f9fa5e9d64966',
+            'newPaidApiCalls':0,'productionDeploy':False,'mergeApproved':False
+          }, 'Unexpected archive marker'
+          PY
+      - name: Read existing completed GH Actions artifact only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run view 38686151848 -R teslaeco/WORLDIFACT --json conclusion --jq '.conclusion' | grep -qx success
+          gh run view 38686157205 -R teslaeco/WORLDIFACT --json conclusion --jq '.conclusion' | grep -qx success
+          mkdir -p /tmp/ecomech-v4-archive
+          gh run download 38686151848 -R teslaeco/WORLDIFACT \
+            --name ecomech-v4-native-reference-rebuild-c4b85f1557df058b6bac37c6f04f9fa5e9d64966 \
+            --dir /tmp/ecomech-v4-archive
+          cd /tmp/ecomech-v4-archive
+          printf '%s  %s\n' '629cca8ce22e7463a4af981d7004f7703124efc6090460b3da42f6660767ea27' 'ECOMECH_V4_REFERENCE_RECONSTRUCTED_GAME.glb' | sha256sum --check
+          printf '%s  %s\n' '1e4845b679c9546a0716acff2b8a3e519acf2d0b313fba0d18d56fdf9307b24a' 'ECOMECH_V4_EDITABLE_REAL_MESH.blend' | sha256sum --check
+          test "$(stat -c %s ECOMECH_V4_REFERENCE_RECONSTRUCTED_GAME.glb)" -eq 8964884
+          test "$(stat -c %s ECOMECH_V4_EDITABLE_REAL_MESH.blend)" -eq 4916202
+      - name: Preserve actual original geometry in preview branch, never production
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest=public/pilots/ecomech-v4-review
+          mkdir -p "$dest"
+          cp /tmp/ecomech-v4-archive/ECOMECH_V4_REFERENCE_RECONSTRUCTED_GAME.glb "$dest/robot.glb"
+          cp /tmp/ecomech-v4-archive/ECOMECH_V4_EDITABLE_REAL_MESH.blend "$dest/source.blend"
+          cp /tmp/ecomech-v4-archive/MANIFEST_REFERENCE_V4.json "$dest/native-manifest.json"
+          cat > "$dest/README.md" <<'EOF'
+          # ECOMECH V4 — DRAFT QA ORIGINALS, NOT FOR PRODUCTION
+
+          These original files came from native Blender reference-guided reconstruction.
+          This is not an image-to-3D Astra success or a photo-realistic certified asset.
+
+          GAME GLB: robot.glb — 8,964,884 bytes
+          SHA-256: 629cca8ce22e7463a4af981d7004f7703124efc6090460b3da42f6660767ea27
+
+          EDITABLE BLEND: source.blend — 4,916,202 bytes
+          SHA-256: 1e4845b679c9546a0716acff2b8a3e519acf2d0b313fba0d18d56fdf9307b24a
+
+          Original native render evidence:
+          https://github.com/teslaeco/WORLDIFACT/actions/runs/38686151848
+
+          Details: docs/ECOMECH_V4_NATIVE_REAL_QA_20261015.md
+          NO-GO: no customer release, manufacturing, rig, or HTTPS viewer approval.
+          EOF
+          sha256sum "$dest/robot.glb" "$dest/source.blend"
+          git add "$dest"
+          if git diff --cached --quiet; then
+            echo "All original bytes already present; no write necessary"
+            exit 0
+          fi
+          git -c user.name='WORLDIFACT QA Archive' \
+              -c user.email='worldifact-qa@users.noreply.github.com' \
+              commit -m 'chore(ecomech): preserve exact V4 original GLB and BLEND on draft'
+          git push origin HEAD:refs/heads/feat/ecomech-v4-real-sculpt-20261015
