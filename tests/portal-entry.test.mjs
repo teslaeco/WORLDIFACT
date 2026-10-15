@@ -19,7 +19,7 @@ const files = {
   planets: new URL('../src/components/PlanetsWorld.tsx', import.meta.url),
   chess: new URL('../src/pages/ChessPage.tsx', import.meta.url),
 }
-async function renderPortal(path, user = null) {
+async function renderPortal(path, user = null, acceptedPlanets = false) {
   const Shop = await loadShopComponent()
   assert.equal(typeof Shop, 'function', 'The real checked-in Shop component must be loaded')
   const sources = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([key, url]) => [key, await readFile(url, 'utf8')])))
@@ -47,6 +47,7 @@ async function renderPortal(path, user = null) {
         if (id === '../components/PortalAstraGenerator') return { __esModule: true, default: ({ worldId }) => React.createElement('section', { 'data-testid': 'astra-portal', 'data-world': worldId }, 'Astra portal generator') }
         if (id === '../components/PlanetsWorld') return load('planets')
         if (id === './PlanetsDemo') return { __esModule: true, default: () => React.createElement('span', null, 'Mini test not exercised by this server render') }
+        if (id === 'react' && acceptedPlanets) return { ...React, useState: initial => React.useState(initial === false ? true : initial) }
         if (['react', 'react/jsx-runtime', 'react-router-dom'].includes(id)) return localRequire(id)
         throw new Error(`Unexpected portal dependency: ${id}`)
       },
@@ -65,11 +66,10 @@ test('Chess visitors enter the real full-screen game without a second launcher o
   assert.equal(chessEntry.CHESS_ENTRY_PATH, '/apps/chess/index.html')
 })
 
-test('historical Shop portal keeps the real model form and its separate world-blueprint drawer', async () => {
+test('AI Shop portal keeps its real model form but removes the embedded world generator', async () => {
   const html = await renderPortal('/shop')
-  assert.match(html, /data-world="enchanted-ai-shop"/)
-  assert.match(html, /<details class="portal-generator-drawer portal-page shop-world-disclosure">/, 'Secondary world tools start collapsed')
-  assert.match(html, /<summary>Create a world blueprint with GPT-6 Astra<\/summary>/)
+  assert.doesNotMatch(html, /data-world="enchanted-ai-shop"|portal-generator-drawer/, 'World creation belongs in My World')
+  assert.match(html, /Open My World/)
   assert.match(html, /3D model/)
   assert.match(html, /Back to WORLDIFACT/)
   assert.match(html, /id="studio-prompt"/)
@@ -78,8 +78,12 @@ test('historical Shop portal keeps the real model form and its separate world-bl
   assert.doesNotMatch(html, /<iframe|target="_(top|self|parent)"|3D result appears here|FORGE-projekt/)
 })
 
-test('native Planets entry renders all eight English stages and labels its separate external prototype', async () => {
-  const html = await renderPortal('/planets')
+test('8 Planets requires experimental notice before its eight-stage preview', async () => {
+  const gate = await renderPortal('/planets')
+  assert.match(gate, /experimental preview/)
+  assert.match(gate, /Continue to experimental game/)
+  assert.doesNotMatch(gate, /Eight worlds\. Eight days\. One expedition\./)
+  const html = await renderPortal('/planets', null, true)
   assert.match(html, /data-world="8-planets-in-8-days"/)
   assert.match(html, /Eight worlds\. Eight days\. One expedition\./)
   assert.match(html, /Mini test/)
