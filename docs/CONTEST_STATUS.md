@@ -1,3 +1,8 @@
+# 2026-10-15 — Character Engine V5 root-cause repair (DRAFT only)
+
+IMPLEMENTED/TESTED: [draft PR #297](https://github.com/teslaeco/WORLDIFACT/pull/297). Photo-referenced robots containing MCC, motor, wiring and contactor words now select the **humanoid robot** instruction profile rather than a cabinet. Sol/Astra advice is opt-in on the draft and does not submit, alter the account, price, model or original job. Explicit prior model/price remains authoritative. Real V5 QA tests include actual robot photo, existing MCC and woman model regressions and no paid dispatch. The older legacy /reserve test now correctly asserts the existing immediate 250-point debit against `credits`, with zero `reservedCredits` hold and same-ID idempotency; no payment code was changed. [Exact production-code CI #38701270312](https://github.com/teslaeco/WORLDIFACT/actions/runs/38701270312) SUCCESS on `827fe3b7eb339beb5d3f5ad1e5527710934e61cf`. No new OpenAI API jobs/cost, no merge or deployment. New actual photo-likeness model remains BLOCKED; green tests do not prove photorealism.
+
+---
 # 15 October 2026 — Six-portal landing LIVE: merge and preserving release verified
 
 ## Current verified milestone
