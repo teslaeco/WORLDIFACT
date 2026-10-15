@@ -148,3 +148,37 @@ supplier's actual material/process requirements are separate MAKE gates.
 - Conditional object writes: https://docs.aws.amazon.com/boto3/latest/reference/services/s3/client/put_object.html
 - TRELLIS2 implementation/license: https://github.com/microsoft/TRELLIS.2
 - Pinned worker SDK: https://pypi.org/project/runpod/1.12.0/
+
+## Staging RunPod credential handshake — 2026-10-15
+
+RunPod Official ChatGPT plugin installation was confirmed, but direct RunPod
+account-management tool methods were unavailable in this conversation.
+The owner showed a RunPod API secret in the GitHub **Production** environment;
+do not use that environment from a draft PR: it contains unrelated OpenAI,
+Cloudflare, Stripe and Oracle secrets.
+
+Create a separate GitHub environment named **runpod-staging**, enable required
+reviewer approval, then privately add a read-only RunPod key with secret name
+RUNPOD_API_KEY. Do not paste the value into any chat, commit, issue or log.
+
+Added a protected and disabled-by-default authentication test:
+- scripts/runpod-readonly-preflight.mjs — official REST v1 GET for endpoints,
+  network volumes and Pods; aggregate results only, no provider env/IDs logged.
+- tests/runpod-readonly-preflight.test.mjs — GET-only, leak prevention,
+  malformed-response, timeout and permission-denial regression tests.
+- .github/workflows/runpod-staging-connection-once.yml — dedicated
+  runpod-staging environment, pinned verifier, strictly one marker-only push.
+  The activation marker is intentionally absent until secret/reviewer setup.
+- Existing manual staging workflow was corrected from the wrong API host to
+  the documented official https://rest.runpod.io/v1/endpoints URL. GitHub
+  manual dispatch requires workflow availability on the default branch;
+  do not report it as an executed account check yet.
+
+Official API:
+https://docs.runpod.io/api-reference/endpoints/GET/endpoints
+https://docs.runpod.io/api-reference/network-volumes/GET/networkvolumes
+
+Read-only success is NOT paid GPU setup or LIVE model generation. A GPU
+container image, license review, private storage, measured availability
+and price, actual end-to-end ECOMECH reconstruction, cost reconciliation
+and final Android/MAKE gates remain NOT VERIFIED. No GPU or disk was purchased.
