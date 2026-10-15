@@ -1,0 +1,98 @@
+name: ECOMECH V7 real source-projected GLB/PBR lookdev — NO PAID GENERATION
+on:
+  push:
+    branches: ['feat/ecomech-v7-source-guided-pbr-20261015']
+    paths:
+      - 'tools/ecomech/v7_source_projected_pbr.py'
+      - 'tools/ecomech/v7_render_real_glb.py'
+      - 'tools/ecomech/v7_reference_annotation_DRAFT.json'
+      - '.github/workflows/ecomech-v7-pbr-lookdev.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ecomech-v7-offline-originals
+  cancel-in-progress: true
+jobs:
+  source-photo-real-mesh-lookdev:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: { python-version: '3.12' }
+      - name: Retrieve original user image from existing FAILED Astra job only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .original
+          gh run download 38653687131 --repo teslaeco/WORLDIFACT \
+            --name ECOMECH-V4-ASTRA-WITH-ACTUAL-REFERENCE-8fcffb86c571a8cca7ad09e1401247bf08f41104 \
+            --dir .original
+          printf '%s  %s\n' '9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053' '.original/input-reference.png' | sha256sum --check
+      - name: Retrieve original six-part TripoSR neural CPU output, no regeneration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .original-v6
+          gh run download 38698419490 --repo teslaeco/WORLDIFACT \
+            --name ecomech-v6-open-neural-six-part-geometry-8414e6934d008749a6da0a99d2e45ccbf65fb616 \
+            --dir .original-v6
+          printf '%s  %s\n' '193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970' '.original-v6/ecomech-v6-neural-parts-original.glb' | sha256sum --check
+      - name: Install pinned offline geometry + PBR + native GLTF render tools
+        run: |
+          python -m pip install --disable-pip-version-check \
+            'numpy==2.3.5' 'Pillow==12.3.0' 'trimesh==4.11.1' \
+            'opencv-python-headless==4.13.0.92' 'scipy==1.17.0' 'vtk==9.6.2'
+          python -m py_compile tools/ecomech/v7_source_projected_pbr.py tools/ecomech/v7_render_real_glb.py
+      - name: Generate SOURCE-PROJECTED PBR on true original V6 meshes (NOT 360 photogrammetry)
+        run: |
+          python tools/ecomech/v7_source_projected_pbr.py \
+            --reference .original/input-reference.png \
+            --original-glb .original-v6/ecomech-v6-neural-parts-original.glb \
+            --annotation tools/ecomech/v7_reference_annotation_DRAFT.json \
+            --out ecomech-v7-offline-lookdev
+      - name: Verify every real GLB/PBR material and forbid false release
+        run: |
+          python - <<'PY'
+          import json,hashlib,struct
+          from pathlib import Path
+          import trimesh
+          p=Path('ecomech-v7-offline-lookdev')
+          report=json.loads((p/'provenance-and-qa.json').read_text())
+          binary=(p/'ecomech-v7-projected-pbr-EXPERIMENTAL.glb').read_bytes()
+          assert binary[:4]==b'glTF' and struct.unpack_from('<II',binary,4)==(2,len(binary))
+          assert report['outputGLBSha256']==hashlib.sha256(binary).hexdigest()
+          scene=trimesh.load(p/'ecomech-v7-projected-pbr-EXPERIMENTAL.glb',force='scene',process=False)
+          assert len(scene.geometry)==6 and sum(len(m.faces) for m in scene.geometry.values())==218450
+          assert report['actualTriangles']==218450 and report['partCount']==6
+          assert report['normalMappedMaterials']>=6 and report['metallicRoughnessMappedMaterials']>=6
+          assert report['embeddedImages']>=18
+          assert report['originalReferencePngSha256']=='9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053'
+          assert report['sourceNeuralGlbSha256']=='193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970'
+          assert not report['photorealismCertified'] and not report['premiumShopEligible'] and not report['makeEligible']
+          assert not report['rearSideGeometryVerified'] and not report['actualOpenAI3DGeneration']
+          assert report['actualOpenAIPaidCalls']==report['actualExternalPaidVendorCalls']==0
+          print('ECOMECH_V7_REAL_ORIGINAL_BINARY_PBR_AND_NO_GO_VERIFIED')
+          PY
+      - name: Render ACTUAL GLB from front/three-quarter/side/back
+        run: |
+          python tools/ecomech/v7_render_real_glb.py \
+            --glb ecomech-v7-offline-lookdev/ecomech-v7-projected-pbr-EXPERIMENTAL.glb \
+            --out ecomech-v7-offline-lookdev
+          test -s ecomech-v7-offline-lookdev/real_glb_front.png
+          test -s ecomech-v7-offline-lookdev/real_glb_three_quarter.png
+          test -s ecomech-v7-offline-lookdev/real_glb_side.png
+          test -s ecomech-v7-offline-lookdev/real_glb_back.png
+      - name: Preserve real original GLB, manifests and four ACTUAL views (NO public deploy)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ecomech-v7-PBR-TRUE-GLB-research-${{ github.sha }}
+          path: ecomech-v7-offline-lookdev/
+          if-no-files-found: ignore
+          retention-days: 21
+          compression-level: 0
