@@ -1,0 +1,10 @@
+{
+  "revision": "six-portals-20261015-v1",
+  "baseCommit": "a83a85d4c830147bb5861120ed3dafcd7d63a86d",
+  "reviewedHead": "d974cfa47751252cc0c5c3fc51219334163945fe",
+  "pullRequest": 294,
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "preserveBilling": true,
+  "paidGenerationDuringDeploy": false
+}
