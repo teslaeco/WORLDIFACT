@@ -1,3 +1,9 @@
+## 2026-10-16 — Two paid owner reference trials requested; no fabricated 3D results
+
+**INPUT PREPARED / NO RUNPOD GPU / NO ASTRA INFERENCE.** Owner supplied exact ECOMECH V4 and Halloween music room PNG references plus QA board; approved two paid tests and asks for two actual 3D model URLs. Private source input ZIPs and mask candidates are held in the user's ChatGPT session, not copied into the public repo. Source-pack validation and synthetic tests added on an isolated branch. Provider account GET verified zero RunPod endpoints, PR #305 remains nonmergeable and commercially restricted nvdiffrast PBR path remains blocked. Halloween scene requires multi-object scene construction, which PR #305 does not support. No paid inference executed, no model URLs can honestly be issued. See docs/REFERENCE_TRIALS_20261016.md.
+
+---
+
 ## 2026-10-16 — RunPod/R2 credentials present in GitHub, safe production preflight staged
 
 **SCREENSHOT EVIDENCE / NOT CONNECTED / NOT DEPLOYED / ZERO GPU SPEND.** Owner screenshots show Production has 14 environment secrets and 4 variables, including R2, RunPod and Oracle. The R2 S3 endpoint variable looks like a literal explanatory placeholder, not a URL: fail closed until corrected. RunPod key had returned 403 on a prior v1 check; owner now reports restricted Read/Write scope and a USD 33 RunPod budget, neither independently validated. Draft #305 stays unmerged; its offline provider and real Blender fixture CI passed, with flaky ISS source timeout cleared by rerun.
