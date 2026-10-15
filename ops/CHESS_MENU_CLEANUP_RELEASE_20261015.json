@@ -1,0 +1,12 @@
+{
+  "revision": "chess-cleanup-20261015-v1",
+  "baseCommit": "4560ff82050a79cedda91975a5b1e0c030541286",
+  "reviewedHead": "a4d4fa23168c534b406eb7d24351c46208cea07a",
+  "pullRequest": 296,
+  "chessPullRequest": 144,
+  "chessPin": "63cec61eaf930f337bbf5e77b3c787f9b7711554",
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "preserveBilling": true,
+  "paidGenerationDuringDeploy": false
+}

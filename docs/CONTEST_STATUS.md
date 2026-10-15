@@ -1,33 +1,20 @@
-# 15 October 2026 — Screenshot cleanup: implemented; desktop repeat blocks publication
+# 15 October 2026 — Cube Chess menu cleanup: merged, preserving publication pending
 
-## Implemented changes
+## VERIFIED: reviewed source and merges
+- [Cube Chess PR #144](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/144) merged as `9cc93241e9e2ef1c3bd0de3afdc165bd996c890b` from tested source `63cec61eaf930f337bbf5e77b3c787f9b7711554`. The exact source passed [original Chess test/build #38701520956](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38701520956) and [desktop/mobile menu regression #38701520889](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38701520889): SUCCESS. The former desktop repeat issue was addressed by returning to a static menu rather than restarting the expensive attract/demo animation.
+- [WORLDIFACT PR #296](https://github.com/teslaeco/WORLDIFACT/pull/296) merged as `4560ff82050a79cedda91975a5b1e0c030541286`; pinned Chess source is the exact tested `63cec61eaf930f337bbf5e77b3c787f9b7711554`. The final pinned [WORLDIFACT Verify #38701793675](https://github.com/teslaeco/WORLDIFACT/actions/runs/38701793675) completed SUCCESS, including full `npm run verify`, foundations, Worker dry-run and GET-only Studio inspection. Four independent safety workflows also succeeded.
+- The user authorized production publication on this date after green tests.
 
-[WORLDIFACT PR #296](https://github.com/teslaeco/WORLDIFACT/pull/296) removes the duplicate plain six-card grid and the entire large Product Hunt section, badges and comment iframe. One LED navigation, the compact resource strip, its small Product Hunt link and the ISS petition remain.
+## Reviewed UI scope
+- One six-destination neon portal navigation remains; duplicate old six-card grid and large Product Hunt panel/embeds are removed. The compact resource strip, ISS petition and small independent Product Hunt resource link remain.
+- /chess opens the actual same-origin Cube Chess entry directly, without preview/launcher/iframe or a generation form. The real login/guest flow stays.
+- Within the game, Exit to menu confirms destructive exit and preserves saved games, identity and preferences; Cancel keeps the current match; return to menu does not reload. Polish/English About now describes 8×8×8 / 512 squares and upcoming tested updates.
+- No provider generation, billing modification, Oracle operation or secret sync was performed as part of these source merges.
 
-`/chess` directly enters the actual same-origin `/apps/chess/index.html` game welcome. The disposable route is replaced without a launch click, board preview, blueprint generator or nested mobile WebGL frame. Existing account/guest choices and shared-identity guards remain. Entry navigation is separate from the game's in-document return to menu.
+## Production deployment gate
+**PENDING / not yet LIVE in this milestone:** a new one-use workflow `.github/workflows/chess-cleanup-release-once.yml` is armed by `ops/CHESS_MENU_CLEANUP_RELEASE_20261015.json`. The exact-parent guard requires base 4560ff82050a79cedda91975a5b1e0c030541286, owner-reviewed PR source SHA, exact release-only file changes and the Chess foundation pin. The workflow reruns original verify/foundations and Wrangler dry-run, deploys only with the existing reviewed preserving configuration and `--keep-vars`, suppresses potentially private Wrangler CLI output and performs exact deployed-asset SHA/MIME checks plus public Studio health checks. A successful GitHub Cloudflare receipt and byte-level verification must be recorded before marking this release LIVE.
 
-[Cube Chess PR #144](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/144), pinned at `8fe8bcd27f7e718a59d94e09db9e71f42c3347e1`, implements confirmed Exit to menu. Cancel retains the current match. Confirmation closes it and temporary panels, preserving saved games, identity and preferences without replacing the document/renderer. Session guards invalidate late AI/autosave work. The guest-readiness observer disconnects before writing observed attributes. About is new English/Polish chess-first copy: eight 8×8 boards, 512 squares, Terraforming Planet's work and upcoming updates; it does not claim an app-store launch.
+The historical one-time Cloudflare workflow may separately fail closed on its legacy scope gate. Do not conflate that with this preserving release. Physical Android/iOS hardware, actual login and multiplayer remain unverified by desktop/mobile Chromium emulation.
 
-## VERIFIED exact-source integration
-
-All five WORLDIFACT workflows passed on application candidate `abe4e372856ffb836129a2e6760ac836c2495efe`. [Verify run 38697982288](https://github.com/teslaeco/WORLDIFACT/actions/runs/38697982288), job `116299007411`, completed SUCCESS: original full verify, final pinned chess foundation assembly, Worker deployment dry-run and GET-only hosted Studio inspection. Four safety workflows also passed. This documentation-only follow-up does not change that application source or pin; its own CI status must not be inferred from the parent.
-
-Chess's original test/build [run 38697852036](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38697852036) succeeded on the pinned commit. PR build success is not publication.
-
-The route fixture's prior Vite temporary-config EPERM was resolved by importing the real checked-in configuration with `configFile:false`. React, auth, private-world, other-portal and no-network assertions remain. The temporary diagnostic workflow was removed. Protected original CI and deployment guards were not changed.
-
-## Final browser result: 5/6 PASS; release BLOCKED
-
-[Browser run 38697852085](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38697852085), job `116298579090`, finished FAILED at `2026-10-15T07:23:39Z`, with 5 tests passed and 1 failed, on exact Chess head `8fe8bcd27f7e718a59d94e09db9e71f42c3347e1`.
-
-VERIFIED in mobile Chromium emulation: cancel preserves the match; confirm returns to menu; previously saved games remain; no document navigation occurs; three start/exit cycles complete. Both desktop and mobile passed English/Polish About and direct guest entry.
-
-BLOCKED: desktop's repeat sequence passed the initial cancel/confirm/save/no-reload assertions, but the subsequent `start-game` click exceeded its 30-second action deadline at `e2e/menu-return.spec.js:61`. Playwright was waiting for the button to be visible, enabled and stable. Extending the whole sequence to 180 seconds did not resolve that action failure. The cause is NOT established; do not attribute it solely to CI slowness or call the interaction stable. Next diagnosis must inspect the repeated menu's state, layout stability and rendering lifecycle, not simply increase timeouts again. The snapshot and failure are in the linked job log.
-
-The suite used the real production game and software WebGL, zero retries, all original assertions/repetitions, and blocked non-local provider requests. Emulated Chromium is not physical Android/iOS acceptance, real account sign-in or live multiplayer verification.
-
-## GO / NO-GO
-
-NO-GO for publishing this combined update until the desktop repeat issue is resolved, the full browser suite succeeds, and the owner authorizes merge/publication. Both PRs remain drafts. No merge, production deployment, paid generation, billing mutation or secret synchronization occurred.
-
-Production remains release `c82c6abe246996630b1d751a40dcf769181089f5`, Cloudflare version `630e387c-15d8-42b6-848d-bacf32e2b697`. Complete previous status remains byte-for-byte in [the pre-cleanup snapshot](CONTEST_STATUS.before-ui-cleanup-20261015.md), original blob `1a50b6a47d107fd9fef81625ae7a8d4b1704f7d9`. These cleanup changes are NOT LIVE.
+## History
+Earlier detailed status is preserved byte-for-byte in `docs/CONTEST_STATUS.before-chess-release-20261015.md` (blob `286c20d9c76d363d34e1985b7a97446b0f85814d`). The preceding public six-portal release was Cloudflare version `630e387c-15d8-42b6-848d-bacf32e2b697`; it is not evidence that the current cleanup is LIVE.
