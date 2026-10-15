@@ -1,0 +1,74 @@
+name: Whole-object TRELLIS2 official free GPU experiment (one request, no paid fallback)
+on:
+  push:
+    branches: ['feat/reference-reconstruction-trellis2-20261015']
+    paths: ['ops/reference-trellis2-free-once.json']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ecomech-trellis2-official-free-once
+  cancel-in-progress: false
+jobs:
+  original-reference-single-attempt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      HF_HUB_DISABLE_IMPLICIT_TOKEN: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false, fetch-depth: 2}
+      - name: Require marker-only original activation; rerun is not authorized
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | wc -l)" -eq 1
+          git diff-tree --no-commit-id --name-only -r HEAD | grep -qx ops/reference-trellis2-free-once.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - name: Read the approved source PNG, not any previous model or generated poster
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .reference-source
+          gh run download 38653687131 --repo teslaeco/WORLDIFACT \
+            --name ECOMECH-V4-ASTRA-WITH-ACTUAL-REFERENCE-8fcffb86c571a8cca7ad09e1401247bf08f41104 \
+            --dir .reference-source
+          printf '%s  %s\n' '9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053' '.reference-source/input-reference.png' | sha256sum --check
+          gh api 'repos/teslaeco/WORLDIFACT/contents/tools/ecomech/v7_reference_annotation_DRAFT.json?ref=bd6de4e3d40c6671c6136bbc707bf7d397c179c4' --jq '.content' | base64 -d > .reference-source/annotation.json
+      - name: Install the client and local mask tools, not a local low-quality reconstructor
+        run: |
+          python -m pip install --disable-pip-version-check 'gradio_client==2.0.3' 'Pillow==12.3.0' 'numpy==2.3.5' 'trimesh==4.11.1' 'opencv-python-headless==4.13.0.92'
+          python -m py_compile tools/reference_reconstruction/*.py
+          python tools/reference_reconstruction/mask_reference.py --source .reference-source/input-reference.png --annotation .reference-source/annotation.json --out .reference-source/mask.png
+      - name: Submit exactly once to official Microsoft free demo; no API key or upgrade
+        run: |
+          python tools/reference_reconstruction/official_demo_once.py \
+            --source .reference-source/input-reference.png --mask .reference-source/mask.png \
+            --job ops/reference-trellis2-free-once.json --out trellis2-official-free-result
+      - name: A real GLB is required to call this a successful reconstruction
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('trellis2-official-free-result/attempt.json').read_text())
+          assert report['paidVendorRequests']==report['newOpenAIRequests']==0
+          assert report['generationRequestsAttempted']<=1
+          assert report['status']=='ORIGINAL_GLB_RECEIVED_REQUIRES_INDEPENDENT_REVIEW', report.get('reason',report['status'])
+          assert not report['visualAccepted'] and not report['printReady']
+          assert Path('trellis2-official-free-result/ECOMECH_TRELLIS2_ORIGINAL_UNREVIEWED.glb').is_file()
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: trellis2-official-free-research-${{ github.sha }}
+          path: |
+            trellis2-official-free-result/attempt.json
+            trellis2-official-free-result/ECOMECH_TRELLIS2_ORIGINAL_UNREVIEWED.glb
+            trellis2-official-free-result/provider_renders/
+            trellis2-official-free-result/input.png
+          if-no-files-found: ignore
+          retention-days: 14

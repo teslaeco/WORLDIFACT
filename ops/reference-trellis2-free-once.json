@@ -1,0 +1,9 @@
+{
+  "revision": "reference-reconstruction-v1",
+  "source_sha256": "9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053",
+  "seed": 20261015,
+  "resolution": 1024,
+  "texture_size": 4096,
+  "decimation_target": 500000,
+  "engine": "trellis2"
+}

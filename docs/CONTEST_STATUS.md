@@ -47,3 +47,15 @@ Prior Cloudflare version `dbd875c7-26d5-42c5-b6d9-bbe3f48708e8` is superseded by
 
 ## Preserved previous status
 Prior status is stored byte-for-byte in [CONTEST_STATUS.before-single-chess-exit-20261015.md](CONTEST_STATUS.before-single-chess-exit-20261015.md), original blob `ab5f26d4c64863ec3b68296cbcc139070d14f11f`. Earlier published status claims are historical and not proof that this specific bug fix is already live.
+
+---
+
+# 15 October 2026 — PR #304 interrupted-session recovery: source mask fixed
+
+IMPLEMENTED / TESTED on draft only. The original SAM2 tuple/list error and two erroneous background annotations were already corrected in saved commits. A further defect remained: the highest-scored mask passed sparse point checks while deleting visible forearm and foot surfaces. `mask_selection.py` now rejects candidates unless all eleven manually reviewed source-region rectangles retain at least 95% of their pixels, in addition to foreground/background/gap checks. Only then can the model score rank a candidate. The SAME selector is integrated into `sam2_reference_mask.py`; it does not repaint pixels or make a 3D model.
+
+Actual existing-mask replay selected candidate 3 instead of 5. In the inspected source rectangles, exposed forearm retention changed 64.56% -> 100%, heel armor 46.88% -> 100%, front foot 79.33% -> 100%. The minimum among eleven rectangles is 97.32%. These are limited mask-integrity measurements, NOT 3D likeness, full segmentation IoU, print approval or independent competitor benchmarks. Original RGB remains unchanged; selected mask SHA-256 `91933979952de85d92cb3a925cbe9edaf8d79510889b0219a953ec6a293bd0a6`.
+
+Verified evidence: [real SAM2 CPU run 38758676041](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758676041) SUCCESS; [actual archived-mask replay and seven tests 38758804991](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758804991) SUCCESS; [all reconstruction contracts 38758811745](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758811745) SUCCESS; [full repository verify/foundations/dry-run 38758811741](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758811741) SUCCESS at tested source `6a7e7276520287a2adcd5aaf2c577af02c0fd40e`. Later documentation-only commits require a separate exact-head check.
+
+No new 3D generation, paid GPU/API call, merge, deployment, customer-credit change or supplier order occurred in this recovery. The older Microsoft free-demo generation returned previews but GLB export failed with an auth/free-quota category; that result is NOT a downloaded or printable model. See [prior transport/export evidence](TRELLIS2_SESSION_RECOVERY_20261015.md). Native GPU execution and a faithful supplier-ready ECOMECH remain unverified. Source preparation is fixed; the complete 3D/export/MAKE goal is NOT finished.
