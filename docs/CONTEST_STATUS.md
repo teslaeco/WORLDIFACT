@@ -1,3 +1,9 @@
+## 2026-10-16 — RunPod on-demand-only policy enforced in offline CI
+
+**RECOMMENDATION / IMPLEMENTED TEST / NOT DEPLOYED.** Owner requires RunPod GPU only when WORLDIFACT actively generates a model, and automatic scale-down afterward. Added an executable profile regression test on draft PR #305 for queue-based Serverless Flex: Active=0, Max=1, 1 GPU, 1 handler, 5-second idle timeout, no automatic upgrade, no provisioned endpoint/image/rate. Workflow now runs test. No paid GPU/image/resource creation. Actual deployed provider policy remains UNKNOWN until live readback. No browsing, gallery or GET status may trigger new GPU work.
+
+---
+
 ## 2026-10-15 — RunPod actual account GET denied 403; safe v2 migration
 
 **VERIFIED / BLOCKED / NOT DEPLOYED**. The one-time read-only RunPod GitHub
