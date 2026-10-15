@@ -40,6 +40,16 @@ This is a **Blender-authored, manually reference-guided reconstruction**, *not a
 The full exact source and generated files are in immutable GitHub Actions artifact:
 \`ecomech-v4-native-reference-rebuild-c4b85f1557df058b6bac37c6f04f9fa5e9d64966\`.
 
+## Durable source files in the **draft** GitHub branch (verified after archive)
+
+The original output artifact is now preserved as real Git blobs in PR #295 at commit `2d3448ee1e37e9632fe2e6603d2bd4dcaad8cb80`. Read-only Git tree inspection verified:
+
+- [Original GAME GLB — public/pilots/ecomech-v4-review/robot.glb](https://github.com/teslaeco/WORLDIFACT/blob/feat/ecomech-v4-real-sculpt-20261015/public/pilots/ecomech-v4-review/robot.glb) — **8,964,884 bytes**, blob `6659c662...`, source SHA-256 `629cca8ce...`.
+- [Original editable Blender file — source.blend](https://github.com/teslaeco/WORLDIFACT/blob/feat/ecomech-v4-real-sculpt-20261015/public/pilots/ecomech-v4-review/source.blend) — **4,916,202 bytes**, blob `18cc2960...`, source SHA-256 `1e4845b6...`.
+- [Native manifest](https://github.com/teslaeco/WORLDIFACT/blob/feat/ecomech-v4-real-sculpt-20261015/public/pilots/ecomech-v4-review/native-manifest.json) — 1,269 bytes, no false vendor attribution.
+
+Existing no-provider archive workflow [#38687007606](https://github.com/teslaeco/WORLDIFACT/actions/runs/38687007606) finished SUCCESS, verified original SHA-256, exact file sizes and copied only these immutable review files. **Not merged, not live, no buyer access promised, no production deployment**. This removes dependence on expiring GitHub Actions artifact retention for the original GLB/BLEND.
+
 ## Visual QA: not a win
 
 A rough hand-drafted V4 photo silhouette annotation was used without camera calibration (five yaw hypotheses). Old recovered V2 GLB baseline best annotated IoU: **0.50226**. New geometry best annotated IoU: **0.48396**, at 25°. **Silhouette alignment became worse on this preliminary metric**, despite a better-directed chili, less smooth hero helmet and more varied mechanical details. These are projected coarse masks, **not photorealism confidence values**.
