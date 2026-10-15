@@ -40,7 +40,7 @@ export const PORTALS: readonly PortalDefinition[] = [
     title: 'Enchanted AI Shop',
     shortTitle: 'AI Shop',
     route: '/shop',
-    tagline: 'Open the original FORGE shop and your projects',
+    tagline: 'Create 3D models, characters and assets',
     description:
       'Prototype object generation workflows that separate appearance review from manufacturing validation.',
     color: '#a5d6a7',
@@ -51,9 +51,9 @@ export const PORTALS: readonly PortalDefinition[] = [
     title: 'AI Game Lab',
     shortTitle: 'Game Lab',
     route: '/lab',
-    tagline: 'Open the existing Froge MPC 2 studio',
+    tagline: 'Test games built in My World',
     description:
-      'Create characters, vehicles, buildings and objects, then place them into reusable scenes.',
+      'Playtest saved My World scenes, drive vehicles and tune game controls and rendering.',
     color: '#80cbc4',
     position: { x: 20, z: 2.7 },
   },
