@@ -1,3 +1,37 @@
+## 2026-10-15 — RunPod actual account GET denied 403; safe v2 migration
+
+**VERIFIED / BLOCKED / NOT DEPLOYED**. The one-time read-only RunPod GitHub
+probe was reviewed under PR #306, merged with its own green CI, and triggered
+from trusted main. Its actual GET to RunPod management REST returned
+**HTTP 403**: https://github.com/teslaeco/WORLDIFACT/actions/runs/38801996493.
+The secret was available to the runner (masked) but no resource access was
+granted. This did NOT launch a GPU, purchase storage, send a paid generation,
+expose the key, or modify customer data. The main-branch one-time workflow
+was removed immediately afterward at
+2e41b15a11f6f023f1189892033f3923929af511.
+An unrelated release workflow was invoked by the main push but stopped before
+credential setup/deploy at
+https://github.com/teslaeco/WORLDIFACT/actions/runs/38801996415.
+
+**VERIFIED in docs**: Official management API moves from REST v1 to v2 on
+https://api.runpod.io/v2 and retires v1 on 2026-11-15. In draft PR #305 the
+staging verification scripts and tests were updated for official paginated
+v2 JSON response types, with GET-only, zero-secret-logging checks. This code
+has not yet obtained a successful authenticated staging response.
+Documentation: https://docs.runpod.io/api-reference-v2/migrate-from-v1
+
+**BLOCKED**: Owner's RunPod key must be enabled and have adequate read
+permissions for endpoints, volumes and Pods. Existing GitHub and installed
+RunPod plugins do not expose account secret/permission administration here.
+No unauthorized workaround, payment operation, credential rotation, paid
+worker start, or endpoint creation was attempted.
+
+**NO-GO**: Native TRELLIS2 image and end-to-end ECOMECH PBR GLB remain
+unverified, as do private storage, actual rate/cost, side/back shape fidelity
+and supplier MAKE checks. Draft PR #305 is intentionally not merged.
+
+---
+
 ## Staging GET-only RunPod connection gate — 2026-10-15
 
 **IMPLEMENTED / TESTS PENDING / ACCOUNT ACCESS BLOCKED / NOT DEPLOYED.**
