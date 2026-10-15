@@ -5,7 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { createServer } from 'vite'
 
-test('login entry offers email, gated Google, truthful future providers and an explicit guest route', async () => {
+const expectedPortalRoutes = ['/chess', '/iss', '/planets', '/shop', '/lab', '/account/worlds']
+const portalRoutes = markup => [...markup.matchAll(/href="([^"]+)"/g)].map(match => match[1])
+
+test('login entry preserves safe sign-in and exposes exactly six portals on both landing pages', async () => {
   // Static React rendering only: no listening server, browser, login, or provider request.
   const vite = await createServer({ server: { middlewareMode: true, watch: null, hmr: false, ws: false }, appType: 'custom', logLevel: 'error' })
   try {
@@ -13,8 +16,21 @@ test('login entry offers email, gated Google, truthful future providers and an e
     const { AccountProvider } = await vite.ssrLoadModule('/src/lib/account.tsx')
     const render = path => renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: [path] }, createElement(AccountProvider, null, createElement(AccountPage))))
     const html = render('/login')
-    assert.match(html, /WORLDIFAKT/)
-    assert.doesNotMatch(html, /WORLDIFACT|Chess Cube|CHESS CUBE/)
+    // Branding belongs to the header; portal names are intentionally visible below it.
+    const header = html.split('<header class="account-header">')[1]?.split('</header>')[0]
+    assert.ok(header, 'the account header is present')
+    assert.match(header, /WORLDIFAKT/)
+    assert.doesNotMatch(header, /WORLDIFACT|Chess Cube|CHESS CUBE/)
+    assert.ok(html.includes('aria-label="Six WORLDIFACT portals"'))
+    const accountPortals = html.split('<nav class="neon-portals"')[1]?.split('</nav>')[0]
+    assert.ok(accountPortals, 'the account landing has a dedicated portal navigation')
+    assert.deepEqual(portalRoutes(accountPortals), expectedPortalRoutes, 'all six account portals appear exactly once in order')
+    assert.ok(html.includes('class="resource-marquee"'))
+    assert.ok(html.includes('No partnership or endorsement implied'))
+    for (const resource of ['NASA', 'ESA', 'JAXA']) assert.ok(html.includes(resource), `${resource} is visible`)
+    const { default: PortalCardsNav } = await vite.ssrLoadModule('/src/components/PortalCardsNav.tsx')
+    const worldPortals = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(PortalCardsNav)))
+    assert.deepEqual(portalRoutes(worldPortals), expectedPortalRoutes, 'the world-page navigation also exposes all six destinations exactly once')
     assert.match(html, /href="\/world"[^>]*>Explore as a guest/)
     assert.match(html, /<input[^>]*type="email"[^>]*required=""/)
     assert.match(html, /<input[^>]*type="password"[^>]*autoComplete="current-password"[^>]*required=""/)

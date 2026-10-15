@@ -10,6 +10,7 @@ export default function PortalCardsNav() {
           <span>{portal.tagline}</span>
         </Link>
       ))}
+      <Link to="/account/worlds" className="portal-nav-card portal-nav-card--my-worlds"><span className="portal-nav-title">My Worlds</span><span>Open saved worlds and create your own</span></Link>
     </nav>
   )
 }
