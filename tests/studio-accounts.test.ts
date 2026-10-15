@@ -831,3 +831,28 @@ test('completed and failed owned recovery returns measured duration independentl
     assert.equal(f.posts(), 1)
   }
 })
+
+
+test('Character V5 photo robot reservation keeps the original account price, idempotency and no hidden Oracle dispatch', async()=>{
+  const f=fixture()
+  await f.subscribe()
+  const original=await entitlementStatus(f.env,alice)
+  const id=crypto.randomUUID()
+  const input={id,profile:'slow',model:'astra',qualityProfile:'reference-humanoid-robot-v5'}
+  const first=await entitlementCall<{allowed:boolean;cost?:number}>(f.env,alice,'/reserve',input)
+  assert.equal(first.allowed,true,'New character classification must not block a verified existing account')
+  assert.equal(first.cost,250,'The V5 quality profile does not create a new price')
+  const after=await entitlementStatus(f.env,alice)
+  assert.equal(after.credits,original.credits)
+  assert.equal(after.reservedCredits,original.reservedCredits+250)
+  assert.equal(f.posts(),0,'Preparation/reservation alone never starts the Oracle job')
+  const again=await entitlementCall<{allowed:boolean;cost?:number}>(f.env,alice,'/reserve',input)
+  assert.equal(again.allowed,true)
+  const repeated=await entitlementStatus(f.env,alice)
+  assert.equal(repeated.reservedCredits,after.reservedCredits,'One original UUID cannot reserve again')
+  await entitlementCall(f.env,alice,'/settle',{id,state:'failed'})
+  const final=await entitlementStatus(f.env,alice)
+  assert.equal(final.credits,original.credits)
+  assert.equal(final.reservedCredits,original.reservedCredits)
+  assert.equal(f.posts(),0)
+})
