@@ -1,3 +1,11 @@
+# 2026-10-15 — ECOMECH V7 true source-guided PBR/Blender lookdev (NOT RELEASED)
+
+IMPLEMENTED / TESTED: [draft PR #299](https://github.com/teslaeco/WORLDIFACT/pull/299) contains real original-reference-PNG-sha-guided 3D GLB texture projection with actual UV/PBR, metallic/roughness and normal texture images. A previous first attempt failed at the VTK hosted renderer segfault, **not** the GLB/PBR creation stage. We replaced renderer with checksum-verified native Blender 4.3; [native four-view GLB and BLEND workflow #38711528467](https://github.com/teslaeco/WORLDIFACT/actions/runs/38711528467) **SUCCESS** and [full code CI #38711533593](https://github.com/teslaeco/WORLDIFACT/actions/runs/38711533593) **SUCCESS**. Reproduced real binary GLB: 7,732,920 bytes SHA-256 `a9cf5b06e450577ef420a3c95b80017f401caf6c1674e10cc09e254be057dd48`; original editable BLEND 35,094,362 bytes SHA-256 `bb5137c784d00b62786bdbdb6ab42a8214212c32ecc7c5ff720976149181e67e`. Actual 218,450 triangles, six semantic parts, six PBR materials, 24 embedded textures. Real front, three-quarter, side and back render hashes are recorded in `docs/ECOMECH_V7_TRUE_PBR_QA_20261015.md`.
+
+**VISUAL NO-GO**: the front image resembles source more due *projected original source pixels*, but side/3D topology does not replicate unknown mechanics; the result is NOT photorealistic 360-degree geometry and not premium. Upstream geometry remains open-source local TripoSR and WORLDIFACT assembly, NOT an Astra-generated mesh. New OpenAI/Tripo/Meshy paid generations **0**; no secrets, customer points, merges, Cloudflare deployment or MAKE approval. This is R&D only, not production. Preserve production exactly.
+
+---
+
 # 15 October 2026 — Cube Chess menu cleanup: VERIFIED LIVE
 
 ## VERIFIED: reviewed source and merges
