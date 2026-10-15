@@ -1,0 +1,12 @@
+{
+  "revision": "chess-single-exit-20261015-v1",
+  "baseCommit": "d514699367675ad83e11d117688ae345567ab30d",
+  "reviewedHead": "bb74094f7c05d69719ca64d8eae269ac0b26f92a",
+  "pullRequest": 301,
+  "chessPullRequest": 146,
+  "chessPin": "8f519bc37dd850dc886cbbaab02e0bcc0320f07e",
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "preserveBilling": true,
+  "paidGenerationDuringDeploy": false
+}
