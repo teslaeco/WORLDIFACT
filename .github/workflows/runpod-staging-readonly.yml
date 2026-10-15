@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 3
     environment: runpod-staging
     steps:
-      - name: Verify readonly REST v1 access without exposing account data
+      - name: Verify readonly REST v2 access without exposing account data
         env:
           RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
         shell: bash
@@ -31,7 +31,7 @@ jobs:
           if not key or key.isspace():
               raise SystemExit("BLOCKED: RUNPOD_API_KEY missing from runpod-staging environment.")
           # NEVER log the key, HTTP body, endpoint IDs, user identity or spending.
-          uri = "https://rest.runpod.io/v1/endpoints"
+          uri = "https://api.runpod.io/v2/serverless"
           class NoRedirects(urllib.request.HTTPRedirectHandler):
               def redirect_request(self, *args, **kwargs):
                   raise RuntimeError("Refusing provider HTTP redirect.")
@@ -60,6 +60,6 @@ jobs:
           except Exception as e:
               # Do not print exceptions; they may embed URLs or headers.
               raise SystemExit("BLOCKED: safe connection verification failed (%s)." % type(e).__name__)
-          print("VERIFIED: RunPod authenticated GET-only access (REST v1).")
+          print("VERIFIED: RunPod authenticated GET-only access (REST v2).")
           print("NO GPU CREATED. NO API JOB SUBMITTED. NO STORAGE PURCHASE.")
           PY
