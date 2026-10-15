@@ -1,0 +1,1 @@
+{"revision":"worldifact-runpod-r2-production-preflight-v1","runpodOperations":["GET /v2/serverless","GET /v2/network-volumes","GET /v2/pods"],"r2OnlyObjectPrefix":"ops/preflight/","paidGpuAuthorized":false,"productionDeploymentAuthorized":false}
