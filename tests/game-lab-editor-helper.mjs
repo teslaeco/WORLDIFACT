@@ -10,6 +10,7 @@ import * as library from '../src/lib/gameLabLibrary.ts'
 import * as models from '../src/lib/modelCatalog.ts'
 import * as scopedBlueprint from '../src/lib/scopedBlueprintClient.ts'
 import * as blueprintRequest from '../src/lib/blueprintRequest.ts'
+import * as blueprint from '../src/lib/blueprint.ts'
 import * as editor from '../src/lib/editorTools.ts'
 import { privateWorldStore } from '../server/privateWorldStore.ts'
 
@@ -63,6 +64,7 @@ async function harness({ blueprintTransport,recoveryStore=new Map(),confirm=()=>
       if(id==='../lib/modelCatalog')return models
       if(id==='../lib/scopedBlueprintClient')return scopedBlueprint
       if(id==='../lib/blueprintRequest')return blueprintRequest
+      if(id==='../lib/blueprint')return blueprint
       if(id==='../lib/editorTools')return editor
       if(id==='../lib/studioArchive')return {STUDIO_ARCHIVE_EVENT:'archive',STUDIO_ARCHIVE_SIGNAL_KEY:'signal',listStudioModels:async()=>archive,readStudioModel:readModel||(async()=>new Blob(['fixture']))}
       if(id==='../lib/privateWorldAssets')return {listWorldAssets:async who=>assets.filter(a=>a.owner===who),storeWorldAsset:async(who,name,blob)=>{assetWrites.push({owner:who,name,blob});const item={id:assetWrites.length===1?assetId:replacementId,owner:who,name:assetName,bytes:blob.size,sha256:'a'.repeat(64)};assets=[item];return item}}
