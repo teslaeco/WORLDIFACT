@@ -1,3 +1,20 @@
+# 15 October 2026 — Compact premium Cube Chess HUD: REVIEW, NOT LIVE
+
+## Current implementation
+- The owner supplied three production Android screenshots showing overlapping account/Exit controls and bottom actions, plus a design direction for a compact blue/green neon HUD. This candidate uses the actual Cube Chess source, not an AI image.
+- [Cube Chess PR #145](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/145) moves the real user profile dropdown into the header grid, keeps the explicit destructive-confirmation Exit to menu and resizes the statistics, all eight levels and the scrollable camera toolbar. Bottom controls remain above the separate WORLDIFACT/Shop links.
+- This WORLDIFACT candidate pins Chess source `ebed7d71cff931c50b9d88734279098fbe82baca` in `config/foundation-sources.json`. It changes neither game rules/geometry nor WORLDIFACT backends/billing/secrets.
+
+## Verification
+PENDING: Cube Chess original test/build and PR-only built Chromium desktop/mobile gameplay/layout matrix. New geometry tests check the actual authenticated-profile DOM location with synthetic visible guest profile, header/status, controls and no overlap; this is not real sign-in evidence.
+PENDING: WORLDIFACT full verify, pinned foundation assembly, Worker dry-run, hosted Studio read-only inspection.
+BLOCKED: physical Android visual acceptance and real signed-in screenshot confirmation until user tests the deployed version.
+
+## Publication conditions
+NO-GO for production until Cube Chess + WORLDIFACT checks are successful and an exact-version preserving release passes. The last known LIVE release remains Cloudflare `9abf16c1-7fa6-48cd-b83a-efa32869dce5`, documented below. No paid model test, billing modification, secret synchronization or Oracle action is in scope.
+
+---
+
 # 15 October 2026 — Cube Chess menu cleanup: VERIFIED LIVE
 
 ## VERIFIED: reviewed source and merges
