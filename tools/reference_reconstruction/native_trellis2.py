@@ -7,8 +7,8 @@ from __future__ import annotations
 import argparse,json,os,platform,re,signal,subprocess,sys,time
 from pathlib import Path
 from core import MODEL_ID,MODEL_REVISION,SOURCE_REVISION,prepare_input,digest,inspect_glb,validate_job
+from native_checkpoint import save_checkpoint
 
-# Must be set BEFORE importing torch/transformers/the upstream pipeline.
 os.environ['HF_HUB_OFFLINE']='1'
 os.environ['TRANSFORMERS_OFFLINE']='1'
 os.environ['HF_HUB_DISABLE_TELEMETRY']='1'
@@ -49,8 +49,7 @@ def validate_bundle(bundle):
         for ext in ('.json','.safetensors'):
             if prefix+ext not in files:raise ValueError('UNHASHED_CHECKPOINT')
         config['args']['models'][key]=str(contained(bundle,prefix))
-    feature=lock.get('dinov3Directory')
-    directory=contained(bundle,feature)
+    feature=lock.get('dinov3Directory');directory=contained(bundle,feature)
     feature_files={str(p.relative_to(bundle)) for p in directory.rglob('*') if p.is_file()}
     if not feature_files or not feature_files.issubset(files):raise ValueError('UNHASHED_FEATURE_EXTRACTOR')
     config['args']['image_cond_model']={'name':'DinoV3FeatureExtractor','args':{'model_name':str(directory)}}
@@ -75,15 +74,18 @@ def execute(source,mask,job_path,upstream,bundle,out,compute_authorized=False):
     if sha!=SOURCE_REVISION:raise ValueError('UPSTREAM_SOURCE_REVISION_CHANGED')
     subprocess.run(['git','-C',str(upstream),'diff','--exit-code','HEAD','--'],check=True,capture_output=True,timeout=10)
     config,lock=validate_bundle(bundle)
-    # Unique output/claim before any expensive inference. No overwrites or retries.
     out.mkdir(parents=True,exist_ok=False)
     prepared=out/'input.png';input_evidence=prepare_input(source,mask,prepared,digest(mask))
     (out/'pipeline.json').write_text(json.dumps(config))
-    report={'revision':'worldifact-native-trellis2-v1','job':job,'input':input_evidence,
+    report={'revision':'worldifact-native-trellis2-v2','job':job,'input':input_evidence,
       'geometryEngine':MODEL_ID,'checkpointRevision':MODEL_REVISION,'sourceRevision':SOURCE_REVISION,
       'hardware':hw,'state':'CLAIMED','providerInferenceCalls':0,'newOpenAIRequests':0,
       'computeCostUsd':None,'visualAccepted':False,'printReady':False,'retryAllowed':False}
-    def save():(out/'receipt.json').write_text(json.dumps(report,indent=2)+'\n')
+    def save():
+        temporary=out/'receipt.json.tmp'
+        with temporary.open('w') as f:
+            json.dump(report,f,indent=2);f.write('\n');f.flush();os.fsync(f.fileno())
+        os.replace(temporary,out/'receipt.json')
     save();start=time.monotonic()
     def expired(*_):raise TimeoutError('GPU_JOB_TIME_BUDGET_EXCEEDED')
     previous=signal.signal(signal.SIGALRM,expired);signal.alarm(900)
@@ -98,14 +100,21 @@ def execute(source,mask,job_path,upstream,bundle,out,compute_authorized=False):
         outputs=pipeline.run(Image.open(prepared),seed=job['seed'],preprocess_image=False,
           pipeline_type={512:'512',1024:'1024_cascade',1536:'1536_cascade'}[job['resolution']])
         mesh=outputs[0]
+        # Preserve ALL native decoder data before a lossy or failure-prone export.
+        # Geometry alone cannot recover PBR if material/voxel data was discarded.
+        report['state']='CHECKPOINTING_ORIGINAL_GEOMETRY_AND_PBR';save()
+        report['decoderCheckpoint']=save_checkpoint(mesh,out/'decoder-checkpoint',{
+          'sourceSha256':job['source_sha256'],'inputSha256':input_evidence['inputSha256'],
+          'model':MODEL_ID,'modelRevision':MODEL_REVISION,'codeRevision':SOURCE_REVISION})
+        report['state']='FULL_DECODER_CHECKPOINT_SAVED';save()
         v=mesh.vertices.detach().cpu().numpy();f=mesh.faces.detach().cpu().numpy()
         if len(f)<4 or not np.isfinite(v).all():raise ValueError('INVALID_NATIVE_GEOMETRY')
-        # Preserve decoder geometry BEFORE UV baking/decimation; no old V7 inputs.
         np.savez_compressed(out/'RAW_NEURAL_GEOMETRY.npz',vertices=v,faces=f)
         clay=trimesh.Trimesh(vertices=v,faces=f,process=False)
         clay.visual=trimesh.visual.ColorVisuals(mesh=clay,vertex_colors=[150,150,150,255])
         clay.export(out/'RAW_GEOMETRY_CLAY.glb')
-        report['rawTriangles']=len(f);report['rawGeometrySha256']=digest(out/'RAW_NEURAL_GEOMETRY.npz');save()
+        report['rawTriangles']=len(f);report['rawGeometrySha256']=digest(out/'RAW_NEURAL_GEOMETRY.npz')
+        report['state']='PBR_EXPORT';save()
         mesh.simplify(16777216)
         glb=o_voxel.postprocess.to_glb(vertices=mesh.vertices,faces=mesh.faces,
           attr_volume=mesh.attrs,coords=mesh.coords,attr_layout=mesh.layout,voxel_size=mesh.voxel_size,
@@ -115,7 +124,9 @@ def execute(source,mask,job_path,upstream,bundle,out,compute_authorized=False):
         report['glb']=inspect_glb(out/'ORIGINAL_PBR.glb')
         report['state']='GENERATED_UNREVIEWED_NOT_PRINT_READY'
     except Exception as e:
-        report['state']='FAILED_OR_PARTIAL_DO_NOT_RETRY';report['errorType']=type(e).__name__
+        report['failedPhase']=report['state'];report['errorType']=type(e).__name__
+        report['state']='FAILED_OR_PARTIAL_DO_NOT_REGENERATE'
+        report['exportOnlyRecoveryAvailable']='decoderCheckpoint' in report
         raise
     finally:
         signal.alarm(0);signal.signal(signal.SIGALRM,previous)
