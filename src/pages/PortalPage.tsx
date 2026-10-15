@@ -12,6 +12,7 @@ export default function PortalPage() {
   const { portalId } = useParams()
   const { pathname } = useLocation()
   const [loadedFrame, setLoadedFrame] = useState('')
+  const [planetsAccepted, setPlanetsAccepted] = useState(false)
   const legacy = portalId ? getPortalById(portalId) : undefined
   if (legacy) return <Navigate to={legacy.route} replace />
   if (pathname === '/chess/shop') return <Navigate to="/shop" replace />
@@ -20,15 +21,18 @@ export default function PortalPage() {
   // No launcher, board illustration or generator between the portal and game.
   if (app.route === '/chess') return <ChessPage />
 
-  if (app.route === '/shop') return <>
-    <ShopPage />
-    <details className="portal-generator-drawer portal-page shop-world-disclosure">
-      <summary>Create a world blueprint with GPT-6 Astra</summary>
-      <PortalAstraGenerator worldId="enchanted-ai-shop" title="Enchanted AI Shop" />
-    </details>
-  </>
+  // AI Shop creates models, not worlds. World creation lives in My World.
+  if (app.route === '/shop') return <ShopPage />
 
   const planets = app.route === '/planets'
+  if (planets && !planetsAccepted) return <main className="portal-page planet-entry-page">
+    <section className="planet-entry-notice" role="alertdialog" aria-modal="true" aria-labelledby="planet-entry-title" aria-describedby="planet-entry-description">
+      <span className="eyebrow">EXPERIMENTAL · UNDER DEVELOPMENT</span>
+      <h1 id="planet-entry-title">8 Planets in 8 Days is an experimental preview</h1>
+      <p id="planet-entry-description">This game is still under construction. Features, controls, progress and performance may change, and parts of the campaign are not playable yet. Nothing here is a stable release.</p>
+      <div className="planet-entry-actions"><button className="primary" type="button" onClick={() => setPlanetsAccepted(true)}>Continue to experimental game</button><Link to="/world" className="button-link">Back to six portals</Link></div>
+    </section>
+  </main>
   const worldId = app.id as 'terra-fix-iss' | '8-planets-in-8-days'
   return <main className="portal-page foundation-page">
     <header className="portal-header">
