@@ -1,7 +1,7 @@
 {
   "chess": {
     "repository": "teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer",
-    "commit": "2714d0f0c4d7b9b2a33515c967c1bbd004622823",
+    "commit": "bd5b5684270c6bb5f097aa534fde46f7b5809f61",
     "base": "/apps/chess/"
   },
   "terra": {
