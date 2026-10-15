@@ -46,7 +46,7 @@ async function takeBytes(response,max) {
   for(const part of parts){bytes.set(part,i);i+=part.length}
   return bytes
 }
-export async function auditOriginalV4(env,fetcher=fetch) {
+export async function auditOriginalV4(env,fetcher=fetch,outputDir=DIR) {
   const {origin,token}=guardRuntime(env)
   const observed=[]
   const get=async (path,maximum=128*1024)=>{
@@ -96,9 +96,9 @@ export async function auditOriginalV4(env,fetcher=fetch) {
     providerPosts:0,paidGenerationsTriggered:0,customerPointMutations:0,
     details:'No result or liability field is a visual-quality or invoice certification.'
   }
-  await mkdir(DIR,{recursive:true})
-  if(originalGLB)await writeFile(DIR+'/original-v4.glb',model.value)
-  await writeFile(DIR+'/audit.json',JSON.stringify(report,null,2)+'\n')
+  await mkdir(outputDir,{recursive:true})
+  if(originalGLB)await writeFile(outputDir+'/original-v4.glb',model.value)
+  await writeFile(outputDir+'/audit.json',JSON.stringify(report,null,2)+'\n')
   return {report,readRoutes:observed}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {
