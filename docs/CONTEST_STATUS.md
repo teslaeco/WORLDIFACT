@@ -1,3 +1,13 @@
+# 15 October 2026 — ECOMECH V8 MAKE repair: TESTED, NOT PRINT APPROVED
+
+[Draft PR #303](https://github.com/teslaeco/WORLDIFACT/pull/303) adds a source-bound offline MAKE preparation tool on a separate branch, without touching the V7 original GLB/textures or production. Actual V7 input SHA-256: `a9cf5b06e450577ef420a3c95b80017f401caf6c1674e10cc09e254be057dd48`. Its 86 connected fragments are converted into one closed, positive-volume solid copy with an added plinth. Local reopened STL has zero boundary edges, zero non-manifold edges, zero degenerate faces, consistent winding and dimensions 131.0761 × 55.3785 × 200.0000 mm. Real STL SHA-256: `e43e7d93156f879d4bced3a1baca3700c1ff7e537623477b15b94f56bfcdb17d`, 10,038,884 bytes, 200,776 faces. Eight local tests passed, including real STL/GLB reopening and mm/metre conversion.
+
+The first [dedicated GitHub run #38725026445](https://github.com/teslaeco/WORLDIFACT/actions/runs/38725026445) independently reproduced the repair and passed all eight tests, but failed its render step because EGL/OSMesa libraries were absent. The corrected [full MAKE and actual-render workflow #38725425755](https://github.com/teslaeco/WORLDIFACT/actions/runs/38725425755) completed SUCCESS after installing Mesa/EGL/Xvfb on the ephemeral runner. No tests were disabled. Full repository CI after documentation changes must be observed separately.
+
+**NO-GO for original-reference fidelity and manufacturing:** V8 repairs inherited V7 topology; it does NOT recover missing helmet/armor/hand/motor anatomy that was only represented in the source texture. The 200 mm resin profile is provisional. Two of 1,000 normal-ray chord samples remain below the 2 mm research target (minimum ~1.08 mm); this is not full wall-thickness validation. Self-intersection, slicer/support, selected resin, supplier engineering approval and a physical test print remain unverified. No order, premium release, merge, production change or paid AI call occurred. See `docs/ECOMECH_V8_MAKE_20261015.md` for measured evidence and limitations. GAME source and MAKE copy remain separate; STL does not contain color.
+
+---
+
 # 15 October 2026 — Single Chess menu and native unload protection: VERIFIED LIVE
 
 ## VERIFIED source and merge
