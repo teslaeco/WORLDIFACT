@@ -4,7 +4,7 @@ import { Writable } from 'node:stream'
 import { createElement } from 'react'
 import { renderToPipeableStream } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { createServer } from 'vite'
+import { createServer } from './route-test-server.mjs'
 
 function render(element) {
   return new Promise((resolve, reject) => {

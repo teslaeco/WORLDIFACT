@@ -1,19 +1,23 @@
-# 15 October 2026 — Screenshot-driven navigation cleanup (review branch)
+# 15 October 2026 — Screenshot-driven cleanup: integrated review candidate
 
-## Current milestone: implementation, not publication
+## Implemented, not yet published
 
-Owner screenshots identified duplicate portal navigation, an unwanted large Product Hunt panel and an unnecessary chess launcher. The old six-card grid and entire Product Hunt panel/embeds are removed from the shared meadow. The single LED navigation, compact resource strip, small Product Hunt resource link and ISS petition remain.
+[WORLDIFACT PR #296](https://github.com/teslaeco/WORLDIFACT/pull/296) removes the duplicate plain six-card navigation and the large Product Hunt block, badges and comment iframe. The single LED navigation, compact resource strip, small Product Hunt resource link and ISS petition remain.
 
-`/chess` automatically replaces its disposable entry route with the actual same-origin `/apps/chess/index.html` game. There is no intermediate preview, extra launch click, blueprint generator or nested mobile WebGL frame. The real account/guest welcome and shared identity checks remain. This intentional entry navigation is separate from the linked game's in-document Exit to menu. Other portals and legacy route redirects remain intact.
+`/chess` immediately replaces the disposable portal route with the real same-origin `/apps/chess/index.html` game. No intermediate preview, launch click, blueprint generator or nested mobile WebGL frame. The real account/guest welcome and shared-identity checks remain. This entry navigation is distinct from the game's no-reload Exit to menu.
 
-## Verification diagnosis
+The candidate pins [Cube Chess PR #144](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/144) at `5d088596ec4c36401e6fdc21f0e23de0afdb0821`: confirmation before returning to menu, saved-game/identity preservation, cancelled stale AI/autosave work, fixed guest-readiness observer and new chess-first English/Polish About copy. The pin is an integration candidate, not a claim of completed browser acceptance.
 
-[Diagnostic run 38694557865](https://github.com/teslaeco/WORLDIFACT/actions/runs/38694557865) ran the unchanged full verify: lint and TypeScript passed; 2306/2312 tests passed, zero skipped. The six failures were five portal-harness imports not recognizing the real new ChessPage and one historical requirement for the now owner-removed Product Hunt embeds. The revised harness loads the actual ChessPage; Shop, Planets, ISS, Terra, private-world and account checks remain. The Product Hunt regression now checks absence of the big embeds and preservation of the requested small resource link/petition. The historical no-nested-chess-iframe protection is retained. New tests execute the actual entry effect, including StrictMode replay and a fixed account-capable same-origin target.
+## Test evidence and repairs
 
-Linked game work: [Cube Chess PR #144](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/144) adds confirmed return to menu, preserved saved games and chess-first English/Polish About copy. Its first browser run exposed an existing self-triggering guest readiness observer; the follow-up disconnects it before changing observed attributes. The integrated pin and final verification are still pending here.
+At WORLDIFACT `5a8c4feef8b3ba11289681aaf2060ce4b99fab5f`, the read-only diagnostic workflow passed the unchanged full verification. The separate main Verify run [38695510306](https://github.com/teslaeco/WORLDIFACT/actions/runs/38695510306) failed one of 2314 tests on an EPERM creating Vite's shared `.vite-temp` configuration directory. The routing fixture now imports the actual checked-in Vite configuration directly and sets `configFile:false`, eliminating that temporary configuration bundle without bypassing the React plugin or route assertions. The temporary diagnostics workflow has been removed; protected original CI is unchanged.
 
-PENDING: full verification after this repair, foundation assembly, Worker dry-run, final tested chess pin and owner publication approval. The temporary diagnostics workflow does not modify the protected original CI and will be removed before release. Physical Android, real sign-in and production publication are not claimed. No paid provider request, billing change, merge or deployment is included.
+Earlier six stale test expectations were repaired: five harness imports now load the real ChessPage; the removed Product Hunt embeds are required absent. Account, private-world, Shop, Planets, ISS, Terra, no-network and no-nested-chess-frame protections are retained. New tests execute the actual direct-entry effect and StrictMode replay.
 
-## Last production evidence, unchanged
+At Chess `1cadf504cc4928903dd7186ec1ce033f50eb262e`, the original Pages test/build job passed with publication skipped. Browser run [38694910568](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38694910568) passed mobile About and direct guest entry, but four other cases timed out. The new browser fixture uses the built game with explicit software WebGL on GPU-less CI, unchanged geometry/assertions/timeouts, no video-capture contention and no external provider calls. Results for the new candidate remain pending.
 
-Production remains the preceding six-portal release `c82c6abe246996630b1d751a40dcf769181089f5`, Cloudflare version `630e387c-15d8-42b6-848d-bacf32e2b697`. Complete prior evidence is preserved byte-for-byte in [the pre-cleanup snapshot](CONTEST_STATUS.before-ui-cleanup-20261015.md), original blob `1a50b6a47d107fd9fef81625ae7a8d4b1704f7d9`. Historical LIVE/test claims are not verification of this branch.
+## GO / NO-GO
+
+NO-GO for publication until the integrated Verify/foundations/Worker dry-run and both desktop/mobile browser cases pass, followed by owner authorization. No merge, production deployment, paid generation, billing change or secret synchronization has occurred. Physical Android/iOS, real sign-in and live multiplayer remain unverified.
+
+Production is still the prior six-portal release `c82c6abe246996630b1d751a40dcf769181089f5`, Cloudflare version `630e387c-15d8-42b6-848d-bacf32e2b697`. Complete previous evidence is preserved byte-for-byte in [the pre-cleanup snapshot](CONTEST_STATUS.before-ui-cleanup-20261015.md), original blob `1a50b6a47d107fd9fef81625ae7a8d4b1704f7d9`. Prior LIVE claims are not verification of this candidate.
