@@ -5,17 +5,22 @@
  */
 import { pathToFileURL } from 'node:url'
 
-export const RUNPOD_ORIGIN = 'https://rest.runpod.io'
-export const SAFE_READS = Object.freeze(['/v1/endpoints', '/v1/networkvolumes', '/v1/pods'])
+export const RUNPOD_ORIGIN = 'https://api.runpod.io'
+export const SAFE_READS = Object.freeze(['/v2/serverless', '/v2/network-volumes', '/v2/pods'])
 
 const validSize = (v) => Number.isSafeInteger(v) && v >= 0 ? v : 0
 
-function rows(value) {
-  if (Array.isArray(value)) return value
-  if (value && typeof value === 'object') {
-    for (const key of ['data', 'items', 'results']) if (Array.isArray(value[key])) return value[key]
-  }
-  throw new Error('UNEXPECTED_LIST_SHAPE')
+function rows(path, value) {
+  const key = path === '/v2/serverless' ? 'endpoints'
+    : path === '/v2/network-volumes' ? 'networkVolumes' : 'pods'
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      !Array.isArray(value[key]) || !value.pagination ||
+      typeof value.pagination !== 'object' ||
+      typeof value.pagination.hasNextPage !== 'boolean')
+    throw new Error('UNEXPECTED_V2_RESPONSE_SHAPE')
+  // First-page counts are never silently misrepresented as total inventory.
+  if (value.pagination.hasNextPage) throw new Error('PAGINATION_REQUIRES_REVIEW')
+  return value[key]
 }
 
 async function parseBoundedJson(res) {
@@ -50,15 +55,15 @@ function safeStatus(http) {
   return http >= 500 ? 'PROVIDER_UNAVAILABLE' : 'HTTP_NOT_OK'
 }
 function summarize(path, input) {
-  const values = rows(input)
+  const values = rows(path, input)
   if (values.length > 5_000) throw new Error('LIST_SIZE_LIMIT')
-  if (path === '/v1/endpoints') return {
+  if (path === '/v2/serverless') return {
     status: 'OK',
     count: values.length,
-    configuredScaleToZero: values.filter(x => x && x.workersMin === 0).length,
-    currentlyAlwaysOn: values.filter(x => x && Number(x.workersMin) > 0).length,
+    configuredScaleToZero: values.filter(x => x && x?.workers?.min === 0).length,
+    currentlyAlwaysOn: values.filter(x => x && Number(x?.workers?.min) > 0).length,
   }
-  if (path === '/v1/networkvolumes') return {
+  if (path === '/v2/network-volumes') return {
     status: 'OK',
     count: values.length,
     totalProvisionedGB: values.reduce((sum, item) => sum + validSize(item?.size), 0),
@@ -66,7 +71,7 @@ function summarize(path, input) {
   return {
     status: 'OK',
     count: values.length,
-    running: values.filter(x => String(x?.desiredStatus ?? x?.runtime?.status ?? '').toUpperCase() === 'RUNNING').length,
+    running: values.filter(x => String(x?.status ?? x?.desiredStatus ?? x?.runtime?.status ?? '').toUpperCase() === 'RUNNING').length,
   }
 }
 
