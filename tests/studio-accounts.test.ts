@@ -843,8 +843,15 @@ test('Character V5 photo robot reservation keeps the original account price, ide
   assert.equal(first.allowed,true,'New character classification must not block a verified existing account')
   assert.equal(first.cost,250,'The V5 quality profile does not create a new price')
   const after=await entitlementStatus(f.env,alice)
-  assert.equal(after.credits,original.credits)
-  assert.equal(after.reservedCredits,original.reservedCredits+250)
+  // A reservation reduces spendable credits and increases the held balance.
+  // It does NOT charge/settle them. Preserve the same original total.
+  // This exact legacy /reserve request has no fingerprint or Studio funding
+  // contract. Its historical semantics deduct 250 spendable credits at
+  // admission; the separate v3 hold ledger is not involved. Never change it
+  // to make an advisory routing test pass.
+  assert.equal(after.credits,original.credits-250)
+  assert.equal(after.reservedCredits,original.reservedCredits)
+  assert.equal(after.availableCredits,original.availableCredits-250)
   assert.equal(f.posts(),0,'Preparation/reservation alone never starts the Oracle job')
   const again=await entitlementCall<{allowed:boolean;cost?:number}>(f.env,alice,'/reserve',input)
   assert.equal(again.allowed,true)
@@ -853,6 +860,8 @@ test('Character V5 photo robot reservation keeps the original account price, ide
   // Without a real authenticated terminal provider receipt, a synthetic
   // account reservation must never assume zero liability and refund credits.
   // Refund/settlement correctness is covered by separate evidence-bound tests.
-  assert.equal(repeated.credits,original.credits)
+  assert.equal(repeated.credits,after.credits,'Idempotent reserve cannot debit twice')
+  assert.equal(repeated.reservedCredits,after.reservedCredits,'Legacy idempotence does not create a new hold')
+  assert.equal(repeated.availableCredits,after.availableCredits)
   assert.equal(f.posts(),0)
 })
