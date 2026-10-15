@@ -1,4 +1,4 @@
-# 15 October 2026 — Premium compact Cube Chess HUD: MERGED, RELEASE PENDING
+# 15 October 2026 — Premium compact Cube Chess HUD: VERIFIED LIVE
 
 ## VERIFIED implementation and tests
 
@@ -12,11 +12,19 @@
 
 The retry preserves every test unchanged and tightens the one-use exact file/parent scope for the new attempt. It does not disable or bypass the native Chromium check.
 
-## Publication gate — not yet LIVE in this record
+## VERIFIED LIVE — public Cloudflare release
+
+The exact-parent, source-only [premium HUD preserving release #38714113516](https://github.com/teslaeco/WORLDIFACT/actions/runs/38714113516) completed **SUCCESS** at **2026-10-15T09:38:48Z**, release commit `7f0558ed6266d8535ef2bac918f3823531e2d0d2`. Cloudflare version `dbd875c7-26d5-42c5-b6d9-bbe3f48708e8`; production https://worldifact.xodobrox.workers.dev/chess.
+
+Post-deployment `PUBLIC_RELEASE_VERIFIED` checked **12 HTML routes, all 437 built public assets against original release bytes and MIME**, `GET /account/worlds = 200`, six WORLDIFACT portal/brand resources, and actual pinned Chess premium stylesheet markers `--premium-blue`, `--premium-green`, `exit-match-button` and `user-profile-menu`. The public Studio health remained READY with Astra, Sol, Luna. The release reran the unchanged full verify, pinned foundations and Worker dry-run before publication. No paid generation, secrets sync, billing updates or Oracle restart.
+
+**Not verified:** Physical Android/iOS screenshots, signed-in account visual walkthrough, live multiplayer, or a fresh paid AI generation. Desktop/mobile Chromium tests support layout and menu behavior but are not physical device certification.
+
+## Publication method and protections (completed)
 
 The user authorized implementation and publication in this conversation. The updated exact-parent, exact-file one-use release workflow `.github/workflows/premium-chess-hud-release-once.yml` is paired with `ops/PREMIUM_CHESS_HUD_RELEASE_20261015.json`. It must compare the release commit's single parent with `8b14fdc9ae708fb5a03bfb2a51a1ad3ce6bd760d`, confirm the precise three-file publication-only diff and immutable Chess pin, then run unchanged verify and foundation checks, prepare the already-reviewed preserving config with no declared vars, deploy via Wrangler `--keep-vars` and strictly verify the public HTML, every asset (hash and MIME), premium CSS markers and Studio readiness. No secret synchronization, paid generation, billing mutation or Oracle action.
 
-**PENDING:** Actual Cloudflare version/receipt and post-release public-asset check. The previous LIVE version remains `9abf16c1-7fa6-48cd-b83a-efa32869dce5` until new evidence succeeds. Real signed-in Android and iOS visual tests remain UNKNOWN.
+**COMPLETED:** Production receipt, full public asset and premium HUD markers are verified above. The previous LIVE version `9abf16c1-7fa6-48cd-b83a-efa32869dce5` is superseded. Real signed-in Android/iOS visual checks remain UNKNOWN.
 
 ## Preserved history
 
