@@ -1,3 +1,11 @@
+## 2026-10-16 — LIVE auth and R2 CAS VERIFIED; native GPU still license BLOCKED
+
+**VERIFIED** one-time trusted main run https://github.com/teslaeco/WORLDIFACT/actions/runs/38818010309 : RunPod REST v2 authenticated (0 endpoints, 0 network volumes, 0 Pods, 0 billed GPU requests), R2 conditional create/duplicate-412/get/delete passed, no user objects touched. Owner's R2 HTTPS endpoint is fixed, GitHub credentials work. **NOT DEPLOYED**: no endpoint or container image, no LIVE original ECOMECH, no Oracle change. Owner's GPU-only-when-generating constraint is asserted in offline profile tests (Active=0, Max=1, idle=5s).
+
+**BLOCKED LICENSE**: Standard TRELLIS.2 dependency path may require NVIDIA nvdiffrast/nvdiffrec, whose official source-code licenses restrict non-commercial use. DINOv3 has separate gated Meta license. Until legally cleared commercial-safe PBR export and model bundle are audited, do not activate paid RunPod inference or merge this GPU PR. Exact live evidence, official links and gates: docs/RUNPOD_LIVE_AUTH_LICENSE_GATE_20261016.md.
+
+---
+
 ## 2026-10-16 — RunPod on-demand-only policy enforced in offline CI
 
 **RECOMMENDATION / IMPLEMENTED TEST / NOT DEPLOYED.** Owner requires RunPod GPU only when WORLDIFACT actively generates a model, and automatic scale-down afterward. Added an executable profile regression test on draft PR #305 for queue-based Serverless Flex: Active=0, Max=1, 1 GPU, 1 handler, 5-second idle timeout, no automatic upgrade, no provisioned endpoint/image/rate. Workflow now runs test. No paid GPU/image/resource creation. Actual deployed provider policy remains UNKNOWN until live readback. No browsing, gallery or GET status may trigger new GPU work.
