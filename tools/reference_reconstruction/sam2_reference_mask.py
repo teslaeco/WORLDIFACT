@@ -1,6 +1,6 @@
 """Local SAM2.1 masking of the intact original ECOMECH reference.
-Removes background pixels only; never recolors, submits 3D jobs or certifies a mesh.
-The input-point contract is tested before any model download or expensive inference.
+Only alpha changes; no repainting, 3D generation, quota retry or geometry claims.
+All prompt variants and loading diagnostics are preserved for honest review.
 """
 from __future__ import annotations
 import argparse,json,os,time
@@ -11,20 +11,20 @@ REVISION='da4f09582a0488fcc80d5ec7c828062f6abc0d52'
 WEIGHTS_SHA='48c14467e5cf9e51870511feb72c89688e82dd74523142c0538b663e193ac2a7'
 FOREGROUND=[(530,80),(491,224),(566,282),(648,355),(243,305),(348,272),
  (250,174),(306,363),(430,637),(655,704),(327,985),(731,1049),(265,1260),(800,1290)]
-BACKGROUND=[(404,435),(401,489),(534,831),(521,981),(480,1143),
- (112,715),(932,626),(670,98),(418,57),(790,585)]
+# Original pixel inspection: (790,585) touches the exposed forearm, and
+# (401,489) is too near a protruding hip plate. They cannot label background.
+# Corrections are annotation changes, not edits to the photo or relaxed tests.
+BACKGROUND=[(404,435),(380,460),(534,831),(521,981),(480,1143),
+ (112,715),(932,626),(670,98),(418,57),(970,520)]
 BACKGROUND_HOLDOUT=[(398,457),(531,787),(509,909),(510,1060),(485,1200)]
+BOX=[105,0,925,1370]
 
 def point_inputs(foreground=FOREGROUND,background=BACKGROUND,size=(1122,1402)):
-    """SAM2 requires LISTS at all four levels: image/object/point/coordinates.
-    A tuple pair is numerically valid but the 4.57.3 processor's nested-list
-    validator treats it as a leaf, so [[list-of-tuples]] has only three levels.
-    """
+    """The processor requires lists at every image/object/point/coordinate level."""
     if not foreground or not background:raise ValueError('BOTH_FOREGROUND_AND_BACKGROUND_PROMPTS_REQUIRED')
     points=[]
     for pair in list(foreground)+list(background):
-        if not isinstance(pair,(tuple,list)) or len(pair)!=2:
-            raise ValueError('INVALID_POINT_PAIR')
+        if not isinstance(pair,(tuple,list)) or len(pair)!=2:raise ValueError('INVALID_POINT_PAIR')
         if any(type(v) is not int for v in pair):raise ValueError('INTEGER_PIXEL_COORDINATES_REQUIRED')
         x,y=pair
         if not 0<=x<size[0] or not 0<=y<size[1]:raise ValueError('POINT_OUTSIDE_ORIGINAL_IMAGE')
@@ -42,46 +42,65 @@ def run(source:Path,out:Path):
     if digest(source)!=SOURCE_SHA:raise ValueError('ORIGINAL_REFERENCE_SHA_MISMATCH')
     image=Image.open(source).convert('RGB')
     if image.size!=(1122,1402):raise ValueError('ORIGINAL_SIZE_CHANGED')
-    prompts=point_inputs(size=image.size)
+    point_inputs(size=image.size)
+    out.mkdir(parents=True,exist_ok=False)
     os.environ['HF_HUB_DISABLE_TELEMETRY']='1'
     os.environ['HF_HUB_DISABLE_IMPLICIT_TOKEN']='1'
     torch.set_num_threads(4)
     weights=Path(hf_hub_download(MODEL,'model.safetensors',revision=REVISION,token=False))
     if digest(weights)!=WEIGHTS_SHA:raise ValueError('SEGMENTATION_WEIGHTS_SHA_MISMATCH')
     processor=Sam2Processor.from_pretrained(MODEL,revision=REVISION,token=False)
-    model=Sam2Model.from_pretrained(MODEL,revision=REVISION,token=False,
-      use_safetensors=True,dtype=torch.float32).to('cpu').eval()
-    inputs=processor(images=image,**prompts,return_tensors='pt')
-    if tuple(inputs['input_points'].shape)!=(1,1,len(FOREGROUND)+len(BACKGROUND),2):
-        raise ValueError('PROCESSOR_CHANGED_POINT_TENSOR_CONTRACT')
-    with torch.inference_mode():outputs=model(**inputs,multimask_output=True)
-    masks=processor.post_process_masks(outputs.pred_masks.cpu(),inputs['original_sizes'])[0][0].numpy().astype(bool)
-    scores=outputs.iou_scores.detach().cpu().numpy().reshape(-1)
-    if masks.ndim!=3 or masks.shape[1:]!=(1402,1122) or len(scores)!=len(masks) or not np.isfinite(scores).all():
-        raise ValueError('SEGMENTATION_OUTPUT_CONTRACT_CHANGED')
-    out.mkdir(parents=True,exist_ok=False);candidates=[]
-    for i,mask in enumerate(masks):
-        fg=sum(bool(mask[y,x]) for x,y in FOREGROUND)
-        bg=sum(bool(mask[y,x]) for x,y in BACKGROUND)
-        holdout=sum(bool(mask[y,x]) for x,y in BACKGROUND_HOLDOUT)
-        candidates.append({'index':i,'modelPredictedIoU':float(scores[i]),
-          'foregroundAnchorsKept':fg,'backgroundAnchorLeaks':bg,'holdoutBackgroundLeaks':holdout,
-          'foregroundFraction':float(mask.mean()),
-          'passesAnchorScreen':fg==len(FOREGROUND) and bg==holdout==0 and .12<float(mask.mean())<.65})
-        Image.fromarray(mask.astype('uint8')*255).save(out/f'candidate-mask-{i}.png')
+    model,loading=Sam2Model.from_pretrained(MODEL,revision=REVISION,token=False,
+      use_safetensors=True,dtype=torch.float32,output_loading_info=True)
+    model=model.to('cpu').eval()
+    load_report={'missingKeys':loading.get('missing_keys',[]),'unexpectedKeys':loading.get('unexpected_keys',[]),
+      'mismatchedKeys':loading.get('mismatched_keys',[]),'errorMessages':loading.get('error_msgs',[]),
+      'config':model.config.to_dict(),'model':MODEL,'revision':REVISION,'weightsSha256':WEIGHTS_SHA}
+    (out/'load-report.json').write_text(json.dumps(load_report,indent=2)+'\n')
+    if any(load_report[k] for k in ('missingKeys','mismatchedKeys','errorMessages')):
+        raise ValueError('SEGMENTATION_CHECKPOINT_NOT_FULLY_LOADED')
+    masks_all=[];candidates=[];shape_records=[]
+    # Three bounded local segmentation variants only. No three-dimensional reruns.
+    variants=[('corrected_points',FOREGROUND,BACKGROUND,False),
+      ('corrected_points_and_box',FOREGROUND,BACKGROUND,True),
+      ('sparse_points_and_box',[FOREGROUND[i] for i in (0,1,4,8,9,10,11,12,13)],BACKGROUND,True)]
+    for variant,fg_prompt,bg_prompt,boxed in variants:
+        prompts=point_inputs(fg_prompt,bg_prompt,size=image.size)
+        if boxed:prompts['input_boxes']=[[BOX]]
+        inputs=processor(images=image,**prompts,return_tensors='pt')
+        expected=(1,1,len(fg_prompt)+len(bg_prompt),2)
+        if tuple(inputs['input_points'].shape)!=expected:raise ValueError('PROCESSOR_CHANGED_POINT_TENSOR_CONTRACT')
+        shape_records.append({'variant':variant,'pointTensorShape':list(inputs['input_points'].shape),'box':BOX if boxed else None})
+        with torch.inference_mode():outputs=model(**inputs,multimask_output=True)
+        masks=processor.post_process_masks(outputs.pred_masks.cpu(),inputs['original_sizes'])[0][0].numpy().astype(bool)
+        scores=outputs.iou_scores.detach().cpu().numpy().reshape(-1)
+        if masks.ndim!=3 or masks.shape[1:]!=(1402,1122) or len(scores)!=len(masks) or not np.isfinite(scores).all():
+            raise ValueError('SEGMENTATION_OUTPUT_CONTRACT_CHANGED')
+        for local,mask in enumerate(masks):
+            index=len(masks_all);masks_all.append(mask)
+            fg=sum(bool(mask[y,x]) for x,y in FOREGROUND)
+            bg=sum(bool(mask[y,x]) for x,y in BACKGROUND)
+            holdout=sum(bool(mask[y,x]) for x,y in BACKGROUND_HOLDOUT)
+            candidates.append({'index':index,'variant':variant,'modelPredictedIoU':float(scores[local]),
+              'foregroundAnchorsKept':fg,'backgroundAnchorLeaks':bg,'holdoutBackgroundLeaks':holdout,
+              'foregroundFraction':float(mask.mean()),
+              'passesAnchorScreen':fg==len(FOREGROUND) and bg==holdout==0 and .12<float(mask.mean())<.65})
+            Image.fromarray(mask.astype('uint8')*255).save(out/f'candidate-mask-{index}.png')
     passing=[v for v in candidates if v['passesAnchorScreen']]
     chosen=max(passing,key=lambda v:v['modelPredictedIoU']) if passing else max(candidates,key=lambda v:v['modelPredictedIoU'])
-    mask=masks[chosen['index']];alpha=Image.fromarray(mask.astype('uint8')*255)
+    mask=masks_all[chosen['index']];alpha=Image.fromarray(mask.astype('uint8')*255)
     alpha.save(out/'mask.png')
     rgba=image.copy().convert('RGBA');rgba.putalpha(alpha);rgba.save(out/'original-rgb-masked.png')
     assert np.array_equal(np.asarray(rgba)[:,:,:3],np.asarray(image))
     display=Image.new('RGB',image.size,(0,0,0));display.paste(image,mask=alpha);display.save(out/'mask-preview.png')
-    report={'revision':'ecomech-sam21-reference-mask-v2','sourceSha256':SOURCE_SHA,
+    report={'revision':'ecomech-sam21-reference-mask-v3','sourceSha256':SOURCE_SHA,
       'segmentationModel':MODEL,'modelRevision':REVISION,'weightsSha256':WEIGHTS_SHA,
       'license':'Apache-2.0, Meta SAM2.1 model; retain attribution',
       'execution':'LOCAL_CPU_INFERENCE_NO_IMAGE_UPLOAD','maskSha256':digest(out/'mask.png'),
-      'originalRgbUnchanged':True,'pointTensorShape':list(inputs['input_points'].shape),
+      'originalRgbUnchanged':True,'inputContracts':shape_records,
       'foregroundAnchors':FOREGROUND,'backgroundAnchors':BACKGROUND,
+      'annotationCorrections':[{'previous':[401,489],'replacement':[380,460],'reason':'ambiguous hip plate edge'},
+        {'previous':[790,585],'replacement':[970,520],'reason':'prior background click was on exposed forearm'}],
       'backgroundHoldoutPixels':BACKGROUND_HOLDOUT,'candidates':candidates,'selectedIndex':chosen['index'],
       'anchorScreenPassed':chosen['passesAnchorScreen'],'humanFullMaskApproved':False,
       'new3DGenerationCalls':0,'newPaidApiCalls':0,'geometryQualityClaim':False,
