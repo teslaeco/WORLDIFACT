@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAccount } from '../lib/account'
-import { applyWorldCommand, blankWorld, newEntity, parseWorldCommand, validatePrivateWorld, WORLD_ID, WORLD_LIMITS, worldAssetName, type EntityKind, type LocalWorldCommand, type PrivateWorld, type SavedWorld, type WorldCharacter, type WorldControl } from '../lib/privateWorld'
+import { applyWorldCommand, blankWorld, newEntity, parseWorldCommand, validatePrivateWorld, WORLD_ID, WORLD_LIMITS, worldAssetName, type EntityKind, type LocalWorldCommand, type PrivateWorld, type SavedWorld, type WorldCharacter } from '../lib/privateWorld'
 import { listStudioModels, readStudioModel, STUDIO_ARCHIVE_EVENT, STUDIO_ARCHIVE_SIGNAL_KEY, type StudioArchiveEntry } from '../lib/studioArchive'
 import { mergeGameLabArchive } from '../lib/gameLabLibrary'
 import { listWorldAssets, storeWorldAsset, type WorldAsset } from '../lib/privateWorldAssets'
