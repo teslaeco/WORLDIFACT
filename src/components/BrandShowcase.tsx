@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import './BrandShowcase.css'
 
@@ -37,7 +38,7 @@ export default function BrandShowcase() {
     </div>
     <nav className="neon-portals" aria-label="Six WORLDIFACT portals">
       {destinations.map((item, index) => <Link key={item.route} to={item.route} className="neon-portal"
-        style={{ '--portal-glow': item.color } as React.CSSProperties}>
+        style={{ '--portal-glow': item.color } as CSSProperties}>
         <span className="neon-portal-number">0{index + 1}</span>
         <span className="neon-portal-symbol" aria-hidden="true">{item.icon}</span>
         <strong>{item.name}</strong><small>{item.label}</small>
