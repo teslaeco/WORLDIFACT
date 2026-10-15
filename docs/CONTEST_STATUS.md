@@ -5,7 +5,11 @@ The owner supplied an actual Android screenshot of two adjacent header controls:
 
 Native browser `beforeunload` now asks for browser-provided confirmation when a real local/computer/online game or finished/paused match is open, including refresh, tab close and address-bar navigation. It does not warn for the attract-mode demo or once the user has deliberately returned to the in-page menu. Browser vendors choose the message and may decline to show it in some mobile circumstances (app kill, no user activation). This is not automatic saving or a guarantee of a displayed warning.
 
-This WORLDIFACT candidate pins Chess exact source `00cd4f05f79ea60119be121d7f492076caecdafd` without changing backend, account, payments, secrets, game geometry or existing premium theme.
+This WORLDIFACT candidate pins Chess exact source `a983fccd24acce9b6100d40eeac0d7542e7c5cdd` without changing backend, account, payments, secrets, game geometry or existing premium theme.
+
+## Browser-discovered regression and correction
+
+[Chess browser run #38718051008](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38718051008) exposed a real CSS bug: the `Menu` element was disabled and marked `hidden`, but its hide selector contained a literal backslash-n escape that stopped CSS from applying. The new Chess revision fixes the selector using a real line break and explicit premium HUD specificity; no game or auth logic was disabled. The full browser matrix must now be rerun.
 
 ## Verification and release gates
 - PENDING: Chess original build/tests and actual production-build Chromium desktop/mobile verification of one visible exit, native unload prompt on refresh, Cancel preserving the game, Confirm disarming the warning.
