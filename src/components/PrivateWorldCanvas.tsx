@@ -157,7 +157,8 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
         velocity*=Math.max(0,1-dt*(throttle?0.4:2.2))
         vehicleHeading+=steer*(latest.current.gameplay?.steeringPercent??70)/100*Math.min(1,Math.abs(velocity)/Math.max(1,top))*(velocity>=0?1:-1)*2*dt
         const candidate=playerAt.clone().add(new THREE.Vector3(Math.sin(vehicleHeading)*velocity*dt,0,Math.cos(vehicleHeading)*velocity*dt))
-        const blocked=w.entities.some(e=>e.id!==driveSource?.id&&Math.abs(e.x-candidate.x)<2&&Math.abs(e.z-candidate.z)<2&&Math.hypot(e.x-candidate.x,e.z-candidate.z)<2)
+        const activeVehicle=w.entities.find(e=>e.kind==='rover'||(e.kind==='asset'&&/(car|auto|samoch|rover|vehicle)/i.test(e.name)))
+        const blocked=w.entities.some(e=>e.id!==activeVehicle?.id&&Math.abs(e.x-candidate.x)<2&&Math.abs(e.z-candidate.z)<2&&Math.hypot(e.x-candidate.x,e.z-candidate.z)<2)
         if(!blocked&&Math.abs(candidate.x)<39&&Math.abs(candidate.z)<39){const delta=candidate.clone().sub(playerAt);playerAt.copy(candidate);camera.position.add(delta);orbit.target.add(delta)}else velocity=0
         player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,w.terrain)+.1,playerAt.z)
         player.rotation.y=vehicleHeading
