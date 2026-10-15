@@ -304,3 +304,8 @@
 .native-shop .shop-composer-reset { font-size: .86rem; line-height: 1.5; margin: 10px 0; }
 .native-shop .shop-previous-failure > summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
 .native-shop .shop-previous-failure:not([open]) { padding: 16px 22px; }
+
+/* Shop creates assets; world-blueprint generation belongs in My World. */
+.shop-world-handoff{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;margin:22px auto;padding:18px 20px;max-width:1180px;border:1px solid #3d8f82;border-radius:16px;background:linear-gradient(110deg,#122a32,#133c41);color:#e9fcf7}
+.shop-world-handoff strong{font-size:17px}.shop-world-handoff p{font-size:12px;color:#b4d5cf;margin:6px 0 0;max-width:720px}.shop-world-handoff .button-link{background:#a7e9d2;color:#11342e;padding:11px 18px;border-radius:9px;white-space:normal;font-weight:800}
+@media(max-width:600px){.shop-world-handoff{margin:14px 12px;padding:15px}.shop-world-handoff .button-link{width:100%;text-align:center}}
