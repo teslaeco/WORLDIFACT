@@ -1,40 +1,17 @@
-# 15 October 2026 — Compact premium Cube Chess HUD: REVIEW, NOT LIVE
+# 15 October 2026 — Premium compact Cube Chess HUD: MERGED, RELEASE PENDING
 
-## Current implementation
-- The owner supplied three production Android screenshots showing overlapping account/Exit controls and bottom actions, plus a design direction for a compact blue/green neon HUD. This candidate uses the actual Cube Chess source, not an AI image.
-- [Cube Chess PR #145](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/145) moves the real user profile dropdown into the header grid, keeps the explicit destructive-confirmation Exit to menu and resizes the statistics, all eight levels and the scrollable camera toolbar. Bottom controls remain above the separate WORLDIFACT/Shop links.
-- This WORLDIFACT candidate pins Chess source `ebed7d71cff931c50b9d88734279098fbe82baca` in `config/foundation-sources.json`. It changes neither game rules/geometry nor WORLDIFACT backends/billing/secrets.
+## VERIFIED implementation and tests
 
-## Verification
-PENDING: Cube Chess original test/build and PR-only built Chromium desktop/mobile gameplay/layout matrix. New geometry tests check the actual authenticated-profile DOM location with synthetic visible guest profile, header/status, controls and no overlap; this is not real sign-in evidence.
-PENDING: WORLDIFACT full verify, pinned foundation assembly, Worker dry-run, hosted Studio read-only inspection.
-BLOCKED: physical Android visual acceptance and real signed-in screenshot confirmation until user tests the deployed version.
+- [Cube Chess PR #145](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/145) merged as `7e01a4f1e870ef56b772e2ff99544f4b3f4192a8`. Its exact tested source `ebed7d71cff931c50b9d88734279098fbe82baca` passes the original Cube Chess build/test workflow and [desktop/mobile Playwright menu + premium HUD layout tests](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38712501745). No browser screen capture is misrepresented as a physical Android test.
+- [WORLDIFACT PR #300](https://github.com/teslaeco/WORLDIFACT/pull/300) merged as `8b14fdc9ae708fb5a03bfb2a51a1ad3ce6bd760d`, pinning the exact reviewed Chess source. [Verify WORLDIFACT #38712650090](https://github.com/teslaeco/WORLDIFACT/actions/runs/38712650090) and four other independent review jobs passed: full verify, pinned Chess/Terra foundation assembly, Wrangler dry-run and hosted Studio read-only inspection.
+- The actual in-game HUD now places the real profile inside the shared header grid, keeps a visible confirmed Exit to menu, shrinks the status and 8-level controls, and raises the scrollable camera bar above standalone WORLDIFACT/Shop shortcuts. Blue/green LED accents, focus indicators and high-contrast/reduced-motion styles are included. No chess rules, 3D geometry, authentication, game saves, billing or provider costs were modified.
 
-## Publication conditions
-NO-GO for production until Cube Chess + WORLDIFACT checks are successful and an exact-version preserving release passes. The last known LIVE release remains Cloudflare `9abf16c1-7fa6-48cd-b83a-efa32869dce5`, documented below. No paid model test, billing modification, secret synchronization or Oracle action is in scope.
+## Publication gate — not yet LIVE in this record
 
----
+The user authorized implementation and publication in this conversation. The exact-parent, exact-file one-use release workflow `.github/workflows/premium-chess-hud-release-once.yml` is paired with `ops/PREMIUM_CHESS_HUD_RELEASE_20261015.json`. It must compare the release commit's single parent with `8b14fdc9ae708fb5a03bfb2a51a1ad3ce6bd760d`, confirm the precise four-file publication-only diff and immutable Chess pin, then run unchanged verify and foundation checks, prepare the already-reviewed preserving config with no declared vars, deploy via Wrangler `--keep-vars` and strictly verify the public HTML, every asset (hash and MIME), premium CSS markers and Studio readiness. No secret synchronization, paid generation, billing mutation or Oracle action.
 
-# 15 October 2026 — Cube Chess menu cleanup: VERIFIED LIVE
+**PENDING:** Actual Cloudflare version/receipt and post-release public-asset check. The previous LIVE version remains `9abf16c1-7fa6-48cd-b83a-efa32869dce5` until new evidence succeeds. Real signed-in Android and iOS visual tests remain UNKNOWN.
 
-## VERIFIED: reviewed source and merges
-- [Cube Chess PR #144](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/144) merged as `9cc93241e9e2ef1c3bd0de3afdc165bd996c890b` from tested source `63cec61eaf930f337bbf5e77b3c787f9b7711554`. The exact source passed [original Chess test/build #38701520956](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38701520956) and [desktop/mobile menu regression #38701520889](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38701520889): SUCCESS. The former desktop repeat issue was addressed by returning to a static menu rather than restarting the expensive attract/demo animation.
-- [WORLDIFACT PR #296](https://github.com/teslaeco/WORLDIFACT/pull/296) merged as `4560ff82050a79cedda91975a5b1e0c030541286`; pinned Chess source is the exact tested `63cec61eaf930f337bbf5e77b3c787f9b7711554`. The final pinned [WORLDIFACT Verify #38701793675](https://github.com/teslaeco/WORLDIFACT/actions/runs/38701793675) completed SUCCESS, including full `npm run verify`, foundations, Worker dry-run and GET-only Studio inspection. Four independent safety workflows also succeeded.
-- The user authorized production publication on this date after green tests.
+## Preserved history
 
-## Reviewed UI scope
-- One six-destination neon portal navigation remains; duplicate old six-card grid and large Product Hunt panel/embeds are removed. The compact resource strip, ISS petition and small independent Product Hunt resource link remain.
-- /chess opens the actual same-origin Cube Chess entry directly, without preview/launcher/iframe or a generation form. The real login/guest flow stays.
-- Within the game, Exit to menu confirms destructive exit and preserves saved games, identity and preferences; Cancel keeps the current match; return to menu does not reload. Polish/English About now describes 8×8×8 / 512 squares and upcoming tested updates.
-- No provider generation, billing modification, Oracle operation or secret sync was performed as part of these source merges.
-
-## Safe publication retry — guard correction
-Initial [run #38702593694](https://github.com/teslaeco/WORLDIFACT/actions/runs/38702593694) stopped at the exact-file-scope assertion before credential setup or deployment: the expected path array was not lexicographically sorted like the Git diff. No public files, secrets or billing were changed by that failed-closed run. This retry sorts the same exact path allowlist and pins the new one-use commit parent. It did not remove or weaken the exact-parent or exact-file guard; the corrected retry passed before credentials and deployment.
-
-## Production deployment gate
-**VERIFIED LIVE:** [preserving production release #38702822443](https://github.com/teslaeco/WORLDIFACT/actions/runs/38702822443) completed SUCCESS at 2026-10-15T08:05:20Z, release commit `d17a70d1ef5ecd91cd8be36b513073662a762234`, Cloudflare version `9abf16c1-7fa6-48cd-b83a-efa32869dce5`, origin https://worldifact.xodobrox.workers.dev. The original full verify, pinned Chess foundations and Wrangler dry-run passed. Actual post-deployment `PUBLIC_RELEASE_VERIFIED` matched **12 HTML routes and 437 static assets** against the built outputs (hash/MIME), `GET /account/worlds` returned 200, six portals/marquee and Chess's `Exit to menu` / About markers were present, and Studio reported ready with Astra, Sol and Luna. No paid generation, billing writes, secrets sync or Oracle restart. Physical Android, signed-in navigation and production multiplayer are NOT verified. The one-use workflow `.github/workflows/chess-cleanup-release-once.yml` is armed by `ops/CHESS_MENU_CLEANUP_RELEASE_20261015.json`. The exact-parent guard requires base 4560ff82050a79cedda91975a5b1e0c030541286, owner-reviewed PR source SHA, exact release-only file changes and the Chess foundation pin. The workflow reruns original verify/foundations and Wrangler dry-run, deploys only with the existing reviewed preserving configuration and `--keep-vars`, suppresses potentially private Wrangler CLI output and performs exact deployed-asset SHA/MIME checks plus public Studio health checks. The Cloudflare receipt and byte-level verification are now recorded in the linked run above. The previous six-portal version is superseded. The standalone Cube Chess GitHub Pages deploy job also completed SUCCESS on its merged main; its separate browser E2E result is a distinct evidence gate.
-
-The historical one-time Cloudflare workflow may separately fail closed on its legacy scope gate. Do not conflate that with this preserving release. Physical Android/iOS hardware, actual login and multiplayer remain unverified by desktop/mobile Chromium emulation.
-
-## History
-Earlier detailed status is preserved byte-for-byte in `docs/CONTEST_STATUS.before-chess-release-20261015.md` (blob `286c20d9c76d363d34e1985b7a97446b0f85814d`). The preceding public six-portal release was Cloudflare version `630e387c-15d8-42b6-848d-bacf32e2b697`; it is not evidence that the current cleanup is LIVE.
+The preceding status is preserved byte-for-byte in [CONTEST_STATUS.before-premium-hud-release-20261015.md](CONTEST_STATUS.before-premium-hud-release-20261015.md), original blob `fc4a342d43edaf1c6fafb99edded951d4309bab4`. Historical earlier releases are not evidence that the premium HUD is already public.

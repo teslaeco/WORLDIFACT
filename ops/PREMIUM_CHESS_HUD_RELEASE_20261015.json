@@ -1,0 +1,12 @@
+{
+  "revision": "premium-chess-hud-20261015-v1",
+  "baseCommit": "8b14fdc9ae708fb5a03bfb2a51a1ad3ce6bd760d",
+  "reviewedHead": "caef6adb3c09fe3e7ea5c22f0852ed1ef970fae5",
+  "pullRequest": 300,
+  "chessPullRequest": 145,
+  "chessPin": "ebed7d71cff931c50b9d88734279098fbe82baca",
+  "preserveRemoteVars": true,
+  "preserveSecrets": true,
+  "preserveBilling": true,
+  "paidGenerationDuringDeploy": false
+}

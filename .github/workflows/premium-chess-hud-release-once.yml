@@ -1,0 +1,128 @@
+name: Publish premium Chess HUD preserving production
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/PREMIUM_CHESS_HUD_RELEASE_20261015.json'
+      - '.github/workflows/premium-chess-hud-release-once.yml'
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.run_attempt == 1
+    environment:
+      name: production
+      url: ${{ steps.verify.outputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify exact owner-approved source and release envelope
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          import { execFileSync } from 'node:child_process'
+          import { readFile } from 'node:fs/promises'
+          const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim()
+          const base = '8b14fdc9ae708fb5a03bfb2a51a1ad3ce6bd760d'
+          const head = git('rev-parse', 'HEAD')
+          assert.equal(process.env.GITHUB_SHA, head)
+          assert.deepEqual(git('rev-list', '--parents', '-n', '1', 'HEAD').split(' '), [head, base])
+          const event = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, 'utf8'))
+          assert.equal(event.before, base)
+          assert.equal(event.after, head)
+          assert.equal(event.ref, 'refs/heads/main')
+          const paths = ['.github/workflows/premium-chess-hud-release-once.yml', 'docs/CONTEST_STATUS.md', 'docs/CONTEST_STATUS.before-premium-hud-release-20261015.md', 'ops/PREMIUM_CHESS_HUD_RELEASE_20261015.json'].sort()
+          assert.deepEqual(git('diff', '--name-only', base, head).split('\n').sort(), paths)
+          for (const path of paths) assert.ok(git('ls-tree', head, '--', path).startsWith('100644 blob '))
+          const marker = JSON.parse(await readFile('ops/PREMIUM_CHESS_HUD_RELEASE_20261015.json', 'utf8'))
+          assert.deepEqual(marker, { revision: 'premium-chess-hud-20261015-v1', baseCommit: base, reviewedHead: 'caef6adb3c09fe3e7ea5c22f0852ed1ef970fae5', pullRequest: 300, chessPullRequest: 145, chessPin: 'ebed7d71cff931c50b9d88734279098fbe82baca', preserveRemoteVars: true, preserveSecrets: true, preserveBilling: true, paidGenerationDuringDeploy: false })
+          console.log('PASS: exact merged PR #300 and pinned Chess #145; only the release envelope and status documentation changed.')
+          JS
+      - name: Check deployment credential shape without printing secrets
+        run: node scripts/release-check.ts credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - name: Prepare existing preserving transport without declared variables
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile, writeFile } from 'node:fs/promises'
+          import { buildAiShopUiConfig } from './scripts/build-compatible-mcc-config.mjs'
+          const base = JSON.parse(await readFile('wrangler.jsonc', 'utf8'))
+          const config = buildAiShopUiConfig(base, { aiShopUi: true, preserveBilling: true, preserveRemoteVars: true, preserveSecrets: true })
+          await writeFile('.premium-chess-hud.wrangler.json', JSON.stringify(config, null, 2) + '\n', { mode: 0o600 })
+          JS
+      - name: Dry-run reviewed Worker and assets
+        run: npx wrangler deploy --dry-run --config .premium-chess-hud.wrangler.json --outdir .wrangler/preview
+      - name: Deploy source while preserving remote variables and secrets
+        run: |
+          set -euo pipefail
+          if WRANGLER_LOG=none WRANGLER_WRITE_LOGS=false WRANGLER_SEND_METRICS=false WRANGLER_SEND_ERROR_REPORTS=false \
+            npx wrangler deploy --config .premium-chess-hud.wrangler.json --keep-vars > /dev/null 2>&1; then
+            echo 'Deployment command completed; public byte-for-byte verification follows.'
+          else
+            echo '::error::Deployment failed; potentially private Wrangler output suppressed.'
+            exit 1
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-premium-hud.ndjson
+      - name: Verify public premium Chess HUD, six portals and Studio health
+        id: verify
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          import { appendFile, readFile, readdir } from 'node:fs/promises'
+          import { readDeployment } from './scripts/release-check.ts'
+          import { checkCompatibleMccRelease } from './scripts/check-compatible-mcc-release.mjs'
+          const deployment = readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8'))
+          assert.equal(deployment.origin, 'https://worldifact.xodobrox.workers.dev')
+          const release = await checkCompatibleMccRelease(deployment)
+          const foundation = JSON.parse(await readFile('dist/foundation-release.json', 'utf8'))
+          assert.equal(foundation.sources.chess.commit, 'ebed7d71cff931c50b9d88734279098fbe82baca')
+          const get = path => fetch(release.origin + path, { method: 'GET', credentials: 'omit', headers: { 'Cache-Control': 'no-cache' }, redirect: 'error', signal: AbortSignal.timeout(20000) })
+          const worlds = await get('/account/worlds')
+          assert.equal(worlds.status, 200)
+          assert.ok(worlds.headers.get('content-type')?.includes('text/html'))
+          assert.deepEqual(Buffer.from(await worlds.arrayBuffer()), await readFile('dist/index.html'))
+          const files = await readdir('dist/assets')
+          const js = (await Promise.all(files.filter(name => name.endsWith('.js')).map(name => readFile('dist/assets/' + name, 'utf8')))).join('\n')
+          const css = (await Promise.all(files.filter(name => name.endsWith('.css')).map(name => readFile('dist/assets/' + name, 'utf8')))).join('\n')
+          const chessAssets = await readdir('dist/apps/chess/assets')
+          const chessJs = (await Promise.all(chessAssets.filter(name => name.endsWith('.js')).map(name => readFile('dist/apps/chess/assets/' + name, 'utf8')))).join('\n')
+          const chessCss = (await Promise.all(chessAssets.filter(name => name.endsWith('.css')).map(name => readFile('dist/apps/chess/assets/' + name, 'utf8')))).join('\n')
+          for (const text of ['--premium-blue', '--premium-green', 'exit-match-button', 'user-profile-menu']) assert.ok(chessCss.includes(text), 'Missing premium HUD stylesheet marker: ' + text)
+          for (const text of ['Exit to menu', 'Unsaved progress will be lost', '512 squares', 'updates are coming soon']) assert.ok(chessJs.includes(text), 'Missing released Chess UI marker: ' + text)
+          for (const text of ['Six WORLDIFACT portals', 'My Worlds', 'resource-marquee', 'NASA', 'ESA', 'JAXA']) assert.ok(js.includes(text), 'Missing released UI marker: ' + text)
+          for (const text of ['neon-portals', 'resource-drift', 'prefers-reduced-motion']) assert.ok(css.includes(text), 'Missing released style: ' + text)
+          const response = await get('/api/studio/status')
+          assert.equal(response.status, 200)
+          const status = await response.json()
+          assert.equal(status.ready, true)
+          assert.equal(status.studioAdmissionRevision, 'oracle-durable-admission-v1')
+          assert.equal(status.studioExecutionRevision, 'studio-execution-v1')
+          assert.deepEqual([...status.studioExecutionModels].sort(), ['astra', 'luna', 'sol'])
+          assert.deepEqual([...status.studioExecutionModes].sort(), ['fast', 'standard'])
+          assert.equal(status.allowance?.unlimited, true)
+          const report = { result: 'PUBLIC_RELEASE_VERIFIED', releaseCommit: process.env.GITHUB_SHA, sourceCommit: '8b14fdc9ae708fb5a03bfb2a51a1ad3ce6bd760d', chessPin: 'ebed7d71cff931c50b9d88734279098fbe82baca', ...release, myWorldsHttp: 200, premiumHudStyles: true, sixPortalAssets: true, marqueeAssets: true, studioReady: status.ready, models: status.studioExecutionModels, paidGenerationDuringDeploy: false, browserVisualAcceptance: 'NOT_PERFORMED' }
+          console.log(JSON.stringify(report))
+          await appendFile(process.env.GITHUB_OUTPUT, 'url=' + release.origin + '\n')
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, '## Premium Chess HUD release evidence\n\n```json\n' + JSON.stringify(report, null, 2) + '\n```\n\nGET-only public checks; no login, paid generation, billing writes or secret synchronization. Physical Android visual acceptance remains unverified.\n')
+          JS
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-premium-hud.ndjson
