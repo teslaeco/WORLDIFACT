@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { Writable } from 'node:stream'
 import { createElement } from 'react'
 import { renderToPipeableStream } from 'react-dom/server'
