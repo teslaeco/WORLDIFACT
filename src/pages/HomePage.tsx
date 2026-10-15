@@ -34,7 +34,7 @@ export default function HomePage() {
       </Suspense>
       <section className="accessibility-panel">
         <div className="section-heading">
-          <h2>Five portals. One shared world.</h2>
+          <h2>Six portals. One shared world.</h2>
           <span>Open any portal directly</span>
         </div>
         <PortalCardsNav />
