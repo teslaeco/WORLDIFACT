@@ -1,0 +1,101 @@
+name: Archive exact ECOMECH V6 experimental GLB/QA on isolated draft branch once
+on:
+  push:
+    branches: ['feat/ecomech-v6-open-neural-reconstruction-20261015']
+    paths: ['ops/ecomech-v6-archive-original-once.json']
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: ecomech-v6-artifact-draft-archive-once
+  cancel-in-progress: false
+jobs:
+  pin-existing-original-geometry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+          fetch-depth: 2
+      - name: Fail closed for anything except the reviewed marker-only commit
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -m -r HEAD | wc -l)" -eq 1
+          git diff-tree --no-commit-id --name-only -m -r HEAD | grep -qx ops/ecomech-v6-archive-original-once.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('ops/ecomech-v6-archive-original-once.json').read_text())
+          assert x=={
+            'revision':'ecomech-v6-existing-original-draft-archive-v1',
+            'generationRunId':38698419490,
+            'qaRunId':38701960353,
+            'originalGLBSha256':'193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970',
+            'newPaidJobs':0,'mergeAuthorized':False,'productionDeployAuthorized':False
+          }
+          PY
+      - name: Download exact previously completed free neural GLB and independent QA evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh run view 38698419490 -R teslaeco/WORLDIFACT --json conclusion --jq '.conclusion')" = success
+          test "$(gh run view 38701960353 -R teslaeco/WORLDIFACT --json conclusion --jq '.conclusion')" = success
+          mkdir -p /tmp/ecomech-v6-staging /tmp/ecomech-v6-qa
+          gh run download 38698419490 -R teslaeco/WORLDIFACT \
+            --name ecomech-v6-open-neural-six-part-geometry-8414e6934d008749a6da0a99d2e45ccbf65fb616 \
+            --dir /tmp/ecomech-v6-staging
+          gh run download 38701960353 -R teslaeco/WORLDIFACT \
+            --name ecomech-v6-independent-depth-pbr-QA-94fc7eb584170bd5fc4e2e36c9417844fcaa8ce4 \
+            --dir /tmp/ecomech-v6-qa
+          printf '%s  %s\n' '193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970' '/tmp/ecomech-v6-staging/ecomech-v6-neural-parts-original.glb' | sha256sum --check
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('/tmp/ecomech-v6-staging/assembly-manifest.json').read_text())
+          q=json.loads(Path('/tmp/ecomech-v6-qa/geometry-qa.json').read_text())
+          assert m['outputSha256']==q['originalGLBSha256']=='193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970'
+          assert m['sourceImageOriginalSha256']==q['sourceImageSha256']=='9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053'
+          assert q['release']=='NO_GO' and not q['premiumEligible']
+          assert m['partCount']==6 and q['actualTriangles']==218450
+          PY
+      - name: Archive original binary outside public/ and reject product-ready labeling
+        run: |
+          set -euo pipefail
+          dest=research/ecomech-v6-neural-originals
+          mkdir -p "$dest"
+          cp /tmp/ecomech-v6-staging/ecomech-v6-neural-parts-original.glb "$dest/original-six-part.glb"
+          cp /tmp/ecomech-v6-staging/assembly-manifest.json "$dest/original-manifest.json"
+          cp /tmp/ecomech-v6-qa/geometry-qa.json "$dest/independent-qa.json"
+          cat > "$dest/README.md" <<'EOF'
+          # ECOMECH V6 neural research — REAL 3D, EXPERIMENTAL, NO-GO
+
+          This original 4,376,136-byte GLB uses six genuine local CPU TripoSR
+          open-source MIT inference passes and WORLDIFACT's source-image-aware
+          assembly (not original OpenAI GPT-6 Astra geometry). TripoSR source
+          Copyright 2024 Tripo AI & Stability AI; MIT license:
+          https://github.com/VAST-AI-Research/TripoSR/blob/107cefdc244c39106fa830359024f6a2f1c78871/LICENSE
+
+          Original model GLB SHA-256:
+          193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970
+
+          Original source image SHA-256:
+          9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053
+
+          Ground-truth status: NO-GO for commercial release. Too flat in depth
+          (0.112 depth/height); no embedded PBR/normal maps or rig. The coarse
+          silhouette metric is not independent: parts were placed using the
+          same source annotation used by the metric. Do NOT claim exact likeness,
+          print readiness, photo-realism or consumer/premium approval.
+
+          No new paid AI jobs, no account/points writes, no production deploy.
+          Source: GitHub Actions run 38698419490 and QA run 38701960353.
+          EOF
+          sha256sum "$dest/original-six-part.glb"
+          git add research/ecomech-v6-neural-originals
+          if git diff --cached --quiet; then echo 'Original already archived'; exit 0; fi
+          git -c user.name='WORLDIFACT QA Archive' \
+              -c user.email='worldifact-qa@users.noreply.github.com' \
+              commit -m 'chore(ecomech-v6): archive actual six-part GLB and no-go QA outside public'
+          git push origin HEAD:refs/heads/feat/ecomech-v6-open-neural-reconstruction-20261015
