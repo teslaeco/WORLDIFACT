@@ -13,6 +13,7 @@ import * as crystal from '../src/lib/crystal18.ts'
 import * as models from '../src/lib/modelCatalog.ts'
 import * as scopedBlueprint from '../src/lib/scopedBlueprintClient.ts'
 import * as blueprintRequest from '../src/lib/blueprintRequest.ts'
+import * as blueprint from '../src/lib/blueprint.ts'
 import * as gameLabLibrary from '../src/lib/gameLabLibrary.ts'
 async function component(path, dependencies, extra = {}) {
   const url = new URL(path, import.meta.url), source = await readFile(url, 'utf8'), module = { exports: {} }, localRequire = createRequire(url)
@@ -46,6 +47,7 @@ test('real editor onboarding has named world, real 18-face jewel and no shared p
     '../lib/modelCatalog': models,
     '../lib/scopedBlueprintClient': scopedBlueprint,
     '../lib/blueprintRequest': blueprintRequest,
+    '../lib/blueprint': blueprint,
   }, { fetch: forbidden })
   const html = renderToStaticMarkup(React.createElement(MemoryRouter, { initialEntries: ['/account/worlds'] }, React.createElement(PrivateLab)))
   assert.match(html, /Create your world\./)
@@ -71,7 +73,7 @@ test('saved private worlds retain their separate editor without shared-world ass
   preload.observe({ loading: false, userId: 'test-account', pathname: '/account/worlds' })
   preload.observe({ loading: false, userId: 'test-account', pathname: '/account/models' })
   assert.deepEqual(reads, [], 'private editor routes must not preload shared-world characters')
-  assert.match(portal, /<PortalAstraGenerator worldId="enchanted-ai-shop"/)
+  assert.doesNotMatch(portal, /<PortalAstraGenerator worldId="enchanted-ai-shop"/, 'AI Shop does not contain another world generator')
   assert.match(portal, /<PortalAstraGenerator worldId=\{worldId\}/, 'other portal tools remain intact')
   assert.doesNotMatch(page, /import StartingWorld|loadAvatarBytes|fetch\(.+\/api\/avatar/)
 })
