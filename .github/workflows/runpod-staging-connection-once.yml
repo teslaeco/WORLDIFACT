@@ -32,14 +32,14 @@ jobs:
           set -euo pipefail
           test "$(git diff-tree --no-commit-id --name-only -r HEAD | wc -l)" -eq 1
           git diff-tree --no-commit-id --name-only -r HEAD | grep -qx 'ops/runpod-staging-connection-once.json'
-          test "$(git hash-object scripts/runpod-readonly-preflight.mjs)" = '4ef70dcfc2a9ff012bd6e37882903f5a84683b3d'
+          test "$(git hash-object scripts/runpod-readonly-preflight.mjs)" = 'cb257d6f356168a255fc93a8db774c7f7cc6cb18'
           node - <<'NODE'
           const fs = require('node:fs')
           const actual = JSON.parse(fs.readFileSync('ops/runpod-staging-connection-once.json', 'utf8'))
           const expected = {
             revision: 'worldifact-runpod-staging-readonly-v1',
             environment: 'runpod-staging',
-            allowedOperations: ['GET /v1/endpoints', 'GET /v1/networkvolumes', 'GET /v1/pods'],
+            allowedOperations: ['GET /v2/serverless', 'GET /v2/network-volumes', 'GET /v2/pods'],
             paidGpuAuthorized: false,
             resourceCreationAuthorized: false,
             productionChangeAuthorized: false
