@@ -1,5 +1,13 @@
 # 15 October 2026 — ECOMECH V4 P0 recovery and image-integrity gate (DRAFT BRANCH ONLY)
 
+## 15 October 2026 — exact V4 photo geometry DRAFT QA, no paid generation
+
+IMPLEMENTED / TESTED: [Offline GLB shape baseline run 38682937893](https://github.com/teslaeco/WORLDIFACT/actions/runs/38682937893) completed SUCCESS. Downloaded pinned original source image from existing failed Astra V4 action and original older Blender V2 GLB; both SHA-256 verified. Added an explicitly unapproved rough V4 user-photo foreground outline with **separate robot/chili polygons** and passed original 1122×1402 PNG SHA-256 verification. Projected **real old V2 GLB triangles**, five approximate yaw settings. Best *provisional* shape IoU **0.50226 (50.23%) at 25 degrees**. **NOT a realism score, NOT an improvement over the old reference metric, NOT a V4 mesh, NOT release-approved** (`passGate=false` regardless of overlap). All art comparisons require human acceptance; no customer output generated. Report artifact: `ecomech-v4-real-source-shape-baseline-ace7f0aefe75e81cbf4296b29451ccf51566dc32`. New paid calls: zero.
+
+IMPLEMENTED on separate draft PR #292: corrected optional inactive Meshy 7.1 payload to `should_remesh:false` per [official highest-fidelity guidance](https://docs.meshy.ai/en/api/image-to-3d) and tested its offline invariants. This is **not** a vendor test, does not submit tasks or authorize charges. Commit `59d7abe881d2bbe5765fae66f17f3f03c6cce608`. External vendor charges still require separate approval.
+
+---
+
 IMPLEMENTED (not deployed): branch `fix/ecomech-v4-reference-audit-no-spend-20261015` is based on the already existing unsent photo-integrity fix branch at `e2b9d2b582e275931b13ec978268fac17063e0fb` (which itself is based on PR #291). Original one-shot code now checks the FULL source PNG SHA-256 and exact 1122×1402 dimensions **before** an irreversible submission claim, with bounded streaming and a fail-closed image read. Exact approved original SHA-256: `9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053`. Synthetic tests cover image mutation, wrong dimensions, unbounded fetch, no-paid-call path, and original-job read-only behavior. Existing paid tag/job are not reset.
 
 VERIFIED by direct extraction of existing GitHub Action artifacts (zero additional paid API calls):

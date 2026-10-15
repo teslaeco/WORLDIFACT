@@ -63,6 +63,12 @@ Reported checkpoints: 734 meshes, 393,088 triangles, Turn3 electrical detail pas
 - [Meshy Image-to-3D](https://docs.meshy.ai/en/api/image-to-3d): `meshy-7.1`, `geometry_resolution:4k`, PBR output and target formats; PR #292 is a non-submitting adapter only. Vendor billing, upload rights, actual fidelity and persistence are **unverified**.
 - [Tripo H-series Image-to-Model](https://developers.tripo3d.ai/en/docs/generation-image-to-model): native image-to-3D async API, separate geometry provider, UV/PBR options. No paid submission or pricing commitment made.
 
+## Additional same-photo shape evidence (15 October 2026)
+
+[Offline real-GLB vs exact V4 photo run 38682937893](https://github.com/teslaeco/WORLDIFACT/actions/runs/38682937893) completed success with no model-generation API: original approved input PNG digest verified from the previous actual failed job; the recovered **older V2 GLB** was SHA-verified and its actual triangles projected over a newly hand-drafted **DRAFT** human/photo mask with separate chili contour. Best of five rough yaw guesses **IoU 0.50226 at 25°**. This is **not** a photorealism measurement, not a replacement for visual review and **NOT COMPARABLE** with the older different-photo IoU 0.49894. No QA quality release pass (`passGate=false`). Source geometry is not the lost V4 output. Artifact: `ecomech-v4-real-source-shape-baseline-ace7f0aefe75e81cbf4296b29451ccf51566dc32`.
+
+A separate inactive-only Meshy #292 fix configures `should_remesh:false` for unmodified high-fidelity geometry following current [official Meshy guidance](https://docs.meshy.ai/en/api/image-to-3d); output optimization/LOD would be an explicit downstream step, not a fake remesh quality gain. No external Meshy task has run.
+
 ## Security/release gates
 
 No automatic retries; no merging or production release without owner GO; no changes to secrets, points, Stripe or account history. The USD 20 additional OpenAI cap is cumulative, not per attempt. A separate approval is needed for a new external API subscription, GPU resource or paid Tripo/Meshy test. A consumer download should default to independently verified mobile GLB LOD, not a 265 MB high-detail original.
