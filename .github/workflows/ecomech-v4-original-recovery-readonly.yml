@@ -27,6 +27,9 @@ jobs:
       - run: npm ci
       - name: Prove GET-only original-job audit never submits, retries or mutates customer balances
         run: node --test tests/ecomech-v4-original-readonly-audit.test.mjs tests/ecomech-v4-reference-integrity.test.mjs
+      - name: Verify production CDN still serves the exact approved source PNG
+        run: |
+          node --input-type=module -e "import{readReferenceImage}from'./scripts/ecomech-v4-astra-image-once.mjs';import{ECOMECH_V4_REFERENCE_SHA256}from'./scripts/lib/ecomechReferenceIntegrity.mjs';const a=await readReferenceImage();if(a.sha256!==ECOMECH_V4_REFERENCE_SHA256)throw Error('REFERENCE_SOURCE_SWAPPED');console.log('V4 ORIGINAL IMAGE PIN VERIFIED',a.sha256,a.bytes.length)"
       - name: Read original consumed Oracle job and sealed liability (NO POST / NO API generation)
         env:
           ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
