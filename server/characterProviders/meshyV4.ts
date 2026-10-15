@@ -35,7 +35,9 @@ export function buildMeshyImagePayload(input: MeshyReferenceInput) {
     image_enhancement: false,
     should_texture: true,
     enable_pbr: true,
-    should_remesh: true,
+    // Official Meshy 7.1 guidance: do not remesh when maximizing surface fidelity.
+    // Mobile LOD/retopology is a separate downstream validated stage.
+    should_remesh: false,
     texture_resolution: '4k',
     texture_prompt: input.texturePrompt,
     target_formats: ['glb','fbx','obj'] as const,
