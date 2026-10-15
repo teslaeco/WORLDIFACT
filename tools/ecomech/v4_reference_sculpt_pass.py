@@ -25,7 +25,7 @@ def closed_panel(name,coords,y,material,depth=.022,bevel=.005):
  verts=[tuple(p) for p in points]+[tuple(p+Vector((0,depth,0))) for p in points]
  faces=[]
  for tri in tris:
-  ix=[min(range(n),key=lambda k:(points[k]-t).length_squared) for t in tri]
+  ix=list(tri) if isinstance(tri[0],int) else [min(range(n),key=lambda k:(points[k]-t).length_squared) for t in tri]
   if len(set(ix))==3:faces.extend((tuple(ix),tuple(n+j for j in reversed(ix))))
  for i in range(n):faces.append((i,(i+1)%n,n+(i+1)%n,n+i))
  ob=mesh_obj(name,verts,faces,material,0,bevel)
