@@ -1,29 +1,61 @@
-# 15 October 2026 — PR #304 recovery: source-mask selection repaired
+# 15 October 2026 — My World / AI Shop / AI Game Lab separation (branch only)
 
-**IMPLEMENTED / TESTED on draft only. No new 3D job, paid provider request, merge, production deployment, customer-credit change or supplier order.** This is not a completed printable ECOMECH.
+Status: **IN PROGRESS / NOT DEPLOYED**. No merge, paid generation, export build, secret, billing adjustment, or production deployment performed. Changes on [feature/my-world-game-lab-separation](https://github.com/teslaeco/WORLDIFACT/tree/feature/my-world-game-lab-separation).
 
-## Actual defect and correction
+## Scope: six original experiences preserved
+- VERIFIED IN SOURCE: /chess, /iss, /planets, /shop, /lab, /terra remain registered in src/config/foundations.ts. The original five 3D meadow portal IDs remain unchanged in src/config/portals.ts; Earth observation remains reachable as the sixth experience.
+- AI Shop: removed duplicate PortalAstraGenerator drawer, added link to My World. Detailed Studio generation, existing saved jobs, models, billing, and recovery untouched.
+- My World (/account/worlds): remains existing private account-scoped scene editor, now contains the historical WorldBlueprint studio behind a collapsible panel; explicit validated object import and save-to-Game-Lab handoff. Legacy /builder redirects to My World.
+- AI Game Lab (/lab): new exclusive saved-world playtest, simulated rover driving, validated local speed/steering/render tuning, private-world revision-checked save. Individual GLB files remain device-local, not automatically exported with the game.
+- 8 Planets: explicit experimental/under-development confirmation screen before preview.
+- SUBSCRIPTION GAME EXPORT: **BLOCKED / PLANNED**. Windows, Linux and Android build buttons are disabled. They must remain disabled until an authenticated server-side entitlement check, actual build pipeline, reliable artifacts, cost/quotas and security tests exist. No fake downloadable games or inferred membership.
+- Gameplay parameter speed is a simulation target in km/h, not calibrated real-world physics. AI text-to-script and full physics engine not yet connected.
 
-The original SAM2 input-point nesting defect and two wrong background annotations were already corrected in earlier saved commits. The actual v3 mask run [38751646199](https://github.com/teslaeco/WORLDIFACT/actions/runs/38751646199) passed its sparse-point screen, but its score-ranked selected mask (candidate 5) still removed parts of the visible forearm, ankle and foot. Passing a handful of points did not ensure the object between those points survived.
+## Gates before any production deployment
+- [ ] CI lint, typecheck, unit/integration tests, build, Wrangler dry-run all PASS on this branch.
+- [ ] Review API authentication, game persistence, older-world compatibility, account switching, conflicts.
+- [ ] Android/desktop layout and WebGL fallback smoke tests; verify portal links and 8 Planets notice.
+- [ ] Owner explicitly reviews GO/NO-GO and authorizes merge/release.
+- [ ] Subscription-only cross-platform downloadable games remain separate BLOCKED milestone, not delivered by this UI refactor.
 
-`mask_selection.py` now checks eleven manually reviewed source-image surface regions, requiring at least 95% retention in each, as well as the existing foreground/background and gap checks. Model scores only rank candidates AFTER this screen. No missing pixels are repainted or invented. The SAME selector is called by `sam2_reference_mask.py`; it is not a disconnected test-only fix. If no candidate passes, the script preserves evidence and refuses to produce an accepted mask.
+---
 
-Actual archived-mask replay changes selection from candidate 5 to candidate 3. In the fixed inspected rectangles: exposed forearm 64.56% -> 100%; heel armor 46.88% -> 100%; front foot 79.33% -> 100%. These are retained original-image pixels, **not mesh/likeness scores**. The lowest retention across eleven rectangles is approximately 97.32%; this is a limited research screening set, not full segmentation ground truth or human acceptance.
+# 15 October 2026 — Single Chess menu and native unload protection: VERIFIED LIVE
 
-Original reference PNG SHA-256: `9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053`.
-Correctly selected existing mask SHA-256: `91933979952de85d92cb3a925cbe9edaf8d79510889b0219a953ec6a293bd0a6`.
+## VERIFIED source and merge
+- [Cube Chess PR #146](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/pull/146) merged as `3658ed1c5c1f83fe417f7a59218b8a439090cf0e`. Exact tested source `8f519bc37dd850dc886cbbaab02e0bcc0320f07e` passed the original game tests/build and [desktop+mobile browser menu/navigation matrix #38719645010](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38719645010), both browser jobs SUCCESS. The tests confirmed exactly one in-game Exit control, a native beforeunload prompt during a real reload, cancel preserving the match, and no prompt after confirmed in-document exit. They also cover the existing game menu, About and premium HUD layout.
+- [WORLDIFACT PR #301](https://github.com/teslaeco/WORLDIFACT/pull/301) merged as `d514699367675ad83e11d117688ae345567ab30d`, pinning the exact reviewed Chess source. [Verify WORLDIFACT #38719688102](https://github.com/teslaeco/WORLDIFACT/actions/runs/38719688102) and the four independent safety workflows all passed: full `npm run verify`, pinned Chess/Terra foundation assembly, Wrangler dry-run and read-only Studio inspection.
 
-## Execution evidence
+## User-requested behavior
+- During a real Chess game the original small Menu control is hidden/disabled, so the top bar has only one visible **Exit to menu**. A literal escaped newline in the hide rule was diagnosed using failed [browser run #38718051008](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38718051008), and fixed before the successful desktop/mobile rerun. The start/demo menu remains available.
+- The existing Exit action still confirms loss of the current unfinished match without reloading. Saved games, profile, AI constraints, credits and 3D models are unchanged.
+- Browsers receive a standards-based `beforeunload` request for a real active/paused/finished match when the user refreshes, enters another address or closes the tab. No warning is requested for the demo or after a deliberate in-app Exit. Browsers choose the wording and can skip prompts on some mobile app terminations; this is not automatic saving.
+- No paid generation, backend modifications, subscription, billing, secret synchronization or Oracle restart occurred.
 
-- [Real SAM2 CPU inference with the integrated selection fix, 38758676041](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758676041): **SUCCESS**. This is source masking only, not a new 3D inference.
-- [Independent existing-mask replay + seven regression tests, 38758804991](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758804991): **SUCCESS**, including the actual archived masks and unchanged-input hashes. No inference is performed in this replay.
-- [All offline reconstruction contracts, 38758811745](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758811745): **SUCCESS** at tested code `6a7e7276520287a2adcd5aaf2c577af02c0fd40e`.
-- [Full repository verify, 38758811741](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758811741): still running when this checkpoint was written. Observe final exact-head status separately; do not assume green.
+## VERIFIED LIVE — Cloudflare publication
 
-## Remaining 3D/GPU export blocker
+The owner-authorized source release [#38720659648](https://github.com/teslaeco/WORLDIFACT/actions/runs/38720659648), job `116374114016`, completed **SUCCESS** on release commit `50825a0632979e6e14bd74ff1ba0204eb977226b`. Cloudflare version `bd085cf6-ff55-4321-a511-87c57a4d2908`, public origin https://worldifact.xodobrox.workers.dev; game https://worldifact.xodobrox.workers.dev/chess.
 
-The previous official Microsoft TRELLIS.2 GPU session returned provider previews but its GLB export failed with an authentication/free-quota category. No original GLB was received. That run was NOT retried here, no quotas bypassed, no GPU rented. See [the detailed prior session receipt](TRELLIS2_SESSION_RECOVERY_20261015.md). Native checkpoint/export recovery code was already saved before this continuation; native GPU execution remains unverified. The final reference-faithful, supplier-ready mesh is **NOT finished**. New masking tests cannot prove that a subsequent 3D reconstruction will meet that target.
+Release gate PASS: 2314/2314 unchanged WORLDIFACT tests, green lint/typecheck/build, exact Chess/Terra foundation assembly, Wrangler dry-run, and `wrangler deploy --keep-vars` with potentially sensitive CLI output suppressed. The `PUBLIC_RELEASE_VERIFIED` receipt confirmed **12 HTML routes and 437 static assets** matching built bytes/MIME, `GET /account/worlds` 200, expected six-portal/partner resource markers, actual compiled Chess `beforeunload`+legacy `returnValue` and CSS `open-menu[hidden]` markers, and Studio READY with Astra/Sol/Luna. The independent Cube Chess [desktop/mobile Chromium browser test #38719645010](https://github.com/teslaeco/Cube-Chess-512-AI-Open-Source-3D-Chess-Engine-Autonomous-AI-Game-Developer/actions/runs/38719645010) passed both jobs before merging the exact Chess source.
 
-## Preserved production history
+No paid generation, payment change, secret synchronization or Oracle restart was performed. The previous Cloudflare version `dbd875c7-26d5-42c5-b6d9-bbe3f48708e8` is superseded. Physical Android visual QA, iOS and actual signed-in session testing remain UNKNOWN. Browser-native warnings have browser-specific wording and mobile limitations; automatic saving is not claimed.
 
-The complete prior status has been retained byte-for-byte as [CONTEST_STATUS.before-mask-integrity-20261015.md](CONTEST_STATUS.before-mask-integrity-20261015.md), blob `f792c23027b83e3adf759b3f04fb313f59b6625d`. It records the separately approved live Chess/navigation release. This PR does not alter that deployment or its secrets/accounts.
+## Release method and preserving protections
+**COMPLETED (see verified LIVE receipt above):** One-use `.github/workflows/single-chess-exit-release-once.yml` is armed by `ops/SINGLE_CHESS_EXIT_RELEASE_20261015.json`. Its strict parent and exact-four-file allowlist restrict the published change to this already merged, reviewed release. It reruns the original full verify/foundations and Wrangler dry-run, deploys the existing reviewed preserving config with `--keep-vars`, and requires an actual Cloudflare receipt, matching 12 HTML routes and all public asset bytes/MIME, Chess unload/single-menu JS+CSS markers and a read-only Studio READY check before declaring LIVE.
+
+Prior Cloudflare version `dbd875c7-26d5-42c5-b6d9-bbe3f48708e8` is superseded by the LIVE version above. Physical Android and signed-in account testing remain UNKNOWN.
+
+## Preserved previous status
+Prior status is stored byte-for-byte in [CONTEST_STATUS.before-single-chess-exit-20261015.md](CONTEST_STATUS.before-single-chess-exit-20261015.md), original blob `ab5f26d4c64863ec3b68296cbcc139070d14f11f`. Earlier published status claims are historical and not proof that this specific bug fix is already live.
+
+---
+
+# 15 October 2026 — PR #304 interrupted-session recovery: source mask fixed
+
+IMPLEMENTED / TESTED on draft only. The original SAM2 tuple/list error and two erroneous background annotations were already corrected in saved commits. A further defect remained: the highest-scored mask passed sparse point checks while deleting visible forearm and foot surfaces. `mask_selection.py` now rejects candidates unless all eleven manually reviewed source-region rectangles retain at least 95% of their pixels, in addition to foreground/background/gap checks. Only then can the model score rank a candidate. The SAME selector is integrated into `sam2_reference_mask.py`; it does not repaint pixels or make a 3D model.
+
+Actual existing-mask replay selected candidate 3 instead of 5. In the inspected source rectangles, exposed forearm retention changed 64.56% -> 100%, heel armor 46.88% -> 100%, front foot 79.33% -> 100%. The minimum among eleven rectangles is 97.32%. These are limited mask-integrity measurements, NOT 3D likeness, full segmentation IoU, print approval or independent competitor benchmarks. Original RGB remains unchanged; selected mask SHA-256 `91933979952de85d92cb3a925cbe9edaf8d79510889b0219a953ec6a293bd0a6`.
+
+Verified evidence: [real SAM2 CPU run 38758676041](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758676041) SUCCESS; [actual archived-mask replay and seven tests 38758804991](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758804991) SUCCESS; [all reconstruction contracts 38758811745](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758811745) SUCCESS; [full repository verify/foundations/dry-run 38758811741](https://github.com/teslaeco/WORLDIFACT/actions/runs/38758811741) SUCCESS at tested source `6a7e7276520287a2adcd5aaf2c577af02c0fd40e`. Later documentation-only commits require a separate exact-head check.
+
+No new 3D generation, paid GPU/API call, merge, deployment, customer-credit change or supplier order occurred in this recovery. The older Microsoft free-demo generation returned previews but GLB export failed with an auth/free-quota category; that result is NOT a downloaded or printable model. See [prior transport/export evidence](TRELLIS2_SESSION_RECOVERY_20261015.md). Native GPU execution and a faithful supplier-ready ECOMECH remain unverified. Source preparation is fixed; the complete 3D/export/MAKE goal is NOT finished.
