@@ -20,7 +20,22 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run verify
+      - name: Run npm run verify with bounded diagnostics
+        run: |
+          set +e
+          npm run verify > "$RUNNER_TEMP/worldifact-verify.log" 2>&1
+          verify_status=$?
+          set -e
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          lines = Path(os.environ['RUNNER_TEMP'], 'worldifact-verify.log').read_text(errors='replace').splitlines()
+          print('Verification command: npm run verify. Original exit status is preserved.')
+          print('\n'.join(line[:600] for line in lines[:15]))
+          print('--- Verification result and failure details (last 85 lines; long lines clipped) ---')
+          print('\n'.join(line[:600] for line in lines[-85:]))
+          PY
+          exit "$verify_status"
       - uses: ./.github/actions/foundations
       - run: npm run deploy:check
       - name: Inspect hosted Studio access without login or generation
