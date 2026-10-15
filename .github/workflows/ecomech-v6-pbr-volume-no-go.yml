@@ -57,6 +57,12 @@ jobs:
           assert q['newPaidRequests']==q['newCostUsd']==0
           print('NEURAL_V6_QUALITY_GATE_PASS: malformed premium claims rejected')
           PY
+      - name: Unit-test real original high-IoU/flat-3D rejection and tamper resistance
+        env:
+          ECOMECH_ORIGINAL_SIX_GLB: .existing-six-part/ecomech-v6-neural-parts-original.glb
+          ECOMECH_ORIGINAL_SIX_MANIFEST: .existing-six-part/assembly-manifest.json
+          ECOMECH_ORIGINAL_SIX_ANNOTATION: tools/ecomech/ecomech_v6_approved_photo_mask_DRAFT.json
+        run: python -m unittest discover -s tests -p 'test_ecomech_v6_quality_gate.py' -v
       - name: Upload only geometry QA evidence without user source image
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
