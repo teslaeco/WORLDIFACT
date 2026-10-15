@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAccount } from '../lib/account'
-import { validatePrivateWorld, WORLD_ID, type PrivateWorld, type SavedWorld } from '../lib/privateWorld'
+import { validatePrivateWorld, WORLD_ID, type PrivateWorld, type SavedWorld, type WorldControl } from '../lib/privateWorld'
 import { DEFAULT_GAME_TUNING, parseGameLabPrompt, validateGameTuning, type GameTuning } from '../lib/gameLabTuning'
 import './PrivateGameLab.css'
 import './GameLabPlaytest.css'
@@ -26,6 +26,7 @@ export default function GameLabPlaytest() {
   const [settings, setSettings] = useState<GameTuning>({ ...DEFAULT_GAME_TUNING })
   const [dirty, setDirty] = useState(false)
   const [running, setRunning] = useState(false)
+  const [gameControls, setGameControls] = useState<WorldControl[]>(['jump'])
   const [busy, setBusy] = useState(false)
   const [prompt, setPrompt] = useState('Increase speed to 120 km/h, steering 65%')
   const [message, setMessage] = useState('Open a world saved in My World to test your game.')
@@ -40,7 +41,7 @@ export default function GameLabPlaytest() {
   useEffect(() => {
     const controller = new AbortController()
     setWorld(null); setWorldList([]); setSelectedWorld(''); setDirty(false); setRunning(false); setRevision(0)
-    setSettings({ ...DEFAULT_GAME_TUNING }); settingsRevision.current++
+    setSettings({ ...DEFAULT_GAME_TUNING }); setGameControls(['jump']); settingsRevision.current++
     setError('')
     if (!owner) return () => controller.abort()
     void readApi('/api/worlds', { signal: controller.signal }).then(result => {
@@ -70,7 +71,7 @@ export default function GameLabPlaytest() {
       const record = body as unknown as SavedWorld
       const doc = validatePrivateWorld(record.document)
       if (doc.id !== id || !Number.isSafeInteger(record.revision) || record.revision < 1) throw new Error('Saved world revision is invalid.')
-      setWorld(doc); setRevision(record.revision); setSettings(validateGameTuning(doc.gameplay ?? DEFAULT_GAME_TUNING))
+      setWorld(doc); setRevision(record.revision); setGameControls([...doc.controls]); setSettings(validateGameTuning(doc.gameplay ?? DEFAULT_GAME_TUNING))
       settingsRevision.current++
       setMessage('Loaded "' + doc.name + '". This is a playable test of your saved scene, not an exported application.')
     }).catch(err => { if (!controller.signal.aborted && ownerRef.current === actor) setError(err instanceof Error ? err.message : 'Could not load this world.') })
@@ -87,6 +88,12 @@ export default function GameLabPlaytest() {
     try { setSettings(validateGameTuning(next)); settingsRevision.current++; setDirty(true); setError('') }
     catch (err) { setError(err instanceof Error ? err.message : 'Invalid settings.') }
   }
+  const toggleGameControl = (value: WorldControl) => {
+    if (!canPlayNow()) return
+    setGameControls(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value])
+    settingsRevision.current++; setDirty(true); setError('')
+  }
+  const canPlayNow = () => !!owner && !!world && world.id === selectedWorld && !loading
   const applyPrompt = (event: FormEvent) => {
     event.preventDefault()
     try { const update = parseGameLabPrompt(prompt, settings); changeSettings(update.settings); setMessage(update.changes.join(', ') + ' updated locally · 0 AI points. Save settings when ready.') }
@@ -94,7 +101,7 @@ export default function GameLabPlaytest() {
   }
   const saveSettings = async () => {
     if (!owner || !world || !dirty || busy) return
-    const actor = owner, worldId = world.id, version = settingsRevision.current, proposed = { ...world, gameplay: validateGameTuning(settings) }
+    const actor = owner, worldId = world.id, version = settingsRevision.current, proposed = { ...world, controls: gameControls, gameplay: validateGameTuning(settings) }
     setBusy(true); setError('')
     try {
       const body = await readApi('/api/worlds/' + encodeURIComponent(worldId), {
@@ -141,13 +148,14 @@ export default function GameLabPlaytest() {
     <div className="game-lab-layout">
       <section className="game-lab-stage" aria-label="Game test viewport">
         {canPlay && world ? <Suspense fallback={<p className="game-lab-loading">Preparing the 3D scene…</p>}>
-          <WorldCanvas owner={owner} world={world} playing={running} selected={null} point={point} onPick={() => {}} onMessage={setMessage} vehicleMode={settings.vehicleMode} gameplay={settings} />
+          <WorldCanvas owner={owner} world={{ ...world, controls: gameControls }} playing={running} selected={null} point={point} onPick={() => {}} onMessage={setMessage} vehicleMode={settings.vehicleMode} gameplay={settings} />
         </Suspense> : <div className="game-lab-placeholder"><h2>Your playtest viewport</h2><p>Save a world in My World and select it here. This panel doesn't create worlds or charge AI points.</p><Link to="/account/worlds">Open My World →</Link></div>}
         <p className="game-lab-status" role="status">{message}</p>{error && <p className="game-lab-error" role="alert">{error}</p>}
       </section>
       <aside className="game-lab-controls">
         <span className="game-lab-label">CONTROLS AND RENDERING</span>
         <label className="game-lab-checkbox"><input type="checkbox" checked={settings.vehicleMode} disabled={!canPlay} onChange={event => changeSettings({ ...settings, vehicleMode: event.target.checked })} /> Drive vehicle · car / rover test</label>
+        <fieldset className="game-lab-control-options"><legend>Character controls</legend>{(['jump','sprint','interact'] as const).map(value => <label key={value} className="game-lab-checkbox"><input type="checkbox" disabled={!canPlay} checked={gameControls.includes(value)} onChange={() => toggleGameControl(value)}/>{value==='jump'?'Jump · Space':value==='sprint'?'Sprint · Shift':'Interact · E'}</label>)}</fieldset>
         <label>Vehicle top speed · {settings.speedKmh} km/h (simulation target)<input type="range" min="10" max="300" step="10" value={settings.speedKmh} disabled={!canPlay} onChange={event => changeSettings({ ...settings, speedKmh: Number(event.target.value) })} /></label>
         <label>Steering sensitivity · {settings.steeringPercent}%<input type="range" min="10" max="100" step="5" value={settings.steeringPercent} disabled={!canPlay} onChange={event => changeSettings({ ...settings, steeringPercent: Number(event.target.value) })} /></label>
         <label>Rendering<select value={settings.renderQuality} disabled={!canPlay} onChange={event => changeSettings({ ...settings, renderQuality: event.target.value as GameTuning['renderQuality'] })}><option value="eco">Eco · mobile</option><option value="balanced">Balanced</option><option value="quality">Quality · desktop</option></select></label>
