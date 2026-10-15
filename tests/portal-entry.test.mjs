@@ -11,11 +11,13 @@ import * as portals from '../src/config/portals.ts'
 import * as foundations from '../src/config/foundations.ts'
 import * as references from '../src/config/references.ts'
 import * as campaign from '../src/lib/planetCampaign.ts'
+import * as chessEntry from '../src/lib/chessEntry.ts'
 import { loadShopComponent } from './shop-render-helper.mjs'
 
 const files = {
   portal: new URL('../src/pages/PortalPage.tsx', import.meta.url),
   planets: new URL('../src/components/PlanetsWorld.tsx', import.meta.url),
+  chess: new URL('../src/pages/ChessPage.tsx', import.meta.url),
 }
 async function renderPortal(path, user = null) {
   const Shop = await loadShopComponent()
@@ -37,11 +39,10 @@ async function renderPortal(path, user = null) {
         if (id === '../config/foundations') return foundations
         if (id === '../config/references') return references
         if (id === '../lib/planetCampaign') return campaign
+        if (id === '../lib/chessEntry') return chessEntry
         if (id === '../lib/account') return { useAccount: () => ({ user }) }
-        // The source is an ES module with a default export. Without this marker,
-        // transpiled __importDefault wraps the adapter again and React sees an
-        // object, not the actual component. This is a harness adapter, not a
-        // replacement for the dedicated PortalAstraGenerator tests.
+        // Load the real entry component rather than substituting a fake chess page.
+        if (id === './ChessPage') return load('chess')
         if (id === './ShopPage') return { __esModule: true, default: Shop }
         if (id === '../components/PortalAstraGenerator') return { __esModule: true, default: ({ worldId }) => React.createElement('section', { 'data-testid': 'astra-portal', 'data-world': worldId }, 'Astra portal generator') }
         if (id === '../components/PlanetsWorld') return load('planets')
@@ -56,17 +57,12 @@ async function renderPortal(path, user = null) {
   return renderToStaticMarkup(React.createElement(MemoryRouter, { initialEntries: [path] }, React.createElement(load('portal').default)))
 }
 
-test('Chess visitors get a mobile-safe full-screen guest launch instead of a nested 3D iframe', async () => {
+test('Chess visitors enter the real full-screen game without a second launcher or nested 3D iframe', async () => {
   const html = await renderPortal('/chess')
-  assert.match(html, /href="\/apps\/chess\/guest\.html\?guest=1"/)
-  assert.match(html, /CHESS CUBE 512 AI/)
-  assert.match(html, /Chess Cube preview: eight boards, eight rows and eight columns, 512 squares/)
-  assert.equal((html.match(/width="19" height="19"/g) || []).length, 512)
-  assert.match(html, /Launch Chess Cube 512 AI/)
-  assert.match(html, /data-world="chess-cube-512-ai"/)
-  assert.match(html, /Shop boards and pieces/)
-  assert.match(html, /Open original/)
-  assert.doesNotMatch(html, /<iframe[^>]+src="\/apps\/chess\//)
+  assert.match(html, /role="status">Opening Cube Chess 512 AI/)
+  assert.match(html, /aria-label="Cube Chess 512 AI"/)
+  assert.doesNotMatch(html, /<iframe|<button|<a |Chess Cube preview|Launch Chess|Shop boards|Open original|data-world="chess-cube-512-ai"|astra-portal/)
+  assert.equal(chessEntry.CHESS_ENTRY_PATH, '/apps/chess/index.html')
 })
 
 test('historical Shop portal keeps the real model form and its separate world-blueprint drawer', async () => {
@@ -105,9 +101,11 @@ test('ISS and Terra still embed their separate reviewed applications after the r
   assert.match(terra, /separate simulation/)
 })
 
-
-test('signed-in Chess players launch the shared-account build without guest override', async () => {
+test('signed-in Chess players use the same account-capable entry without a guest override', async () => {
   const html = await renderPortal('/chess', { id: 'account', displayName: 'Explorer' })
-  assert.match(html, /href="\/apps\/chess\/index\.html"/)
-  assert.doesNotMatch(html, /href="\/apps\/chess\/guest\.html\?guest=1"/)
+  assert.match(html, /Opening Cube Chess 512 AI/)
+  assert.doesNotMatch(html, /guest=1|guest\.html|<iframe|Launch Chess/)
+  const destinations = []
+  chessEntry.openChessEntry({ replace: path => destinations.push(path) })
+  assert.deepEqual(destinations, ['/apps/chess/index.html'])
 })

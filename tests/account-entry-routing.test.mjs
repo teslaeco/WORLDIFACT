@@ -41,15 +41,14 @@ test('the public root opens login first and the shared world exposes exactly one
   } finally { await vite.close() }
 })
 
-test('the chess portal opens the actual game entry without a launcher or a generator', async () => {
+test('the chess route enters the full-screen game without a launcher, generator or nested frame', async () => {
   const vite = await createServer({ server: { middlewareMode: true, watch: null, hmr: false, ws: false }, appType: 'custom', logLevel: 'error' })
   try {
     const { default: App } = await vite.ssrLoadModule('/src/App.tsx')
     const { AccountProvider } = await vite.ssrLoadModule('/src/lib/account.tsx')
     const html = await render(createElement(MemoryRouter, { initialEntries: ['/chess'] }, createElement(AccountProvider, null, createElement(App))))
-    assert.match(html, /<iframe[^>]+src="\/apps\/chess\/index\.html"[^>]+title="Cube Chess 512 AI"/)
-    assert.match(html, /allowFullScreen=""/i)
-    assert.doesNotMatch(html, /Chess Cube launcher|chess-instant-preview|Launch Chess|Open original public build|Create inside this world|portal-generator-drawer|Portal prompt/)
+    assert.match(html, /role="status">Opening Cube Chess 512 AI/)
+    assert.doesNotMatch(html, /<iframe|Chess Cube launcher|chess-instant-preview|Launch Chess|Open original public build|Create inside this world|portal-generator-drawer|Portal prompt/)
   } finally { await vite.close() }
 })
 
