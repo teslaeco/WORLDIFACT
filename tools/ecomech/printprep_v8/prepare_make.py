@@ -6,7 +6,7 @@ wall certification or supplier approval. Source GLB is read-only. STL is mm,
 GLB is metres. Voxel union and uniform thickening are explicitly lossy changes.
 """
 from __future__ import annotations
-import argparse, hashlib, json, math, os, struct, time
+import argparse, gc, hashlib, json, math, os, struct, time
 from pathlib import Path
 import numpy as np
 import scipy.ndimage as ndi
@@ -145,7 +145,7 @@ def prepare(source:Path,out:Path,height_mm=200.,pitch_mm=.4,thicken_mm=.6):
     yy=lo[1]+np.arange(dims[1])*pitch_mm;xx=lo[0]+np.arange(dims[0])*pitch_mm
     base_xy=(xx[None,:]/base_rx)**2+(yy[:,None]/base_ry)**2<=1
     occupancy|=((z[:,None,None]>=0)&(z[:,None,None]<=5)) & base_xy[None,:,:]
-    radius=max(0,int(round(thicken_mm/pitch_mm)))
+    radius=max(0,int(math.ceil(thicken_mm/pitch_mm)))
     if radius:occupancy=ndi.binary_dilation(occupancy,structure=ball(radius))
     occupancy=ndi.binary_closing(occupancy,structure=ball(2),iterations=1)
     occupancy=ndi.binary_fill_holes(occupancy)
@@ -156,11 +156,13 @@ def prepare(source:Path,out:Path,height_mm=200.,pitch_mm=.4,thicken_mm=.6):
     removed=[{'label':int(k),'approxVolumeMm3':float(sizes[k]*pitch_mm**3)} for k in drop]
     if len(drop):occupancy[np.isin(labels,drop)]=False
     del labels
-    # Scalar smoothing regularizes voxel stair-steps; sampled deviation recorded below.
+    # Scalar smoothing regularizes stair-steps; it is lossy, not likeness validation.
     field=ndi.gaussian_filter(occupancy.astype(np.float32),sigma=.65)
     v,f,_,_=marching_cubes(field,level=.5,spacing=(pitch_mm,)*3,allow_degenerate=False)
     vertices=v[:,[2,1,0]]+lo
     final=trimesh.Trimesh(vertices=vertices,faces=f,process=True)
+    del occupancy, field, v, f, vertices, sizes
+    gc.collect()
     final.update_faces(final.nondegenerate_faces());final.remove_unreferenced_vertices()
     trimesh.repair.fix_normals(final,multibody=True)
     # Final physical scale, stored explicitly; no hidden import units.
@@ -173,7 +175,10 @@ def prepare(source:Path,out:Path,height_mm=200.,pitch_mm=.4,thicken_mm=.6):
     surface_removed=[float(abs(m.volume)) for m in components if abs(m.volume)<1.0]
     substantial=[m for m in components if abs(m.volume)>=1.0]
     if not substantial: raise ValueError('REPAIR_ERASED_ALL_GEOMETRY')
+    component_target=len(substantial)
     final=trimesh.util.concatenate(substantial)
+    del components, substantial
+    gc.collect()
     dense_triangles=len(final.faces)
     # Volume-preserving quadratic reduction, accepted only after independent checks.
     dec=vtk.vtkQuadricDecimation();dec.SetInputData(vtk_poly(final));dec.SetTargetReduction(.8)
@@ -186,14 +191,16 @@ def prepare(source:Path,out:Path,height_mm=200.,pitch_mm=.4,thicken_mm=.6):
     reduction_qa=audit(reduced)
     volume_error=abs(reduced.volume-final.volume)/max(abs(final.volume),1e-9)
     reduction_accepted=(reduction_qa['watertight'] and reduction_qa['windingConsistent']
-        and reduction_qa['positiveVolume'] and reduction_qa['connectedComponents']==len(substantial)
+        and reduction_qa['positiveVolume'] and reduction_qa['connectedComponents']==component_target
         and reduction_qa['degenerateFaces']==0 and volume_error<.005)
     if reduction_accepted: final=reduced
+    del dec, pd, vv, ff
+    gc.collect()
     final.vertices[:,2]-=final.bounds[0,2]
     final.apply_scale(height_mm/final.extents[2])
     print('REPAIR_SURFACE_EXTRACTED',len(final.faces),'from',dense_triangles,flush=True)
     out.mkdir(parents=True,exist_ok=True)
-    stl=out/'ECOMECH_V8_MAKE_CANDIDATE_200mm.stl'
+    stl=out/f'ECOMECH_V8_MAKE_CANDIDATE_{height_mm:g}mm.stl'
     final.export(stl)
     reopened=trimesh.load(stl,force='mesh',process=True)
     meshqa=audit(reopened)
@@ -219,7 +226,7 @@ def prepare(source:Path,out:Path,height_mm=200.,pitch_mm=.4,thicken_mm=.6):
       'pitchMm':pitch_mm,'requestedThickeningMm':thicken_mm,'gridVoxels':count,'denseExtractionTriangles':dense_triangles,
       'postSurfaceRemovedVolumesMm3':surface_removed,'reductionAccepted':bool(reduction_accepted),
       'reductionVolumeRelativeError':float(volume_error),
-      'radiusVoxels':radius,'sourceOccupiedVoxels':source_occupied,'removedSubMm3Islands':removed,
+      'effectiveThickeningMm':radius*pitch_mm,'radiusVoxels':radius,'sourceOccupiedVoxels':source_occupied,'removedSubMm3Islands':removed,
       'addedGeometry':'OVAL_SUPPORT_PLINTH_5MM_INITIAL_HEIGHT',
       'finalScaleAdjustment':adjusted_scale,'stlSha256':sha(stl),'stlBytes':stl.stat().st_size,
       'structuralAudit':meshqa,'structuralGatePassed':bool(structural),'thicknessScreen':thickness,
