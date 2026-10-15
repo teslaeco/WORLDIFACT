@@ -52,7 +52,7 @@ test('the chess route enters the full-screen game without a launcher, generator 
   } finally { await vite.close() }
 })
 
-test('historical Game Lab routes and the saved private-world workspace both remain reachable without external requests', async () => {
+test('Game Lab playtests, legacy scene builder and saved My World editor remain isolated without external requests', async () => {
   const vite = await createServer({ server: { middlewareMode: true, watch: null, hmr: false, ws: false }, appType: 'custom', logLevel: 'error' })
   const originalFetch = globalThis.fetch
   let externalCalls = 0
@@ -61,17 +61,19 @@ test('historical Game Lab routes and the saved private-world workspace both rema
     const { default: App } = await vite.ssrLoadModule('/src/App.tsx')
     const { AccountProvider } = await vite.ssrLoadModule('/src/lib/account.tsx')
     const page = path => createElement(MemoryRouter, { initialEntries: [path] }, createElement(AccountProvider, null, createElement(App)))
-    for (const path of ['/lab', '/builder']) {
-      const lab = await render(page(path))
-      assert.match(lab, /Ideas become playable worlds\./, `${path} opens the historical blueprint workbench`)
-      assert.match(lab, /World scene/)
-      assert.match(lab, /YOU ARE HERE/)
-      assert.match(lab, /<option value="queen" selected="">Fan Queen/)
-      assert.match(lab, /<option value="terraformer">TerraformingPlanet Heroine/, 'the later original character remains an explicit choice')
-      assert.match(lab, /href="\/account\/worlds"[^>]*>My saved worlds/)
-      assert.match(lab, /href="\/account\/models"/)
-      assert.doesNotMatch(lab, /id="new-world-title"/, 'the private editor cannot replace the restored lab')
-    }
+    const lab = await render(page('/lab'))
+    assert.match(lab, /AI GAME LAB · PLAYTEST/)
+    assert.match(lab, /Build in My World\. Play here\./)
+    assert.match(lab, /Your playtest viewport/)
+    assert.match(lab, /CONTROLS AND RENDERING/)
+    assert.match(lab, /Android \.apk · PLANNED/)
+    assert.match(lab, /BLOCKED until that pipeline is tested/)
+    assert.match(lab, /href="\/account\/worlds"/)
+    assert.doesNotMatch(lab, /id="new-world-title"|Generate world blueprint/, 'Game Lab does not host the world editor or a paid generator')
+    const legacyBuilder = await render(page('/builder'))
+    assert.doesNotMatch(legacyBuilder, /Ideas become playable worlds\.|AI GAME LAB · PLAYTEST/)
+    const workbench = await readFile(new URL('../src/pages/WorkbenchPage.tsx', import.meta.url), 'utf8')
+    assert.match(workbench, /kind === 'builder'\) return <Navigate to="\/account\/worlds" replace \/>/, 'old builder deep-links redirect into My World')
     const saved = await render(page('/account/worlds'))
     assert.match(saved, /id="new-world-title"/)
     assert.match(saved, /Name your world\./)
