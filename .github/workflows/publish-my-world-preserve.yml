@@ -1,0 +1,91 @@
+name: Publish reviewed My World UI (manual, preserve runtime)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type DEPLOY-MY-WORLD after reviewing PR #302 and the successful preflight"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY-MY-WORLD'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Pin to reviewed PR #302 implementation (no backend or payment changes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN=6fa4ee6d2c30d32a6c8d358fc95007166d13bc5c
+          git merge-base --is-ancestor "$PIN" HEAD
+          # Ignore workflow/docs only. No app, server, payment, build or test edits after review.
+          git diff --quiet "$PIN" HEAD -- src server scripts tests package.json package-lock.json wrangler.jsonc vite.config.ts tsconfig.json public
+          # Existing Cloudflare configuration must not be modified by this release.
+          git diff --quiet 7277286fcad63402c6eb7f0d2e4cbbfcbb061fad HEAD -- server wrangler.jsonc
+          test -f docs/MY_WORLD_GAME_LAB_REFACTOR.md
+          echo 'Reviewed My World UI code matches the audited PR snapshot.'
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - name: Preserve deployed environment vars without changing bindings or migrations
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          import assert from 'node:assert/strict'
+          const base = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'))
+          assert.equal(base.name, 'worldifact')
+          assert.equal(base.main, 'server/worker.ts')
+          assert.ok(Array.isArray(base.durable_objects?.bindings))
+          assert.ok(Array.isArray(base.migrations))
+          const removeVars = value => Array.isArray(value) ? value.map(removeVars)
+            : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([k]) => k !== 'vars').map(([k, v]) => [k, removeVars(v)])) : value
+          const config = removeVars(base)
+          assert.deepEqual(config.durable_objects, base.durable_objects)
+          assert.deepEqual(config.migrations, base.migrations)
+          assert.deepEqual(config.ratelimits, base.ratelimits)
+          writeFileSync('.preserve-my-world.wrangler.json', JSON.stringify(config, null, 2) + '\n', { mode: 0o600 })
+          JS
+      - name: Read-only dry-run
+        run: npx wrangler deploy --dry-run --config .preserve-my-world.wrangler.json --outdir .wrangler/preview
+      - name: Publish reviewed UI without syncing secrets, payments or running generation
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-my-world-receipt.ndjson
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          if WRANGLER_LOG=none WRANGLER_WRITE_LOGS=false WRANGLER_SEND_METRICS=false WRANGLER_SEND_ERROR_REPORTS=false \
+            npx wrangler deploy --config .preserve-my-world.wrangler.json --keep-vars >/dev/null 2>&1; then
+            echo 'Publication submitted with remote vars preserved; checking exact assets.'
+          else
+            echo '::error::Cloudflare publication failed; suppressed private CLI output.'
+            exit 1
+          fi
+      - name: Verify every shipped asset and six routes without charging a user
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/worldifact-my-world-receipt.ndjson
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs'
+          import { readDeployment } from './scripts/release-check.ts'
+          import { checkCompatibleMccRelease } from './scripts/check-compatible-mcc-release.mjs'
+          const result = await checkCompatibleMccRelease(readDeployment(readFileSync(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8')))
+          console.log('Verified static release', JSON.stringify(result))
+          JS

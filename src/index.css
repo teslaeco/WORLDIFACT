@@ -1089,3 +1089,10 @@ input[type="file"] {
     flex-direction: column;
   }
 }
+
+/* Consent before entering the unfinished 8 Planets portal. */
+.planet-entry-page{min-height:85vh;display:grid;place-items:center;padding:24px 14px}
+.planet-entry-notice{width:min(650px,100%);padding:clamp(22px,4vw,40px);border-radius:22px;border:1px solid #6da7b1;background:radial-gradient(circle at top right,#204b60,#0e1d32 70%);box-shadow:0 22px 90px #0008;color:#eaf7fb}
+.planet-entry-notice .eyebrow{color:#f8d28e}.planet-entry-notice h1{font-size:clamp(24px,3vw,36px);line-height:1.16}.planet-entry-notice p{color:#c9dfe1;line-height:1.7}
+.planet-entry-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}.planet-entry-actions button,.planet-entry-actions .button-link{min-height:44px;border-radius:10px;padding:11px 17px;display:inline-flex;align-items:center}.planet-entry-actions button{background:#a8e9ce;color:#0f3031;border:0;font-weight:800;cursor:pointer}
+@media(max-width:480px){.planet-entry-actions>*{width:100%;justify-content:center}.planet-entry-notice{padding:20px}}

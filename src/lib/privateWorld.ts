@@ -1,3 +1,4 @@
+import { validateGameTuning, type GameTuning } from './gameLabTuning.ts'
 export const WORLD_SCHEMA = 1 as const
 export const WORLD_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 export const WORLD_LIMITS = Object.freeze({ worlds: 8, entities: 4096, terrain: 128, bytes: 98304, radius: 42 })
@@ -6,7 +7,7 @@ export type EntityKind = 'tree' | 'rock' | 'cabin' | 'lamp' | 'crate' | 'asset' 
 export type WorldEntity = { id: string; kind: EntityKind; name: string; x: number; z: number; elevation: number; scale: number; rotation: number; color: string; assetId: string | null }
 export type TerrainEdit = { id: string; x: number; z: number; radius: number; strength: number }
 export type WorldCharacter = { assetId?: string | null; description: string; outfit: string; hair: string; style: string; label: string; hairColor: string; outfitColor: string }
-export type PrivateWorld = { schema: 1; id: string; name: string; character: WorldCharacter; entities: WorldEntity[]; terrain: TerrainEdit[]; controls: WorldControl[]; night: boolean }
+export type PrivateWorld = { schema: 1; id: string; name: string; character: WorldCharacter; entities: WorldEntity[]; terrain: TerrainEdit[]; controls: WorldControl[]; night: boolean; gameplay?: GameTuning }
 export type SavedWorld = { document: PrivateWorld; revision: number; updatedAt: string }
 const record = (v: unknown): Record<string, unknown> => { if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('Invalid world data.'); return v as Record<string, unknown> }
 function keys(v: Record<string, unknown>, allowed: string[]) { if (Object.keys(v).some(k => !allowed.includes(k))) throw new Error('Unknown world field. Scripts, URLs and owner overrides are not accepted.') }
@@ -18,7 +19,7 @@ export function blankWorld(name = 'My new world'): PrivateWorld {
   return { schema: 1, id: crypto.randomUUID(), name, character: { description: '', outfit: '', hair: '', style: '', label: '', hairColor: '#453228', outfitColor: '#21b8a6' }, entities: [], terrain: [], controls: ['jump'], night: false }
 }
 export function validatePrivateWorld(input: unknown): PrivateWorld {
-  const v = record(input); keys(v, ['schema','id','name','character','entities','terrain','controls','night'])
+  const v = record(input); keys(v, ['schema','id','name','character','entities','terrain','controls','night','gameplay'])
   if (v.schema !== 1 || typeof v.night !== 'boolean') throw new Error('Unsupported world schema.')
   const c = record(v.character); keys(c, ['description','outfit','hair','style','label','hairColor','outfitColor','assetId'])
   if (!Array.isArray(v.entities) || v.entities.length > WORLD_LIMITS.entities || !Array.isArray(v.terrain) || v.terrain.length > WORLD_LIMITS.terrain || !Array.isArray(v.controls) || v.controls.length > 3) throw new Error('World complexity limit reached.')
@@ -34,6 +35,7 @@ export function validatePrivateWorld(input: unknown): PrivateWorld {
   const controls = v.controls.map(value => { if (!['jump','sprint','interact'].includes(String(value))) throw new Error('Unsupported game control.'); return value as WorldControl })
   if (new Set(controls).size !== controls.length) throw new Error('Duplicate game controls.')
   const result: PrivateWorld = { schema: 1, id: id(v.id), name: text(v.name,80,1), night: v.night,
+    ...(v.gameplay === undefined ? {} : { gameplay: validateGameTuning(v.gameplay) }),
     character: { ...(c.assetId === undefined ? {} : { assetId: c.assetId === null ? null : id(c.assetId) }), description: text(c.description,800), outfit: text(c.outfit,160), hair: text(c.hair,100), style: text(c.style,100), label: text(c.label,40), hairColor: color(c.hairColor), outfitColor: color(c.outfitColor) }, entities, terrain, controls }
   if (new TextEncoder().encode(JSON.stringify(result)).byteLength > WORLD_LIMITS.bytes) throw new Error('World file is too large.')
   return result

@@ -1,0 +1,34 @@
+name: Review My World UI publication safety (no deployment)
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'docs/MY_WORLD_GAME_LAB_REFACTOR.md'
+      - '.github/workflows/my-world-ui-preserve-release.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - run: npm run deploy:check
+      - name: Verify six existing portal routes and separate My World / Game Lab
+        run: node --test tests/my-world-game-lab-architecture.test.ts tests/game-lab-tuning.test.ts
+      - name: Confirm preflight is strictly read-only
+        run: |
+          echo 'NO DEPLOYMENT: this workflow has no Cloudflare, OpenAI, Oracle or Stripe credentials.'
+          echo 'Merge/production publication are withheld until a separately reviewed preserve-runtime scope exists.'

@@ -25,10 +25,10 @@ function download(data: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 type Health = { generationReady?: boolean; accessRequired?: boolean; publicPilot?: boolean; model?: string | null }
-export default function P0GameLab({ surface = 'lab' }: { surface?: 'lab' | 'shop' }) {
-  return surface === 'shop' ? <ShopPage /> : <WorldBlueprintLab />
+export default function P0GameLab({ surface = 'lab', onApplyBlueprint }: { surface?: 'lab' | 'shop'; onApplyBlueprint?: (blueprint: WorldBlueprint) => void }) {
+  return surface === 'shop' ? <ShopPage /> : <WorldBlueprintLab onApplyBlueprint={onApplyBlueprint} />
 }
-function WorldBlueprintLab() {
+function WorldBlueprintLab({ onApplyBlueprint }: { onApplyBlueprint?: (blueprint: WorldBlueprint) => void }) {
   const navigate = useNavigate()
   const { user, loading: accountLoading } = useAccount()
   const owner = user?.id ?? null
@@ -162,20 +162,21 @@ function WorldBlueprintLab() {
   }
   const spec = result?.assetSpec, live = result?.mode === 'LIVE' && result.provenance === 'GENERATED'
   return <div className="studio">
-    <div className="studio-heading"><div><span className="eyebrow">AI GAME LAB · WORLD BLUEPRINTS</span><h1>Ideas become playable worlds.</h1></div><span className="pill">{health.generationReady ? `${MODEL_CATALOG[selectedModel].label} blueprint ready` : 'Local scene demo available'}</span></div>
-    <nav className="world-tabs" aria-label="AI Game Lab views">
+    <div className="studio-heading"><div><span className="eyebrow">MY WORLD · WORLD BLUEPRINTS</span><h1>Ideas become playable worlds.</h1></div><span className="pill">{health.generationReady ? `${MODEL_CATALOG[selectedModel].label} blueprint ready` : 'Local scene demo available'}</span></div>
+    <nav className="world-tabs" aria-label="My World blueprint views">
       <span className="active" aria-current="page">World scene</span>
       <Link to="/shop">3D models + textures →</Link>
       <a href={REFERENCE_LINKS.gameLabPublic} target="_blank" rel="noopener noreferrer">Original Froge Studio ↗</a>
       <a href={REFERENCE_LINKS.gameLabSource} target="_blank" rel="noopener noreferrer">Froge source ↗</a>
     </nav>
     <p><strong>World blueprint → procedural scene change → GAME / MAKE plan.</strong> For a new figurine, character or textured object, use <Link to="/shop">3D models + textures</Link>. Scene blueprints and detailed model generation are separate workflows.</p>
-    <p className="result-note">You are already inside AI Game Lab. Its portal is marked YOU ARE HERE; the other four portals open their worlds.</p>
+    <p className="result-note">This generator creates a bounded scene proposal inside My World. Choose 'Add objects to My World' to place it in your owned editor. AI Game Lab only handles playtests.</p>
     <div className="studio-layout">
       <div className="studio-scene">
         <StartingWorld blueprint={blueprint} activePortalId="ai-game-lab" onPortalOpen={id => navigate(routeForPortal(id))} />
         <div className="scene-toolbar">
-          <button onClick={exportGameGlb}>Export GAME · procedural GLB</button>
+          <button onClick={exportGameGlb}>Export scene asset · procedural GLB (not a full game)</button>
+          {onApplyBlueprint && <button type="button" disabled={!result || !result.blueprint.objects.length || busy} onClick={() => { if (result) onApplyBlueprint(result.blueprint) }}>Add generated objects to My World →</button>}
           <button onClick={() => download(new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' }), 'WORLDIFACT-WorldBlueprint.json')}>Download WorldBlueprint</button>
           {spec && <button onClick={() => download(new Blob([JSON.stringify(spec, null, 2)], { type: 'application/json' }), 'WORLDIFACT-AssetSpec.json')}>Download AssetSpec</button>}
         </div>

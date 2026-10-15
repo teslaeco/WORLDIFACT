@@ -15,7 +15,7 @@ import { createPrivateWorldPreviewAssets } from '../lib/privateWorldPreviewAsset
 import { riverCenter, terrainHeight, type PrivateWorld, type WorldEntity } from '../lib/privateWorld'
 
 type Point = {x:number;z:number}
-export type WorldCanvasProps = { owner:string|null; world:PrivateWorld; playing:boolean; selected:string|null; point:Point; onPick:(point:Point,entityId:string|null)=>void; onMessage:(message:string)=>void; transformMode?:TransformMode; snap?:number; focusVersion?:number; focusCharacterVersion?:number; onTransform?:(id:string,value:EntityTransform)=>void }
+export type WorldCanvasProps = { owner:string|null; world:PrivateWorld; playing:boolean; selected:string|null; point:Point; onPick:(point:Point,entityId:string|null)=>void; onMessage:(message:string)=>void; transformMode?:TransformMode; snap?:number; focusVersion?:number; focusCharacterVersion?:number; onTransform?:(id:string,value:EntityTransform)=>void; vehicleMode?:boolean; gameplay?:import('../lib/gameLabTuning').GameTuning }
 function release(root:THREE.Object3D){const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>(),textures=new Set<THREE.Texture>();root.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.Points||o instanceof THREE.LineSegments){geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);for(const value of Object.values(m))if(value instanceof THREE.Texture)textures.add(value)}}});textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());geometries.forEach(g=>g.dispose())}
 function primitive(e:WorldEntity):THREE.Group{
   if(['rover','habitat','solar-array','sculpture','mcc-cabinet'].includes(e.kind)) return createWorldObject({...e,kind:e.kind as AssetKind,x:0,z:0,scale:1,rotation:0})
@@ -40,7 +40,9 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
     let alive=true,raf=0,frame=0,last=0,clock=0,jump=0,vertical=0,interact=false
     const scene=new THREE.Scene();scene.background=new THREE.Color('#b8d8e9');scene.fog=new THREE.Fog('#badadf',45,125)
     const camera=new THREE.PerspectiveCamera(48,1,.1,180);camera.position.set(22,22,28)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap
+    const qualityPixels=()=>latest.current.gameplay?.renderQuality==='eco'?1:latest.current.gameplay?.renderQuality==='quality'?2:1.5
+    let lastQuality=latest.current.gameplay?.renderQuality
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,qualityPixels()));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap
     renderer.domElement.tabIndex=0;renderer.domElement.setAttribute('aria-label','Private world canvas. Drag to orbit, tap to select a point or object.');host.appendChild(renderer.domElement)
     const orbit=new OrbitControls(camera,renderer.domElement);orbit.target.set(0,0,0);orbit.enableDamping=true;orbit.maxPolarAngle=Math.PI*.47;orbit.minDistance=5;orbit.maxDistance=95
     const hemi=new THREE.HemisphereLight('#d9eefc','#526c3c',2);scene.add(hemi)
@@ -60,7 +62,7 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
     const marker=new THREE.Mesh(new THREE.RingGeometry(.55,.72,36),new THREE.MeshBasicMaterial({color:'#ffd77d',side:THREE.DoubleSide,depthTest:false}));marker.rotation.x=-Math.PI/2;marker.renderOrder=5;scene.add(marker)
     const selection=new THREE.Box3Helper(new THREE.Box3(),new THREE.Color('#ffe7a1'));selection.visible=false;scene.add(selection)
     const items=new THREE.Group();scene.add(items)
-    let player=avatar(latest.current.world);const playerAt=new THREE.Vector3(-8,0,10);scene.add(player);player.visible=false
+    let player=avatar(latest.current.world);const playerAt=new THREE.Vector3(-8,0,10);let vehicleHeading=0,velocity=0;scene.add(player);player.visible=false
     let previousCharacter='',terrainSignature='',lastFocus=-1,lastCharacterFocus=-1
     let mixer:THREE.AnimationMixer|null=null
     const transforms=attachEditorTransforms(camera,renderer.domElement,scene,items,orbit,()=>latest.current)
@@ -79,7 +81,8 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
       previews.retain([...world.entities.flatMap(e=>e.assetId?[e.assetId]:[]),...(world.character.assetId?[world.character.assetId]:[])])
       setPreviewFailures(previews.failedCount())
       let previewCost:PreviewCost={triangles:0,draws:0,bytes:0},proxyCount=0
-      const ordered=[...world.entities].sort((a,b)=>Number(b.id===latest.current.selected)-Number(a.id===latest.current.selected))
+      const driveSource=latest.current.vehicleMode ? world.entities.find(e=>e.kind==='rover'||(e.kind==='asset'&&/(car|auto|samoch|rover|vehicle)/i.test(e.name))) : undefined
+       const ordered=[...world.entities].sort((a,b)=>Number(b.id===latest.current.selected)-Number(a.id===latest.current.selected))
       for(const e of ordered){
         let group:THREE.Group
         const knownAsset=e.assetId?previews.get(e.assetId):null
@@ -89,13 +92,24 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
         const currentCost=costOf(group);if(!fitsPreview(previewCost,currentCost)){if(!group.userData.sharedAsset)release(group);group=primitive({...e,kind:'asset'});group.name='Resource-budget proxy';proxyCount++}else previewCost=sumPreview(previewCost,currentCost)
         if(e.kind==='asset'&&!asset)proxyCount++
         group.userData.editorBaseScale=group.scale.x
-        group.position.set(e.x,terrainHeight(e.x,e.z,world.terrain)+e.elevation,e.z);group.scale.multiplyScalar(e.scale);group.rotation.y=e.rotation*Math.PI/180;group.userData.entityId=e.id;items.add(group)
+        group.position.set(e.x,terrainHeight(e.x,e.z,world.terrain)+e.elevation,e.z);group.scale.multiplyScalar(e.scale);group.rotation.y=e.rotation*Math.PI/180;group.userData.entityId=e.id;group.visible=e.id!==driveSource?.id;items.add(group)
         if(e.assetId&&!knownAsset&&latest.current.owner)void previews.request(e.assetId)
       }
       if(world.character.assetId&&!previews.get(world.character.assetId)&&latest.current.owner)void previews.request(world.character.assetId)
       if(proxyCount)latest.current.onMessage(`${proxyCount} object(s) use lightweight previews while files load or the rendering budget is full. All placements are saved; the old four-model limit is removed.`)
 
-      const character=JSON.stringify(world.character)+(world.character.assetId&&previews.get(world.character.assetId)?':loaded':'');if(character!==previousCharacter){disposePlayer();const asset=world.character.assetId?previews.get(world.character.assetId)?.root:null;if(asset){player=cloneSkeleton(asset) as THREE.Group;player.scale.multiplyScalar(.64);player.userData.sharedAsset=true;const clips=asset.animations;if(clips.length){mixer=new THREE.AnimationMixer(player);const clip=clips.find(c=>/walk|run|idle/i.test(c.name))??clips[0];mixer.clipAction(clip).play()}}else player=avatar(world);scene.add(player);player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,world.terrain),playerAt.z);player.visible=true;previousCharacter=character}
+      const driving=!!latest.current.vehicleMode
+       const vehicleAsset=driving&&driveSource?.assetId?previews.get(driveSource.assetId)?.root:null
+       const sourceAsset=driving?vehicleAsset:world.character.assetId?previews.get(world.character.assetId)?.root:null
+       const character=JSON.stringify(world.character)+':'+String(driving)+':'+(driveSource?.id??'')+':'+String(!!sourceAsset)
+       if(character!==previousCharacter){
+         disposePlayer()
+         if(sourceAsset){player=cloneSkeleton(sourceAsset) as THREE.Group;player.scale.multiplyScalar(driving?(driveSource?.scale??1):.64);player.userData.sharedAsset=true;const clips=sourceAsset.animations;if(clips.length&&!driving){mixer=new THREE.AnimationMixer(player);const clip=clips.find(c=>/walk|run|idle/i.test(c.name))??clips[0];mixer.clipAction(clip).play()}}
+         else if(driving)player=primitive({id:'preview-vehicle',kind:'rover',name:'Playtest rover',x:0,z:0,elevation:0,scale:1,rotation:0,color:'#5abca3',assetId:null})
+         else player=avatar(world)
+         if(driving){playerAt.set(driveSource?.x??-8,0,driveSource?.z??10);vehicleHeading=(driveSource?.rotation??0)*Math.PI/180;velocity=0;player.rotation.y=vehicleHeading;orbit.target.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,world.terrain),playerAt.z);camera.position.set(playerAt.x+11,orbit.target.y+13,playerAt.z+17);orbit.update()}
+         scene.add(player);player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,world.terrain)+.1,playerAt.z);player.visible=true;previousCharacter=character
+       }
       transforms.update()
 
     }
@@ -134,7 +148,21 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
       if((latest.current.focusVersion??0)!==lastFocus){lastFocus=latest.current.focusVersion??0;if(chosen&&lastFocus>0)focus(chosen)}
       if((latest.current.focusCharacterVersion??0)!==lastCharacterFocus){lastCharacterFocus=latest.current.focusCharacterVersion??0;if(lastCharacterFocus>0)focus(player)}
       transforms.update()
-      if(latest.current.playing){const k=keys.current,forward=(k.has('KeyW')||k.has('ArrowUp')?1:0)-(k.has('KeyS')||k.has('ArrowDown')?1:0),side=(k.has('KeyD')||k.has('ArrowRight')?1:0)-(k.has('KeyA')||k.has('ArrowLeft')?1:0);const speed=w.controls.includes('sprint')&&k.has('ShiftLeft')?8:4;const ahead=new THREE.Vector3().subVectors(orbit.target,camera.position).setY(0).normalize(),right=new THREE.Vector3(-ahead.z,0,ahead.x);const move=ahead.multiplyScalar(forward).add(right.multiplyScalar(side));if(move.lengthSq()>0){move.normalize().multiplyScalar(speed*dt);const old=playerAt.clone();playerAt.x=Math.max(-39,Math.min(39,playerAt.x+move.x));playerAt.z=Math.max(-39,Math.min(39,playerAt.z+move.z));const delta=playerAt.clone().sub(old);camera.position.add(delta);orbit.target.add(delta);player.rotation.y=Math.atan2(move.x,move.z);(player.userData.previewLimbs as THREE.Object3D[]|undefined)?.forEach((part,i)=>{part.rotation.x=Math.sin(clock*9+i%2*Math.PI)*.4});mixer?.update(dt)}else{(player.userData.previewLimbs as THREE.Object3D[]|undefined)?.forEach(p=>{p.rotation.x=0});mixer?.update(dt)}
+      if(lastQuality!==latest.current.gameplay?.renderQuality){lastQuality=latest.current.gameplay?.renderQuality;renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,qualityPixels()));size()}
+      if(latest.current.playing&&latest.current.vehicleMode){
+        const k=keys.current,throttle=(k.has('KeyW')||k.has('ArrowUp')?1:0)-(k.has('KeyS')||k.has('ArrowDown')?1:0)
+        const steer=(k.has('KeyD')||k.has('ArrowRight')?1:0)-(k.has('KeyA')||k.has('ArrowLeft')?1:0)
+        const top=(latest.current.gameplay?.speedKmh??80)/12
+        velocity=Math.max(-top*.35,Math.min(top,velocity+throttle*top*2*dt))
+        velocity*=Math.max(0,1-dt*(throttle?0.4:2.2))
+        vehicleHeading+=steer*(latest.current.gameplay?.steeringPercent??70)/100*Math.min(1,Math.abs(velocity)/Math.max(1,top))*(velocity>=0?1:-1)*2*dt
+        const candidate=playerAt.clone().add(new THREE.Vector3(Math.sin(vehicleHeading)*velocity*dt,0,Math.cos(vehicleHeading)*velocity*dt))
+        const activeVehicle=w.entities.find(e=>e.kind==='rover'||(e.kind==='asset'&&/(car|auto|samoch|rover|vehicle)/i.test(e.name)))
+        const blocked=w.entities.some(e=>e.id!==activeVehicle?.id&&Math.abs(e.x-candidate.x)<2&&Math.abs(e.z-candidate.z)<2&&Math.hypot(e.x-candidate.x,e.z-candidate.z)<2)
+        if(!blocked&&Math.abs(candidate.x)<39&&Math.abs(candidate.z)<39){const delta=candidate.clone().sub(playerAt);playerAt.copy(candidate);camera.position.add(delta);orbit.target.add(delta)}else velocity=0
+        player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,w.terrain)+.1,playerAt.z)
+        player.rotation.y=vehicleHeading
+      }else if(latest.current.playing){const k=keys.current,forward=(k.has('KeyW')||k.has('ArrowUp')?1:0)-(k.has('KeyS')||k.has('ArrowDown')?1:0),side=(k.has('KeyD')||k.has('ArrowRight')?1:0)-(k.has('KeyA')||k.has('ArrowLeft')?1:0);const speed=w.controls.includes('sprint')&&k.has('ShiftLeft')?8:4;const ahead=new THREE.Vector3().subVectors(orbit.target,camera.position).setY(0).normalize(),right=new THREE.Vector3(-ahead.z,0,ahead.x);const move=ahead.multiplyScalar(forward).add(right.multiplyScalar(side));if(move.lengthSq()>0){move.normalize().multiplyScalar(speed*dt);const old=playerAt.clone();playerAt.x=Math.max(-39,Math.min(39,playerAt.x+move.x));playerAt.z=Math.max(-39,Math.min(39,playerAt.z+move.z));const delta=playerAt.clone().sub(old);camera.position.add(delta);orbit.target.add(delta);player.rotation.y=Math.atan2(move.x,move.z);(player.userData.previewLimbs as THREE.Object3D[]|undefined)?.forEach((part,i)=>{part.rotation.x=Math.sin(clock*9+i%2*Math.PI)*.4});mixer?.update(dt)}else{(player.userData.previewLimbs as THREE.Object3D[]|undefined)?.forEach(p=>{p.rotation.x=0});mixer?.update(dt)}
         if(w.controls.includes('jump')&&k.has('Space')&&jump<=0){vertical=5.8;k.delete('Space')}vertical-=14*dt;jump=Math.max(0,jump+vertical*dt);if(jump===0)vertical=0;player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,w.terrain)+jump,playerAt.z)
         if(w.controls.includes('interact')&&k.has('KeyE')&&!interact){const near=w.entities.find(e=>Math.hypot(e.x-playerAt.x,e.z-playerAt.z)<4);latest.current.onMessage(near?`Interacting with ${near.name}. Add further behavior in a future scripted build.`:'Move within four meters of an object to interact.');interact=true}if(!k.has('KeyE'))interact=false
       }else{keys.current.clear();jump=0;player.position.y=terrainHeight(playerAt.x,playerAt.z,w.terrain);mixer?.update(dt)}
@@ -142,7 +170,7 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
     };raf=requestAnimationFrame(animate)
     return()=>{alive=false;cancelAnimationFrame(raf);draw.current=null;retryPreviews.current=null;window.removeEventListener('worldifact-private-library',retry);observer.disconnect();window.removeEventListener('keydown',downKey);window.removeEventListener('keyup',upKey);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',pointerDown);renderer.domElement.removeEventListener('pointerup',pick);renderer.domElement.removeEventListener('webglcontextlost',lost);transforms.dispose();orbit.dispose();if(player.userData.sharedAsset)scene.remove(player);for(const child of [...items.children])if(child.userData.sharedAsset)items.remove(child);release(scene);previews.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();keys.current.clear()}
   },[props.owner,props.world.id])
-  useEffect(()=>{draw.current?.(props.world)},[props.world])
+  useEffect(()=>{draw.current?.(props.world)},[props.world,props.vehicleMode])
   const hold=(key:string)=>({onPointerDown:(e:React.PointerEvent<HTMLButtonElement>)=>{e.currentTarget.setPointerCapture(e.pointerId);keys.current.add(key)},onPointerUp:()=>keys.current.delete(key),onPointerCancel:()=>keys.current.delete(key),onLostPointerCapture:()=>keys.current.delete(key)})
   return <div className="private-canvas-shell"><div ref={container} className="private-canvas"/>{previewFailures>0&&<button className="private-preview-retry" onClick={()=>retryPreviews.current?.()}>Retry model previews ({previewFailures})</button>}{error&&<p className="private-canvas-error" role="alert">{error}</p>}{!props.playing&&<div className="private-canvas-hint">Tap to select · Move/Rotate/Scale handles edit objects · drag empty space to orbit</div>}{props.playing&&<div className="private-game-controls"><div className="private-move-pad"><button aria-label="Move forward" {...hold('KeyW')}>↑</button><button aria-label="Move left" {...hold('KeyA')}>←</button><button aria-label="Move back" {...hold('KeyS')}>↓</button><button aria-label="Move right" {...hold('KeyD')}>→</button></div><div>{props.world.controls.includes('jump')&&<button {...hold('Space')}>Jump</button>}{props.world.controls.includes('sprint')&&<button {...hold('ShiftLeft')}>Sprint</button>}{props.world.controls.includes('interact')&&<button {...hold('KeyE')}>Interact</button>}</div></div>}</div>
 }

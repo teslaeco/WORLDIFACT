@@ -1,3 +1,25 @@
+# 15 October 2026 — My World / AI Shop / AI Game Lab separation (branch only)
+
+Status: **IN PROGRESS / NOT DEPLOYED**. No merge, paid generation, export build, secret, billing adjustment, or production deployment performed. Changes on [feature/my-world-game-lab-separation](https://github.com/teslaeco/WORLDIFACT/tree/feature/my-world-game-lab-separation).
+
+## Scope: six original experiences preserved
+- VERIFIED IN SOURCE: /chess, /iss, /planets, /shop, /lab, /terra remain registered in src/config/foundations.ts. The original five 3D meadow portal IDs remain unchanged in src/config/portals.ts; Earth observation remains reachable as the sixth experience.
+- AI Shop: removed duplicate PortalAstraGenerator drawer, added link to My World. Detailed Studio generation, existing saved jobs, models, billing, and recovery untouched.
+- My World (/account/worlds): remains existing private account-scoped scene editor, now contains the historical WorldBlueprint studio behind a collapsible panel; explicit validated object import and save-to-Game-Lab handoff. Legacy /builder redirects to My World.
+- AI Game Lab (/lab): new exclusive saved-world playtest, simulated rover driving, validated local speed/steering/render tuning, private-world revision-checked save. Individual GLB files remain device-local, not automatically exported with the game.
+- 8 Planets: explicit experimental/under-development confirmation screen before preview.
+- SUBSCRIPTION GAME EXPORT: **BLOCKED / PLANNED**. Windows, Linux and Android build buttons are disabled. They must remain disabled until an authenticated server-side entitlement check, actual build pipeline, reliable artifacts, cost/quotas and security tests exist. No fake downloadable games or inferred membership.
+- Gameplay parameter speed is a simulation target in km/h, not calibrated real-world physics. AI text-to-script and full physics engine not yet connected.
+
+## Gates before any production deployment
+- [ ] CI lint, typecheck, unit/integration tests, build, Wrangler dry-run all PASS on this branch.
+- [ ] Review API authentication, game persistence, older-world compatibility, account switching, conflicts.
+- [ ] Android/desktop layout and WebGL fallback smoke tests; verify portal links and 8 Planets notice.
+- [ ] Owner explicitly reviews GO/NO-GO and authorizes merge/release.
+- [ ] Subscription-only cross-platform downloadable games remain separate BLOCKED milestone, not delivered by this UI refactor.
+
+---
+
 # 15 October 2026 — Single Chess menu and native unload protection: VERIFIED LIVE
 
 ## VERIFIED source and merge

@@ -899,6 +899,7 @@ export default function ShopPage() {
       </div>
 
     </section>
+    <section className="shop-world-handoff" aria-label="Continue in My World"><div><strong>Build a world with your 3D models</strong><p>Keep creating individual models here. In My World you can import completed GLB assets, create scenes, and send saved worlds to AI Game Lab for playtesting.</p></div><Link to="/account/worlds" className="button-link">Open My World →</Link></section>
     <details className="studio-library-disclosure"><summary>Explore creations</summary><PublicModelGallery /></details>
     <details className="studio-library-disclosure"><summary>My models</summary><StudioGallery compact requestedModelId={saved && job?.state === 'succeeded' && job.id === saved.receipt.id ? saved.receipt.id : ''} /></details>
     <details className="shop-manufacturing-disclosure"><summary><span>Bring it into the real world</span><span>Manufacturing options +</span></summary><p className="shop-beta-note"><strong>Experimental beta.</strong> Manufacturing and delivery require a separate production review and price approval.</p><ShopManufacturingOptions dimensions={dimensions} dimensionsEnabled={dimensionsEnabled} hasGeneratedModel={!!preview && preview.origin === 'job'} onDimensionsChange={setDimensions} onDimensionsEnabledChange={setDimensionsEnabled} onPrepareIssDraft={prepareIssDraft} /></details>
