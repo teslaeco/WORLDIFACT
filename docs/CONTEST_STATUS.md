@@ -3,6 +3,12 @@
 IMPLEMENTED/TESTED: free MIT TripoSR CPU six-part image-to-mesh: [generation run #38698419490](https://github.com/teslaeco/WORLDIFACT/actions/runs/38698419490) SUCCESS; independent no-paid real binary/PBR depth tests: [#38701960353](https://github.com/teslaeco/WORLDIFACT/actions/runs/38701960353) SUCCESS. Original GLB 4,376,136 bytes SHA-256 `193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970`, 218,450 faces / 6 neural parts. Physical GLB archive on isolated branch outside `public/`: [original archive #38702243568](https://github.com/teslaeco/WORLDIFACT/actions/runs/38702243568) SUCCESS at commit `d02a706e6dcc036920a9e620a64179fc818eecb8`. QA: depth/height **0.11164 FAIL**, zero PBR/normal textures, no rig, 360-degree visual review absent. Draft outline overlap **0.80342** uses the same annotation as assembly and is NOT an independent similarity result. Provider attribution: local open source TripoSR + WORLDIFACT assembly, NOT Astra-created geometry. New AI/vendor spend USD **0.00**. Premium, GAME release and MAKE **NO-GO**. Full details `docs/ECOMECH_V6_CHARACTER_ENGINE_STATUS_20261015.md`. [Draft PR #298](https://github.com/teslaeco/WORLDIFACT/pull/298), stacked on V5 #297, not merged/deployed. GitHub bot-created head check may need authorization, not silently treated green.
 
 ---
+
+# 2026-10-15 — Character Engine V5 root-cause repair (DRAFT only)
+
+IMPLEMENTED/TESTED: [draft PR #297](https://github.com/teslaeco/WORLDIFACT/pull/297). Photo-referenced robots containing MCC, motor, wiring and contactor words now select the **humanoid robot** instruction profile rather than a cabinet. Sol/Astra advice is opt-in on the draft and does not submit, alter the account, price, model or original job. Explicit prior model/price remains authoritative. Real V5 QA tests include actual robot photo, existing MCC and woman model regressions and no paid dispatch. The older legacy /reserve test now correctly asserts the existing immediate 250-point debit against `credits`, with zero `reservedCredits` hold and same-ID idempotency; no payment code was changed. [Exact production-code CI #38701270312](https://github.com/teslaeco/WORLDIFACT/actions/runs/38701270312) SUCCESS on `827fe3b7eb339beb5d3f5ad1e5527710934e61cf`. No new OpenAI API jobs/cost, no merge or deployment. New actual photo-likeness model remains BLOCKED; green tests do not prove photorealism.
+
+---
 # 15 October 2026 — Six-portal landing LIVE: merge and preserving release verified
 
 ## Current verified milestone
