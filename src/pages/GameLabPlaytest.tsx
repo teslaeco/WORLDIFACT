@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAccount } from '../lib/account'
 import { validatePrivateWorld, WORLD_ID, type PrivateWorld, type SavedWorld } from '../lib/privateWorld'
 import { DEFAULT_GAME_TUNING, parseGameLabPrompt, validateGameTuning, type GameTuning } from '../lib/gameLabTuning'
+import './PrivateGameLab.css'
 import './GameLabPlaytest.css'
 
 const WorldCanvas = lazy(() => import('../components/PrivateWorldCanvas'))
