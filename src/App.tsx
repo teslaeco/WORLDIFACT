@@ -7,6 +7,7 @@ import { clearAvatarAssets, loadAvatarBytes } from './lib/avatarAsset'
 import { createAvatarPreloadLifecycle } from './lib/avatarPreloadLifecycle'
 
 const PrivateGameLab = lazy(async () => import('./pages/PrivateGameLab'))
+const GameLabPlaytest = lazy(async () => import('./pages/GameLabPlaytest'))
 const HomePage = lazy(async () => import('./pages/HomePage'))
 const PortalPage = lazy(async () => import('./pages/PortalPage'))
 const InfoPage = lazy(async () => import('./pages/InfoPage'))
@@ -54,7 +55,7 @@ export default function App() {
           <Route key={path} path={path} element={<PortalPage />} />
         ))}
         <Route path="/chess/shop" element={<Navigate to="/shop" replace />} />
-        <Route path="/lab" element={<WorkbenchPage kind="builder" />} />
+        <Route path="/lab" element={<GameLabPlaytest />} />
         <Route path="/builder" element={<WorkbenchPage kind="builder" />} />
         <Route path="/account/worlds" element={<PrivateGameLab />} />
         <Route path="/make" element={<WorkbenchPage kind="make" />} />
