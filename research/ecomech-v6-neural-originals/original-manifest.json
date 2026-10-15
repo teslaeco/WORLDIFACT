@@ -1,0 +1,128 @@
+{
+  "revision": "worldifact-ecomech-neural-part-assembly-v1",
+  "sourceImageOriginalSha256": "9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053",
+  "geometryProvider": "stabilityai/TripoSR \u2014 MIT OPEN SOURCE, six CPU passes",
+  "generator": "WORLDIFACT own part-aware assembly",
+  "claimAstraCreatedGeometry": false,
+  "claimPhotorealistic": false,
+  "partCount": 6,
+  "parts": [
+    {
+      "part": "helmet",
+      "triangles": 43244,
+      "inputImageSha256": "6e43a3c8280ed66938f50b91e25ad44213ad8531d06d37f38d9a7391ac6b8a84",
+      "rawNeuralSha256": "dc63683f72eceef7015ad4d04496becd054d674e9886924bef6577bc894f9b61",
+      "assembledBounds": [
+        [
+          -0.28905001282691956,
+          2.1887998580932617,
+          -0.10194861143827438
+        ],
+        [
+          0.4059000015258789,
+          2.6918399333953857,
+          0.10010538250207901
+        ]
+      ]
+    },
+    {
+      "part": "chest",
+      "triangles": 31516,
+      "inputImageSha256": "e1b35b794c8bf2121fb12e115bb2ad89f605237716a1fc41efa0c5b24b50e083",
+      "rawNeuralSha256": "6b9d9dcaff3acf382d169ef7abad4beee2ead480aae2e4a3d9948f59c2e4901c",
+      "assembledBounds": [
+        [
+          -0.5391499996185303,
+          1.3958399295806885,
+          -0.11585196107625961
+        ],
+        [
+          0.5637500286102295,
+          2.413439989089966,
+          0.10169260948896408
+        ]
+      ]
+    },
+    {
+      "part": "raised_arm_chili",
+      "triangles": 40778,
+      "inputImageSha256": "64cd8a991b4d68f599a6415fa73896fa8f19d2360e6b0fc133a4a8fd0d70c19d",
+      "rawNeuralSha256": "180caf754edafaece73972321beef4c5e8b2ecbca9cf5e65129f2ecdeb490e93",
+      "assembledBounds": [
+        [
+          -0.8712500333786011,
+          1.6262400150299072,
+          -0.1522974967956543
+        ],
+        [
+          -0.164000004529953,
+          2.6572799682617188,
+          0.14822426438331604
+        ]
+      ]
+    },
+    {
+      "part": "right_arm_mechanics",
+      "triangles": 42142,
+      "inputImageSha256": "7f9464eb3d03d99ff03621887db1afe05f6f98d81836801f6d6621e78d9a00d3",
+      "rawNeuralSha256": "dffb17442d38bc7a343f2038057712faebf673d40541ee1c38a846327914516d",
+      "assembledBounds": [
+        [
+          0.1537500023841858,
+          1.146239995956421,
+          -0.14269815385341644
+        ],
+        [
+          0.768750011920929,
+          2.3846399784088135,
+          0.12970808148384094
+        ]
+      ]
+    },
+    {
+      "part": "armored_left_leg",
+      "triangles": 27332,
+      "inputImageSha256": "0e2b38086e2f93696ae5dbe0ae5694a39956741ba222d0b5e74b9756ad75536a",
+      "rawNeuralSha256": "c6960d2bddc7406f3d59ead03bb4f402267d4cf5459df2c26471d2a8ba16d86c",
+      "assembledBounds": [
+        [
+          -0.8999500274658203,
+          0.0,
+          -0.11476868391036987
+        ],
+        [
+          0.03485000133514404,
+          1.6070399284362793,
+          0.12993451952934265
+        ]
+      ]
+    },
+    {
+      "part": "mechanical_right_leg",
+      "triangles": 33438,
+      "inputImageSha256": "a1bd3e4df873ba235e08753552e5d4a9d1ad270f2ac405c9b97a314a2698e688",
+      "rawNeuralSha256": "d813b371c96dbad3bddd9694da7354e3b3d14e4014b3fa823641278248d6da93",
+      "assembledBounds": [
+        [
+          -0.1537500023841858,
+          0.0,
+          -0.1256541609764099
+        ],
+        [
+          0.836400032043457,
+          1.65503990650177,
+          0.14506033062934875
+        ]
+      ]
+    }
+  ],
+  "outputSha256": "193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970",
+  "outputBytes": 4376136,
+  "elapsedSeconds": 220.68,
+  "modelProvenance": "OPEN_SOURCE_NEURAL_CPU_AND_INTERNAL_PART_ASSEMBLY",
+  "quality": "UNREVIEWED_VISUAL_NO_GO",
+  "rigReady": false,
+  "makeReady": false,
+  "newOpenAIRequests": 0,
+  "externalPaidVendorRequests": 0
+}
