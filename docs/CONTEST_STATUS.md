@@ -1,3 +1,10 @@
+## 2026-10-16 — RunPod/R2 credentials present in GitHub, safe production preflight staged
+
+**SCREENSHOT EVIDENCE / NOT CONNECTED / NOT DEPLOYED / ZERO GPU SPEND.** Owner screenshots show Production has 14 environment secrets and 4 variables, including R2, RunPod and Oracle. The R2 S3 endpoint variable looks like a literal explanatory placeholder, not a URL: fail closed until corrected. RunPod key had returned 403 on a prior v1 check; owner now reports restricted Read/Write scope and a USD 33 RunPod budget, neither independently validated. Draft #305 stays unmerged; its offline provider and real Blender fixture CI passed, with flaky ISS source timeout cleared by rerun.
+
+**IMPLEMENTATION:** Add read-only RunPod REST v2 connection and private R2 atomic create/read/duplicate/delete one-object preflight, offline tests and separate marker-gated trusted-main-only GitHub workflow. No Production secrets used from PR, no GPU endpoint created, no model loaded, no paid request, no merge/production deployment. Approval to merge narrow preflight and subsequent marker-only main commit are still required. Details: docs/RUNPOD_R2_PREFLIGHT_20261016.md.
+
+---
 # 15 October 2026 — My World / AI Shop / AI Game Lab separation (branch only)
 
 Status: **IN PROGRESS / NOT DEPLOYED**. No merge, paid generation, export build, secret, billing adjustment, or production deployment performed. Changes on [feature/my-world-game-lab-separation](https://github.com/teslaeco/WORLDIFACT/tree/feature/my-world-game-lab-separation).
