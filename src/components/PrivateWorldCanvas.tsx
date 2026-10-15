@@ -107,7 +107,7 @@ export default function PrivateWorldCanvas(props:WorldCanvasProps){
          if(sourceAsset){player=cloneSkeleton(sourceAsset) as THREE.Group;player.scale.multiplyScalar(driving?(driveSource?.scale??1):.64);player.userData.sharedAsset=true;const clips=sourceAsset.animations;if(clips.length&&!driving){mixer=new THREE.AnimationMixer(player);const clip=clips.find(c=>/walk|run|idle/i.test(c.name))??clips[0];mixer.clipAction(clip).play()}}
          else if(driving)player=primitive({id:'preview-vehicle',kind:'rover',name:'Playtest rover',x:0,z:0,elevation:0,scale:1,rotation:0,color:'#5abca3',assetId:null})
          else player=avatar(world)
-         if(driving){playerAt.set(driveSource?.x??-8,0,driveSource?.z??10);vehicleHeading=(driveSource?.rotation??0)*Math.PI/180;velocity=0;player.rotation.y=vehicleHeading}
+         if(driving){playerAt.set(driveSource?.x??-8,0,driveSource?.z??10);vehicleHeading=(driveSource?.rotation??0)*Math.PI/180;velocity=0;player.rotation.y=vehicleHeading;orbit.target.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,world.terrain),playerAt.z);camera.position.set(playerAt.x+11,orbit.target.y+13,playerAt.z+17);orbit.update()}
          scene.add(player);player.position.set(playerAt.x,terrainHeight(playerAt.x,playerAt.z,world.terrain)+.1,playerAt.z);player.visible=true;previousCharacter=character
        }
       transforms.update()
