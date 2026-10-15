@@ -11,7 +11,7 @@ export default function WorkbenchPage({ kind }: { kind: 'builder' | 'make' }) {
     <header className="portal-header">
       <Link to="/world" className="brand">WORLDIFAKT<span>← Back to the meadow</span></Link>
       <nav aria-label="Workshop navigation">
-        <Link to="/lab">AI Game Lab</Link><Link to="/shop">Shop</Link>
+        <Link to="/lab">AI Game Lab</Link><Link to="/account/worlds">My World</Link><Link to="/shop">Shop</Link>
         <Link to="/account/worlds">My World · Scene editor</Link><Link to="/make">Manufacturing audit</Link><Link to="/account/models">My models</Link>
       </nav>
     </header>
