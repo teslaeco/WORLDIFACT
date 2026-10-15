@@ -1,3 +1,8 @@
+# 2026-10-15 — ECOMECH V6 original six-part neural research and QA — NO-GO
+
+IMPLEMENTED/TESTED: free MIT TripoSR CPU six-part image-to-mesh: [generation run #38698419490](https://github.com/teslaeco/WORLDIFACT/actions/runs/38698419490) SUCCESS; independent no-paid real binary/PBR depth tests: [#38701960353](https://github.com/teslaeco/WORLDIFACT/actions/runs/38701960353) SUCCESS. Original GLB 4,376,136 bytes SHA-256 `193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970`, 218,450 faces / 6 neural parts. Physical GLB archive on isolated branch outside `public/`: [original archive #38702243568](https://github.com/teslaeco/WORLDIFACT/actions/runs/38702243568) SUCCESS at commit `d02a706e6dcc036920a9e620a64179fc818eecb8`. QA: depth/height **0.11164 FAIL**, zero PBR/normal textures, no rig, 360-degree visual review absent. Draft outline overlap **0.80342** uses the same annotation as assembly and is NOT an independent similarity result. Provider attribution: local open source TripoSR + WORLDIFACT assembly, NOT Astra-created geometry. New AI/vendor spend USD **0.00**. Premium, GAME release and MAKE **NO-GO**. Full details `docs/ECOMECH_V6_CHARACTER_ENGINE_STATUS_20261015.md`. [Draft PR #298](https://github.com/teslaeco/WORLDIFACT/pull/298), stacked on V5 #297, not merged/deployed. GitHub bot-created head check may need authorization, not silently treated green.
+
+---
 # 15 October 2026 — Six-portal landing LIVE: merge and preserving release verified
 
 ## Current verified milestone
