@@ -1,0 +1,103 @@
+name: WORLDIFACT RunPod owner read-only verification (no GPU)
+
+# This workflow does not deploy code, create any volume or submit a GPU job.
+# The secret is available ONLY in the main-branch job, not on pull requests.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/runpod-owner-readonly-once.yml'
+  push:
+    branches: ['main']
+    paths:
+      - 'ops/RUNPOD_OWNER_READONLY_TRIGGER_20261015.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runpod-owner-readonly-main-once
+  cancel-in-progress: false
+
+jobs:
+  workflow-safety:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Syntax and security contract — no secret is ever exposed in a PR job
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('.github/workflows/runpod-owner-readonly-once.yml').read_text()
+          assert "if: github.event_name == 'push' && github.ref == 'refs/heads/main'" in s
+          assert 'environment: Production' in s
+          assert 'https://rest.runpod.io/v1/' in s
+          assert "method='GET'" in s
+          assert "RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}" in s
+          assert 'ghp_' not in s and 'sk-proj-' not in s
+          assert 'runpod.serverless' not in s
+          print('PASS: read-only workflow contract; no credential accessed')
+          PY
+
+  verify-existing-owner-secret:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    environment: Production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Hard fail on unexpected trigger or retry
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | wc -l)" -eq 1
+          git diff-tree --no-commit-id --name-only -r HEAD | grep -qx ops/RUNPOD_OWNER_READONLY_TRIGGER_20261015.json
+          python3 - <<'PY'
+          import json
+          v=json.load(open('ops/RUNPOD_OWNER_READONLY_TRIGGER_20261015.json'))
+          assert v == {
+            'revision':'runpod-owner-readonly-v1',
+            'operations':['GET endpoints','GET networkvolumes','GET pods'],
+            'gpuSpendAuthorized':False,
+            'storagePurchaseAuthorized':False,
+            'productionDeployAuthorized':False,
+          }
+          PY
+      - name: Authenticate to official RunPod REST v1 with GET only — never show secret/account identifiers
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.error, urllib.request
+          key=os.environ.get('RUNPOD_API_KEY','')
+          if len(key)<12 or any(c.isspace() for c in key):
+              raise SystemExit('BLOCKED: RUNPOD_API_KEY unavailable; no requests sent')
+          class RefuseRedirects(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,*args,**kwargs):
+                  raise ValueError('NO_REDIRECT_ALLOWED')
+          opener=urllib.request.build_opener(RefuseRedirects())
+          for route in ('endpoints','networkvolumes','pods'):
+              url='https://rest.runpod.io/v1/'+route
+              req=urllib.request.Request(url,method='GET',headers={
+                  'Authorization':'Bearer '+key,'Accept':'application/json'})
+              try:
+                  with opener.open(req,timeout=12) as response:
+                      if response.status!=200 or 'application/json' not in response.headers.get('Content-Type',''):
+                          raise ValueError('UNEXPECTED_PROVIDER_RESPONSE')
+                      raw=response.read(786433)
+                      if len(raw)>786432:raise ValueError('SIZE_LIMIT')
+                      payload=json.loads(raw)
+                      if not isinstance(payload,(list,dict)):raise ValueError('UNEXPECTED_LIST_SHAPE')
+              except urllib.error.HTTPError as exc:
+                  raise SystemExit('BLOCKED: '+route+' HTTP '+str(exc.code)) from None
+              except Exception:
+                  raise SystemExit('BLOCKED: '+route+' unreachable or invalid response') from None
+              print('RUNPOD_READ_ONLY_AUTH_OK: '+route)
+          print('ZERO_PROVIDER_MUTATIONS_NO_GPU_NO_VOLUME_PURCHASE')
+          PY
