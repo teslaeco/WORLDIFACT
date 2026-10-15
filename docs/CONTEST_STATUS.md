@@ -1,3 +1,30 @@
+## Staging GET-only RunPod connection gate — 2026-10-15
+
+**IMPLEMENTED / TESTS PENDING / ACCOUNT ACCESS BLOCKED / NOT DEPLOYED.**
+The user confirmed installation of RunPod Official plugin and showed a
+RUNPOD_API_KEY secret under GitHub Production. This is evidence of secret
+presence only, NOT successful authentication or a deployed GPU endpoint.
+
+PR #305 now contains a strict read-only API preflight and tests, plus a one-use
+GitHub Actions staging environment workflow. The latter is not armed: a separate
+runpod-staging environment with its own read-only API key and required reviewer
+must be configured before its marker-only run. Do not expose the many unrelated
+Production secrets to draft branch workflows. The existing staging manual
+workflow was corrected to the official RunPod REST v1 hostname.
+
+User reference uploaded in this conversation matches the previously approved
+decoded original 1122x1402 RGB pixels (SHA-256:
+3d601608694b61932ccf11a4e0eff979f49e0c08c2a20e161c117f8e10126508).
+The raw PNG copy has its own SHA; do not mistake a different lossless encoding
+for a new reference. No original reference bytes were committed publicly.
+
+**Cost impact:** zero paid RunPod/OpenAI calls, zero provisioning, zero persistent
+volume purchase, no merge, no production change. Initial planned operating
+settings remain workersMin=0, workersMax=1, one GPU, Flex scale-to-zero.
+A live TRELLIS2 + Blender ECOMECH test and MAKE approval remain BLOCKED.
+
+---
+
 ## 2026-10-15 — RunPod staging credentials step prepared (no real API connection)
 
 **IMPLEMENTED / NOT ACTIVATED:** Draft [PR #305](https://github.com/teslaeco/WORLDIFACT/pull/305) now includes a manual-only, read-only RunPod REST v2 connection check (`.github/workflows/runpod-staging-readonly.yml`) protected by the `runpod-staging` GitHub environment. It is intentionally not runnable from an unmerged PR; a reviewed merge is required for GitHub workflow_dispatch availability. The owner must create a least-privilege RunPod API key via the official credentials console and save it as the `RUNPOD_API_KEY` GitHub environment secret. The ChatGPT GitHub connector does not create/read secret values. The test uses a single authenticated GET to list Serverless endpoints; no private body/token is logged, no GPU/endpoints/storage/images are created or bought, no jobs are dispatched. Full instructions in `docs/RUNPOD_CREDENTIAL_SETUP_20261015.md`. RunPod provider auth, RunPod GPU, production Cloudflare runtime secrets and original ECOMECH geometry all remain **UNVERIFIED/BLOCKED** until separately tested.
