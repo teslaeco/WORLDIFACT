@@ -1,0 +1,46 @@
+name: ECOMECH V4 original Oracle job — read-only recovery (ZERO paid calls)
+on:
+  push:
+    branches: ['fix/ecomech-v4-reference-audit-no-spend-20261015']
+    paths:
+      - 'scripts/ecomech-v4-original-readonly-audit.mjs'
+      - 'tests/ecomech-v4-original-readonly-audit.test.mjs'
+      - '.github/workflows/ecomech-v4-original-recovery-readonly.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ecomech-v4-original-readonly
+  cancel-in-progress: true
+jobs:
+  recover-existing-only:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prove GET-only original-job audit never submits, retries or mutates customer balances
+        run: node --test tests/ecomech-v4-original-readonly-audit.test.mjs tests/ecomech-v4-reference-integrity.test.mjs
+      - name: Verify production CDN still serves the exact approved source PNG
+        run: |
+          node --input-type=module -e "import{readReferenceImage}from'./scripts/ecomech-v4-astra-image-once.mjs';import{ECOMECH_V4_REFERENCE_SHA256}from'./scripts/lib/ecomechReferenceIntegrity.mjs';const a=await readReferenceImage();if(a.sha256!==ECOMECH_V4_REFERENCE_SHA256)throw Error('REFERENCE_SOURCE_SWAPPED');console.log('V4 ORIGINAL IMAGE PIN VERIFIED',a.sha256,a.bytes.length)"
+      - name: Read original consumed Oracle job and sealed liability (NO POST / NO API generation)
+        env:
+          ORACLE_ENDPOINT: ${{ secrets.ORACLE_ENDPOINT }}
+          ORACLE_API_TOKEN: ${{ secrets.ORACLE_API_TOKEN }}
+        run: node scripts/ecomech-v4-original-readonly-audit.mjs
+      - name: Preserve sanitized original-job evidence without customer data
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ecomech-v4-original-readonly-recovery-${{ github.sha }}
+          path: ecomech-v4-readonly-recovery/
+          if-no-files-found: ignore
+          retention-days: 14
+          compression-level: 0

@@ -1,0 +1,63 @@
+name: ECOMECH V4 exact original image — offline real-GLB baseline (NO API)
+on:
+  push:
+    branches: ['fix/ecomech-v4-reference-audit-no-spend-20261015']
+    paths:
+      - 'tools/ecomech/reference_silhouette_v4_draft.py'
+      - 'tools/ecomech/ecomech_v4_approved_photo_annotation_DRAFT.json'
+      - '.github/workflows/ecomech-v4-photo-shape-offline.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ecomech-v4-image-shape-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  offline-reference-baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Get ORIGINAL already-published 2026-10-14 V4 photo (NO provider call)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .ecomech-v4-photo
+          gh run download 38653687131 --repo teslaeco/WORLDIFACT \
+            --name ECOMECH-V4-ASTRA-WITH-ACTUAL-REFERENCE-8fcffb86c571a8cca7ad09e1401247bf08f41104 \
+            --dir .ecomech-v4-photo
+          printf '%s  %s\n' '9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053' '.ecomech-v4-photo/input-reference.png' | sha256sum --check
+      - name: Get the actual existing old V2 GLB as HONEST failed-fidelity baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .ecomech-old-glb
+          gh run download 38651850201 --repo teslaeco/WORLDIFACT \
+            --name ecomech-vision-first-real-sculpt-795110f7419ee49df2289bc5c5959e62f540b2ca \
+            --dir .ecomech-old-glb
+          printf '%s  %s\n' '87f5bd78cc39a04f47ee85f16418003575c3dbd363591dd3446fb9a4bb616e4c' '.ecomech-old-glb/ECOMECH_REFERENCE_SHAPED_GAME.glb' | sha256sum --check
+      - name: Install CPU-only geometric QA utilities
+        run: |
+          python -m pip install 'numpy==2.2.6' 'trimesh==4.11.1' 'opencv-python-headless==4.13.0.92' 'Pillow==11.3.0'
+          python -m py_compile tools/ecomech/reference_silhouette_v4_draft.py
+      - name: Verify original V4 reference SHA and real old GLB triangles against DRAFT outline
+        run: |
+          python tools/ecomech/reference_silhouette_v4_draft.py \
+            --source-image .ecomech-v4-photo/input-reference.png \
+            --glb .ecomech-old-glb/ECOMECH_REFERENCE_SHAPED_GAME.glb \
+            --target tools/ecomech/ecomech_v4_approved_photo_annotation_DRAFT.json \
+            --output ecomech-v4-offline-reference-qa \
+            --report-only --expect-no-go
+      - name: Preserve only derived contour report, not the original user image
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ecomech-v4-real-source-shape-baseline-${{ github.sha }}
+          path: ecomech-v4-offline-reference-qa/
+          if-no-files-found: ignore
+          retention-days: 14

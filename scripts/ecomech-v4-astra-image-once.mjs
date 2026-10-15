@@ -16,6 +16,7 @@ import { MODEL_CATALOG } from '../src/lib/modelCatalog.ts'
 import { validateStudioInput, oracleStudioPayload, validateOracleStudioPayload } from '../src/lib/studioProtocol.ts'
 import { validateTerminalBudgetReceipt } from '../server/studioBudgetReceipt.ts'
 import { inspectGLB } from '../src/lib/glb.ts'
+import { assertPinnedEcomechReference, ECOMECH_V4_REFERENCE_MAX_BYTES } from './lib/ecomechReferenceIntegrity.mjs'
 
 export const JOB_ID = 'd3fc6e0f-6258-4a2d-9935-ae31b0048e61'
 export const PROVIDER_MODEL = 'gpt-6-astra'
@@ -149,10 +150,10 @@ export async function readReferenceImage(fetcher=fetch) {
   if(url.protocol!=='https:'||url.hostname!=='cdn.shopify.com')throw Error('REFERENCE_HOST_BLOCKED')
   const response=await fetcher(url.href,{redirect:'error',signal:AbortSignal.timeout(20000)})
   if(!response.ok || !response.headers.get('content-type')?.toLowerCase().includes('image/'))throw Error('REFERENCE_IMAGE_UNAVAILABLE')
-  const bytes=new Uint8Array(await response.arrayBuffer())
-  if(bytes.length<40000||bytes.length>12*1024*1024||
-     ![137,80,78,71,13,10,26,10].every((x,i)=>bytes[i]===x))throw Error('REFERENCE_PNG_INVALID')
-  return {bytes,sha256:sha(bytes)}
+  // Fail closed if the remote image was swapped: do not claim a one-shot or call Oracle.
+  // Bound streaming before memory allocation and hash the ORIGINAL full-resolution PNG.
+  const bytes=await readBounded(response,ECOMECH_V4_REFERENCE_MAX_BYTES)
+  return assertPinnedEcomechReference(bytes)
 }
 export function prepareReferenceJpeg(originalPNG) {
   if(!(originalPNG instanceof Uint8Array)||originalPNG.length<40_000 ||
