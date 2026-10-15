@@ -67,9 +67,15 @@ jobs:
           assert q['newOpenAiCalls']==q['newPaidVendorCalls']==0
           print('STRUCTURAL_TESTS_PASSED_BUT_PRINT_AND_ART_APPROVAL_REMAIN_FALSE')
           PY
-      - name: Render real STL geometry with neutral clay, not the original photo as a shader
+      - name: Install software OpenGL/EGL and a virtual display on the ephemeral CI runner
         run: |
-          python tools/ecomech/printprep_v8/render_make.py \
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1-mesa-dri libosmesa6 xvfb xauth
+      - name: Render real STL geometry with neutral clay, not the original photo as a shader
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          xvfb-run -a -s '-screen 0 1280x1600x24' python tools/ecomech/printprep_v8/render_make.py \
             --stl ecomech-v8-make-evidence/ECOMECH_V8_MAKE_CANDIDATE_200mm.stl \
             --out ecomech-v8-make-evidence/renders
           for view in front three_quarter side back; do
