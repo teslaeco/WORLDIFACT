@@ -1,0 +1,18 @@
+{
+  "revision": "manual-unsubmitted-session-recovery-v1",
+  "previous_run_id": 38735532844,
+  "previous_artifact_id": 11974132372,
+  "previous_archive_sha256": "5c2c10aabc76f4267cf4c9dfe585a0c62e1146fdec247151f92cba26e02ad920",
+  "contract_test_run_id": 38742089974,
+  "job": {
+    "revision": "reference-reconstruction-v1",
+    "source_sha256": "9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053",
+    "seed": 20261015,
+    "resolution": 1024,
+    "texture_size": 4096,
+    "decimation_target": 500000,
+    "engine": "trellis2"
+  },
+  "max_generation_submissions": 1,
+  "paid_gpu_allowed": false
+}
