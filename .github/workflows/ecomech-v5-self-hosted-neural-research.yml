@@ -1,0 +1,106 @@
+name: ECOMECH V5 isolated OPEN MODEL image-to-mesh research (NO vendor API)
+on:
+  push:
+    branches: ['feat/character-engine-v5-router-reference-qa-20261015']
+    paths:
+      - '.github/workflows/ecomech-v5-self-hosted-neural-research.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ecomech-v5-cpu-experiment-single
+  cancel-in-progress: true
+jobs:
+  image-to-mesh-independent-quality-baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.10'
+      - name: Reuse authentic user photo from ORIGINAL already-consumed Astra job
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .source-photo
+          gh run download 38653687131 --repo teslaeco/WORLDIFACT \
+            --name ECOMECH-V4-ASTRA-WITH-ACTUAL-REFERENCE-8fcffb86c571a8cca7ad09e1401247bf08f41104 \
+            --dir .source-photo
+          printf '%s  %s\n' '9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053' '.source-photo/input-reference.png' | sha256sum --check
+      - name: Report available CPU / RAM; no paid GPU is provisioned
+        shell: bash
+        run: |
+          set -euo pipefail
+          free -h
+          nproc
+          if command -v nvidia-smi >/dev/null; then nvidia-smi --query-gpu=name,memory.total --format=csv; else echo 'CPU_RUNNER_ONLY'; fi
+      - name: Obtain PINNED MIT-licensed OPEN-source reconstruction research model
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/VAST-AI-Research/TripoSR.git .external-reconstructor
+          test "$(git -C .external-reconstructor rev-parse HEAD)" = 107cefdc244c39106fa830359024f6a2f1c78871
+          grep -q "Copyright (c) 2024 Tripo AI & Stability AI" .external-reconstructor/LICENSE
+          echo 'Open model benchmark: original TripoSR under MIT license; NOT native WORLDIFACT or GPT-6 model, NOT hosted Tripo API'
+      - name: Install CPU scientific runtime — zero paid external provider calls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade 'pip<26'
+          python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 'torch==2.5.1' 'torchvision==0.20.1'
+          python -m pip install --no-cache-dir -r .external-reconstructor/requirements.txt
+      - name: Run exactly ONE local open-model reconstruction of the source image
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ecomech-v5-open-model-research
+          cd .external-reconstructor
+          python run.py ../.source-photo/input-reference.png \
+            --device cpu --mc-resolution 128 --chunk-size 2048 \
+            --model-save-format glb \
+            --output-dir ../ecomech-v5-open-model-research/
+      - name: Verify actual emitted original GLB and record HONEST model authorship
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'numpy==1.26.4' 'trimesh==4.11.1'
+          python - <<'PY'
+          import hashlib,json,struct
+          from pathlib import Path
+          import trimesh
+          path=Path('ecomech-v5-open-model-research/0/mesh.glb')
+          raw=path.read_bytes()
+          assert 2000 < len(raw) <= 50_000_000
+          assert struct.unpack_from('<III',raw,0)==(0x46546c67,2,len(raw))
+          scene=trimesh.load(path,force='scene',process=False)
+          triangles=sum(len(mesh.faces) for mesh in scene.dump(concatenate=False) if isinstance(mesh,trimesh.Trimesh))
+          assert triangles>=1000
+          evidence={
+            'revision':'ecomech-v5-open-reconstructor-cpu-research-only-v1',
+            'originalReferenceSha256':'9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053',
+            'geometryProvider':'TripoSR open-source 2024, self-hosted research baseline, MIT license',
+            'codeCommit':'107cefdc244c39106fa830359024f6a2f1c78871',
+            'aiDirector':'NONE',
+            'usesHostedTripoApi':False,'usesMeshyApi':False,'usesOpenAiApi':False,
+            'realOriginalGlbSha256':hashlib.sha256(raw).hexdigest(),'realOriginalGlbBytes':len(raw),
+            'realTriangles':triangles,
+            'fidelity':'UNREVIEWED_DO_NOT_RELEASE','isWORLDIFACTOriginalEngine':False,
+            'makeApproved':False,'productionReady':False,
+            'newProviderChargesUSD':0
+          }
+          Path('ecomech-v5-open-model-research/research-report.json').write_text(json.dumps(evidence,indent=2)+'\n')
+          print('RESEARCH_GLBBYTES_VERIFIED',len(raw),triangles,evidence['realOriginalGlbSha256'])
+          PY
+      - name: Preserve research GLB only, WITHOUT writing production or customer library
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ecomech-v5-self-hosted-open-model-benchmark-${{ github.sha }}
+          path: ecomech-v5-open-model-research/
+          if-no-files-found: ignore
+          retention-days: 14
