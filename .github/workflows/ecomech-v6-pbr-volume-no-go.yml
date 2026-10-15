@@ -1,0 +1,73 @@
+name: ECOMECH V6 independent original six-part GLB QA (zero paid AI)
+on:
+  push:
+    branches: ['feat/ecomech-v6-open-neural-reconstruction-20261015']
+    paths:
+      - 'tools/ecomech/v6_character_quality_gate.py'
+      - 'tools/ecomech/ecomech_v6_approved_photo_mask_DRAFT.json'
+      - '.github/workflows/ecomech-v6-pbr-volume-no-go.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ecomech-v6-pbr-3d-depth-original
+  cancel-in-progress: true
+jobs:
+  measure-original-existing-geometry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Download only original already-generated TripoSR CPU model, no regeneration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .existing-six-part
+          gh run download 38698419490 --repo teslaeco/WORLDIFACT \
+            --name ecomech-v6-open-neural-six-part-geometry-8414e6934d008749a6da0a99d2e45ccbf65fb616 \
+            --dir .existing-six-part
+          printf '%s  %s\n' '193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970' '.existing-six-part/ecomech-v6-neural-parts-original.glb' | sha256sum --check
+      - name: Install CPU-only independent original-geometry auditors
+        run: |
+          python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'trimesh==4.11.1' 'opencv-python-headless==4.13.0.92'
+          python -m py_compile tools/ecomech/v6_character_quality_gate.py
+      - name: Inspect original triangle geometry, depth and PBR and preserve NO-GO
+        run: |
+          python tools/ecomech/v6_character_quality_gate.py \
+            --glb .existing-six-part/ecomech-v6-neural-parts-original.glb \
+            --manifest .existing-six-part/assembly-manifest.json \
+            --annotation tools/ecomech/ecomech_v6_approved_photo_mask_DRAFT.json \
+            --out ecomech-v6-qa/geometry-qa.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          q=json.loads(Path('ecomech-v6-qa/geometry-qa.json').read_text())
+          assert q['sourceImageSha256']=='9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053'
+          assert q['originalGLBSha256']=='193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970'
+          assert q['actualTriangles']==218450 and len(q['semanticParts'])==6
+          assert q['release']=='NO_GO' and not q['premiumEligible'] and not q['visualAccept']
+          assert 'FLATTENED_3D_DEPTH' in q['failures']
+          assert 'NO_EMBEDDED_NORMAL_AND_METALLIC_ROUGHNESS_PBR_TEXTURES' in q['failures']
+          assert q['newPaidRequests']==q['newCostUsd']==0
+          print('NEURAL_V6_QUALITY_GATE_PASS: malformed premium claims rejected')
+          PY
+      - name: Unit-test real original high-IoU/flat-3D rejection and tamper resistance
+        env:
+          ECOMECH_ORIGINAL_SIX_GLB: .existing-six-part/ecomech-v6-neural-parts-original.glb
+          ECOMECH_ORIGINAL_SIX_MANIFEST: .existing-six-part/assembly-manifest.json
+          ECOMECH_ORIGINAL_SIX_ANNOTATION: tools/ecomech/ecomech_v6_approved_photo_mask_DRAFT.json
+        run: python -m unittest discover -s tests -p 'test_ecomech_v6_quality_gate.py' -v
+      - name: Upload only geometry QA evidence without user source image
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ecomech-v6-independent-depth-pbr-QA-${{ github.sha }}
+          path: ecomech-v6-qa/
+          if-no-files-found: ignore
+          retention-days: 14

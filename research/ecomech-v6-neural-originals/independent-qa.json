@@ -1,0 +1,56 @@
+{
+  "revision": "worldifact-ecomech-v6-geometric-qa-v1",
+  "sourceImageSha256": "9f3b9a994315c0578859486a1c9dc17c8916316ba9e96300409772a1b8f5e053",
+  "originalGLBSha256": "193ad27bd19ec94941b24222662024460d62758c7e2b0e53e7e55e51196f5970",
+  "actualTriangles": 218450,
+  "semanticParts": [
+    "armored_left_leg",
+    "chest",
+    "helmet",
+    "mechanical_right_leg",
+    "raised_arm_chili",
+    "right_arm_mechanics"
+  ],
+  "bbox": {
+    "min": [
+      -0.8999500274658203,
+      0.0,
+      -0.1522974967956543
+    ],
+    "max": [
+      0.836400032043457,
+      2.6918399333953857,
+      0.14822426438331604
+    ],
+    "size": [
+      1.7363500595092773,
+      2.6918399333953857,
+      0.30052176117897034
+    ]
+  },
+  "ratios": {
+    "widthOverHeight": 0.64504,
+    "depthOverHeight": 0.11164,
+    "depthOverWidth": 0.17308
+  },
+  "draftSilhouetteIoU": 0.80342,
+  "draftSilhouetteSource": "APPROX_MANUAL_ORIGINAL_IMAGE_NOT_CAMERA_SOLVED",
+  "imageCount": 0,
+  "materialCount": 0,
+  "normalMappedMaterials": 0,
+  "metallicRoughnessMappedMaterials": 0,
+  "failures": [
+    "FLATTENED_3D_DEPTH",
+    "NO_EMBEDDED_NORMAL_AND_METALLIC_ROUGHNESS_PBR_TEXTURES",
+    "NO_SKINNED_RIG",
+    "REQUIRES_ORIGINAL_PHOTO_HUMAN_MULTIVIEW_REVIEW"
+  ],
+  "visualAccept": false,
+  "premiumEligible": false,
+  "manufacturingApproved": false,
+  "provider": "TripoSR local CPU + WORLDIFACT assembly",
+  "notAnAstraMesh": true,
+  "newPaidRequests": 0,
+  "newCostUsd": 0,
+  "release": "NO_GO"
+}
