@@ -1,0 +1,11 @@
+{
+  "revision": "runpod-owner-readonly-v1",
+  "operations": [
+    "GET endpoints",
+    "GET networkvolumes",
+    "GET pods"
+  ],
+  "gpuSpendAuthorized": false,
+  "storagePurchaseAuthorized": false,
+  "productionDeployAuthorized": false
+}
