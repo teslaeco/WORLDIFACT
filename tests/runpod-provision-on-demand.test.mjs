@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  ENDPOINT_NAME, Refused, approvedInputs, pickA100,
+  ENDPOINT_NAME, EPHEMERAL_WORKER_DISK_GB, Refused, approvedInputs, pickA100,
   requestedEndpoint, provisionOnce
 } from '../scripts/runpod-provision-on-demand.mjs'
 
@@ -70,8 +70,12 @@ test('configuration never provisions Pods or always-on GPUs', () => {
   assert.deepEqual(request.workers, {min:0,max:1,idleTimeout:5})
   assert.equal(request.gpu.count, 1)
   assert.equal(request.timeout, 120000)
+  assert.equal(EPHEMERAL_WORKER_DISK_GB, 100)
+  assert.equal(request.disk, EPHEMERAL_WORKER_DISK_GB)
   assert.equal(request.env.ENABLE_RUNPOD_WORKER, 'false')
   assert.deepEqual(request.mounts, {network:[],global:[]})
+  assert.ok(!('networkVolumes' in request), 'No persistent RunPod volume may be created')
+  assert.ok(!('templateId' in request), 'No provider template may override storage policy')
   assert.equal(request.flashboot, 'OFF')
   assert.ok(!('ports' in request))
 })
@@ -144,4 +148,19 @@ test('bad account permission does not POST or disclose private body',async()=>{
   })
   await assert.rejects(result,/PROVIDER_READ_FAILED/)
   assert.equal(calls.length,1)
+})
+
+test('provider response with persistent network volume is never accepted',async()=>{
+  const c=fakeAccount({post:body=>Response.json({...body,id:'badvol123',mounts:{
+    network:[{volumeId:'permanent-disk'}],global:[]}}, {status:201})})
+  await assert.rejects(provisionOnce(options,c.fetcher),
+    /CREATION_UNCONFIRMED_OR_BAD_SETTINGS_INSPECT_PROVIDER_NO_RETRY/)
+  assert.equal(c.calls.filter(x=>x.method==='POST').length,1)
+})
+
+test('provider response with too-small ephemeral disk is never accepted',async()=>{
+  const c=fakeAccount({post:body=>Response.json({...body,id:'badstor123',disk:20}, {status:201})})
+  await assert.rejects(provisionOnce(options,c.fetcher),
+    /CREATION_UNCONFIRMED_OR_BAD_SETTINGS_INSPECT_PROVIDER_NO_RETRY/)
+  assert.equal(c.calls.filter(x=>x.method==='POST').length,1)
 })
