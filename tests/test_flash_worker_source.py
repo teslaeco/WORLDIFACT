@@ -58,6 +58,41 @@ class FlashWorkerTransport(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "CUDA_GPU_REQUIRED"):
                         task(source)
 
+    def test_remote_generated_live_module_imports_without_sibling_source_file(self):
+        # Exactly the failure seen in paid runs #38877860327 and #38879132929:
+        # RunPod moves the source to /tmp/runpod_live_<hash>.py but does not
+        # transfer repository-adjacent procedural_models.py.
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        source = SCRIPT.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory(prefix="runpod-flash-isolation-") as isolated:
+            target = Path(isolated) / "runpod_live_isolated.py"
+            target.write_text(source, encoding="utf-8")
+            self.assertFalse((Path(isolated) / "procedural_models.py").exists())
+            program = (
+                "import importlib.util; from pathlib import Path; "
+                f"p=Path({str(target)!r}); "
+                "spec=importlib.util.spec_from_file_location('worldifact_isolated_flash',p); "
+                "module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); "
+                "assert callable(module.l4_chess_512_trial.remote); "
+                "assert callable(module.a100_ecomech_trial.remote); "
+                "assert callable(module.h100_halloween_trial.remote)"
+            )
+            proc = subprocess.run([sys.executable, "-c", program],
+                                  cwd=isolated, text=True,
+                                  capture_output=True, timeout=30)
+            self.assertEqual(proc.returncode, 0, proc.stderr[-1200:])
+
+    def test_no_module_level_repo_imports_in_generated_worker(self):
+        tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+        imports = [node for node in tree.body
+                   if isinstance(node, ast.ImportFrom)]
+        self.assertFalse(any(node.module == "procedural_models" for node in imports))
+        self.assertFalse(any(isinstance(node, ast.Import) and
+                             any(alias.name == "procedural_models" for alias in node.names)
+                             for node in tree.body))
+
     def test_remote_worker_never_needs_repo_module_in_function_body(self):
         tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
         functions = {node.name: node for node in tree.body
