@@ -31,7 +31,7 @@ do not rent a permanent Runpod network volume or an always-on GPU.
   Its safe receipt artifact is 12068262959; the immutable image is unchanged.
   Real CUDA execution and model generation remain unverified.
 - Runpod now lists the owner-created Docker credential `worldifact-ghcr`, ID
-  `cmvbbpdxq000pi81ul0ltivxv`. Its presence is verified; no token value was read.
+  `cmvbbpdxq000pi81ul0ltivxv`. Run 38955031054 verified an actual private pull on A100 SXM workers. No token value was read.
 - 26 imported worker tests and four new bundle corruption/encoder tests pass
   locally. They use test doubles and tiny fixture weights, never real inference.
 - Full local `npm run verify` reached 2,343 passing tests and two failures because
@@ -113,3 +113,28 @@ this is explicitly an engine qualification, not a customer/planner integration
 test. The final production provisioning gate and its attestations are unchanged.
 
 Paid qualification has not run yet. Source review/CPU tests are not GPU proof.
+
+## First actual Serverless attempt and corrected startup
+
+Run 38955031054 used A100 AMPERE_80 at an observed $2.72/hour and successfully
+pulled the private image. The job stayed queued and three workers became
+THROTTLED without container output. Read-only diagnosis 38956013692 confirmed
+the stored command fields and empty container logs; the root cause is not yet
+proven. The queued job was cancelled and endpoint q5g1ulcq0mwom8 was deleted,
+with independent absence verification at 19:36:54 UTC. Failure/cleanup receipt
+artifact: 12069784629. No CUDA or model output was produced.
+
+PR #318 bakes the probe and startup file into a derivative of the exact private
+image, avoiding source code in the provider command. Build 38956475181 passed
+private-image publication/pull, CPU Runpod SDK import and comparison of the
+baked probe bytes. Safe artifact 12071401957 identifies new manifest
+`sha256:d303d66ec97aec3826dea3679ce5bf6b2786718fc2a0777409e859ce5375347e`.
+The model/runtime dependencies and original weights are unchanged.
+
+The updated qualification collects bounded startup logs and stops if all workers
+are throttled. It never retries an ambiguous generation. Main-only, manual,
+first-attempt-only admission and exact script hashes remain enforced.
+The browser environment disconnected before another dispatch; the next attempt
+must be started manually on main with `QUALIFY-ONE-GPU-MAX-1USD`.
+No always-on GPU or network volume is kept. A successful native GPU receipt,
+private outputs and a permanent endpoint are still outstanding.

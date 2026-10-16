@@ -1,0 +1,59 @@
+name: Runpod file-based startup image (no GPU)
+on:
+  push:
+    branches: ['fix/runpod-baked-qualification-20261016']
+    paths: ['tools/runpod_qualification/**', '.github/workflows/runpod-qualification-image.yml']
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: worldifact-runpod-runtime-build
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - name: Compile operator sources and require an existing private package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m py_compile tools/runpod_qualification/*.py
+          test "$(gh api /users/teslaeco/packages/container/worldifact-runpod3d --jq .visibility)" = private
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username teslaeco --password-stdin
+      - name: Prepare ephemeral CPU disk
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+      - name: Add file startup to the exact existing weight image
+        run: |
+          docker buildx build --platform linux/amd64 --file tools/runpod_qualification/Dockerfile \
+            --tag "ghcr.io/teslaeco/worldifact-runpod3d:startup-$GITHUB_SHA" \
+            --metadata-file /tmp/image-metadata.json --provenance=false --push .
+          jq -er '."containerimage.digest"' /tmp/image-metadata.json
+      - name: Verify image files, CPU SDK import and privacy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh api /users/teslaeco/packages/container/worldifact-runpod3d --jq .visibility)" = private
+          digest=$(jq -er '."containerimage.digest" | select(test("^sha256:[a-f0-9]{64}$"))' /tmp/image-metadata.json)
+          image="ghcr.io/teslaeco/worldifact-runpod3d@$digest"
+          docker pull "$image"
+          docker run --rm --entrypoint python "$image" -c 'import runpod, runpy; from pathlib import Path; compile(Path("/opt/worldifact/qualification/entrypoint.py").read_text(),"entrypoint.py","exec"); print("CPU_RUNPOD_IMPORT_PASS; GPU_NOT_TESTED")'
+          id=$(docker create "$image")
+          trap 'docker rm "$id" >/dev/null' EXIT
+          mkdir -p startup-proof
+          docker cp "$id:/opt/worldifact/qualification/worker.py" startup-proof/worker.py
+          cmp tools/runpod_qualification/worker.py startup-proof/worker.py
+          rm startup-proof/worker.py
+          jq -n --arg image "$image" --arg source "$GITHUB_SHA" \
+            '{image:$image,sourceCommit:$source,visibility:"private",gpuTested:false}' > startup-proof/image.json
+          cat startup-proof/image.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: runpod-startup-image-${{ github.sha }}
+          path: startup-proof/image.json
+          retention-days: 14
+      - if: always()
+        run: docker logout ghcr.io

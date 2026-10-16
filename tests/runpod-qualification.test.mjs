@@ -13,8 +13,9 @@ test('qualification has bounded workers, time, immutable image and private pull'
   assert.deepEqual(p.mounts,{network:[],global:[]});assert.deepEqual(p.dataCenterIds,[])
   assert.equal(p.env.ENABLE_RUNPOD_WORKER,'false')
   assert.equal(p.env.QUALIFICATION_EXPIRES_AT,'2200')
-  assert.deepEqual(p.entrypoint,['python','-u','-c'])
-  assert.equal(p.cmd[0],input.worker)
+  assert.equal('entrypoint' in p,false)
+  assert.equal('cmd' in p,false)
+  assert.match(p.env.QUALIFICATION_PROBE_SHA,/^[a-f0-9]{64}$/)
 })
 test('paid reruns and arbitrary resource names are refused',()=>{
   for(const run of ['gha-12345-2','../../customer','gha-foo-1',''])
@@ -29,7 +30,9 @@ test('incomplete storage prevents a paid allocation',()=>{
   for(const key of Object.keys(storage))
     assert.throws(()=>plan({...input,storage:{...storage,[key]:''}}),/MISSING_PRIVATE_STORAGE/)
 })
-test('exec-form command preserves operator source without shell interpretation',()=>{
+test('operator source is attested without sending it as a container command',()=>{
   const worker=input.worker+'\n# $HOME `id` $(whoami) ;\n'
-  assert.deepEqual(plan({...input,worker}).cmd,[worker])
+  const p=plan({...input,worker})
+  assert.ok(!JSON.stringify(p).includes(worker))
+  assert.notEqual(p.env.QUALIFICATION_PROBE_SHA,plan(input).env.QUALIFICATION_PROBE_SHA)
 })
