@@ -17,88 +17,148 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-# Runpod CLI imports this file by path, not as a repository-root package.
-# Keep the worker geometry module adjacent and importable after serialization.
+# CLI imports this file from the repository; the remote Flash runtime does not.
+# Add this path for local verification only; remote tasks receive pinned source.
 LOCAL_MODULE_DIR = Path(__file__).resolve().parent
 if str(LOCAL_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(LOCAL_MODULE_DIR))
 
 import runpod
 
-from procedural_models import TASKS, verified_model
+# The Flash v2 runtime materializes this app as /tmp/runpod_live_<hash>.py.
+# Do not import repository-adjacent files when the module itself is imported.
+# The complete SHA-pinned geometry source is handed to each remote task.
+TASKS = {
+    "L4": "chess-cube-512-led-rook",
+    "A100": "ecomech-asymmetric-mechanical-study",
+    "H100": "halloween-multi-asset-room-study",
+}
 
 APP_NAME = "worldifact-ephemeral-three-gpu-qualification-20261016"
-APPROVAL = "GO-WORLDIFACT-THREE-EPHEMERAL-GPU-PROCEDURAL-20261016"
+APPROVAL = "GO-WORLDIFACT-SPLIT-GPU-QUALIFICATION-20261016"
 MAX_TOTAL_PROJECTED_USD = 8.0
-MIN_REPORTED_WALLET_USD = 33.68
+# Historical owner screenshot only; NEVER treat this as verified current credits.
+HISTORICAL_WALLET_REFERENCE_USD = 33.68
 ESTIMATED_MAX_MINUTES_EACH = 15
+SINGLE_GPU_BUDGETS_USD = {"L4": 1.50, "A100": 2.50, "H100": 4.00}
 GPU_CAPS = {"L4": 1.50, "A100": 3.50, "H100": 6.0}
 
 app = runpod.App(APP_NAME)
 
 
-@app.task(gpu=runpod.GpuType.NVIDIA_L4, gpu_count=1,
+@app.task(gpu=["4090", "L4"], gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
-def l4_chess_512_trial():
-    from procedural_models import construct
-    return construct("L4", require_cuda=True)
+def l4_chess_512_trial(geometry_source: str):
+    # Flash dev ships the task BODY, not adjacent Python modules.
+    # Transfer repository-reviewed source as an argument, pinned to exact Git blob.
+    import hashlib
+    if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
+        raise RuntimeError("UNEXPECTED_GEOMETRY_SOURCE_SIZE")
+    raw = geometry_source.encode("utf-8")
+    blob = b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise RuntimeError("UNREVIEWED_REMOTE_GEOMETRY_SOURCE")
+    namespace = {"__name__": "worldifact_pinned_gpu_geometry"}
+    exec(compile(geometry_source, "verified_procedural_models.py", "exec"), namespace)
+    return namespace["construct"]("L4", require_cuda=True)
 
 
 @app.task(gpu="A100", gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
-def a100_ecomech_trial():
-    from procedural_models import construct
-    return construct("A100", require_cuda=True)
+def a100_ecomech_trial(geometry_source: str):
+    # Flash dev ships the task BODY, not adjacent Python modules.
+    # Transfer repository-reviewed source as an argument, pinned to exact Git blob.
+    import hashlib
+    if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
+        raise RuntimeError("UNEXPECTED_GEOMETRY_SOURCE_SIZE")
+    raw = geometry_source.encode("utf-8")
+    blob = b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise RuntimeError("UNREVIEWED_REMOTE_GEOMETRY_SOURCE")
+    namespace = {"__name__": "worldifact_pinned_gpu_geometry"}
+    exec(compile(geometry_source, "verified_procedural_models.py", "exec"), namespace)
+    return namespace["construct"]("A100", require_cuda=True)
 
 
 @app.task(gpu="H100", gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
-def h100_halloween_trial():
-    from procedural_models import construct
-    return construct("H100", require_cuda=True)
+def h100_halloween_trial(geometry_source: str):
+    # Flash dev ships the task BODY, not adjacent Python modules.
+    # Transfer repository-reviewed source as an argument, pinned to exact Git blob.
+    import hashlib
+    if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
+        raise RuntimeError("UNEXPECTED_GEOMETRY_SOURCE_SIZE")
+    raw = geometry_source.encode("utf-8")
+    blob = b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise RuntimeError("UNREVIEWED_REMOTE_GEOMETRY_SOURCE")
+    namespace = {"__name__": "worldifact_pinned_gpu_geometry"}
+    exec(compile(geometry_source, "verified_procedural_models.py", "exec"), namespace)
+    return namespace["construct"]("H100", require_cuda=True)
 
 
 class Refused(Exception):
     pass
 
 
-def quote_catalog(data):
+def quote_catalog(data, targets=("L4", "A100", "H100")):
+    if not targets or len(targets) != len(set(targets)) or any(t not in GPU_CAPS for t in targets):
+        raise Refused("UNEXPECTED_GPU_TEST_ORDER_OR_DUPLICATE")
     if not isinstance(data, dict) or not isinstance(data.get("gpus"), list):
         raise Refused("GPU_POD_CATALOG_UNKNOWN")
     quote = {}
-    names = {"L4": "NVIDIA L4", "A100": "A100", "H100": "H100"}
-    for model, exact in names.items():
+    names = {"L4": ("NVIDIA L4", "4090"), "A100": ("A100",), "H100": ("H100",)}
+    for model in targets:
+        permitted = names[model]
+        # The SDK may select any available matching SKU. Verify the *entire*
+        # eligible pool rather than approving the cheapest candidate only.
+        # A single unknown/over-cap secure price must stop paid dispatch.
         prices = []
         for gpu in data["gpus"]:
             if not isinstance(gpu, dict) or not isinstance(gpu.get("id"), str):
                 continue
-            if model == "L4" and gpu["id"] != exact:
+            gpu_id = gpu["id"].upper()
+            if model == "L4" and not (
+                gpu_id == "NVIDIA L4" or gpu_id == "NVIDIA GEFORCE RTX 4090"
+            ):
                 continue
-            if model != "L4" and exact not in gpu["id"].upper():
+            if model != "L4" and not any(name in gpu_id for name in permitted):
                 continue
-            if model in ("A100", "H100") and gpu.get("memory", 0) < 80:
-                continue
-            value = gpu.get("price", {}).get("secure")
-            if not isinstance(value, (int, float)) or not math.isfinite(value):
-                continue
-            if not 0 < value <= GPU_CAPS[model]:
+            memory = gpu.get("memory")
+            if (not isinstance(memory, (int, float)) or isinstance(memory, bool)
+                    or memory < (24 if model == "L4" else 80)):
                 continue
             if gpu.get("availability") not in ("HIGH", "MEDIUM", "LOW"):
                 continue
-            if not any(x.get("availability") in ("HIGH", "MEDIUM", "LOW")
-                       for x in gpu.get("dataCenters", [])):
+            centers = gpu.get("dataCenters", [])
+            if not isinstance(centers, list) or not any(
+                isinstance(center, dict)
+                and center.get("availability") in ("HIGH", "MEDIUM", "LOW")
+                for center in centers
+            ):
                 continue
+            price = gpu.get("price")
+            value = price.get("secure") if isinstance(price, dict) else None
+            if (not isinstance(value, (int, float)) or isinstance(value, bool)
+                    or not math.isfinite(value) or not 0 < value <= GPU_CAPS[model]):
+                raise Refused(f"UNPRICED_OR_OVER_CAP_ELIGIBLE_{model}_SKU")
             prices.append(float(value))
         if not prices:
             raise Refused(f"NO_VERIFIED_POD_{model}_HARDWARE_OR_PRICE")
-        quote[model] = min(prices)
+        quote[model] = max(prices)  # worst-case available SKU, not the cheapest
     exposure = sum(quote.values()) * ESTIMATED_MAX_MINUTES_EACH / 60
-    if exposure > MAX_TOTAL_PROJECTED_USD or exposure >= MIN_REPORTED_WALLET_USD / 2:
+    # Catalog rates are estimates, not settled charges or a wallet lookup.
+    # The hard runtime stop belongs to the one-shot Actions operator.
+    if exposure > MAX_TOTAL_PROJECTED_USD:
         raise Refused("PROJECTED_GPU_TEST_EXPOSURE_TOO_HIGH")
-    return {"hourly": quote, "estimated15MinutesEachUsd": round(exposure, 4)}
+    if len(targets) == 1 and exposure > SINGLE_GPU_BUDGETS_USD[targets[0]]:
+        raise Refused("SINGLE_GPU_BUDGET_EXCEEDED")
+    return {"hourly": quote, "estimated15MinutesEachUsd": round(exposure, 4),
+            "quoteBasis": "WORST_CASE_AVAILABLE_SECURE_POD_SKU",
+            "walletVerified": False, "actualBilledCostUsd": None}
 
 
-def live_quote(key: str) -> dict:
+def live_quote(key: str, targets=("L4", "A100", "H100")) -> dict:
     if not isinstance(key, str) or len(key) < 12:
         raise Refused("MISSING_SERVER_ONLY_RUNPOD_API_KEY")
     url = ("https://api.runpod.io/v2/catalog/gpus?"
@@ -117,25 +177,43 @@ def live_quote(key: str) -> dict:
     except (urllib.error.URLError, TimeoutError):
         raise Refused("RUNPOD_POD_CATALOG_UNAVAILABLE") from None
     try:
-        return quote_catalog(json.loads(data))
+        return quote_catalog(json.loads(data), targets=targets)
     except (ValueError, TypeError, KeyError):
         raise Refused("INVALID_PROVIDER_CATALOG") from None
 
 
-def store_proven_trial(out_dir: Path, gpu_class: str, response: dict):
+def store_proven_trial(out_dir: Path, gpu_class: str, response: dict, geometry_source: str | None = None):
     if not isinstance(response, dict) or response.get("gpuClass") != gpu_class:
         raise Refused("GPU_RESPONSE_INVALID_OR_WRONG_CLASS")
     gpu = response.get("gpuName", "")
-    if gpu_class not in str(gpu).upper() or response.get("gpuVramGiB", 0) < (
+    actual_name = str(gpu).upper()
+    valid_hardware = (("L4" in actual_name or "4090" in actual_name)
+                      if gpu_class == "L4" else gpu_class in actual_name)
+    if not valid_hardware or response.get("gpuVramGiB", 0) < (
             21 if gpu_class == "L4" else 72):
         raise Refused("WRONG_OR_UNVERIFIED_GPU_HARDWARE")
     if response.get("cudaMatrixChecksum") is None or response.get("cudaComputeMs") is None:
         raise Refused("GPU_MATH_NOT_CONFIRMED")
-    raw = verified_model(response)
+    # The SDK can run this client code from a generated /tmp/runpod_live_*.py.
+    # Reconstruct the validated local helper from the exact source already
+    # transferred to the worker, rather than importing absent sibling modules.
+    if geometry_source is None:
+        geometry_source = (LOCAL_MODULE_DIR / "procedural_models.py").read_text("utf-8")
+    if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
+        raise Refused("UNEXPECTED_LOCAL_VALIDATOR_SOURCE_SIZE")
+    import hashlib
+    raw_source = geometry_source.encode("utf-8")
+    blob = b"blob " + str(len(raw_source)).encode("ascii") + b"\0" + raw_source
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise Refused("UNREVIEWED_LOCAL_VALIDATOR_SOURCE")
+    namespace = {"__name__": "worldifact_pinned_local_validation"}
+    exec(compile(geometry_source, "pinned_local_validation.py", "exec"), namespace)
+    raw = namespace["verified_model"](response)
     out = out_dir / (TASKS[gpu_class] + ".glb")
     out.write_bytes(raw)
     public_receipt = {k: value for k, value in response.items()
                       if k != "glbBase64"}
+    public_receipt["actualGpuHardware"] = gpu
     public_receipt["gpuResultValidated"] = True
     (out_dir / (TASKS[gpu_class] + ".json")).write_text(
         json.dumps(public_receipt, indent=2, sort_keys=True) + "\n")
@@ -145,13 +223,24 @@ def store_proven_trial(out_dir: Path, gpu_class: str, response: dict):
 def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_quote):
     if os.getenv("WORLDIFACT_PAID_GPU_APPROVAL") != APPROVAL:
         raise Refused("NO_ONE_TIME_OWNER_APPROVAL")
-    raw_targets = os.getenv("WORLDIFACT_GPU_TARGETS", "L4,A100,H100")
+    # Fail closed: the operator MUST explicitly select one device class.
+    # Never dispatch three GPUs in a single paid workflow.
+    raw_targets = os.getenv("WORLDIFACT_GPU_TARGETS", "")
     targets = raw_targets.split(",")
-    if targets != ["L4", "A100", "H100"]:
+    if targets not in (["L4"], ["A100"], ["H100"]):
         raise Refused("UNEXPECTED_GPU_TEST_ORDER_OR_DUPLICATE")
-    quote = quotefn(os.environ.get("RUNPOD_API_KEY", ""))
     if allowed is not None and allowed != targets:
         raise Refused("UNEXPECTED_TARGET_SELECTION")
+    # Quote only the hardware we are about to provision. No paid fallback to
+    # a different class, and no capacity dependency on the other GPU classes.
+    quote = quotefn(os.environ.get("RUNPOD_API_KEY", ""), targets=tuple(targets))
+    # Source is verified locally before any paid GPU dispatch and again on each worker.
+    content = (LOCAL_MODULE_DIR / "procedural_models.py").read_bytes()
+    blob = b"blob " + str(len(content)).encode("ascii") + b"\0" + content
+    import hashlib
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise Refused("UNREVIEWED_LOCAL_GEOMETRY_SOURCE")
+    geometry_source = content.decode("utf-8")
     out_dir = Path("gpu-trial-artifacts")
     out_dir.mkdir(exist_ok=False)
     functions = {"L4": l4_chess_512_trial, "A100": a100_ecomech_trial,
@@ -163,8 +252,8 @@ def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_q
                 response = dispatch(name)
             else:
                 # Exactly one call, never retry an ambiguous GPU provisioning.
-                response = functions[name].remote()
-            report = store_proven_trial(out_dir, name, response)
+                response = functions[name].remote(geometry_source)
+            report = store_proven_trial(out_dir, name, response, geometry_source)
             report["wallClockSeconds"] = round(time.monotonic() - start, 2)
             print(json.dumps({"gpuClass": name, "status": "ACTUAL_PROCEDURAL_GPU_GLB",
                               "sha256": report["glbSha256"],
@@ -175,7 +264,7 @@ def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_q
             print(json.dumps({"gpuClass": name,
                               "status": "FAILED_NO_AUTOMATIC_PAID_RETRY"}), flush=True)
             raise
-    print(json.dumps({"completed": 3, "mode": "PROCEDURAL_NOT_NEURAL",
+    print(json.dumps({"completed": len(targets), "mode": "PROCEDURAL_NOT_NEURAL",
                       "quoted15MinuteMaximum": quote["estimated15MinutesEachUsd"],
                       "permanentStorageCreated": False}), flush=True)
 

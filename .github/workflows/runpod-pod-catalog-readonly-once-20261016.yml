@@ -1,0 +1,48 @@
+name: WORLDIFACT Secure POD stock quote — read-only, no GPU rental
+on:
+  push:
+    branches: ['ops/gpu-split-20261016']
+    paths:
+      - 'ops/RUNPOD_SECURE_POD_GET_ONCE_20261016.json'
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-get-only-pod-stock-20261016
+  cancel-in-progress: false
+jobs:
+  pod-secure-quote:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/ops/gpu-split-20261016'
+    runs-on: ubuntu-24.04
+    environment: Production
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24'}
+      - name: Verify only an approved marker triggered immutable GET-only code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = 'ops/RUNPOD_SECURE_POD_GET_ONCE_20261016.json'
+          test "$(git hash-object scripts/runpod-pod-catalog-readonly.mjs)" = 'e8dd213a4b28701c17d51b0538eea6be73a9b519'
+          test "$(git hash-object tests/runpod-pod-catalog-readonly.test.mjs)" = '586012127ce3006c6a4fd22ad7d50f9d855fb8df'
+          node - <<'NODE'
+          const fs=require('node:fs')
+          const m=JSON.parse(fs.readFileSync('ops/RUNPOD_SECURE_POD_GET_ONCE_20261016.json','utf8'))
+          const want={revision:'worldifact-secure-pod-get-only-20261016',
+            operations:['GET /v2/serverless','GET /v2/network-volumes','GET /v2/pods',
+              'GET /v2/catalog/gpus?include=AVAILABILITY&product=POD&count=1&cloud=SECURE'],
+            ownerRequested:true,paidGpuAuthorized:false,createsResources:false,productionDeploy:false}
+          if(JSON.stringify(m)!==JSON.stringify(want))process.exit(2)
+          NODE
+      - name: Prove code never rents GPUs and never emits credentials
+        run: node --test tests/runpod-pod-catalog-readonly.test.mjs
+      - name: Read Secure POD catalog and account resources using private secret
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/runpod-pod-catalog-readonly.mjs

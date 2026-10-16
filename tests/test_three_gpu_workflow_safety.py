@@ -9,7 +9,7 @@ CODE=(ROOT/'tools/gpu_trials/runpod_three_gpu.py').read_text()
 class Safety(unittest.TestCase):
     def test_only_main_marker_may_run_paid_generation(self):
         self.assertIn("branches: ['main']",WF)
-        self.assertIn("paths: ['ops/THREE_GPU_EPHEMERAL_PAID_ONCE_20261016_V2.json']",WF)
+        self.assertIn("paths: ['ops/THREE_GPU_EPHEMERAL_PAID_ONCE_20261016_V3.json']",WF)
         self.assertNotIn('pull_request:',WF)
         self.assertIn('environment: Production',WF)
         self.assertIn('PAID_GPU_APPROVAL_MARKER_MISMATCH',WF)
@@ -28,7 +28,10 @@ class Safety(unittest.TestCase):
         self.assertNotIn('runpod.create_pod(',CODE)
     def test_at_most_one_paid_call_per_gpu_class_no_automatic_retry(self):
         self.assertIn('for name in targets:',CODE)
-        self.assertIn('response = functions[name].remote()',CODE)
+        self.assertIn('response = functions[name].remote(geometry_source)',CODE)
+        self.assertNotIn('from procedural_models import construct',CODE)
+        self.assertEqual(CODE.count('UNREVIEWED_REMOTE_GEOMETRY_SOURCE'),3)
+        self.assertIn('UNREVIEWED_LOCAL_GEOMETRY_SOURCE',CODE)
         self.assertIn('FAILED_NO_AUTOMATIC_PAID_RETRY',CODE)
         self.assertIn('NO_ONE_TIME_OWNER_APPROVAL',CODE)
         self.assertIn('MAX_TOTAL_PROJECTED_USD = 8.0',CODE)
