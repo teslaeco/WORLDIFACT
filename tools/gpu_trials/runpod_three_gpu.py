@@ -206,9 +206,11 @@ def store_proven_trial(out_dir: Path, gpu_class: str, response: dict, geometry_s
 def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_quote):
     if os.getenv("WORLDIFACT_PAID_GPU_APPROVAL") != APPROVAL:
         raise Refused("NO_ONE_TIME_OWNER_APPROVAL")
-    raw_targets = os.getenv("WORLDIFACT_GPU_TARGETS", "L4,A100,H100")
+    # Fail closed: the operator MUST explicitly select one device class.
+    # Never dispatch three GPUs in a single paid workflow.
+    raw_targets = os.getenv("WORLDIFACT_GPU_TARGETS", "")
     targets = raw_targets.split(",")
-    if targets not in (["L4"], ["A100"], ["H100"], ["L4", "A100", "H100"]):
+    if targets not in (["L4"], ["A100"], ["H100"]):
         raise Refused("UNEXPECTED_GPU_TEST_ORDER_OR_DUPLICATE")
     if allowed is not None and allowed != targets:
         raise Refused("UNEXPECTED_TARGET_SELECTION")
