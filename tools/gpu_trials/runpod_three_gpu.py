@@ -17,9 +17,15 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# Runpod CLI imports this file by path, not as a repository-root package.
+# Keep the worker geometry module adjacent and importable after serialization.
+LOCAL_MODULE_DIR = Path(__file__).resolve().parent
+if str(LOCAL_MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(LOCAL_MODULE_DIR))
+
 import runpod
 
-from tools.gpu_trials.procedural_models import TASKS, verified_model
+from procedural_models import TASKS, verified_model
 
 APP_NAME = "worldifact-ephemeral-three-gpu-qualification-20261016"
 APPROVAL = "GO-WORLDIFACT-THREE-EPHEMERAL-GPU-PROCEDURAL-20261016"
@@ -34,21 +40,21 @@ app = runpod.App(APP_NAME)
 @app.task(gpu=runpod.GpuType.NVIDIA_L4, gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
 def l4_chess_512_trial():
-    from tools.gpu_trials.procedural_models import construct
+    from procedural_models import construct
     return construct("L4", require_cuda=True)
 
 
 @app.task(gpu="A100", gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
 def a100_ecomech_trial():
-    from tools.gpu_trials.procedural_models import construct
+    from procedural_models import construct
     return construct("A100", require_cuda=True)
 
 
 @app.task(gpu="H100", gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
 def h100_halloween_trial():
-    from tools.gpu_trials.procedural_models import construct
+    from procedural_models import construct
     return construct("H100", require_cuda=True)
 
 
