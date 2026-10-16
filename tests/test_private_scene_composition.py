@@ -49,7 +49,7 @@ class CompositionTests(unittest.TestCase):
         self.assertTrue(output.read_bytes().startswith(b'glTF'))
         scene = trimesh.load(output, force='scene', process=False)
         self.assertTrue(set(module.REQUIRED).issubset(
-            {name.split('_')[0] for name in scene.graph.nodes_geometry} ))
+            {name.rsplit('_', 1)[0] for name in scene.graph.nodes_geometry} ))
         self.assertEqual(len(scene.geometry), 5)
         self.assertEqual(result['sceneSha256'], hashlib.sha256(output.read_bytes()).hexdigest())
 
