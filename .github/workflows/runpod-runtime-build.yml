@@ -1,0 +1,100 @@
+name: Runpod TRELLIS runtime — private image build, no GPU
+on:
+  push:
+    branches: [feat/runpod-trellis-runtime-20261016]
+    paths:
+      - tools/runpod_runtime/**
+      - tools/runpod_worker/**
+      - tests/fixtures/runpod/**
+      - .github/workflows/runpod-runtime-build.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: worldifact-runpod-runtime-build
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/feat/runpod-trellis-runtime-20261016'
+    runs-on: ubuntu-24.04
+    environment: Production
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify source contracts before handling model credentials
+        run: |
+          python3 -m pip install -r tools/runpod_worker/requirements.txt
+          python3 -m unittest discover -s tools/runpod_worker -p 'test_*.py' -v
+          python3 -m unittest discover -s tools/runpod_runtime -p 'test_*.py' -v
+          python3 -m py_compile tools/runpod_runtime/*.py scripts/runpod-hf-preflight.py
+      - name: Verify gated ViT-L access
+        run: python3 scripts/runpod-hf-preflight.py
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      - name: Refuse a public weight-bearing destination
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/worldifact-package.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            https://api.github.com/users/teslaeco/packages/container/worldifact-runpod3d)
+          case "$code" in
+            200) jq -e '.visibility == "private"' /tmp/worldifact-package.json >/dev/null ;;
+            404) echo 'New GHCR packages default to private; verify again after publishing.' ;;
+            *) echo '::error::Unable to establish registry access; stopped before model publishing.'; exit 1 ;;
+          esac
+      - name: Prepare ephemeral CPU build disk
+        run: |
+          # Only unused SDKs on this disposable GitHub-hosted runner.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+          df -h /
+          test "$(df --output=avail -k / | tail -1)" -gt 50000000
+      - name: Authenticate to private GHCR package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username teslaeco --password-stdin
+      - name: Compile native runtime and bake verified model weights
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          docker buildx build --platform linux/amd64 \
+            --file tools/runpod_runtime/Dockerfile \
+            --secret id=hf_token,env=HF_TOKEN \
+            --tag "ghcr.io/teslaeco/worldifact-runpod3d:candidate-$GITHUB_SHA" \
+            --tag ghcr.io/teslaeco/worldifact-runpod3d:buildcache \
+            --cache-from ghcr.io/teslaeco/worldifact-runpod3d:buildcache \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --metadata-file /tmp/worldifact-build-metadata.json --provenance=false --push .
+      - name: Verify private publication and extract safe build evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api /users/teslaeco/packages/container/worldifact-runpod3d --jq .visibility | grep -qx private
+          mkdir -p runtime-proof
+          digest=$(jq -er '."containerimage.digest" | select(test("^sha256:[a-f0-9]{64}$"))' /tmp/worldifact-build-metadata.json)
+          image="ghcr.io/teslaeco/worldifact-runpod3d@$digest"
+          docker pull "$image"
+          id=$(docker create "$image")
+          trap 'docker rm "$id" >/dev/null' EXIT
+          docker cp "$id:/opt/worldifact/runtime/runtime-build-receipt.json" runtime-proof/
+          docker cp "$id:/models/trellis2/worldifact-bundle.json" runtime-proof/
+          jq -n --arg image "$image" --arg source "$GITHUB_SHA" \
+            '{image:$image,sourceCommit:$source,visibility:"private",gpuTested:false,endpointCreated:false}' \
+            > runtime-proof/image-receipt.json
+          cat runtime-proof/image-receipt.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: runpod-runtime-proof-${{ github.sha }}
+          path: runtime-proof/*.json
+          retention-days: 14
+      - name: Remove ephemeral registry login
+        if: always()
+        run: docker logout ghcr.io

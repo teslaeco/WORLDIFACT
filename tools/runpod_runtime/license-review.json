@@ -1,0 +1,17 @@
+{
+  "reviewed": true,
+  "scope": "Pinned direct inference dependencies and retained upstream notices; not a legal opinion or CUDA acceptance",
+  "date": "2026-10-16",
+  "dino": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+  "dinoLicense": "Meta DINOv3 License; owner obtained gated access; retain LICENSE.md; private image only",
+  "trellis2": "MIT, Microsoft source 75fbf0183001ed9876c8dbb35de6b68552ee08bd and named model weights",
+  "DRTK": "MIT, 43c3095d01d0ff435c798518e97e387c784b567f",
+  "CuMesh": "MIT, 12289e1062f0603f2f0d0771b02e1395d247f26f; retain source/submodule notices",
+  "FlexGEMM": "MIT, 6dd94a859c26ee8246888502eada3dd8ad85532e; retain source/submodule notices",
+  "torch": "BSD-3-Clause; official CUDA image includes separate NVIDIA runtime license terms",
+  "transformers": "Apache-2.0",
+  "flashAttention": "BSD-3-Clause, 2.7.3",
+  "Blender": "GPL; official 4.3.0 binary, included notices, separate subprocess",
+  "excluded": ["nvdiffrast", "nvdiffrec_render", "briaai/RMBG-2.0"],
+  "limitations": ["No public redistribution of this weight-bearing image", "CUDA rasterizer behavior and full inference remain separate validation gates", "No claim of compliance for arbitrary customer content"]
+}
