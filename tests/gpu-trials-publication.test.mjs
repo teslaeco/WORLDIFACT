@@ -46,7 +46,7 @@ async function fixture(mutator=()=>{}) {
       task:id,gpuClass:gpu,gpuName,
       gpuVramGiB:gpu==='L4'?23:80,cudaMatrixChecksum:1.23,cudaComputeMs:80,
       meshCount:14,triangleCount:800,glbSha256:createHash('sha256').update(buffer).digest('hex'),
-      gpuResultValidated:true,astraCallExecuted:false,neuralImageTo3D:false,
+      gpuResultValidated:true,actualGpuHardware:gpuName,astraCallExecuted:false,neuralImageTo3D:false,
       originalImageMatch:'NOT_MEASURED',makeReady:false,
     }
     mutator(id,receipt,buffer)
@@ -84,5 +84,36 @@ test('hash tampering is always rejected',async()=>{
 test('no IMAGE TO 3D claims may be published',async()=>{
   const f=await fixture((id,receipt)=>{if(id===ids[0][0])receipt.astraCallExecuted=true})
   try{await assert.rejects(prepareGpuGallery(f.input,f.output,38866390304),/FALSE_NEURAL_OR_MAKE_CLAIM/)}
+  finally{await f.cleanup()}
+})
+
+test('economy GPU RTX 4090 is accepted only with matching actual hardware disclosure',async()=>{
+  const f=await fixture((id,receipt)=>{
+    if(id === ids[0][0]) {
+      receipt.gpuName = 'NVIDIA GeForce RTX 4090'
+      receipt.actualGpuHardware = receipt.gpuName
+    }
+  })
+  try {
+    const output=await prepareGpuGallery(f.input,f.output,38877860327)
+    assert.equal(output.manifest.models[0].gpuName,'NVIDIA GeForce RTX 4090')
+    assert.equal(output.manifest.models[0].gpu,'L4')
+  }finally{await f.cleanup()}
+})
+test('RTX 4090 declared without matching actual hardware is rejected',async()=>{
+  const f=await fixture((id,receipt)=>{
+    if(id === ids[0][0]) receipt.gpuName = 'NVIDIA GeForce RTX 4090'
+  })
+  try{await assert.rejects(prepareGpuGallery(f.input,f.output,38877860327),/CUDA_PROOF_MISSING/)}
+  finally{await f.cleanup()}
+})
+test('wrong physical GPU is rejected even when CUDA checksums exist',async()=>{
+  const f=await fixture((id,receipt)=>{
+    if(id === ids[0][0]) {
+      receipt.gpuName = 'NVIDIA H100 80GB'
+      receipt.actualGpuHardware = receipt.gpuName
+    }
+  })
+  try{await assert.rejects(prepareGpuGallery(f.input,f.output,38877860327),/CUDA_PROOF_MISSING/)}
   finally{await f.cleanup()}
 })
