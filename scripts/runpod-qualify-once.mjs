@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises'
 import {createHash} from 'node:crypto'
 import {pickA100} from './runpod-provision-on-demand.mjs'
-export const IMAGE='ghcr.io/teslaeco/worldifact-runpod3d@sha256:f6cd2c5facce5008e6d40b5d08ce34bfb9050347d585ab8b4d91c79cfb76b993'
+export const IMAGE='ghcr.io/teslaeco/worldifact-runpod3d@sha256:d303d66ec97aec3826dea3679ce5bf6b2786718fc2a0777409e859ce5375347e'
 export const REGISTRY='cmvbbpdxq000pi81ul0ltivxv'
 const MANAGEMENT='https://api.runpod.io'
 const RUNTIME='https://api.runpod.ai'
@@ -21,10 +21,36 @@ export function plan({run,worker,pool,storage,now=Date.now()}){
     gpu:{pools:[pool],count:1,minCudaVersion:'12.4'},disk:100,
     workers:{min:0,max:1,idleTimeout:5},scaling:{type:'QUEUE_DELAY',queueDelay:4},
     timeout:900000,flashboot:'OFF',dataCenterIds:[],mounts:{network:[],global:[]},
-    entrypoint:['python','-u','-c'],cmd:[worker],
     env:{...storage,ENABLE_RUNPOD_WORKER:'false',QUALIFICATION_ID:run,
       QUALIFICATION_EXPIRES_AT:String(Math.floor(now/1000)+1200),
       QUALIFICATION_IMAGE:IMAGE,QUALIFICATION_PROBE_SHA:createHash('sha256').update(worker).digest('hex')}}
+}
+
+async function startupLogs(endpointId,workerId){
+  must(validId(endpointId)&&validId(workerId),'INVALID_LOG_TARGET')
+  let raw=''
+  try{
+    const r=await fetch(MANAGEMENT+'/v2/serverless/'+endpointId+'/workers/'+workerId+'/logs?tail=100',{
+      redirect:'error',signal:AbortSignal.timeout(4000),
+      headers:{Authorization:'Bearer '+process.env.RUNPOD_API_KEY,Accept:'text/event-stream'}})
+    if(!r.ok)return [{workerId,status:r.status}]
+    const reader=r.body.getReader()
+    try{while(raw.length<120000){const x=await reader.read();if(x.done)break;raw+=new TextDecoder().decode(x.value)}}
+    finally{await reader.cancel().catch(()=>{})}
+  }catch{/* Ending an established SSE stream at the deadline is normal. */}
+  const lines=[]
+  for(const row of raw.split('\n')){
+    if(!row.startsWith('data:'))continue
+    try{
+      const data=JSON.parse(row.slice(5))
+      if(data.source!=='container'&&!/ready|error|failed|exit/i.test(data.line??''))continue
+      let line=String(data.line??'').slice(0,1500)
+      for(const key of ['RUNPOD_API_KEY','ARTIFACT_ACCESS_KEY_ID','ARTIFACT_SECRET_ACCESS_KEY'])
+        if(process.env[key])line=line.replaceAll(process.env[key],'[REDACTED]')
+      lines.push({workerId,source:data.source,ts:data.ts,line})
+    }catch{/* Incomplete final SSE frames are ignored. */}
+  }
+  return lines.slice(-30)
 }
 
 async function api(method,origin,path,body){
@@ -90,6 +116,8 @@ async function main(){
     proof.jobId=job.id
     console.log(JSON.stringify({stage:'SUBMITTED',endpointId:endpoint.id,jobId:job.id}))
     let complete=false
+    const queuedAt=Date.now()
+    let nextStartupInspection=queuedAt+60000
     while(Date.now()<deadline){
       const status=await api('GET',RUNTIME,'/v2/'+endpoint.id+'/status/'+job.id)
       console.log(JSON.stringify({stage:'JOB',status:status?.status,at:new Date().toISOString()}))
@@ -97,6 +125,17 @@ async function main(){
         proof.jobStatus=status.status;proof.output=status.output;
         proof.executionTimeMs=status.executionTime;proof.delayTimeMs=status.delayTime;
         complete=true;break
+      }
+      if(status?.status==='IN_QUEUE'&&Date.now()>nextStartupInspection){
+        nextStartupInspection=Date.now()+60000
+        const workers=await api('GET',MANAGEMENT,'/v2/serverless/'+endpoint.id+'/workers')
+        proof.workerSummary=workers?.summary
+        proof.startupLogs=[]
+        for(const w of (workers?.workers??[]).slice(0,3))
+          proof.startupLogs.push(...await startupLogs(endpoint.id,w.id))
+        console.log(JSON.stringify({stage:'STARTUP',summary:proof.workerSummary,logs:proof.startupLogs}))
+        must(!(Date.now()-queuedAt>180000&&workers?.summary?.total>0&&
+          workers.summary.throttled===workers.summary.total),'WORKERS_THROTTLED_WITHOUT_PROCESS')
       }
       await new Promise(resolve=>setTimeout(resolve,15000))
     }
@@ -107,7 +146,7 @@ async function main(){
       const health=await api('GET',RUNTIME,'/v2/'+endpoint.id+'/health')
       proof.health=health
       const workers=health?.workers
-      if(workers&&['idle','initializing','ready','running','throttled'].every(k=>(workers[k]??0)===0)){
+      if(workers&&Object.keys(workers).length>0&&Object.values(workers).every(n=>n===0)){
         proof.scaleToZeroObserved=true;break
       }
       await new Promise(resolve=>setTimeout(resolve,5000))

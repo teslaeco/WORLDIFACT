@@ -1,3 +1,17 @@
+## 2026-10-16 — Private pull verified; corrected startup image built, GPU acceptance pending
+
+PR #317 merged as `745782a63f5ed30f072ae60f50c599ba73edd2d6` after exact-head CI 38954229668 passed full verify, foundations and deployment dry-run. The automatic Cloudflare workflow stopped at its existing release-scope guard before credentials/deployment; no customer route release occurred.
+
+Run 38954768346 stopped at a stale imported-script hash before any provider call. The qualification guard was corrected to the already-reviewed 100GB source blob `ad7b63aac6e47c0ded62f50c25f0e7a94d53f822`, without changing the production provisioning guard. Run 38955031054 then created disposable endpoint `q5g1ulcq0mwom8`, catalog A100 AMPERE_80 at $2.72/hour, min0/max1/idle5, 100GB scratch and no network volumes. The owner-created registry credential successfully pulled immutable image `sha256:f6cd2c5facce5008e6d40b5d08ce34bfb9050347d585ab8b4d91c79cfb76b993`; provider system logs confirmed the complete download on A100 SXM workers.
+
+**NOT GPU ACCEPTED:** Job `4289df83-d7bb-4334-8597-122b810160ad-u1` remained queued. Three provider workers became THROTTLED with no container output; neither CUDA nor inference executed. Read-only diagnosis 38956013692 confirmed exact entrypoint/CMD storage, worker states and empty container logs. The queued job was cancelled after about nine minutes. Qualification and independent cleanup both confirmed deletion at 19:36:54 UTC. Runpod subsequently displayed 0 deployed workers and balance $32.88; this is an observed balance, not invoice reconciliation. Safe failure/cleanup artifact: 12069784629.
+
+PR #318 bakes file-based startup into a derivative of the unchanged native image, removing long source text from provider command fields and printing a startup marker. This is a diagnostic correction, not a confirmed root cause. **Build 38956475181 passed** private-image publication/pull, CPU SDK import and exact probe-byte comparison; artifact 12071401957. New manifest: `sha256:d303d66ec97aec3826dea3679ce5bf6b2786718fc2a0777409e859ce5375347e`. CPU checks are not CUDA proof.
+
+The next bounded qualification uses this new digest, collects startup logs and exits early if all workers become throttled. It retains main-only, first-attempt-only manual dispatch, exact script hashes, one-job policy and cleanup. The browser environment disconnected before another dispatch. Real CUDA/DRTK acceptance, generated models, R2 export proof and the final permanent endpoint remain pending. No paid resource was left running.
+
+---
+
 ## 2026-10-16 — Correct DINOv3 access verified; private native runtime built; GPU qualification prepared
 
 **VERIFIED ACCESS:** GitHub Actions [38937552850](https://github.com/teslaeco/WORLDIFACT/actions/runs/38937552850) passed three read-only gated-file checks for the exact ViT-L/16 revision using the owner-saved Production HF_TOKEN. No token was extracted, no GPU was started, and this is not a full weight-download or inference result.
