@@ -1,0 +1,13 @@
+{
+  "revision": "worldifact-secure-pod-get-only-20261016",
+  "operations": [
+    "GET /v2/serverless",
+    "GET /v2/network-volumes",
+    "GET /v2/pods",
+    "GET /v2/catalog/gpus?include=AVAILABILITY&product=POD&count=1&cloud=SECURE"
+  ],
+  "ownerRequested": true,
+  "paidGpuAuthorized": false,
+  "createsResources": false,
+  "productionDeploy": false
+}
