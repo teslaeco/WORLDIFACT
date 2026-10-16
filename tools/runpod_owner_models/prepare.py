@@ -5,10 +5,12 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import time
 import urllib.request
+import urllib.error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'runpod_worker'))
 from storage import S3Store
@@ -36,14 +38,44 @@ def openai(path, body):
     request = urllib.request.Request('https://api.openai.com/v1'+path,
         data=json.dumps(body).encode(), method='POST',
         headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['OPENAI_API_KEY']})
-    with urllib.request.build_opener(NoRedirect()).open(request, timeout=150) as response:
-        raw=response.read(262145)
-        if len(raw)>262144:raise ValueError('PROVIDER_RESPONSE_TOO_LARGE')
-        return json.loads(raw)
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(request, timeout=150) as response:
+            raw=response.read(262145)
+            if len(raw)>262144:raise ValueError('PROVIDER_RESPONSE_TOO_LARGE')
+            return json.loads(raw)
+    except urllib.error.HTTPError as error:
+        # Never log the request, provider message, credentials or image data.
+        fields={}
+        try:
+            failure=json.loads(error.read(16384)).get('error',{})
+            for name in ('type','code','param'):
+                value=failure.get(name)
+                if isinstance(value,str) and re.fullmatch(r'[A-Za-z0-9_.\[\]-]{1,100}',value):
+                    fields[name]=value
+        except Exception:pass
+        print(json.dumps({'stage':'OPENAI_HTTP_REJECTED','endpoint':path,
+                          'status':error.code,'fields':fields}),flush=True)
+        raise
+
+
+def claim_preparation(store,prefix,expected):
+    if store.create_json(prefix+'operator-prepare-claim.json',expected):return
+    raw=store.read(prefix+'operator-prepare-claim.json',262144)
+    if not raw or json.loads(raw)!=expected:
+        raise RuntimeError('OWNER_PREPARATION_CLAIM_MISMATCH')
+    # Resume CPU preparation only after proving no paid dispatch ever started.
+    for name in ('astra-dispatch-claim.json','astra-response.json','prepared-job.json',
+                 'operator-dispatch-claim.json','claim.json','result.json'):
+        if store.read(prefix+name,262144) is not None:
+            raise RuntimeError('PAID_OR_PREPARED_JOB_REQUIRES_RECONCILIATION')
 
 
 def put_bytes(store, key, raw, mime):
     # Originals and derivatives are immutable, and ambiguous writes are never repeated.
+    existing=store.read(key,12*1024*1024)
+    if existing is not None:
+        if existing!=raw:raise RuntimeError('IMMUTABLE_DERIVATIVE_MISMATCH')
+        return
     store.client.put_object(Bucket=store.bucket,Key=key,Body=raw,ContentType=mime,
                             Metadata={'sha256':hashlib.sha256(raw).hexdigest()},IfNoneMatch='*')
 
@@ -97,9 +129,8 @@ def prepare(store, cfg):
     output=[]
     for item in cfg['jobs']:
         prefix=f"jobs/{item['scope']}/{item['jobId']}/"
-        if not store.create_json(prefix+'operator-prepare-claim.json',{
-                'sourceSha256':item['sha256'],'authorizedBatch':cfg['id']}):
-            raise RuntimeError('OWNER_PREPARATION_ALREADY_CLAIMED_RECONCILE')
+        claim_preparation(store,prefix,{
+                'sourceSha256':item['sha256'],'authorizedBatch':cfg['id']})
         source_key='ops/owner-models-20261016/sources/'+item['source']
         raw=store.read(source_key,12*1024*1024)
         assert raw and hashlib.sha256(raw).hexdigest()==item['sha256'], 'PRIVATE_ORIGINAL_MISMATCH'

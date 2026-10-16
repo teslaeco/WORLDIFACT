@@ -1,3 +1,7 @@
+## 2026-10-16 — Owner preparation stopped before paid dispatch; recovery scoped to unspent state
+
+Actual manual run 38969320339 on merge 68bb139b stopped at the OpenAI input-token-count POST with HTTPError. The GPU step was skipped, and the private result collector found zero model artifacts. No Astra generation dispatch was reached. The follow-up records only safe HTTP status/code/parameter diagnostics and permits matching CPU preparation to resume only when every Astra/GPU dispatch and result marker is absent. Existing derivatives must match byte-for-byte; all paid one-shot claims remain effective. Neither requested model is delivered yet.
+
 ## 2026-10-16 — Two native owner generations prepared after actual GPU qualification
 
 Three original reference uploads returned HTTP 200 with unchanged SHA-256. Local SAM2.1 CPU segmentation and visual inspection preserved the complete ECOMECH silhouette and prop. The manual-only owner workflow prepares two real bounded Astra plans and sequential 1024 native reconstructions under the announced USD 4 envelope, with durable one-shot claims and private original/output storage. Tests verify GPU/storage/budget configuration and output-prefix isolation. Generation is PREPARED, NOT EXECUTED at this source revision. See RUNPOD_OWNER_MODELS_20261016.md.
