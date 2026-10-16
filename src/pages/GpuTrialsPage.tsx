@@ -198,7 +198,7 @@ export default function GpuTrialsPage() {
       <nav className="gpu-trials-selector" aria-label="Select model">
         {models.models.map(m => <button key={m.id} onClick={() => setSelected(m.id)}
           className={m.id === selected ? 'gpu-trials-current' : ''} aria-pressed={m.id === selected}>
-          <strong>{m.name}</strong><span>{m.gpu} · {m.triangleCount.toLocaleString()} triangles</span>
+          <strong>{m.name}</strong><span>{m.gpuName} · {m.triangleCount.toLocaleString()} triangles</span>
         </button>)}
       </nav>
       {active && <article className="gpu-trials-viewer" key={active.id}>
