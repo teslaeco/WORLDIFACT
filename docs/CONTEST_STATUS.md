@@ -1,3 +1,15 @@
+## 2026-10-16 — Owner explicitly requested paid GPU/real 3D: safe zero-idle infrastructure remains NOT PROVISIONED
+
+**VERIFIED** GitHub branch PR #309 now enforces 100GB **ephemeral** Serverless worker scratch, Active=0 / Max=1 / idle timeout 5s, rejects any network/global volume mount in provider receipt, and keeps persistent outputs in already verified private Cloudflare R2. The experimental 256GB permanently billed RunPod volume branch is NOT merged and NO volume was purchased. Real provider management last reported 0 endpoints/Pods/volumes; new current GPU catalog read-only test has been added to PR #309 with a trusted-main marker workflow, but has NOT been executed against account secrets yet. Offline tests green: https://github.com/teslaeco/WORLDIFACT/actions/runs/38857313185 .
+
+**BLOCKED / REQUIRED INPUT:** The TRELLIS.2 image-to-3D pipeline requires the gated Meta DINOv3 ViT-L/16 encoder model. The model page currently explicitly requires the owner to log in and accept contact-sharing/model access terms: https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m . At last verified GitHub Production screenshot, there was no HUGGING_FACE_HUB_TOKEN/HF_TOKEN secret. Until legitimate acceptance/download/weights SHA checks and a CUDA+DRTK/Binary SBOM build are performed, there is no reviewed immutable GPU image and therefore no real RunPod Serverless endpoint to provision. No paid inference, owner-photo R2 ingress, original ECOMECH GLB, or Halloween GLB exists. The test source images remain private. The old Oracle CPU backend has not been touched.
+
+**SAFETY INCIDENT RESOLVED:** One manual-only RunPod workflow file was inadvertently written to trusted main as commit feb2684dbbc4e38993b5638595bf356aaddbc4b5. It had no push/paid-job trigger and lacked the installer script, so no endpoint/resource was created. It was promptly deleted from main with commit 623fe656a4aa58b6e9995871fadbd64e05d948e1; the reviewed file remains only in PR #309. Do not infer a successful deployment or credit spend from these commits.
+
+**GO:** Offline build/test and ready-to-execute trusted-main GET-only GPU catalog after PR review. **NO-GO:** PR #305/309 production merge/paid GPU until vetted commercial CUDA image/real encoder checkpoints and measured GPU acceptance are ready.
+
+---
+
 ## 2026-10-16 — On-demand-only storage policy approved by owner; no permanent RunPod volume
 
 **IMPLEMENTED / MOCK-CI PENDING / NOT DEPLOYED.** In PR #309, RunPod Serverless Flex endpoint worker still has Active=0 / Max=1 / GPU=1 / idle=5 sec. The container scratch disk is now **100GB ephemeral**, destroyed between worker startups, and outputs must be stored in existing **private Cloudflare R2**. The endpoint installer refuses provider readback that unexpectedly includes any persistent network/global mount. A previously prepared draft for a 256GB always-billed RunPod network disk was **NOT PROVISIONED** and must not be used for this requirement. Unreal Engine editor/compilation requires a separately planned persistent environment and funding, not the always-on inference runtime.
