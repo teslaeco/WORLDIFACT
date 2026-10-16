@@ -1,0 +1,131 @@
+name: WORLDIFACT GPU 2026-10-16 owner-approved branch trial (max USD 8)
+on:
+  push:
+    branches: ['ops/gpu-paid-20261016']
+    paths: ['ops/THREE_GPU_EPHEMERAL_PAID_BRANCH_ONCE_20261016.json']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-gpu-paid-branch-once-20261016
+  cancel-in-progress: false
+jobs:
+  three-gpu:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/ops/gpu-paid-20261016' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 42
+    environment: Production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Reject anything but exact owner approval marker and reviewed pinned code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = 'ops/THREE_GPU_EPHEMERAL_PAID_BRANCH_ONCE_20261016.json'
+          printf '%s  %s\n' \
+            '91d87511b507b72652422ba7839ec28f0fcb1c93' 'tools/gpu_trials/procedural_models.py' \
+            'bcd7f26c4f90ea791378bd43a5377500ae12a2d1' 'tools/gpu_trials/runpod_three_gpu.py' \
+            '383acedf9cb9aa2b9e1ac04de922fa092cdc3616' 'tests/test_three_gpu_procedural_models.py' \
+            'd80c430a7e75f12fc8fb2a248cc494d91bc8704f' 'tests/test_three_gpu_dispatch.py' | \
+              while read expected file; do test "$(git hash-object "$file")" = "$expected"; done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('ops/THREE_GPU_EPHEMERAL_PAID_BRANCH_ONCE_20261016.json')
+          actual=json.loads(p.read_text())
+          expected={'revision':'worldifact-three-gpu-procedural-one-time-v1',
+            'tasks':['L4','A100','H100'], 'maxEstimatedUsd':8,
+            'requiresNoPersistentGPU':True,'createsPersistentVolumes':False,
+            'originalOwnerPhotosUsed':False, 'customerGenerationEnabled':False,
+            'runpodSdk':'2.0.0rc1', 'automaticPaidRetries':False,'priorAttemptRunId':38867359962,'priorAttemptProviderGpuStarted':False, 'secondRunId':38868316200,'secondRunL4StockUnavailable':True,'secondRunResourcesCleared':True, 'oneTimeBranch':'ops/gpu-paid-20261016', 'ownerSpendApproval':True}
+          assert actual==expected, 'PAID_GPU_APPROVAL_MARKER_MISMATCH'
+          PY
+      - name: Install official RunPod v2 SDK and pinned geometric libraries
+        run: |
+          python -m pip install --no-input --disable-pip-version-check \
+            runpod==2.0.0rc1 numpy==2.3.5 trimesh==4.11.1 Pillow==12.3.0
+      - name: Recheck CPU-only geometry and SDK/paid-dispatch contracts
+        run: |
+          python -m unittest discover -s tests -p test_three_gpu_procedural_models.py -v
+          python -m unittest discover -s tests -p test_three_gpu_dispatch.py -v
+      - name: Verify account has zero existing pods, endpoints and volumes BEFORE spending
+        shell: bash
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/runpod-readonly-preflight.mjs > "$RUNNER_TEMP/runpod-before.json"
+          python - <<'PY'
+          import os, json
+          d=json.load(open(os.environ['RUNNER_TEMP']+'/runpod-before.json'))
+          assert d.get('verified') is True, 'RUNPOD_ACCOUNT_AUTH_UNVERIFIED'
+          p=d.get('checks',{})
+          for key in ('/v2/pods','/v2/serverless','/v2/network-volumes'):
+            assert p.get(key,{}).get('count') == 0, 'PREEXISTING_RESOURCE_REQUIRES_REVIEW'
+          print('PROVIDER_RESOURCE_PRECHECK_PASS: no preexisting GPU, endpoint or volume')
+          PY
+      - name: Paid GPU qualifications L4 then A100 then H100; SDK terminates each Pod
+        shell: bash
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          WORLDIFACT_PAID_GPU_APPROVAL: GO-WORLDIFACT-THREE-EPHEMERAL-GPU-PROCEDURAL-20261016
+          WORLDIFACT_GPU_TARGETS: L4,A100,H100
+          PYTHONUNBUFFERED: '1'
+        run: |
+          set -euo pipefail
+          # The first SIGINT gives SDK a chance to shut down ephemeral Pods.
+          # Job timeout is independent. Never run a permanent Pod or GPU keepalive.
+          timeout --signal=INT --kill-after=120s 35m \
+            rp flash dev tools/gpu_trials/runpod_three_gpu.py --once
+      - name: Upload only genuinely generated and SHA-verified GLBs (if present)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: WORLDIFACT-THREE-GPU-PAID-PROCEDURAL-GLB-NOT-NEURAL
+          path: gpu-trial-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+  provider-postflight:
+    needs: three-gpu
+    if: always() && github.repository == 'teslaeco/WORLDIFACT'
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24'}
+      - name: Confirm SDK released all ephemeral Pods and wrote no persistent resources
+        shell: bash
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: |
+          set -euo pipefail
+          # Allow RunPod async teardown of the last task; GET only, never delete
+          # a Pod that might belong to another user or concurrent workflow.
+          for attempt in 1 2 3 4 5 6; do
+            node scripts/runpod-readonly-preflight.mjs > "$RUNNER_TEMP/runpod-after.json" || true
+            if python - <<'PY'
+          import json,os
+          try:
+            d=json.load(open(os.environ['RUNNER_TEMP']+'/runpod-after.json'))
+            p=d.get('checks',{})
+            assert d.get('verified') is True
+            for key in ('/v2/pods','/v2/serverless','/v2/network-volumes'):
+              assert p.get(key,{}).get('count') == 0
+          except Exception:raise SystemExit(1)
+          PY
+            then
+              echo "PASS: no paid GPU Pod, endpoint or network disk left on RunPod"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::GPU resource remains on RunPod or API unreadable. Check RunPod console now; no automatic broad deletion."
+          exit 2
