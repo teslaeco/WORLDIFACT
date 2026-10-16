@@ -68,6 +68,19 @@ class SingleGpuTests(unittest.TestCase):
         self.assertEqual(quote_calls, [("L4",)])
         self.assertEqual(launched, ["L4"])
 
+    def test_no_implicit_bulk_or_missing_gpu_target(self):
+        # A marker-approved run cannot spend on three GPUs by accident.
+        for selected in ("L4,A100,H100", "", "A100,H100", "H100,L4"):
+            with self.subTest(selected=selected):
+                with patch.dict(os.environ, {
+                    "WORLDIFACT_PAID_GPU_APPROVAL": trial.APPROVAL,
+                    "WORLDIFACT_GPU_TARGETS": selected,
+                }):
+                    def never(*args, **kwargs):
+                        self.fail("Unexpected provider call")
+                    with self.assertRaisesRegex(trial.Refused, "UNEXPECTED_GPU_TEST_ORDER"):
+                        trial.operator_run(quotefn=never, dispatch=never)
+
     def test_no_generation_without_explicit_approval(self):
         with patch.dict(os.environ, {
             "WORLDIFACT_PAID_GPU_APPROVAL": "DO_NOT_SPEND",
