@@ -35,6 +35,61 @@ class SingleGpuTests(unittest.TestCase):
         with self.assertRaisesRegex(trial.Refused, "NO_VERIFIED_POD_H100"):
             trial.quote_catalog(catalog([("NVIDIA L4", 24, 1.1)]), targets=("H100",))
 
+    def test_worst_case_price_wins_when_sdk_can_choose_multiple_skus(self):
+        available = catalog([
+            ("NVIDIA L4", 24, 0.69),
+            ("NVIDIA GeForce RTX 4090", 24, 1.29),
+        ])
+        result = trial.quote_catalog(available, targets=("L4",))
+        self.assertEqual(result["hourly"]["L4"], 1.29)
+        self.assertEqual(result["quoteBasis"], "WORST_CASE_AVAILABLE_SECURE_POD_SKU")
+        self.assertIs(result["walletVerified"], False)
+        self.assertIsNone(result["actualBilledCostUsd"])
+
+    def test_over_cap_second_choice_blocks_both_gpu_choices(self):
+        # Reject even if the first eligible device is cheap: the RunPod SDK
+        # can provision another allowed SKU, so min(price) was unsafe.
+        available = catalog([
+            ("NVIDIA L4", 24, 0.69),
+            ("NVIDIA GeForce RTX 4090", 24, 1.90),
+        ])
+        with self.assertRaisesRegex(trial.Refused, "UNPRICED_OR_OVER_CAP_ELIGIBLE_L4_SKU"):
+            trial.quote_catalog(available, targets=("L4",))
+
+    def test_available_sku_without_secure_price_is_fail_closed(self):
+        data = catalog([
+            ("NVIDIA L4", 24, 0.69),
+            ("NVIDIA GeForce RTX 4090", 24, 1.10),
+        ])
+        data["gpus"][1]["price"] = {"community": 0.2}
+        with self.assertRaisesRegex(trial.Refused, "UNPRICED_OR_OVER_CAP_ELIGIBLE_L4_SKU"):
+            trial.quote_catalog(data, targets=("L4",))
+
+    def test_a100_alternative_cost_is_not_silently_understated(self):
+        data = catalog([
+            ("NVIDIA A100 80GB PCIe", 80, 2.0),
+            ("NVIDIA A100-SXM4-80GB", 80, 3.4),
+        ])
+        result = trial.quote_catalog(data, targets=("A100",))
+        self.assertEqual(result["hourly"]["A100"], 3.4)
+        data["gpus"][1]["price"]["secure"] = 4.1
+        with self.assertRaisesRegex(trial.Refused, "UNPRICED_OR_OVER_CAP_ELIGIBLE_A100_SKU"):
+            trial.quote_catalog(data, targets=("A100",))
+
+    def test_wrong_or_unavailable_skus_are_never_quoted(self):
+        # A blacklisted/out-of-stock device is not a possible allocation.
+        available = catalog([
+            ("NVIDIA L4", 24, 0.95),
+            ("NVIDIA GeForce RTX 4090", 24, 99.0),
+        ])
+        available["gpus"][1]["availability"] = "NONE"
+        available["gpus"][1]["dataCenters"] = []
+        result = trial.quote_catalog(available, targets=("L4",))
+        self.assertEqual(result["hourly"]["L4"], 0.95)
+        available["gpus"][0]["memory"] = 8
+        with self.assertRaisesRegex(trial.Refused, "NO_VERIFIED_POD_L4"):
+            trial.quote_catalog(available, targets=("L4",))
+
     def test_economy_l4_uses_4090_when_l4_is_unavailable(self):
         quote = trial.quote_catalog(catalog([
             ("NVIDIA GeForce RTX 4090", 24, 1.2)
