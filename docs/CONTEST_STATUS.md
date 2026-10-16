@@ -1,3 +1,13 @@
+## 2026-10-16 — Third paid RunPod attempt #38879916050: remote task returned, local validator failed
+
+- **VERIFIED**: [Actions run #38879916050](https://github.com/teslaeco/WORLDIFACT/actions/runs/38879916050), GPU job `116903891891`, passed source-hash/CPU/Flash import regression checks and provider inventory preflight. RunPod provisioned Pod `ry9hic5potmw` and logged `worker ready`, then `✓ l4_chess_512_trial() in 2m33s`. This establishes that the **remote task returned**; it is **NOT** a retained CUDA certificate or model file.
+- **FAILED POST-RETURN PERSISTENCE**: Trusted Actions operator then logged `FAILED_NO_AUTOMATIC_PAID_RETRY` followed by `No module named 'procedural_models'`. The source had been fixed inside the GPU function and at module import, but the local `store_proven_trial` still dynamically imported an adjacent file from a generated runtime path. Hence **zero downloadable GPU GLB artifacts**; A100/H100 were not run. Never conflate remote worker completion with an independent artifact proof.
+- **VERIFIED cleanup**: provider-postflight job `116905065606` passed with zero Pods, endpoints or network volumes immediately after. Provider wallet and bill remain **UNKNOWN**.
+- **IMPLEMENTED (offline pending full CI)**: Pass the exact pinned geometry source to local GLB validation/persistence and compile its verified validator in memory instead of importing a sibling module. Add a regression that imports and runs the entire local return/persistence path from an isolated `/tmp/runpod_live_isolated.py` lacking `procedural_models.py`. Simulated CPU fixtures MUST NOT be published as GPU results. Next paid attempt requires this test to pass and separately guarded, single-use owner-approved workflow; no automated retry.
+- **NO PRODUCTION RELEASE**: PR #311 remains evidence-gated, with no real GPU GLB yet; all customer/Stripe/Oracle/R2 resources and six portals unchanged.
+
+---
+
 ## 2026-10-16 — Paid RunPod qualification #38879132929: remote script import failure, automatic teardown VERIFIED
 
 - **VERIFIED:** [Actions #38879132929](https://github.com/teslaeco/WORLDIFACT/actions/runs/38879132929) / job `116901314038` passed all offline contract/Flash source-isolation tests and zero-resource provider preflight, then provisioned transient Pod `o8zn2ip56njh` for RTX4090/L4. The remote runtime failed before CUDA with `ModuleNotFoundError: No module named 'procedural_models'` at line 28 of `/tmp/runpod_live_8df613e70abf5d6d.py`. The bug was the **module-level import** inherited by the temporary copied script, distinct from the previous missing in-body import. A100 and H100 were not attempted; artifact inventory was empty, **zero GPU GLBs and zero CUDA evidence**.
