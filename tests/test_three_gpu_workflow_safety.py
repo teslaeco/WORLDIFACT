@@ -32,4 +32,16 @@ class Safety(unittest.TestCase):
         self.assertIn('FAILED_NO_AUTOMATIC_PAID_RETRY',CODE)
         self.assertIn('NO_ONE_TIME_OWNER_APPROVAL',CODE)
         self.assertIn('MAX_TOTAL_PROJECTED_USD = 8.0',CODE)
+    def test_paid_and_offline_workflows_have_valid_yaml_and_two_phase_cleanup(self):
+        import yaml
+        live=yaml.safe_load(WF)
+        offline=yaml.safe_load((ROOT/'.github/workflows/three-gpu-trials-offline.yml').read_text())
+        self.assertIn('three-gpu',live['jobs'])
+        self.assertIn('provider-postflight',live['jobs'])
+        self.assertIn('cpu-only-real-glb',offline['jobs'])
+        # Python PyYAML 1.1 parses literal YAML 'on' as the boolean key True.
+        self.assertIn('main',live.get(True,live.get('on'))['push']['branches'])
+        steps=live['jobs']['three-gpu']['steps']
+        self.assertTrue(any('--once' in str(x.get('run','')) for x in steps))
+        self.assertEqual(live['jobs']['provider-postflight']['needs'],'three-gpu')
 if __name__=='__main__':unittest.main()
