@@ -32,21 +32,21 @@ app = runpod.App(APP_NAME)
 
 
 @app.task(gpu=runpod.GpuType.NVIDIA_L4, gpu_count=1,
-          container_disk_gb=40, dependencies=["trimesh==4.11.1", "Pillow==12.3.0"])
+          container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
 def l4_chess_512_trial():
     from tools.gpu_trials.procedural_models import construct
     return construct("L4", require_cuda=True)
 
 
 @app.task(gpu="A100", gpu_count=1,
-          container_disk_gb=40, dependencies=["trimesh==4.11.1", "Pillow==12.3.0"])
+          container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
 def a100_ecomech_trial():
     from tools.gpu_trials.procedural_models import construct
     return construct("A100", require_cuda=True)
 
 
 @app.task(gpu="H100", gpu_count=1,
-          container_disk_gb=40, dependencies=["trimesh==4.11.1", "Pillow==12.3.0"])
+          container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
 def h100_halloween_trial():
     from tools.gpu_trials.procedural_models import construct
     return construct("H100", require_cuda=True)
