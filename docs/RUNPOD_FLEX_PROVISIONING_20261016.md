@@ -3,6 +3,12 @@
 **2026-10-16 — PREPARED / MOCK TESTS PASS / NOT PROVISIONED.**
 No RunPod Pod, Serverless endpoint, GPU worker or network volume has been created by this PR.
 
+## 2026-10-16 — owner's zero-idle GPU AND no-ongoing-RunPod-disk-cost policy
+
+The owner explicitly requires **no permanently running GPU** and storage usable with jobs on demand. We will use a 100 GB **ephemeral container scratch disk** on the RunPod Serverless worker, and the existing tested private Cloudflare R2 bucket as **persistent object storage**. A dedicated RunPod Network Volume of 256 GB was investigated in a separate experimental branch but **was not provisioned** and must **not** be merged or activated: it would incur charges while all GPU workers are zero. Cloudflare R2 may itself incur storage and operation charges, but not a dedicated always-reserved RunPod disk cost.
+
+The operator script and mocked-provider CI now reject any provider-created endpoint returning a persistent network/global mount or a 20 GB scratch disk, even when the worker min remains zero. Only future, explicitly approved and separately budgeted Unreal Engine compilation/authoring infrastructure may have a larger persistent filesystem; do **not** bundle Unreal Editor into the 3D inference worker. Real container image/model weights may still require model-layer size and startup analysis before calling this production-ready.
+
 ## Owner links
 - RunPod Serverless: https://console.runpod.io/serverless
 - RunPod Pods: https://console.runpod.io/pods
@@ -24,9 +30,9 @@ No RunPod Pod, Serverless endpoint, GPU worker or network volume has been create
 | Idle timeout | **5 seconds** |
 | Scaling | QUEUE_DELAY=4 |
 | Execution timeout | 120 seconds initially; benchmark before increasing |
-| Disk | 20GB ephemeral, no persistent network volume |
+| Scratch disk | **100 GB ephemeral**, only while a worker runs; wiped on worker restart |
 | Endpoint at creation | ENABLE_RUNPOD_WORKER=false (no client GPU inference yet) |
-| Storage | Existing private Cloudflare R2, with worker secret binding later |
+| Persistent storage | Existing **private Cloudflare R2**; no new RunPod network volume, no idle-volume rental |
 | CPU | Existing Oracle service untouched |
 | Client billing | No changes |
 
