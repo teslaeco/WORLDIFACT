@@ -1,3 +1,9 @@
+## 2026-10-16 — Requested owner models: private source ingress prepared
+
+Actual qualification run 38964818698 on main b14ce6f started its A100 worker and native sparse/shape/texture sampling, exported GLB/BLEND and eight renders successfully (PASS); cleanup confirmed endpoint deletion at 20:58:18 UTC. User run 38963541225 completed only CPU review because its confirmation condition skipped the GPU job. The agent dispatched the correct first-attempt test under the existing one-GPU allowance.
+
+The exact ECOMECH V4 original and two Halloween source images have been recovered privately. A reviewed, manual-only Production workflow prepares encrypted, 15-minute, create-only uploads for those three fixed files. No source image, raw signed URL or storage secret is published. No GPU or OpenAI call is made by the transfer workflow. See RUNPOD_OWNER_MODELS_20261016.md.
+
 ## 2026-10-16 — Private pull verified; corrected startup image built, GPU acceptance pending
 
 PR #317 merged as `745782a63f5ed30f072ae60f50c599ba73edd2d6` after exact-head CI 38954229668 passed full verify, foundations and deployment dry-run. The automatic Cloudflare workflow stopped at its existing release-scope guard before credentials/deployment; no customer route release occurred.

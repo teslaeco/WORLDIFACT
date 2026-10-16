@@ -1,0 +1,22 @@
+{
+  "id": "owner-models-20261016",
+  "expiresBefore": "2026-10-17T12:00:00Z",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEApsdPKbnfQFet0zDbiOf9\n9TIJj+jSlTESC7B4lTQxJwnwTMXpX8f9ohj87pxBw9MJs0wvDeSVPVLnSovEi8x7\nwCsj08rgTvTkgUJ91ZIFG7Tbpm9JI7VsxS+Zs59xVjKwp53NZn0sq6RiBesSHEMi\n4sZdFl+Oh1DVrFa8DJ/eEB+5th5ngEadDW3pdIYUv8A3MK71M8R3KtWxpeLa5GDV\n4ZV9uv/iogPC/3xbtjHjyO8GZ/5kOM5PTjSikV1XfBY6XGy9ejzvnY6gmmYGYdHP\nkBLjnCOCZ321mghSuCK70pLcFwtM1LxSPeTS7kUexbyzYh7nzaOiaDFUe25r2q2w\n6tcP1eIppNgd/kfyeY58tTNFJLO8AeGEmD+tExyhEkzToX9UKKN0lh093u9xxEBp\n1SAfUpD/T7PVI0uB0tUt5Vn28noy8eUFik4L/iktFbrcuL9nmwaparItYobc9xNM\nu8vlrqNh1M1Ckot0EUFEApk2Ke/axA4bL6i4CjL7pPkNAgMBAAE=\n-----END PUBLIC KEY-----\n",
+  "sources": [
+    {
+      "name": "ecomech-v4-original.jpg",
+      "sha256": "8fda1676a54161ed2ca82d00f988c6e647d18edf504a299676902d4eb471a062",
+      "bytes": 390526
+    },
+    {
+      "name": "halloween-music-room-original.jpg",
+      "sha256": "57c7ee96a7a2dc0d0f36a64c5598a4f10ef8aeb27e1401da543ce1f0c73a90e5",
+      "bytes": 351589
+    },
+    {
+      "name": "halloween-alternate-reference.jpg",
+      "sha256": "48af4397292884f5d8c1668431679d7d9f13def97bc82cc1dea91df689f88d80",
+      "bytes": 211421
+    }
+  ]
+}

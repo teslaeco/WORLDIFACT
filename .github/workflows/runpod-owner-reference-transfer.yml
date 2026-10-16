@@ -1,0 +1,43 @@
+name: Prepare three private owner references — encrypted uploads, zero GPU
+on:
+  pull_request:
+    paths: ['scripts/runpod-owner-reference-transfer.py', 'tests/test_owner_reference_transfer.py', 'ops/RUNPOD_OWNER_REFERENCES_20261016.json', '.github/workflows/runpod-owner-reference-transfer.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - run: python -m pip install cryptography==50.0.2
+      - run: python -m unittest discover -s tests -p test_owner_reference_transfer.py
+  prepare:
+    needs: review
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - name: Require exact reviewed script and fixed recipients before secrets
+        run: |
+          test "$(git hash-object scripts/runpod-owner-reference-transfer.py)" = '3695cf49cc403db72f25eeb4efe0cc17cb8eaa5f'
+          test "$(git hash-object ops/RUNPOD_OWNER_REFERENCES_20261016.json)" = 'd7f3608a917600c06f94343000e968d3d07af2b7'
+      - run: python -m pip install boto3==1.43.66 cryptography==50.0.2
+      - name: Prepare encrypted create-only object uploads
+        env:
+          ARTIFACT_ACCESS_KEY_ID: ${{ secrets.ARTIFACT_ACCESS_KEY_ID }}
+          ARTIFACT_SECRET_ACCESS_KEY: ${{ secrets.ARTIFACT_SECRET_ACCESS_KEY }}
+          ARTIFACT_S3_ENDPOINT: ${{ vars.ARTIFACT_S3_ENDPOINT }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+        run: python scripts/runpod-owner-reference-transfer.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: owner-reference-upload-${{ github.run_id }}
+          path: owner-reference-upload.sealed.json
+          retention-days: 1
+          if-no-files-found: error
