@@ -1,3 +1,11 @@
+## 2026-10-16 — Correct DINOv3 access verified; private native runtime build in progress
+
+**VERIFIED ACCESS:** GitHub Actions [38937552850](https://github.com/teslaeco/WORLDIFACT/actions/runs/38937552850) passed three read-only gated-file checks for the exact ViT-L/16 revision using the owner-saved Production HF_TOKEN. No token was extracted, no GPU was started, and this is not a full weight-download or inference result.
+
+**IMPLEMENTED / BUILD PENDING:** Branch `feat/runpod-trellis-runtime-20261016` adds the isolated worker from PR #305 and a complete private-image build with pinned PyTorch/CUDA/source, native DRTK/CuMesh/FlexGEMM, Blender and SHA-verified model weights. Actual [build 38938779926](https://github.com/teslaeco/WORLDIFACT/actions/runs/38938779926) is running. Thirty worker/bundle tests pass locally; full local verify has 2 Chromium-missing failures among 2,345 tests. See docs/RUNPOD_RUNTIME_BUILD_20261016.md. No endpoint or paid inference is claimed. Runpod still needs a private GHCR pull credential after the image exists.
+
+---
+
 ## 2026-10-16 — Three different on-demand GPU model qualification tests: SDK implementation and CPU GLBs verified
 
 **OWNER APPROVAL:** Owner explicitly authorized spending from approximately USD 33.68 RunPod wallet to run an economical GPU test first and three separate classes (L4, A100, H100), each with different real 3D geometry. Owner still requires ZERO always-on GPUs and no permanently rented RunPod network storage.
@@ -14,7 +22,7 @@
 
 **VERIFIED** GitHub branch PR #309 now enforces 100GB **ephemeral** Serverless worker scratch, Active=0 / Max=1 / idle timeout 5s, rejects any network/global volume mount in provider receipt, and keeps persistent outputs in already verified private Cloudflare R2. The experimental 256GB permanently billed RunPod volume branch is NOT merged and NO volume was purchased. Real provider management last reported 0 endpoints/Pods/volumes; new current GPU catalog read-only test has been added to PR #309 with a trusted-main marker workflow, but has NOT been executed against account secrets yet. Offline tests green: https://github.com/teslaeco/WORLDIFACT/actions/runs/38857313185 .
 
-**BLOCKED / REQUIRED INPUT:** The TRELLIS.2 image-to-3D pipeline requires the gated Meta DINOv3 ViT-L/16 encoder model. The model page currently explicitly requires the owner to log in and accept contact-sharing/model access terms: https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m . At last verified GitHub Production screenshot, there was no HUGGING_FACE_HUB_TOKEN/HF_TOKEN secret. Until legitimate acceptance/download/weights SHA checks and a CUDA+DRTK/Binary SBOM build are performed, there is no reviewed immutable GPU image and therefore no real RunPod Serverless endpoint to provision. No paid inference, owner-photo R2 ingress, original ECOMECH GLB, or Halloween GLB exists. The test source images remain private. The old Oracle CPU backend has not been touched.
+**ACCESS RESOLVED / RUNTIME PENDING (later on 16 October):** The owner saved HF_TOKEN in GitHub Production and obtained access to the correct Meta DINOv3 ViT-L/16. Actual read-only workflow 38937552850 successfully verified gated file access at revision ea8dc2863c51be0a264bab82070e3e8836b02d51. Private native runtime build 38938779926 is in progress. Weight downloads, final image digest and real CUDA/DRTK execution still require successful build/test evidence; no real RunPod Serverless endpoint has been provisioned. No paid inference, owner-photo R2 ingress, original ECOMECH GLB, or Halloween GLB exists. The test source images remain private. The old Oracle CPU backend has not been touched.
 
 **SAFETY INCIDENT RESOLVED:** One manual-only RunPod workflow file was inadvertently written to trusted main as commit feb2684dbbc4e38993b5638595bf356aaddbc4b5. It had no push/paid-job trigger and lacked the installer script, so no endpoint/resource was created. It was promptly deleted from main with commit 623fe656a4aa58b6e9995871fadbd64e05d948e1; the reviewed file remains only in PR #309. Do not infer a successful deployment or credit spend from these commits.
 
