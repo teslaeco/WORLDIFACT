@@ -96,3 +96,12 @@ Prior Cloudflare version `dbd875c7-26d5-42c5-b6d9-bbe3f48708e8` is superseded by
 
 ## Preserved previous status
 Prior status is stored byte-for-byte in [CONTEST_STATUS.before-single-chess-exit-20261015.md](CONTEST_STATUS.before-single-chess-exit-20261015.md), original blob `ab5f26d4c64863ec3b68296cbcc139070d14f11f`. Earlier published status claims are historical and not proof that this specific bug fix is already live.
+
+
+## 2026-10-16 — GPU qualification capacity incident (VERIFIED / BLOCKED)
+
+- VERIFIED: [Paid qualification run #38868316200](https://github.com/teslaeco/WORLDIFACT/actions/runs/38868316200) passed SDK, CPU contracts and account preflight, but NVIDIA L4 allocation was refused: `There are no instances currently available`. Neither A100 nor H100 was dispatched. GPU GLB artifacts: **none**.
+- VERIFIED: the independent provider-postflight succeeded, reporting no remaining Pods, serverless endpoints or network volumes at inspection time.
+- UNKNOWN: current RunPod wallet, actual settled billing and subsequent provider capacity. Do not claim zero spend.
+- BLOCKED: paid GPU CUDA proof, 3 GLBs/PBR textures, R2 publication, Astra/TRELLIS.2 and public GPU gallery. PR #311 is still draft; production requires separate owner approval.
+- IMPLEMENTED: documented the actual failure and a no-retry, single-GPU qualification recovery gate in [GPU_QUALIFICATION_INCIDENT_20261016.md](GPU_QUALIFICATION_INCIDENT_20261016.md). No paid dispatch, resource creation, merge or deployment performed during this documentation change.
