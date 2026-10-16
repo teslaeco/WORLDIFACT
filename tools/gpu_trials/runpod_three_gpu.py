@@ -17,15 +17,22 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-# Runpod CLI imports this file by path, not as a repository-root package.
-# Keep the worker geometry module adjacent and importable after serialization.
+# CLI imports this file from the repository; the remote Flash runtime does not.
+# Add this path for local verification only; remote tasks receive pinned source.
 LOCAL_MODULE_DIR = Path(__file__).resolve().parent
 if str(LOCAL_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(LOCAL_MODULE_DIR))
 
 import runpod
 
-from procedural_models import TASKS, verified_model
+# The Flash v2 runtime materializes this app as /tmp/runpod_live_<hash>.py.
+# Do not import repository-adjacent files when the module itself is imported.
+# The complete SHA-pinned geometry source is handed to each remote task.
+TASKS = {
+    "L4": "chess-cube-512-led-rook",
+    "A100": "ecomech-asymmetric-mechanical-study",
+    "H100": "halloween-multi-asset-room-study",
+}
 
 APP_NAME = "worldifact-ephemeral-three-gpu-qualification-20261016"
 APPROVAL = "GO-WORLDIFACT-THREE-EPHEMERAL-GPU-PROCEDURAL-20261016"
@@ -164,6 +171,8 @@ def store_proven_trial(out_dir: Path, gpu_class: str, response: dict):
         raise Refused("WRONG_OR_UNVERIFIED_GPU_HARDWARE")
     if response.get("cudaMatrixChecksum") is None or response.get("cudaComputeMs") is None:
         raise Refused("GPU_MATH_NOT_CONFIRMED")
+    # Local Actions orchestrator only: remote module import must not depend on this file.
+    from procedural_models import verified_model
     raw = verified_model(response)
     out = out_dir / (TASKS[gpu_class] + ".glb")
     out.write_bytes(raw)
