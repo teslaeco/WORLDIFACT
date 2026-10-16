@@ -35,10 +35,11 @@ TASKS = {
 }
 
 APP_NAME = "worldifact-ephemeral-three-gpu-qualification-20261016"
-APPROVAL = "GO-WORLDIFACT-THREE-EPHEMERAL-GPU-PROCEDURAL-20261016"
+APPROVAL = "GO-WORLDIFACT-SPLIT-GPU-QUALIFICATION-20261016"
 MAX_TOTAL_PROJECTED_USD = 8.0
 MIN_REPORTED_WALLET_USD = 33.68
 ESTIMATED_MAX_MINUTES_EACH = 15
+SINGLE_GPU_BUDGETS_USD = {"L4": 1.50, "A100": 2.50, "H100": 4.00}
 GPU_CAPS = {"L4": 1.50, "A100": 3.50, "H100": 6.0}
 
 app = runpod.App(APP_NAME)
@@ -99,12 +100,15 @@ class Refused(Exception):
     pass
 
 
-def quote_catalog(data):
+def quote_catalog(data, targets=("L4", "A100", "H100")):
+    if not targets or len(targets) != len(set(targets)) or any(t not in GPU_CAPS for t in targets):
+        raise Refused("UNEXPECTED_GPU_TEST_ORDER_OR_DUPLICATE")
     if not isinstance(data, dict) or not isinstance(data.get("gpus"), list):
         raise Refused("GPU_POD_CATALOG_UNKNOWN")
     quote = {}
     names = {"L4": ("NVIDIA L4", "4090"), "A100": ("A100",), "H100": ("H100",)}
-    for model, permitted in names.items():
+    for model in targets:
+        permitted = names[model]
         prices = []
         for gpu in data["gpus"]:
             if not isinstance(gpu, dict) or not isinstance(gpu.get("id"), str):
@@ -132,10 +136,12 @@ def quote_catalog(data):
     exposure = sum(quote.values()) * ESTIMATED_MAX_MINUTES_EACH / 60
     if exposure > MAX_TOTAL_PROJECTED_USD or exposure >= MIN_REPORTED_WALLET_USD / 2:
         raise Refused("PROJECTED_GPU_TEST_EXPOSURE_TOO_HIGH")
+    if len(targets) == 1 and exposure > SINGLE_GPU_BUDGETS_USD[targets[0]]:
+        raise Refused("SINGLE_GPU_BUDGET_EXCEEDED")
     return {"hourly": quote, "estimated15MinutesEachUsd": round(exposure, 4)}
 
 
-def live_quote(key: str) -> dict:
+def live_quote(key: str, targets=("L4", "A100", "H100")) -> dict:
     if not isinstance(key, str) or len(key) < 12:
         raise Refused("MISSING_SERVER_ONLY_RUNPOD_API_KEY")
     url = ("https://api.runpod.io/v2/catalog/gpus?"
@@ -154,7 +160,7 @@ def live_quote(key: str) -> dict:
     except (urllib.error.URLError, TimeoutError):
         raise Refused("RUNPOD_POD_CATALOG_UNAVAILABLE") from None
     try:
-        return quote_catalog(json.loads(data))
+        return quote_catalog(json.loads(data), targets=targets)
     except (ValueError, TypeError, KeyError):
         raise Refused("INVALID_PROVIDER_CATALOG") from None
 
@@ -202,9 +208,13 @@ def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_q
         raise Refused("NO_ONE_TIME_OWNER_APPROVAL")
     raw_targets = os.getenv("WORLDIFACT_GPU_TARGETS", "L4,A100,H100")
     targets = raw_targets.split(",")
-    if targets != ["L4", "A100", "H100"]:
+    if targets not in (["L4"], ["A100"], ["H100"], ["L4", "A100", "H100"]):
         raise Refused("UNEXPECTED_GPU_TEST_ORDER_OR_DUPLICATE")
-    quote = quotefn(os.environ.get("RUNPOD_API_KEY", ""))
+    if allowed is not None and allowed != targets:
+        raise Refused("UNEXPECTED_TARGET_SELECTION")
+    # Quote only the hardware we are about to provision. No paid fallback to
+    # a different class, and no capacity dependency on the other GPU classes.
+    quote = quotefn(os.environ.get("RUNPOD_API_KEY", ""), targets=tuple(targets))
     # Source is verified locally before any paid GPU dispatch and again on each worker.
     content = (LOCAL_MODULE_DIR / "procedural_models.py").read_bytes()
     blob = b"blob " + str(len(content)).encode("ascii") + b"\0" + content
@@ -212,8 +222,6 @@ def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_q
     if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
         raise Refused("UNREVIEWED_LOCAL_GEOMETRY_SOURCE")
     geometry_source = content.decode("utf-8")
-    if allowed is not None and allowed != targets:
-        raise Refused("UNEXPECTED_TARGET_SELECTION")
     out_dir = Path("gpu-trial-artifacts")
     out_dir.mkdir(exist_ok=False)
     functions = {"L4": l4_chess_512_trial, "A100": a100_ecomech_trial,
@@ -237,7 +245,7 @@ def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_q
             print(json.dumps({"gpuClass": name,
                               "status": "FAILED_NO_AUTOMATIC_PAID_RETRY"}), flush=True)
             raise
-    print(json.dumps({"completed": 3, "mode": "PROCEDURAL_NOT_NEURAL",
+    print(json.dumps({"completed": len(targets), "mode": "PROCEDURAL_NOT_NEURAL",
                       "quoted15MinuteMaximum": quote["estimated15MinutesEachUsd"],
                       "permanentStorageCreated": False}), flush=True)
 
