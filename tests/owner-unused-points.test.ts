@@ -1,7 +1,12 @@
-import { test } from 'node:test'
+import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash, createHmac } from 'node:crypto'
 import { ownerUnusedPointsApi, OWNER_UNUSED_POINTS_PATH } from '../server/ownerUnusedPoints.ts'
+
+// This one-time maintenance endpoint deliberately expired at 2026-10-16T00:00Z.
+// Replay its historical authorized window ONLY within this isolated test process.
+// Do not extend the production deadline, credentials, or owner entitlement.
+mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-15T12:00:00.000Z') })
 
 const ID='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const OTHER='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
