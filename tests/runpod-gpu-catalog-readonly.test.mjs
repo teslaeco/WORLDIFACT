@@ -59,7 +59,7 @@ test('unknown/nonJSON/extra-large GPU provider response never claims verified',a
    if(getResult===cases[2]){assert.equal(r.verified,true);assert.equal(r.availableGPUs.length,0)}
    else {assert.equal(r.verified,false);assert.equal(r.reason,'GPU_CATALOG_UNVERIFIED')}
    assert.ok(!JSON.stringify(r).includes('should not leak'))
- })
+ }
 })
 test('untrusted paginated inventory blocks catalog read',async()=>{
  const m=mock({...docs,'/v2/serverless':{endpoints:[],pagination:{hasNextPage:true,nextCursor:'secret'}}})
