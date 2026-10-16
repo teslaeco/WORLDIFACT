@@ -1,3 +1,13 @@
+## 2026-10-16 — Commercial UV raster replacement implemented, pinned upstream CI verified (GPU pending)
+
+**IMPLEMENTED IN DRAFT PR #305 / NOT DEPLOYED:** Own `worldifact_drtk_uv.py` bridge maps the original 4-channel NVDiffRaster interface used by Microsoft's MIT postprocessor to the MIT DRTK raster/interpolate API without packaging NVIDIA noncommercial `nvdiffrast` or `nvdiffrec`. Strict `trellis_mit_patch.py` verifies Microsoft source commit `75fbf0183001ed9876c8dbb35de6b68552ee08bd` and permits only one deterministic import change. The Dockerfile now demands MIT DRTK commit `43c3095d01d0ff435c798518e97e387c784b567f` and refuses the noncommercial modules. UV coordinate/face-ID safety contracts added.
+
+**VERIFIED BY CI:** Pure CPU module tests + real pinned Microsoft upstream import patch + original Blender fixture export passed at https://github.com/teslaeco/WORLDIFACT/actions/runs/38852190275 . This proves the source patch and file pipeline, NOT DRTK CUDA raster parity, the image/weights licenses, true 3D fidelity or a priced RunPod endpoint. Current GPU image digest/rate/model bundle still UNKNOWN; existing Oracle/customer generator remains unchanged.
+
+**BLOCKED:** Commercial third-party binary/checkpoint SBOM, accepted Meta DINOv3 terms, GPU runtime measurement, image build, endpoint provisioning and real reference jobs. No paid calls or real ECOMECH/Halloween output. Separate PR #308 now stages offline independent Halloween GLB composition, but its inputs must be real source-generated objects. **NO-GO to merge/activate paid GPU.**
+
+---
+
 ## 2026-10-16 — LIVE auth and R2 CAS VERIFIED; native GPU still license BLOCKED
 
 **VERIFIED** one-time trusted main run https://github.com/teslaeco/WORLDIFACT/actions/runs/38818010309 : RunPod REST v2 authenticated (0 endpoints, 0 network volumes, 0 Pods, 0 billed GPU requests), R2 conditional create/duplicate-412/get/delete passed, no user objects touched. Owner's R2 HTTPS endpoint is fixed, GitHub credentials work. **NOT DEPLOYED**: no endpoint or container image, no LIVE original ECOMECH, no Oracle change. Owner's GPU-only-when-generating constraint is asserted in offline profile tests (Active=0, Max=1, idle=5s).
