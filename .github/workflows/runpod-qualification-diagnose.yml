@@ -29,7 +29,7 @@ jobs:
             if(!/^[a-z0-9]{8,30}$/.test(id))continue;
             let stream='';
             try{
-              const r=await fetch(base+'/workers/'+id+'/logs?source=both&tail=100',{headers,redirect:'error',signal:AbortSignal.timeout(4000)});
+              const r=await fetch(base+'/workers/'+id+'/logs?tail=100',{headers:{...headers,Accept:'text/event-stream'},redirect:'error',signal:AbortSignal.timeout(4000)});
               if(!r.ok){console.log(JSON.stringify({worker:id,logStatus:r.status}));continue}
               const reader=r.body.getReader();
               try{while(stream.length<120000){const v=await reader.read();if(v.done)break;stream+=new TextDecoder().decode(v.value)}}finally{await reader.cancel().catch(()=>{})}
