@@ -1,3 +1,13 @@
+## 2026-10-16 — ASTRA P0 rescue execution order and conservative RunPod GPU pricing
+
+- **IMPLEMENTED / NOT YET PAID-EXECUTED:** A detailed, English execution directive for engineering/Codex/Astra is in [ASTRA_GPU_P0_EXECUTION_ORDER_20261016.md](ASTRA_GPU_P0_EXECUTION_ORDER_20261016.md). It is an instruction artifact and was **NOT submitted as an actual Astra API request**. The documented official model ID is `gpt-6-astra` (https://developers.openai.com/api/docs/models/gpt-6-astra); no inference cost/response is claimed.
+- **IMPLEMENTED:** On PR #316 the GPU quote now audits **every** matching eligible Secure Pod SKU and admits the **highest** available price, rather than the cheapest. Any eligible fallback candidate with unknown or over-cap price blocks dispatch. L4/RTX4090 must have reported memory >=24 GB; A100 and H100 >=80 GB. New regression tests explicitly catch the former understated fallback quote bug.
+- **SAFETY:** Old wallet screenshot 33.68 USD is historical evidence only. It is not a live balance check or actual billing receipt. The quote now explicitly reports `walletVerified:false` and `actualBilledCostUsd:null`. Limits in the operator are projected admissions, NOT hard billing caps.
+- **EXECUTED HERE:** These edits were committed to GitHub and automatically trigger the repo's existing CPU/SDK CI; latest job results must be read from Actions and linked before marking VERIFIED. No RunPod management tool/session is connected; prior provider API writes for paid GPU were blocked by host permissions. This change does **not** create or run any new billed GPU workflow, endpoint, Pod or network volume; it does not deploy to Cloudflare or publish unverified GLBs.
+- **PENDING / BLOCKED:** Resolve legitimate authenticated RunPod execution, obtain current account billing/stock, execute a separately permitted one-GPU stage, retain valid CUDA/GLB evidence, postflight and then progress through A100/H100. Keep PR #311 staging-only. No bypass of tool blocks.
+
+---
+
 ## 2026-10-16 — GPU qualification split into independent one-device batches (IMPLEMENTED, NOT DISPATCHED)
 
 - **VERIFIED BASELINE:** `main` remains `b6f367cd62b1253a45ca5e8a34ae9326e28fd6a7`; GPU persistence fix is in draft [PR #315](https://github.com/teslaeco/WORLDIFACT/pull/315). The third earlier paid attempt [#38879916050](https://github.com/teslaeco/WORLDIFACT/actions/runs/38879916050) returned from a GPU worker but failed to persist GLB. Postflight confirmed no billable Pods/endpoints/network volumes left at its inspection time. GPU artifacts from that run: NONE. Actual invoice and wallet remain UNKNOWN.
