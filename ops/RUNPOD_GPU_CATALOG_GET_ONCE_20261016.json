@@ -1,0 +1,1 @@
+{"revision":"worldifact-runpod-gpu-readiness-v1","operations":["GET /v2/serverless","GET /v2/network-volumes","GET /v2/pods","GET /v2/catalog/gpus?include=AVAILABILITY&product=SERVERLESS&count=1"],"paidGpuAuthorized":false,"createResources":false}
