@@ -10,6 +10,8 @@ export const ORIGIN = 'https://api.runpod.io'
 export const ENDPOINT_NAME = 'WORLDIFACT-3D-FLEX'
 export const IMAGE_PATTERN = /^ghcr\.io\/teslaeco\/worldifact-runpod3d@sha256:[a-f0-9]{64}$/
 export const COST_CEILING_USD_PER_HOUR = 3.00
+// Scratch storage exists on a running Serverless worker only; persistent output goes to private R2.
+export const EPHEMERAL_WORKER_DISK_GB = 100
 
 export class Refused extends Error {
   constructor(code) { super(code); this.name = 'RunPodProvisionRefused'; this.code = code }
@@ -63,7 +65,7 @@ export function requestedEndpoint(image, pool) {
     scaling: { type: 'QUEUE_DELAY', queueDelay: 4 },
     timeout: 120000,
     flashboot: 'OFF',
-    disk: 20,
+    disk: EPHEMERAL_WORKER_DISK_GB,
     dataCenterIds: [],
     mounts: { network: [], global: [] },
     env: { ENABLE_RUNPOD_WORKER: 'false' }
@@ -79,7 +81,10 @@ function endpointMatches(current, planned) {
     current.gpu?.count === 1 &&
     Array.isArray(current.gpu?.pools) &&
     JSON.stringify(current.gpu.pools) === JSON.stringify(planned.gpu.pools) &&
-    current.env?.ENABLE_RUNPOD_WORKER === 'false'
+    current.env?.ENABLE_RUNPOD_WORKER === 'false' &&
+    current.disk === EPHEMERAL_WORKER_DISK_GB &&
+    Array.isArray(current.mounts?.network) && current.mounts.network.length === 0 &&
+    Array.isArray(current.mounts?.global) && current.mounts.global.length === 0
 }
 const idPattern = /^[a-zA-Z0-9_-]{5,64}$/
 
