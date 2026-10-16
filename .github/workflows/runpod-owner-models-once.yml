@@ -1,0 +1,115 @@
+name: Generate ECOMECH and Halloween on native GPU — one batch, maximum USD 4
+on:
+  pull_request:
+    paths: ['tools/runpod_owner_models/**', 'scripts/runpod-owner-models-once.mjs', 'tests/runpod-owner-models.test.mjs', 'tests/test_owner_model_output_scope.py', 'ops/RUNPOD_OWNER_MODEL_JOBS_20261016.json', '.github/workflows/runpod-owner-models-once.yml']
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Generate each fixed owner model once, or only recover already saved outputs.'
+        type: choice
+        required: true
+        options: [generate, download_existing]
+        default: generate
+      confirmation:
+        description: 'At most two Astra plans and one sequential GPU worker; no automatic paid retries.'
+        type: choice
+        required: true
+        options: [TWO-OWNER-MODELS-MAX-4USD]
+        default: TWO-OWNER-MODELS-MAX-4USD
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-owner-models-native
+  cancel-in-progress: false
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24'}
+      - run: python -m pip install cryptography==50.0.2
+      - run: node --test tests/runpod-owner-models.test.mjs tests/runpod-provision-on-demand.test.mjs
+      - run: python -m unittest discover -s tests -p test_owner_model_output_scope.py
+      - run: python -m py_compile tools/runpod_owner_models/*.py
+  execute:
+    needs: review
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && inputs.confirmation == 'TWO-OWNER-MODELS-MAX-4USD'
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24'}
+      - name: Require exact reviewed generation, budget, source and output scope
+        id: guard
+        run: |
+          test "$(git hash-object tools/runpod_owner_models/prepare.py)" = '16aa6c03b94b73c8873514e466faa8c9c52e68d6'
+          test "$(git hash-object tools/runpod_owner_models/claim_dispatch.py)" = '7ab15ac1e171232e078881b413a7190ae52641c1'
+          test "$(git hash-object tools/runpod_owner_models/collect.py)" = 'f8ed69dae7ae1c5dc8e95a01364a8f77bd747a5a'
+          test "$(git hash-object scripts/runpod-owner-models-once.mjs)" = '67a9d9548836090367faa78ab34468321bc55a38'
+          test "$(git hash-object ops/RUNPOD_OWNER_MODEL_JOBS_20261016.json)" = '0dfab4dd21e686d4ada5fa20a57420f540f347be'
+          test "$(git hash-object tools/runpod_worker/contracts.py)" = '575abc238119b4b5508ace3d136037777edb38dd'
+          test "$(git hash-object tools/runpod_worker/storage.py)" = '6f5e54e8b47f77ad646b90994fb4a836ce6ea07c'
+          test "$(git hash-object scripts/runpod-provision-on-demand.mjs)" = 'ad7b63aac6e47c0ded62f50c25f0e7a94d53f822'
+          test "$(git hash-object ops/RUNPOD_OWNER_REFERENCES_20261016.json)" = 'd7f3608a917600c06f94343000e968d3d07af2b7'
+      - name: Install private storage and encryption clients
+        run: python -m pip install boto3==1.43.66 cryptography==50.0.2 Pillow==12.3.0
+      - name: Install CPU-only image segmentation
+        if: inputs.action == 'generate'
+        run: |
+          python -m pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install transformers==4.57.1 huggingface-hub==0.36.0 numpy==2.3.5
+      - name: Verify private sources, prepare masks and request two bounded Astra plans
+        if: inputs.action == 'generate'
+        timeout-minutes: 8
+        env:
+          ARTIFACT_ACCESS_KEY_ID: ${{ secrets.ARTIFACT_ACCESS_KEY_ID }}
+          ARTIFACT_SECRET_ACCESS_KEY: ${{ secrets.ARTIFACT_SECRET_ACCESS_KEY }}
+          ARTIFACT_S3_ENDPOINT: ${{ vars.ARTIFACT_S3_ENDPOINT }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+          ARTIFACT_REGION: ${{ vars.ARTIFACT_REGION }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: python tools/runpod_owner_models/prepare.py
+      - name: Generate the two models on one fixed scale-to-zero endpoint
+        if: inputs.action == 'generate'
+        timeout-minutes: 43
+        env:
+          OWNER_MODEL_CONFIRMATION: ${{ inputs.confirmation }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          ARTIFACT_ACCESS_KEY_ID: ${{ secrets.ARTIFACT_ACCESS_KEY_ID }}
+          ARTIFACT_SECRET_ACCESS_KEY: ${{ secrets.ARTIFACT_SECRET_ACCESS_KEY }}
+          ARTIFACT_S3_ENDPOINT: ${{ vars.ARTIFACT_S3_ENDPOINT }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+          ARTIFACT_REGION: ${{ vars.ARTIFACT_REGION }}
+        run: node scripts/runpod-owner-models-once.mjs
+      - name: Independent cleanup of an unsuccessful batch
+        if: always() && steps.guard.outcome == 'success' && hashFiles('owner-model-endpoint-state.json') != ''
+        timeout-minutes: 2
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: node scripts/runpod-owner-models-once.mjs --cleanup
+      - name: Collect saved outputs into an encrypted download packet
+        if: always() && steps.guard.outcome == 'success'
+        timeout-minutes: 2
+        env:
+          ARTIFACT_ACCESS_KEY_ID: ${{ secrets.ARTIFACT_ACCESS_KEY_ID }}
+          ARTIFACT_SECRET_ACCESS_KEY: ${{ secrets.ARTIFACT_SECRET_ACCESS_KEY }}
+          ARTIFACT_S3_ENDPOINT: ${{ vars.ARTIFACT_S3_ENDPOINT }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+          ARTIFACT_REGION: ${{ vars.ARTIFACT_REGION }}
+        run: python tools/runpod_owner_models/collect.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && steps.guard.outcome == 'success'
+        with:
+          name: private-owner-model-results-${{ github.run_id }}
+          path: |
+            owner-model-results.sealed.json
+            owner-model-safe-receipt.json
+          retention-days: 7
+          if-no-files-found: error
