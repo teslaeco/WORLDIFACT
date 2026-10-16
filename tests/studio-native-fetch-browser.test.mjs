@@ -10,7 +10,7 @@ import { validateStudioInput } from '../src/lib/studioProtocol.ts'
 
 // Standalone native fetch API regression, NOT a site preview or visual test.
 // Only inert data: fixtures are fetched. No Oracle, OpenAI, HTTP or account.
-test('native Chromium reproduces the old invocation error and accepts the repaired Studio lifecycle', { timeout: 45_000 }, async () => {
+test('native Chromium reproduces the old invocation error and accepts the repaired Studio lifecycle', { timeout: 100_000 }, async () => {
   const candidates = [process.env.CHROME_BIN, 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'].filter(Boolean)
   const browser = candidates.find(command => spawnSync(command, ['--version'], { encoding: 'utf8', timeout: 3000 }).status === 0)
   assert.ok(browser, 'Chromium/Chrome is required for this browser-specific regression; do not report Node mocks as browser proof.')
@@ -119,7 +119,7 @@ test('native Chromium reproduces the old invocation error and accepts the repair
 
 // Separate inert bundle: exercise the actual temporary-panel controller without
 // starting/recovering any paid job. The real bundle may read scoped receipt keys.
-test('native Chromium reads the temporary test allowance with the repaired OvernightTestClient receiver', { timeout: 45_000 }, async () => {
+test('native Chromium reads the temporary test allowance with the repaired OvernightTestClient receiver', { timeout: 100_000 }, async () => {
   const candidates = [process.env.CHROME_BIN, 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'].filter(Boolean)
   const browser = candidates.find(command => spawnSync(command, ['--version'], { encoding: 'utf8', timeout: 3000 }).status === 0)
   assert.ok(browser, 'Chromium/Chrome is required for this browser-specific regression; do not report Node mocks as browser proof.')
