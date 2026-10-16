@@ -1,0 +1,16 @@
+# Compatible with the immutable official torch 2.6.0 / CUDA 12.4 image.
+-r ../runpod_worker/requirements.txt
+setuptools==75.8.0
+ninja==1.13.0
+transformers==4.57.1
+huggingface-hub==0.36.0
+opencv-python-headless==4.11.0.86
+scipy==1.16.3
+imageio==2.37.2
+imageio-ffmpeg==0.6.0
+easydict==1.13
+tqdm==4.67.1
+zstandard==0.25.0
+einops==0.8.1
+torch==2.6.0
+torchvision==0.21.0

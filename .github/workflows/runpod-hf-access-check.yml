@@ -1,0 +1,32 @@
+name: Runpod DINOv3 access — read-only, no GPU
+on:
+  push:
+    branches: [feat/runpod-trellis-runtime-20261016]
+    paths:
+      - scripts/runpod-hf-preflight.py
+      - .github/workflows/runpod-hf-access-check.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-hf-access-check
+  cancel-in-progress: false
+jobs:
+  access:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/feat/runpod-trellis-runtime-20261016'
+    runs-on: ubuntu-24.04
+    environment: Production
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check access to exact DINOv3 ViT-L weights without downloading them
+        run: python3 scripts/runpod-hf-preflight.py
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: runpod-dinov3-access-${{ github.sha }}
+          path: runpod-hf-access-proof.json
+          retention-days: 7
