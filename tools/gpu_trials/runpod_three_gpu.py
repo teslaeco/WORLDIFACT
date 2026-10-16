@@ -37,7 +37,8 @@ TASKS = {
 APP_NAME = "worldifact-ephemeral-three-gpu-qualification-20261016"
 APPROVAL = "GO-WORLDIFACT-SPLIT-GPU-QUALIFICATION-20261016"
 MAX_TOTAL_PROJECTED_USD = 8.0
-MIN_REPORTED_WALLET_USD = 33.68
+# Historical owner screenshot only; NEVER treat this as verified current credits.
+HISTORICAL_WALLET_REFERENCE_USD = 33.68
 ESTIMATED_MAX_MINUTES_EACH = 15
 SINGLE_GPU_BUDGETS_USD = {"L4": 1.50, "A100": 2.50, "H100": 4.00}
 GPU_CAPS = {"L4": 1.50, "A100": 3.50, "H100": 6.0}
@@ -109,36 +110,52 @@ def quote_catalog(data, targets=("L4", "A100", "H100")):
     names = {"L4": ("NVIDIA L4", "4090"), "A100": ("A100",), "H100": ("H100",)}
     for model in targets:
         permitted = names[model]
+        # The SDK may select any available matching SKU. Verify the *entire*
+        # eligible pool rather than approving the cheapest candidate only.
+        # A single unknown/over-cap secure price must stop paid dispatch.
         prices = []
         for gpu in data["gpus"]:
             if not isinstance(gpu, dict) or not isinstance(gpu.get("id"), str):
                 continue
-            if model == "L4" and not (gpu["id"] == permitted[0] or "4090" in gpu["id"].upper()):
+            gpu_id = gpu["id"].upper()
+            if model == "L4" and not (
+                gpu_id == "NVIDIA L4" or gpu_id == "NVIDIA GEFORCE RTX 4090"
+            ):
                 continue
-            if model != "L4" and not any(p in gpu["id"].upper() for p in permitted):
+            if model != "L4" and not any(name in gpu_id for name in permitted):
                 continue
-            if model in ("A100", "H100") and gpu.get("memory", 0) < 80:
-                continue
-            value = gpu.get("price", {}).get("secure")
-            if not isinstance(value, (int, float)) or not math.isfinite(value):
-                continue
-            if not 0 < value <= GPU_CAPS[model]:
+            memory = gpu.get("memory")
+            if (not isinstance(memory, (int, float)) or isinstance(memory, bool)
+                    or memory < (24 if model == "L4" else 80)):
                 continue
             if gpu.get("availability") not in ("HIGH", "MEDIUM", "LOW"):
                 continue
-            if not any(x.get("availability") in ("HIGH", "MEDIUM", "LOW")
-                       for x in gpu.get("dataCenters", [])):
+            centers = gpu.get("dataCenters", [])
+            if not isinstance(centers, list) or not any(
+                isinstance(center, dict)
+                and center.get("availability") in ("HIGH", "MEDIUM", "LOW")
+                for center in centers
+            ):
                 continue
+            price = gpu.get("price")
+            value = price.get("secure") if isinstance(price, dict) else None
+            if (not isinstance(value, (int, float)) or isinstance(value, bool)
+                    or not math.isfinite(value) or not 0 < value <= GPU_CAPS[model]):
+                raise Refused(f"UNPRICED_OR_OVER_CAP_ELIGIBLE_{model}_SKU")
             prices.append(float(value))
         if not prices:
             raise Refused(f"NO_VERIFIED_POD_{model}_HARDWARE_OR_PRICE")
-        quote[model] = min(prices)
+        quote[model] = max(prices)  # worst-case available SKU, not the cheapest
     exposure = sum(quote.values()) * ESTIMATED_MAX_MINUTES_EACH / 60
-    if exposure > MAX_TOTAL_PROJECTED_USD or exposure >= MIN_REPORTED_WALLET_USD / 2:
+    # Catalog rates are estimates, not settled charges or a wallet lookup.
+    # The hard runtime stop belongs to the one-shot Actions operator.
+    if exposure > MAX_TOTAL_PROJECTED_USD:
         raise Refused("PROJECTED_GPU_TEST_EXPOSURE_TOO_HIGH")
     if len(targets) == 1 and exposure > SINGLE_GPU_BUDGETS_USD[targets[0]]:
         raise Refused("SINGLE_GPU_BUDGET_EXCEEDED")
-    return {"hourly": quote, "estimated15MinutesEachUsd": round(exposure, 4)}
+    return {"hourly": quote, "estimated15MinutesEachUsd": round(exposure, 4),
+            "quoteBasis": "WORST_CASE_AVAILABLE_SECURE_POD_SKU",
+            "walletVerified": False, "actualBilledCostUsd": None}
 
 
 def live_quote(key: str, targets=("L4", "A100", "H100")) -> dict:
