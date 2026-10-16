@@ -81,7 +81,7 @@ jobs:
           # The first SIGINT gives SDK a chance to shut down ephemeral Pods.
           # Job timeout is independent. Never run a permanent Pod or GPU keepalive.
           timeout --signal=INT --kill-after=120s 35m \
-            rp flash dev tools/gpu_trials/runpod_three_gpu.py
+            rp flash dev tools/gpu_trials/runpod_three_gpu.py --once
       - name: Upload only genuinely generated and SHA-verified GLBs (if present)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
