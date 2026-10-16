@@ -14,6 +14,21 @@ TRIALS = importlib.import_module('tools.gpu_trials.runpod_three_gpu')
 
 
 class SDKContractTests(unittest.TestCase):
+    def test_cli_discovery_imports_standalone_runner_without_repo_package_path(self):
+        import subprocess, sys
+        runner = Path(TRIALS.__file__).resolve()
+        with tempfile.TemporaryDirectory() as work:
+            program = (
+                "import importlib.util; p=" + repr(str(runner)) + "; "
+                "s=importlib.util.spec_from_file_location('runpod_gpu_cli_import',p); "
+                "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+                "assert m.APPROVAL.startswith('GO-WORLDIFACT-'); "
+                "assert callable(m.l4_chess_512_trial.remote)"
+            )
+            process = subprocess.run([sys.executable,'-c',program],cwd=work,
+                capture_output=True,text=True,timeout=20)
+            self.assertEqual(process.returncode,0,process.stderr[-800:])
+
     def test_runpod_2_app_and_ephemeral_task_handles_are_defined(self):
         import runpod
         self.assertTrue(hasattr(runpod, 'App'))
