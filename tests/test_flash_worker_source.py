@@ -35,7 +35,7 @@ def isolated_worker(name: str):
 class FlashWorkerTransport(unittest.TestCase):
     def test_source_is_exact_git_blob_pinned_inside_worker_and_locally(self):
         raw = GEOMETRY.read_bytes()
-        actual = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw).hexdigest()
+        actual = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
         self.assertEqual(actual, PINNED_GEOMETRY_BLOB)
 
     def test_all_remote_functions_refuse_modified_geometry_before_cuda(self):
