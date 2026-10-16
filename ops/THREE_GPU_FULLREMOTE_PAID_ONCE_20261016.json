@@ -1,0 +1,29 @@
+{
+  "revision": "worldifact-three-gpu-procedural-one-time-v1",
+  "tasks": [
+    "L4",
+    "A100",
+    "H100"
+  ],
+  "maxEstimatedUsd": 8,
+  "requiresNoPersistentGPU": true,
+  "createsPersistentVolumes": false,
+  "originalOwnerPhotosUsed": false,
+  "customerGenerationEnabled": false,
+  "runpodSdk": "2.0.0rc1",
+  "automaticPaidRetries": false,
+  "priorAttemptRunId": 38867359962,
+  "priorAttemptProviderGpuStarted": false,
+  "secondRunId": 38868316200,
+  "secondRunL4StockUnavailable": true,
+  "secondRunResourcesCleared": true,
+  "oneTimeBranch": "ops/gpu-paid-fullremote-20261016",
+  "ownerSpendApproval": true,
+  "flashRemotePackagingFix": true,
+  "priorPaidRunId": 38877860327,
+  "priorPodTerminated": true,
+  "secondFixRunId": 38879132929,
+  "secondFixPodTerminated": true,
+  "moduleLevelImportFix": true,
+  "isolatedImportCiRunId": 38879725353
+}
