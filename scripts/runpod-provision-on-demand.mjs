@@ -78,7 +78,8 @@ function endpointMatches(current, planned) {
     current.workers?.idleTimeout === 5 &&
     current.gpu?.count === 1 &&
     Array.isArray(current.gpu?.pools) &&
-    JSON.stringify(current.gpu.pools) === JSON.stringify(planned.gpu.pools)
+    JSON.stringify(current.gpu.pools) === JSON.stringify(planned.gpu.pools) &&
+    current.env?.ENABLE_RUNPOD_WORKER === 'false'
 }
 const idPattern = /^[a-zA-Z0-9_-]{5,64}$/
 
