@@ -1,3 +1,42 @@
+## 2026-10-16 — Third paid RunPod attempt #38879916050: remote task returned, local validator failed
+
+- **VERIFIED**: [Actions run #38879916050](https://github.com/teslaeco/WORLDIFACT/actions/runs/38879916050), GPU job `116903891891`, passed source-hash/CPU/Flash import regression checks and provider inventory preflight. RunPod provisioned Pod `ry9hic5potmw` and logged `worker ready`, then `✓ l4_chess_512_trial() in 2m33s`. This establishes that the **remote task returned**; it is **NOT** a retained CUDA certificate or model file.
+- **FAILED POST-RETURN PERSISTENCE**: Trusted Actions operator then logged `FAILED_NO_AUTOMATIC_PAID_RETRY` followed by `No module named 'procedural_models'`. The source had been fixed inside the GPU function and at module import, but the local `store_proven_trial` still dynamically imported an adjacent file from a generated runtime path. Hence **zero downloadable GPU GLB artifacts**; A100/H100 were not run. Never conflate remote worker completion with an independent artifact proof.
+- **VERIFIED cleanup**: provider-postflight job `116905065606` passed with zero Pods, endpoints or network volumes immediately after. Provider wallet and bill remain **UNKNOWN**.
+- **IMPLEMENTED / VERIFIED OFFLINE CI**: Pass the exact pinned geometry source to local GLB validation/persistence and compile its verified validator in memory instead of importing a sibling module. Add a regression that imports and runs the entire local return/persistence path from an isolated `/tmp/runpod_live_isolated.py` lacking `procedural_models.py`. Simulated CPU fixtures MUST NOT be published as GPU results. The isolated full module-and-persistence regression passed in [CPU/SDK Actions #38880575275](https://github.com/teslaeco/WORLDIFACT/actions/runs/38880575275), and the updated branch CPU/SDK run #38880674089 passed as well. **No fourth paid GPU execution has been completed or claimed**. A future separate operator-authorized dispatch is required; automatic paid retry remains prohibited.
+- **NO PRODUCTION RELEASE**: PR #311 remains evidence-gated, with no real GPU GLB yet; all customer/Stripe/Oracle/R2 resources and six portals unchanged.
+
+---
+
+## 2026-10-16 — Paid RunPod qualification #38879132929: remote script import failure, automatic teardown VERIFIED
+
+- **VERIFIED:** [Actions #38879132929](https://github.com/teslaeco/WORLDIFACT/actions/runs/38879132929) / job `116901314038` passed all offline contract/Flash source-isolation tests and zero-resource provider preflight, then provisioned transient Pod `o8zn2ip56njh` for RTX4090/L4. The remote runtime failed before CUDA with `ModuleNotFoundError: No module named 'procedural_models'` at line 28 of `/tmp/runpod_live_8df613e70abf5d6d.py`. The bug was the **module-level import** inherited by the temporary copied script, distinct from the previous missing in-body import. A100 and H100 were not attempted; artifact inventory was empty, **zero GPU GLBs and zero CUDA evidence**.
+- **VERIFIED:** Independent postflight job `116902307581` succeeded with zero RunPod Pods/endpoints/network volumes at inspection time. Settled spend/wallet **UNKNOWN**, as GitHub CI does not expose RunPod invoice balance.
+- **IMPLEMENTED OFFLINE FIX (NOT GPU-VERIFIED):** Remove the `procedural_models` import from module top-level; keep bounded, SHA-pinned source transferred as each task argument; dynamically load the local validator only when storing a returned result in the trusted GitHub operator. Regression now imports the entire copied `runpod_live_isolated.py` under a temporary directory without a neighboring geometry module; assert task handles load and top-level imports are absent. Do not authorize another paid run until this exact regression and complete CI PASS.
+- **NO PRODUCTION DEPLOY / NO LIBRARY OR R2 WRITES:** Existing six portals, customer billing, Stripe, Oracle and gallery release remain unchanged. Gallery #311 still refuses fake or absent evidence; the two paid Pod attempts today did not complete real generation.
+
+---
+
+## 2026-10-16 — Owner-approved paid RunPod attempt #38877860327: real Pod, missing remote module (NO GPU GLB)
+
+**VERIFIED:** [Paid Actions run #38877860327](https://github.com/teslaeco/WORLDIFACT/actions/runs/38877860327), three-gpu job `116897151962`. Owner-authorized branch-only one-use marker passed exact-source, SDK and account inventory checks. RunPod provisioned temporary Pod `7liuqxk897dk` for the economical RTX4090/L4 selection; remote runtime then failed after about 82s with `ModuleNotFoundError: No module named 'procedural_models'` in a `runpod_live_*.py` worker. This is the Flash dev isolation contract: only decorated task bodies are shipped, not local module files. **No CUDA proof, model GLB, reference-image reconstruction or GPU artifact was created.** A100/H100 were not called. No automatic paid retry occurred.
+
+**VERIFIED CLEANUP:** Independent postflight job `116897884449` reported 0 remaining Pods, serverless endpoints and network volumes after this incident. Actual provider charges and wallet balance remain **UNKNOWN** (check RunPod billing, do not claim free execution).
+
+**IMPLEMENTED FIX / NOT YET LIVE:** The reviewed procedural source is now explicitly passed as an argument to each isolated Flash task; each remote worker and local dispatcher reject any content outside the exact pinned Git blob `91d87511b507b72652422ba7839ec28f0fcb1c93` before Python execution or paid dispatch. New offline tests isolate each decorated worker body, reject tampering and prove valid source reaches the CUDA-availability gate. No persistent GPU or network volumes, no automatic retries, no Oracle/Stripe/customer changes, no production release. A subsequent independent owner-approved single-use run and verified provider receipt remain required before claiming GPU success.
+
+---
+
+## 2026-10-16 — Real paid RunPod trials: L4 no capacity; economical 4090 fallback prepared
+
+**VERIFIED SECOND ATTEMPT FAILURE (NO REAL GPU MODEL):** https://github.com/teslaeco/WORLDIFACT/actions/runs/38868316200 passed source/secret/RunPod inventory checks and imported official `rp flash dev --once` app correctly. The first task tried to provision NVIDIA L4, but RunPod returned **"There are no instances currently available"** after 417 ms. A100 and H100 were not launched because the pipeline stopped on the first failed GPU. RunPod independent postflight confirmed **0 Pods, 0 Serverless endpoints, 0 network volumes**. No real paid-GPU GLB or published site model was created. Invoice/wallet balance not independently checked.
+
+**IMPLEMENTED THIRD-ATTEMPT PREPARATION / NOT YET DISPATCHED:** A separate controlled branch selects `gpu=["4090","L4"]` for the economical Chess Cube rook task so the official SDK can choose available RTX 4090 24GB or L4 24GB. It strictly reads REAL POD Secure catalog prices, refuses the class if neither fits the USD 1.50/h per-GPU ceiling, never misrepresents the actual GPU name in the receipt, and leaves A100 and H100 tasks unchanged. The CUDA/GLB validator accepts either physical economical GPU while rejecting CPU fakes. A third distinct main-only marker ending `_V3.json` is mandatory, replacing earlier consumed markers. Same aggregate projected USD 8, no automatic retries, temporary Pods, independent teardown. User explicitly approved on-demand paid GPU tests and publication of verified textured models.
+
+**SITE**: public gallery UI is staged separately in draft PR #311 and remains evidence-gated. Do NOT deploy or advertise as real GPU/ASTRA generation until receipt GLBs/teardown verified. Documentation/release follow-up is required after any real GPU run.
+
+---
+
 ## 2026-10-16 — Three different on-demand GPU model qualification tests: SDK implementation and CPU GLBs verified
 
 **OWNER APPROVAL:** Owner explicitly authorized spending from approximately USD 33.68 RunPod wallet to run an economical GPU test first and three separate classes (L4, A100, H100), each with different real 3D geometry. Owner still requires ZERO always-on GPUs and no permanently rented RunPod network storage.
