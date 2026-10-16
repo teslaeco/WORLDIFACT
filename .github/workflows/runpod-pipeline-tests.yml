@@ -32,6 +32,20 @@ jobs:
           python -m pip install -r tools/runpod_worker/requirements.txt
           python -m py_compile tools/runpod_worker/*.py
           python -m unittest discover -s tools/runpod_worker -p 'test_*.py' -v
+      - name: Audit pinned Microsoft TRELLIS.2 import patch against REAL upstream source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/worldifact-trellis2-license-smoke
+          git init -q /tmp/worldifact-trellis2-license-smoke
+          git -C /tmp/worldifact-trellis2-license-smoke -c protocol.version=2 \
+            fetch --depth=1 --filter=blob:none https://github.com/microsoft/TRELLIS.2.git \
+            75fbf0183001ed9876c8dbb35de6b68552ee08bd
+          git -C /tmp/worldifact-trellis2-license-smoke checkout -q --detach FETCH_HEAD
+          python tools/runpod_worker/trellis_mit_patch.py --apply --source /tmp/worldifact-trellis2-license-smoke
+          python tools/runpod_worker/trellis_mit_patch.py --check --source /tmp/worldifact-trellis2-license-smoke
+          git -C /tmp/worldifact-trellis2-license-smoke diff --name-only HEAD -- | grep -qx 'o-voxel/o_voxel/postprocess.py'
+          echo 'REAL_PINNED_MICROSOFT_SOURCE_PATCH_PASS; no CUDA installed or model downloaded'
       - name: Fetch verified Blender CPU runtime — not a paid GPU
         run: |
           set -euo pipefail
