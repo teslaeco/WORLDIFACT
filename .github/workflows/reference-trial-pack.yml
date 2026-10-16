@@ -6,6 +6,8 @@ on:
       - 'tests/test_reference_trial_pack.py'
       - 'scripts/verify-3d-trial-result.py'
       - 'tests/test_3d_trial_result.py'
+      - 'scripts/compose-private-scene.py'
+      - 'tests/test_private_scene_composition.py'
       - '.github/workflows/reference-trial-pack.yml'
   push:
     branches: ['feat/ecomech-halloween-reference-trials-20261016']
@@ -28,3 +30,5 @@ jobs:
         run: python -m unittest discover -s tests -p test_reference_trial_pack.py -v
       - name: Validate real 3D GLB/PBR structural QA contracts (synthetic fixtures only)
         run: python -m unittest discover -s tests -p test_3d_trial_result.py -v
+      - name: Compose synthetic independently hashed 3D scene parts (no Astra/RunPod)
+        run: python -m unittest discover -s tests -p test_private_scene_composition.py -v
