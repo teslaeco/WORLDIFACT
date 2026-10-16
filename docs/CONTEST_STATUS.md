@@ -1,3 +1,11 @@
+## 2026-10-16 — On-demand-only storage policy approved by owner; no permanent RunPod volume
+
+**IMPLEMENTED / MOCK-CI PENDING / NOT DEPLOYED.** In PR #309, RunPod Serverless Flex endpoint worker still has Active=0 / Max=1 / GPU=1 / idle=5 sec. The container scratch disk is now **100GB ephemeral**, destroyed between worker startups, and outputs must be stored in existing **private Cloudflare R2**. The endpoint installer refuses provider readback that unexpectedly includes any persistent network/global mount. A previously prepared draft for a 256GB always-billed RunPod network disk was **NOT PROVISIONED** and must not be used for this requirement. Unreal Engine editor/compilation requires a separately planned persistent environment and funding, not the always-on inference runtime.
+
+**BLOCKED / NOT YET PAID TESTED:** Image bundle + DINOv3 license, audited CUDA/DTRK native rebuild and model weights, actual RunPod endpoint, secrets installed on worker, user private source uploads and two owner-reference 3D outputs remain unverified. User gave clear permission for a bounded RunPod/OpenAI pilot but no functioning GPU image exists yet; do not spend for an idle pod, claim 3D output, or modify customer Oracle generation.
+
+---
+
 ## 2026-10-16 — RunPod A100 Flex provisioning gate staged; NO endpoint or Pod created
 
 **VERIFIED** existing trusted RunPod management REST v2+R2 account preflight: https://github.com/teslaeco/WORLDIFACT/actions/runs/38818010309 returned 0 Serverless endpoints, 0 Pods and 0 network volumes; R2 S3 conditional create/read/delete PASS. The existing Oracle CPU service was not modified.
