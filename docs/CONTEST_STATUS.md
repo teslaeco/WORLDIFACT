@@ -1,3 +1,13 @@
+## 2026-10-16 — Parameter Golf lessons applied to two private 3D trials (still source-only)
+
+**TESTS:** Two owner image ZIP manifests/PNG SHA-256 verified locally. Added `scripts/verify-3d-trial-result.py` + eight synthetic CPU unit tests to reject flat billboards, missing independent prop/scene meshes, absent PBR texture, reused camera PNGs and false `visualAccepted` claims. Follow PR #308 CI for independently rerun results; local 8/8 pass is not provider GPU generation.
+
+**PARAMETER GOLF:** Verified author's OpenAI PR #1750 (explicitly non-record) and PR #2076 (PR-reported three-seed mean 0.92967555 BPB within ~15.92MB). Applying reproducibility/measurement/budget discipline to WORLDIFACT, NOT claiming BPB predicts photorealistic 3D. See docs/PARAMETER_GOLF_TO_3D_20261016.md.
+
+**BLOCKED:** No RunPod endpoint/image provisioned, NVIDIA exporter license gate unresolved, no actual Astra+RunPod photo-to-mesh generation, no final downloadable robot or Halloween GLB. Owner's two paid tests remain pending; preserve Oracle and 0 active GPU rule.
+
+---
+
 ## 2026-10-16 — Two paid owner reference trials requested; no fabricated 3D results
 
 **INPUT PREPARED / NO RUNPOD GPU / NO ASTRA INFERENCE.** Owner supplied exact ECOMECH V4 and Halloween music room PNG references plus QA board; approved two paid tests and asks for two actual 3D model URLs. Private source input ZIPs and mask candidates are held in the user's ChatGPT session, not copied into the public repo. Source-pack validation and synthetic tests added on an isolated branch. Provider account GET verified zero RunPod endpoints, PR #305 remains nonmergeable and commercially restricted nvdiffrast PBR path remains blocked. Halloween scene requires multi-object scene construction, which PR #305 does not support. No paid inference executed, no model URLs can honestly be issued. See docs/REFERENCE_TRIALS_20261016.md.
