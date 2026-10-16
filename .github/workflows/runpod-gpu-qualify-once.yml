@@ -42,7 +42,7 @@ jobs:
         run: |
           test "$(git hash-object scripts/runpod-qualify-once.mjs)" = '741a61526f3e8e00432632b535b4f56a863f166f'
           test "$(git hash-object tools/runpod_qualification/worker.py)" = '5789519cb3306c4eefd7d644621b6a6466ee10e4'
-          test "$(git hash-object scripts/runpod-provision-on-demand.mjs)" = '3b30e2c74dea4d15e748fe5cf85465156d40efe8'
+          test "$(git hash-object scripts/runpod-provision-on-demand.mjs)" = 'ad7b63aac6e47c0ded62f50c25f0e7a94d53f822'
       - name: One private model qualification, preserve originals and delete worker
         env:
           RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
