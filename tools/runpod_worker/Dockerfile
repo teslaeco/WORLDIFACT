@@ -18,6 +18,14 @@ ENV ENABLE_RUNPOD_WORKER=false \
     TRELLIS_CODE_DIR=/opt/TRELLIS.2 \
     TRELLIS_BUNDLE_DIR=/models/trellis2 \
     BLENDER_BIN=/opt/blender/blender
+# Pinned MIT DRTK source must be compiled in-place inside the pre-reviewed base.
+# Pinning source alone does not establish binary SBOM provenance; final image digest
+# and binary hashes remain separate operator acceptance gates.
+ENV PYTHONPATH=/opt/DRTK:/opt/worldifact/worker
+RUN test "$(git -c safe.directory=/opt/DRTK -C /opt/DRTK rev-parse HEAD)" = "43c3095d01d0ff435c798518e97e387c784b567f" && \
+    git -c safe.directory=/opt/DRTK -C /opt/DRTK diff --quiet HEAD -- && \
+    test -f /opt/DRTK/LICENSE && \
+    python -c "from pathlib import Path; from importlib.util import find_spec; a=find_spec('drtk'); assert a and Path(a.origin).resolve()==Path('/opt/DRTK/drtk/__init__.py'), 'DRTK module/source mismatch'"
 # GPU_BASE_IMAGE must already contain a LICENSE-AUDITED, pinned MIT DRTK build,
 # the exact TRELLIS.2 git revision and read-only model/checkpoint bundle.
 # Never fetch weights or build a CUDA extension inside a user generation request.
