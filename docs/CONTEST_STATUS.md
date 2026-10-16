@@ -1,3 +1,15 @@
+## 2026-10-16 — PR #308 reference QA CI passed; two real GPU models still NOT generated
+
+**VERIFIED:** Both owner-held ECOMECH V4 and Halloween reference ZIPs passed local CRC/hash/PNG size checks. Synthetic structural GLB/PBR evidence checks passed locally (8/8) and in protected GitHub Actions: https://github.com/teslaeco/WORLDIFACT/actions/runs/38850340309 . The complete repository verification and UI publication preflight passed on exact head 66f5cfa2d777eab93786363c00474041ee252236: https://github.com/teslaeco/WORLDIFACT/actions/runs/38850340265 and https://github.com/teslaeco/WORLDIFACT/actions/runs/38850340318 .
+
+**DATE-RELATED TEST FIX:** Old owner-unused-points test fixtures expected an expired one-day maintenance route to remain open after its actual 2026-10-16T00:00Z deadline. Test-only Node mock timers now pin the historical authorized instant (2026-10-15T12:00Z). **The production deadline, API source, owner authorization, ledger, receipts and balances were NOT modified**. No expired production access was reactivated.
+
+**EXPERIENCE:** GitHub PR #308 documents the author's verifiable OpenAI Parameter Golf experiments #1750 and #2076 and translates reproducible benchmarking, tight budgets and artifact provenance into honest 3D geometry/PBR/scene checks. It does not claim a Parameter Golf leaderboard win or a photo-to-mesh model was generated.
+
+**NO-GO:** The last real RunPod management check reported zero provisioned GPU endpoints. No commercially licensed TRELLIS.2 textured exporter/image has been approved, and Halloween remains a multi-object pipeline problem. **No paid Astra/RunPod inference ran, no real ECOMECH or Halloween GLB/BLEND download exists, no revenue or Oracle production configuration was changed**. Keep PR #308 draft until actual GPU readiness and reviewed visual QA; do not merge/deploy just for green mock tests.
+
+---
+
 ## 2026-10-16 — Parameter Golf lessons applied to two private 3D trials (still source-only)
 
 **TESTS:** Two owner image ZIP manifests/PNG SHA-256 verified locally. Added `scripts/verify-3d-trial-result.py` + eight synthetic CPU unit tests to reject flat billboards, missing independent prop/scene meshes, absent PBR texture, reused camera PNGs and false `visualAccepted` claims. Follow PR #308 CI for independently rerun results; local 8/8 pass is not provider GPU generation.
