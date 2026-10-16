@@ -39,23 +39,53 @@ app = runpod.App(APP_NAME)
 
 @app.task(gpu=["4090", "L4"], gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
-def l4_chess_512_trial():
-    from procedural_models import construct
-    return construct("L4", require_cuda=True)
+def l4_chess_512_trial(geometry_source: str):
+    # Flash dev ships the task BODY, not adjacent Python modules.
+    # Transfer repository-reviewed source as an argument, pinned to exact Git blob.
+    import hashlib
+    if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
+        raise RuntimeError("UNEXPECTED_GEOMETRY_SOURCE_SIZE")
+    raw = geometry_source.encode("utf-8")
+    blob = b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise RuntimeError("UNREVIEWED_REMOTE_GEOMETRY_SOURCE")
+    namespace = {"__name__": "worldifact_pinned_gpu_geometry"}
+    exec(compile(geometry_source, "verified_procedural_models.py", "exec"), namespace)
+    return namespace["construct"]("L4", require_cuda=True)
 
 
 @app.task(gpu="A100", gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
-def a100_ecomech_trial():
-    from procedural_models import construct
-    return construct("A100", require_cuda=True)
+def a100_ecomech_trial(geometry_source: str):
+    # Flash dev ships the task BODY, not adjacent Python modules.
+    # Transfer repository-reviewed source as an argument, pinned to exact Git blob.
+    import hashlib
+    if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
+        raise RuntimeError("UNEXPECTED_GEOMETRY_SOURCE_SIZE")
+    raw = geometry_source.encode("utf-8")
+    blob = b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise RuntimeError("UNREVIEWED_REMOTE_GEOMETRY_SOURCE")
+    namespace = {"__name__": "worldifact_pinned_gpu_geometry"}
+    exec(compile(geometry_source, "verified_procedural_models.py", "exec"), namespace)
+    return namespace["construct"]("A100", require_cuda=True)
 
 
 @app.task(gpu="H100", gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
-def h100_halloween_trial():
-    from procedural_models import construct
-    return construct("H100", require_cuda=True)
+def h100_halloween_trial(geometry_source: str):
+    # Flash dev ships the task BODY, not adjacent Python modules.
+    # Transfer repository-reviewed source as an argument, pinned to exact Git blob.
+    import hashlib
+    if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
+        raise RuntimeError("UNEXPECTED_GEOMETRY_SOURCE_SIZE")
+    raw = geometry_source.encode("utf-8")
+    blob = b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise RuntimeError("UNREVIEWED_REMOTE_GEOMETRY_SOURCE")
+    namespace = {"__name__": "worldifact_pinned_gpu_geometry"}
+    exec(compile(geometry_source, "verified_procedural_models.py", "exec"), namespace)
+    return namespace["construct"]("H100", require_cuda=True)
 
 
 class Refused(Exception):
@@ -154,6 +184,13 @@ def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_q
     if targets != ["L4", "A100", "H100"]:
         raise Refused("UNEXPECTED_GPU_TEST_ORDER_OR_DUPLICATE")
     quote = quotefn(os.environ.get("RUNPOD_API_KEY", ""))
+    # Source is verified locally before any paid GPU dispatch and again on each worker.
+    content = (LOCAL_MODULE_DIR / "procedural_models.py").read_bytes()
+    blob = b"blob " + str(len(content)).encode("ascii") + b"\\0" + content
+    import hashlib
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise Refused("UNREVIEWED_LOCAL_GEOMETRY_SOURCE")
+    geometry_source = content.decode("utf-8")
     if allowed is not None and allowed != targets:
         raise Refused("UNEXPECTED_TARGET_SELECTION")
     out_dir = Path("gpu-trial-artifacts")
@@ -167,7 +204,7 @@ def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_q
                 response = dispatch(name)
             else:
                 # Exactly one call, never retry an ambiguous GPU provisioning.
-                response = functions[name].remote()
+                response = functions[name].remote(geometry_source)
             report = store_proven_trial(out_dir, name, response)
             report["wallClockSeconds"] = round(time.monotonic() - start, 2)
             print(json.dumps({"gpuClass": name, "status": "ACTUAL_PROCEDURAL_GPU_GLB",
