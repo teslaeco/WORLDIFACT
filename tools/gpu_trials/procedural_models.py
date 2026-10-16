@@ -40,8 +40,11 @@ def construct(task, require_cuda=False):
         device = torch.device("cuda:0")
         gpu_identity = torch.cuda.get_device_name(0)
         gpu_vram_gb = round(torch.cuda.get_device_properties(0).total_memory / (1024 ** 3), 2)
-        expected = {"L4": "L4", "A100": "A100", "H100": "H100"}[task]
-        if expected not in gpu_identity.upper():
+        # Economy tier may fall back to RTX 4090 when L4 stock is exhausted.
+        # Always keep the actual provider GPU identity in the signed result.
+        expected = {"L4": ("L4", "RTX 4090", "GEFORCE RTX 4090"),
+                    "A100": ("A100",), "H100": ("H100",)}[task]
+        if not any(name in gpu_identity.upper() for name in expected):
             raise RuntimeError("WRONG_PHYSICAL_GPU")
         start = time.monotonic()
         a = torch.linspace(-1, 1, 512 * 512, device=device).reshape(512, 512)
