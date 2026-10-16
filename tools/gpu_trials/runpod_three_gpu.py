@@ -159,7 +159,7 @@ def live_quote(key: str) -> dict:
         raise Refused("INVALID_PROVIDER_CATALOG") from None
 
 
-def store_proven_trial(out_dir: Path, gpu_class: str, response: dict):
+def store_proven_trial(out_dir: Path, gpu_class: str, response: dict, geometry_source: str | None = None):
     if not isinstance(response, dict) or response.get("gpuClass") != gpu_class:
         raise Refused("GPU_RESPONSE_INVALID_OR_WRONG_CLASS")
     gpu = response.get("gpuName", "")
@@ -171,9 +171,21 @@ def store_proven_trial(out_dir: Path, gpu_class: str, response: dict):
         raise Refused("WRONG_OR_UNVERIFIED_GPU_HARDWARE")
     if response.get("cudaMatrixChecksum") is None or response.get("cudaComputeMs") is None:
         raise Refused("GPU_MATH_NOT_CONFIRMED")
-    # Local Actions orchestrator only: remote module import must not depend on this file.
-    from procedural_models import verified_model
-    raw = verified_model(response)
+    # The SDK can run this client code from a generated /tmp/runpod_live_*.py.
+    # Reconstruct the validated local helper from the exact source already
+    # transferred to the worker, rather than importing absent sibling modules.
+    if geometry_source is None:
+        geometry_source = (LOCAL_MODULE_DIR / "procedural_models.py").read_text("utf-8")
+    if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
+        raise Refused("UNEXPECTED_LOCAL_VALIDATOR_SOURCE_SIZE")
+    import hashlib
+    raw_source = geometry_source.encode("utf-8")
+    blob = b"blob " + str(len(raw_source)).encode("ascii") + b"\\0" + raw_source
+    if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
+        raise Refused("UNREVIEWED_LOCAL_VALIDATOR_SOURCE")
+    namespace = {"__name__": "worldifact_pinned_local_validation"}
+    exec(compile(geometry_source, "pinned_local_validation.py", "exec"), namespace)
+    raw = namespace["verified_model"](response)
     out = out_dir / (TASKS[gpu_class] + ".glb")
     out.write_bytes(raw)
     public_receipt = {k: value for k, value in response.items()
@@ -214,7 +226,7 @@ def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_q
             else:
                 # Exactly one call, never retry an ambiguous GPU provisioning.
                 response = functions[name].remote(geometry_source)
-            report = store_proven_trial(out_dir, name, response)
+            report = store_proven_trial(out_dir, name, response, geometry_source)
             report["wallClockSeconds"] = round(time.monotonic() - start, 2)
             print(json.dumps({"gpuClass": name, "status": "ACTUAL_PROCEDURAL_GPU_GLB",
                               "sha256": report["glbSha256"],
