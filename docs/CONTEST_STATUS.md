@@ -1,3 +1,13 @@
+## 2026-10-16 — RunPod A100 Flex provisioning gate staged; NO endpoint or Pod created
+
+**VERIFIED** existing trusted RunPod management REST v2+R2 account preflight: https://github.com/teslaeco/WORLDIFACT/actions/runs/38818010309 returned 0 Serverless endpoints, 0 Pods and 0 network volumes; R2 S3 conditional create/read/delete PASS. The existing Oracle CPU service was not modified.
+
+**IMPLEMENTED / MOCK CI ONLY** a narrow branch `ops/runpod-worldifact-flex-provisioning-20261016` with a protected manual-only API v2 installer. It requires an actual immutable licensed GHCR CUDA/TRELLIS.2/DRTK image plus explicit reviewer attestations before performing at most one POST; reads actual A100 80GB pool/availability and price capped at USD 3/hour, enforces QUEUE min0/max1/idle5/GPU1 and ENABLE_RUNPOD_WORKER=false, prevents duplicate/unknown-create retries. Contract tests pass: https://github.com/teslaeco/WORLDIFACT/actions/runs/38854025718 .
+
+**NO-GO:** no actual container image digest, license/SBOM/weights/CUDA benchmark, endpoint ID, real GPU inference, GLB results or customer traffic switch. No auto-merge, paid provisioning, Pod rental or secret extraction. Operator instructions and direct console links: docs/RUNPOD_FLEX_PROVISIONING_20261016.md.
+
+---
+
 ## 2026-10-16 — RunPod/R2 credentials present in GitHub, safe production preflight staged
 
 **SCREENSHOT EVIDENCE / NOT CONNECTED / NOT DEPLOYED / ZERO GPU SPEND.** Owner screenshots show Production has 14 environment secrets and 4 variables, including R2, RunPod and Oracle. The R2 S3 endpoint variable looks like a literal explanatory placeholder, not a URL: fail closed until corrected. RunPod key had returned 403 on a prior v1 check; owner now reports restricted Read/Write scope and a USD 33 RunPod budget, neither independently validated. Draft #305 stays unmerged; its offline provider and real Blender fixture CI passed, with flaky ISS source timeout cleared by rerun.
