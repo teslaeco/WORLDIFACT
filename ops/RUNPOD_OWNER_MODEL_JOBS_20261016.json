@@ -1,0 +1,24 @@
+{
+  "id": "owner-models-20261016",
+  "qualificationId": "gha-38964818698-1",
+  "image": "ghcr.io/teslaeco/worldifact-runpod3d@sha256:d303d66ec97aec3826dea3679ce5bf6b2786718fc2a0777409e859ce5375347e",
+  "expiresBefore": "2026-10-17T12:00:00Z",
+  "jobs": [
+    {
+      "name": "ECOMECH_V4",
+      "source": "ecomech-v4-original.jpg",
+      "sha256": "8fda1676a54161ed2ca82d00f988c6e647d18edf504a299676902d4eb471a062",
+      "subject": "robot",
+      "jobId": "0b055bd4-e94b-4acd-a875-b958f0be9c11",
+      "scope": "2c9f2e043bfaab9ef6a3e8c19d5d2f1fc79060ffab0b29f82a7376cbc1c05de9"
+    },
+    {
+      "name": "HALLOWEEN_MUSIC_ROOM",
+      "source": "halloween-music-room-original.jpg",
+      "sha256": "57c7ee96a7a2dc0d0f36a64c5598a4f10ef8aeb27e1401da543ce1f0c73a90e5",
+      "subject": "prop",
+      "jobId": "e80edb76-99b3-43b9-97aa-b46e12ef28a5",
+      "scope": "2c9f2e043bfaab9ef6a3e8c19d5d2f1fc79060ffab0b29f82a7376cbc1c05de9"
+    }
+  ]
+}

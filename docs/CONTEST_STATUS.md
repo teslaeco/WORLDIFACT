@@ -1,3 +1,7 @@
+## 2026-10-16 — Two native owner generations prepared after actual GPU qualification
+
+Three original reference uploads returned HTTP 200 with unchanged SHA-256. Local SAM2.1 CPU segmentation and visual inspection preserved the complete ECOMECH silhouette and prop. The manual-only owner workflow prepares two real bounded Astra plans and sequential 1024 native reconstructions under the announced USD 4 envelope, with durable one-shot claims and private original/output storage. Tests verify GPU/storage/budget configuration and output-prefix isolation. Generation is PREPARED, NOT EXECUTED at this source revision. See RUNPOD_OWNER_MODELS_20261016.md.
+
 ## 2026-10-16 — Requested owner models: private source ingress prepared
 
 Actual qualification run 38964818698 on main b14ce6f started its A100 worker and native sparse/shape/texture sampling, exported GLB/BLEND and eight renders successfully (PASS); cleanup confirmed endpoint deletion at 20:58:18 UTC. User run 38963541225 completed only CPU review because its confirmation condition skipped the GPU job. The agent dispatched the correct first-attempt test under the existing one-GPU allowance.
