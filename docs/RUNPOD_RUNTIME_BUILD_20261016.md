@@ -27,8 +27,9 @@ do not rent a permanent Runpod network volume or an always-on GPU.
   a missing package instead of relying on an assumed visibility default.
   GitHub's version page shows immutable manifest digest
   `sha256:f6cd2c5facce5008e6d40b5d08ce34bfb9050347d585ab8b4d91c79cfb76b993`.
-  Private pull and receipt extraction are being rechecked; real CUDA execution
-  and model generation remain unverified.
+  Private pull and receipt extraction passed in run 38951170070 on e8ba1863.
+  Its safe receipt artifact is 12068262959; the immutable image is unchanged.
+  Real CUDA execution and model generation remain unverified.
 - Runpod now lists the owner-created Docker credential `worldifact-ghcr`, ID
   `cmvbbpdxq000pi81ul0ltivxv`. Its presence is verified; no token value was read.
 - 26 imported worker tests and four new bundle corruption/encoder tests pass
@@ -92,3 +93,23 @@ binary receipt; the final immutable image digest is required for any deployment.
 
 No endpoint, live model output, customer traffic switch or production acceptance
 is claimed by this build-only change.
+
+## Bounded operator qualification
+
+`runpod-gpu-qualify-once.yml` is manual, trusted-main-only and first-attempt-only.
+It checks exact script hashes before exposing Production credentials. It creates
+one disposable min=0/max=1 A100 endpoint using the private immutable image and
+owner-created registry credential. Actual catalog price must be <= $3/hour.
+The single job has a 900-second provider timeout plus an independent worker
+watchdog; orchestration reserves 18 minutes for startup/job and two for cleanup.
+It deletes only the endpoint it created, with readback and a separate always-run
+cleanup step. Ambiguous creation/submission is never retried automatically.
+
+The operator probe checks actual CUDA rasterization/interpolation against CPU
+math, then performs native 512-resolution inference on Microsoft's pinned T.png
+example, exports original GLB and Blender outputs, and preserves all artifacts
+in private R2 under `ops/runpod-qualification/`. No Astra response is fabricated;
+this is explicitly an engine qualification, not a customer/planner integration
+test. The final production provisioning gate and its attestations are unchanged.
+
+Paid qualification has not run yet. Source review/CPU tests are not GPU proof.
