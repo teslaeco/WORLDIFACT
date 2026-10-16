@@ -1,3 +1,13 @@
+## 2026-10-16 — Owner-approved paid RunPod attempt #38877860327: real Pod, missing remote module (NO GPU GLB)
+
+**VERIFIED:** [Paid Actions run #38877860327](https://github.com/teslaeco/WORLDIFACT/actions/runs/38877860327), three-gpu job `116897151962`. Owner-authorized branch-only one-use marker passed exact-source, SDK and account inventory checks. RunPod provisioned temporary Pod `7liuqxk897dk` for the economical RTX4090/L4 selection; remote runtime then failed after about 82s with `ModuleNotFoundError: No module named 'procedural_models'` in a `runpod_live_*.py` worker. This is the Flash dev isolation contract: only decorated task bodies are shipped, not local module files. **No CUDA proof, model GLB, reference-image reconstruction or GPU artifact was created.** A100/H100 were not called. No automatic paid retry occurred.
+
+**VERIFIED CLEANUP:** Independent postflight job `116897884449` reported 0 remaining Pods, serverless endpoints and network volumes after this incident. Actual provider charges and wallet balance remain **UNKNOWN** (check RunPod billing, do not claim free execution).
+
+**IMPLEMENTED FIX / NOT YET LIVE:** The reviewed procedural source is now explicitly passed as an argument to each isolated Flash task; each remote worker and local dispatcher reject any content outside the exact pinned Git blob `91d87511b507b72652422ba7839ec28f0fcb1c93` before Python execution or paid dispatch. New offline tests isolate each decorated worker body, reject tampering and prove valid source reaches the CUDA-availability gate. No persistent GPU or network volumes, no automatic retries, no Oracle/Stripe/customer changes, no production release. A subsequent independent owner-approved single-use run and verified provider receipt remain required before claiming GPU success.
+
+---
+
 ## 2026-10-16 — Real paid RunPod trials: L4 no capacity; economical 4090 fallback prepared
 
 **VERIFIED SECOND ATTEMPT FAILURE (NO REAL GPU MODEL):** https://github.com/teslaeco/WORLDIFACT/actions/runs/38868316200 passed source/secret/RunPod inventory checks and imported official `rp flash dev --once` app correctly. The first task tried to provision NVIDIA L4, but RunPod returned **"There are no instances currently available"** after 417 ms. A100 and H100 were not launched because the pipeline stopped on the first failed GPU. RunPod independent postflight confirmed **0 Pods, 0 Serverless endpoints, 0 network volumes**. No real paid-GPU GLB or published site model was created. Invoice/wallet balance not independently checked.
