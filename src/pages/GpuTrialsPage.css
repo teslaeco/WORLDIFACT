@@ -1,0 +1,28 @@
+.gpu-trials-page{min-height:100vh;color:#e4f9fa;background:radial-gradient(ellipse at 30% 0%,#102f32 0%,#06121b 45%,#060b13 100%);padding:clamp(1.1rem,3vw,3rem);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.gpu-trials-page a{color:#73f8c5}.gpu-trials-header{max-width:1050px;margin:0 auto 2.6rem}
+.gpu-trials-header>a{display:inline-block;margin-bottom:1.7rem;color:#9dcaca}
+.gpu-trials-eyebrow{display:block;letter-spacing:.18em;font-size:.77rem;color:#52dcae;font-weight:700}
+.gpu-trials-header h1{font-size:clamp(2rem,6vw,4.3rem);letter-spacing:-.035em;line-height:1.13;margin:.5rem 0 .8rem}
+.gpu-trials-header p{max-width:790px;color:#bfd0d5;line-height:1.7}
+.gpu-trials-empty{max-width:850px;margin:2rem auto;padding:2rem;border:1px solid #265b5d;border-radius:22px;background:rgba(13,32,45,.8)}
+.gpu-trials-empty h2{font-size:1.45rem;margin:0 0 .7rem}
+.gpu-trials-empty p{line-height:1.6;color:#bdd2d8}
+.gpu-trials-results{max-width:1260px;margin:0 auto}
+.gpu-trials-selector{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-bottom:1.3rem}
+.gpu-trials-selector button{background:rgba(20,38,51,.9);border:1px solid #315d62;border-radius:14px;color:#e4f9fa;padding:1rem;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:.5rem}
+.gpu-trials-selector button:hover,.gpu-trials-selector button:focus-visible{outline:2px solid #57dda9;outline-offset:2px}
+.gpu-trials-selector button.gpu-trials-current{border-color:#44d8bc;box-shadow:0 0 20px rgba(43,230,186,.18)}
+.gpu-trials-selector span{font-size:.85rem;color:#acc3ca}
+.gpu-trials-viewer{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:1.3rem;align-items:start}
+.gpu-trials-preview{position:relative;width:100%;height:min(66vh,630px);min-height:360px;border-radius:20px;border:1px solid #306a69;overflow:hidden;background:#10171e}
+.gpu-trials-preview canvas{display:block;width:100%;height:100%;touch-action:none}
+.gpu-trials-overlay{position:absolute;inset:0;display:grid;place-content:center;text-align:center;background:rgba(6,16,24,.65);padding:1.5rem;color:#ddecec}
+.gpu-trials-details{padding:1.4rem;border:1px solid #315c60;border-radius:20px;background:rgba(13,30,41,.8)}
+.gpu-trials-details h2{font-size:1.5rem;margin:0 0 1rem}
+.gpu-trials-details p{line-height:1.6;color:#c1d4d9}
+.gpu-trials-disclosure{font-size:.78rem;font-weight:700;letter-spacing:.05em;color:#b5dbdb!important}
+.gpu-trials-download{display:inline-block;margin:.9rem 0;padding:.9rem 1.2rem;border:1px solid #61e2bc;background:#185343;border-radius:12px;font-weight:700;text-decoration:none}
+.gpu-trials-download:hover{background:#246f59}
+.gpu-trials-hash{overflow-wrap:anywhere;font-size:.78rem}
+.gpu-trials-receipt{font-size:.85rem;color:#b0bec8;margin:2rem 0}
+@media(max-width:780px){.gpu-trials-selector{grid-template-columns:1fr}.gpu-trials-viewer{grid-template-columns:1fr}.gpu-trials-preview{height:52vh;min-height:330px}.gpu-trials-page{padding:1rem}}

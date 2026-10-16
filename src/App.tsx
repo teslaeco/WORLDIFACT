@@ -18,6 +18,7 @@ const CreditsPage = lazy(async () => import('./pages/CreditsPage'))
 const OwnerReserveAdjustmentPage = lazy(async () => import('./pages/OwnerReserveAdjustmentPage'))
 const ImagesPage = lazy(async () => import('./pages/ImagesPage'))
 const ModelsPage = lazy(async () => import('./pages/ModelsPage'))
+const GpuTrialsPage = lazy(async () => import('./pages/GpuTrialsPage'))
 const OvernightTestsPage = lazy(async () => import('./pages/OvernightTestsPage'))
 const ResetPasswordPage = lazy(async () => import('./pages/ResetPasswordPage'))
 
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/account/credits" element={<CreditsPage />} />
         <Route path="/account/owner-reserve-adjustment" element={<OwnerReserveAdjustmentPage />} />
         <Route path="/account/models" element={<ModelsPage />} />
+        <Route path="/gpu-trials" element={<GpuTrialsPage />} />
         <Route path="/account/images" element={<ImagesPage />} />
         <Route path="/account/overnight-tests" element={<OvernightTestsPage />} />
         <Route path="/account/reset" element={<ResetPasswordPage />} />
@@ -66,6 +68,7 @@ export default function App() {
       <nav className="legal-nav" aria-label="Project information">
         <Link to="/login">Account</Link>
         <Link to="/account/models">My models</Link>
+        <Link to="/gpu-trials">3D GPU test gallery</Link>
         <Link to="/account/worlds">My saved worlds</Link>
         <a href="/blog/astra-vs-meshy-rim/">Astra vs Meshy: rim case study</a>
         <a href="/compare/mcc/">MCC cabinet: Astra and Meshy evidence</a>
