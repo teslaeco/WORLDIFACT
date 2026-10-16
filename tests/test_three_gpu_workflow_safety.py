@@ -9,7 +9,7 @@ CODE=(ROOT/'tools/gpu_trials/runpod_three_gpu.py').read_text()
 class Safety(unittest.TestCase):
     def test_only_main_marker_may_run_paid_generation(self):
         self.assertIn("branches: ['main']",WF)
-        self.assertIn("paths: ['ops/THREE_GPU_EPHEMERAL_PAID_ONCE_20261016_V2.json']",WF)
+        self.assertIn("paths: ['ops/THREE_GPU_EPHEMERAL_PAID_ONCE_20261016_V3.json']",WF)
         self.assertNotIn('pull_request:',WF)
         self.assertIn('environment: Production',WF)
         self.assertIn('PAID_GPU_APPROVAL_MARKER_MISMATCH',WF)

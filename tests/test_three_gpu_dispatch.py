@@ -56,6 +56,33 @@ class SDKContractTests(unittest.TestCase):
             with self.assertRaises(TRIALS.Refused):
                 TRIALS.quote_catalog(bad)
 
+    def test_economy_fallback_4090_is_quoted_when_L4_has_no_capacity(self):
+        catalog={'gpus':[
+            {'id':'NVIDIA L4','memory':24,'price':{'secure':.75},
+             'availability':'NONE','dataCenters':[]},
+            {'id':'NVIDIA GeForce RTX 4090','memory':24,'price':{'secure':1.2},
+             'availability':'HIGH','dataCenters':[{'availability':'HIGH'}]},
+            {'id':'NVIDIA A100 80GB PCIe','memory':80,'price':{'secure':2.0},
+             'availability':'HIGH','dataCenters':[{'availability':'HIGH'}]},
+            {'id':'NVIDIA H100 80GB HBM3','memory':80,'price':{'secure':4.0},
+             'availability':'HIGH','dataCenters':[{'availability':'HIGH'}]},
+        ]}
+        result=TRIALS.quote_catalog(catalog)
+        self.assertEqual(result['hourly']['L4'],1.2)
+        self.assertTrue(result['estimated15MinutesEachUsd']<=TRIALS.MAX_TOTAL_PROJECTED_USD)
+
+    def test_economy_fallback_proof_includes_actual_gpu_name_not_fake_L4(self):
+        with tempfile.TemporaryDirectory() as t:
+            response=construct('L4')
+            response['gpuName']='NVIDIA GeForce RTX 4090'
+            response['gpuVramGiB']=23.99
+            response['cudaMatrixChecksum']=18.5
+            response['cudaComputeMs']=29.0
+            receipt=TRIALS.store_proven_trial(Path(t),'L4',response)
+            self.assertEqual(receipt['gpuClass'],'L4')
+            self.assertEqual(receipt['actualGpuHardware'],'NVIDIA GeForce RTX 4090')
+            self.assertTrue(receipt['gpuResultValidated'])
+
     def test_no_authorization_means_no_catalog_and_no_gpu(self):
         with patch.dict(os.environ,{'WORLDIFACT_PAID_GPU_APPROVAL':'no'},
                         clear=True):
