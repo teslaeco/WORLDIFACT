@@ -5,7 +5,10 @@ on:
     paths:
       - 'scripts/runpod-provision-on-demand.mjs'
       - 'tests/runpod-provision-on-demand.test.mjs'
+      - 'scripts/runpod-gpu-catalog-readonly.mjs'
+      - 'tests/runpod-gpu-catalog-readonly.test.mjs'
       - '.github/workflows/runpod-flex-*.yml'
+      - '.github/workflows/runpod-gpu-catalog-get-once.yml'
   pull_request:
     paths:
       - 'scripts/runpod-provision-on-demand.mjs'
@@ -25,4 +28,4 @@ jobs:
         with:
           node-version: '24'
       - name: Test zero-active worker, image approvals, no Pod, no duplicate POST
-        run: node --test tests/runpod-provision-on-demand.test.mjs
+        run: node --test tests/runpod-provision-on-demand.test.mjs tests/runpod-gpu-catalog-readonly.test.mjs
