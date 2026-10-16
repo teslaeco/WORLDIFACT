@@ -28,7 +28,10 @@ class Safety(unittest.TestCase):
         self.assertNotIn('runpod.create_pod(',CODE)
     def test_at_most_one_paid_call_per_gpu_class_no_automatic_retry(self):
         self.assertIn('for name in targets:',CODE)
-        self.assertIn('response = functions[name].remote()',CODE)
+        self.assertIn('response = functions[name].remote(geometry_source)',CODE)
+        self.assertNotIn('from procedural_models import construct',CODE)
+        self.assertEqual(CODE.count('UNREVIEWED_REMOTE_GEOMETRY_SOURCE'),3)
+        self.assertIn('UNREVIEWED_LOCAL_GEOMETRY_SOURCE',CODE)
         self.assertIn('FAILED_NO_AUTOMATIC_PAID_RETRY',CODE)
         self.assertIn('NO_ONE_TIME_OWNER_APPROVAL',CODE)
         self.assertIn('MAX_TOTAL_PROJECTED_USD = 8.0',CODE)
