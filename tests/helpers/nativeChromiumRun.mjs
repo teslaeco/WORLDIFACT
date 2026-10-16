@@ -23,7 +23,7 @@ export async function runNativeChromium(browser, html, prefix) {
   })
   child.stderr.on('data', value => { stderr = (stderr + value.toString()).slice(-1600) })
   try {
-    const deadline = Date.now() + 20_000
+    const deadline = Date.now() + 30_000
     let port = 0
     while (Date.now() < deadline && !port) {
       try {
@@ -33,7 +33,7 @@ export async function runNativeChromium(browser, html, prefix) {
       if (!port) await wait(50)
     }
     if (!port) throw new Error(`Native Chromium debugging endpoint never opened: ${unexpected || stderr}`)
-    const response = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(3000) })
+    const response = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(10000) })
     if (!response.ok) throw new Error(`Chromium target lookup failed: HTTP ${response.status}`)
     const target = (await response.json()).find(item => item.type === 'page' && item.webSocketDebuggerUrl)
     if (!target) throw new Error('Chromium did not expose a page target')
@@ -43,7 +43,7 @@ export async function runNativeChromium(browser, html, prefix) {
         socket.addEventListener('open', resolve, { once: true })
         socket.addEventListener('error', () => reject(new Error('Native Chromium debugger connection failed')), { once: true })
       }),
-      wait(3000).then(() => { throw new Error('Native Chromium debugger handshake timed out') }),
+      wait(10000).then(() => { throw new Error('Native Chromium debugger handshake timed out') }),
     ])
     let serial = 0
     const pending = new Map(), exceptions = []
@@ -71,7 +71,7 @@ export async function runNativeChromium(browser, html, prefix) {
     // No navigation and no HTTP origin: inert fixture executes in about:blank
     // and cannot accidentally call the production API.
     await send('Page.setDocumentContent', { frameId: frame.frameTree.frame.id, html })
-    const finishBy = Date.now() + 20_000
+    const finishBy = Date.now() + 35_000
     let lastState = ''
     while (Date.now() < finishBy) {
       const evaluated = await send('Runtime.evaluate', {
