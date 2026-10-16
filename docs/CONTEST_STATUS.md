@@ -1,3 +1,39 @@
+## 2026-10-16 — Real-geometry Halloween scene composition staged, no actual generated inputs
+
+**IMPLEMENTED / OFFLINE ONLY:** PR #308 adds `scripts/compose-private-scene.py` to combine five independent SHA-bound real GLB parts (performer, squirrel, keyboard, instruments, room) using validated private manifests and world transforms; output is genuine GLB structure and an explicitly REVIEW_REQUIRED receipt, never a generated 2D billboard. Seven synthetic CPU tests plus prior private reference pack/structural checks run in GitHub Actions. No original photo committed. Not a live generated scene or Blender-editable deliverable before native models and real Blender acceptance.
+
+**SEPARATE GPU PATH:** Draft PR #305 now has a commercial-raster licensing mitigation (DRTK MIT adapter) and real pinned-upstream source CI green, but full licensing, CUDA image build/benchmark and runtime input upload remain blocked. Owner-authorized ECOMECH and Halloween paid jobs have NOT been dispatched; no 3D download URLs or costs. Existing Oracle production unchanged.
+
+---
+
+## 2026-10-16 — PR #308 reference QA CI passed; two real GPU models still NOT generated
+
+**VERIFIED:** Both owner-held ECOMECH V4 and Halloween reference ZIPs passed local CRC/hash/PNG size checks. Synthetic structural GLB/PBR evidence checks passed locally (8/8) and in protected GitHub Actions: https://github.com/teslaeco/WORLDIFACT/actions/runs/38850340309 . The complete repository verification and UI publication preflight passed on exact head 66f5cfa2d777eab93786363c00474041ee252236: https://github.com/teslaeco/WORLDIFACT/actions/runs/38850340265 and https://github.com/teslaeco/WORLDIFACT/actions/runs/38850340318 .
+
+**DATE-RELATED TEST FIX:** Old owner-unused-points test fixtures expected an expired one-day maintenance route to remain open after its actual 2026-10-16T00:00Z deadline. Test-only Node mock timers now pin the historical authorized instant (2026-10-15T12:00Z). **The production deadline, API source, owner authorization, ledger, receipts and balances were NOT modified**. No expired production access was reactivated.
+
+**EXPERIENCE:** GitHub PR #308 documents the author's verifiable OpenAI Parameter Golf experiments #1750 and #2076 and translates reproducible benchmarking, tight budgets and artifact provenance into honest 3D geometry/PBR/scene checks. It does not claim a Parameter Golf leaderboard win or a photo-to-mesh model was generated.
+
+**NO-GO:** The last real RunPod management check reported zero provisioned GPU endpoints. No commercially licensed TRELLIS.2 textured exporter/image has been approved, and Halloween remains a multi-object pipeline problem. **No paid Astra/RunPod inference ran, no real ECOMECH or Halloween GLB/BLEND download exists, no revenue or Oracle production configuration was changed**. Keep PR #308 draft until actual GPU readiness and reviewed visual QA; do not merge/deploy just for green mock tests.
+
+---
+
+## 2026-10-16 — Parameter Golf lessons applied to two private 3D trials (still source-only)
+
+**TESTS:** Two owner image ZIP manifests/PNG SHA-256 verified locally. Added `scripts/verify-3d-trial-result.py` + eight synthetic CPU unit tests to reject flat billboards, missing independent prop/scene meshes, absent PBR texture, reused camera PNGs and false `visualAccepted` claims. Follow PR #308 CI for independently rerun results; local 8/8 pass is not provider GPU generation.
+
+**PARAMETER GOLF:** Verified author's OpenAI PR #1750 (explicitly non-record) and PR #2076 (PR-reported three-seed mean 0.92967555 BPB within ~15.92MB). Applying reproducibility/measurement/budget discipline to WORLDIFACT, NOT claiming BPB predicts photorealistic 3D. See docs/PARAMETER_GOLF_TO_3D_20261016.md.
+
+**BLOCKED:** No RunPod endpoint/image provisioned, NVIDIA exporter license gate unresolved, no actual Astra+RunPod photo-to-mesh generation, no final downloadable robot or Halloween GLB. Owner's two paid tests remain pending; preserve Oracle and 0 active GPU rule.
+
+---
+
+## 2026-10-16 — Two paid owner reference trials requested; no fabricated 3D results
+
+**INPUT PREPARED / NO RUNPOD GPU / NO ASTRA INFERENCE.** Owner supplied exact ECOMECH V4 and Halloween music room PNG references plus QA board; approved two paid tests and asks for two actual 3D model URLs. Private source input ZIPs and mask candidates are held in the user's ChatGPT session, not copied into the public repo. Source-pack validation and synthetic tests added on an isolated branch. Provider account GET verified zero RunPod endpoints, PR #305 remains nonmergeable and commercially restricted nvdiffrast PBR path remains blocked. Halloween scene requires multi-object scene construction, which PR #305 does not support. No paid inference executed, no model URLs can honestly be issued. See docs/REFERENCE_TRIALS_20261016.md.
+
+---
+
 ## 2026-10-16 — RunPod/R2 credentials present in GitHub, safe production preflight staged
 
 **SCREENSHOT EVIDENCE / NOT CONNECTED / NOT DEPLOYED / ZERO GPU SPEND.** Owner screenshots show Production has 14 environment secrets and 4 variables, including R2, RunPod and Oracle. The R2 S3 endpoint variable looks like a literal explanatory placeholder, not a URL: fail closed until corrected. RunPod key had returned 403 on a prior v1 check; owner now reports restricted Read/Write scope and a USD 33 RunPod budget, neither independently validated. Draft #305 stays unmerged; its offline provider and real Blender fixture CI passed, with flaky ISS source timeout cleared by rerun.
