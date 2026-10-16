@@ -38,14 +38,14 @@ def l4_chess_512_trial():
     return construct("L4", require_cuda=True)
 
 
-@app.task(gpu=runpod.GpuType.NVIDIA_A100_80GB_PCIe, gpu_count=1,
+@app.task(gpu="A100", gpu_count=1,
           container_disk_gb=40, dependencies=["trimesh==4.11.1", "Pillow==12.3.0"])
 def a100_ecomech_trial():
     from tools.gpu_trials.procedural_models import construct
     return construct("A100", require_cuda=True)
 
 
-@app.task(gpu=runpod.GpuType.NVIDIA_H100_80GB_HBM3, gpu_count=1,
+@app.task(gpu="H100", gpu_count=1,
           container_disk_gb=40, dependencies=["trimesh==4.11.1", "Pillow==12.3.0"])
 def h100_halloween_trial():
     from tools.gpu_trials.procedural_models import construct
@@ -60,12 +60,17 @@ def quote_catalog(data):
     if not isinstance(data, dict) or not isinstance(data.get("gpus"), list):
         raise Refused("GPU_POD_CATALOG_UNKNOWN")
     quote = {}
-    names = {"L4": "NVIDIA L4", "A100": "NVIDIA A100 80GB PCIe",
-             "H100": "NVIDIA H100 80GB HBM3"}
+    names = {"L4": "NVIDIA L4", "A100": "A100", "H100": "H100"}
     for model, exact in names.items():
         prices = []
         for gpu in data["gpus"]:
-            if not isinstance(gpu, dict) or gpu.get("id") != exact:
+            if not isinstance(gpu, dict) or not isinstance(gpu.get("id"), str):
+                continue
+            if model == "L4" and gpu["id"] != exact:
+                continue
+            if model != "L4" and exact not in gpu["id"].upper():
+                continue
+            if model in ("A100", "H100") and gpu.get("memory", 0) < 80:
                 continue
             value = gpu.get("price", {}).get("secure")
             if not isinstance(value, (int, float)) or not math.isfinite(value):
