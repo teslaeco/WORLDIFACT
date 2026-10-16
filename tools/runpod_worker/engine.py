@@ -7,6 +7,7 @@ import hashlib,json,os,re,subprocess,sys
 from pathlib import Path
 from contracts import Rejected
 from storage import digest
+from trellis_mit_patch import audit as verify_commercial_upstream_patch
 MODEL='microsoft/TRELLIS.2-4B'
 CODE_REVISION='75fbf0183001ed9876c8dbb35de6b68552ee08bd'
 WEIGHTS_REVISION='af44b45f2e35a493886929c6d786e563ec68364d'
@@ -73,11 +74,16 @@ class NativeEngine:
         if not torch.cuda.is_available() or torch.cuda.get_device_properties(0).total_memory<24_000_000_000:
             raise Rejected('CUDA_24GB_REQUIRED')
         upstream=Path(os.environ['TRELLIS_CODE_DIR']).resolve();bundle=Path(os.environ['TRELLIS_BUNDLE_DIR'])
-        # Trust only the operator-selected image path, not a global safe.directory=* exception.
-        git=['git','-c',f'safe.directory={upstream}','-C',str(upstream)]
-        code=subprocess.check_output(git+['rev-parse','HEAD'],text=True,timeout=10).strip()
-        if code!=CODE_REVISION:raise Rejected('UPSTREAM_REVISION_CHANGED')
-        subprocess.run(git+['diff','--exit-code','HEAD','--'],check=True,timeout=10,capture_output=True)
+        # The image build applies exactly ONE reviewed MIT DRTK import patch to
+        # the immutable Microsoft source. Never patch/download during inference.
+        proof=verify_commercial_upstream_patch(upstream,apply=False)
+        if proof['revision'] != CODE_REVISION:
+            raise Rejected('UPSTREAM_REVISION_CHANGED')
+        import importlib.util
+        if (importlib.util.find_spec('drtk') is None
+                or importlib.util.find_spec('nvdiffrast') is not None
+                or importlib.util.find_spec('nvdiffrec_render') is not None):
+            raise Rejected('COMMERCIAL_RASTERIZER_BUNDLE_NOT_VERIFIED')
         config=load_bundle(bundle)
         sys.path.insert(0,str(upstream.resolve()))
         from trellis2.pipelines import Trellis2ImageTo3DPipeline,rembg
