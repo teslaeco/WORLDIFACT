@@ -46,7 +46,7 @@ def l4_chess_512_trial(geometry_source: str):
     if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
         raise RuntimeError("UNEXPECTED_GEOMETRY_SOURCE_SIZE")
     raw = geometry_source.encode("utf-8")
-    blob = b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+    blob = b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
     if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
         raise RuntimeError("UNREVIEWED_REMOTE_GEOMETRY_SOURCE")
     namespace = {"__name__": "worldifact_pinned_gpu_geometry"}
@@ -63,7 +63,7 @@ def a100_ecomech_trial(geometry_source: str):
     if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
         raise RuntimeError("UNEXPECTED_GEOMETRY_SOURCE_SIZE")
     raw = geometry_source.encode("utf-8")
-    blob = b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+    blob = b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
     if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
         raise RuntimeError("UNREVIEWED_REMOTE_GEOMETRY_SOURCE")
     namespace = {"__name__": "worldifact_pinned_gpu_geometry"}
@@ -80,7 +80,7 @@ def h100_halloween_trial(geometry_source: str):
     if not isinstance(geometry_source, str) or not 1_000 < len(geometry_source) < 50_000:
         raise RuntimeError("UNEXPECTED_GEOMETRY_SOURCE_SIZE")
     raw = geometry_source.encode("utf-8")
-    blob = b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+    blob = b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
     if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
         raise RuntimeError("UNREVIEWED_REMOTE_GEOMETRY_SOURCE")
     namespace = {"__name__": "worldifact_pinned_gpu_geometry"}
@@ -186,7 +186,7 @@ def operator_run(allowed: list[str] | None = None, dispatch=None, quotefn=live_q
     quote = quotefn(os.environ.get("RUNPOD_API_KEY", ""))
     # Source is verified locally before any paid GPU dispatch and again on each worker.
     content = (LOCAL_MODULE_DIR / "procedural_models.py").read_bytes()
-    blob = b"blob " + str(len(content)).encode("ascii") + b"\\0" + content
+    blob = b"blob " + str(len(content)).encode("ascii") + b"\0" + content
     import hashlib
     if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
         raise Refused("UNREVIEWED_LOCAL_GEOMETRY_SOURCE")
