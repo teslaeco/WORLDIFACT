@@ -84,6 +84,47 @@ class FlashWorkerTransport(unittest.TestCase):
                                   capture_output=True, timeout=30)
             self.assertEqual(proc.returncode, 0, proc.stderr[-1200:])
 
+    def test_isolated_gpu_response_persistence_needs_no_repo_module(self):
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        from tools.gpu_trials.procedural_models import construct
+        fixture = construct("L4", require_cuda=False)
+        # This is a CPU fixture with intentionally simulated GPU attestation
+        # to validate serialization only, NEVER to publish as a true CUDA GLB.
+        fixture["gpuName"] = "NVIDIA GeForce RTX 4090"
+        fixture["gpuVramGiB"] = 23.9
+        fixture["cudaMatrixChecksum"] = 1.0
+        fixture["cudaComputeMs"] = 40.0
+        with tempfile.TemporaryDirectory(prefix="runpod-store-response-") as isolated:
+            directory = Path(isolated)
+            (directory / "runpod_live_isolated.py").write_text(
+                SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
+            (directory / "input_receipt.json").write_text(json.dumps(fixture))
+            (directory / "geometry_payload.txt").write_text(
+                GEOMETRY.read_text(encoding="utf-8"))
+            (directory / "gpu-trial-artifacts").mkdir()
+            self.assertFalse((directory / "procedural_models.py").exists())
+            program = """
+import importlib.util, json
+from pathlib import Path
+source = Path('runpod_live_isolated.py')
+spec = importlib.util.spec_from_file_location('worldifact_isolated_store',source)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+model = json.loads(Path('input_receipt.json').read_text())
+payload = Path('geometry_payload.txt').read_text()
+receipt = module.store_proven_trial(Path('gpu-trial-artifacts'),'L4',model,payload)
+assert receipt['gpuResultValidated'] is True
+assert Path('gpu-trial-artifacts/chess-cube-512-led-rook.glb').read_bytes()[:4] == b'glTF'
+assert Path('gpu-trial-artifacts/chess-cube-512-led-rook.json').is_file()
+"""
+            proc = subprocess.run([sys.executable, "-c", program],
+                                  cwd=directory, text=True,
+                                  capture_output=True, timeout=45)
+            self.assertEqual(proc.returncode, 0, proc.stderr[-1200:])
+
     def test_no_module_level_repo_imports_in_generated_worker(self):
         tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
         imports = [node for node in tree.body
