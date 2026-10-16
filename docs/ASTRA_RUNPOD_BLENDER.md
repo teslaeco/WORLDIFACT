@@ -1,3 +1,28 @@
+## 2026-10-16 — concrete MIT UV bake implementation (code staged; GPU NOT activated)
+
+The previous source path imported NVIDIA `nvdiffrast` into `o_voxel.postprocess.to_glb()` and was unsuitable for paid commercial subscriptions under its source license. This draft now adds a **reviewable import-only patch** plus our own `worldifact_drtk_uv.py` adapter. The adapter maps NVIDIA's four-channel raster contract to Meta's **MIT-licensed DRTK** index/barycentric API: UV NDC → pixel centers, face ID + 1, chunk offsets, Barycentric 3D vertex interpolation, and zero-filled background. The rest of Microsoft's MIT conversion pipeline still performs CuMesh (MIT) topology cleanup/UV unwrap and FlexGEMM (MIT) voxel material sampling. This keeps raw geometry and PBR color/metallic/roughness attributes intact instead of pasting a reference image onto a 2D plane.
+
+**Pinned references:**
+- Microsoft TRELLIS.2 source `75fbf0183001ed9876c8dbb35de6b68552ee08bd`, exact single edit `o-voxel/o_voxel/postprocess.py`: `import nvdiffrast.torch as dr` → `import worldifact_drtk_uv as dr`.
+- DRTK MIT source `43c3095d01d0ff435c798518e97e387c784b567f`, compiled in-place from the audited source at `/opt/DRTK`; the GPU-base source and binary SBOM remain to be established.
+- Runtime rejects mismatched Microsoft git revision, any nonmatching source patch, other tracked source edits, absent DRTK or installed NVIDIA nvdiffrast/nvdiffrec rendering libraries.
+- Real pinned upstream patch check is in GitHub Actions (no GPU, no paid provider). Python tests exercise exact patch/rejection and UV pixel/face-ID math. **They do not prove CUDA UV raster parity or photorealistic resemblance**.
+
+**Image build/activation order (fail closed):**
+1. Audit *all* base-image CUDA/PyTorch, MIT dependencies, DINOv3 terms and accepted license, model bundle SHA-256, source revisions and binary provenance. Do not use a public shared image or download model checkpoints during user jobs.
+2. Build a digest-pinned Linux CUDA image with vetted TRELLIS2 source, DRTK compiled in place, preloaded local TRELLIS2/DINOv3 checkpoints and Blender. The Dockerfile runs `trellis_mit_patch.py --apply` then `--check`, rejects noncommercial NVIDIA packages, validates its source revision and refuses to build on an unknown base. **No such reviewed base/image digest exists yet**.
+3. Benchmark one synthetic GLB/PBR checkpoint, camera renders, file hashes and actual DRTK CUDA index/barycentric mapping against expected UV charts; reject seams, flipped v, missing PBR or black materials. Do not advertise parity before this measured test.
+4. Only when all license/security/performance gates pass, quote a specific RunPod GPU price, max execution, cold start + storage exposure, get owner approval for a controlled paid pilot and provision **Serverless Flex QUEUE, Active=0, Max=1, GPU=1, idle=5s**. Always verify the live endpoint settings; no 24/7 Pod or keepalive.
+5. Privately upload SHA-bound original images and reviewed masks through owner-authenticated R2 storage, not public GitHub or a public URL. Require a server-issued budget permit before one real Astra request and then at most one paid GPU reconstruction attempt per approved job.
+6. Check original geometry, all PBR views/clay views, editable BLEND, private signed download, account library saving, matched invoiced usage, and actual likeness. Halloween is an independent **multi-object scene** and requires real composition of performer, squirrel, piano, instruments and room; the single-object worker does **not** deliver it alone.
+7. Keep **GAME (real GLB/BLEND if inspected)** distinct from **MAKE (REVIEW_REQUIRED)**, preserve the existing Oracle path and all user credits, then request explicit GO before merging/deploying anything customer-facing.
+
+**Status:** MIT raster-adapter source **IMPLEMENTED / OFFLINE TEST PENDING REAL GPU**; operational RunPod GPU image **NOT BUILT**; real two-photo reconstruction **NOT EXECUTED**; commercial legal audit of full image **INCOMPLETE**. This work eliminates a known dependency only from the reviewed UV path; it does not yet certify every dependency or a deployable production service.
+
+See https://github.com/facebookresearch/DRTK/blob/43c3095d01d0ff435c798518e97e387c784b567f/LICENSE and https://github.com/microsoft/TRELLIS.2/blob/75fbf0183001ed9876c8dbb35de6b68552ee08bd/o-voxel/o_voxel/postprocess.py .
+
+---
+
 ## Mandatory on-demand-only GPU policy (owner confirmation, 2026-10-16)
 
 RunPod is **NOT** a permanently running Pod or 24/7 Active worker. When a licensed, image-digest-pinned endpoint is later provisioned, configure queue-based **Serverless Flex**, **Active workers = 0**, **Max workers = 1**, **GPUs per worker = 1**, **handler concurrency = 1**, **Idle timeout = 5 seconds**, **Automatic upgrade = false**. Match the exact checklist at `deploy/runpod/profile.example.json`; enforce it in CI with `tests/runpod-on-demand-profile.test.mjs`.
