@@ -1,6 +1,6 @@
 ## 2026-10-16 — Owner preparation stopped before paid dispatch; recovery scoped to unspent state
 
-Actual manual run 38969320339 on merge 68bb139b stopped at the OpenAI input-token-count POST with HTTPError. The GPU step was skipped, and the private result collector found zero model artifacts. No Astra generation dispatch was reached. The follow-up records only safe HTTP status/code/parameter diagnostics and permits matching CPU preparation to resume only when every Astra/GPU dispatch and result marker is absent. Existing derivatives must match byte-for-byte; all paid one-shot claims remain effective. Neither requested model is delivered yet.
+Actual manual run 38969320339 on merge 68bb139b stopped at the OpenAI input-token-count POST with HTTPError. Run 38970194190 on ab1f42c7 then stopped before that POST because a newly computed CPU mask differed from the immutable original. Both GPU steps were skipped and both collectors found zero model artifacts. No Astra generation dispatch was reached. Recovery now reuses the original saved mask after checking source provenance, reference hash, mask object hash, dimensions, coverage and all eight pinned robot points. It never replaces that mask. Only safe HTTP status/code/parameter diagnostics are logged, and matching CPU preparation may resume only when every Astra/GPU dispatch and result marker is absent. All paid one-shot claims remain effective. Neither requested model is delivered yet.
 
 ## 2026-10-16 — Two native owner generations prepared after actual GPU qualification
 
