@@ -1,3 +1,11 @@
+## 2026-10-16 — Real-geometry Halloween scene composition staged, no actual generated inputs
+
+**IMPLEMENTED / OFFLINE ONLY:** PR #308 adds `scripts/compose-private-scene.py` to combine five independent SHA-bound real GLB parts (performer, squirrel, keyboard, instruments, room) using validated private manifests and world transforms; output is genuine GLB structure and an explicitly REVIEW_REQUIRED receipt, never a generated 2D billboard. Seven synthetic CPU tests plus prior private reference pack/structural checks run in GitHub Actions. No original photo committed. Not a live generated scene or Blender-editable deliverable before native models and real Blender acceptance.
+
+**SEPARATE GPU PATH:** Draft PR #305 now has a commercial-raster licensing mitigation (DRTK MIT adapter) and real pinned-upstream source CI green, but full licensing, CUDA image build/benchmark and runtime input upload remain blocked. Owner-authorized ECOMECH and Halloween paid jobs have NOT been dispatched; no 3D download URLs or costs. Existing Oracle production unchanged.
+
+---
+
 ## 2026-10-16 — PR #308 reference QA CI passed; two real GPU models still NOT generated
 
 **VERIFIED:** Both owner-held ECOMECH V4 and Halloween reference ZIPs passed local CRC/hash/PNG size checks. Synthetic structural GLB/PBR evidence checks passed locally (8/8) and in protected GitHub Actions: https://github.com/teslaeco/WORLDIFACT/actions/runs/38850340309 . The complete repository verification and UI publication preflight passed on exact head 66f5cfa2d777eab93786363c00474041ee252236: https://github.com/teslaeco/WORLDIFACT/actions/runs/38850340265 and https://github.com/teslaeco/WORLDIFACT/actions/runs/38850340318 .
