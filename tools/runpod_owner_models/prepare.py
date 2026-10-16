@@ -138,11 +138,32 @@ def prepare(store, cfg):
             assert image.format=='JPEG' and image.width*image.height<=16000000
             image.load();image=image.convert('RGB')
         normalized=encode_png(image)
-        mask,mask_info=foreground(image,item['subject'])
-        mask_bytes=encode_png(mask)
         reference_sha=hashlib.sha256(normalized).hexdigest()
         put_bytes(store,prefix+'reference.png',normalized,'image/png')
-        put_bytes(store,prefix+'mask.png',mask_bytes,'image/png')
+        mask_bytes=store.read(prefix+'mask.png',12*1024*1024)
+        if mask_bytes is None:
+            mask,mask_info=foreground(image,item['subject'])
+            mask_bytes=encode_png(mask)
+            put_bytes(store,prefix+'mask.png',mask_bytes,'image/png')
+        else:
+            # CPU kernels on different hosts may differ at the segmentation
+            # threshold. Preserve and validate the originally saved mask.
+            prior=json.loads(store.read(prefix+'source-provenance.json',262144))
+            assert prior['originalKey']==source_key and prior['originalSha256']==item['sha256']
+            assert prior['referenceSha256']==reference_sha
+            mask_info=prior['mask']
+            if item['subject']=='robot':assert mask_info['revision']==SAM_REVISION
+            head=store.client.head_object(Bucket=store.bucket,Key=prefix+'mask.png')
+            assert head.get('Metadata',{}).get('sha256')==hashlib.sha256(mask_bytes).hexdigest()
+            with Image.open(io.BytesIO(mask_bytes)) as saved_mask:
+                assert saved_mask.format=='PNG' and saved_mask.size==image.size
+                saved_mask.load();saved_mask=saved_mask.convert('L')
+                coverage=sum(saved_mask.histogram()[205:])/(image.width*image.height)
+                assert .01<coverage<.98
+                if item['subject']=='robot':
+                    assert .15<coverage<.72
+                    for point in ((619,84),(545,335),(699,697),(315,1272),(839,1321),(936,729),(244,281),(285,420)):
+                        assert saved_mask.getpixel(point)>204
         store.create_json(prefix+'source-provenance.json',{
             'originalKey':source_key,'originalSha256':item['sha256'],
             'normalization':'lossless RGB PNG derivative; original JPEG retained',

@@ -30,7 +30,7 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: {node-version: '24'}
-      - run: python -m pip install cryptography==50.0.2
+      - run: python -m pip install cryptography==50.0.2 Pillow==12.3.0
       - run: node --test tests/runpod-owner-models.test.mjs tests/runpod-provision-on-demand.test.mjs
       - run: python -m unittest discover -s tests -p 'test_owner_model_*.py'
       - run: python -m py_compile tools/runpod_owner_models/*.py
@@ -48,7 +48,7 @@ jobs:
       - name: Require exact reviewed generation, budget, source and output scope
         id: guard
         run: |
-          test "$(git hash-object tools/runpod_owner_models/prepare.py)" = '920b8cbcc1aa753ed92200bb4da941ecc27e65bc'
+          test "$(git hash-object tools/runpod_owner_models/prepare.py)" = 'ede040d260560018a078e5821d051ee0094d2cc7'
           test "$(git hash-object tools/runpod_owner_models/claim_dispatch.py)" = '7ab15ac1e171232e078881b413a7190ae52641c1'
           test "$(git hash-object tools/runpod_owner_models/collect.py)" = 'f8ed69dae7ae1c5dc8e95a01364a8f77bd747a5a'
           test "$(git hash-object scripts/runpod-owner-models-once.mjs)" = '67a9d9548836090367faa78ab34468321bc55a38'
