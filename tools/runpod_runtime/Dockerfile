@@ -27,9 +27,11 @@ RUN git init /opt/FlexGEMM && git -C /opt/FlexGEMM fetch --depth=1 https://githu
     && git -C /opt/FlexGEMM checkout --detach FETCH_HEAD \
     && git -C /opt/FlexGEMM submodule update --init --recursive --depth=1 \
     && python -m pip install --no-cache-dir --no-build-isolation /opt/FlexGEMM
+# DRTK extensions share a build.ninja path. Serialize extension builds; MAX_JOBS
+# still permits two compiler workers within the current extension.
 RUN git init /opt/DRTK && git -C /opt/DRTK fetch --depth=1 https://github.com/facebookresearch/DRTK.git 43c3095d01d0ff435c798518e97e387c784b567f \
     && git -C /opt/DRTK checkout --detach FETCH_HEAD \
-    && cd /opt/DRTK && python setup.py build_ext --inplace -j 2
+    && cd /opt/DRTK && python setup.py build_ext --inplace -j 1
 COPY tools/runpod_worker/ /opt/worldifact/worker/
 COPY tools/runpod_runtime/ /opt/worldifact/runtime/
 ENV PYTHONPATH=/opt/DRTK:/opt/TRELLIS.2:/opt/TRELLIS.2/o-voxel:/opt/worldifact/worker \

@@ -13,13 +13,22 @@ do not rent a permanent Runpod network volume or an always-on GPU.
   verified the exact repository revision and gated file identities. This did
   not download weights or allocate GPU time. No secret value was retrieved.
 - [Private runtime build 38938779926](https://github.com/teslaeco/WORLDIFACT/actions/runs/38938779926)
-  was started on `677153297bf6f7b8183b164b94c9b0dae9455577`. Its result remains
-  pending; starting the workflow is not a built-image or inference claim.
+  failed on `677153297bf6f7b8183b164b94c9b0dae9455577` after successfully building
+  FlashAttention, CuMesh and FlexGEMM. DRTK's two concurrent extension builds
+  wrote the same `build.ninja`; the rasterizer link then lacked its object files.
+  The recipe now serializes extension builds (`-j 1`) while retaining two Ninja
+  workers within each extension. The corrected build still needs verification;
+  no image digest or real inference exists yet.
 - 26 imported worker tests and four new bundle corruption/encoder tests pass
   locally. They use test doubles and tiny fixture weights, never real inference.
 - Full local `npm run verify` reached 2,343 passing tests and two failures because
   Chromium is absent. Lint/typecheck passed. Do not replace those browser tests
-  with mocks or claim a complete verify pass. The existing PR CI is the next gate.
+  with mocks or claim a complete local verify pass. Local `npm run build` and
+  `npm run deploy:check` subsequently passed.
+- [Existing full PR CI 38939382342](https://github.com/teslaeco/WORLDIFACT/actions/runs/38939382342)
+  passed on `54c948e5dd338b248ef4b7468ba33be3fd1c5bfa`, including the repository's
+  normal verify, foundation assembly and deployment dry-run. This is not GPU or
+  customer-generation evidence.
 
 ## Runtime implementation
 
