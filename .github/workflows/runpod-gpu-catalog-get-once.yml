@@ -1,0 +1,43 @@
+name: WORLDIFACT RunPod — one-time live GPU catalog (GET only; no billing)
+on:
+  push:
+    branches: ['main']
+    paths: ['ops/RUNPOD_GPU_CATALOG_GET_ONCE_20261016.json']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-runpod-gpu-catalog-get-once
+  cancel-in-progress: false
+jobs:
+  catalog:
+    if: github.repository == 'teslaeco/WORLDIFACT'
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24'}
+      - name: Verify exact approved standalone marker and pinned GET-only implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = 'ops/RUNPOD_GPU_CATALOG_GET_ONCE_20261016.json'
+          test "$(git hash-object scripts/runpod-gpu-catalog-readonly.mjs)" = '6af6d33dfb1d2f9c081ed74e34d72cec2d3d23e4'
+          node --input-type=module - <<'NODE'
+          import {readFileSync} from 'node:fs'
+          const value=JSON.parse(readFileSync('ops/RUNPOD_GPU_CATALOG_GET_ONCE_20261016.json','utf8'))
+          const expected={revision:'worldifact-runpod-gpu-readiness-v1',
+            operations:['GET /v2/serverless','GET /v2/network-volumes','GET /v2/pods',
+              'GET /v2/catalog/gpus?include=AVAILABILITY&product=SERVERLESS&count=1'],
+            paidGpuAuthorized:false,createResources:false}
+          if(JSON.stringify(value)!==JSON.stringify(expected))process.exit(2)
+          NODE
+          node --test tests/runpod-gpu-catalog-readonly.test.mjs
+      - name: Check current RunPod API v2 inventory + GPU prices (strict GET only)
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: node scripts/runpod-gpu-catalog-readonly.mjs
