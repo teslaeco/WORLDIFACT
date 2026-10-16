@@ -48,7 +48,11 @@ function verifyReceipt(receipt, spec, raw) {
     receipt.kind === EXPECTED && receipt.task === spec.id &&
     receipt.gpuClass === spec.gpu && receipt.gpuResultValidated === true,
     'GPU_PROVENANCE_MISMATCH')
-  assert(typeof receipt.gpuName === 'string' && receipt.gpuName.toUpperCase().includes(spec.gpu) &&
+  const actualGpu = typeof receipt.gpuName === 'string' ? receipt.gpuName.toUpperCase() : ''
+  const expectedGpu = spec.gpu === 'L4'
+    ? (actualGpu.includes('NVIDIA L4') || (actualGpu.includes('NVIDIA') && actualGpu.includes('RTX 4090')))
+    : actualGpu.includes('NVIDIA ' + spec.gpu)
+  assert(expectedGpu && receipt.actualGpuHardware === receipt.gpuName &&
     Number(receipt.gpuVramGiB) >= (spec.gpu === 'L4' ? 21 : 72) &&
     Number.isFinite(receipt.cudaMatrixChecksum) &&
     Number.isFinite(receipt.cudaComputeMs) && receipt.cudaComputeMs >= 0, 'CUDA_PROOF_MISSING')
