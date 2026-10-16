@@ -20,7 +20,7 @@ class TransferTests(unittest.TestCase):
         self.manifest = {'id': 'owner-models-20261016', 'expiresBefore': '2026-10-17T12:00:00Z',
                          'publicKeyPem': self.key.public_key().public_bytes(serialization.Encoding.PEM,
                                             serialization.PublicFormat.SubjectPublicKeyInfo).decode(),
-                         'sources': [{'name': name+'.png', 'sha256': 'a'*64, 'bytes': 100}
+                         'sources': [{'name': name+'.jpg', 'sha256': 'a'*64, 'bytes': 100}
                                      for name in ('robot', 'room', 'alternate')]}
         self.now = datetime(2026, 10, 16, 21, tzinfo=timezone.utc)
 
@@ -46,7 +46,7 @@ class TransferTests(unittest.TestCase):
     def test_expired_authorization_and_path_escape_rejected_before_signing(self):
         with self.assertRaises(ValueError):
             transfer.validate(self.manifest, datetime(2026, 10, 18, tzinfo=timezone.utc))
-        self.manifest['sources'][0]['name'] = '../other.png'
+        self.manifest['sources'][0]['name'] = '../other.jpg'
         client = Mock()
         with self.assertRaises(ValueError):
             transfer.create_packet(client, 'private-fixture', self.manifest, self.now)

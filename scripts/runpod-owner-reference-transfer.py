@@ -27,7 +27,7 @@ def validate(manifest, now):
         raise ValueError('TRANSFER_AUTHORIZATION_EXPIRED')
     names = set()
     for source in manifest['sources']:
-        if (not re.fullmatch(r'[a-z0-9-]+\.png', source['name'])
+        if (not re.fullmatch(r'[a-z0-9-]+\.jpg', source['name'])
                 or not re.fullmatch(r'[a-f0-9]{64}', source['sha256'])
                 or type(source['bytes']) is not int or not 1 <= source['bytes'] <= 12*1024*1024
                 or source['name'] in names):
@@ -46,13 +46,13 @@ def create_packet(client, bucket, manifest, now):
     uploads = []
     for source in manifest['sources']:
         target = 'ops/owner-models-20261016/sources/' + source['name']
-        params = {'Bucket': bucket, 'Key': target, 'ContentType': 'image/png',
+        params = {'Bucket': bucket, 'Key': target, 'ContentType': 'image/jpeg',
                   'ContentLength': source['bytes'], 'IfNoneMatch': '*',
                   'Metadata': {'sha256': source['sha256']}}
         url = client.generate_presigned_url('put_object', Params=params,
                                            ExpiresIn=900, HttpMethod='PUT')
         uploads.append({**source, 'key': target, 'url': url, 'method': 'PUT',
-                        'headers': {'Content-Type': 'image/png', 'Content-Length': str(source['bytes']),
+                        'headers': {'Content-Type': 'image/jpeg', 'Content-Length': str(source['bytes']),
                                     'If-None-Match': '*', 'x-amz-meta-sha256': source['sha256']}})
     plaintext = json.dumps({'id': manifest['id'], 'expiresAt': int(now.timestamp())+900,
                             'uploads': uploads}, separators=(',', ':')).encode()
