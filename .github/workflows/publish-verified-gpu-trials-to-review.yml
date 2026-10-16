@@ -43,7 +43,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          id="$(node --input-type=module -p "JSON.parse(require('fs').readFileSync('ops/PUBLISH_VERIFIED_GPU_TRIALS_20261016.json','utf8')).sourceRunId")"
+          id="$(node -p "JSON.parse(require('fs').readFileSync('ops/PUBLISH_VERIFIED_GPU_TRIALS_20261016.json','utf8')).sourceRunId")"
           json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}")"
           printf '%s' "$json" | jq -e '.conclusion=="success" and .status=="completed" and .head_branch=="main" and .name=="WORLDIFACT one-time three GPU procedural GLB tests — paid, scale to zero"' >/dev/null
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" | \
