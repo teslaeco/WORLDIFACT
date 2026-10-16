@@ -39,8 +39,11 @@ class RealProceduralGLBTests(unittest.TestCase):
 
     def test_gpu_branch_requires_actual_cuda(self):
         # CI CPU runners must never invent a CUDA result.
-        import torch
-        if not torch.cuda.is_available():
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        import sys
+        stub=SimpleNamespace(cuda=SimpleNamespace(is_available=lambda:False))
+        with patch.dict(sys.modules, {'torch':stub}):
             with self.assertRaisesRegex(RuntimeError,'CUDA_GPU_REQUIRED'):
                 models.construct('L4',require_cuda=True)
 
