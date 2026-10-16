@@ -1,0 +1,25 @@
+name: WORLDIFACT RunPod shared volume — offline financial and region contracts
+on:
+  push:
+    branches: ['ops/worldifact-256gb-shared-storage-20261016']
+    paths:
+      - 'scripts/runpod-network-volume-once.mjs'
+      - 'tests/runpod-network-volume-once.test.mjs'
+      - '.github/workflows/worldifact-storage-*.yml'
+  pull_request:
+    paths:
+      - 'scripts/runpod-network-volume-once.mjs'
+      - 'tests/runpod-network-volume-once.test.mjs'
+      - '.github/workflows/worldifact-storage-*.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24'}
+      - run: node --test tests/runpod-network-volume-once.test.mjs
