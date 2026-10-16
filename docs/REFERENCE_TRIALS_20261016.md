@@ -56,3 +56,12 @@ Source execution proof: https://github.com/teslaeco/WORLDIFACT/actions/runs/3881
 
 ---
 
+
+## 2026-10-16 — independent editable Halloween scene composition (offline implementation)
+
+**IMPLEMENTED / SYNTHETIC CONTRACT TESTED, NOT LIVE GENERATED.** A new `scripts/compose-private-scene.py` accepts exactly five separate private, SHA-256-bound source GLB parts (`performer`, `squirrel`, `keyboard`, `floating_instruments`, `room`). It rejects arbitrary URLs/path traversal, changed GLB bytes, missing parts, nonfinite or implausible matrices, empty meshes and fake visual approval. It preserves independent GLB scene nodes, transforms and their actual mesh material data. It exports `scene.glb` with a `REVIEW_REQUIRED` SHA receipt, with `blenderEditable=false` until an actual Blender export is run. It **never fabricates a musician or squirrel** when input geometry is absent.
+
+Synthetic fixtures are primitive 3D meshes for unit tests ONLY. The actual Halloween photo needs separate model generation/asset extraction; the single-object TRELLIS.2 pipeline cannot in one pass produce the complete playable environment. Real person likeness, hands, squirrel fur, room composition and material fidelity require human QA against the original image. The preview scene is NOT automatically GAME-ready or MAKE-approved.
+
+The exporter integration under [PR #305](https://github.com/teslaeco/WORLDIFACT/pull/305) now stages a deterministic *MIT DRTK* UV rasterization adapter to replace `nvdiffrast` in the pinned Microsoft postprocessor without changing model weights or its PBR attribute pipeline. Real pinned-upstream CI passed in [Actions run](https://github.com/teslaeco/WORLDIFACT/actions/runs/38852190275); there is still no built/audited CUDA image, no GPU endpoint, and no real original-photo generation. Do not confuse these provider-free contracts with completed models.
+
