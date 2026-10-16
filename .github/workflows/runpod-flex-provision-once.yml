@@ -1,0 +1,53 @@
+name: WORLDIFACT RunPod Flex — create ONE disabled endpoint (operator-only)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type PROVISION-WORLDIFACT-FLEX; this may provision a Serverless resource. Never run without an approved image."
+        required: true
+        type: string
+      image_digest:
+        description: "Reviewed GHCR image: ghcr.io/teslaeco/worldifact-runpod3d@sha256:<64 hex>. Not a mutable tag."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worldifact-runpod-flex-provision-once
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/main' && inputs.confirmation == 'PROVISION-WORLDIFACT-FLEX'
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify immutable operator script before exposing the scoped secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object scripts/runpod-provision-on-demand.mjs)" = 'ad7b63aac6e47c0ded62f50c25f0e7a94d53f822'
+          node --test tests/runpod-provision-on-demand.test.mjs
+      - name: RunPod management API v2 — create at most ONE inactive Flex endpoint
+        # Run this only after a source/weights/license/CUDA image release review.
+        # No key or raw provider response may be emitted to the log.
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          RUNPOD_PROVISION_CONFIRMATION: ${{ inputs.confirmation }}
+          RUNPOD_IMAGE_DIGEST: ${{ inputs.image_digest }}
+          RUNPOD_APPROVED_IMAGE_DIGEST: ${{ vars.RUNPOD_APPROVED_IMAGE_DIGEST }}
+          RUNPOD_LICENSES_REVIEWED: ${{ vars.RUNPOD_LICENSES_REVIEWED }}
+          RUNPOD_CUDA_PARITY_VERIFIED: ${{ vars.RUNPOD_CUDA_PARITY_VERIFIED }}
+          RUNPOD_WEIGHTS_VERIFIED: ${{ vars.RUNPOD_WEIGHTS_VERIFIED }}
+          RUNPOD_R2_ACCOUNT_VERIFIED: ${{ vars.RUNPOD_R2_ACCOUNT_VERIFIED }}
+        run: node scripts/runpod-provision-on-demand.mjs
