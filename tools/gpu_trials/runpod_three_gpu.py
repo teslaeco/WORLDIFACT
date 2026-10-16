@@ -37,7 +37,7 @@ GPU_CAPS = {"L4": 1.50, "A100": 3.50, "H100": 6.0}
 app = runpod.App(APP_NAME)
 
 
-@app.task(gpu=runpod.GpuType.NVIDIA_L4, gpu_count=1,
+@app.task(gpu=["4090", "L4"], gpu_count=1,
           container_disk_gb=40, dependencies=["torch==2.6.0", "numpy==2.3.5", "trimesh==4.11.1", "Pillow==12.3.0"])
 def l4_chess_512_trial():
     from procedural_models import construct
@@ -66,15 +66,15 @@ def quote_catalog(data):
     if not isinstance(data, dict) or not isinstance(data.get("gpus"), list):
         raise Refused("GPU_POD_CATALOG_UNKNOWN")
     quote = {}
-    names = {"L4": "NVIDIA L4", "A100": "A100", "H100": "H100"}
-    for model, exact in names.items():
+    names = {"L4": ("NVIDIA L4", "4090"), "A100": ("A100",), "H100": ("H100",)}
+    for model, permitted in names.items():
         prices = []
         for gpu in data["gpus"]:
             if not isinstance(gpu, dict) or not isinstance(gpu.get("id"), str):
                 continue
-            if model == "L4" and gpu["id"] != exact:
+            if model == "L4" and not (gpu["id"] == permitted[0] or "4090" in gpu["id"].upper()):
                 continue
-            if model != "L4" and exact not in gpu["id"].upper():
+            if model != "L4" and not any(p in gpu["id"].upper() for p in permitted):
                 continue
             if model in ("A100", "H100") and gpu.get("memory", 0) < 80:
                 continue
@@ -126,7 +126,10 @@ def store_proven_trial(out_dir: Path, gpu_class: str, response: dict):
     if not isinstance(response, dict) or response.get("gpuClass") != gpu_class:
         raise Refused("GPU_RESPONSE_INVALID_OR_WRONG_CLASS")
     gpu = response.get("gpuName", "")
-    if gpu_class not in str(gpu).upper() or response.get("gpuVramGiB", 0) < (
+    actual_name = str(gpu).upper()
+    valid_hardware = (("L4" in actual_name or "4090" in actual_name)
+                      if gpu_class == "L4" else gpu_class in actual_name)
+    if not valid_hardware or response.get("gpuVramGiB", 0) < (
             21 if gpu_class == "L4" else 72):
         raise Refused("WRONG_OR_UNVERIFIED_GPU_HARDWARE")
     if response.get("cudaMatrixChecksum") is None or response.get("cudaComputeMs") is None:
@@ -136,6 +139,7 @@ def store_proven_trial(out_dir: Path, gpu_class: str, response: dict):
     out.write_bytes(raw)
     public_receipt = {k: value for k, value in response.items()
                       if k != "glbBase64"}
+    public_receipt["actualGpuHardware"] = gpu
     public_receipt["gpuResultValidated"] = True
     (out_dir / (TASKS[gpu_class] + ".json")).write_text(
         json.dumps(public_receipt, indent=2, sort_keys=True) + "\n")
