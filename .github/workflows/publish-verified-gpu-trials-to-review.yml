@@ -1,0 +1,81 @@
+name: Publish verified RunPod GPU GLBs to review branch (no production deploy)
+on:
+  push:
+    branches: ['main']
+    paths: ['ops/PUBLISH_VERIFIED_GPU_TRIALS_20261016.json']
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: worldifact-review-verified-gpu-trials
+  cancel-in-progress: false
+jobs:
+  prepare-reviewed-gallery-assets:
+    if: github.repository == 'teslaeco/WORLDIFACT'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24'}
+      - name: Require exactly one reviewed authorization marker on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = 'ops/PUBLISH_VERIFIED_GPU_TRIALS_20261016.json'
+          test "$(git hash-object scripts/prepare-gpu-trial-publication.mjs)" = '6147411a70333bc31707c9db4117d14ce46f615b'
+          node --input-type=module - <<'NODE'
+          import {readFileSync} from 'node:fs'
+          const content=JSON.parse(readFileSync('ops/PUBLISH_VERIFIED_GPU_TRIALS_20261016.json','utf8'))
+          const expected={revision:'worldifact-gpu-trials-publication-once-v1',
+            releaseType:'REVIEW_BRANCH_ONLY',noProductionDeploy:true,
+            originalUserImagesUsed:false,acceptsOnlyProceduralGpuGLB:true}
+          const {sourceRunId,...rest}=content
+          if (!Number.isSafeInteger(sourceRunId)||sourceRunId<1||
+            JSON.stringify(rest)!==JSON.stringify(expected))process.exit(2)
+          NODE
+      - name: Verify source job and independent RunPod cleanup really succeeded
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          id="$(node --input-type=module -p "JSON.parse(require('fs').readFileSync('ops/PUBLISH_VERIFIED_GPU_TRIALS_20261016.json','utf8')).sourceRunId")"
+          json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}")"
+          printf '%s' "$json" | jq -e '.conclusion=="success" and .status=="completed" and .head_branch=="main" and .name=="WORLDIFACT one-time three GPU procedural GLB tests — paid, scale to zero"' >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" | \
+            jq -e '([.jobs[] | select(.name=="three-gpu" and .conclusion=="success")] | length)==1 and ([.jobs[] | select(.name=="provider-postflight" and .conclusion=="success")] | length)==1' >/dev/null
+          echo "GPU_EVIDENCE_RUN_ID=${id}" >> "$GITHUB_ENV"
+      - name: Download three authentic GPU files (no CPU fixtures)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download "$GPU_EVIDENCE_RUN_ID" -n WORLDIFACT-THREE-GPU-PAID-PROCEDURAL-GLB-NOT-NEURAL -D "$RUNNER_TEMP/real-gpu-artifacts"
+      - name: Verify every receipt, SHA, embedded PBR material and 3D mesh
+        run: |
+          set -euo pipefail
+          node scripts/prepare-gpu-trial-publication.mjs "$RUNNER_TEMP/real-gpu-artifacts" public/gpu-trials
+      - name: Push only verified public model assets to a distinct review branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="review/real-gpu-models-${GITHUB_RUN_ID}"
+          git switch -c "$branch"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/gpu-trials/manifest.json public/gpu-trials/assets/
+          test "$(git diff --cached --name-only | wc -l)" -eq 4
+          git diff --cached --name-only | while read -r path; do
+            case "$path" in
+              public/gpu-trials/manifest.json|public/gpu-trials/assets/chess-cube-512-led-rook.glb|public/gpu-trials/assets/ecomech-asymmetric-mechanical-study.glb|public/gpu-trials/assets/halloween-multi-asset-room-study.glb) ;;
+              *) echo "UNEXPECTED_PUBLIC_FILE"; exit 2;;
+            esac
+          done
+          git commit -m "gallery: stage three GPU-attested procedural GLBs from Actions run ${GPU_EVIDENCE_RUN_ID}"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "Created review branch: $branch"
+          echo "No Cloudflare production deployment occurred."
