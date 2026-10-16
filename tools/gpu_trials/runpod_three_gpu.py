@@ -180,7 +180,7 @@ def store_proven_trial(out_dir: Path, gpu_class: str, response: dict, geometry_s
         raise Refused("UNEXPECTED_LOCAL_VALIDATOR_SOURCE_SIZE")
     import hashlib
     raw_source = geometry_source.encode("utf-8")
-    blob = b"blob " + str(len(raw_source)).encode("ascii") + b"\\0" + raw_source
+    blob = b"blob " + str(len(raw_source)).encode("ascii") + b"\0" + raw_source
     if hashlib.sha1(blob).hexdigest() != "91d87511b507b72652422ba7839ec28f0fcb1c93":
         raise Refused("UNREVIEWED_LOCAL_VALIDATOR_SOURCE")
     namespace = {"__name__": "worldifact_pinned_local_validation"}
