@@ -43,3 +43,16 @@ Source execution proof: https://github.com/teslaeco/WORLDIFACT/actions/runs/3881
 | Halloween music scene | YES, PRIVATE | NO | NO | NONE |
 
 **NO-GO to claim completion or spend the RunPod wallet until the above blockers are cleared.**
+
+## 2026-10-16 — Parameter Golf engineering transfer + stricter 3D output checks
+
+**LOCALLY VERIFIED (OWNER-HELD FILES):** Both private source ZIP packs were opened, ZIP CRCs checked and the embedded source/mask PNGs rehashed against their manifests; images retained privately, no upload to public GitHub or GPU. The robot has 3 PNGs including QA collage; Halloween has 2 PNGs. Both are **SOURCE_ONLY**, not generated models.
+
+**IMPLEMENTED / SYNTHETIC CI:** `scripts/verify-3d-trial-result.py` rejects GLB billboards/low-density geometry, missing separate robot/chili or performer/squirrel/keyboard/room 3D scene nodes, missing PBR basecolor texture, false QA approval, mismatched source checksums, missing BLEND signature and duplicated 8-view PNGs. Passing synthetic contract tests is **not** a real Astra or RunPod result, nor a measure of likeness.
+
+**EXPERIENCE / EVIDENCE:** The creator's published OpenAI Parameter Golf PRs #1750 and #2076 show optimization of measured language-model experiments, bounded artifacts and repeatable multi-seed reporting (PR #2076 reports 0.92967555 BPB / ~15.92 MB under 16MB). This motivates traceability and efficiency, **not an asserted 3D model or leaderboard victory**. Full explanation: [Parameter Golf → WORLDIFACT quality discipline](PARAMETER_GOLF_TO_3D_20261016.md).
+
+**NO-GO / actual GPU output:** RunPod still lacked a provisioned Serverless endpoint at the last authenticated management check; commercially permitted native PBR exporter/model bundle are not yet installed. Real robot GLB, Halloween editable 3D scene, Astra response IDs, RunPod job IDs, invoices and model download URLs: **NONE VERIFIED**. Two paid jobs remain authorized in principle but were NOT launched. They must run only on-demand, active workers 0 / max 1, and require measured costs and QA.
+
+---
+
