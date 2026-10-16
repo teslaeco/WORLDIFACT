@@ -17,8 +17,20 @@ do not rent a permanent Runpod network volume or an always-on GPU.
   FlashAttention, CuMesh and FlexGEMM. DRTK's two concurrent extension builds
   wrote the same `build.ninja`; the rasterizer link then lacked its object files.
   The recipe now serializes extension builds (`-j 1`) while retaining two Ninja
-  workers within each extension. The corrected build still needs verification;
-  no image digest or real inference exists yet.
+  workers within each extension. The corrected build passed native compilation.
+- [Build 38942262589](https://github.com/teslaeco/WORLDIFACT/actions/runs/38942262589)
+  on `f188824e61192c73c01f11ca183923a17506afd1` compiled all native dependencies,
+  imported the DINO class, downloaded and SHA-verified the full weight bundle,
+  and pushed the image. The final visibility check failed because the package
+  was public, contrary to the assumed new-package default. It was changed to
+  private in GitHub settings on 16 October before GPU use. The build now refuses
+  a missing package instead of relying on an assumed visibility default.
+  GitHub's version page shows immutable manifest digest
+  `sha256:f6cd2c5facce5008e6d40b5d08ce34bfb9050347d585ab8b4d91c79cfb76b993`.
+  Private pull and receipt extraction are being rechecked; real CUDA execution
+  and model generation remain unverified.
+- Runpod now lists the owner-created Docker credential `worldifact-ghcr`, ID
+  `cmvbbpdxq000pi81ul0ltivxv`. Its presence is verified; no token value was read.
 - 26 imported worker tests and four new bundle corruption/encoder tests pass
   locally. They use test doubles and tiny fixture weights, never real inference.
 - Full local `npm run verify` reached 2,343 passing tests and two failures because
@@ -68,9 +80,8 @@ binary receipt; the final immutable image digest is required for any deployment.
 ## Remaining gates
 
 1. Successful private image build and retained immutable digest/weight receipts.
-2. A Runpod registry credential able to pull that private GHCR image. The Runpod
-   Container Registry Auth page currently has no entries. This is a separate
-   credential from `HF_TOKEN`; no secret should be pasted into chat.
+2. A successful private pull using the owner-created Runpod registry credential
+   `worldifact-ghcr`. Credential presence alone does not prove pull access.
 3. Bounded real CUDA/DRTK and native model inference qualification, preserved
    originals and GLB/Blender exports in private R2, plus teardown/scale-to-zero.
 4. The existing provisioning attestations may be set only from real evidence.
