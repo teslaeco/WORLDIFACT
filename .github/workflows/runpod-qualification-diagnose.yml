@@ -1,0 +1,42 @@
+name: Runpod qualification startup diagnosis (GET only)
+on:
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '24'}
+      - name: Read only the endpoint created for qualification
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: |
+          node --input-type=module <<'JS'
+          const base='https://api.runpod.io/v2/serverless/q5g1ulcq0mwom8';
+          const headers={Authorization:'Bearer '+process.env.RUNPOD_API_KEY,Accept:'application/json'};
+          const get=async(url)=>{const r=await fetch(url,{headers,redirect:'error',signal:AbortSignal.timeout(10000)});if(!r.ok)throw new Error('GET_STATUS_'+r.status);return r.json()};
+          const ep=await get(base);
+          if(ep.name!=='WORLDIFACT-QUALIFY-gha-38955031054-1')throw new Error('WRONG_ENDPOINT');
+          console.log(JSON.stringify({id:ep.id,image:ep.image,registry:ep.registry,entrypoint:ep.entrypoint,cmdLengths:ep.cmd?.map(x=>x.length),args:ep.args,workers:ep.workers}));
+          const listing=await get(base+'/workers');
+          console.log(JSON.stringify({summary:listing.summary,workers:listing.workers?.map(w=>({id:w.id,status:w.status}))}));
+          const ids=[...new Set(['b3ozz0umlpbtwc','bdgfazr73l30s8',...(listing.workers??[]).map(w=>w.id)])].slice(0,5);
+          for(const id of ids){
+            if(!/^[a-z0-9]{8,30}$/.test(id))continue;
+            let stream='';
+            try{
+              const r=await fetch(base+'/workers/'+id+'/logs?source=both&tail=100',{headers,redirect:'error',signal:AbortSignal.timeout(4000)});
+              if(!r.ok){console.log(JSON.stringify({worker:id,logStatus:r.status}));continue}
+              const reader=r.body.getReader();
+              try{while(stream.length<120000){const v=await reader.read();if(v.done)break;stream+=new TextDecoder().decode(v.value)}}finally{await reader.cancel().catch(()=>{})}
+            }catch{}
+            for(const row of stream.split('\n')){
+              if(!row.startsWith('data:'))continue;
+              try{const x=JSON.parse(row.slice(5));if(x.source==='container'||/error|fail|ready|exit|denied|start|permission|invalid/i.test(x.line??''))console.log(JSON.stringify({worker:id,...x}))}catch{}
+            }
+          }
+          JS
