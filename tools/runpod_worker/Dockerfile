@@ -18,7 +18,14 @@ ENV ENABLE_RUNPOD_WORKER=false \
     TRELLIS_CODE_DIR=/opt/TRELLIS.2 \
     TRELLIS_BUNDLE_DIR=/models/trellis2 \
     BLENDER_BIN=/opt/blender/blender
-RUN python -m py_compile contracts.py storage.py handler.py engine.py blender_export.py
+# GPU_BASE_IMAGE must already contain a LICENSE-AUDITED, pinned MIT DRTK build,
+# the exact TRELLIS.2 git revision and read-only model/checkpoint bundle.
+# Never fetch weights or build a CUDA extension inside a user generation request.
+RUN python trellis_mit_patch.py --apply --source /opt/TRELLIS.2 && \
+    python trellis_mit_patch.py --check --source /opt/TRELLIS.2 && \
+    python -c "import importlib.util; assert importlib.util.find_spec('drtk') is not None, 'Pinned MIT DRTK missing'; assert importlib.util.find_spec('nvdiffrast') is None, 'Noncommercial nvdiffrast installed'; assert importlib.util.find_spec('nvdiffrec_render') is None, 'Noncommercial nvdiffrec installed'" && \
+    python -m py_compile contracts.py storage.py handler.py engine.py blender_export.py \
+      trellis_mit_patch.py uv_contract.py worldifact_drtk_uv.py
 # Do not embed OpenAI, RunPod, artifact credentials or weights into Git.
 USER 10001:10001
 CMD ["python", "-u", "handler.py"]
