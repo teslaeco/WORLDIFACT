@@ -41,4 +41,15 @@ Run [38997634111](https://github.com/teslaeco/WORLDIFACT/actions/runs/3899763411
 
 The actual public browser exposed a remaining device issue: WebGL was unavailable, and the existing software preview rejected the 18 MB models at its 16 MB limit. Interactive rendering was therefore NOT visually accepted. This follow-up provides four actual saved Blender renders per model when WebGL is unavailable, with an explicit saved-render label and working view selectors. WebGL-capable devices retain the original interactive renderer; the generic software limits are unchanged. The eight JPEGs are only web encodings of the previously delivered corrected PNG renders, with no crop, repaint, new generation or geometry change. Their source and output hashes are recorded in `OWNER_MODEL_RENDER_PROVENANCE_20261017.json`.
 
-The follow-up publication checks the exact changed-file allowlist against `177815e`, overlays these reviewed files onto the same live application baseline, verifies all eight render hashes and both unchanged GLBs, and retains every deployment gate. Browser acceptance of this fallback remains PENDING until it is actually published and inspected.
+The follow-up publication checks the exact changed-file allowlist against `177815e`, overlays these reviewed files onto the same live application baseline, verifies all eight render hashes and both unchanged GLBs, and retains every deployment gate. The fallback was subsequently published and accepted in the public browser as recorded below.
+
+## Verified public result
+
+PR #327 merged as `b57cc336e03b4afde1daeafab30f7e1cd52e8bbf` after CI 38998151231 passed. Publication [38998322330](https://github.com/teslaeco/WORLDIFACT/actions/runs/38998322330), job `117295766365`, passed all 2,317 baseline-overlay tests, original foundations, both deployment dry-runs and actual Cloudflare release at 03:22 UTC on 17 October 2026. Version: `57617709-fa12-4a8b-99bd-3a4ea0061406`. The release checker verified all 452 public assets, 12 HTML routes and both complete unchanged textured GLBs. The eight saved-render JPEGs matched the provenance manifest. Paid generation calls: zero.
+
+Actual public browser acceptance: both ECOMECH V4 and Halloween displayed their saved whole-model renders; selecting Back visibly changed the render for each model, and Whole model restored the original view. Both direct hash links select the correct model. Download links appeared only after full GLB byte/hash validation.
+
+- https://worldifact.xodobrox.workers.dev/models/#ecomech-v4
+- https://worldifact.xodobrox.workers.dev/models/#halloween-music-room
+
+This browser does not expose WebGL. Saved rendered views are visually accepted; free-orbit GPU rendering remains unverified on this particular device and is not claimed as browser-tested. The page states this distinction explicitly. The full public GLBs retain their original geometry and textures; no model quality or missing-room repair is claimed.
