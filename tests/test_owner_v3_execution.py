@@ -53,7 +53,7 @@ class Provider:
   self.create_ambiguous=False;self.run_ambiguous=False;self.delete_ambiguous=False
   self.always_running=False;self.no_result=False;self.extra_endpoints=[]
   self.pods=[];self.volumes=[];self.busy_previous=False;self.fail_poll=False
-  self.price=2.72;self.fail_storage_after_create=False
+  self.price=2.72;self.pool='AMPERE_80';self.extra_response_metadata=False;self.fail_storage_after_create=False
  def request(self,origin,method,path,body=None):
   self.calls.append((origin,method,path))
   if origin==module.CONTROL and method=='GET' and path=='/v2/serverless':
@@ -65,10 +65,14 @@ class Provider:
   if path=='/v2/'+module.PREVIOUS_ENDPOINT+'/health':
    return {'jobs':{'inQueue':1 if self.busy_previous else 0,'inProgress':0},'workers':{'idle':1}}
   if path.startswith('/v2/catalog/gpus'):
-   return {'gpus':[{'name':'NVIDIA A100','memory':80,'pool':'AMPERE_80',
+   return {'gpus':[{'name':'NVIDIA A100','memory':80,'pool':self.pool,
     'price':{'serverless':self.price},'availability':'HIGH'}]}
   if origin==module.CONTROL and method=='POST' and path=='/v2/serverless':
    self.created={**copy.deepcopy(body),'id':'owned_stage_endpoint'}
+   if self.extra_response_metadata:
+    self.created['workers']['status']='FIXTURE_PROVIDER_METADATA'
+    self.created['mounts']['lastUpdatedAt']='2026-10-17T12:00:00Z'
+    self.created['networkVolumes']=[]
    if self.fail_storage_after_create:self.store.fail_all_writes=True
    if self.create_ambiguous:raise module.Refused('PROVIDER_WRITE_RESULT_UNKNOWN')
    return copy.deepcopy(self.created)
@@ -216,5 +220,24 @@ class ExecutionTests(unittest.TestCase):
    self.path,self.clock,self.clock.sleep)
   self.assertTrue(result['deleted']);self.assert_only_own_cleanup()
   self.assertFalse(any(method=='POST' for _,method,_ in self.api.calls))
+ def test_additional_response_metadata_does_not_consume_and_fail_valid_creation(self):
+  self.api.extra_response_metadata=True;result=self.run_stage()
+  self.assertEqual(result['status'],'EXPORTED_REVIEW_REQUIRED')
+  self.assertEqual(self.api.count('POST','/v2/serverless'),1)
+  self.assertEqual(self.api.count('POST','/run'),1);self.assert_only_own_cleanup()
+ def test_fieldwise_readback_still_rejects_workers_and_any_persistent_mount(self):
+  planned=module.endpoint_plan(self.cfg,1,{'pool':'AMPERE_80'},ENV,ENV['GITHUB_RUN_ID'])
+  for group,key,value in [('workers','min',1),('workers','max',2),('workers','idleTimeout',30),
+   ('workers','min',False),('mounts','network',[{'volumeId':'fixture'}]),
+   ('mounts','global',[{'volumeId':'fixture'}]),('mounts','network',None)]:
+   returned={**copy.deepcopy(planned),'id':'owned_stage_endpoint'};returned[group][key]=value
+   with self.assertRaisesRegex(module.Refused,'ENDPOINT_READBACK_MISMATCH'):module.readback(returned,planned)
+  returned={**copy.deepcopy(planned),'id':'owned_stage_endpoint','networkVolumes':['fixture']}
+  with self.assertRaisesRegex(module.Refused,'ENDPOINT_READBACK_MISMATCH'):module.readback(returned,planned)
+ def test_a100_catalog_cannot_select_an_unverified_pool_alias(self):
+  self.api.pool='UNREVIEWED_80'
+  with self.assertRaisesRegex(module.Refused,'A100_80GB_PRICE_OR_AVAILABILITY_NOT_CONFIRMED'):
+   self.run_stage()
+  self.assertFalse(any(method!='GET' for _,method,_ in self.api.calls))
 
 if __name__=='__main__':unittest.main()

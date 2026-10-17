@@ -20,6 +20,7 @@ CONTROL='https://api.runpod.io'
 RUNTIME='https://api.runpod.ai'
 PREVIOUS_ENDPOINT='s461jvmhr256g3'
 REGISTRY='cmvbbpdxq000pi81ul0ltivxv'
+A100_POOL='AMPERE_80'  # Runpod SDK GPU types + prior successful A100 qualification.
 CONFIRMATION='TWO-OWNER-V3-MAX-6USD'
 IMAGE=re.compile(r'ghcr.io/teslaeco/worldifact-runpod3d@sha256:[a-f0-9]{64}')
 IDENTIFIER=re.compile(r'[A-Za-z0-9_-]{5,100}')
@@ -150,8 +151,7 @@ def gpu_price(api):
  for gpu in catalog['gpus']:
   price=gpu.get('price',{}).get('serverless') if isinstance(gpu,dict) else None
   if (isinstance(gpu,dict) and re.search('A100',str(gpu.get('name','')),re.I)
-   and gpu.get('memory')==80 and isinstance(gpu.get('pool'),str)
-   and re.fullmatch(r'[A-Z0-9_]{3,40}',gpu['pool']) and type(price) in (int,float)
+   and gpu.get('memory')==80 and gpu.get('pool')==A100_POOL and type(price) in (int,float)
    and math.isfinite(price) and 0<price<=3 and gpu.get('availability') in ('HIGH','MEDIUM','LOW')):
    candidates.append({'pool':gpu['pool'],'pricePerHour':price})
  require(candidates,'A100_80GB_PRICE_OR_AVAILABILITY_NOT_CONFIRMED')
@@ -173,11 +173,17 @@ def endpoint_plan(cfg,stage,gpu,environment,run_id):
 def readback(endpoint,planned):
  require(isinstance(endpoint,dict) and valid_id(endpoint.get('id'))
   and endpoint.get('id')!=PREVIOUS_ENDPOINT,'ENDPOINT_CREATE_ID_UNKNOWN')
+ workers=endpoint.get('workers');mounts=endpoint.get('mounts');gpu=endpoint.get('gpu')
+ # The v2 response may add status/metadata fields. Check each requested cost
+ # and storage constraint rather than requiring dictionary byte-for-byte shape.
+ # Never accept an omitted mount list or a conflicting legacy volume alias.
  require(all(endpoint.get(key)==planned[key] for key in ('name','image','registry','type','disk','timeout'))
-  and endpoint.get('workers')==planned['workers']
-  and endpoint.get('gpu',{}).get('count')==1
-  and endpoint.get('gpu',{}).get('pools')==planned['gpu']['pools']
-  and endpoint.get('mounts')=={'network':[],'global':[]},'ENDPOINT_READBACK_MISMATCH')
+  and isinstance(workers,dict) and all(type(workers.get(key)) is int and workers[key]==value
+   for key,value in planned['workers'].items())
+  and isinstance(gpu,dict) and type(gpu.get('count')) is int and gpu['count']==1
+  and gpu.get('pools')==planned['gpu']['pools']
+  and isinstance(mounts,dict) and mounts.get('network')==[] and mounts.get('global')==[]
+  and endpoint.get('networkVolumes',[])==[],'ENDPOINT_READBACK_MISMATCH')
 
 def local_json(path,value):
  path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
