@@ -1,0 +1,49 @@
+{
+  "revision": "ECOMECH_V4_R1",
+  "execution": "OFFLINE_CPU_NATIVE_SOURCE_REPAIR",
+  "package": {
+    "name": "WORLDIFACT_ECOMECH_R1_REPAIRED_PACKAGE.zip",
+    "bytes": 282693539,
+    "sha256": "06aa78da6301dbb9d3db41e54332d9cd8c83ae975b903069602704e6365b5d94",
+    "files": 54,
+    "zip_crc_check": "PASS"
+  },
+  "make": {
+    "triangles": 1788746,
+    "vertices": 892505,
+    "dimensions_mm": [138.50240325927734, 86.7427749633789, 205],
+    "boundary_edges": 0,
+    "nonmanifold_edges": 0,
+    "inconsistent_winding_edges": 0,
+    "mesh_surface_components": 1,
+    "degenerate_triangles": 0,
+    "volume_mm3": 175644.41769152385,
+    "closed_horizontal_sections": 103,
+    "normal_ray_samples": 6000,
+    "normal_ray_samples_below_0_8_mm": 5,
+    "normal_ray_samples_below_1_mm": 8,
+    "normal_ray_minimum_mm": 0.25354326301356683,
+    "normal_ray_p01_mm": 1.2426204392612807,
+    "all_STL_and_3MF_triangles_match_master": true,
+    "all_GLB_triangles_match_after_unit_axis_conversion": true,
+    "maximum_GLB_coordinate_difference_mm": 0.0000171661376953125,
+    "self_intersections_certified": false,
+    "supplier_approved": false,
+    "printer_trial_completed": false
+  },
+  "game": {
+    "triangles": 993714,
+    "geometry_normal_uv_buffer_bytes_unchanged": true,
+    "base_color_image_bytes_unchanged": true,
+    "new_uv_flip": false,
+    "manufacturing_approved": false
+  },
+  "rendered_views": 8,
+  "renderer": "Blender 4.3.0 / Cycles CPU",
+  "integrity_guard_tests_passed": 5,
+  "geometry_guard_tests_passed": 6,
+  "new_paid_provider_calls": 0,
+  "cloud_configuration_changed": false,
+  "new_public_model_deployment": false,
+  "halloween_repair_completed": false
+}
