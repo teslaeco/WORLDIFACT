@@ -20,12 +20,16 @@ function SavedModelViews({ model }: { model: OwnerModel }) {
 }
 
 function ModelSession({ model }: { model: OwnerModel }) {
+  const [load3d, setLoad3d] = useState(false)
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
+    if (!load3d) return
     const controller = new AbortController()
     let objectUrl = ''
+    setError('')
+    setUrl('')
     void readOwnerModel(model, controller.signal).then(blob => {
       if (controller.signal.aborted) return
       objectUrl = URL.createObjectURL(blob)
@@ -34,15 +38,25 @@ function ModelSession({ model }: { model: OwnerModel }) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'The model could not be loaded.')
     })
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [model, attempt])
+  }, [model, attempt, load3d])
   return <>
     <div className="owner-model-stage">
-      {url ? <OracleModelPreview url={url} label={model.name} customerMode renderedFallback={<SavedModelViews model={model} />} /> : <div className="owner-model-loading" role={error ? 'alert' : 'status'}>
-        <span aria-hidden="true">◇</span><p>{error || `Loading ${model.name} · ${(model.bytes / 1_000_000).toFixed(1)} MB…`}</p>
-        {error && <button onClick={() => { setError(''); setAttempt(value => value + 1) }}>Retry download</button>}
-      </div>}
+      {!load3d ? <SavedModelViews model={model} /> :
+        url ? <OracleModelPreview url={url} label={model.name} customerMode renderedFallback={<SavedModelViews model={model} />} /> :
+          <div className="owner-model-loading" role={error ? 'alert' : 'status'}>
+            <span aria-hidden="true">◇</span>
+            <p>{error || `Loading interactive 3D · ${(model.bytes / 1_000_000).toFixed(1)} MB…`}</p>
+            {error && <button type="button" onClick={() => { setError(''); setAttempt(value => value + 1) }}>Retry 3D</button>}
+            <button type="button" onClick={() => setLoad3d(false)}>Return to instant views</button>
+          </div>}
     </div>
-    <div className="owner-model-download"><span>{model.triangles.toLocaleString('en-US')} triangles · embedded textures</span>{url && <a href={url} download={`${model.id}.glb`}>Download this GLB ↓</a>}</div>
+    <div className="owner-model-download">
+      <span>{model.triangles.toLocaleString('en-US')} triangles · embedded textures</span>
+      <div className="owner-model-actions">
+        <button type="button" onClick={() => setLoad3d(value => !value)}>{load3d ? 'Show instant renders' : 'Load interactive 3D (18 MB)'}</button>
+        <a href={model.path} download={`${model.id}.glb`}>Download GLB ↓</a>
+      </div>
+    </div>
   </>
 }
 
