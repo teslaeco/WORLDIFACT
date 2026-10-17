@@ -1,0 +1,73 @@
+name: Split existing encrypted V3 robot archive without provider access
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/owner-v3-split-encrypted-robot-once.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  split:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false, fetch-depth: 2}
+      - name: Verify isolated archive-only scope
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^1)" = 'fc608fc0cab857012abe57061b099ba029a8c9d7'
+          test "$(git diff --name-only HEAD^1 HEAD)" = '.github/workflows/owner-v3-split-encrypted-robot-once.yml'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '12098290971'
+          run-id: '39024431377'
+          repository: teslaeco/WORLDIFACT
+          github-token: ${{ github.token }}
+          path: recovered-ciphertext
+          merge-multiple: true
+      - name: Validate fixed source names and split ciphertext without decryption
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json,shutil,struct
+          source=Path('recovered-ciphertext')
+          files=list(source.glob('*.sealed'))
+          assert len(files)==18 and all(p.is_file() and not p.is_symlink() for p in files)
+          table=json.loads(Path('ops/OWNER_RECOVERY_SOURCES_20261017.json').read_text())['ECOMECH_V4']
+          manifest=json.loads((source/'manifest.json').read_text())
+          expected={('ECOMECH_V4/'+name).replace('/','__')+'.sealed' for name in table}
+          assert {p.name for p in files}==expected
+          groups={name:Path('robot-'+name) for name in ('decoder','visual')}
+          for folder in groups.values():folder.mkdir()
+          for p in files:
+              with p.open('rb') as f:
+                  n=struct.unpack('>I',f.read(4))[0];assert 0<n<8192
+                  header=json.loads(f.read(n))
+              assert header['format']=='WORLDIFACT_PRIVATE_FILE_V1'
+              relative=header['name'].removeprefix('ECOMECH_V4/')
+              assert relative in table and header['bytes']==table[relative][0]
+              assert p.stat().st_size==4+n+header['bytes']+16
+              group='decoder' if relative=='raw/decoder.npz' else 'visual'
+              shutil.move(str(p),groups[group]/p.name)
+          for group,folder in groups.items():
+              copied=[x for x in manifest['files'] if (folder/x['sealed']).is_file()]
+              assert sum((folder/x['sealed']).stat().st_size for x in copied)<500_000_000
+              (folder/'manifest.json').write_text(json.dumps({'files':copied,'sourceRunId':39024431377,'sourceArtifactId':12098290971,'ciphertextUnmodified':True},indent=2)+'\n')
+          print('EXACT_CIPHERTEXT_SPLIT_COMPLETE; no RunPod, R2 or OpenAI access')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: exact-v3-robot-visual-${{ github.run_id }}
+          path: robot-visual/
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: exact-v3-robot-decoder-${{ github.run_id }}
+          path: robot-decoder/
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
