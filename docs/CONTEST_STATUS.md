@@ -1,31 +1,38 @@
-# WORLDIFACT — actual owner V3 recovery, 17 October 2026
+# WORLDIFACT — measured ECOMECH R1 repair delivered, 17 October 2026
 
-## Current task and correction of the earlier record
+## Actual artifact milestone, not a website release
 
-The owner repeatedly authorized completing the two original-reference 3D models, using existing GitHub secrets and preserving manually configured infrastructure. Hoodie work is explicitly deferred until these models are finished. Deployment of the old gallery did not complete this request.
+The original V3 robot source files were independently recovered from the owner's Library, then hash-verified locally. The current result is a new MAKE engineering candidate built from the saved 17,214,244-triangle native decoder geometry, plus a separate material-only GAME derivative. No API credential was extracted, new provider inference called, GPU provisioned, or cloud/customer setting changed during this offline repair.
 
-**VERIFIED:** inspection of the downloaded collector archive from [39017678399](https://github.com/teslaeco/WORLDIFACT/actions/runs/39017678399) identifies three actual Halloween files, not three diagnostic reports: raw/decoder.npz (321,705,128 bytes), raw/engine.json (1,633 bytes) and raw/original.glb (67,422,012 bytes; SHA-256 efc8f3a8972cb4f656bd84e86527a7621bf7bee31c9b26ec604cd458c02f9615). Its 13 Blender/scene/render outputs are missing. This supports checkpoint-first postprocessing, not immediate duplicate inference. The exact internal Blender exception is still UNKNOWN.
+The delivery is `WORLDIFACT_ECOMECH_R1_REPAIRED_PACKAGE.zip`: 282,693,539 bytes, SHA-256 `06aa78da6301dbb9d3db41e54332d9cd8c83ae975b903069602704e6365b5d94`. All 54 package members passed ZIP CRC verification. The package contains new STL/3MF/GLB/BLEND derivatives, eight actual Blender renders, reproducible offline processing stages, a guarded command-line operator, measured QA and hashes. Original reference images, private native sources, encryption keys and Blender/font binaries are NOT included or published to this repository.
 
-**VERIFIED:** the stage-one collector archive from [39010298706](https://github.com/teslaeco/WORLDIFACT/actions/runs/39010298706) lists all 16 ECOMECH files. GAME GLB is 80,649,596 bytes, SHA-256 83525f62b72a14cf547698a2ca5272be70f85eff31c656970d467b58985adacd. The earlier geometry review records 993,714 exported and 17,214,244 native triangles; material correction remains pending.
+## VERIFIED LOCAL: repaired MAKE geometry
 
-**VERIFIED LIVE READ:** [RunPod inventory 39022952225](https://github.com/teslaeco/WORLDIFACT/actions/runs/39022952225), at 09:55 UTC, used the existing Production secret successfully: zero Pods, zero network volumes, one endpoint configured for min=0 and none configured always-on. Runtime worker counts and provider invoice reconciliation were not part of this read. No resource was created or deleted.
+- 1,788,746 triangles; 892,505 vertices; one connected surface.
+- Overall dimensions 138.502403 x 86.742775 x 205.000 mm, including a fused base.
+- Zero boundary edges, non-manifold edges, inconsistent winding edges or degenerate triangles; positive volume 175,644.417692 mm3.
+- Native sparse surface reconstruction used a 0.22 mm grid, gap/void repair, a documented total 0.66 mm radial reinforcement, base-connected volume selection and topology-preserving reduction. Final bounded surface cleanup moved vertices by at most 0.24993 mm. MAKE is deliberately not shape-identical to the separate GAME derivative; small gaps and details were altered.
+- Every STL triangle and every 3MF vertex/index match the final master. Every MAKE GLB triangle matches after unit/axis conversion (maximum coordinate difference 0.0000172 mm). STL must be imported as millimeters; 3MF declares millimeters; GLB/BLEND use meters.
+- All 103 screened horizontal sections of the final mesh have closed degree-two contours.
+- All 6,000 sampled inward-normal thickness rays returned an opposite surface. Five samples remain below 0.8 mm and eight below 1.0 mm. The minimum sampled ray is 0.2535 mm; first percentile 1.2426 mm. Exact warning positions are delivered in CSV. This is NOT a certified global minimum-wall analysis.
+- Uniform-solid static support screen: center-of-mass projection inside the fused base hull, minimum margin 38.35 mm. Not a strength, impact or tipping-under-load test.
 
-## Executable recovery milestone
+**MAKE status: REPAIRED ENGINEERING CANDIDATE / SUPPLIER REVIEW REQUIRED.** No material/process acceptance, full self-intersection certification, support/orientation approval or actual printer trial is claimed. The remaining thin-feature warnings must not be hidden or converted into an unconditional PRINT READY label.
 
-The source-recovery workflow accepts only a bounded main-branch envelope, reads 23 exact hash/size-pinned files in the two fixed job prefixes, preserves all original bytes and encrypts delivery to a new task-scoped public key. The private key remains local. No secret, plaintext private model or signed URL is published. No R2 write, GPU provisioning or provider inference is performed.
+## VERIFIED LOCAL: separate GAME derivative and evidence
 
-The first [source run 39023825811](https://github.com/teslaeco/WORLDIFACT/actions/runs/39023825811) refused the source configuration before any download because its filename validator omitted the hyphen in the genuine `scene-report.json`. This was reproduced locally against all 23 manifest entries and corrected without broadening the fixed R2 scope. New integration tests validate the actual complete source configuration and exact public recipient before live execution; fixed refusal codes are now retained safely. No model was overwritten or paid generation repeated. Actual transfer and geometry acceptance remain pending.
+The GAME derivative retains all original geometry/normal/UV buffer bytes and base-color image bytes from the saved 993,714-triangle V3 GAME mesh. It changes the packed metallic/roughness channels to reduce the excessive mirror response; no additional UV flip was applied. That material correction does not make the GAME mesh manufacturing-approved.
 
-Next: recover and independently rehash the real source files; inspect original references; reproduce and fix Halloween postprocessing; correct ECOMECH materials without geometry substitution; create separate GAME/MAKE files and measured QA. Execution brief: [OWNER_QUALITY_EXECUTION_20261017.md](OWNER_QUALITY_EXECUTION_20261017.md).
+Actual Blender 4.3.0 CPU Cycles renders show front, three-quarter, side and back for both distinct variants. Their provenance manifest binds each image to its corresponding GLB and Blender project hashes. The studio floor is not part of the manufacturing export. Five integrity-guard tests and six geometry/source-guard tests passed. Processing stages and full-size artifact checks ran on the real native sources; the portable wrapper was separately syntax-checked and guard-tested, not charged through a provider.
 
-## Not complete / not claimed
+Use `python tools/owner_v3_recovery/verify_ecomech_r1_delivery.py --self-test` for the public verifier guards. Given the owner's downloaded package, `python tools/owner_v3_recovery/verify_ecomech_r1_delivery.py /path/to/WORLDIFACT_ECOMECH_R1` verifies the six exact model files. No private file is required for the guard self-tests.
 
-- No repaired MAKE model, approved material/process, physical fit or supplier approval is claimed.
-- No new high-detail models have been deployed publicly by this recovery.
-- The older public gallery remains older reduced-detail working copies.
-- Any new paid attempt requires a reconciled remaining allowance or a separately approved overage; old claims must never be reset.
-- Contest rules and entry status have not been rechecked during this model-recovery task.
+## Not completed
 
-## Previous evidence retained intact
+Halloween V3 is NOT repaired or delivered by this milestone. The known native checkpoint is 67,422,012 bytes, SHA-256 `efc8f3a8972cb4f656bd84e86527a7621bf7bee31c9b26ec604cd458c02f9615`; available encrypted archives are not an accessible decrypted model. Do not substitute the old public reduced-detail reconstruction or repeat a paid job blindly.
 
-The entire previous ledger is retained byte-for-byte as [history/CONTEST_STATUS.before-actual-v3-recovery-20261017.md](history/CONTEST_STATUS.before-actual-v3-recovery-20261017.md), original blob bb43a2fd5478a80828cea559bf9f66596e9bd70f. Older PREPARING/no-stage2 statements there are historical and superseded by the evidence above, not current status.
+No new public website/model deployment has occurred in this offline repair. The live gallery must not be described as serving these R1 outputs. Current account-wide RunPod runtime and invoice state were not reread by this repair. No new GPU request was made by the local operator.
+
+## Prior ledger retained
+
+The previous complete ledger remains byte-identical at `docs/history/CONTEST_STATUS.before-ecomech-r1-delivery-20261017.md` (blob `bef9b8e0911bfbb5e9127aea3ea27c95da2f9757`). Its earlier robot-repair-pending statements are superseded here; its historical run evidence is preserved.
