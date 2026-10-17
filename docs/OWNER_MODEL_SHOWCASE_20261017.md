@@ -26,3 +26,9 @@ The site release starts from the last verified live application, `50825a0632979e
 Required gates: original full `npm run verify`, original foundation assembly, `npm run deploy:check`, preserving-config dry-run, exact local GLB hashes/embedded-texture/triangle checks, and GET-only checks of every public static asset plus `/models/` and both complete model downloads. Actual release IDs and browser acceptance must be recorded after completion; no LIVE claim follows from a dry-run.
 
 The models remain ordinary tracked static working copies for future builds. Future source releases must account for the difference between the live application base and current main. This page does not enable the native generator for customers.
+
+## Publication recovery
+
+The first run [38996551218](https://github.com/teslaeco/WORLDIFACT/actions/runs/38996551218) successfully verified and committed both exact corrected GLBs as `1779b7a652a51a3964e1b5b6b8cf1c39fa64c59d`. Its deployment stopped before Cloudflare because three historical `owner-unused-points` tests in the live application baseline relied on an authorization window that expired on 16 October. This did not invalidate the models or change production.
+
+Main already contains the isolated test-clock repair: `mock.timers.enable` fixes only this test process to its original 15 October window; production deadlines, credentials and permissions are unchanged. The recovery workflow includes that existing test file in the overlay, pins the viewer and both working copies to `1779b7a`, reruns the full original gates, and publishes only after they pass. It has no R2 credentials, no asset import/write, and no provider inference. The two-file recovery envelope must have `1779b7a` as its first parent.
