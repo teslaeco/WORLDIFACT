@@ -48,3 +48,21 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px soli
 .owner-model-notes p { max-width: 950px; }
 .owner-showcase footer { color: #597783; font-size: 10px; letter-spacing: .09em; padding-top: 14px; }
 @media(max-width: 760px) { .owner-showcase { padding-top: 20px; } .owner-showcase-intro { margin-top: 32px; } .owner-showcase-layout { grid-template-columns: 1fr; gap: 16px; } .owner-model-choice { grid-template-columns: 1fr 1fr; gap: 8px; } .owner-model-choice a { padding: 13px; } .owner-model-choice strong { font-size: 15px; } .owner-model-choice span { font-size: 8px; } .owner-model-info { padding: 20px 0 0; } .owner-model-info h2 { margin: 14px 0 6px; } .owner-model-info p { margin: 9px 0; } .owner-model-panel { padding: 12px; } .owner-model-stage { min-height: 400px; } .owner-model-loading { min-height: 390px; } .owner-model-stage .oracle-model-canvas { height: 430px; max-height: 60dvh; min-height: 290px; } }
+
+/* Owner model mobile-first visual viewport: actual saved renders appear before optional GLB. */
+.owner-model-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.owner-model-actions button { cursor:pointer; min-height:44px; border:1px solid #87d9be; background:#183d3c; color:#d6fff3; border-radius:8px; padding:10px 14px; font-weight:650; }
+@media(max-width:760px) {
+ .owner-showcase { padding:14px 12px 24px; }
+ .owner-showcase-intro { margin:22px 0; }
+ .owner-showcase-layout { display:flex; flex-direction:column; }
+ .owner-model-choice { grid-template-columns:1fr 1fr; }
+ .owner-model-info { padding:8px 2px 0; }
+ .owner-model-panel { padding:8px; width:100%; }
+ .owner-model-stage, .owner-model-loading { min-height:0; }
+ .owner-render-image { height:min(75dvh,780px); min-height:380px; }
+ .owner-model-stage .oracle-model-canvas { height: min(75dvh,780px); max-height:none; min-height:400px; }
+ .owner-model-download { align-items:stretch; }
+ .owner-model-actions { width:100%; }
+ .owner-model-actions button, .owner-model-actions a { flex:1; text-align:center; }
+}
