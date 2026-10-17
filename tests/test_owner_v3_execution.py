@@ -1,6 +1,7 @@
 """Offline provider/storage failure injection; never sends a provider request."""
 import copy,json,os,stat,sys,tempfile,unittest
 from pathlib import Path
+from botocore.exceptions import ReadTimeoutError
 
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from tools.runpod_owner_v3 import execute as module
@@ -25,6 +26,7 @@ def configuration():
 class Store:
  def __init__(self,cfg):
   self.values={};self.fail_suffix=None;self.fail_all_writes=False;self.fail_reads=False
+  self.final_read_errors=[];self.final_read_count=0
   fixture=json.loads((ROOT/'tests/fixtures/runpod/contract.json').read_text())['job']
   for item in cfg['jobs']:
    job=copy.deepcopy(fixture);p=prefix(item)
@@ -35,6 +37,9 @@ class Store:
    self.create_json(p+'prepared-job.json',job)
  def read(self,key,limit):
   if self.fail_reads:raise OSError('FIXTURE_STORAGE_UNAVAILABLE')
+  if key.endswith('/result.json') and key in self.values:
+   self.final_read_count+=1
+   if self.final_read_errors:raise self.final_read_errors.pop(0)
   return self.values.get(key)
  def create_json(self,key,value):
   if self.fail_all_writes or (self.fail_suffix and key.endswith(self.fail_suffix)):
@@ -162,6 +167,26 @@ class ExecutionTests(unittest.TestCase):
  def test_missing_durable_final_result_cannot_be_called_export_success(self):
   self.api.no_result=True;result=self.run_stage()
   self.assertEqual(result['failure'],'DURABLE_RESULT_MISMATCH');self.assertTrue(result['cleanup']['deleted'])
+ def test_completed_inference_survives_read_timeout_without_repeating_any_paid_operation(self):
+  self.store.final_read_errors=[ReadTimeoutError(endpoint_url='https://fixture.invalid/SECRET')]
+  result=self.run_stage()
+  self.assertEqual(result['status'],'EXPORTED_REVIEW_REQUIRED')
+  self.assertEqual(self.store.final_read_count,2);self.assertEqual(self.clock.now,1)
+  self.assertEqual(self.api.count('POST','/run'),1);self.assertEqual(self.api.count('POST','/v2/serverless'),1)
+  self.assert_only_own_cleanup();self.assertNotIn('SECRET',json.dumps(result))
+ def test_unavailable_completed_result_read_is_bounded_and_still_deletes_endpoint(self):
+  self.store.final_read_errors=[ReadTimeoutError(endpoint_url='https://fixture.invalid/SECRET') for _ in range(4)]
+  result=self.run_stage()
+  self.assertEqual(result['failure'],'DURABLE_RESULT_READ_UNAVAILABLE')
+  self.assertEqual(result['failurePhase'],'DURABLE_RESULT');self.assertEqual(self.store.final_read_count,3)
+  self.assertEqual(self.clock.now,2);self.assertEqual(self.api.count('POST','/run'),1)
+  self.assert_only_own_cleanup();self.assertNotIn('SECRET',json.dumps(result))
+ def test_invalid_completed_result_is_not_retried_or_accepted(self):
+  self.store.final_read_errors=[module.Rejected('STORAGE_OBJECT_TOO_LARGE')]
+  result=self.run_stage()
+  self.assertEqual(result['failure'],'STORAGE_OBJECT_TOO_LARGE')
+  self.assertEqual(result['failurePhase'],'DURABLE_RESULT');self.assertEqual(result['failureType'],'Rejected')
+  self.assertEqual(self.store.final_read_count,1);self.assert_only_own_cleanup()
  def test_stage2_requires_verified_stage1_and_matching_visual_review_before_any_provider_read(self):
   with self.assertRaises(AssertionError):self.run_stage(2)
   self.assertEqual(self.api.calls,[])

@@ -12,7 +12,7 @@ import urllib.request
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT));sys.path.insert(0,str(ROOT/'tools/runpod_worker'))
-from contracts import validate_job, fingerprint
+from contracts import validate_job, fingerprint, Rejected
 from storage import S3Store
 from tools.runpod_owner_v3.prepare import config, prefix, stage2_gate, read_json, SCOPE, BATCH, JOBS
 
@@ -35,7 +35,18 @@ class Refused(RuntimeError):pass
 def require(ok,code):
  if not ok:raise Refused(code)
 def safe_error(error):
- return str(error) if isinstance(error,Refused) and SAFE_CODE.fullmatch(str(error)) else 'UNEXPECTED_FAILURE_RECONCILE'
+ return str(error) if isinstance(error,(Refused,Rejected)) and SAFE_CODE.fullmatch(str(error)) else 'UNEXPECTED_FAILURE_RECONCILE'
+
+def read_final_result(store,key,sleep):
+ # Only this read-only reconciliation is retried. Endpoint creation, paid
+ # submission and conditional storage writes remain strictly one-shot.
+ from botocore.exceptions import BotoCoreError
+ for attempt in range(3):
+  try:return read_json(store,key)
+  except (OSError,BotoCoreError,Rejected) as error:
+   if isinstance(error,Rejected) and str(error)!='STORAGE_READ_FAILED':raise
+   if attempt==2:raise Refused('DURABLE_RESULT_READ_UNAVAILABLE') from None
+   sleep(1)
 def valid_id(value):return isinstance(value,str) and IDENTIFIER.fullmatch(value) is not None
 def stage_name(stage):
  require(type(stage) is int and stage in (1,2),'INVALID_STAGE')
@@ -281,7 +292,7 @@ def execute(store,cfg,stage,api,environment,clock=time.monotonic,wall=time.time,
   'gpuReservedMicroUsd':2100000,'batchModeledLimitMicroUsd':6000000,
   'providerInvoiceCapAbsolute':False,'customerRoutingChanged':False,'automaticRetryAllowed':False,
   'startedAtUnixMs':int(wall()*1000)}
- state=None;create_started=False;end=clock()+2400
+ state=None;create_started=False;end=clock()+2400;phase='ENDPOINT_SETUP'
  try:
   create_started=True
   created=api.request(CONTROL,'POST','/v2/serverless',planned)
@@ -292,6 +303,7 @@ def execute(store,cfg,stage,api,environment,clock=time.monotonic,wall=time.time,
   readback(created,planned)
   actual=api.request(CONTROL,'GET','/v2/serverless/'+state['endpointId']);readback(actual,planned)
   require(end-clock()>1800,'INSUFFICIENT_REMAINING_EXECUTION_TIME')
+  phase='DISPATCH'
   require(store.create_json(p+'operator-dispatch-claim.json',{'batch':BATCH,'stage':stage,
    'fingerprint':fp,'job':job,'endpointId':state['endpointId']}),'DISPATCH_ALREADY_CLAIMED_NO_RETRY')
   accepted=api.request(RUNTIME,'POST','/v2/'+state['endpointId']+'/run',
@@ -302,6 +314,7 @@ def execute(store,cfg,stage,api,environment,clock=time.monotonic,wall=time.time,
    'endpointId':state['endpointId'],'providerId':accepted['id'],'fingerprint':fp}),
    'PROVIDER_JOB_ID_COMMIT_CONFLICT')
   proof.update(endpointId=state['endpointId'],providerId=accepted['id'],fingerprint=fp)
+  phase='POLL'
   terminal=None
   while clock()<end:
    status=api.request(RUNTIME,'GET','/v2/'+state['endpointId']+'/status/'+accepted['id'])
@@ -311,6 +324,7 @@ def execute(store,cfg,stage,api,environment,clock=time.monotonic,wall=time.time,
     terminal=status;break
    sleep(min(15,max(0,end-clock())))
   require(terminal is not None,'STAGE_WALL_CLOCK_LIMIT')
+  phase='PROVIDER_RESULT'
   proof['providerStatus']=terminal['status']
   for field in ('executionTime','delayTime'):
    if type(terminal.get(field)) in (int,float) and math.isfinite(terminal[field]) and terminal[field]>=0:
@@ -320,8 +334,10 @@ def execute(store,cfg,stage,api,environment,clock=time.monotonic,wall=time.time,
    and output.get('state')=='REVIEW_REQUIRED' and output.get('jobId')==item['jobId']
    and output.get('fingerprint')==fp and output.get('inferenceAttempts')==1,
    'GENERATION_FAILED_RECONCILE_SAVED_CHECKPOINTS')
-  durable=read_json(store,p+'result.json')
+  phase='DURABLE_RESULT'
+  durable=read_final_result(store,p+'result.json',sleep)
   require(durable==output,'DURABLE_RESULT_MISMATCH')
+  phase='ARTIFACT_MANIFEST'
   artifacts=durable.get('artifacts')
   require(isinstance(artifacts,list) and len(artifacts)==16
    and {a.get('key') for a in artifacts if isinstance(a,dict)}=={p+name for name in ARTIFACT_NAMES},
@@ -329,6 +345,9 @@ def execute(store,cfg,stage,api,environment,clock=time.monotonic,wall=time.time,
   proof.update(status='EXPORTED_REVIEW_REQUIRED',artifactCount=len(artifacts),inferenceAttempts=1)
  except Exception as error:
   proof['failure']=safe_error(error)
+  proof['failurePhase']=phase
+  error_type=type(error).__name__
+  proof['failureType']=error_type if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,79}',error_type) else 'Exception'
  finally:
   if state is None and create_started:
    try:
