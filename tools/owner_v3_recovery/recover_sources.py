@@ -12,17 +12,28 @@ MAX_FILE=400_000_000
 ROOT=Path('owner-recovery-private')
 OUT=Path('owner-recovery-sealed')
 
+class RecoveryRefused(ValueError):
+    """Only fixed, non-sensitive codes raised by this script."""
+
 def require(ok,code):
-    if not ok: raise ValueError(code)
+    if not ok: raise RecoveryRefused(code)
 
 def validate_spec(spec):
     require(set(spec)=={'name','key','bytes','sha256'},'INVALID_SPEC_FIELDS')
-    require(re.fullmatch(r'(ECOMECH_V4|HALLOWEEN_MUSIC_ROOM)/(raw|outputs|source)/[a-zA-Z0-9_.]+',spec['name']) is not None,'INVALID_FILE_NAME')
+    require(re.fullmatch(r'(ECOMECH_V4|HALLOWEEN_MUSIC_ROOM)/(raw|outputs|source)/[a-zA-Z0-9_.-]+',spec['name']) is not None,'INVALID_FILE_NAME')
     name=spec['name'].split('/')[0]; rel=spec['name'].split('/',1)[1]
     if rel.startswith('source/'): rel=rel[7:]
     require(spec['key']==f'jobs/{SCOPE}/{JOBS[name]}/{rel}','SOURCE_SCOPE_CHANGED')
     require(type(spec['bytes']) is int and 0<spec['bytes']<=MAX_FILE,'INVALID_FILE_SIZE')
     require(re.fullmatch(r'[a-f0-9]{64}',spec['sha256']) is not None,'INVALID_SOURCE_HASH')
+
+def source_specs():
+    table=json.loads(Path('ops/OWNER_RECOVERY_SOURCES_20261017.json').read_text())
+    require(set(table)==set(JOBS),'FIXED_MODELS_REQUIRED')
+    specs=[{'name':name+'/'+rel,'key':f'jobs/{SCOPE}/{JOBS[name]}/'+(rel[7:] if rel.startswith('source/') else rel),'bytes':value[0],'sha256':value[1]} for name,items in table.items() for rel,value in items.items()]
+    require(len(specs)==23 and len({s['key'] for s in specs})==23,'FIXED_SOURCE_SET_REQUIRED')
+    for spec in specs:validate_spec(spec)
+    return specs
 
 def checked_download(client,bucket,spec,target):
     validate_spec(spec)
@@ -77,11 +88,7 @@ def main():
     require(endpoint.rstrip('/')=='https://44c5391a2e203041d393e4be4e760fd1.r2.cloudflarestorage.com' and bucket=='worldifact-artifacts','STORAGE_DESTINATION_CHANGED')
     key=serialization.load_pem_public_key(Path('ops/OWNER_RECOVERY_PUBLIC_20261017.pem').read_bytes())
     require(isinstance(key,rsa.RSAPublicKey) and key.key_size==3072,'INVALID_RECIPIENT')
-    table=json.loads(Path('ops/OWNER_RECOVERY_SOURCES_20261017.json').read_text())
-    require(set(table)==set(JOBS),'FIXED_MODELS_REQUIRED')
-    specs=[{'name':name+'/'+rel,'key':f'jobs/{SCOPE}/{JOBS[name]}/'+(rel[7:] if rel.startswith('source/') else rel),'bytes':value[0],'sha256':value[1]} for name,items in table.items() for rel,value in items.items()]
-    require(len(specs)==23 and len({s['key'] for s in specs})==23,'FIXED_SOURCE_SET_REQUIRED')
-    for spec in specs:validate_spec(spec)
+    specs=source_specs()
     import boto3
     from botocore.config import Config
     client=boto3.client('s3',endpoint_url=endpoint,region_name='auto',aws_access_key_id=os.environ['ARTIFACT_ACCESS_KEY_ID'],aws_secret_access_key=os.environ['ARTIFACT_SECRET_ACCESS_KEY'],config=Config(signature_version='s3v4',connect_timeout=10,read_timeout=90,retries={'total_max_attempts':1},s3={'addressing_style':'path'}))
@@ -92,10 +99,11 @@ def main():
         if path.suffix=='.glb':reject_external_glb(path)
         receipts.append(seal_file(path,spec['name'],key,OUT))
         (OUT/'manifest.json').write_text(json.dumps({'files':receipts,'sourceFilesVerified':len(receipts),'gpuRequests':0},indent=2)+'\n')
+        print(json.dumps({'status':'SOURCE_VERIFIED_AND_SEALED','name':spec['name'],'bytes':spec['bytes']}),flush=True)
     print(json.dumps({'status':'EXACT_V3_SOURCES_RECOVERED','files':len(receipts),'bytes':sum(x['bytes'] for x in receipts),'gpuRequests':0,'storageWrites':0}))
 
 if __name__=='__main__':
     try:main()
     except Exception as e:
-        print(json.dumps({'status':'SOURCE_RECOVERY_FAILED','errorClass':type(e).__name__}))
+        print(json.dumps({'status':'SOURCE_RECOVERY_FAILED','errorClass':type(e).__name__,'reason':str(e) if type(e) is RecoveryRefused else 'UNEXPECTED_RUNTIME_FAILURE'}))
         raise SystemExit(2) from None

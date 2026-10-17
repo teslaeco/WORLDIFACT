@@ -1,6 +1,6 @@
 import importlib.util,io,json,struct,tempfile,unittest,hashlib
 from pathlib import Path
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes,serialization
 from cryptography.hazmat.primitives.asymmetric import rsa,padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.exceptions import InvalidTag
@@ -13,6 +13,15 @@ class Tests(unittest.TestCase):
  @classmethod
  def setUpClass(cls):cls.key=rsa.generate_private_key(public_exponent=65537,key_size=3072)
  def item(self,raw):return {'name':'ECOMECH_V4/raw/engine.json','key':f"jobs/{r.SCOPE}/{r.JOBS['ECOMECH_V4']}/raw/engine.json",'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
+ def test_actual_source_configuration(self):
+  specs=r.source_specs();self.assertEqual(len(specs),23)
+  self.assertEqual(len({s['key'] for s in specs}),23)
+  scene=next(s for s in specs if s['name']=='ECOMECH_V4/outputs/scene-report.json');self.assertEqual(scene['bytes'],235)
+  native=next(s for s in specs if s['name']=='HALLOWEEN_MUSIC_ROOM/raw/original.glb');self.assertEqual(native['bytes'],67422012)
+ def test_actual_recipient(self):
+  raw=Path('ops/OWNER_RECOVERY_PUBLIC_20261017.pem').read_bytes()
+  self.assertEqual(hashlib.sha256(raw).hexdigest(),'9d8413a3307f276cee9cabaca70a8a8ff936a1cf473883580f426509be2d9c68')
+  key=serialization.load_pem_public_key(raw);self.assertIsInstance(key,rsa.RSAPublicKey);self.assertEqual(key.key_size,3072)
  def test_download_exact_bytes(self):
   raw=b'real saved source';c=FakeClient(raw)
   with tempfile.TemporaryDirectory() as d:
