@@ -78,6 +78,7 @@ export default function PublicModelGallery() {
   const shown = PUBLIC_MODELS.filter(model => !onlyHearts || hearts.includes(model.id))
   return <section className="public-model-gallery" aria-labelledby="public-model-gallery-title">
     <header className="public-model-gallery-heading"><div><span className="public-model-eyebrow">EXPLORE IN 3D</span><h2 id="public-model-gallery-title">Made in WORLDIFACT.</h2><p>A few of our public creations. Find your next spark.</p></div><div className="public-model-filters" role="group" aria-label="Filter public models"><button type="button" aria-pressed={!onlyHearts} onClick={() => setOnlyHearts(false)}>All models</button><button type="button" aria-pressed={onlyHearts} onClick={() => setOnlyHearts(true)}>My hearts{hearts.length ? ` · ${hearts.length}` : ''}</button></div></header>
+    <p><a href="/models/">Explore ECOMECH V4 &amp; Halloween in 3D →</a></p>
     <div className="public-model-grid">{shown.map(model => <PublicModelCard key={model.id} model={model} hearted={hearts.includes(model.id)} onHeart={() => toggle(model)} />)}</div>
     {shown.length === 0 && <p className="public-model-empty">Nothing saved yet. Tap a heart on a model you like.</p>}
     <p className="public-model-footnote">{persistent ? 'Hearts are saved in this browser only; they are not account likes or public popularity counts.' : 'Some hearts could not be saved. They may last only in this open page.'} Public examples are unreviewed GAME assets, not manufacturing-approved products.</p>
