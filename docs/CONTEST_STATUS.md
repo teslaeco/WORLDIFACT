@@ -1,5 +1,17 @@
 # 17 October 2026 — Owner V3 reference-faithful two-stage generation
 
+## 2026-10-17 — Recovery checkpoint after interrupted owner V3 task
+
+**VERIFIED (GitHub commit 90efd715, 06:31 UTC):** stage-one ECOMECH V4 has a hash-bound geometry review marked accepted for *continuation to stage two*, not manufacturing acceptance. The reviewed job is `3b3b9cc5-8f43-4e48-bf56-ce2d3e2390c1`; exported GAME GLB SHA-256 `83525f62b72a14cf547698a2ca5272be70f85eff31c656970d467b58985adacd`; active scene 993,714 triangles, raw mesh 17,214,244. Review retains visible silhouette/asymmetry, pepper hand, exposed mechanics and rear volume; material-only PBR correction remains pending.
+
+**NOT VERIFIED:** no proof of stage-two Halloween V3 dispatch or export has been obtained in this recovery. The two older public showcase GLBs are **not** stage-two V3 evidence, nor proof of a complete room. Public V3 deployment and supplier-ready MAKE assets are not claimed.
+
+**BLOCKED IN THIS SESSION:** RunPod management and manual GitHub Actions workflow-dispatch tools are unavailable to this assistant; do not infer a running pod, billing state, or completed cleanup from historical logs. The previously approved cost cap is USD 6 across the V3 batch; verify consumed spend, exact durable stage-one result bytes, strict `stage2_gate`, and the current endpoint inventory before a single authorized stage-two dispatch. No automatic paid retry. Keep temporary endpoint min=0/max=1 and delete with read-back on every terminal path.
+
+**RECOVERY ACTION:** reconcile stage-one evidence without inference; retain approved hash-bound review, then execute only the remaining stage-two one-shot via `.github/workflows/owner-v3-stages.yml` (`stage2`) in an authorized GitHub Actions context. Collect `collect2` if results already exist rather than resubmitting. Correct ECOMECH materials without another native generation, preserve native geometry, verify GLB/BLEND/renders and private durable hashes before publication.
+
+---
+
 Status: PREPARING; no V3 paid inference or new result is claimed yet. The owner explicitly authorized two new paid generations on 17 October. This isolated batch uses one ECOMECH inference, then one Halloween performer inference plus an actual modeled room; stage 2 requires durable byte verification and a hash-bound visual review of stage 1. The working total cost ceiling is USD 6 (bounded runtime/reservations, not a provider invoice guarantee); automatic paid retries are prohibited.
 
 V3 retains the exact original PNG references and reviewed segmentation masks. Requested native settings are 1536 cascade, 24 sampling steps, 4096 texture and up to 1,000,000 exported triangles; actual resolution and triangle counts must be measured. Hidden surfaces and the lower Halloween dress/room are inferred. No printability or supplier acceptance is claimed. The original native GLB remains unchanged; the visual derivative applies the previously verified V-coordinate correction once.
