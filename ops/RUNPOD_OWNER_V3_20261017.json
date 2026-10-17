@@ -16,7 +16,23 @@
     "referenceGeometry": "Visible contours retained; hidden surfaces require inference.",
     "maskReview": "Root visually inspected final overlays, complete robot including pepper, and original performer fingers/nails. No RGB edits."
   },
-  "stage1VisualReview": null,
+  "stage1VisualReview": {
+    "accepted": true,
+    "jobId": "3b3b9cc5-8f43-4e48-bf56-ce2d3e2390c1",
+    "gameSha256": "83525f62b72a14cf547698a2ca5272be70f85eff31c656970d467b58985adacd",
+    "purpose": "GEOMETRY_REVIEW_FOR_STAGE2_CONTINUATION",
+    "activeSceneTriangles": 993714,
+    "rawTriangles": 17214244,
+    "reviewedViews": [
+      "front",
+      "three_quarter",
+      "side",
+      "back"
+    ],
+    "findings": "Full robot, asymmetric armor and exposed mechanics, raised pepper hand, separate feet and inferred rear volume retained. Native PBR is excessively metallic; separate material-only correction is pending.",
+    "printReady": false,
+    "supplierAccepted": false
+  },
   "jobs": [
     {
       "name": "ECOMECH_V4",

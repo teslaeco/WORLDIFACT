@@ -94,7 +94,7 @@ jobs:
         run: |
           python tools/runpod_owner_v3/execute.py --stage "${OWNER_V3_OPERATION: -1}" --cleanup
       - name: Verify all completed bytes before accepting the stage
-        if: success() && (inputs.operation == 'stage1' || inputs.operation == 'stage2')
+        if: success() && (inputs.operation == 'stage1' || inputs.operation == 'stage2' || inputs.operation == 'collect1' || inputs.operation == 'collect2')
         env:
           OWNER_V3_OPERATION: ${{ inputs.operation }}
           ARTIFACT_ACCESS_KEY_ID: ${{ secrets.ARTIFACT_ACCESS_KEY_ID }}
