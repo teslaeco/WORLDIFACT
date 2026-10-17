@@ -1,0 +1,178 @@
+name: Publish the two saved owner models on WORLDIFACT
+on:
+  pull_request:
+    paths: ['scripts/publish-owner-showcase-assets.py', 'scripts/verify-owner-showcase.mjs', 'tests/test_owner_showcase.py', 'tests/owner-showcase.test.ts', 'src/lib/ownerShowcase.ts', '.github/workflows/owner-model-showcase-once.yml']
+  push:
+    branches: [main]
+    paths: ['.github/workflows/owner-model-showcase-once.yml']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: '24' }
+      - run: python -m unittest discover -s tests -p 'test_owner_showcase.py'
+      - run: node --test tests/owner-showcase.test.ts
+  ingest:
+    needs: review
+    if: github.event_name == 'push' && github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    environment: production
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: '24' }
+      - name: Require the reviewed narrow source envelope
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          import { execFileSync } from 'node:child_process'
+          const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim()
+          const base = '3c90d74371d6804f4cffd993a3e4735757914a28'
+          assert.equal(git('rev-parse', 'HEAD^1'), base)
+          assert.equal(git('rev-parse', 'HEAD'), process.env.GITHUB_SHA)
+          const allowed = [
+            '.github/workflows/owner-model-showcase-once.yml', 'docs/CONTEST_STATUS.md', 'docs/OWNER_MODEL_SHOWCASE_20261017.md',
+            'models/index.html', 'src/owner-models.tsx', 'src/lib/ownerShowcase.ts',
+            'src/pages/OwnerModelsPage.tsx', 'src/pages/OwnerModelsPage.css',
+            'src/components/PublicModelGallery.tsx', 'vite.config.ts',
+            'scripts/publish-owner-showcase-assets.py', 'scripts/verify-owner-showcase.mjs',
+            'tests/test_owner_showcase.py', 'tests/owner-showcase.test.ts',
+          ].sort()
+          assert.deepEqual(git('diff', '--name-only', base, 'HEAD').split('\n').sort(), allowed)
+          for (const path of allowed) assert.ok(git('ls-tree', 'HEAD', '--', path).startsWith('100644 blob '))
+          assert.ok(Date.now() < Date.parse('2026-10-19T00:00:00Z'), 'This one-use publication envelope expired')
+          console.log('Verified: two existing owner working copies and a standalone viewer; no new model generation.')
+          JS
+      - run: python -m pip install boto3==1.43.66
+      - name: Read two fixed saved GLBs and reproduce the exact delivered UV correction
+        env:
+          ARTIFACT_ACCESS_KEY_ID: ${{ secrets.ARTIFACT_ACCESS_KEY_ID }}
+          ARTIFACT_SECRET_ACCESS_KEY: ${{ secrets.ARTIFACT_SECRET_ACCESS_KEY }}
+          ARTIFACT_S3_ENDPOINT: ${{ vars.ARTIFACT_S3_ENDPOINT }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+          ARTIFACT_REGION: ${{ vars.ARTIFACT_REGION }}
+        run: python scripts/publish-owner-showcase-assets.py
+      - name: Save only the approved public working copies
+        id: commit
+        run: |
+          set -euo pipefail
+          git add -- public/owner-models/ecomech-v4-b8532d8c.glb public/owner-models/halloween-music-room-d9f01fa8.glb
+          test "$(git diff --cached --name-only | wc -l)" -eq 2
+          git config user.name 'WORLDIFACT release bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'asset: add verified ECOMECH and Halloween public working copies'
+          git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  publish:
+    needs: ingest
+    environment:
+      name: production
+      url: ${{ steps.verify.outputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Start from the last verified live application
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 50825a0632979e6e14bd74ff1ba0204eb977226b
+          persist-credentials: false
+      - name: Read the exact new viewer and published derivatives
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.ingest.outputs.sha }}
+          path: .upstream/owner-gallery
+          persist-credentials: false
+      - name: Overlay only the standalone viewer and gallery link
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          source = Path('.upstream/owner-gallery')
+          paths = [
+            'models/index.html', 'src/owner-models.tsx', 'src/lib/ownerShowcase.ts',
+            'src/pages/OwnerModelsPage.tsx', 'src/pages/OwnerModelsPage.css',
+            'src/components/PublicModelGallery.tsx', 'vite.config.ts',
+            'scripts/verify-owner-showcase.mjs', 'tests/owner-showcase.test.ts',
+            'public/owner-models/ecomech-v4-b8532d8c.glb',
+            'public/owner-models/halloween-music-room-d9f01fa8.glb',
+          ]
+          for name in paths:
+              original = source / name
+              assert original.is_file() and not original.is_symlink()
+              target = Path(name)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(original, target)
+          PY
+          git diff --exit-code -- server wrangler.jsonc package.json package-lock.json config src/App.tsx src/pages/ShopPage.tsx
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: '24', cache: npm }
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - name: Verify exact working-copy bytes, geometry and embedded textures
+        run: node scripts/verify-owner-showcase.mjs
+      - name: Prepare the existing preserving deployment configuration
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile, writeFile } from 'node:fs/promises'
+          import { buildAiShopUiConfig } from './scripts/build-compatible-mcc-config.mjs'
+          const base = JSON.parse(await readFile('wrangler.jsonc', 'utf8'))
+          const config = buildAiShopUiConfig(base, { aiShopUi: true, preserveBilling: true, preserveRemoteVars: true, preserveSecrets: true })
+          await writeFile('.owner-showcase.wrangler.json', JSON.stringify(config, null, 2) + '\n', { mode: 0o600 })
+          JS
+      - run: npm run deploy:check
+      - run: npx wrangler deploy --dry-run --config .owner-showcase.wrangler.json --outdir .wrangler/preview
+      - name: Publish the viewer and existing files with remote variables preserved
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/owner-model-showcase.ndjson
+        run: |
+          set -euo pipefail
+          node scripts/release-check.ts credentials
+          if WRANGLER_LOG=none WRANGLER_WRITE_LOGS=false WRANGLER_SEND_METRICS=false WRANGLER_SEND_ERROR_REPORTS=false \
+            npx wrangler deploy --config .owner-showcase.wrangler.json --keep-vars >/dev/null 2>&1; then
+            echo 'Publication submitted; checking all public asset bytes.'
+          else
+            echo '::error::Publication failed; private CLI output suppressed.'
+            exit 1
+          fi
+      - name: Verify the public page and both complete textured model files
+        id: verify
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/owner-model-showcase.ndjson
+          SHOWCASE_SOURCE_SHA: ${{ needs.ingest.outputs.sha }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          import { appendFile, readFile } from 'node:fs/promises'
+          import { readDeployment } from './scripts/release-check.ts'
+          import { checkCompatibleMccRelease } from './scripts/check-compatible-mcc-release.mjs'
+          import { OWNER_MODELS, readOwnerModel } from './src/lib/ownerShowcase.ts'
+          const deployment = readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8'))
+          assert.equal(deployment.origin, 'https://worldifact.xodobrox.workers.dev')
+          const release = await checkCompatibleMccRelease(deployment)
+          const response = await fetch(release.origin + '/models/', { redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(30000) })
+          assert.equal(response.status, 200)
+          assert.deepEqual(Buffer.from(await response.arrayBuffer()), await readFile('dist/models/index.html'))
+          for (const model of OWNER_MODELS) await readOwnerModel(model, new AbortController().signal, (path, options) => fetch(release.origin + path, options))
+          const report = { result: 'OWNER_SHOWCASE_LIVE', page: release.origin + '/models/', ...release, source: process.env.SHOWCASE_SOURCE_SHA, applicationBase: '50825a0632979e6e14bd74ff1ba0204eb977226b', models: OWNER_MODELS.map(model => ({ id: model.id, bytes: model.bytes, sha256: model.sha256 })), paidGenerationCalls: 0, visualBrowserCheck: 'PENDING' }
+          console.log(JSON.stringify(report))
+          await appendFile(process.env.GITHUB_OUTPUT, 'url=' + report.page + '\n')
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, '## Two saved owner models published\n\n```json\n' + JSON.stringify(report, null, 2) + '\n```\n')
+          JS

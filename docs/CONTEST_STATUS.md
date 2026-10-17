@@ -1,4 +1,10 @@
-## 2026-10-16 — Owner preparation stopped before paid dispatch; recovery scoped to unspent state
+## 2026-10-17 — Owner generation completed; website showcase prepared
+
+Run [38978275895](https://github.com/teslaeco/WORLDIFACT/actions/runs/38978275895) completed one native inference for ECOMECH V4 and one for Halloween. The earlier preparation failures below are historical; their no-output status is superseded. Original files are preserved. Corrected UV working copies, Blender files and actual renders were delivered. ECOMECH has reduced fine detail; Halloween is an incomplete, partly flattened reconstruction and does not meet the whole-room request. Export reduced roughly seven-million-triangle raw meshes to 186,328 and 193,638 triangles, but missing scene content is also a reconstruction failure.
+
+The owner now requested website display. A standalone viewer with both exact corrected working copies and honest quality labels is prepared. Its one-use publication uses the verified live application as a base and adds only the gallery, preserving existing runtime configuration. No new inference is requested. Publication and browser checks remain PENDING until actual workflow evidence is recorded. See [OWNER_MODEL_SHOWCASE_20261017.md](OWNER_MODEL_SHOWCASE_20261017.md).
+
+## 2026-10-16 — Owner preparation stopped before paid dispatch; recovery scoped to unspent state (historical)
 
 Actual manual run 38969320339 on merge 68bb139b stopped at the OpenAI input-token-count POST with HTTPError. Run 38970194190 on ab1f42c7 then stopped before that POST because a newly computed CPU mask differed from the immutable original. Both GPU steps were skipped and both collectors found zero model artifacts. No Astra generation dispatch was reached. Recovery now reuses the original saved mask after checking source provenance, reference hash, mask object hash, dimensions, coverage and all eight pinned robot points. It never replaces that mask. Only safe HTTP status/code/parameter diagnostics are logged, and matching CPU preparation may resume only when every Astra/GPU dispatch and result marker is absent. All paid one-shot claims remain effective. Neither requested model is delivered yet.
 
