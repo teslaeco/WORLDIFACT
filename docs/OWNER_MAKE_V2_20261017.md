@@ -1,5 +1,13 @@
 # Owner MAKE V2 — execution brief
 
+## 2026-10-17 follow-up — delivery unavailable; live generation not upgraded
+
+The resumed execution environment is empty: the previous `WORLDIFACT-MAKE-V2/deliverables` directory is absent. The earlier persistent save failed before the first confirmed upload. A search for the new MAKE files did not resolve a saved copy. Therefore the MAKE counts and hashes below describe the prior local execution, **not currently available or delivered binaries**. Do not show the old GAME models as the rebuilt result or claim the MAKE pipeline is deployed. Recovering the original decoders would not itself restore the lost modeled room, final exports or local refinement scripts; those refinements must be reconstructed and validated again before delivery.
+
+The live gallery was checked again: ECOMECH is still 186,328 triangles, and Halloween is still 193,638 triangles with an incomplete-room notice. AI Shop still presents the existing Astra/Blender path and requires account sign-in to verify points and generation availability. No signed-in generation or new paid inference was performed.
+
+A fresh GET-only Runpod check on 2026-10-17 at 05:03:35 UTC, [run 38818010309 attempt 4, job 117315131042](https://github.com/teslaeco/WORLDIFACT/actions/runs/38818010309/job/117315131042), returned 0 Pods, 0 network volumes and 1 Serverless endpoint configured with minimum workers 0 and no always-on worker. Subsequent provider-console inspection identified the retained `WORLDIFACT-3D-FLEX` endpoint `s461jvmhr256g3`: 0 running workers, 0 in-progress/queued jobs, displayed spend rate USD 0.00000/s and USD 0.00 billed in the past hour; Active=0, Max=1, idle timeout=5 seconds. Its worker list still contains one `idle` entry with no uptime. This proves the observed zero spend rate, **not endpoint deletion or a final invoice reconciliation**. No GPU job was started or resource deleted during this check.
+
 The owner rejected the two working GAME models as unsuitable for B2B printing and asked for materially better modeling, up to about one million triangles, with the modeling instruction actually executed. Existing originals and published GAME copies must be preserved.
 
 ## Execute
