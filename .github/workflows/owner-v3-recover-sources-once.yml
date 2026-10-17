@@ -1,0 +1,93 @@
+name: Recover exact V3 models and references without inference
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/owner-v3-recover-sources-once.yml']
+  pull_request:
+    paths: ['.github/workflows/owner-v3-recover-sources-once.yml', 'tools/owner_v3_recovery/**', 'tests/test_owner_v3_source_recovery.py', 'ops/OWNER_RECOVERY_*']
+permissions: {contents: read}
+concurrency:
+  group: worldifact-owner-v3-source-recovery
+  cancel-in-progress: false
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - run: python -m pip install cryptography==50.0.2
+      - run: python -m unittest discover -s tests -p test_owner_v3_source_recovery.py -v
+  recover:
+    needs: review
+    if: github.event_name == 'push' && github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false, fetch-depth: 2}
+      - name: Validate exact approved recovery envelope before credentials
+        run: |
+          python - <<'PY'
+          import subprocess
+          def git(*a): return subprocess.check_output(['git',*a],text=True).strip()
+          base='ecfa407257f1d794fe27e28976f9e793397873f7'
+          assert git('rev-parse','HEAD^1')==base
+          expected=['.github/workflows/owner-v3-recover-sources-once.yml','tools/owner_v3_recovery/recover_sources.py','tests/test_owner_v3_source_recovery.py','ops/OWNER_RECOVERY_SOURCES_20261017.json','ops/OWNER_RECOVERY_PUBLIC_20261017.pem','docs/CONTEST_STATUS.md','docs/history/CONTEST_STATUS.before-actual-v3-recovery-20261017.md','docs/OWNER_QUALITY_EXECUTION_20261017.md']
+          assert sorted(git('diff','--name-only',base,'HEAD').splitlines())==sorted(expected)
+          for p in expected: assert git('ls-tree','HEAD','--',p).startswith('100644 blob ')
+          assert git('rev-parse','HEAD:docs/history/CONTEST_STATUS.before-actual-v3-recovery-20261017.md')==git('rev-parse',base+':docs/CONTEST_STATUS.md')
+          print('APPROVED_EXACT_SOURCE_RECOVERY_NO_INFERENCE')
+          PY
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - run: python -m pip install boto3==1.43.66 cryptography==50.0.2
+      - name: Read exactly 23 saved files and encrypt them to the owner task recipient
+        env:
+          ARTIFACT_ACCESS_KEY_ID: ${{ secrets.ARTIFACT_ACCESS_KEY_ID }}
+          ARTIFACT_SECRET_ACCESS_KEY: ${{ secrets.ARTIFACT_SECRET_ACCESS_KEY }}
+          ARTIFACT_S3_ENDPOINT: ${{ vars.ARTIFACT_S3_ENDPOINT }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: python tools/owner_v3_recovery/recover_sources.py
+      - name: Preserve verified robot sources as ciphertext
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: exact-v3-robot-${{ github.run_id }}
+          path: |
+            owner-recovery-sealed/ECOMECH_V4__*.sealed
+            owner-recovery-sealed/manifest.json
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+      - name: Preserve verified Halloween sources as ciphertext
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: exact-v3-halloween-${{ github.run_id }}
+          path: |
+            owner-recovery-sealed/HALLOWEEN_MUSIC_ROOM__*.sealed
+            owner-recovery-sealed/manifest.json
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+      - name: Prepare the same official Blender version for isolated local postprocessing
+        run: |
+          set -euo pipefail
+          mkdir owner-recovery-tools
+          cd owner-recovery-tools
+          curl -fL --retry 2 --max-time 300 https://download.blender.org/release/Blender4.3/blender-4.3.0-linux-x64.tar.xz -o blender-4.3.0-linux-x64.tar.xz
+          curl -fL --retry 2 --max-time 30 https://download.blender.org/release/Blender4.3/blender-4.3.0.sha256 -o blender-4.3.0.sha256
+          sha256sum --check --ignore-missing blender-4.3.0.sha256
+          git -C .. archive --format=zip --output=owner-recovery-tools/reviewed-source.zip HEAD tools/runpod_worker tools/runpod_owner_v3 tools/owner_v3_recovery ops/OWNER_RECOVERY_SOURCES_20261017.json ops/OWNER_RECOVERY_PUBLIC_20261017.pem docs/OWNER_QUALITY_EXECUTION_20261017.md
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: owner-postprocess-tools-${{ github.run_id }}
+          path: owner-recovery-tools/
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error

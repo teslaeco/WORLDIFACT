@@ -1,0 +1,29 @@
+{
+  "ECOMECH_V4": {
+    "outputs/clay_back.png": [335433,"2fe7af82d1093e2ac91582ddf03a5b70f1236a8712d1b4afef4841d6c44b8689"],
+    "outputs/clay_front.png": [334489,"8676787851847816b2e25f96d5f2c1d711054f8c713dc249f8dbadf673b6460a"],
+    "outputs/clay_side.png": [290175,"6e5838e9dcc487223f2180aa9b4a0184c5384c68c334fa4da21971f0d941fb1b"],
+    "outputs/clay_three_quarter.png": [331609,"939c5aec4674c1168b02df6b4d95613b8d211d3a55ccca86d34b83680157bd09"],
+    "outputs/game.glb": [80649596,"83525f62b72a14cf547698a2ca5272be70f85eff31c656970d467b58985adacd"],
+    "outputs/pbr_back.png": [360387,"5e11fb434632b3515d1d4f18ec0d0116a001b45610a8d1a3dfea24e06b895f3c"],
+    "outputs/pbr_front.png": [358240,"eda321c40e5dbe344d18cd6e8e119fdcbeb46cbb7ac7d2377d0e70da32623ea5"],
+    "outputs/pbr_side.png": [319177,"6560bba1871d65018fcda45b9075e1d5d15fd5f957ab1e474e1f2cbe48bfa3db"],
+    "outputs/pbr_three_quarter.png": [360785,"ad2f7295a8d6b5743bf00d2a275fcc52790a0d4ecac638489630696e8be8868b"],
+    "outputs/qa.initial.json": [581,"c41684d349b51d46303638568ae4dbd8ff1e8863034add449569cd660c19e49c"],
+    "outputs/qa.json": [1626,"c3521aaf0b57561dab95ec64fcf573aa388109d4b74ffec322d8570ef03067a8"],
+    "outputs/scene-report.json": [235,"da03cc7bc107e190ba54255bea76a116e7dbbc811fa8441383334ac4bf157927"],
+    "outputs/source.blend": [137040189,"9665a2ee40139ccb635665ecd5df9fbf70e89283cafb102a1dc585f08f22f34a"],
+    "raw/decoder.npz": [330228553,"281b71485cb8eec9c94742292e3afa6071040d21837b454889437f863090b635"],
+    "raw/engine.json": [1633,"1044208dcb627d7825e09236da660c875fb86c581e3361d9e86936bafab9704f"],
+    "raw/original.glb": [80384540,"94718b4d1a7d5cafc3f750b562393392542a7203626aea96f79be6d977278535"],
+    "source/reference.png": [3299243,"be79f5e1b543c0b3663319b11356ab5c436b56e5589d545527cf397084ff8f42"],
+    "source/mask.png": [11794,"def94384563f46fec9f6fef72479ec4b18865960c3f7802a17ea0d1a51e3d80e"]
+  },
+  "HALLOWEEN_MUSIC_ROOM": {
+    "raw/decoder.npz": [321705128,"e5cfa32721cafe39b3fb613db0579e5c73f4b1b38ec7ed013cc9197d22fd07dd"],
+    "raw/engine.json": [1633,"d873d50da2a65501a51a1043f5a5ba0d9c70eea88c7da21e2ca148f5933e043b"],
+    "raw/original.glb": [67422012,"efc8f3a8972cb4f656bd84e86527a7621bf7bee31c9b26ec604cd458c02f9615"],
+    "source/reference.png": [3272523,"f630d0bf12dad970747e797b19385a5e8a13a558a17f8203f89d30d6c8aa0455"],
+    "source/mask.png": [8422,"9c09434be0b154d75b0c1e6acdee8662c9e1e53bd487756c051e02194f56e85c"]
+  }
+}
