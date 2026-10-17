@@ -1,5 +1,13 @@
 # Owner MAKE V2 — execution brief
 
+## 2026-10-17 follow-up — delivery unavailable; live generation not upgraded
+
+The resumed execution environment is empty: the previous `WORLDIFACT-MAKE-V2/deliverables` directory is absent. The earlier persistent save failed before the first confirmed upload. A search for the new MAKE files did not resolve a saved copy. Therefore the MAKE counts and hashes below describe the prior local execution, **not currently available or delivered binaries**. Do not show the old GAME models as the rebuilt result or claim the MAKE pipeline is deployed. Recovering the original decoders would not itself restore the lost modeled room, final exports or local refinement scripts; those refinements must be reconstructed and validated again before delivery.
+
+The live gallery was checked again: ECOMECH is still 186,328 triangles, and Halloween is still 193,638 triangles with an incomplete-room notice. AI Shop still presents the existing Astra/Blender path and requires account sign-in to verify points and generation availability. No signed-in generation or new paid inference was performed.
+
+A fresh GET-only Runpod check on 2026-10-17 at 05:03:35 UTC, [run 38818010309 attempt 4, job 117315131042](https://github.com/teslaeco/WORLDIFACT/actions/runs/38818010309/job/117315131042), returned 0 Pods, 0 network volumes and 1 Serverless endpoint configured with minimum workers 0 and no always-on worker. Subsequent provider-console inspection identified the retained `WORLDIFACT-3D-FLEX` endpoint `s461jvmhr256g3`: 0 running workers, 0 in-progress/queued jobs, displayed spend rate USD 0.00000/s and USD 0.00 billed in the past hour; Active=0, Max=1, idle timeout=5 seconds. Its worker list still contains one `idle` entry with no uptime. This proves the observed zero spend rate, **not endpoint deletion or a final invoice reconciliation**. No GPU job was started or resource deleted during this check.
+
 The owner rejected the two working GAME models as unsuitable for B2B printing and asked for materially better modeling, up to about one million triangles, with the modeling instruction actually executed. Existing originals and published GAME copies must be preserved.
 
 ## Execute
@@ -26,4 +34,42 @@ The one-use workflow only reads and HEAD-checks the same two previously generate
 
 Sources: https://jlc3dp.com/help/article/3d-printing-design-guideline ; https://jlc3dp.com/help/article/wjp-products-design-guidelines ; https://www.sculpteo.com/en/materials/stereolithography/prototyping-resin/
 
-These values are screening references, not a manufacturing approval. The exact selected process, final dimensions and supplier review govern the final acceptance. Execution results will be recorded after the local geometry and visual checks.
+These values are screening references, not a manufacturing approval. The exact selected process, final dimensions and supplier review govern the final acceptance. Executed geometry results and remaining limits are recorded below.
+
+
+## Executed results
+
+Read-only recovery run 39000492464 succeeded. Both decoder SHA-256 values matched the original receipts. Local tools: Blender 4.3, MeshLib, NumPy, SciPy, scikit-image and Trimesh. Original sparse surface cells were reconstructed into closed geometry; modeled internal support and room objects were united, collisions repaired and actual surface colors transferred barycentrically. No new inference was called.
+
+### ECOMECH_V4
+
+- Final triangles: 1,102,000; size: 143.996 x 143.998 x 200.049 mm.
+- Closed components: 1; boundary loops: 0; detected self-intersecting triangle pairs: 0.
+- Added local support bridges: 2.
+- 16,000-sample geometric comparison against the closed pre-reduction assembly: P99 0.00361 mm; sampled maximum 0.01447 mm. This is not an exhaustive Hausdorff bound or an error bound against the photograph.
+- Inward-normal chord samples below 0.8 mm: 10/16,000. Decorative tips and edges are included. The CSV requires material-specific review.
+- `ECOMECH_V4-MAKE-V2-mm.stl` SHA-256: `4e3935355dedc23dcbbe29dfeb6c8340d0c14e923621da219780e25652027c86`.
+- `ECOMECH_V4-MAKE-V2.3mf` SHA-256: `07521e444d79627cd3fc2110f7bf4e7e7cdec7aed0d78fcd4865e38e1efdc2bd`.
+- `ECOMECH_V4-MAKE-V2.glb` SHA-256: `078b4e7d3fc3f6ba42a3ff5e60da2d96a315a83e6141716558cc0a50b506456d`.
+
+### HALLOWEEN_MUSIC_ROOM
+
+- Final triangles: 1,099,802; size: 235.040 x 162.240 x 200.003 mm.
+- Closed components: 1; boundary loops: 0; detected self-intersecting triangle pairs: 0.
+- Added local support bridges: 30.
+- 16,000-sample geometric comparison against the closed pre-reduction assembly: P99 0.09227 mm; sampled maximum 0.28770 mm. This is not an exhaustive Hausdorff bound or an error bound against the photograph.
+- Inward-normal chord samples below 0.8 mm: 249/16,000. Decorative tips and edges are included. The CSV requires material-specific review.
+- `HALLOWEEN_MUSIC_ROOM-MAKE-V2-mm.stl` SHA-256: `a14f8db15980029023dc607c4ca0127bfd0a473ce244b0054ac7c525c9ad3e6a`.
+- `HALLOWEEN_MUSIC_ROOM-MAKE-V2.3mf` SHA-256: `8b07872d9e3707a5262db557439cdbf2e4cba668be0325043555255e413f76e8`.
+- `HALLOWEEN_MUSIC_ROOM-MAKE-V2.glb` SHA-256: `0e8b942510eebff25a7067a552dfd355d0668e458f7b1f494ed80bf1e2ddbde9`.
+
+The original GAME assets and private source decoders are preserved. MAKE files are private deliverables and are not published by this change. The whole-room design includes inferred unseen surfaces and does not claim verified photorealistic likeness. Both whole-mesh topology gates pass. Supplier approval, physical durability, all-process feature compliance and physical pin fit remain pending. No supplier messages or orders were sent.
+
+
+## Delivery interrupted by workspace availability
+
+After validated exports and reports were created, the execution environment disconnected with `environment_offline` / `Environment is not connected`. The normal packaging/upload path could not run. A direct file-save fallback also failed to read the first file before any upload was confirmed. The new MAKE artifacts have **not been delivered or confirmed in persistent user file storage**, and ZIP packaging is unfinished. This is an infrastructure failure, not a mesh validation failure or an approval rejection.
+
+The last accessible working directory was `WORLDIFACT-MAKE-V2`, with final artifacts under `deliverables/ECOMECH_V4` and `deliverables/HALLOWEEN_MUSIC_ROOM`. Both full-resolution GLB/STL/3MF files, final and editable Blender files, measured QA JSON, thin-area CSVs and the Polish modeling command/report had been created. Eight robot render PNGs were confirmed; three Halloween render PNGs were last confirmed while its remaining render job was running. Final render-job completion and final viewport framing were not rechecked after the disconnection. Do not claim a finished ZIP or a working download link from these prepared paths.
+
+On reconnection, first recover and inspect those existing outputs, then finish actual render verification, package only the intended deliverables and modeling scripts, save them persistently and verify the save receipts. Exclude recovery keys and transfer credentials. Do not repeat inference or overwrite original GAME inputs. If the scratch outputs no longer exist, the two original decoder meshes remain recoverable from their fixed previously verified private storage receipts.
