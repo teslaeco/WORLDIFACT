@@ -17,7 +17,7 @@ jobs:
       - name: Restrict to one new workflow and approved main
         run: |
           set -euo pipefail
-          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = '.github/workflows/owner-v3-inventory-audit.yml'
+          test "$(git diff --name-only HEAD^1 HEAD)" = '.github/workflows/owner-v3-inventory-audit.yml'
           test "$(git rev-parse HEAD^1)" = '15db5705e94f78d12ae10309427c21241557988c'
           test "$(git hash-object scripts/runpod-readonly-preflight.mjs)" = "$(git rev-parse 15db5705e94f78d12ae10309427c21241557988c:scripts/runpod-readonly-preflight.mjs)"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
