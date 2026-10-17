@@ -1,0 +1,29 @@
+name: Owner V3 RunPod inventory audit (read only)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/owner-v3-inventory-audit.yml']
+permissions:
+  contents: read
+jobs:
+  inventory:
+    if: github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false, fetch-depth: 2 }
+      - name: Restrict to one new workflow and approved main
+        run: |
+          set -euo pipefail
+          test "$(git diff --name-only HEAD^1 HEAD)" = '.github/workflows/owner-v3-inventory-audit.yml'
+          test "$(git rev-parse HEAD^1)" = '15db5705e94f78d12ae10309427c21241557988c'
+          test "$(git hash-object scripts/runpod-readonly-preflight.mjs)" = "$(git rev-parse 15db5705e94f78d12ae10309427c21241557988c:scripts/runpod-readonly-preflight.mjs)"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: '24' }
+      - run: node --test tests/runpod-readonly-preflight.test.mjs
+      - name: Read current RunPod Pods, endpoints and volumes (no resource writes)
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: node scripts/runpod-readonly-preflight.mjs
