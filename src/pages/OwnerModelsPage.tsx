@@ -54,7 +54,7 @@ function ModelSession({ model }: { model: OwnerModel }) {
       <span>{model.triangles.toLocaleString('en-US')} triangles · embedded textures</span>
       <div className="owner-model-actions">
         <button type="button" onClick={() => setLoad3d(value => !value)}>{load3d ? 'Show instant renders' : 'Load interactive 3D (18 MB)'}</button>
-        <a href={`/owner-models/${model.id}.glb`} download={`${model.id}.glb`}>Download GLB ↓</a>
+        <a href={model.path} download={`${model.id}.glb`}>Download GLB ↓</a>
       </div>
     </div>
   </>
