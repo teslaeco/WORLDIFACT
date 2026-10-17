@@ -22,7 +22,19 @@ export async function verifyOwnerShowcase(root = 'dist') {
     const triangles = json.meshes.reduce((sum, mesh) => sum + mesh.primitives.reduce((n, primitive) => n + json.accessors[primitive.indices].count / 3, 0), 0)
     assert.equal(triangles, model.triangles)
   }
-  return { models: OWNER_MODELS.length, exactCorrectedBytes: true, embeddedTextures: true }
+  const renders = JSON.parse(await readFile('docs/OWNER_MODEL_RENDER_PROVENANCE_20261017.json', 'utf8')).renders
+  const names = OWNER_MODELS.flatMap(model => ['three_quarter', 'front', 'side', 'back'].map(view => `${model.id}-${view}.jpg`))
+  assert.deepEqual(renders.map(render => render.path).sort(), names.map(name => `public/owner-model-renders/${name}`).sort())
+  assert.deepEqual((await readdir(join(root, 'owner-model-renders'))).sort(), names.sort())
+  for (const render of renders) {
+    const path = join(root, render.path.slice('public/'.length))
+    assert.ok((await lstat(path)).isFile())
+    const bytes = await readFile(path)
+    assert.equal(bytes.length, render.bytes)
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), render.sha256)
+    assert.equal(bytes.readUInt16BE(0), 0xffd8)
+  }
+  return { models: OWNER_MODELS.length, exactCorrectedBytes: true, embeddedTextures: true, verifiedSavedRenders: renders.length }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -1,8 +1,8 @@
-## 2026-10-17 — Owner generation completed; website showcase prepared
+## 2026-10-17 — Owner generation completed; showcase published; browser fallback prepared
 
 Run [38978275895](https://github.com/teslaeco/WORLDIFACT/actions/runs/38978275895) completed one native inference for ECOMECH V4 and one for Halloween. The earlier preparation failures below are historical; their no-output status is superseded. Original files are preserved. Corrected UV working copies, Blender files and actual renders were delivered. ECOMECH has reduced fine detail; Halloween is an incomplete, partly flattened reconstruction and does not meet the whole-room request. Export reduced roughly seven-million-triangle raw meshes to 186,328 and 193,638 triangles, but missing scene content is also a reconstruction failure.
 
-The owner now requested website display. A standalone viewer with both exact corrected working copies and honest quality labels is prepared. Its one-use publication uses the verified live application as a base and adds only the gallery, preserving existing runtime configuration. No new inference is requested. Publication and browser checks remain PENDING until actual workflow evidence is recorded. See [OWNER_MODEL_SHOWCASE_20261017.md](OWNER_MODEL_SHOWCASE_20261017.md).
+The requested standalone viewer and both exact corrected working copies are published: run 38997634111, Cloudflare version b3a0c4a7-fcdb-4938-92fc-2fb29bad2a7e, 2317 tests passed, 444 assets and both full GLBs byte-verified. Actual browser inspection found WebGL unavailable and the existing software preview too small for these 18 MB files. The fixed-angle saved-render fallback is prepared but not yet visually accepted. No new inference was called. See [OWNER_MODEL_SHOWCASE_20261017.md](OWNER_MODEL_SHOWCASE_20261017.md).
 
 ## 2026-10-16 — Owner preparation stopped before paid dispatch; recovery scoped to unspent state (historical)
 

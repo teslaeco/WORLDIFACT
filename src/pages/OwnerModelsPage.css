@@ -34,6 +34,9 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px soli
 .owner-model-stage .scene-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .owner-model-stage button { cursor: pointer; background: #1b2d37; color: #d3e5e2; border: 1px solid #38505c; border-radius: 7px; min-height: 40px; padding: 9px 12px; font-size: 11px; }
 .owner-model-stage button:disabled { opacity: .45; cursor: default; }
+.owner-model-stage button[aria-pressed="true"] { border-color: #9ae8c9; color: #9ae8c9; }
+.owner-render-image { display: block; width: 100%; height: clamp(370px, 56vh, 650px); object-fit: contain; border-radius: 10px; background: #20292e; }
+.owner-saved-renders > .result-note { margin-top: 12px; }
 .owner-model-stage .scene-toolbar span { width: 100%; margin: 7px 0 0; }
 .owner-model-loading { display: flex; min-height: 480px; align-items: center; justify-content: center; flex-direction: column; color: #a2bfb8; font-size: 13px; text-align: center; }
 .owner-model-loading > span { font-size: 68px; color: #a0e8ca; }

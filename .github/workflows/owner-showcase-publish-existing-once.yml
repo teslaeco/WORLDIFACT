@@ -1,4 +1,4 @@
-name: Publish existing owner models after historical test repair
+name: Publish owner model saved-render fallback
 on:
   push:
     branches: [main]
@@ -20,20 +20,20 @@ jobs:
       - name: Read the trusted recovery envelope
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with: { fetch-depth: 2, persist-credentials: false }
-      - name: Verify a two-file recovery from the already saved working copies
+      - name: Verify the bounded saved-render fallback release
         run: |
           python - <<'PYGATE'
           from pathlib import Path
           import subprocess
           def git(*args):
               return subprocess.check_output(['git', *args], text=True).strip()
-          base = 'f28093827b8be3d2a367798a8517b596120e6c4e'
+          base = '177815e6696cb96114b302f5e747fd62178d302d'
           assert git('rev-parse', 'HEAD^1') == base
-          expected = ['.github/workflows/owner-showcase-publish-existing-once.yml', 'docs/OWNER_MODEL_SHOWCASE_20261017.md']
+          expected = ['.github/workflows/owner-showcase-publish-existing-once.yml', 'src/components/OracleModelPreview.tsx', 'src/pages/OwnerModelsPage.tsx', 'src/pages/OwnerModelsPage.css', 'scripts/verify-owner-showcase.mjs', 'docs/OWNER_MODEL_RENDER_PROVENANCE_20261017.json', 'docs/OWNER_MODEL_SHOWCASE_20261017.md', 'docs/CONTEST_STATUS.md', 'public/owner-model-renders/ecomech-v4-three_quarter.jpg', 'public/owner-model-renders/ecomech-v4-front.jpg', 'public/owner-model-renders/ecomech-v4-side.jpg', 'public/owner-model-renders/ecomech-v4-back.jpg', 'public/owner-model-renders/halloween-music-room-three_quarter.jpg', 'public/owner-model-renders/halloween-music-room-front.jpg', 'public/owner-model-renders/halloween-music-room-side.jpg', 'public/owner-model-renders/halloween-music-room-back.jpg']
           assert sorted(git('diff', '--name-only', base, 'HEAD').splitlines()) == sorted(expected)
           for path in expected:
               assert git('ls-tree', 'HEAD', '--', path).startswith('100644 blob ')
-          print('Verified: publication recovery uses the same two saved GLBs; no R2 import or inference.')
+          print('Verified: only saved model renders and their fallback UI change; no R2 import or inference.')
           PYGATE
       - name: Start from the last verified live application
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -43,7 +43,7 @@ jobs:
       - name: Read the exact new viewer and published derivatives
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 1779b7a652a51a3964e1b5b6b8cf1c39fa64c59d
+          ref: ${{ github.sha }}
           path: .upstream/owner-gallery
           persist-credentials: false
       - name: Overlay only the standalone viewer and gallery link
@@ -55,12 +55,21 @@ jobs:
           paths = [
             'models/index.html', 'src/owner-models.tsx', 'src/lib/ownerShowcase.ts',
             'src/pages/OwnerModelsPage.tsx', 'src/pages/OwnerModelsPage.css',
-            'src/components/PublicModelGallery.tsx', 'vite.config.ts',
+            'src/components/PublicModelGallery.tsx', 'src/components/OracleModelPreview.tsx', 'vite.config.ts',
             'scripts/verify-owner-showcase.mjs', 'tests/owner-showcase.test.ts',
+            'docs/OWNER_MODEL_RENDER_PROVENANCE_20261017.json',
             'tests/owner-unused-points.test.ts',
             'tests/helpers/nativeChromiumRun.mjs', 'tests/studio-native-fetch-browser.test.mjs',
             'public/owner-models/ecomech-v4-b8532d8c.glb',
             'public/owner-models/halloween-music-room-d9f01fa8.glb',
+            'public/owner-model-renders/ecomech-v4-three_quarter.jpg',
+            'public/owner-model-renders/ecomech-v4-front.jpg',
+            'public/owner-model-renders/ecomech-v4-side.jpg',
+            'public/owner-model-renders/ecomech-v4-back.jpg',
+            'public/owner-model-renders/halloween-music-room-three_quarter.jpg',
+            'public/owner-model-renders/halloween-music-room-front.jpg',
+            'public/owner-model-renders/halloween-music-room-side.jpg',
+            'public/owner-model-renders/halloween-music-room-back.jpg',
           ]
           for name in paths:
               original = source / name
@@ -107,7 +116,7 @@ jobs:
         id: verify
         env:
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/owner-model-showcase.ndjson
-          SHOWCASE_SOURCE_SHA: 1779b7a652a51a3964e1b5b6b8cf1c39fa64c59d
+          SHOWCASE_SOURCE_SHA: ${{ github.sha }}
         run: |
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict'

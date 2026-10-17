@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ACESFilmicToneMapping, AmbientLight, Box3, Color, DirectionalLight, Group, LoadingManager, PerspectiveCamera,
   PMREMGenerator, Scene, Vector3, WebGLRenderer, type WebGLRenderTarget,
@@ -12,14 +12,14 @@ import { createModelSlot } from '../lib/modelSlot'
 import { frameModel, type ModelBounds, type ModelView } from '../lib/modelFraming'
 import { buildSoftwareModel, inspectEmbeddedGlb, isEmbeddedPreviewImage, ModelPreviewError, readModelPreviewBytes, SOFTWARE_PREVIEW_LIMITS } from '../lib/softwareModelPreview'
 
-type Props = { url: string; label?: string; targetDimensionsMm?: [number, number, number]; customerMode?: boolean }
+type Props = { url: string; label?: string; targetDimensionsMm?: [number, number, number]; customerMode?: boolean; renderedFallback?: ReactNode }
 
 /** WORLDIFACT viewer; the externally hosted Froge generator is not modified. */
-export default function OracleModelPreview({ url, label = 'Generated 3D model', targetDimensionsMm, customerMode = false }: Props) {
-  return <ModelPreviewSession key={JSON.stringify([url, label, targetDimensionsMm, customerMode])} url={url} label={label} targetDimensionsMm={targetDimensionsMm} customerMode={customerMode} />
+export default function OracleModelPreview({ url, label = 'Generated 3D model', targetDimensionsMm, customerMode = false, renderedFallback }: Props) {
+  return <ModelPreviewSession key={JSON.stringify([url, label, targetDimensionsMm, customerMode, !!renderedFallback])} url={url} label={label} targetDimensionsMm={targetDimensionsMm} customerMode={customerMode} renderedFallback={renderedFallback} />
 }
 
-function ModelPreviewSession({ url, label, targetDimensionsMm, customerMode }: { url: string; label: string; targetDimensionsMm?: [number, number, number]; customerMode: boolean }) {
+function ModelPreviewSession({ url, label, targetDimensionsMm, customerMode, renderedFallback }: Props & { label: string; customerMode: boolean }) {
   const host = useRef<HTMLDivElement>(null)
   const fitView = useRef<((view?: ModelView) => void) | null>(null)
   const [error, setError] = useState('')
@@ -27,8 +27,10 @@ function ModelPreviewSession({ url, label, targetDimensionsMm, customerMode }: {
   const [person, setPerson] = useState(false)
   const [ready, setReady] = useState(false)
   const [software, setSoftware] = useState(false)
+  const useSavedRenders = software && !!renderedFallback
 
   useEffect(() => {
+    if (useSavedRenders) return
     const element = host.current
     if (!element) return
     let disposed = false
@@ -239,7 +241,12 @@ function ModelPreviewSession({ url, label, targetDimensionsMm, customerMode }: {
       }
     })()
     return cleanup
-  }, [url, label, targetDimensionsMm, customerMode, software])
+  }, [url, label, targetDimensionsMm, customerMode, software, useSavedRenders])
+
+  if (useSavedRenders) return <div className="oracle-model-preview">
+    <p role="status" className="result-note">Interactive 3D is unavailable in this browser. These are saved renders of the same model; choose a view below.</p>
+    {renderedFallback}
+  </div>
 
   return <div className="oracle-model-preview">
     <p role={error ? 'alert' : 'status'} className="result-note">{error || status}</p>
