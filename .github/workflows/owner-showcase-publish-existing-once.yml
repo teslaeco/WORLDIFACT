@@ -27,7 +27,7 @@ jobs:
           import subprocess
           def git(*args):
               return subprocess.check_output(['git', *args], text=True).strip()
-          base = '1779b7a652a51a3964e1b5b6b8cf1c39fa64c59d'
+          base = 'f28093827b8be3d2a367798a8517b596120e6c4e'
           assert git('rev-parse', 'HEAD^1') == base
           expected = ['.github/workflows/owner-showcase-publish-existing-once.yml', 'docs/OWNER_MODEL_SHOWCASE_20261017.md']
           assert sorted(git('diff', '--name-only', base, 'HEAD').splitlines()) == sorted(expected)
@@ -58,6 +58,7 @@ jobs:
             'src/components/PublicModelGallery.tsx', 'vite.config.ts',
             'scripts/verify-owner-showcase.mjs', 'tests/owner-showcase.test.ts',
             'tests/owner-unused-points.test.ts',
+            'tests/helpers/nativeChromiumRun.mjs', 'tests/studio-native-fetch-browser.test.mjs',
             'public/owner-models/ecomech-v4-b8532d8c.glb',
             'public/owner-models/halloween-music-room-d9f01fa8.glb',
           ]
