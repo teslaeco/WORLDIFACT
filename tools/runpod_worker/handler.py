@@ -129,10 +129,16 @@ def execute(envelope,store,engine,postprocess,progress=lambda *_:None,now_ms=Non
                 'planReviewCriteria':j['plan'],'visualAccepted':False,'printReady':False,'supplierAccepted':False,
                 'inferenceAttempts':1,'elapsedMs':round((time.monotonic()-started)*1000),
                 'actualBilledMicroUsd':None,'costState':'PROVIDER_INVOICE_NOT_RECONCILED'}
-    except Exception:
-        # Store partial originals and a safe phase, never exception text, tokens or URLs.
+    except Exception as failure:
+        # Store only an allowlisted phase and exception class, never exception
+        # text, filesystem paths, credentials, object keys or provider URLs.
+        safe_types = {'Rejected', 'TimeoutError', 'CalledProcessError', 'RuntimeError',
+                      'OSError', 'ValueError', 'MemoryError', 'AssertionError'}
+        failure_type = type(failure).__name__
+        if failure_type not in safe_types:
+            failure_type = 'Other'
         receipt={'revision':j['revision'],'jobId':j['jobId'],'fingerprint':fp,'state':'FAILED_RECONCILE',
-            'failedStage':stage,'artifacts':artifacts,'visualAccepted':False,'printReady':False,
+            'failedStage':stage,'failureType':failure_type,'artifacts':artifacts,'visualAccepted':False,'printReady':False,
             'actualBilledMicroUsd':None,'automaticRetryAllowed':False}
     if durable_exports:receipt['checkpointProtocol']='immutable-artifact-receipts-v1'
     if not store.create_json(result_key,receipt):raise Rejected('RESULT_COMMIT_CONFLICT')
