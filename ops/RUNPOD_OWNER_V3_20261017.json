@@ -1,0 +1,56 @@
+{
+  "id": "owner-models-20261017-v3",
+  "scope": "7995e5146670062672b65386bfcefab8278072cf2ba3bad2dd8b5f342660075f",
+  "revision": "astra-runpod-blender-v3",
+  "authorization": "Exactly two new owner model generations, authorized 2026-10-17; one inference per stage, no automatic retries.",
+  "maxBatchMicroUsd": 6000000,
+  "image": null,
+  "imageSourceCommit": null,
+  "previousEndpointId": "s461jvmhr256g3",
+  "registry": "cmvbbpdxq000pi81ul0ltivxv",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAqmHTdqBaww90EP9Lz9ij\nHiB/eCDoPBOYAiGLJuKzxSImrVLMfhOKnnVWmkyNPQ5OPdq6KBuFFopMW9Uy7RdA\nNpwQb5oFdgnTaqUr4Nza9NJtETTwTkCkoXp1JHeCBC3an3uJqlyKo7GuxdbJ5GLE\n+qooggDEpgH/GsSlqaFB5tRGPlk8KuFok7BNHkK4T6uCKO7bzMfB+1FDOG8pwGkY\nsq1Jus/pUQ0j32Y1ivIarILaS7VkDCHCWe5gCizbPUsL6HwzaVqSV4q4tqQOSr5T\nljbrGkugG2NGwR5nSXRURBtl49eKfEzXuqOaJY3iagBwlx37jWJTyWP8Z2SwCuy1\nk9TOMU3B46N0aHNjQzI7fidzl2byL6G6XDe5V8tUz9RxhSn14UFtsIPj/KRgFU0k\nL4K05AM4/hyzHBujFY/JsbRZJ3qTdrEJK88oN2/lcURwxaf0QrPPirtCMIibeBsO\n7B1RKjPNdkpnRYi8gg6Yp23OR2r7we2bEbjmXmybSGcrAgMBAAE=\n-----END PUBLIC KEY-----\n",
+  "sourceReview": {
+    "accepted": true,
+    "reviewedAt": "2026-10-17",
+    "originalPngBytesUnchanged": true,
+    "referenceGeometry": "Visible contours retained; hidden surfaces require inference.",
+    "maskReview": "Root visually inspected final overlays, complete robot including pepper, and original performer fingers/nails. No RGB edits."
+  },
+  "stage1VisualReview": null,
+  "jobs": [
+    {
+      "name": "ECOMECH_V4",
+      "jobId": "3b3b9cc5-8f43-4e48-bf56-ce2d3e2390c1",
+      "subject": "robot",
+      "reference": {
+        "sha256": "be79f5e1b543c0b3663319b11356ab5c436b56e5589d545527cf397084ff8f42",
+        "bytes": 3299243,
+        "width": 1122,
+        "height": 1402
+      },
+      "mask": {
+        "sha256": "def94384563f46fec9f6fef72479ec4b18865960c3f7802a17ea0d1a51e3d80e",
+        "bytes": 11794,
+        "width": 1122,
+        "height": 1402
+      }
+    },
+    {
+      "name": "HALLOWEEN_MUSIC_ROOM",
+      "jobId": "af2fc596-68c7-44a7-a8a8-7e8d4fd2b7e8",
+      "subject": "person",
+      "reference": {
+        "sha256": "f630d0bf12dad970747e797b19385a5e8a13a558a17f8203f89d30d6c8aa0455",
+        "bytes": 3272523,
+        "width": 1024,
+        "height": 1536
+      },
+      "mask": {
+        "sha256": "9c09434be0b154d75b0c1e6acdee8662c9e1e53bd487756c051e02194f56e85c",
+        "bytes": 8422,
+        "width": 1024,
+        "height": 1536
+      }
+    }
+  ]
+}

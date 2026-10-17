@@ -1,3 +1,15 @@
+# 17 October 2026 — Owner V3 reference-faithful two-stage generation
+
+Status: PREPARING; no V3 paid inference or new result is claimed yet. The owner explicitly authorized two new paid generations on 17 October. This isolated batch uses one ECOMECH inference, then one Halloween performer inference plus an actual modeled room; stage 2 requires durable byte verification and a hash-bound visual review of stage 1. The working total cost ceiling is USD 6 (bounded runtime/reservations, not a provider invoice guarantee); automatic paid retries are prohibited.
+
+V3 retains the exact original PNG references and reviewed segmentation masks. Requested native settings are 1536 cascade, 24 sampling steps, 4096 texture and up to 1,000,000 exported triangles; actual resolution and triangle counts must be measured. Hidden surfaces and the lower Halloween dress/room are inferred. No printability or supplier acceptance is claimed. The original native GLB remains unchanged; the visual derivative applies the previously verified V-coordinate correction once.
+
+Every raw/derived file receives an immutable private storage checkpoint before the next expensive operation. The GLB and packed Blender project are saved before rendering. Each stage uses a dedicated temporary A100 80GB endpoint, deleted after success or failure with readback; the prior idle endpoint is left unchanged. Collection recovers saved checkpoints without regenerating. Local CPU tests and a real Blender fixture validate scene construction only, not generated likeness. Production website routing is unchanged.
+
+Earlier MAKE V2 measurements are historical: those local refined files were lost before durable upload and are unavailable. The currently public gallery contains older GAME models; it is not evidence of this V3 work.
+
+---
+
 ## 2026-10-17 — Owner generation completed; model website and saved-render fallback verified
 
 Run [38978275895](https://github.com/teslaeco/WORLDIFACT/actions/runs/38978275895) completed one native inference for ECOMECH V4 and one for Halloween. The earlier preparation failures below are historical; their no-output status is superseded. Original files are preserved. Corrected UV working copies, Blender files and actual renders were delivered. ECOMECH has reduced fine detail; Halloween is an incomplete, partly flattened reconstruction and does not meet the whole-room request. Export reduced roughly seven-million-triangle raw meshes to 186,328 and 193,638 triangles, but missing scene content is also a reconstruction failure.

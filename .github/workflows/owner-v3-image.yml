@@ -1,0 +1,84 @@
+name: Review and build owner V3 quality worker (no GPU)
+on:
+  pull_request:
+    paths: ['tools/runpod_owner_v3/**', 'tools/runpod_worker/**', 'tests/test_owner_v3*', '.github/workflows/owner-v3*.yml', 'ops/RUNPOD_OWNER_V3_20261017.json']
+  push:
+    branches: ['feat/owner-models-v3-20261017']
+    paths: ['tools/runpod_worker/**', 'tools/runpod_owner_v3/Dockerfile', '.github/workflows/owner-v3-image.yml']
+permissions:
+  contents: read
+concurrency:
+  group: owner-v3-image-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - run: python -m pip install boto3==1.43.66 cryptography==50.0.2 Pillow==12.3.0 numpy trimesh
+      - run: python -m unittest discover -s tools/runpod_worker -p test_worker.py -v
+      - run: python -m unittest discover -s tests -p 'test_owner*.py' -v
+      - run: python -m unittest discover -s tests -p 'test_runpod_runtime*.py' -v
+      - run: python -m py_compile tools/runpod_owner_v3/*.py tools/runpod_worker/*.py
+      - run: git diff --check
+  build:
+    needs: review
+    if: github.event_name == 'push' && github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/feat/owner-models-v3-20261017'
+    permissions: {contents: read, packages: write}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - name: Verify existing private package and authenticate CI registry
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          set -euo pipefail
+          test "$(gh api /users/teslaeco/packages/container/worldifact-runpod3d --jq .visibility)" = private
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username teslaeco --password-stdin
+      - name: Free temporary runner disk
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+      - name: Build a derived application layer over the qualified immutable base
+        run: |
+          docker buildx build --platform linux/amd64 --file tools/runpod_owner_v3/Dockerfile \
+            --tag "ghcr.io/teslaeco/worldifact-runpod3d:owner-v3-$GITHUB_SHA" \
+            --metadata-file /tmp/image-metadata.json --provenance=false --push .
+      - name: Verify image source bytes and private visibility
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          set -euo pipefail
+          test "$(gh api /users/teslaeco/packages/container/worldifact-runpod3d --jq .visibility)" = private
+          digest=$(jq -er '."containerimage.digest" | select(test("^sha256:[a-f0-9]{64}$"))' /tmp/image-metadata.json)
+          image="ghcr.io/teslaeco/worldifact-runpod3d@$digest"
+          docker pull "$image"
+          docker run --rm --entrypoint python "$image" -c 'import runpod; from pathlib import Path; [compile(p.read_text(),str(p),"exec") for p in Path("/opt/worldifact/worker").glob("*.py")]; print("OWNER_V3_CPU_IMPORT_PASS; NO_NEW_GPU_TEST")'
+          container=$(docker create "$image")
+          trap 'docker rm "$container" >/dev/null' EXIT
+          mkdir -p image-proof/files
+          for name in contracts.py engine.py storage.py handler.py blender_export.py owner_scene_v3.py; do
+            docker cp "$container:/opt/worldifact/worker/$name" "image-proof/files/$name"
+            cmp "tools/runpod_worker/$name" "image-proof/files/$name"
+          done
+          python - "$image" <<'PY'
+          import hashlib,json,os,sys
+          from pathlib import Path
+          root=Path('image-proof')
+          proof={'image':sys.argv[1],'sourceCommit':os.environ['GITHUB_SHA'],'visibility':'private',
+            'baseImage':'ghcr.io/teslaeco/worldifact-runpod3d@sha256:d303d66ec97aec3826dea3679ce5bf6b2786718fc2a0777409e859ce5375347e',
+            'cudaBundleChanged':False,'newGpuInferencePerformed':False,
+            'files':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (root/'files').iterdir()}}
+          (root/'owner-v3-image.json').write_text(json.dumps(proof,indent=2)+'\n')
+          print(json.dumps(proof))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: owner-v3-image-${{ github.sha }}
+          path: image-proof/owner-v3-image.json
+          retention-days: 30
+          if-no-files-found: error
+      - if: always()
+        run: docker logout ghcr.io

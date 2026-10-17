@@ -35,6 +35,7 @@ def execute(envelope,store,engine,postprocess,progress=lambda *_:None,now_ms=Non
     if not enabled:raise Rejected('GPU_WORKER_DISABLED')
     if type(envelope) is not dict or 'input' not in envelope:raise Rejected('INVALID_RUNPOD_ENVELOPE')
     j=validate_job(envelope['input'],now_ms);fp=fingerprint(j)
+    durable_exports=j['revision']=='astra-runpod-blender-v3'
     prefix=f"jobs/{j['scope']}/{j['jobId']}/";result_key=prefix+'result.json'
     # CAS survives scale-to-zero and RunPod redelivery; no process-local lock illusion.
     created=store.create_json(prefix+'claim.json',{'fingerprint':fp,'revision':j['revision']})
@@ -48,6 +49,17 @@ def execute(envelope,store,engine,postprocess,progress=lambda *_:None,now_ms=Non
             return result
         raise Rejected('EXISTING_INCOMPLETE_JOB_RECONCILIATION_REQUIRED')
     started=time.monotonic();artifacts=[];stage='REFERENCE';receipt=None
+    def checkpoint(relative,path,mime):
+        artifact=store.put_file(prefix+relative,path,mime)
+        artifacts.append(artifact)
+        if durable_exports:
+            # Each small receipt is immutable and independently recoverable
+            # even if provider termination prevents the final result commit.
+            saved_receipt={'revision':j['revision'],'jobId':j['jobId'],
+                'fingerprint':fp,'state':'ARTIFACT_DURABLE','artifact':artifact}
+            if not store.create_json(prefix+'checkpoints/'+relative+'.json',saved_receipt):
+                raise Rejected('CHECKPOINT_COMMIT_CONFLICT')
+        return artifact
     try:
         # Applies to loading, source fetch, inference, export and uploads. RunPod
         # executionTimeout is the independent external kill guard. Neither is an invoice cap.
@@ -63,7 +75,7 @@ def execute(envelope,store,engine,postprocess,progress=lambda *_:None,now_ms=Non
                 if path.name not in raw_types or path.resolve().parent != (root/'neural').resolve() or path.name in saved:
                     raise Rejected('INVALID_CHECKPOINT_PATH')
                 if path.suffix=='.glb':validate_glb(path)
-                artifacts.append(store.put_file(prefix+'raw/'+path.name,path,raw_types[path.name]))
+                checkpoint('raw/'+path.name,path,raw_types[path.name])
                 saved.add(path.name)
             raw=engine(reference,mask,j,root/'neural',preserve)
             # The native engine checkpoints shape+PBR BEFORE costly export.
@@ -71,15 +83,44 @@ def execute(envelope,store,engine,postprocess,progress=lambda *_:None,now_ms=Non
             if saved != set(raw_types):raise Rejected('RAW_OUTPUT_MISSING')
             stage='BLENDER';progress(stage)
             remaining=max(1,j['budget']['executionSeconds']-int(time.monotonic()-started))
-            export_dir=root/'exports';postprocess(root/'neural'/'original.glb',export_dir,remaining)
+            export_dir=root/'exports'
             required={'game.glb':'model/gltf-binary','source.blend':'application/octet-stream','qa.json':'application/json'}
+            if durable_exports:
+                required['qa.initial.json']='application/json'
+                required['scene-report.json']='application/json'
             for view in ('front','three_quarter','side','back'):
                 for kind in ('clay','pbr'):required[f'{kind}_{view}.png']='image/png'
+            exported=set()
+            def preserve_export(path):
+                if (path.name not in required or path.is_symlink()
+                        or path.resolve().parent!=export_dir.resolve() or path.name in exported
+                        or not path.is_file()):
+                    raise Rejected('INVALID_EXPORT_CHECKPOINT_PATH')
+                if path.suffix=='.glb':validate_glb(path)
+                if path.suffix=='.json':
+                    if path.stat().st_size>262144:raise Rejected('QA_REPORT_TOO_LARGE')
+                    report=json.loads(path.read_text())
+                    if report.get('printReady') is not False or report.get('visualAccepted') is not False:
+                        raise Rejected('FALSE_APPROVAL')
+                    if durable_exports and report.get('supplierAccepted') is not False:
+                        raise Rejected('FALSE_SUPPLIER_APPROVAL')
+                checkpoint('outputs/'+path.name,path,required[path.name])
+                exported.add(path.name)
+            if durable_exports:
+                # The native Blender wrapper acknowledges each completed file
+                # only AFTER this callback has durably saved it and its receipt.
+                profiles={'person':'halloween','robot':'robot'}
+                if j['plan']['subject'] not in profiles:raise Rejected('INVALID_OWNER_EXPORT_PROFILE')
+                postprocess(root/'neural'/'original.glb',export_dir,remaining,
+                    preserve=preserve_export,profile=profiles[j['plan']['subject']])
+            else:
+                postprocess(root/'neural'/'original.glb',export_dir,remaining)
             for filename,mime in required.items():
                 p=export_dir/filename
                 if not p.is_file():raise Rejected('EXPORT_OR_RENDER_MISSING')
-                if p.suffix=='.glb':validate_glb(p)
-                artifacts.append(store.put_file(prefix+'outputs/'+filename,p,mime))
+                if filename not in exported:
+                    if durable_exports:raise Rejected('EXPORT_CHECKPOINT_NOT_ACKNOWLEDGED')
+                    preserve_export(p)
             qa=json.loads((export_dir/'qa.json').read_text())
             if qa.get('printReady') is not False or qa.get('visualAccepted') is not False:raise Rejected('FALSE_APPROVAL')
             receipt={'revision':j['revision'],'jobId':j['jobId'],'fingerprint':fp,'state':'REVIEW_REQUIRED',
@@ -93,6 +134,7 @@ def execute(envelope,store,engine,postprocess,progress=lambda *_:None,now_ms=Non
         receipt={'revision':j['revision'],'jobId':j['jobId'],'fingerprint':fp,'state':'FAILED_RECONCILE',
             'failedStage':stage,'artifacts':artifacts,'visualAccepted':False,'printReady':False,
             'actualBilledMicroUsd':None,'automaticRetryAllowed':False}
+    if durable_exports:receipt['checkpointProtocol']='immutable-artifact-receipts-v1'
     if not store.create_json(result_key,receipt):raise Rejected('RESULT_COMMIT_CONFLICT')
     return receipt
 
