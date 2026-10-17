@@ -56,3 +56,12 @@ Read-only recovery run 39000492464 succeeded. Both decoder SHA-256 values matche
 - `HALLOWEEN_MUSIC_ROOM-MAKE-V2.glb` SHA-256: `0e8b942510eebff25a7067a552dfd355d0668e458f7b1f494ed80bf1e2ddbde9`.
 
 The original GAME assets and private source decoders are preserved. MAKE files are private deliverables and are not published by this change. The whole-room design includes inferred unseen surfaces and does not claim verified photorealistic likeness. Both whole-mesh topology gates pass. Supplier approval, physical durability, all-process feature compliance and physical pin fit remain pending. No supplier messages or orders were sent.
+
+
+## Delivery interrupted by workspace availability
+
+After validated exports and reports were created, the execution environment disconnected with `environment_offline` / `Environment is not connected`. The normal packaging/upload path could not run. A direct file-save fallback also failed to read the first file before any upload was confirmed. The new MAKE artifacts have **not been delivered or confirmed in persistent user file storage**, and ZIP packaging is unfinished. This is an infrastructure failure, not a mesh validation failure or an approval rejection.
+
+The last accessible working directory was `WORLDIFACT-MAKE-V2`, with final artifacts under `deliverables/ECOMECH_V4` and `deliverables/HALLOWEEN_MUSIC_ROOM`. Both full-resolution GLB/STL/3MF files, final and editable Blender files, measured QA JSON, thin-area CSVs and the Polish modeling command/report had been created. Eight robot render PNGs were confirmed; three Halloween render PNGs were last confirmed while its remaining render job was running. Final render-job completion and final viewport framing were not rechecked after the disconnection. Do not claim a finished ZIP or a working download link from these prepared paths.
+
+On reconnection, first recover and inspect those existing outputs, then finish actual render verification, package only the intended deliverables and modeling scripts, save them persistently and verify the save receipts. Exclude recovery keys and transfer credentials. Do not repeat inference or overwrite original GAME inputs. If the scratch outputs no longer exist, the two original decoder meshes remain recoverable from their fixed previously verified private storage receipts.
