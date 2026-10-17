@@ -7,6 +7,16 @@ import hashlib, json, os, re, struct
 from urllib.parse import urlsplit
 from contracts import Rejected
 MAX_ARTIFACT=256*1024*1024
+MAX_DECODER_ARTIFACT=1024*1024*1024
+_DECODER_KEY=re.compile(r'jobs/[a-f0-9]{64}/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}/raw/decoder\.npz')
+
+def artifact_limit(key,path,mime):
+    # The higher ceiling applies ONLY to the native decoder checkpoint. GLB,
+    # Blender, images and reports retain the existing 256 MiB ceiling.
+    if (isinstance(key,str) and _DECODER_KEY.fullmatch(key)
+            and path.name=='decoder.npz' and mime=='application/octet-stream'):
+        return MAX_DECODER_ARTIFACT
+    return MAX_ARTIFACT
 
 def digest(path):
     h=hashlib.sha256()
@@ -56,11 +66,16 @@ class S3Store:
         return True
     def put_file(self,key,path,mime):
         size=path.stat().st_size
-        if not 1<=size<=MAX_ARTIFACT or path.is_symlink():raise Rejected('INVALID_ARTIFACT')
+        if not 1<=size<=artifact_limit(key,path,mime) or path.is_symlink() or not path.is_file():raise Rejected('INVALID_ARTIFACT')
         checksum=digest(path)
         with path.open('rb') as body:
             self.client.put_object(Bucket=self.bucket,Key=key,Body=body,ContentType=mime,
                 Metadata={'sha256':checksum},IfNoneMatch='*')
+        # A committed upload is acknowledged only after storage readback. An
+        # ambiguous PUT or failed readback never causes a second write.
+        head=self.client.head_object(Bucket=self.bucket,Key=key)
+        if head.get('ContentLength')!=size or head.get('Metadata',{}).get('sha256')!=checksum:
+            raise Rejected('ARTIFACT_READBACK_MISMATCH')
         return {'key':key,'bytes':size,'sha256':checksum,'mime':mime}
 
 
