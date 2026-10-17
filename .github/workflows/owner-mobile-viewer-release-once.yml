@@ -1,0 +1,139 @@
+name: Release instant mobile owner model previews once
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/owner-mobile-viewer-release-once.yml']
+permissions:
+  contents: read
+concurrency:
+  group: worldifact-production
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.event_name == 'push' && github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    environment:
+      name: production
+      url: ${{ steps.verify.outputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Read the trusted recovery envelope
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { fetch-depth: 2, persist-credentials: false }
+      - name: Verify the bounded saved-render fallback release
+        run: |
+          python - <<'PYGATE'
+          from pathlib import Path
+          import subprocess
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          base = '34b0a0fe616436e8bd9e436837ba41ba5fd73767'
+          assert git('rev-parse', 'HEAD^1') == base
+          expected = ['.github/workflows/owner-mobile-viewer-release-once.yml']
+          assert sorted(git('diff', '--name-only', base, 'HEAD').splitlines()) == expected
+          assert git('ls-tree', 'HEAD', '--', expected[0]).startswith('100644 blob ')
+          # The reviewed mobile UI was merged to base in PR #335. Keep it immutable.
+          assert git('rev-parse', base+':src/pages/OwnerModelsPage.tsx') == 'ed38b62dba0dfc27693010d55af6bf4d8bb4867f'
+          print('Verified: only one-shot workflow changed, mobile UI pinned to PR #335; no model mutation.')
+          PYGATE
+      - name: Start from the last verified live application
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 50825a0632979e6e14bd74ff1ba0204eb977226b
+          persist-credentials: false
+      - name: Read the exact new viewer and published derivatives
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 34b0a0fe616436e8bd9e436837ba41ba5fd73767
+          path: .upstream/owner-gallery
+          persist-credentials: false
+      - name: Overlay only the standalone viewer and gallery link
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          source = Path('.upstream/owner-gallery')
+          paths = [
+            'models/index.html', 'src/owner-models.tsx', 'src/lib/ownerShowcase.ts',
+            'src/pages/OwnerModelsPage.tsx', 'src/pages/OwnerModelsPage.css',
+            'src/components/PublicModelGallery.tsx', 'src/components/OracleModelPreview.tsx', 'vite.config.ts',
+            'scripts/verify-owner-showcase.mjs', 'tests/owner-showcase.test.ts',
+            'docs/OWNER_MODEL_RENDER_PROVENANCE_20261017.json',
+            'tests/owner-unused-points.test.ts',
+            'tests/helpers/nativeChromiumRun.mjs', 'tests/studio-native-fetch-browser.test.mjs',
+            'public/owner-models/ecomech-v4-b8532d8c.glb',
+            'public/owner-models/halloween-music-room-d9f01fa8.glb',
+            'public/owner-model-renders/ecomech-v4-three_quarter.jpg',
+            'public/owner-model-renders/ecomech-v4-front.jpg',
+            'public/owner-model-renders/ecomech-v4-side.jpg',
+            'public/owner-model-renders/ecomech-v4-back.jpg',
+            'public/owner-model-renders/halloween-music-room-three_quarter.jpg',
+            'public/owner-model-renders/halloween-music-room-front.jpg',
+            'public/owner-model-renders/halloween-music-room-side.jpg',
+            'public/owner-model-renders/halloween-music-room-back.jpg',
+          ]
+          for name in paths:
+              original = source / name
+              assert original.is_file() and not original.is_symlink()
+              target = Path(name)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(original, target)
+          PY
+          git diff --exit-code -- server wrangler.jsonc package.json package-lock.json config src/App.tsx src/pages/ShopPage.tsx
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: '24', cache: npm }
+      - run: npm ci
+      - run: npm run verify
+      - uses: ./.github/actions/foundations
+      - name: Verify exact working-copy bytes, geometry and embedded textures
+        run: node scripts/verify-owner-showcase.mjs
+      - name: Prepare the existing preserving deployment configuration
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile, writeFile } from 'node:fs/promises'
+          import { buildAiShopUiConfig } from './scripts/build-compatible-mcc-config.mjs'
+          const base = JSON.parse(await readFile('wrangler.jsonc', 'utf8'))
+          const config = buildAiShopUiConfig(base, { aiShopUi: true, preserveBilling: true, preserveRemoteVars: true, preserveSecrets: true })
+          await writeFile('.owner-showcase.wrangler.json', JSON.stringify(config, null, 2) + '\n', { mode: 0o600 })
+          JS
+      - run: npm run deploy:check
+      - run: npx wrangler deploy --dry-run --config .owner-showcase.wrangler.json --outdir .wrangler/preview
+      - name: Publish the viewer and existing files with remote variables preserved
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/owner-model-showcase.ndjson
+        run: |
+          set -euo pipefail
+          node scripts/release-check.ts credentials
+          if WRANGLER_LOG=none WRANGLER_WRITE_LOGS=false WRANGLER_SEND_METRICS=false WRANGLER_SEND_ERROR_REPORTS=false \
+            npx wrangler deploy --config .owner-showcase.wrangler.json --keep-vars >/dev/null 2>&1; then
+            echo 'Publication submitted; checking all public asset bytes.'
+          else
+            echo '::error::Publication failed; private CLI output suppressed.'
+            exit 1
+          fi
+      - name: Verify the public page and both complete textured model files
+        id: verify
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/owner-model-showcase.ndjson
+          SHOWCASE_SOURCE_SHA: 34b0a0fe616436e8bd9e436837ba41ba5fd73767
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          import { appendFile, readFile } from 'node:fs/promises'
+          import { readDeployment } from './scripts/release-check.ts'
+          import { checkCompatibleMccRelease } from './scripts/check-compatible-mcc-release.mjs'
+          import { OWNER_MODELS, readOwnerModel } from './src/lib/ownerShowcase.ts'
+          const deployment = readDeployment(await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8'))
+          assert.equal(deployment.origin, 'https://worldifact.xodobrox.workers.dev')
+          const release = await checkCompatibleMccRelease(deployment)
+          const response = await fetch(release.origin + '/models/', { redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(30000) })
+          assert.equal(response.status, 200)
+          assert.deepEqual(Buffer.from(await response.arrayBuffer()), await readFile('dist/models/index.html'))
+          for (const model of OWNER_MODELS) await readOwnerModel(model, new AbortController().signal, (path, options) => fetch(release.origin + path, options))
+          const report = { result: 'OWNER_SHOWCASE_LIVE', page: release.origin + '/models/', ...release, source: process.env.SHOWCASE_SOURCE_SHA, applicationBase: '50825a0632979e6e14bd74ff1ba0204eb977226b', models: OWNER_MODELS.map(model => ({ id: model.id, bytes: model.bytes, sha256: model.sha256 })), paidGenerationCalls: 0, visualBrowserCheck: 'PENDING' }
+          console.log(JSON.stringify(report))
+          await appendFile(process.env.GITHUB_OUTPUT, 'url=' + report.page + '\n')
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, '## Two saved owner models published\n\n```json\n' + JSON.stringify(report, null, 2) + '\n```\n')
+          JS
