@@ -34,12 +34,11 @@ jobs:
           python - <<'PY'
           import subprocess
           def git(*a): return subprocess.check_output(['git',*a],text=True).strip()
-          base='ecfa407257f1d794fe27e28976f9e793397873f7'
+          base='c31586756c84f2d4a479a353b773c31bd6788f10'
           assert git('rev-parse','HEAD^1')==base
-          expected=['.github/workflows/owner-v3-recover-sources-once.yml','tools/owner_v3_recovery/recover_sources.py','tests/test_owner_v3_source_recovery.py','ops/OWNER_RECOVERY_SOURCES_20261017.json','ops/OWNER_RECOVERY_PUBLIC_20261017.pem','docs/CONTEST_STATUS.md','docs/history/CONTEST_STATUS.before-actual-v3-recovery-20261017.md','docs/OWNER_QUALITY_EXECUTION_20261017.md']
+          expected=['.github/workflows/owner-v3-recover-sources-once.yml','tools/owner_v3_recovery/recover_sources.py','tests/test_owner_v3_source_recovery.py','docs/CONTEST_STATUS.md']
           assert sorted(git('diff','--name-only',base,'HEAD').splitlines())==sorted(expected)
           for p in expected: assert git('ls-tree','HEAD','--',p).startswith('100644 blob ')
-          assert git('rev-parse','HEAD:docs/history/CONTEST_STATUS.before-actual-v3-recovery-20261017.md')==git('rev-parse',base+':docs/CONTEST_STATUS.md')
           print('APPROVED_EXACT_SOURCE_RECOVERY_NO_INFERENCE')
           PY
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065

@@ -12,7 +12,9 @@ The owner repeatedly authorized completing the two original-reference 3D models,
 
 ## Executable recovery milestone
 
-The source-recovery workflow accepts only this bounded main-branch envelope, reads 23 exact hash/size-pinned files in the two fixed job prefixes, preserves all original bytes and encrypts delivery to a new task-scoped public key. The private key remains local. No secret, plaintext private model or signed URL is published. No R2 write, GPU provisioning or provider inference is performed. Its 11 local transfer/security tests passed; actual transfer results and native model inspection must be recorded after execution.
+The source-recovery workflow accepts only a bounded main-branch envelope, reads 23 exact hash/size-pinned files in the two fixed job prefixes, preserves all original bytes and encrypts delivery to a new task-scoped public key. The private key remains local. No secret, plaintext private model or signed URL is published. No R2 write, GPU provisioning or provider inference is performed.
+
+The first [source run 39023825811](https://github.com/teslaeco/WORLDIFACT/actions/runs/39023825811) refused the source configuration before any download because its filename validator omitted the hyphen in the genuine `scene-report.json`. This was reproduced locally against all 23 manifest entries and corrected without broadening the fixed R2 scope. New integration tests validate the actual complete source configuration and exact public recipient before live execution; fixed refusal codes are now retained safely. No model was overwritten or paid generation repeated. Actual transfer and geometry acceptance remain pending.
 
 Next: recover and independently rehash the real source files; inspect original references; reproduce and fix Halloween postprocessing; correct ECOMECH materials without geometry substitution; create separate GAME/MAKE files and measured QA. Execution brief: [OWNER_QUALITY_EXECUTION_20261017.md](OWNER_QUALITY_EXECUTION_20261017.md).
 
