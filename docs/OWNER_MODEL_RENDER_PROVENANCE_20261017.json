@@ -1,0 +1,53 @@
+{
+  "operation": "JPEG encoding of previously delivered corrected model renders; no crop, repaint, regeneration or geometry change",
+  "renders": [
+    {
+      "path": "public/owner-model-renders/ecomech-v4-three_quarter.jpg",
+      "bytes": 64225,
+      "sha256": "5bb2319e515bcd62244899ebab275585d5fbdbff048691901b05d48587cd3ab4",
+      "sourcePngSha256": "1ed55422a50c5540e307223e3921c9a15793affc1ae9c74b1df683789d158648"
+    },
+    {
+      "path": "public/owner-model-renders/ecomech-v4-front.jpg",
+      "bytes": 64152,
+      "sha256": "85412bc256fe97b32fd428146e805b46ea6fdd8eebb9568b5d3d0d0ff59cb60b",
+      "sourcePngSha256": "4b99531fa44291c0f82a55c92c2052dc755888862c72b51df2ca61015cc70de1"
+    },
+    {
+      "path": "public/owner-model-renders/ecomech-v4-side.jpg",
+      "bytes": 43510,
+      "sha256": "7dc445823b191718c0c39662876c1ce8d20ba255b74d121aeeb1507af00646f0",
+      "sourcePngSha256": "cba6e6f9cb238abac48b67dcdc1a3fe04363c0dfd2ea00d3c04ccfca1066dc8a"
+    },
+    {
+      "path": "public/owner-model-renders/ecomech-v4-back.jpg",
+      "bytes": 62647,
+      "sha256": "dbf0f9aeca30bb86eeffc4ac3e89d26d7d8a21800e4ba3af432bda9973572d72",
+      "sourcePngSha256": "30c867f086fe394d531732d7147bbf8ead4ac7cfc4befc024de66712db376ce2"
+    },
+    {
+      "path": "public/owner-model-renders/halloween-music-room-three_quarter.jpg",
+      "bytes": 70142,
+      "sha256": "2d2f42999d56cf3212c7275b5bf235a1800c079b158e9416e74f73a5cba11d31",
+      "sourcePngSha256": "a87b64315f736f88163450ba36935f8d4c35572707c3994d7cd8f60968b3b13b"
+    },
+    {
+      "path": "public/owner-model-renders/halloween-music-room-front.jpg",
+      "bytes": 74406,
+      "sha256": "508baa7b29e9081a0cc52d14b253de4e00b928ed29b59e28067d4035b9e36019",
+      "sourcePngSha256": "45eb41ee4d22c615f747bd8a1bc14e8af55d8079e53f05e83bc56632a18f4c79"
+    },
+    {
+      "path": "public/owner-model-renders/halloween-music-room-side.jpg",
+      "bytes": 44249,
+      "sha256": "65f70f75ff351ad8701943db4d10c134ff9314ce659bc8c0745a5976673c3c3f",
+      "sourcePngSha256": "5768cef14b20a9cf313e576fce1923ccff24c93a64211cdc4cb3ea3a1862a10c"
+    },
+    {
+      "path": "public/owner-model-renders/halloween-music-room-back.jpg",
+      "bytes": 78851,
+      "sha256": "57bedeab593bf119ba08ac6e93f7d8d3efe60f3a48bdff8f6863c5b4e0da8d36",
+      "sourcePngSha256": "1983d432653d7fbfefe731f0e47e546c38518b2a3013fcceb31bd0b37167ef12"
+    }
+  ]
+}
