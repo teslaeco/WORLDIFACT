@@ -1,0 +1,72 @@
+name: Recover existing owner meshes for MAKE refinement (read only)
+on:
+  pull_request:
+    paths: ['.github/workflows/owner-make-recover-once.yml', 'ops/OWNER_MAKE_RECOVERY_RECIPIENT_20261017.json', 'docs/OWNER_MAKE_V2_20261017.md']
+  push:
+    branches: [main]
+    paths: ['.github/workflows/owner-make-recover-once.yml']
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - run: python -m pip install cryptography==50.0.2
+      - run: python -m unittest discover -s tests -p 'test_owner_model_output_scope.py'
+  recover:
+    needs: review
+    if: github.event_name == 'push' && github.repository == 'teslaeco/WORLDIFACT' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    environment: Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {fetch-depth: 2, persist-credentials: false}
+      - name: Verify the exact recovery-only change and existing collector
+        run: |
+          python - <<'PY'
+          import subprocess
+          def git(*args): return subprocess.check_output(['git',*args],text=True).strip()
+          base='393d3afb2bcfd6657320925d76e3f76408a2425d'
+          assert git('rev-parse','HEAD^1')==base
+          expected=['.github/workflows/owner-make-recover-once.yml','ops/OWNER_MAKE_RECOVERY_RECIPIENT_20261017.json','docs/OWNER_MAKE_V2_20261017.md']
+          assert sorted(git('diff','--name-only',base,'HEAD').splitlines())==sorted(expected)
+          assert git('hash-object','tools/runpod_owner_models/collect.py')=='f8ed69dae7ae1c5dc8e95a01364a8f77bd747a5a'
+          assert git('hash-object','tools/runpod_worker/storage.py')=='6f5e54e8b47f77ad646b90994fb4a836ce6ea07c'
+          assert git('hash-object','ops/RUNPOD_OWNER_MODEL_JOBS_20261016.json')=='0dfab4dd21e686d4ada5fa20a57420f540f347be'
+          PY
+      - run: python -m pip install boto3==1.43.66 cryptography==50.0.2
+      - name: Encrypt fresh links to the same fixed saved outputs
+        env:
+          ARTIFACT_ACCESS_KEY_ID: ${{ secrets.ARTIFACT_ACCESS_KEY_ID }}
+          ARTIFACT_SECRET_ACCESS_KEY: ${{ secrets.ARTIFACT_SECRET_ACCESS_KEY }}
+          ARTIFACT_S3_ENDPOINT: ${{ vars.ARTIFACT_S3_ENDPOINT }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+          ARTIFACT_REGION: ${{ vars.ARTIFACT_REGION }}
+        run: |
+          python - <<'PY'
+          import json, os, boto3
+          from botocore.config import Config
+          from pathlib import Path
+          from tools.runpod_owner_models.collect import collect, S3Store
+          cfg=json.loads(Path('ops/RUNPOD_OWNER_MODEL_JOBS_20261016.json').read_text())
+          recipient=json.loads(Path('ops/OWNER_MAKE_RECOVERY_RECIPIENT_20261017.json').read_text())
+          store=S3Store.from_env()
+          store.client=boto3.client('s3',endpoint_url=os.environ['ARTIFACT_S3_ENDPOINT'],region_name='auto',
+              aws_access_key_id=os.environ['ARTIFACT_ACCESS_KEY_ID'],
+              aws_secret_access_key=os.environ['ARTIFACT_SECRET_ACCESS_KEY'],
+              config=Config(signature_version='s3v4',retries={'total_max_attempts':1},
+                            connect_timeout=10,read_timeout=30,s3={'addressing_style':'path'}))
+          packet,count=collect(store,cfg,recipient['publicKeyPem'])
+          Path('owner-make-recovery.sealed.json').write_text(json.dumps(packet)+'\n')
+          print(json.dumps({'result':'EXISTING_MESH_LINKS_ENCRYPTED','artifactCount':count,'inferenceCalls':0,'storageWrites':0}))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: owner-make-recovery-${{ github.run_id }}
+          path: owner-make-recovery.sealed.json
+          retention-days: 1
+          if-no-files-found: error
